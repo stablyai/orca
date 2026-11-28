@@ -27,6 +27,10 @@ export class JournalSqlOwner {
   private readonly worker: Worker
   private readonly ready = Promise.withResolvers<boolean>()
   private readonly exited = Promise.withResolvers<void>()
+  // Cancellation must reach synchronous work inside the initializer's private transaction.
+  private readonly initializationCancelled = new Int32Array(
+    new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  )
   private readonly pending = new Map<
     number,
     {
@@ -63,7 +67,12 @@ export class JournalSqlOwner {
   ) {
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-writer',
-      workerData: { filename, stateDirectory, hostId },
+      workerData: {
+        filename,
+        stateDirectory,
+        hostId,
+        initializationCancelled: this.initializationCancelled
+      },
       execArgv: []
     })
     this.worker.on('message', (response: JournalSqlResponse) => this.receive(response))
@@ -79,6 +88,10 @@ export class JournalSqlOwner {
 
   opened(): Promise<boolean> {
     return this.ready.promise
+  }
+
+  cancelInitialization(): void {
+    Atomics.store(this.initializationCancelled, 0, 1)
   }
 
   get recordsPending(): boolean {

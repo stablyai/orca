@@ -13,7 +13,10 @@ import { AgentSessionJournalError } from '../writing/journal-write-guards'
 export function importJournalDomainProfile(
   source: Database.Database,
   destination: Database.Database,
-  { restoreRecordFile = false }: { restoreRecordFile?: boolean } = {}
+  {
+    restoreRecordFile = false,
+    checkCancellation
+  }: { restoreRecordFile?: boolean; checkCancellation?: () => void } = {}
 ): void {
   const version = journalPragmaNumber(source, 'user_version')
   if (version > JOURNAL_DB_SCHEMA_VERSION) {
@@ -28,12 +31,12 @@ export function importJournalDomainProfile(
       `the original chat store uses unreleased schema ${version}`
     )
   }
-  copyChatCatalog(source, destination)
+  copyChatCatalog(source, destination, checkCancellation)
   // The copy keeps rows as the original saved them, even a receipt whose chat record is gone.
   destination.pragma('foreign_keys = OFF')
   try {
     for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
-      copyProfileTable(source, destination, name, columns)
+      copyProfileTable(source, destination, name, columns, checkCancellation)
     }
   } finally {
     destination.pragma('foreign_keys = ON')
@@ -64,13 +67,18 @@ export function importJournalDomainProfile(
 
 const PAGE_ROWS = 128
 
-function copyChatCatalog(source: Database.Database, destination: Database.Database): void {
+function copyChatCatalog(
+  source: Database.Database,
+  destination: Database.Database,
+  checkCancellation?: () => void
+): void {
   const insert = destination.prepare(
     'INSERT INTO journal_chat_state(session_id,workspace_id) VALUES(?,?)'
   )
   runJournalTransaction(destination, () => {
     let after: string | undefined
     for (;;) {
+      checkCancellation?.()
       const rows = source
         .prepare(`SELECT session_id,workspace_id FROM journal_sessions
           ${after === undefined ? '' : 'WHERE session_id>?'} ORDER BY session_id LIMIT ?`)
@@ -91,7 +99,8 @@ function copyProfileTable(
   source: Database.Database,
   destination: Database.Database,
   table: string,
-  columns: readonly string[]
+  columns: readonly string[],
+  checkCancellation?: () => void
 ): void {
   const names = columns.join(',')
   const insert = destination.prepare(
@@ -100,6 +109,7 @@ function copyProfileTable(
   runJournalTransaction(destination, () => {
     let after: bigint | undefined
     for (;;) {
+      checkCancellation?.()
       // An INTEGER PRIMARY KEY column would otherwise rename the rowid result column.
       const page = source.prepare(`SELECT rowid AS rowid,${names} FROM ${table}
         ${after === undefined ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT ?`)

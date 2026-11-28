@@ -120,7 +120,8 @@ function stagedQuarantine(row: SqliteRow): { raw: unknown } | undefined {
 function mergeLegacyRecordRows(
   db: Database.Database,
   stage: Database.Database,
-  { generation, salvage, tabs }: LoadedRecordSnapshot
+  { generation, salvage, tabs }: LoadedRecordSnapshot,
+  checkCancellation: () => void
 ): void {
   const wasDeleted = readLegacyDeletionAuthority(db)
   const sqlRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
@@ -135,6 +136,7 @@ function mergeLegacyRecordRows(
       for (const { session_id } of db
         .prepare('SELECT session_id FROM agent_session_tabs')
         .iterate()) {
+        checkCancellation()
         copySqlTab.run(session_id)
       }
     })
@@ -156,6 +158,7 @@ function mergeLegacyRecordRows(
       VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
     let position = -Number(tabCount?.total)
     for (const { session_id, tab_id } of stage.prepare(tabQuery).iterate(generation)) {
+      checkCancellation()
       const id = String(session_id)
       if (!sqlTab.get(id) && !sqlRecord.get(id)) {
         const saved = record.get(generation, Number(salvage), id)
@@ -177,6 +180,7 @@ function mergeLegacyRecordRows(
       AND NOT EXISTS(SELECT 1 FROM legacy_rows r WHERE r.generation=?1 AND r.section='records' AND r.key=u.key)
   ) SELECT ${RECORD_COLUMNS} FROM ids ${RECORD_JOINS}`)
   for (const row of records.iterate(generation, Number(salvage))) {
+    checkCancellation()
     const id = String(row.id)
     const loaded = decodeStagedRecord(row)
     if (sqlRecord.get(id) || wasDeleted(id, loaded)) {
@@ -209,12 +213,14 @@ function mergeLegacyRecordRows(
     'SELECT key,body FROM legacy_rows WHERE generation=? AND section=? ORDER BY rowid'
   )
   for (const { key, body } of section.iterate(generation, 'operations')) {
+    checkCancellation()
     insertOperation.run(key, body)
   }
   const insertRetiredKey =
     db.prepare(`INSERT INTO agent_session_retired_claim_keys(key_id,retired_at)
     VALUES(?,?) ON CONFLICT(key_id) DO NOTHING`)
   for (const { body } of section.iterate(generation, 'retiredClaimKeys')) {
+    checkCancellation()
     const { keyId, retiredAt } = JSON.parse(String(body))
     insertRetiredKey.run(keyId, retiredAt)
   }
@@ -225,8 +231,10 @@ export function importJournalLegacyRecordSnapshot(
   db: Database.Database,
   stage: Database.Database,
   { loaded }: JournalLegacyRecordSnapshot,
-  hostId: string
+  hostId: string,
+  checkCancellation: () => void
 ): void {
+  checkCancellation()
   if (loaded && loaded.hostId !== hostId) {
     console.warn('[agent-session-journal] host-mismatch importing original chat records', {
       fileHostId: loaded.hostId,
@@ -234,16 +242,17 @@ export function importJournalLegacyRecordSnapshot(
     })
   }
   if (loaded?.tabs === 'visibleSessionIds') {
-    assignLegacyVisibleTabs(stage, loaded.generation)
+    assignLegacyVisibleTabs(stage, loaded.generation, checkCancellation)
   }
   runJournalTransaction(db, () => {
     if (loaded) {
-      mergeLegacyRecordRows(db, stage, loaded)
+      mergeLegacyRecordRows(db, stage, loaded, checkCancellation)
     }
     for (const { session_id } of db
       .prepare(`SELECT r.session_id FROM agent_session_records r
       WHERE NOT EXISTS(SELECT 1 FROM agent_session_store_meta WHERE key=?||r.session_id)`)
       .iterate(journalLegacyChatRevisionKey(''))) {
+      checkCancellation()
       const id = String(session_id)
       recordJournalLegacyChatRevision(db, id, journalLegacyChatRevision(source, id) ?? 'null')
     }

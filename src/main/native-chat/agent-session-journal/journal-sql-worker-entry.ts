@@ -62,13 +62,18 @@ let destinationMain: string | undefined
 let readOnly = true
 let fault: unknown
 let closing = false
-const openingAbort = new AbortController()
-let openingCloseRequest: number | undefined
+const initializationCancelled: Int32Array<SharedArrayBuffer> = workerData.initializationCancelled
 let scheduled = false
 const queue = new JournalSqlWriterQueue()
 let parking: JournalSqlWalParking | undefined
 const clock = new JournalSqlQueueClock(() => parking?.mark() ?? { bulk: 0, urgent: 0 })
 const gate = { ms: 0 }
+
+function checkInitialization(): void {
+  if (Atomics.load(initializationCancelled, 0) !== 0) {
+    throw new Error('journal SQL owner closed during initialization')
+  }
+}
 
 async function open(): Promise<void> {
   try {
@@ -77,9 +82,10 @@ async function open(): Promise<void> {
       await initializeJournalDomainDatabase(
         stateDirectory,
         typeof workerData.hostId === 'string' ? workerData.hostId : undefined,
-        openingAbort.signal
+        checkInitialization
       )
     }
+    checkInitialization()
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
     try {
@@ -104,9 +110,6 @@ async function open(): Promise<void> {
     reply({ type: 'ready', readOnly })
   } catch (error) {
     fault = error
-    if (openingCloseRequest !== undefined) {
-      reply({ type: 'done', id: openingCloseRequest })
-    }
     reply({
       type: 'failed',
       outcome: 'not-dispatched',
@@ -124,12 +127,6 @@ port.on('message', (request: JournalSqlRequest) => {
     if (queue.promote(request.command.sessionId)) {
       parking?.interrupt()
     }
-    return
-  }
-  if (!db && !closing && request.command.type === 'close') {
-    closing = true
-    openingCloseRequest = request.id
-    openingAbort.abort(new Error('journal SQL owner closed during initialization'))
     return
   }
   if (closing || !db) {

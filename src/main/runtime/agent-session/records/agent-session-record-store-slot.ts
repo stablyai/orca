@@ -36,6 +36,7 @@ export type OpenedAgentSessionRecordStore = {
 type RecordStoreSlot = {
   stateDirectory: string
   opened: Promise<OpenedAgentSessionRecordStore>
+  initialization: AbortController
   /** Nonawaiting readers can inspect the store only after open resolves. */
   store?: AgentSessionRecordStore
   database?: JournalSqlDatabase
@@ -72,9 +73,11 @@ export function openAgentSessionRecordStoreOnce(
     }
     return opening.opened
   }
+  const initialization = new AbortController()
   const slot: RecordStoreSlot = {
     stateDirectory: location.stateDirectory,
-    opened: openRecordStore(location).then(
+    initialization,
+    opened: openRecordStore(location, initialization.signal).then(
       (opened) => {
         if (opened.journalDatabase.readOnly) {
           location.logger.warn(
@@ -131,14 +134,18 @@ setAgentProcessChatReader((agentSessionId) => {
 })
 
 async function openRecordStore(
-  location: AgentSessionRecordStoreLocation
+  location: AgentSessionRecordStoreLocation,
+  signal: AbortSignal
 ): Promise<OpenedAgentSessionRecordStore> {
   await closeAgentSessionRecordStoreDatabase()
   const { journalDatabase, records } = await openStructuredAgentSessionSqlJournalDatabase({
     ...location,
+    signal,
     closeFailedOpen: closeAgentSessionRecordStoreDatabase
   })
   try {
+    const deletedChats = await readDeletedChats(journalDatabase)
+    signal.throwIfAborted()
     return {
       journalDatabase,
       store: AgentSessionRecordStore.open({
@@ -146,7 +153,7 @@ async function openRecordStore(
         records,
         hostId: location.hostId,
         legacySessionTabIds: location.legacySessionTabIds,
-        deletedChats: await readDeletedChats(journalDatabase)
+        deletedChats
       })
     }
   } catch (error) {
@@ -165,6 +172,9 @@ export function retireAgentSessionRecordStore(
   }
   if (!slot.retire) {
     slot.retire = retire
+    if (!slot.database) {
+      slot.initialization.abort()
+    }
     slot.database?.stopMaintenance()
     slot.store = undefined
     sessionCrewChanges.notify(new Set(['topology', 'records']))

@@ -1,7 +1,6 @@
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { setImmediate as yieldToWorker } from 'node:timers/promises'
 import Database from '../../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../../sqlite/harden-database-files'
 import {
@@ -45,9 +44,9 @@ import { importJournalLegacyRecordSnapshot } from './journal-legacy-record-impor
 export async function initializeJournalDomainDatabase(
   stateDirectory: string,
   hostId: string = LOCAL_EXECUTION_HOST_ID,
-  signal?: AbortSignal
+  checkCancellation: () => void = () => undefined
 ): Promise<string> {
-  signal?.throwIfAborted()
+  checkCancellation()
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -68,11 +67,9 @@ export async function initializeJournalDomainDatabase(
     const savedReceipt = JSON.stringify(initialSource.receipt)
     const stability = JSON.stringify(initialSource.stability)
     let recordFiles: JournalLegacyRecordSnapshot['files'] | undefined
-    const assertStable = (): void => {
-      if (!recordFiles) {
-        return
-      }
+    const assertSourceStable = (): void => {
       if (
+        initialSource.stability.disposition !== 'copied-source' ||
         !sameJournalLegacySource(
           stability,
           captureJournalLegacyInitializationSource(sourcePath).stability
@@ -80,7 +77,12 @@ export async function initializeJournalDomainDatabase(
       ) {
         throw new Error('the original chat journal changed during initialization')
       }
-      assertJournalLegacyRecordFilesStable(recordFiles)
+    }
+    const assertStable = (): void => {
+      if (recordFiles) {
+        assertSourceStable()
+        assertJournalLegacyRecordFilesStable(recordFiles)
+      }
     }
     try {
       if (existsSync(sourcePath)) {
@@ -88,7 +90,13 @@ export async function initializeJournalDomainDatabase(
           inspectRecordFileSource: true
         })
         try {
-          importJournalDomainProfile(source, db, { restoreRecordFile: recordFileSource })
+          if (recordFileSource) {
+            assertSourceStable()
+          }
+          importJournalDomainProfile(source, db, {
+            restoreRecordFile: recordFileSource,
+            checkCancellation: recordFileSource ? checkCancellation : undefined
+          })
           if (recordFileSource) {
             const stage = new Database(join(temporary, 'records-stage.db'))
             try {
@@ -96,11 +104,18 @@ export async function initializeJournalDomainDatabase(
               const recordSnapshot = await readJournalLegacyRecordSnapshot(
                 stateDirectory,
                 stage,
-                signal
+                checkCancellation
               )
               recordFiles = recordSnapshot.files
               assertStable()
-              importJournalLegacyRecordSnapshot(source, db, stage, recordSnapshot, hostId)
+              importJournalLegacyRecordSnapshot(
+                source,
+                db,
+                stage,
+                recordSnapshot,
+                hostId,
+                checkCancellation
+              )
             } finally {
               stage.close()
             }
@@ -116,6 +131,7 @@ export async function initializeJournalDomainDatabase(
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       // An unknown version is no later than any, and waits for a launch that knows its own.
       meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
+      checkCancellation()
       assertStable()
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
@@ -124,14 +140,10 @@ export async function initializeJournalDomainDatabase(
     } finally {
       db.close()
     }
-    if (recordFiles && signal) {
-      // Let a close received during the synchronous merge cancel before publication.
-      await yieldToWorker()
-      signal.throwIfAborted()
-    }
     try {
       // Publish complete metadata without replacing another initializer's result.
       assertStable()
+      checkCancellation()
       linkSync(filename, destination)
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {

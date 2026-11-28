@@ -7,7 +7,8 @@ import { runJournalTransaction } from './journal-database'
 
 export function validateLegacyAgentSessionTabs(
   stage: Database.Database,
-  generation: string
+  generation: string,
+  checkCancellation: () => void
 ): boolean {
   stage.exec(`CREATE TABLE IF NOT EXISTS validated_tabs (
     generation TEXT NOT NULL,
@@ -24,6 +25,7 @@ export function validateLegacyAgentSessionTabs(
       .prepare(`SELECT key,body FROM legacy_rows
       WHERE generation=? AND section='sessionTabs' ORDER BY rowid`)
       .iterate(generation)) {
+      checkCancellation()
       const entry: unknown = JSON.parse(String(body))
       if (
         !isReadableAgentSessionStoreTab(entry) ||
@@ -38,27 +40,38 @@ export function validateLegacyAgentSessionTabs(
 }
 
 /** Pre-index files hold the tab on the final conversation under its /clear chain's first id. */
-export function assignLegacyVisibleTabs(stage: Database.Database, generation: string): void {
+export function assignLegacyVisibleTabs(
+  stage: Database.Database,
+  generation: string,
+  checkCancellation: () => void
+): void {
   runJournalTransaction(stage, () => {
     stage.exec(`
       CREATE TABLE visible_tabs (session_id TEXT PRIMARY KEY, position INTEGER NOT NULL, tab_id TEXT UNIQUE);
       CREATE TABLE clear_predecessors (successor TEXT PRIMARY KEY, predecessor TEXT UNIQUE);
     `)
-    stage
-      .prepare(`INSERT INTO clear_predecessors
-      SELECT json_extract(body,'$.conversationCommand.replacementSessionId'), key
-      FROM legacy_rows WHERE generation=? AND section='records' AND readable=1
+    const addPredecessor = stage.prepare(
+      'INSERT INTO clear_predecessors VALUES(?,?) ON CONFLICT(successor) DO NOTHING'
+    )
+    for (const { key, successor } of stage
+      .prepare(`SELECT key, CASE WHEN readable=1
         AND json_extract(body,'$.conversationCommand.command')='clear'
         AND json_extract(body,'$.conversationCommand.phase')='committed'
-        AND json_extract(body,'$.conversationCommand.replacementSessionId') IS NOT NULL
-      ORDER BY rowid ON CONFLICT(successor) DO NOTHING`)
-      .run(generation)
+        THEN json_extract(body,'$.conversationCommand.replacementSessionId') END AS successor
+      FROM legacy_rows WHERE generation=? AND section='records' ORDER BY rowid`)
+      .iterate(generation)) {
+      checkCancellation()
+      if (successor !== null) {
+        addPredecessor.run(successor, key)
+      }
+    }
     const add = stage.prepare(`INSERT INTO visible_tabs(session_id,position) VALUES(?,?)
       ON CONFLICT(session_id) DO NOTHING`)
     for (const { key, body } of stage
       .prepare(`SELECT key,body FROM legacy_rows
       WHERE generation=? AND section='visibleSessionIds' ORDER BY rowid`)
       .iterate(generation)) {
+      checkCancellation()
       const id: unknown = JSON.parse(String(body))
       if (isAgentSessionId(id)) {
         add.run(id, Number(key))
@@ -94,6 +107,7 @@ export function assignLegacyVisibleTabs(stage: Database.Database, generation: st
       WHERE NOT EXISTS(SELECT 1 FROM clear_predecessors c WHERE c.predecessor=v.session_id)
       ORDER BY v.position`)
       .iterate()) {
+      checkCancellation()
       const id = String(session_id)
       const first = root.get(id)?.id
       if (typeof first === 'string') {
@@ -103,6 +117,7 @@ export function assignLegacyVisibleTabs(stage: Database.Database, generation: st
     for (const { session_id } of stage
       .prepare('SELECT session_id FROM visible_tabs WHERE tab_id IS NULL ORDER BY position')
       .iterate()) {
+      checkCancellation()
       const id = String(session_id)
       assignTab(id, candidates(id))
     }

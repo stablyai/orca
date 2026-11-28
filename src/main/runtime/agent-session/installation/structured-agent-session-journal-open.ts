@@ -32,7 +32,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
     closeFailedOpen?: (database: JournalSqlDatabase) => Promise<void>
   } & Pick<
     Parameters<typeof JournalSqlDatabase.open>[1],
-    'writerPath' | 'readerPath' | 'onMaintenanceTick'
+    'writerPath' | 'readerPath' | 'onMaintenanceTick' | 'signal'
   >
 ) {
   let journalDatabase: JournalSqlDatabase | undefined
@@ -41,6 +41,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
       hostId: args.hostId,
       writerPath: args.writerPath,
       readerPath: args.readerPath,
+      signal: args.signal,
       onMaintenanceTick: args.onMaintenanceTick,
       onMaintenanceError: (error, sessionId) =>
         args.logger.error('maintaining the chat journal database failed', {
@@ -49,17 +50,23 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
           error
         })
     })
+    args.signal?.throwIfAborted()
     const records = await journalDatabase.installRecords()
+    args.signal?.throwIfAborted()
     recordStructuredAgentSessionHostInstallRefusal(null)
     lastLoggedOpenFailure = null
     return { journalDatabase, records }
   } catch (error) {
-    logOpenFailureOnce(args.logger, error)
-    const refusal = journalOpenRefusalError(error)
-    recordStructuredAgentSessionHostInstallRefusal(refusal)
+    let failure = error
+    if (!args.signal?.aborted) {
+      logOpenFailureOnce(args.logger, error)
+      const refusal = journalOpenRefusalError(error)
+      recordStructuredAgentSessionHostInstallRefusal(refusal)
+      failure = refusal
+    }
     if (journalDatabase) {
       await (args.closeFailedOpen ?? ((database) => database.close()))(journalDatabase)
     }
-    throw refusal
+    throw failure
   }
 }

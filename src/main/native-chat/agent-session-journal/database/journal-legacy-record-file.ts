@@ -76,9 +76,9 @@ export function assertJournalLegacyRecordFilesStable(files: readonly RecordFile[
 async function readStableRecordFile(
   file: RecordFile,
   consume: (bytes: Buffer) => void,
-  signal?: AbortSignal
+  checkCancellation: () => void
 ): Promise<void> {
-  signal?.throwIfAborted()
+  checkCancellation()
   if (!statSync(file.path).isFile()) {
     throw new Error('expected a regular original chat records file')
   }
@@ -92,11 +92,11 @@ async function readStableRecordFile(
     const buffer = Buffer.allocUnsafe(CHUNK_BYTES)
     let offset = 0n
     while (offset < stats.size) {
-      signal?.throwIfAborted()
+      checkCancellation()
       const remaining = stats.size - offset
       const length = remaining < CHUNK_BYTES ? Number(remaining) : CHUNK_BYTES
       const { bytesRead } = await handle.read(buffer, 0, length, null)
-      signal?.throwIfAborted()
+      checkCancellation()
       if (bytesRead === 0) {
         throw changedRecordFile()
       }
@@ -145,7 +145,7 @@ async function stageRecordFile(
   db: Database.Database,
   file: RecordFile,
   generation: Generation,
-  signal?: AbortSignal
+  checkCancellation: () => void
 ): Promise<StagedGeneration | null> {
   const pending: StageWrite[] = []
   const envelope = new Map<string, unknown>()
@@ -240,6 +240,7 @@ async function stageRecordFile(
     if (pending.length > 0) {
       runJournalTransaction(db, () => {
         for (const { section, entry } of pending) {
+          checkCancellation()
           if (entry) {
             insert.run(generation, section, entry.key, entry.body, Number(entry.readable))
           } else {
@@ -253,7 +254,7 @@ async function stageRecordFile(
   await readStableRecordFile(
     file,
     (bytes) => parse(() => parser.write(decoder.write(bytes))),
-    signal
+    checkCancellation
   )
   parse(() => {
     parser.write(decoder.end())
@@ -280,7 +281,7 @@ async function stageRecordFile(
       .prepare(`SELECT 1 FROM legacy_rows WHERE generation=? AND
         section IN ('operations','unusableRecords','retiredClaimKeys') AND readable=0 LIMIT 1`)
       .get(generation) ||
-    (tabs === 'sessionTabs' && !validateLegacyAgentSessionTabs(db, generation))
+    (tabs === 'sessionTabs' && !validateLegacyAgentSessionTabs(db, generation, checkCancellation))
   ) {
     db.prepare('DELETE FROM legacy_rows WHERE generation=?').run(generation)
     return null
@@ -292,8 +293,9 @@ async function stageRecordFile(
 export async function readJournalLegacyRecordSnapshot(
   stateDirectory: string,
   stage: Database.Database,
-  signal?: AbortSignal
+  checkCancellation: () => void
 ): Promise<JournalLegacyRecordSnapshot> {
+  checkCancellation()
   const [primaryPath, backupPath] = journalLegacyRecordPaths(stateDirectory)
   const files = [
     { path: primaryPath, identity: captureRecordFile(primaryPath) },
@@ -304,7 +306,9 @@ export async function readJournalLegacyRecordSnapshot(
     return { files, loaded: null }
   }
   const latest =
-    primary.identity === null ? null : await stageRecordFile(stage, primary, 'primary', signal)
+    primary.identity === null
+      ? null
+      : await stageRecordFile(stage, primary, 'primary', checkCancellation)
   const needsSalvage =
     latest &&
     stage
@@ -315,10 +319,10 @@ export async function readJournalLegacyRecordSnapshot(
       .get()
   const recovered =
     backup.identity !== null && (!latest || needsSalvage)
-      ? await stageRecordFile(stage, backup, 'backup', signal)
+      ? await stageRecordFile(stage, backup, 'backup', checkCancellation)
       : null
   assertJournalLegacyRecordFilesStable(files)
-  signal?.throwIfAborted()
+  checkCancellation()
   if (latest) {
     return { files, loaded: { ...latest, salvage: recovered !== null } }
   }

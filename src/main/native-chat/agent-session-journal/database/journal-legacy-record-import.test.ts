@@ -33,7 +33,11 @@ import {
 import { initializeJournalDomainDatabase } from './journal-domain-database'
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
-import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import * as sourceCapture from './journal-legacy-source-capture'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION
+} from './journal-legacy-source-receipt'
 
 const directories: string[] = []
 afterEach(() => {
@@ -373,7 +377,9 @@ it.each(['truncate', 'abort', 'write-full', 'sql-changed'] as const)(
         }
       }
     })
-    const attempt = initializeJournalDomainDatabase(root, 'local', controller.signal)
+    const attempt = initializeJournalDomainDatabase(root, 'local', () =>
+      controller.signal.throwIfAborted()
+    )
     await expect(attempt.catch(journalOpenRefusal)).resolves.toMatchObject({
       code: 'agent_session_journal_unreadable',
       details: { reason: fault === 'write-full' ? 'journalStorageFull' : 'journalUnavailable' }
@@ -389,6 +395,57 @@ it.each(['truncate', 'abort', 'write-full', 'sql-changed'] as const)(
     }
   }
 )
+
+it('rejects an uncertifiable source before staging any records', async () => {
+  const { root, primary } = profile()
+  saveRecords(primary, { 'primary-chat': stored('primary-chat') })
+  const unavailable = {
+    ...JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION,
+    disposition: 'uncertifiable' as const
+  }
+  vi.spyOn(sourceCapture, 'captureJournalLegacyInitializationSource').mockReturnValueOnce({
+    receipt: unavailable,
+    stability: unavailable
+  })
+  const prepare = vi.spyOn(Database.prototype, 'prepare')
+  await expect(
+    initializeJournalDomainDatabase(root).catch(journalOpenRefusal)
+  ).resolves.toMatchObject({ details: { reason: 'journalUnavailable' } })
+  expect(prepare).not.toHaveBeenCalledWith(expect.stringContaining('legacy_rows'))
+  expectUnpublished(root)
+})
+
+it('cancels an in-progress record merge before binding another record', async () => {
+  const { root, primary } = profile()
+  saveRecords(primary, {
+    'first-chat': stored('first-chat'),
+    'second-chat': stored('second-chat')
+  })
+  const cancellation = new AbortController()
+  let inserted = 0
+  const prepare = Database.prototype.prepare
+  vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (
+    this: Database.Database,
+    sql
+  ) {
+    const statement = prepare.call(this, sql)
+    if (sql.startsWith('INSERT INTO agent_session_records(session_id,record_json)')) {
+      const run = statement.run.bind(statement)
+      vi.spyOn(statement, 'run').mockImplementation((...parameters) => {
+        const result = run(...parameters)
+        inserted += 1
+        cancellation.abort()
+        return result
+      })
+    }
+    return statement
+  })
+  await expect(
+    initializeJournalDomainDatabase(root, 'local', () => cancellation.signal.throwIfAborted())
+  ).rejects.toMatchObject({ name: 'AbortError' })
+  expect(inserted).toBe(1)
+  expectUnpublished(root)
+})
 
 it('keeps the clear chain’s original tab id across competing bootstrap snapshots', async () => {
   const { root, primary } = profile()
