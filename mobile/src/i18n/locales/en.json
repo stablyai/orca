@@ -70,7 +70,11 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewFooter": "Switch one session from its long-press menu.",
-      "openInChat": "Open agent sessions in chat"
+      "openInChat": "Open agent sessions in chat",
+      "composerUsageHeading": "COMPOSER USAGE",
+      "composerUsageDescription": "Chat and agent terminal composers show your agent plan as used or left. Tap the meter for every window, reset times and pace.",
+      "railRingsDuringChats": "Show usage rings in the side rail during chats",
+      "railRingsDuringChatsHint": "When a chat leaves the status column free. A chat that fills the column always hides them."
     },
     "nativeChatText": {
       "heading": "Text",
@@ -2488,6 +2492,7 @@
       "fileTitle": "File",
       "terminalTakingLonger": "Terminal is taking longer than expected",
       "loadingTerminal": "Loading terminal",
+      "retryLoadingTerminal": "Retry loading terminal",
       "noTabs": "No tabs open",
       "noTabsStart": "Start an agent or a terminal."
     },
@@ -3399,6 +3404,7 @@
       "addToMessage": "Add to message",
       "attachImage": "Attach image",
       "askAnything": "Ask anything",
+      "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
@@ -3406,7 +3412,9 @@
       "sendSteer": "Steer",
       "sendSteerQueued": "Steer queued",
       "sendQueueHint": "Runs after the current turn",
-      "sendSteerHint": "Goes into what the agent is doing now"
+      "sendSteerHint": "Goes into what the agent is doing now",
+      "keepChatClear": "Keep chat clear of the side column",
+      "expandChat": "Expand chat into the side column"
     },
     "contextUsage": {
       "title": "Context",
@@ -6663,7 +6671,8 @@
       "nothingToReport": "Nothing to report",
       "mentionOwnChats": "Your other chats",
       "mentionPaused": "Paused",
-      "mentionChatsLoadFailed": "Couldn't load chats"
+      "mentionChatsLoadFailed": "Couldn't load chats",
+      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands"
     },
     "access": {
       "titleOne": "Give {{person}} access to {{name}}?",
@@ -8684,5 +8693,70 @@
     "headerMissing": "Fill in {{header}} to add this server.",
     "servers": "Servers",
     "unreadable": "Saved sign-in or key can’t be opened. Sign in again."
+  },
+  "composerUsage": {
+    "meter": {
+      "label": "{{provider}} {{window}} usage: {{percent}}% used. Show details",
+      "labelRemaining": "{{provider}} {{window}} usage: {{percent}}% left. Show details",
+      "left": "{{percent}}% left"
+    },
+    "display": {
+      "label": "Meter shows",
+      "used": "Used",
+      "remaining": "Remaining",
+      "usedHint": "Show how much of the window is used",
+      "remainingHint": "Show how much of the window is left"
+    },
+    "sheet": {
+      "title": "{{provider}} usage",
+      "description": "Pace compares what you have used with an even burn across each window."
+    },
+    "window": {
+      "sessionTitle": "{{length}} session",
+      "weeklyTitle": "Weekly",
+      "fableWeeklyTitle": "Weekly (Fable)",
+      "monthlyTitle": "Monthly",
+      "resets": "Resets {{when}} · in {{duration}}"
+    },
+    "pace": {
+      "onPace": "On pace",
+      "under": "{{percent}}% under pace",
+      "ahead": "{{percent}}% ahead of pace",
+      "aheadRunOut": "{{percent}}% ahead of pace — at this rate you'd run out ~{{duration}} before reset",
+      "exhausted": "Limit reached for this window"
+    },
+    "picker": {
+      "label": "Show in composer",
+      "session": "5-hour",
+      "weekly": "Weekly"
+    },
+    "status": {
+      "exhausted": "limit reached",
+      "onPace": "on pace",
+      "under": "under pace",
+      "ahead": "ahead of pace"
+    },
+    "stats": {
+      "points": "{{value}} pts",
+      "perDay": "{{value}}%/day",
+      "perHour": "{{value}}%/hour",
+      "left": "{{percent}}% left",
+      "last24h": "Used last 24h",
+      "lastHour": "Used last hour",
+      "vsPace": "vs. pace",
+      "budgetDaily": "Daily budget",
+      "budgetHourly": "Hourly budget",
+      "atReset": "At reset"
+    },
+    "headline": {
+      "left": "{{percent}}% left",
+      "used": "{{percent}}% used"
+    },
+    "chart": {
+      "label": "{{window}} usage over time, with a dashed line for an even pace",
+      "legend": "Dashed line: an even pace to reset",
+      "legendNoReset": "Usage since the first reading",
+      "collecting": "Collecting usage history. The graph fills in as the desktop checks usage."
+    }
   }
 }

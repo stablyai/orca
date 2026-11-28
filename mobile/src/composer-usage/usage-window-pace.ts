@@ -1,0 +1,80 @@
+import type { UsagePercentageDisplay } from '../../../src/shared/agent-usage/display/usage-percentage-display'
+
+export type UsagePaceWindow = {
+  usedPercent: number
+  windowMinutes: number
+  resetsAt: number | null
+}
+
+export type UsagePace =
+  | { kind: 'unknown' }
+  | { kind: 'exhausted' }
+  | { kind: 'on-pace'; deltaPercent: number }
+  | { kind: 'ahead'; deltaPercent: number; runOutBeforeResetMs: number | null }
+  | { kind: 'under'; deltaPercent: number }
+
+// Small drift either way reads as on pace; a few points is within one poll's noise.
+export const ON_PACE_TOLERANCE_PERCENT = 3
+
+/** Compare usage with an even burn across the window; ahead also projects the linear run-out. */
+export function computeUsagePace(window: UsagePaceWindow, now: number): UsagePace {
+  const windowMs = window.windowMinutes * 60_000
+  if (window.resetsAt == null || windowMs <= 0) {
+    return { kind: 'unknown' }
+  }
+  const remainingMs = window.resetsAt - now
+  const elapsedMs = windowMs - remainingMs
+  // A past reset is stale data and a not-yet-started window has no rate to compare.
+  if (remainingMs <= 0 || elapsedMs <= 0) {
+    return { kind: 'unknown' }
+  }
+  const used = Math.max(0, Math.min(100, window.usedPercent))
+  if (used >= 100) {
+    return { kind: 'exhausted' }
+  }
+  const expected = Math.min(100, (elapsedMs / windowMs) * 100)
+  const deltaPercent = Math.round(used - expected)
+  if (Math.abs(used - expected) < ON_PACE_TOLERANCE_PERCENT) {
+    return { kind: 'on-pace', deltaPercent }
+  }
+  if (used < expected) {
+    return { kind: 'under', deltaPercent: -deltaPercent }
+  }
+  const msToFull = used > 0 ? ((100 - used) / used) * elapsedMs : Infinity
+  const runOutBeforeResetMs = remainingMs - msToFull
+  return {
+    kind: 'ahead',
+    deltaPercent,
+    runOutBeforeResetMs: runOutBeforeResetMs > 0 ? runOutBeforeResetMs : null
+  }
+}
+
+/** Where an even burn puts usage now (0–100), or null when the reset time is unavailable or stale. */
+export function usageExpectedPercent(
+  window: Pick<UsagePaceWindow, 'windowMinutes' | 'resetsAt'>,
+  now: number
+): number | null {
+  const windowMs = window.windowMinutes * 60_000
+  if (window.resetsAt == null || windowMs <= 0) {
+    return null
+  }
+  const remainingMs = window.resetsAt - now
+  // Same staleness rule as computeUsagePace: no expected pace where reset is unknown or out of range.
+  if (remainingMs <= 0 || remainingMs >= windowMs) {
+    return null
+  }
+  return ((windowMs - remainingMs) / windowMs) * 100
+}
+
+/** Where an even burn puts the bar's fill now (0–100), mirrored when the bar counts what remains. */
+export function usagePaceMarkerPercent(
+  window: Pick<UsagePaceWindow, 'windowMinutes' | 'resetsAt'>,
+  now: number,
+  display: UsagePercentageDisplay
+): number | null {
+  const elapsedPercent = usageExpectedPercent(window, now)
+  if (elapsedPercent === null) {
+    return null
+  }
+  return display === 'remaining' ? 100 - elapsedPercent : elapsedPercent
+}

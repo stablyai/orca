@@ -3,7 +3,7 @@ import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
-  focusMobileNativeChatTextDestination,
+  composerFieldFocus,
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
@@ -43,9 +43,13 @@ import {
 import { useMobileNativeChatComposerCollapse } from './field/use-mobile-native-chat-composer-collapse'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
-import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
+import {
+  composerPlaceholder,
+  type MobileNativeChatComposerProps
+} from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
+import { composerCornerStyles, MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useThemedStyles } from '../../../theme/themed-styles'
 
@@ -99,10 +103,13 @@ export function MobileNativeChatComposer({
   onNeedSkills,
   stop = null,
   sendFollowUp = null,
+  fitScreenCorners = false,
+  widthToggle = null,
   steerHead
 }: Props): React.JSX.Element {
   const inputStyles = useThemedStyles(inputStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
+  const styles = composerCornerStyles(useThemedStyles(stylesSheet), fitScreenCorners)
+  const gap = { agent: editSession ? null : (agent ?? null), ring: null, toggle: null }
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -307,12 +314,7 @@ export function MobileNativeChatComposer({
                     headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
                   }
                 }}
-                onFocus={() => {
-                  setFocused(true)
-                  if (draftScopeKey) {
-                    focusMobileNativeChatTextDestination(draftScopeKey)
-                  }
-                }}
+                onFocus={composerFieldFocus(setFocused, draftScopeKey)}
                 onBlur={() => setFocused(false)}
                 onWebPaste={onWebPaste}
                 // Controlled only transiently right after an autocomplete insert.
@@ -322,9 +324,7 @@ export function MobileNativeChatComposer({
                   dictation.readSelection(menu.dictationAnchor(e))
                   menu.onSelectionChange(e.nativeEvent.selection)
                 }}
-                placeholder={
-                  goal.placeholder ?? placeholder ?? t('chat.composer.askAnything', 'Ask anything')
-                }
+                placeholder={composerPlaceholder(goal.placeholder, placeholder, mentionBots, t)}
                 placeholderTextColor={colors.textMuted}
                 selectionColor={colors.accentBlue}
                 multiline
@@ -340,7 +340,7 @@ export function MobileNativeChatComposer({
               testID="native-chat-composer-actions"
             >
               <MobileNativeChatDictationLeading
-                {...{ micActive, micStarting, micProcessing, cancelRef }}
+                {...{ micActive, micStarting, micProcessing, cancelRef, gap }}
               >
                 <MobileNativeChatComposerAttachButton
                   onAttachImage={onAttachImage}
@@ -367,6 +367,7 @@ export function MobileNativeChatComposer({
                   />
                 )}
               </MobileNativeChatDictationLeading>
+              {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
               {editSession ? mic : null}
               {editSession ? (
                 <MobileNativeChatEditActions

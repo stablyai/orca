@@ -18,6 +18,10 @@ import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
   BRIDGE_TERMINAL_KEY_RAIL_GRANT
 } from '../native-capabilities/bridge-terminal-key'
+import {
+  BRIDGE_SIDE_STRIP_COVER_GRANT,
+  BRIDGE_SIDE_STRIP_COVER_NOTIFY
+} from '../page-geometry/bridge-side-strip-cover'
 
 export type BridgeNotifyName = Extract<BridgeClientMessage, { type: 'notify' }>['name']
 
@@ -38,6 +42,7 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   [BRIDGE_FAULT_GRANT]: BRIDGE_FAULT_GRANT,
   [BRIDGE_HAPTICS_NOTIFY]: BRIDGE_HAPTICS_GRANT,
   [BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY]: BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  [BRIDGE_SIDE_STRIP_COVER_NOTIFY]: BRIDGE_SIDE_STRIP_COVER_GRANT,
   [BRIDGE_LIVENESS_PROBE_NOTIFY]: null
 }
 

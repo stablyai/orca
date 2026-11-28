@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
+import { useFocusedUsageRail } from '../rail-usage/use-shell-usage-rail'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
@@ -187,6 +188,10 @@ export function MobileHomeScreen() {
     [openBotHome, router, t]
   )
   const { bots, allClients } = data
+  // Every tab leaves the Duo's status column free; its rings show the first connected desktop's plans.
+  useFocusedUsageRail(
+    data.sortedHosts.map((host) => data.accountsByHost[host.id]).find(Boolean) ?? null
+  )
   // + shows only when a connected computer takes a new bot; the tab's lines say why not.
   const canCreateBot = useMemo(
     () => homeNewBotComputers(bots, t).some((computer) => computer.refusal === undefined),

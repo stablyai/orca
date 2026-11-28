@@ -1,5 +1,6 @@
 import type { MobileWebBundleManifestRead } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from '../bridge/native-capabilities/bridge-terminal-key'
+import { BRIDGE_SIDE_STRIP_COVER_GRANT } from '../bridge/page-geometry/bridge-side-strip-cover'
 import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
 import { BRIDGE_HAPTICS_GRANT } from '../bridge/native-capabilities/bridge-haptics-notify'
 import { BRIDGE_NATIVE_VERB_NAMES } from '../bridge/native-capabilities/bridge-native-verbs'
@@ -19,6 +20,8 @@ export const MOBILE_WEB_SHELL_GRANTS = [
   // The iPhone Duo key rail: the shell draws terminal keys in a side inset strip and forwards each
   // press as a frame, which only a page declaring this knows.
   BRIDGE_TERMINAL_KEY_RAIL_GRANT,
+  // Whether the page lays itself across that strip, so the shell keeps its usage rings off it then.
+  BRIDGE_SIDE_STRIP_COVER_GRANT,
   // Spread rather than restated: the verb table is keyed on this same tuple, so a verb cannot be
   // advertised without a row and a row cannot exist without being advertised.
   ...BRIDGE_NATIVE_VERB_NAMES

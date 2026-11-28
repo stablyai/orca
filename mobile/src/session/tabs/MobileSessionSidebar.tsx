@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native'
+import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Plus } from 'lucide-react-native'
 import { StatusDot } from '../../components/feedback/StatusDot'
 import { useNow } from '../../hooks/use-now'
@@ -22,7 +22,12 @@ import {
   useMobileSessionTabStopConfirm,
   type MobileSessionTabStop
 } from './MobileSessionTabStopConfirm'
-import type { MobileSessionSidebar as SidebarState } from './use-mobile-session-sidebar'
+import {
+  SIDEBAR_PEEK,
+  type MobileSessionSidebar as SidebarState
+} from './use-mobile-session-sidebar'
+import { useWindowSafeAreaInsets } from '../../layout/side-safe-area'
+import { sessionSidebarSidePadding } from './session-sidebar-side-inset'
 
 const PILL_HEIGHT = 48
 
@@ -46,6 +51,16 @@ export function MobileSessionSidebar({
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
+  const windowInsets = useWindowSafeAreaInsets()
+  const safeFrame = useSafeAreaFrame()
+  const { width: windowWidth } = useWindowDimensions()
+  const sidePadding = sessionSidebarSidePadding({
+    windowInsets,
+    windowWidth,
+    frameWidth: safeFrame.width,
+    docked: sidebar.docked,
+    sidebarPeek: SIDEBAR_PEEK
+  })
   const tabs = useTabSummaries(summaries)
   // The sidebar's one clock: the Older fold and the other workspaces' times read it.
   const now = useNow(60_000)
@@ -88,7 +103,7 @@ export function MobileSessionSidebar({
   const createDisabled = createTabBusy || connState !== 'connected'
   const pillBottom = insets.bottom + spacing.md
   return (
-    <View style={styles.panel}>
+    <View style={[styles.panel, sidePadding]}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
