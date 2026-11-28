@@ -120,7 +120,8 @@ Terminals you open with \`${cli} terminal create\` or \`split\` close with this 
 ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.workerHandle })}  # Ask the coordinator, then end your turn; Orca wakes you with the answer.
   # Never use a local question prompt such as AskUserQuestion; the
   # coordinator cannot see or answer it.
-  ${cli} orchestration ask --from ${params.workerHandle} --question "<your question>"
+  # Write Markdown questions to a file first; use - to read stdin.
+  ${cli} orchestration ask --from ${params.workerHandle} --question-file <path|->
 
   # Blocked, and the coordinator must act before you can continue:
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
