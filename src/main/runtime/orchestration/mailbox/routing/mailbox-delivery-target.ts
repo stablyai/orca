@@ -6,7 +6,18 @@ export type ForegroundShellProbe = {
   read: () => Promise<boolean>
 }
 
-type ProbeDeferral = { mailboxes: Set<string>; started: boolean; joinedInFlight: boolean }
+type ReservedTypes = ReadonlySet<string> | undefined
+
+// Each mailbox keeps the types another path owns, so redelivery doesn't type them.
+type ProbeDeferral = {
+  mailboxes: Map<string, ReservedTypes>
+  started: boolean
+  joinedInFlight: boolean
+}
+
+function unionReserved(a: ReservedTypes, b: ReservedTypes): ReservedTypes {
+  return a && b ? new Set([...a, ...b]) : (a ?? b)
+}
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
@@ -92,12 +103,13 @@ export class OrchestrationMailboxDeliveryTarget {
 
   /** Type only after async proof that the PTY exists and its agent, not a shell, is in front:
    *  the agent's status outlives its exit, so mail would run in the shell it left.
-   *  `redeliver(mailbox, reprobe)` types at once, or probes again when the proof went stale. */
+   *  `redeliver(mailbox, reprobe, reservedTypes)` types at once, or probes again when the proof went stale. */
   deferForTerminalProbe(
     ptyId: string,
     mailboxHandle: string,
     skipProbe: boolean | undefined,
-    redeliver: (mailboxHandle: string, reprobe: boolean) => void
+    redeliver: (mailboxHandle: string, reprobe: boolean, reservedTypes: ReservedTypes) => void,
+    reservedTypes?: ReadonlySet<string>
   ): boolean {
     if (skipProbe) {
       return false
@@ -111,14 +123,19 @@ export class OrchestrationMailboxDeliveryTarget {
     // A coordinator of several Runs can defer one mailbox per Run on the same probe.
     const inFlight = this.probeDeferrals.get(ptyId)
     if (inFlight) {
-      inFlight.mailboxes.add(mailboxHandle)
+      inFlight.mailboxes.set(
+        mailboxHandle,
+        inFlight.mailboxes.has(mailboxHandle)
+          ? unionReserved(inFlight.mailboxes.get(mailboxHandle), reservedTypes)
+          : reservedTypes
+      )
       // A later edge (the agent back at its prompt) may postdate the reading; one terminal's
       // mailboxes delivered in the same turn don't.
       inFlight.joinedInFlight ||= inFlight.started
       return true
     }
     const deferral: ProbeDeferral = {
-      mailboxes: new Set([mailboxHandle]),
+      mailboxes: new Map([[mailboxHandle, reservedTypes]]),
       started: false,
       joinedInFlight: false
     }
@@ -145,8 +162,8 @@ export class OrchestrationMailboxDeliveryTarget {
             shellInFront ||
             (probeShell !== null &&
               this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
-          for (const deferredMailbox of deferral.mailboxes) {
-            redeliver(deferredMailbox, stale)
+          for (const [deferredMailbox, reserved] of deferral.mailboxes) {
+            redeliver(deferredMailbox, stale, reserved)
           }
         }, 0)
       })

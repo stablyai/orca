@@ -128,7 +128,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         ptyId,
         mailboxHandle,
         options.skipTerminalProbe,
-        (probedMailbox, reprobe) => this.redeliverAfterProbe(ptyId, probedMailbox, reprobe)
+        (probedMailbox, reprobe, reservedTypes) =>
+          this.redeliverAfterProbe(ptyId, probedMailbox, reprobe, reservedTypes),
+        options.reservedTypes
       )
     ) {
       return
@@ -219,10 +221,15 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
   }
 
-  private redeliverAfterProbe(ptyId: string, mailboxHandle: string, reprobe: boolean): void {
+  private redeliverAfterProbe(
+    ptyId: string,
+    mailboxHandle: string,
+    reprobe: boolean,
+    reservedTypes: ReadonlySet<string> | undefined
+  ): void {
     const current = this.deps.getTerminal(ptyId)
     if (current) {
-      this.deliver(current, { mailboxHandle, skipTerminalProbe: !reprobe })
+      this.deliver(current, { mailboxHandle, reservedTypes, skipTerminalProbe: !reprobe })
     }
   }
 
