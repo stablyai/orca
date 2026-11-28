@@ -125,6 +125,9 @@ function focusTarget(page: Page, groupId: string): Promise<string> {
     if (active.hasAttribute('data-pane-actions-menu-trigger')) {
       return strip?.contains(active) ? 'owner-pane-actions' : 'other-pane-actions'
     }
+    if (active.hasAttribute('data-pane-close-trigger')) {
+      return strip?.contains(active) ? 'owner-pane-close' : 'other-pane-close'
+    }
     const slot = active.closest('[data-tab-strip-slot]')
     if (slot && strip?.contains(slot)) {
       return active.querySelector('[data-active="true"]') || active.matches('[data-active="true"]')
@@ -197,6 +200,43 @@ for (const how of ['Save', 'Cancel', 'Escape'] as const) {
       'Lint the repo'
     )
     await closeAddDialog(orcaPage, how)
-    await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-actions')
+    // The wide strip drops ⋯ for a direct Close button, which takes the focus.
+    await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-close')
   })
 }
+
+test('closing the ⋯ menu after the strip widens under it lands on Close', async ({ orcaPage }) => {
+  const groupId = await seedOwnerPane(orcaPage)
+  await narrowOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"] [data-pane-actions-menu-trigger]`)
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toBeVisible()
+  await widenOwnerPane(orcaPage, groupId)
+  await orcaPage.keyboard.press('Escape')
+  await expect.poll(() => focusTarget(orcaPage, groupId)).toBe('owner-pane-close')
+})
+
+test('clicking a strip control to dismiss the ⋯ menu after the strip widens keeps focus there', async ({
+  orcaPage
+}) => {
+  const groupId = await seedOwnerPane(orcaPage)
+  await narrowOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"] [data-pane-actions-menu-trigger]`)
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toBeVisible()
+  await widenOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"]`)
+    .getByRole('button', { name: 'Scroll tabs right' })
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toHaveCount(0)
+  // Focus moves in the frames after the menu unmounts; read it once they settle, not mid-move.
+  await orcaPage.evaluate(async () => {
+    for (let frame = 0; frame < 3; frame++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+  })
+  expect(await focusTarget(orcaPage, groupId)).toBe('owner-strip-control')
+})
