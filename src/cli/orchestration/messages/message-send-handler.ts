@@ -16,6 +16,7 @@ import {
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { WORKER_DONE_BLANK_BODY_ERROR } from '../../../shared/rpc-contract/orchestration/orchestration-params'
 import { requireWorkerDoneSettlement } from '../workers/orchestration-worker-settlement'
 import { getOptionalStructuredMessagePayload } from './message-payload'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
@@ -82,10 +83,15 @@ function rejectLifecycleGroupRecipient(type: string | undefined, to: string): vo
 export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
   'orchestration send': async (ctx) => {
     const { flags, client, cwd, json } = ctx
+    const type = getOptionalStringFlag(flags, 'type')
+    const body = await readTextOrFileFlag(flags, cwd, 'body', false)
+    // Older runtimes read '' as no body and complete the Task without its report.
+    if (type === 'worker_done' && body?.trim() === '') {
+      throw new RuntimeClientError('invalid_argument', WORKER_DONE_BLANK_BODY_ERROR)
+    }
     await refuseAgentServerRoute('send', ctx)
     await requirePeerMailCarrier(ctx)
     const to = getOptionalStringFlag(flags, 'to')
-    const type = getOptionalStringFlag(flags, 'type')
     if (to) {
       rejectLifecycleGroupRecipient(type, to)
     }
@@ -118,7 +124,7 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       on: getOptionalStringFlag(flags, 'on'),
       onClient: getOptionalStringFlag(flags, 'on-client'),
       subject: getRequiredStringFlag(flags, 'subject'),
-      body: await readTextOrFileFlag(flags, cwd, 'body', false),
+      body,
       type,
       priority: getOptionalStringFlag(flags, 'priority'),
       threadId: getOptionalStringFlag(flags, 'thread-id'),
