@@ -3,6 +3,7 @@ import type {
   SshTargetUpdateInput
 } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import {
+  getDefaultSshTargetLabel,
   getSshTargetDraftConnectionFields,
   type EditingTarget
 } from '../../../ssh-host-form/ssh-target-draft'
@@ -47,7 +48,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   const reconnectOnLaunch = form.reconnectOnLaunch ? undefined : false
 
   const target: SshTargetCreateInput = {
-    label: form.label.trim() || (username ? `${username}@${host}` : configHost),
+    label: form.label.trim() || getDefaultSshTargetLabel({ host, configHost, username, port }),
     configHost,
     host,
     port,

@@ -1,6 +1,11 @@
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 
 export type WatchRootArgs = { worktreePath: string; connectionId: string | undefined }
+
+export function localWatchRoot(path: string): WatchRootArgs {
+  return { worktreePath: path, connectionId: undefined }
+}
 
 /** 'deferred': main will install it when watcher capacity frees; 'failed': nothing is watching it. */
 export type WatchRootStatus = 'pending' | 'watching' | 'deferred' | 'failed'
@@ -111,7 +116,12 @@ function requestWatch(root: HeldWatchRoot, onError: (error: unknown) => void): v
   )
 }
 
-export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): void {
+/** With `onHandOver`, main returns the events it had queued for this window on that root, so a successor watch loses none. */
+export function releaseWatchRoot(
+  roots: HeldWatchRoots,
+  target: WatchRootArgs,
+  onHandOver?: (payload: FsChangedPayload) => void
+): void {
   const key = getWatchRootKey(target)
   const held = roots.get(key)
   if (!held) {
@@ -122,7 +132,11 @@ export function releaseWatchRoot(roots: HeldWatchRoots, target: WatchRootArgs): 
     return
   }
   roots.delete(key)
-  void window.api.fs.unwatchWorktree(held.args)
+  void window.api.fs.unwatchWorktree({ ...held.args, handOver: onHandOver !== undefined }).then(
+    (undelivered) => undelivered && onHandOver?.(undelivered),
+    // Why: a failed unwatch has nothing to hand over.
+    () => undefined
+  )
 }
 
 export function releaseAllWatchRoots(roots: HeldWatchRoots): void {

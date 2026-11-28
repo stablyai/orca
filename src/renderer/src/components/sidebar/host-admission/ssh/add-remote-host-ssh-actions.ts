@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
+  getDefaultSshTargetLabel,
   getEditingTargetFromSshConfigHost,
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
@@ -18,7 +19,7 @@ import {
   type SshTargetCreateInput
 } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
-import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
+import { isDuplicateSshTarget, type SshTargetIdentity } from './ssh-target-duplicate'
 
 type SshApi = {
   listTargets: () => Promise<SshTarget[]>
@@ -31,10 +32,8 @@ type SshApi = {
   }>
 }
 
-type SavedSshHost = Pick<SshTarget, 'configHost' | 'label' | 'host'>
-
 /** `ssh` is this client's own API or a paired server's (whose hosts never touch local metadata). */
-export async function saveNewSshHostFromForm<T extends SavedSshHost>({
+export async function saveNewSshHostFromForm<T extends SshTargetIdentity>({
   form,
   ssh,
   recordSshRepoReadoptions,
@@ -77,7 +76,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   const systemSshConnectionReuse = form.systemSshConnectionReuse ? undefined : false
   const systemSshProxyConnectionReuse = form.systemSshProxyConnectionReuse ? true : undefined
   const target = {
-    label: form.label.trim() || (username ? `${username}@${host}` : configHost || host),
+    label: form.label.trim() || getDefaultSshTargetLabel({ host, configHost, username, port }),
     configHost,
     host,
     port,
@@ -93,15 +92,7 @@ export async function saveNewSshHostFromForm<T extends SavedSshHost>({
   }
 
   try {
-    const existingTargets = await ssh.listTargets()
-    if (
-      isDuplicateSshTargetAlias({
-        existingTargets,
-        configHost: target.configHost,
-        label: target.label,
-        host: target.host
-      })
-    ) {
+    if (isDuplicateSshTarget(await ssh.listTargets(), target)) {
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.sshAlreadyExists',

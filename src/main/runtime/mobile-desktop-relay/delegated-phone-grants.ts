@@ -3,11 +3,14 @@ import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES,
+  DELEGATED_MOBILE_DEVICE_SYNC_ORIGIN_RUNTIME_CAPABILITY,
   DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY,
-  type DelegatedMobileDeviceSyncParams
+  type DelegatedPhone
 } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { pairedDesktopInstanceId } from '../../ipc/runtime-environments/connections/paired-desktop-instance-id'
 
 const SyncResultSchema = lazyZodSchema(() =>
   z.object({
@@ -36,7 +39,9 @@ export type DelegatedPhoneGrants =
 export async function syncDelegatedPhoneGrants(
   hosts: MobileDesktopRelayHosts,
   host: MobileDesktopRelayHost,
-  phones: DelegatedMobileDeviceSyncParams['phones']
+  phones: readonly DelegatedPhone[],
+  // Runs once the server can mint phones, before the sync that may mint one goes out.
+  beforeSync: () => Promise<void> = async () => {}
 ): Promise<DelegatedPhoneGrants> {
   const status = await hosts.call(host, 'status.get', undefined)
   if (!status.ok) {
@@ -46,8 +51,13 @@ export async function syncDelegatedPhoneGrants(
   if (!capabilities.includes(DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY)) {
     return { kind: 'update-needed', fence: host.fence }
   }
+  await beforeSync()
   const response = await hosts.call(host, DELEGATED_MOBILE_DEVICE_SYNC_METHOD, {
-    phones: phones.slice(0, DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
+    phones: phones.slice(0, DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES),
+    // Names this installation, so the host drops only its phones on a row other desktops share.
+    ...(capabilities.includes(DELEGATED_MOBILE_DEVICE_SYNC_ORIGIN_RUNTIME_CAPABILITY)
+      ? { clientInstanceId: await pairedDesktopInstanceId(getAppEnvironment().getPath('userData')) }
+      : {})
   })
   if (!response.ok) {
     throw new RemoteRuntimeClientError('remote_runtime_unavailable', response.error.message)
