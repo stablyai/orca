@@ -52,6 +52,17 @@ export function excludeAbsentOwnerReplay<
     : owner
 }
 
+/** Moves the kept dead binding to the spawn that will swap it; the operation no longer owns it. */
+export function takeReplacedPaneOwner(
+  operation: PaneSpawnOperation | undefined
+): ReplacedPaneOwner | undefined {
+  const owner = operation?.replacedOwner
+  if (operation) {
+    delete operation.replacedOwner
+  }
+  return owner
+}
+
 export function assertPaneStillExists(
   store: Store | undefined,
   worktreeId: string,

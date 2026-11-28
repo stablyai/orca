@@ -3,7 +3,7 @@ import { requireAcceptedSpawn } from '../spawn/spawn-outcome'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn/spawn-operation'
 import { checkPtyIpcLaunchPane, resolveEarlyPaneKey } from './spawn-begin'
 import { stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
-import { keepAbsentBindingForSwap } from './spawn-absent-binding-swap'
+import { keepsAbsentBindingForSwap } from './spawn-absent-binding-swap'
 import { planPaneAgentLaunch } from './spawn-agent-launch'
 import { applyAgentLaunchPluginHook } from '../spawn/spawn-agent-launch-plugin-hook'
 import { endPaneAgentLaunch } from './spawn-agent-launch-end'
@@ -101,7 +101,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
       }
     },
-    adoption: () => ({ renderer: true, keepAbsentBinding: keepAbsentBindingForSwap(ctx) }),
+    adoption: () => ({ renderer: true, keepAbsentBinding: keepsAbsentBindingForSwap(ctx) }),
     ...(args.replacesPtyId !== undefined
       ? {
           replace: async () => {

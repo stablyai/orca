@@ -50,7 +50,7 @@ import {
 } from './inventory-operations'
 import { observeInProcessWorkerExits } from './in-process-exit-observer'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { keepAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
+import { keepsAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
@@ -70,7 +70,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       await awaitLocalPtyStartup(args.connectionId)
       const adopted = await adoptStablePane({
         ...args,
-        keepAbsentBinding: keepAbsentBindingForSwap({ args })
+        // Only a fresh launch can swap the dead binding.
+        keepAbsentBinding: args.spawnFresh !== undefined && keepsAbsentBindingForSwap({ args })
       })
       if (adopted) {
         await adoptMaterializedRuntimePtySpawn(

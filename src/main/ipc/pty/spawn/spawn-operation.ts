@@ -1,4 +1,4 @@
-import type { PaneSpawnOperation } from '../pane/pane-spawn-operation'
+import { takeReplacedPaneOwner, type PaneSpawnOperation } from '../pane/pane-spawn-operation'
 import type { AdoptStablePaneArgs } from '../ipc/spawn-types'
 import { adoptedOutcome, type PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnOperationState, PtySpawnExecutionFacts } from './spawn-operation-state'
@@ -81,6 +81,9 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
   const args = ctx.args
   ctx.preAdoptedStablePane = args.adoptedStablePane ?? null
   ctx.paneSpawnOperation = args.paneSpawnOperation
+  // From here this start owns the dead binding: its catch retires it on any failure.
+  const keptByCaller = takeReplacedPaneOwner(args.paneSpawnOperation)
+  ctx.replacedPaneOwner ??= keptByCaller ?? null
   const replacementKey = adapter.replace ? resolveEarlyPaneSpawnReservationKey(args) : null
   // Keep replacement authority across stopping the previous process.
   if (replacementKey) {
@@ -213,7 +216,8 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     }
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
-    ctx.replacedPaneOwner ??= operation.replacedOwner ?? null
+    const kept = takeReplacedPaneOwner(operation)
+    ctx.replacedPaneOwner ??= kept ?? null
     prepared = true
     await adapter.prepare()
     const latePane =

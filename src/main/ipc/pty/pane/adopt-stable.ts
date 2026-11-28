@@ -23,9 +23,11 @@ import { resolveStablePaneOwner } from './stable-owner'
 import { completePaneAdoption } from './complete-pane-adoption'
 import {
   assertPaneStillExists,
+  takeReplacedPaneOwner,
   type AbsentPaneBinding,
   type PaneSpawnOperation
 } from './pane-spawn-operation'
+import { releaseStoppedPaneBinding } from './pane-owner-replacement'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
@@ -143,14 +145,16 @@ export async function adoptStablePane(
   }
   let mustExist = false
   let absentOwner: AbsentPaneBinding | undefined
-  // A dead binding kept for swap rides on the fresh operation, whichever spawn takes it.
+  // A dead binding kept for swap rides on the fresh operation until a spawn takes it; until then
+  // this adoption owns it and retires it on failure.
   let keptOwner: ReplacedPaneOwner | undefined
-  const keepAbsentBinding = args.keepAbsentBinding
-    ? (dead: ReplacedPaneOwner) => {
-        keptOwner = dead
-        args.keepAbsentBinding?.(dead)
-      }
-    : undefined
+  let freshOperation: PaneSpawnOperation | undefined
+  const keepAbsentBinding =
+    args.keepAbsentBinding && args.spawnFresh
+      ? (dead: ReplacedPaneOwner) => {
+          keptOwner = dead
+        }
+      : undefined
   try {
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
@@ -165,6 +169,7 @@ export async function adoptStablePane(
         }
         mustExist = true
         absentOwner = undefined
+        keptOwner = undefined
         if (args.worktreeId && typeof store?.getWorkspaceSession === 'function') {
           assertPaneStillExists(store, args.worktreeId, args.tabId, args.leafId, args.connectionId)
         }
@@ -217,6 +222,7 @@ export async function adoptStablePane(
           ...(keptOwner ? { replacedOwner: keptOwner } : {}),
           acquisition: { key, reservation, settle: (outcome) => settle(outcome, operation) }
         }
+        freshOperation = operation
         const result = await args.spawnFresh(operation)
         settle(
           {
@@ -229,6 +235,10 @@ export async function adoptStablePane(
       }
     })
   } catch (error) {
+    const unclaimed = freshOperation ? takeReplacedPaneOwner(freshOperation) : keptOwner
+    if (unclaimed) {
+      await releaseStoppedPaneBinding(store, unclaimed)
+    }
     rejectPaneSpawnReservation(key, reservation, error)
     throw error
   }

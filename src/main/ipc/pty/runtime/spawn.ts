@@ -6,7 +6,7 @@ import { applyAgentLaunchPluginHook } from '../spawn/spawn-agent-launch-plugin-h
 import { buildRuntimePtySpawnOptions } from './spawn-options'
 import { commitRuntimePtySpawn } from './spawn-commit'
 import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-state'
-import { keepAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
+import { keepsAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
 import {
   commitRuntimeSpawnHiddenDelivery,
   markRuntimeSpawnHiddenBeforeSpawn,
@@ -60,7 +60,7 @@ export async function spawnPtyFromRuntimeController(
     // A restart's dead binding stays until the fresh bind swaps it, so the pane is never shown unbound.
     adoption: () => ({
       completed: args.adoptedStablePane,
-      keepAbsentBinding: keepAbsentBindingForSwap(ctx)
+      keepAbsentBinding: keepsAbsentBindingForSwap(ctx)
     })
   })
   const result = requireAcceptedSpawn(outcome)
