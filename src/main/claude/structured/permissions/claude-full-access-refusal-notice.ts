@@ -14,6 +14,10 @@ import {
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
 import { claudeChildPermissionCut } from './claude-permission-dispatch-authority'
+import {
+  CLAUDE_REFUSAL_NOTICE_PREFIX,
+  CLAUDE_REFUSAL_NOTICE_TIMED
+} from '../../../../shared/agent-session/journal/claude-refusal-notice-family'
 
 export type ClaudeNoticeState = Pick<
   ClaudeSession,
@@ -24,8 +28,7 @@ type ClaudeNoticeFacts = Parameters<typeof claudeInPlan>[0] & Pick<ClaudeSession
 
 export type ClaudeFullAccessRefusalNotice = { id: string; body: AgentJournalStatusItem }
 
-export const CLAUDE_REFUSAL_NOTICE_PREFIX = 'full-access-refused:claude:'
-export const CLAUDE_REFUSAL_NOTICE_TIMED = 't'
+export { CLAUDE_REFUSAL_NOTICE_PREFIX, CLAUDE_REFUSAL_NOTICE_TIMED }
 export const EARLIER_PROCESS_WARNING = 'earlier-process'
 export const CLAUDE_AUTO_RESTORED_NOTICE_ID = 'restored:auto'
 export const CLAUDE_FULL_ACCESS_RESTORED_NOTICE_ID = 'restored:bypassPermissions'

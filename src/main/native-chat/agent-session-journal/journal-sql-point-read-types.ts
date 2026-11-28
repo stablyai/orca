@@ -63,8 +63,9 @@ export type JournalSqlPointRead = {
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string; sinceFence?: number }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
-    /** The visible item id starting with `prefix` appended last (by journal position), and the
-     *  greatest id from `prefix + timedFrom` on, whose ids lead with a time. */
+    /** Saved Claude permission rows only (any other `prefix`/`timedFrom` throws): the visible id
+     *  appended last by journal position, and the greatest visible id from `prefix + timedFrom`
+     *  on, whose ids lead with a time. Each is one seek of its own partial index. */
     | { kind: 'newest-item-id'; prefix: string; timedFrom: string }
     | JournalAcpHistoryRead
     | JournalAcpHistoryItemsRead

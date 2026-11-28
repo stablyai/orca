@@ -13,6 +13,7 @@ import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
+import { readJournalClaudeRefusalHead } from './database/journal-claude-refusal-indexes'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -112,29 +113,8 @@ export function readJournalDomainEntity(
           .all(JSON.stringify(operation.itemIds), ...prefix)
           .map((row) => String(row.item_id))
       }
-    case 'newest-item-id': {
-      // Newest is the last appended row: journal position, never id order, which a clock moved
-      // back can invert. Forced onto the primary key so only this family's rows are visited,
-      // not the chat's whole visible-position index. The greatest timed id is the floor for
-      // ids minted next: one row from the primary key walked backward (`\uffff` sorts after
-      // every encoded id).
-      const end = `${operation.prefix}\uffff`
-      const newest = db
-        .prepare(`SELECT item_id FROM journal_items INDEXED BY sqlite_autoindex_journal_items_1
-        WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0
-        ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
-        .get(...prefix, operation.prefix, end)
-      const timed = db
-        .prepare(`SELECT item_id FROM journal_items
-        WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0
-        ORDER BY item_id DESC LIMIT 1`)
-        .get(...prefix, `${operation.prefix}${operation.timedFrom}`, end)
-      return {
-        kind: operation.kind,
-        itemId: newest ? String(newest.item_id) : null,
-        greatestTimedId: timed ? String(timed.item_id) : null
-      }
-    }
+    case 'newest-item-id':
+      return { kind: operation.kind, ...readJournalClaudeRefusalHead(db, prefix, operation) }
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,
