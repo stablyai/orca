@@ -51,6 +51,8 @@ type Watched = {
   /** The wait before a failed serve is asked again, and that retry while it waits. */
   retryMs: number
   retry: ReturnType<typeof setTimeout> | null
+  /** When a held call last asked for a serve, so calls ask at most once per retry wait. */
+  askedAt: number
 }
 
 export class ToolRelayFronts {
@@ -194,6 +196,7 @@ export class ToolRelayFronts {
       opening: new Set(),
       token: null,
       ended: null,
+      askedAt: 0,
       retryMs: SERVE_RETRY_MIN_MS,
       retry: null,
       stop: () => {
@@ -290,12 +293,12 @@ export class ToolRelayFronts {
     try {
       // The daemon re-announces held connections while it answers the serve request. Unserved,
       // its kept agents' tokens aren't known: the connection stays held and gets the 503.
-      if (
-        !(await watched.served.then(
-          () => true,
-          () => false
-        ))
-      ) {
+      if (!(await watched.served.then(() => true).catch(() => false))) {
+        // The call itself asks for a serve (one at a time), so its retry finds the front served.
+        if (Date.now() - watched.askedAt >= SERVE_RETRY_MIN_MS) {
+          watched.askedAt = Date.now()
+          void this.serveOnce(client).catch(() => {})
+        }
         return
       }
       // One retry: the daemon announces a held connection once per serving connection.
