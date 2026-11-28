@@ -5,6 +5,13 @@ import { scrubAntigravityAcpEnvironment } from './antigravity-acp-environment-sa
 // of them could take a key chat off its key, onto a mode that reads agy's shared saved login.
 const AGY_SIGN_IN_SELECTOR = /^(?:AGY_ADC_AUTH|AGY_ACCOUNT|AGY_LLM_GATEWAY_.*)$/
 
+export function isAgySignInSelector(
+  key: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return AGY_SIGN_IN_SELECTOR.test(platform === 'win32' ? key.toUpperCase() : key)
+}
+
 /** The environment for agy on a home Orca owns: only the saved method's credential, and none of agy's own sign-in selectors. On Windows an alternate-case updater flag, here or
  *  inherited, would shadow the configured uppercase entry. */
 export function scrubAgyOrcaHomeEnvironment(
@@ -16,7 +23,7 @@ export function scrubAgyOrcaHomeEnvironment(
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = platform === 'win32' ? key.toUpperCase() : key
     return (
-      AGY_SIGN_IN_SELECTOR.test(normalized) ||
+      isAgySignInSelector(key, platform) ||
       (platform === 'win32' && normalized === 'AGY_CLI_DISABLE_AUTO_UPDATE' && key !== normalized)
     )
   })

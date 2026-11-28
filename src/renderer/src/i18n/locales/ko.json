@@ -16154,14 +16154,18 @@
           "resetDone": "아이콘과 색상이 재설정됨",
           "undo": "실행 취소",
           "styleLetters": "글자",
-          "stylePicture": "사진",
-          "resetAppearance": "아이콘 및 색상 재설정",
+          "styleImage": "이미지",
           "faviconPlaceholder": "파비콘을 가져올 웹사이트",
           "lettersInput": "최대 2글자",
           "lettersPlaceholder": "1–2글자",
           "useLetters": "“{{value0}}” 사용",
-          "usingGitHubAvatar": "GitHub 아바타 사용 중",
-          "openSettings": "설정 열기"
+          "openSettings": "설정 열기",
+          "noIconFound": "아이콘을 찾을 수 없음",
+          "githubAvatar": "GitHub 아바타",
+          "websiteIcon": "웹사이트 아이콘",
+          "fetchIcon": "가져오기",
+          "uploadTooLarge": "256KB 초과",
+          "options": "옵션"
         }
       },
       "pet": {
@@ -19152,7 +19156,7 @@
           "runStatusDispatchFailed": "실패"
         },
         "runContent": {
-          "noOutput": "사용 가능한 출력 내용이 없습니다."
+          "noOutput": "출력이 없습니다."
         },
         "runViewState": {
           "viewRun": "실행 보기",
@@ -22187,10 +22191,7 @@
         "refused": "Google이 이 채팅의 자격 증명을 거부했습니다.",
         "usageLimit": "이 로그인의 사용량 한도에 도달했습니다.",
         "signInGoogle": "Google로 로그인",
-        "yourAgy": "내 agy",
         "yourAgyVersion": "내 agy · v{{version}}",
-        "orcasAgy": "Orca의 agy",
-        "orcasAgyVersion": "Orca의 agy · v{{version}}",
         "runsOn": "실행 위치: {{program}}",
         "keepsOwnLogin": "이 채팅은 agy 자체 Google 로그인을 유지합니다. 새 채팅은 다음을 사용합니다: {{method}}.",
         "apiKeyEnvironment": "환경 변수에서 가져옴",
@@ -25464,7 +25465,6 @@
       "noEmailNotSaved": "agy가 이메일을 알려주지 않음 · 저장되지 않음",
       "saveShort": "저장",
       "active": "활성",
-      "runtime": "런타임",
       "chatTitle": "Antigravity 채팅",
       "terminalTitle": "터미널의 agy",
       "terminalDescription": "agy가 저장한 자체 계정을 사용합니다. 전환하면 새 agy 세션에 적용됩니다.",
@@ -29265,10 +29265,10 @@
         "replyTo": "{{name}}에게 답장…"
       },
       "empty": {
-        "allClear": "확인이 필요한 것이 없습니다",
+        "allClear": "확인할 항목이 없습니다",
         "body": "{{bot}}이(가) 내 일을 맡으면 무엇을 하고 있는지, 나에게 무엇이 필요한지와 함께 여기에 표시됩니다.",
         "filtered": "일치하는 항목이 없습니다.",
-        "needsYou": "확인이 필요한 것이 없습니다.",
+        "needsYou": "확인할 항목이 없습니다.",
         "title": "아직 항목이 없습니다",
         "short": "아직 항목이 없습니다. {{bot}}이(가) 일을 맡으면 여기에 표시됩니다."
       },

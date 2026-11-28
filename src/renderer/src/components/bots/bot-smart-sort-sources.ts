@@ -6,6 +6,7 @@ import {
   buildExplicitEntriesByWorktreeId
 } from '../../../../shared/sidebar-list/sorting/smart-attention'
 import {
+  EMPTY_MIRRORED_TAB_IDS,
   buildMirroredTabIds,
   resolveWorktreeAttention,
   type SmartAttentionIndexes
@@ -74,13 +75,17 @@ function sharedIndexesFor(state: AppState): SmartAttentionIndexes {
   }
   let indexes = byUnsupported.get(state.migrationUnsupportedByPtyId)
   if (!indexes) {
+    const entriesByAttributedWorktreeId = getAttributedByWorktree(state.agentStatusByPaneKey)
     indexes = {
       entriesByTabId: getEntriesByTabId(
         state.agentStatusByPaneKey,
         state.migrationUnsupportedByPtyId
       ),
-      entriesByAttributedWorktreeId: getAttributedByWorktree(state.agentStatusByPaneKey),
-      mirroredTabIds: getMirroredTabIds(state.tabsByWorktree)
+      entriesByAttributedWorktreeId,
+      mirroredTabIds:
+        entriesByAttributedWorktreeId.size > 0
+          ? getMirroredTabIds(state.tabsByWorktree)
+          : EMPTY_MIRRORED_TAB_IDS
     }
     byUnsupported.set(state.migrationUnsupportedByPtyId, indexes)
   }

@@ -16004,13 +16004,17 @@
           "openRemote": "在浏览器中打开 {{value0}}",
           "openSettings": "打开设置",
           "openUpstream": "在浏览器中打开 {{value0}}",
-          "resetAppearance": "重置图标和颜色",
           "resetDone": "图标和颜色已重置",
           "styleLetters": "字母",
-          "stylePicture": "图片",
+          "styleImage": "图片",
           "undo": "撤销",
           "useLetters": "使用“{{value0}}”",
-          "usingGitHubAvatar": "正在使用 GitHub 头像"
+          "noIconFound": "未找到图标",
+          "githubAvatar": "GitHub 头像",
+          "websiteIcon": "网站图标",
+          "fetchIcon": "获取",
+          "uploadTooLarge": "超过 256 KB",
+          "options": "选项"
         }
       },
       "pet": {
@@ -18977,7 +18981,7 @@
           "runStatusDispatchFailed": "失败"
         },
         "runContent": {
-          "noOutput": "没有可用的输出内容"
+          "noOutput": "没有输出"
         },
         "runViewState": {
           "viewRun": "查看运行",
@@ -20029,7 +20033,7 @@
         "dismiss": "忽略",
         "retry": "重试",
         "stateResumed": "已恢复",
-        "stateNeedsYou": "需要你处理",
+        "stateNeedsYou": "需要你",
         "stateResuming": "正在恢复",
         "stateStopped": "已停止",
         "resumingOne": "正在恢复 {{name}}…",
@@ -20037,7 +20041,7 @@
         "failedSome_other": "无法恢复：{{total}} 个中的 {{count}} 个",
         "resumedOne": "已恢复 {{name}}",
         "resumedMany_other": "已恢复 {{count}} 个智能体",
-        "needYou_other": "{{count}} 个需要你处理",
+        "needYou_other": "{{count}} 个需要你",
         "resumedCount_other": "已恢复 {{count}} 个"
       },
       "NativeChatResumeFailureGuidance": {
@@ -21000,9 +21004,9 @@
         "prompt": "提示词",
         "result": "结果",
         "close": "关闭",
-        "needsYou": "需要你处理",
-        "agentNeedsYou": "{{name}} 需要你处理",
-        "mainNeedsYou": "主代理需要你处理",
+        "needsYou": "需要你",
+        "agentNeedsYou": "{{name}} 需要你",
+        "mainNeedsYou": "主代理需要你",
         "show": "查看"
       },
       "drop": {
@@ -21564,7 +21568,7 @@
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
         "failedCount": "{{count}} 个失败",
-        "needsYouCount": "{{count}} 个等待你处理",
+        "needsYouCount": "{{count}} 个需要你",
         "newQuestions_other": "{{count}} 个新的工作者问题等待你回答",
         "waitingOnYouName": "{{name}} · 等待你处理",
         "moreQuestions": "另有 {{count}} 个等待你处理",
@@ -21963,10 +21967,7 @@
         "refused": "Google 拒绝了此聊天的凭据",
         "usageLimit": "此登录凭据已达到使用上限",
         "signInGoogle": "使用 Google 登录",
-        "yourAgy": "你的 agy",
         "yourAgyVersion": "你的 agy · v{{version}}",
-        "orcasAgy": "Orca 自带的 agy",
-        "orcasAgyVersion": "Orca 自带的 agy · v{{version}}",
         "runsOn": "运行于：{{program}}",
         "keepsOwnLogin": "此聊天沿用 agy 自带的 Google 登录，新聊天将使用 {{method}}",
         "apiKeyEnvironment": "来自你的环境变量",
@@ -23467,7 +23468,7 @@
       "collapse": "收起编排面板",
       "show": "显示编排：{{counts}}",
       "summary": "编排：{{counts}}",
-      "needsYou_other": "{{count}} 个需要你处理",
+      "needsYou_other": "{{count}} 个需要你",
       "waitingPrefix": "等待你回复 · ",
       "noTask": "无共享任务",
       "open": "打开 {{name}}",
@@ -24479,7 +24480,7 @@
       "groupComposer": "给 {{group}} 发消息，输入 @ 提及 bot",
       "items": "事项",
       "inProgress": "进行中",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "itemMeta": "事项 {{number}} · {{bot}} · 刚刚",
       "activity": "活动",
       "activityAdded": "<b>{{bot}}</b> 添加了此事项",
@@ -24492,7 +24493,7 @@
       "itemDocs": "更新文档",
       "idle": "空闲",
       "inProgressCount": "{{count}} 项进行中",
-      "needsYouCount": "{{count}} 项需要你处理",
+      "needsYouCount": "{{count}} 项需要你",
       "itemsAsk": "修复 CSV 导出和 Safari 登录问题，再更新一下文档",
       "itemsReply": "收到。我会把每件事都作为一个事项来跟踪",
       "askAnything": "随心输入",
@@ -25160,7 +25161,6 @@
       "noEmailNotSaved": "agy 未提供邮箱 · 未保存",
       "saveShort": "保存",
       "active": "当前",
-      "runtime": "运行时",
       "chatTitle": "Antigravity 聊天",
       "terminalTitle": "终端中的 agy",
       "terminalDescription": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话",
@@ -27514,7 +27514,7 @@
       "branch": "分支",
       "startedIn": "在 {{name}} 中启动",
       "idle": "空闲",
-      "needsYou": "需要你处理",
+      "needsYou": "需要你",
       "askedCoordinator": "已向 {{name}} 提问",
       "waitsOnBackground": "正在等待它的后台任务",
       "chat": "聊天"
@@ -28526,7 +28526,7 @@
       "open": "打开",
       "actions": "聊天操作",
       "hideOlder": "隐藏更早的",
-      "needsYouCount": "{{count}} 项需要你处理"
+      "needsYouCount": "{{count}} 项需要你"
     },
     "items": {
       "view": {
@@ -28559,7 +28559,7 @@
         "replyingTo": "回复：{{question}}。转到该问题",
         "linked": "关联了 {{links}}",
         "made": "添加了此事项",
-        "madeNeedsYou": "添加了此事项，并标记为“需要你处理”",
+        "madeNeedsYou": "添加了此事项，并标记为“需要你”",
         "moved": "将此事项移至",
         "noComments": "还没有评论",
         "notSent": "未发送",
@@ -28638,10 +28638,10 @@
         "replyTo": "回复 {{name}}…"
       },
       "empty": {
-        "allClear": "没有需要你处理的事项，也没有正在运行的工作",
+        "allClear": "暂无事项需要你",
         "body": "当 {{bot}} 为你接手任务时，会在这里显示它正在做什么，以及需要你做什么",
         "filtered": "没有匹配的事项",
-        "needsYou": "没有需要你处理的事项",
+        "needsYou": "暂无事项需要你",
         "title": "还没有事项",
         "short": "还没有事项。当 {{bot}} 接手任务时，会显示在这里"
       },
@@ -28655,7 +28655,7 @@
       "filter": {
         "clearAll": "清除筛选",
         "label": "筛选事项",
-        "needsYou": "仅显示需要你处理的",
+        "needsYou": "只看需要你",
         "remove": "移除筛选条件 {{name}}"
       },
       "group": {
@@ -28703,7 +28703,7 @@
       "status": {
         "canceled": "已取消",
         "done": "已完成",
-        "needsYou": "需要你处理",
+        "needsYou": "需要你",
         "planned": "已计划",
         "working": "进行中",
         "waiting": "等待中"
@@ -29516,7 +29516,7 @@
       "newThreadTab": "新话题",
       "items": {
         "orNames": "{{names}} 或 {{last}}",
-        "emptyBotsNeedsYou": "{{names}} 没有需要你处理的事项",
+        "emptyBotsNeedsYou": "{{names}} 暂无事项需要你",
         "emptyBots": "没有来自 {{names}} 的事项",
         "emptyTitle": "此群组还没有事项",
         "filterNamed": "筛选事项，当前筛选：{{filter}}",
@@ -30115,7 +30115,7 @@
       "emptyTemplates": "模板",
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
-      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你处理，{{unread}} 个未读，{{working}} 个工作中",
+      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 个需要你，{{unread}} 个未读，{{working}} 个工作中",
       "new": "新建 bot 或群组",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"

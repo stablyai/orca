@@ -1,3 +1,4 @@
+import { forgetHostInstallation } from '../host-descriptors/direct-pairing-installations'
 import type { QueryClient } from '@tanstack/react-query'
 import { discardConnectionLogs } from '../diagnostics/connection/persisted-connection-log-store'
 import { wipeHostStore } from '../device-store/device-store'
@@ -28,6 +29,7 @@ export async function removeHostAndCloseClient(
   }
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
+  forgetHostInstallation(hostId)
   // Before the wipe, so nothing this world still holds is written back after it.
   forgetNativeHostQueries(queryClient, hostId)
   forgetKeptBots(hostId)

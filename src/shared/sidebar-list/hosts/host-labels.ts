@@ -86,6 +86,42 @@ export function getProjectHeaderHostRepos(args: {
   const { group, defaultHostId } = args
   const hostOf = (repo: Repo | undefined): ExecutionHostId =>
     getRepoExecutionHostIdOrDefault(repo, defaultHostId)
+  const groupHostId = hostOf(group.repo)
+  // Fast path: when every row sits on the single header's host, no per-host header map is needed.
+  let hasForeignHost = false
+  for (let i = 0; i < group.items.length; i += 1) {
+    const worktree = group.items[i]
+    if (
+      getWorktreeExecutionHostId(worktree, args.repoOf(worktree), defaultHostId) !== groupHostId
+    ) {
+      hasForeignHost = true
+      break
+    }
+  }
+  if (!hasForeignHost) {
+    for (const repoId of group.repoIds) {
+      if (args.hasPendingCreation(repoId)) {
+        const repo = args.repoMap.get(repoId)
+        if (repo && hostOf(repo) !== groupHostId) {
+          hasForeignHost = true
+          break
+        }
+      }
+      const noticeRepos = args.noticeRepoOf(repoId)
+      for (let i = 0; i < noticeRepos.length; i += 1) {
+        if (hostOf(noticeRepos[i]) !== groupHostId) {
+          hasForeignHost = true
+          break
+        }
+      }
+      if (hasForeignHost) {
+        break
+      }
+    }
+  }
+  if (!hasForeignHost) {
+    return undefined
+  }
   const rowHostIds = new Set<ExecutionHostId>()
   const registrations: Repo[] = group.repo ? [group.repo] : []
   for (const worktree of group.items) {
@@ -108,9 +144,6 @@ export function getProjectHeaderHostRepos(args: {
       registrations.push(noticeRepo)
       rowHostIds.add(hostOf(noticeRepo))
     }
-  }
-  if (rowHostIds.size === 0 || (rowHostIds.size === 1 && rowHostIds.has(hostOf(group.repo)))) {
-    return undefined
   }
   const projectRepoIds = new Set(group.repoIds)
   if (group.repo) {
@@ -213,6 +246,14 @@ export function getMixedWorktreeHostContextLabels(
   }
   if (!isMixed) {
     return undefined
+  }
+  if (folderWorkspaces.length === 0) {
+    return getSharedMixedHostContextLabels(worktrees, {
+      getHostId: (worktree) =>
+        getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId),
+      getIdentity: getWorktreeHostIdentity,
+      sources: { hostLabelById }
+    })
   }
   const rows = [
     ...worktrees.map((worktree) => ({

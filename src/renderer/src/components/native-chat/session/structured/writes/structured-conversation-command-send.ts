@@ -7,7 +7,10 @@ import { sayAgentSessionFailureTranslated } from '../../../messages/notices/agen
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { agentSessionVisibleFailureFacts } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
-import type { StructuredPromptItem } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import {
+  structuredAgentSessionReplacedStartFailureRowIds,
+  type StructuredPromptItem
+} from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -173,7 +176,13 @@ export function structuredConversationCommandRunner(args: {
         sendPending
       }),
       causes,
-      startFailures: () => agentSessionVisibleFailureFacts(args.items()),
+      startFailures: () => {
+        const items = args.items()
+        return agentSessionVisibleFailureFacts(
+          items,
+          structuredAgentSessionReplacedStartFailureRowIds(items, args.chat.submissions)
+        )
+      },
       onClearSent: args.onClearSent,
       onSent,
       send: (command) =>

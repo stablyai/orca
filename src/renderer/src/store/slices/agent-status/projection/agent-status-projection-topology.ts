@@ -19,29 +19,17 @@ import {
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  EMPTY_STRING_SET,
+  changedRemoteRowKeys,
+  collectOwnKeys
+} from './agent-status-projection-key-diff'
 
 const SEAM_AGENT_PRESENTATION_FIELDS = [
   'runtimePaneTitlesByTabId',
   'ptyIdsByTabId',
   'terminalLayoutsByTabId'
 ] as const
-
-/** Row keys whose applied remote context changed, including re-keyed chats and a first or last host. */
-function changedRemoteRowKeys(
-  before: AgentStatusProjectionState['remoteRows'],
-  after: AgentStatusProjectionState['remoteRows']
-): Set<string> {
-  const keys = new Set<string>()
-  if (before === after) {
-    return keys
-  }
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (before[key] !== after[key]) {
-      keys.add(key)
-    }
-  }
-  return keys
-}
 
 export function stageProjectionTopology(
   data: AgentStatusProjectionState,
@@ -50,15 +38,27 @@ export function stageProjectionTopology(
   refreshKeys: readonly string[]
 ) {
   const previous = data.inputs
-  const moved = new Set(
-    [...state.agentStatusByPaneKey.stagedKeys()].filter((key) =>
-      state.agentStatusByPaneKey.wasMoved(key)
-    )
-  )
+  let movedSet: Set<string> | undefined
+  if (state.agentStatusByPaneKey.replacementCount > 0) {
+    for (const key of state.agentStatusByPaneKey.stagedKeys()) {
+      if (state.agentStatusByPaneKey.wasMoved(key)) {
+        ;(movedSet ??= new Set()).add(key)
+      }
+    }
+  }
+  const moved: ReadonlySet<string> = movedSet ?? EMPTY_STRING_SET
   const changedTabs = new Set<string>()
   const bindingTabs = new Set<string>()
-  const acceptedKeys = new Set(changes.map((change) => change.paneKey))
-  const changedKeys = new Set([...acceptedKeys, ...refreshKeys])
+  const acceptedKeys = new Set<string>()
+  const changedKeys = new Set<string>()
+  for (let i = 0; i < changes.length; i += 1) {
+    const paneKey = changes[i].paneKey
+    acceptedKeys.add(paneKey)
+    changedKeys.add(paneKey)
+  }
+  for (let i = 0; i < refreshKeys.length; i += 1) {
+    changedKeys.add(refreshKeys[i])
+  }
   const nextTabs = new Map<string, TerminalTab | null>()
   const nextTabOwners = new Map<string, string | null>()
   if (state.tabsByWorktree !== previous?.tabsByWorktree) {
@@ -66,28 +66,31 @@ export function stageProjectionTopology(
     const owners =
       diff?.kind === 'addressed'
         ? diff.workspaceIds
-        : new Set([
-            ...Object.keys(previous?.tabsByWorktree ?? {}),
-            ...Object.keys(state.tabsByWorktree ?? {})
-          ])
+        : collectOwnKeys(previous?.tabsByWorktree, state.tabsByWorktree)
     for (const owner of owners) {
-      for (const tab of previous?.tabsByWorktree[owner] ?? []) {
-        if (diff?.kind === 'addressed' && !diff.tabIds.has(tab.id)) {
-          continue
+      const prevOwnerTabs = previous?.tabsByWorktree[owner]
+      if (prevOwnerTabs) {
+        for (const tab of prevOwnerTabs) {
+          if (diff?.kind === 'addressed' && !diff.tabIds.has(tab.id)) {
+            continue
+          }
+          nextTabs.set(tab.id, null)
+          nextTabOwners.set(tab.id, null)
+          changedTabs.add(tab.id)
+          bindingTabs.add(tab.id)
         }
-        nextTabs.set(tab.id, null)
-        nextTabOwners.set(tab.id, null)
-        changedTabs.add(tab.id)
-        bindingTabs.add(tab.id)
       }
-      for (const tab of state.tabsByWorktree[owner] ?? []) {
-        if (diff?.kind === 'addressed' && !diff.tabIds.has(tab.id)) {
-          continue
+      const nextOwnerTabs = state.tabsByWorktree[owner]
+      if (nextOwnerTabs) {
+        for (const tab of nextOwnerTabs) {
+          if (diff?.kind === 'addressed' && !diff.tabIds.has(tab.id)) {
+            continue
+          }
+          nextTabs.set(tab.id, tab)
+          nextTabOwners.set(tab.id, owner)
+          changedTabs.add(tab.id)
+          bindingTabs.add(tab.id)
         }
-        nextTabs.set(tab.id, tab)
-        nextTabOwners.set(tab.id, owner)
-        changedTabs.add(tab.id)
-        bindingTabs.add(tab.id)
       }
     }
   }
@@ -99,44 +102,47 @@ export function stageProjectionTopology(
     const owners =
       diff?.kind === 'addressed'
         ? diff.workspaceIds
-        : new Set([
-            ...Object.keys(previous?.unifiedTabsByWorktree ?? {}),
-            ...Object.keys(state.unifiedTabsByWorktree ?? {})
-          ])
+        : collectOwnKeys(previous?.unifiedTabsByWorktree, state.unifiedTabsByWorktree)
     const removedKeys = new Set<string>()
     // The first tab listed for a conversation represents it, as the status bridge's member does.
     const insertedKeys = new Set<string>()
     for (const owner of owners) {
-      for (const tab of previous?.unifiedTabsByWorktree[owner] ?? []) {
-        if (
-          tab.contentType === 'agent-session' &&
-          (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
-        ) {
-          changedTabs.add(tab.id)
-          const key = chatPaneKey(tab.entityId)
-          changedKeys.add(key)
-          represented.delete(key)
-          removedKeys.add(key)
-          nextTabOwners.set(tab.id, null)
+      const prevUnified = previous?.unifiedTabsByWorktree[owner]
+      if (prevUnified) {
+        for (const tab of prevUnified) {
+          if (
+            tab.contentType === 'agent-session' &&
+            (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
+          ) {
+            changedTabs.add(tab.id)
+            const key = chatPaneKey(tab.entityId)
+            changedKeys.add(key)
+            represented.delete(key)
+            removedKeys.add(key)
+            nextTabOwners.set(tab.id, null)
+          }
         }
       }
     }
     // Insert after every removal: a chat moved between workspaces keeps its one conversation key.
     for (const owner of owners) {
-      for (const tab of state.unifiedTabsByWorktree[owner] ?? []) {
-        if (
-          tab.contentType === 'agent-session' &&
-          (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
-        ) {
-          changedTabs.add(tab.id)
-          const key = chatPaneKey(tab.entityId)
-          changedKeys.add(key)
-          removedKeys.delete(key)
-          if (isStructuredTab(tab) && !insertedKeys.has(key)) {
-            insertedKeys.add(key)
-            represented.set(key, tab)
+      const nextUnified = state.unifiedTabsByWorktree[owner]
+      if (nextUnified) {
+        for (const tab of nextUnified) {
+          if (
+            tab.contentType === 'agent-session' &&
+            (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
+          ) {
+            changedTabs.add(tab.id)
+            const key = chatPaneKey(tab.entityId)
+            changedKeys.add(key)
+            removedKeys.delete(key)
+            if (isStructuredTab(tab) && !insertedKeys.has(key)) {
+              insertedKeys.add(key)
+              represented.set(key, tab)
+            }
+            nextTabOwners.set(tab.id, owner)
           }
-          nextTabOwners.set(tab.id, owner)
         }
       }
     }
@@ -155,7 +161,7 @@ export function stageProjectionTopology(
     const diff = previous ? readRecordChanges(state[field], previous[field]) : null
     for (const tab of diff?.kind === 'addressed'
       ? diff.keys
-      : new Set([...Object.keys(previous?.[field] ?? {}), ...Object.keys(state[field] ?? {})])) {
+      : collectOwnKeys(previous?.[field], state[field])) {
       changedTabs.add(tab)
       if (field !== 'runtimePaneTitlesByTabId' && state[field][tab] !== previous?.[field][tab]) {
         bindingTabs.add(tab)

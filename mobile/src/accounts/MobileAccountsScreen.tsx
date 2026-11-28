@@ -19,16 +19,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { stylesSheet } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
-import './usage/UsageBar'
 import {
   type ProviderKey,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getSystemDefaultProviderUsage,
-  getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
-import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
@@ -40,10 +37,11 @@ import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NavBarButton, NavBarButtonOnSheetContext } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
+import { ProviderAccountSections } from './provider-account-sections'
 import {
   getManagedAccountInlineLabel,
   getManagedAccountPrimaryLabel
@@ -84,7 +82,12 @@ export function MobileAccountsScreen() {
     connState,
     lastConnectedAt: connectionInputs.lastConnectedAt
   })
-  const { snapshot, live, refresh, refreshing, acceptSnapshot } = accounts
+  const { snapshot, live, refreshing, acceptSnapshot } = accounts
+  const [providerAccountsReload, setProviderAccountsReload] = useState(0)
+  const refresh = useCallback(async () => {
+    setProviderAccountsReload((value) => value + 1)
+    await accounts.refresh()
+  }, [accounts.refresh])
   const error = accounts.error ?? hostError
   // Stored accounts stay up while connecting or offline; re-pair and a failed read on a live connection say so instead.
   const showsAccounts =
@@ -210,7 +213,7 @@ export function MobileAccountsScreen() {
           icon={<Icon size={14} />}
           first={provider === 'claude'}
         />
-        <ListGroup style={styles.group}>
+        <ListGroup>
           {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
           <ListRow
             key="default"
@@ -293,56 +296,32 @@ export function MobileAccountsScreen() {
     )
   }
 
-  // Every other provider desktop shows usage for; usage only, since accounts are managed on desktop.
-  const renderOtherProviders = () => {
-    const providers = snapshot ? getOtherUsageProviders(snapshot) : []
-    if (providers.length === 0) {
-      return null
-    }
-    return (
-      <View>
-        <SectionHeader title={t('accounts.screen.otherAgents', 'Other agents')} />
-        <ListGroup style={styles.group}>
-          {providers.map((limits) => (
-            <ListRow
-              key={limits.provider}
-              title={getProviderDisplayName(limits.provider)}
-              leading={<MobileAgentIcon agentId={limits.provider} size={16} />}
-              detail={
-                <>
-                  <ProviderUsageWindows limits={limits} now={now} />
-                  <UsageStatusNote limits={limits} />
-                </>
-              }
-            />
-          ))}
-        </ListGroup>
-      </View>
-    )
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={() => router.back()}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
-        title={t('accounts.screen.title', 'Accounts')}
-        subtitle={hostName || undefined}
-        refreshing={showRefreshLine}
-        trailing={
-          <NavBarButton
-            icon={refreshing ? RefreshingIcon : RefreshCw}
-            onPress={() => void refresh()}
-            disabled={!client || refreshing || connState !== 'connected'}
-            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
-          />
-        }
-      />
+      {/* The bar takes the grouped page's grey, so its buttons need the fill that reads on it. */}
+      <NavBarButtonOnSheetContext.Provider value>
+        <NavBar
+          style={styles.bar}
+          leading={
+            <NavBarButton
+              icon={ChevronLeft}
+              onPress={() => router.back()}
+              accessibilityLabel={t('common.back', 'Back')}
+            />
+          }
+          title={t('accounts.screen.title', 'Accounts')}
+          subtitle={hostName || undefined}
+          refreshing={showRefreshLine}
+          trailing={
+            <NavBarButton
+              icon={refreshing ? RefreshingIcon : RefreshCw}
+              onPress={() => void refresh()}
+              disabled={!client || refreshing || connState !== 'connected'}
+              accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
+            />
+          }
+        />
+      </NavBarButtonOnSheetContext.Provider>
 
       <ScrollView
         contentContainerStyle={[
@@ -372,7 +351,18 @@ export function MobileAccountsScreen() {
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}
-            {renderOtherProviders()}
+            <ProviderAccountSections
+              client={client}
+              live={live}
+              snapshot={snapshot}
+              now={now}
+              reloadKey={providerAccountsReload}
+              busyAccountId={busyAccountId}
+              switchBlocked={busyAccountId !== null || resettingCodex || !live}
+              onBusyAccountId={setBusyAccountId}
+              onSwitched={refresh}
+              onNotice={setNotice}
+            />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

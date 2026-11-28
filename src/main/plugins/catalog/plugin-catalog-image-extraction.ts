@@ -37,7 +37,8 @@ export function createCatalogBufferMemo(): CatalogBufferMemo {
 /** Gives an entry images before they are checked, with a reader for the bytes it already read. */
 export type CatalogEntryImageFill = (
   entry: PluginMarketplaceEntry,
-  readBlob: CatalogBlobReader
+  readBlob: CatalogBlobReader,
+  remainingBudget: number
 ) => Promise<{ entry: PluginMarketplaceEntry; readBlob: CatalogBlobReader }>
 
 /** Reads every image a catalog references from the catalog repository at its commit, keeps the
@@ -101,9 +102,8 @@ export async function extractCatalogImages(
   }
   const plugins: PluginMarketplace['plugins'] = []
   for (const listed of marketplace.plugins) {
-    const { entry, readBlob: read } = fill
-      ? await fill(listed, readBlob)
-      : { entry: listed, readBlob }
+    const { entry, readBlob: read } =
+      fill && budget > 0 ? await fill(listed, readBlob, budget) : { entry: listed, readBlob }
     if (!entry.releases) {
       plugins.push(entry)
       continue

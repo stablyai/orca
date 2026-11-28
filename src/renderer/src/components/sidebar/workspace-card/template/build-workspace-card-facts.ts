@@ -1,4 +1,4 @@
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
   WorkspaceCardFacts,
@@ -94,7 +94,7 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       pending: card.reviewChecks.pending
     },
     links: {
-      count: getWorkspaceAttachments(worktree).length,
+      count: getReadonlyWorkspaceAttachments(worktree).length,
       issue: Boolean(card.hoverIssue),
       linearIssue: Boolean(card.hoverLinearIssue),
       jiraIssue: Boolean(card.hoverJiraIssue)
@@ -133,6 +133,6 @@ export function buildWorkspaceCardFacts(card: WorktreeCardController): Workspace
       detailsRow: card.settings?.worktreeCardDetailsRow !== false,
       agentRows: card.agentActivityDisplayMode === 'compact' ? 'compact' : 'full'
     },
-    env: { projectGroups: card.projectGroups.length > 0 }
+    env: { projectGroups: card.hasProjectGroups }
   }
 }

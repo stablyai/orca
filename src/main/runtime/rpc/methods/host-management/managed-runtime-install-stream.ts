@@ -14,8 +14,6 @@ export type ManagedRuntimeInstallChoice = {
   all: readonly ManagedRuntimeInstallation[]
   /** Their shared clock: a switch takes a fresh revision, which clients order after the last. */
   revisions: RevisionClock
-  /** Tells when a fact the choice weighs changes apart from settings and these installations. */
-  onChoiceChanged?: (listener: () => void) => () => void
 }
 
 const RUNNING_PHASES = new Set(['downloading', 'extracting', 'verifying', 'removing'])
@@ -77,12 +75,9 @@ export async function streamManagedRuntimeInstall(
           }
         })
       : undefined
-  const stopChoice =
-    choice.all.length > 1 ? choice.onChoiceChanged?.(() => void follow()) : undefined
   dispose = () => {
     stops.forEach((stop) => stop())
     stopSettings?.()
-    stopChoice?.()
   }
   emit(first)
   // Catches a revision between the first read and the subscribe.

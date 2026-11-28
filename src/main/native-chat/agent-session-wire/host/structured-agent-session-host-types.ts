@@ -117,6 +117,8 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly permissionMode?: AgentChatPermissionChoice
   /** The account home it was launched under, in memory only; absent when its adapter reports none. */
   readonly accountHome?: AgentSessionAccountHome
+  /** The saved account it launched on, when its home can't tell (memory only). */
+  readonly accountKey?: string
   /** The launch source that may publish observations for this child. */
   readonly catalogSource?: AgentModelCatalogSource
   /** Read adapter-held sends at each decision. */

@@ -35,7 +35,6 @@ import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
 } from '../metadata/worktree-card-meta-items'
-import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import {
@@ -57,7 +56,7 @@ function CardTitle({
   props: Readonly<Record<string, unknown>>
   card: Card
 }): React.JSX.Element {
-  const { affiliateListMode, worktree } = card
+  const { affiliateListMode } = card
   // Bold and the unread dot are one signal: any unread the card speaks for, its own or a hidden one.
   const rolledUpUnread = useWorktreeCardRolledUpUnread()
   return (
@@ -71,10 +70,7 @@ function CardTitle({
       titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
       onEditingChange={affiliateListMode ? undefined : card.setTitleRenaming}
       onRename={card.handleRenameTitle}
-      beginEditing={
-        !affiliateListMode &&
-        shouldBeginWorktreeRename(card.renamingWorktreeId, worktree.id, card.renameRowKey)
-      }
+      beginEditing={!affiliateListMode && card.shouldBeginRename}
       onBeginEditingConsumed={
         affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
       }

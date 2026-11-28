@@ -7,7 +7,7 @@ import { radii } from '../../theme/mobile-theme'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MOBILE_AGENT_CATALOG } from '../../agents/mobile-agent-catalog'
 import { MOBILE_AGENT_ICON_ASSETS } from './mobile-agent-icon-assets'
-import { ClaudeIcon, OpenAIIcon } from './AgentIcons'
+import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './AgentIcons'
 
 const iconAssets: Partial<Record<string, ImageSourcePropType>> = MOBILE_AGENT_ICON_ASSETS
 
@@ -112,6 +112,13 @@ export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?
   }
   if (agentId === 'aider') {
     return <AiderIcon size={size} />
+  }
+  // Usage providers without an agent of their own (Other agents rows key icons by provider id).
+  if (agentId === 'opencode-go') {
+    return <OpenCodeGoIcon size={size} />
+  }
+  if (agentId === 'minimax') {
+    return <MiniMaxIcon size={size} />
   }
   if (agentId === '__blank__' || agentId === 'blank') {
     return <Terminal size={size} color={colors.textMuted} />

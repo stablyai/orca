@@ -180,6 +180,7 @@ jobs:
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
+      reuse_windows_prebuild_cache: true
 
   release-javascript:
     needs: [resolve-ref, orcad-template-support]
@@ -341,14 +342,14 @@ jobs:
         shell: bash
         run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
 
-      # Install both x64/arm64 optional natives because this arm64 runner packages both.
+      # Install only host + target optional natives for this architecture leg.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
+          command: pnpm install --frozen-lockfile --cpu=current,${{ matrix.arch }}
 
       # Build required out/mobile-web after installing its React Native/Expo dependencies.
       - uses: ./.github/actions/install-mobile-dependencies
@@ -371,6 +372,18 @@ jobs:
           name: release-javascript
           path: .build/release-javascript
 
+      - name: Cache macOS native helpers
+        id: macos-native-helpers
+        uses: actions/cache@v5
+        with:
+          path: |
+            native/computer-use-macos/.build/release
+            native/keyboard-layout-macos/.build/release
+            native/notification-status-macos/.build/release
+            native/process-footprint-macos/.build/release
+            native/socket-owner-macos/.build/release
+          key: macos-native-helpers-v2-${{ hashFiles('native/*-macos/**', 'config/scripts/native-build/macos/**', 'config/scripts/native-build/posix/build-provider-exec.mjs', 'resources/build/entitlements.computer-use.mac.plist', 'resources/build/icon.icns') }}
+
       - name: Build app
         run: |
           if [[ "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" != '' ]]; then
@@ -386,6 +399,7 @@ jobs:
         env:
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
+          ORCA_REUSE_MACOS_NATIVE_HELPERS: ${{ steps.macos-native-helpers.outputs.cache-hit == 'true' && '1' || '' }}
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave build identity unset: telemetry accepts only official stable/rc, so branch artifacts stay silent.
           ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token

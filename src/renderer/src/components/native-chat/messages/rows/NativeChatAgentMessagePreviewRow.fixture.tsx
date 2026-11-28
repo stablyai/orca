@@ -212,6 +212,15 @@ const startedLongForItems: NativeChatMessage = {
     { uid: 'item-32', number: 32, title: 'Usage meter after a switch', status: 'planned' }
   ]
 }
+const startedForFourItems: NativeChatMessage = {
+  ...startedLongForItems,
+  id: 'preview-started-four-items',
+  agentStartItems: [
+    ...(startedLongForItems.agentStartItems ?? []),
+    { uid: 'item-33', number: 33, title: 'Account settings', status: 'planned' },
+    { uid: 'item-34', number: 34, title: 'Continue the session', status: 'planned' }
+  ]
+}
 const workers: OrchestrationSessionWorker[] = [
   {
     dispatchId: 'task-dispatch',
@@ -256,6 +265,12 @@ function rows() {
           />
           <MessageRow
             message={startedLongForItems}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={runtimeContext}
+          />
+          <MessageRow
+            message={startedForFourItems}
             expandSignal={false}
             onScrollMessageToTop={() => {}}
             runtimeContext={runtimeContext}

@@ -7,7 +7,6 @@ import {
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
-import '@/lib/workspace/creation/new-workspace-composer-repo'
 import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
@@ -15,7 +14,6 @@ import type {
   Worktree
 } from '../../../../../../shared/worktree/types'
 import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/lineage/workspace-lineage-graph'
-import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
 import {

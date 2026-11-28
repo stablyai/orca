@@ -20,6 +20,11 @@ import {
 import { imageParamsSchema, imageResultSchema } from './bridge-image-verbs'
 import { BRIDGE_SPEECH_VERB, speechParamsSchema, speechResultSchema } from './bridge-speech-verbs'
 import { BRIDGE_STORE_VERB, storeParamsSchema, storeResultSchema } from './bridge-store-verb'
+import {
+  BRIDGE_DIRECT_PAIRINGS_VERB,
+  directPairingsParamsSchema,
+  directPairingsResultSchema
+} from './bridge-direct-pairings-verb'
 import { PAGE_STORAGE_MAX_KEY_CHARS } from '../../page-storage/page-storage-keys'
 import { mobileFileMediaMime, PDF_MIME_TYPE } from '../../../files/media/mobile-file-media'
 import { BRIDGE_MAX_EXTERNAL_LINK_CHARS } from '../protocol/bridge-caps'
@@ -40,11 +45,13 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.audio.stop',
   'native.storage.read',
   'native.pdf.view',
+  'native.file.share',
   'native.image.act',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
   'native.a11y.announce',
-  'native.link.open'
+  'native.link.open',
+  BRIDGE_DIRECT_PAIRINGS_VERB
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -93,6 +100,23 @@ export const pdfViewResultSchema = z.strictObject({})
 
 export type BridgePdfOpenParams = Omit<
   Extract<z.infer<typeof pdfViewParamsSchema>, { action: 'open' }>,
+  'action'
+>
+
+// As native.pdf.view, for any file: the shell downloads it and opens the system share sheet. Cancel abandons a download the user walked away from.
+export const fileShareParamsSchema = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('open'),
+    worktreeId: z.string().min(1),
+    relativePath: z.string().min(1),
+    executionHost: z.templateLiteral(['runtime:', z.string().min(1)]).optional()
+  }),
+  z.strictObject({ action: z.literal('cancel') })
+])
+export const fileShareResultSchema = z.strictObject({})
+
+export type BridgeFileShareParams = Omit<
+  Extract<z.infer<typeof fileShareParamsSchema>, { action: 'open' }>,
   'action'
 >
 
@@ -153,6 +177,11 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     result: pdfViewResultSchema,
     desktop: true
   },
+  'native.file.share': {
+    params: fileShareParamsSchema,
+    result: fileShareResultSchema,
+    desktop: true
+  },
   'native.image.act': {
     params: imageParamsSchema,
     result: imageResultSchema
@@ -172,6 +201,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.link.open': {
     params: linkOpenParamsSchema,
     result: linkOpenResultSchema
+  },
+  [BRIDGE_DIRECT_PAIRINGS_VERB]: {
+    params: directPairingsParamsSchema,
+    result: directPairingsResultSchema
   }
 }
 

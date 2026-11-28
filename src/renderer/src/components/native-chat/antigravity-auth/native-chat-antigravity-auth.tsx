@@ -45,13 +45,9 @@ type Method = AntigravityChatAuthConfig['method']
 /** Gemini Enterprise needs a project and location, which only Settings collects. */
 export type AntigravitySwitchableMethod = Exclude<Method, 'oauth-business'>
 
-/** An Antigravity chat's host and which agy runs its chats there. */
+/** An Antigravity chat's host. */
 export type NativeChatAntigravityAuthTarget = {
   host: RuntimeClientTarget
-  /** Orca's installed agy or the person's own; null until the host says, or while none is. */
-  agy: 'orcas' | 'yours' | null
-  /** The version of Orca's installed agy, when the host has reported one. */
-  managedVersion: string | null
   /** This chat runs on agy's own home and Google login, whatever method new chats use. */
   ownLogin: boolean
 }
@@ -136,8 +132,6 @@ export function NativeChatAntigravityAuthProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const hostProp = target?.host ?? null
-  const agy = target?.agy ?? null
-  const managedVersion = target?.managedVersion ?? null
   const ownLogin = target?.ownLogin === true
   const t = useTranslate()
   // Callers rebuild the target each render; one per host keeps the context value steady.
@@ -228,8 +222,6 @@ export function NativeChatAntigravityAuthProvider({
     }
     return {
       host,
-      agy,
-      managedVersion,
       ownLogin,
       detection,
       keyAndAdc,
@@ -246,7 +238,7 @@ export function NativeChatAntigravityAuthProvider({
       openSettings: () => openAntigravitySignInSettings(host),
       refresh: () => void refreshAntigravityChatAuthDetection(host, { force: true })
     }
-  }, [host, agy, managedVersion, ownLogin, detection, keyAndAdc, switching, decide])
+  }, [host, ownLogin, detection, keyAndAdc, switching, decide])
 
   const confirmTitle = t(
     'components.native-chat.antigravityAuth.confirmTitle',

@@ -38,6 +38,10 @@ on:
         description: Upload each lane's release slot and merge them into the orcad-template artifact
         type: boolean
         default: false
+      reuse_windows_prebuild_cache:
+        description: Reuse the validated Windows node-pty prebuild cache on unsigned dev builds
+        type: boolean
+        default: false
   # Requalify fresh builds daily; publish missing immutable Windows cache keys.
   schedule:
     - cron: '30 11 * * *'
@@ -223,10 +227,10 @@ jobs:
         id: orcad-prebuild
         with:
           resolve-windows-cache: >-
-            ${{ !inputs.build_template && inputs.ref == '' &&
+            ${{ inputs.reuse_windows_prebuild_cache || (!inputs.build_template && inputs.ref == '' &&
             (github.event_name == 'pull_request' ||
-            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
-          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
+          restore-windows-cache: ${{ inputs.reuse_windows_prebuild_cache || github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
       - uses: ./.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'
@@ -292,6 +296,23 @@ jobs:
       - name: Build the host-target desktop server template
         if: runner.os == 'Linux' && (needs.changes.outputs.qualification != 'false' || inputs.build_template)
         run: node "$(if [ -f config/scripts/orcad-distribution/template/build-orcad-template.mjs ]; then printf %s config/scripts/orcad-distribution/template/build-orcad-template.mjs; else printf %s config/scripts/build-orcad-template.mjs; fi)" --targets linux-${{ runner.arch == 'ARM64' && 'arm64' || 'x64' }}-glibc
+      # orcad's data-root privacy check fails closed without it, so every Windows slot needs one.
+      # Overlap with windows-process-tree below since they build independent native packages.
+      - name: Build the Windows security addons for the desktop template
+        id: windows-security-addons
+        background: true
+        shell: bash
+        env:
+          BUILD_TEMPLATE: ${{ inputs.build_template }}
+          MATRIX_OS: ${{ matrix.os }}
+          HAS_SECURITY_BUILDER: ${{ hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != '' }}
+        run: |
+          if [ "$BUILD_TEMPLATE" != true ] || [ "$MATRIX_OS" != windows-2022 ] || [ "$HAS_SECURITY_BUILDER" != true ]; then
+            exit 0
+          fi
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=x64
+          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=arm64
+          node -e "require('./.build/windows-security/x64/windows-security.node').currentUserSid()"
       # Only a Windows runner compiles it; arm64 cross-compiles here.
       # Before the Node 18 check below: the build script imports TypeScript, which Node 18 cannot load.
       # orcad's instance lock and stop proof read a PID's creation time through it; the x64 binary this
@@ -331,15 +352,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
           overwrite: true
-      # orcad's data-root privacy check fails closed without it, so every Windows slot needs one.
-      # Older requested refs use the previous security implementation and have no addon builder.
-      - name: Build the Windows security addons for the desktop template
-        if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
-        shell: bash
-        run: |
-          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=x64
-          node "$(if [ -f config/scripts/native-build/windows/build-windows-security-addon.mjs ]; then printf %s config/scripts/native-build/windows/build-windows-security-addon.mjs; else printf %s config/scripts/build-windows-security-addon.mjs; fi)" --arch=arm64
-          node -e "require('./.build/windows-security/x64/windows-security.node').currentUserSid()"
+      - wait: windows-security-addons
       - name: Keep the Windows security addons for the desktop template
         if: inputs.build_template && matrix.os == 'windows-2022' && hashFiles('config/scripts/native-build/windows/build-windows-security-addon.mjs', 'config/scripts/build-windows-security-addon.mjs') != ''
         uses: actions/upload-artifact@v7

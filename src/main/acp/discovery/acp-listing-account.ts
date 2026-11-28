@@ -10,12 +10,13 @@ export class AcpListingRefused extends Error {}
  *  from what it has, as before. Only an account that refuses the listing, or a listing that went
  *  stale, stops here. */
 export async function prepareAcpListingAccount(
-  spec: Pick<AcpLaunchSpec, 'account'>,
+  spec: Pick<AcpLaunchSpec, 'account' | 'launchAccount'>,
   env: Readonly<Record<string, string>>,
   antigravityChatAuth: AntigravityChatAuthConfig | undefined,
   assertCurrent: () => void
 ): Promise<void> {
-  if (!antigravityChatAuth) {
+  // Saved accounts in one home (agy's): a listing reads the selected account's models too.
+  if (!antigravityChatAuth && !spec.launchAccount) {
     return
   }
   await spec.account
@@ -33,7 +34,7 @@ export async function prepareAcpListingAccount(
  *  that starts meanwhile aborts the returned signal and fails `check`, so nothing spawns after it;
  *  the caller leaves the gate once its process is done. */
 export async function enterAcpListingAccount(
-  spec: Pick<AcpLaunchSpec, 'account' | 'launchGate'>,
+  spec: Pick<AcpLaunchSpec, 'account' | 'launchGate' | 'launchAccount'>,
   env: Readonly<Record<string, string>>,
   antigravityChatAuth: AntigravityChatAuthConfig | undefined,
   signal: AbortSignal,

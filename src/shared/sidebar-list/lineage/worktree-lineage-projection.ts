@@ -20,13 +20,17 @@ export type LineageRenderInfo =
   | { state: 'valid'; lineage: WorktreeLineage; parent: Worktree }
   | { state: 'missing'; lineage: WorktreeLineage }
 
+const NO_LINEAGE_RENDER_INFO: LineageRenderInfo = Object.freeze({ state: 'none' })
+const EMPTY_PARENT_IDENTITIES: SidebarLineageParentIdentities = new Map()
+const EMPTY_PARENT_BY_IDENTITY: ReadonlyMap<string, Worktree> = new Map()
+
 type LineageProjection = {
   cyclicLineageIds?: Set<string>
   childrenByParentId?: Map<string, Worktree[]>
-  sidebarParentByIdentity?: Map<string, Worktree>
+  sidebarParentByIdentity?: ReadonlyMap<string, Worktree>
   sidebarParentByIdentityByResolution?: WeakMap<
     SidebarLineageParentIdentities,
-    Map<string, Worktree>
+    ReadonlyMap<string, Worktree>
   >
 }
 
@@ -61,7 +65,7 @@ export function getCyclicProjectedWorktreeLineageIds(
   if (projection.cyclicLineageIds) {
     return projection.cyclicLineageIds
   }
-  const validLineageByChildId = new Map<string, WorktreeLineage>()
+  let validLineageByChildId: Map<string, WorktreeLineage> | undefined
   for (const worktree of worktreeMap.values()) {
     const lineage = getProjectedWorktreeLineage(worktree, lineageById)
     if (!lineage) {
@@ -69,10 +73,12 @@ export function getCyclicProjectedWorktreeLineageIds(
     }
     const parent = worktreeMap.get(lineage.parentWorktreeId)
     if (parent && isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)) {
-      validLineageByChildId.set(worktree.id, lineage)
+      ;(validLineageByChildId ??= new Map<string, WorktreeLineage>()).set(worktree.id, lineage)
     }
   }
-  const cyclicLineageIds = getCyclicWorktreeLineageChildIds(validLineageByChildId)
+  const cyclicLineageIds = validLineageByChildId
+    ? getCyclicWorktreeLineageChildIds(validLineageByChildId)
+    : new Set<string>()
   projection.cyclicLineageIds = cyclicLineageIds
   return cyclicLineageIds
 }
@@ -85,7 +91,7 @@ export function getLineageRenderInfo(
 ): LineageRenderInfo {
   const lineage = getProjectedWorktreeLineage(worktree, lineageById)
   if (!lineage) {
-    return { state: 'none' }
+    return NO_LINEAGE_RENDER_INFO
   }
   const parent = worktreeMap.get(lineage.parentWorktreeId)
   if (
@@ -177,16 +183,20 @@ export function resolveSidebarLineageParentIdentities(
   crossStoreLineage: CrossStoreLineageView | undefined,
   folderRecordOf?: FolderLineageRecordOf
 ): SidebarLineageParentIdentities {
-  return new Map(
-    [
-      ...resolveWorkspaceLineageParents(
-        lineageById,
-        completeRowsByHostIdentity,
-        crossStoreLineage,
-        folderRecordOf
-      )
-    ].map(([identity, parent]) => [identity, getWorktreeHostIdentity(parent)])
+  const resolved = resolveWorkspaceLineageParents(
+    lineageById,
+    completeRowsByHostIdentity,
+    crossStoreLineage,
+    folderRecordOf
   )
+  if (resolved.size === 0) {
+    return EMPTY_PARENT_IDENTITIES
+  }
+  const parentIdentities = new Map<string, string>()
+  for (const [identity, parent] of resolved) {
+    parentIdentities.set(identity, getWorktreeHostIdentity(parent))
+  }
+  return parentIdentities
 }
 
 /** Host-keyed nesting parents; cycles have none. With resolved identities, only rows present here nest.
@@ -208,17 +218,36 @@ export function getSidebarLineageParentsByIdentity(
     projection.sidebarParentByIdentity = parentByIdentity
     return parentByIdentity
   }
-  const parentByIdentity = new Map<string, Worktree>()
-  for (const identity of rowsByHostIdentity.keys()) {
-    const parentIdentity = parentIdentities.get(identity)
-    const parent = parentIdentity === undefined ? undefined : rowsByHostIdentity.get(parentIdentity)
-    if (parent) {
-      parentByIdentity.set(identity, parent)
+  if (parentIdentities.size === 0 || rowsByHostIdentity.size === 0) {
+    projection.sidebarParentByIdentityByResolution ??= new WeakMap()
+    projection.sidebarParentByIdentityByResolution.set(parentIdentities, EMPTY_PARENT_BY_IDENTITY)
+    return EMPTY_PARENT_BY_IDENTITY
+  }
+  let parentByIdentity: Map<string, Worktree> | undefined
+  if (parentIdentities.size <= rowsByHostIdentity.size) {
+    for (const [identity, parentIdentity] of parentIdentities) {
+      if (!rowsByHostIdentity.has(identity)) {
+        continue
+      }
+      const parent = rowsByHostIdentity.get(parentIdentity)
+      if (parent) {
+        ;(parentByIdentity ??= new Map<string, Worktree>()).set(identity, parent)
+      }
+    }
+  } else {
+    for (const identity of rowsByHostIdentity.keys()) {
+      const parentIdentity = parentIdentities.get(identity)
+      const parent =
+        parentIdentity === undefined ? undefined : rowsByHostIdentity.get(parentIdentity)
+      if (parent) {
+        ;(parentByIdentity ??= new Map<string, Worktree>()).set(identity, parent)
+      }
     }
   }
+  const result: ReadonlyMap<string, Worktree> = parentByIdentity ?? EMPTY_PARENT_BY_IDENTITY
   projection.sidebarParentByIdentityByResolution ??= new WeakMap()
-  projection.sidebarParentByIdentityByResolution.set(parentIdentities, parentByIdentity)
-  return parentByIdentity
+  projection.sidebarParentByIdentityByResolution.set(parentIdentities, result)
+  return result
 }
 
 /** The rows a worktree nests under in the sidebar, nearest first; a lineage cycle nests nothing. */

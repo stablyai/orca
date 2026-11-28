@@ -111,31 +111,33 @@ export function classifyWorktreeOwnership(args: {
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
   worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
+  visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
 }): WorktreeOwnership {
   if (hasStrongOrcaMetadata(args.meta)) {
     return 'orca-managed'
   }
 
+  const visibilitySource =
+    args.visibilitySource !== undefined
+      ? args.visibilitySource
+      : args.worktreeVisibilitySourceMatcher?.(args.worktree.path)
+  if (visibilitySource?.kind === 'built-in') {
+    return 'agent-scratch'
+  }
+  const configuredBasePaths = resolveConfiguredWorktreeBasePaths(args.repo)
   // Classify tool scratch before layout heuristics; explicitly configured project bases remain exempt (#9388, #15232).
   if (
-    args.worktreeVisibilitySourceMatcher?.(args.worktree.path)?.kind === 'built-in' ||
-    (args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
-      isAgentScratchWorktreePath(
-        args.repo.path,
-        args.worktree.path,
-        resolveConfiguredWorktreeBasePaths(args.repo)
-      ))
+    args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
+    isAgentScratchWorktreePath(args.repo.path, args.worktree.path, configuredBasePaths)
   ) {
     return 'agent-scratch'
   }
 
-  if (
-    resolveConfiguredWorktreeBasePaths(args.repo).some(
-      (basePath) => relativePathInsideRoot(basePath, args.worktree.path) !== null
-    )
-  ) {
-    // Why: an explicit project base is trusted even when global workspace nesting is flat.
-    return 'external'
+  for (let i = 0; i < configuredBasePaths.length; i += 1) {
+    if (relativePathInsideRoot(configuredBasePaths[i], args.worktree.path) !== null) {
+      // Why: an explicit project base is trusted even when global workspace nesting is flat.
+      return 'external'
+    }
   }
 
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
@@ -172,8 +174,13 @@ export function toDetectedWorktree(args: {
     )
   const visibilitySource = sourceMatcher(args.worktree.path)
   const ownership = classifyWorktreeOwnership({
-    ...args,
-    worktreeVisibilitySourceMatcher: sourceMatcher
+    repo: args.repo,
+    worktree: args.worktree,
+    meta: args.meta,
+    settings: args.settings,
+    knownOrcaLayouts: args.knownOrcaLayouts,
+    agentScratchWorktreePathMatcher: args.agentScratchWorktreePathMatcher,
+    visibilitySource
   })
   const selectedCheckout = areRuntimePathsEqual(args.worktree.path, args.repo.path)
   const isLegacyRepoForVisibility =

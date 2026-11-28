@@ -1,6 +1,7 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
+import { forgetDiffCommentFailureOwners } from '../../diff-comments/diff-comment-failure-owners'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
@@ -27,6 +28,7 @@ export function applyRemoveWorktreeSuccessState(
   forgetAmbiguousOwnerWarnings([worktreeId])
   forgetCombinedDiffViewsForWorktrees([worktreeId])
   forgetDisplayedPanesForWorktrees([{ id: worktreeId }])
+  forgetDiffCommentFailureOwners([worktreeId])
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)

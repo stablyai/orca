@@ -24,6 +24,7 @@ import { sessionCallerOf } from '../../orchestration/addressing/orchestration-ca
 import { noteBotRequestPost } from './orchestration/messaging/bot-request-outcome'
 import { connectorPostAttempts } from '../../../external-conversations/connector-post-attempts'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import { connectorActionIntoThread } from '../../../connector-cloud/connector-action-into-thread'
 import {
   hostNotSignedIn,
   orcaCloudNeedsSignIn,
@@ -247,12 +248,8 @@ export async function actAsBot(
   const toSlack = actionGoesToSlack({ verb, ref, title: args.title, conversation })
   // Only a post into the thread the chat answers is its own answer; one elsewhere is other work,
   // and a staged file or scheduled post hasn't posted yet.
-  const staging = args.upload !== undefined || args.stage === true
   const scheduled = verb === 'post' && args.postAt !== undefined
-  const intoThread =
-    !staging &&
-    !scheduled &&
-    (verb === 'reply' || ((verb === 'post' || verb === 'attach') && !ref && conversation !== null))
+  const intoThread = connectorActionIntoThread({ verb, args, ref, conversation })
   const refused = intoThread
     ? connectorPostAttempts.attempted(chatPaneKey(sessionId), args.postId, target?.key.externalId)
     : () => {}

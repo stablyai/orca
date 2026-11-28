@@ -1,3 +1,61 @@
+function isAsciiWhitespace(b: number): boolean {
+  return b === 0x20 || (b >= 0x09 && b <= 0x0d)
+}
+
+/** Decode a UTF-8 Buffer with JS `.trim()` semantics without allocating an untrimmed string first. */
+export function decodeTrimmedUtf8Buffer(buf: Buffer): string {
+  let start = 0
+  let end = buf.length
+  while (start < end && isAsciiWhitespace(buf[start])) {
+    start += 1
+  }
+  while (end > start && isAsciiWhitespace(buf[end - 1])) {
+    end -= 1
+  }
+  if (start === end) {
+    return ''
+  }
+  const text = buf.toString('utf8', start, end)
+  return buf[start] >= 0x80 || buf[end - 1] >= 0x80 ? text.trim() : text
+}
+
+/** Parse git `packed-refs` directly from a UTF-8 Buffer without decoding or trimming the whole file. */
+export function parsePackedRefsBuffer(buf: Buffer): Map<string, string> {
+  const refs = new Map<string, string>()
+  const len = buf.length
+  let lineStart = 0
+  while (lineStart < len && isAsciiWhitespace(buf[lineStart])) {
+    lineStart += 1
+  }
+  while (lineStart < len) {
+    const nextNewline = buf.indexOf(0x0a, lineStart)
+    const lineEnd = nextNewline === -1 ? len : nextNewline
+    if (lineEnd > lineStart) {
+      const firstByte = buf[lineStart]
+      // Skip '#' (0x23) comment lines and '^' (0x5e) peeled-tag lines without decoding.
+      if (firstByte !== 0x23 && firstByte !== 0x5e) {
+        const separator = buf.indexOf(0x20, lineStart)
+        if (separator > lineStart && separator < lineEnd) {
+          let refStart = separator + 1
+          let refEnd = lineEnd
+          while (refStart < refEnd && buf[refStart] <= 0x20) {
+            refStart += 1
+          }
+          while (refEnd > refStart && buf[refEnd - 1] <= 0x20) {
+            refEnd -= 1
+          }
+          refs.set(
+            buf.toString('utf8', refStart, refEnd),
+            buf.toString('utf8', lineStart, separator)
+          )
+        }
+      }
+    }
+    lineStart = nextNewline === -1 ? len : nextNewline + 1
+  }
+  return refs
+}
+
 /** Parse git `packed-refs` content line-by-line without allocating a `split('\n')` array. */
 export function parsePackedRefsContent(content: string): Map<string, string> {
   const refs = new Map<string, string>()

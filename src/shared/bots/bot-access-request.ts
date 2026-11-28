@@ -8,7 +8,7 @@ import {
   type Bot,
   type BotMember
 } from '../bot-types'
-import { CONNECTOR_CLIENT_LIMITS } from '../connectors/connector-cloud-contract'
+import { CONNECTOR_CLIENT_LIMITS } from '../connectors/connector-client-limits'
 import type { ConnectorAccessRequest } from '../connector-bot-access-contract'
 
 const ACCESS_NOTICE_PREFIX = 'bot-access-request:'

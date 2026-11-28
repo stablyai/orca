@@ -61,6 +61,8 @@ export type OwnerUsageRateLimits = {
   accounts: ProviderAccountsSnapshot | null
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
+  /** True when the remote owner cannot currently be reached. */
+  remoteUnreachable?: boolean
   /** Forces the owning host to re-read usage; null when this device owns it. */
   refreshRemote: (() => Promise<void>) | null
 }
@@ -218,6 +220,7 @@ export function useAccountOwnerUsage(
     rateLimits: scopedRateLimits,
     accounts: ownerId ? (owned?.snapshot ?? null) : null,
     remoteOwner,
+    remoteUnreachable: unavailable || (ownerId !== null && owned?.failure === 'unreachable'),
     refreshRemote: wslDistro ? wsl.refresh : ownerId || unavailable ? refreshRemote : null
   }
 }

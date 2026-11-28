@@ -28,6 +28,9 @@ export function getLifecycleGroupRecipientError(type: DispatchMutationMessageTyp
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
 
+export const WORKER_DONE_BLANK_BODY_ERROR =
+  'worker_done body is empty, so nothing was sent. Pass the completion summary with --body or --body-file.'
+
 export const CheckParams = lazyZodSchema(() =>
   z
     .object({

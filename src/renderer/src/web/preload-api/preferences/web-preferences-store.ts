@@ -272,6 +272,9 @@ export async function syncRuntimeBackedSettings(
         delete runtimeSettings.voice
         // The host's own switches, not this browser's notification settings.
         Reflect.deleteProperty(runtimeSettings, 'hostNotifications')
+        // Paired web keeps + menu layouts browser-local, so unrelated host saves must not overwrite them.
+        delete runtimeSettings.newTabMenuLayout
+        delete runtimeSettings.floatingTerminalNewTabMenuLayout
         if (requireActiveEnvironmentOrNull()?.id !== requestedEnvironment.id) {
           delete runtimeSettings.worktreeCardDetailsRow
         }

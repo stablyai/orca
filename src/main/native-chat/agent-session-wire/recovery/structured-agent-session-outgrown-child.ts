@@ -70,16 +70,24 @@ function picksNewLaunchModel(
 }
 
 /** Loop-free while a start launches under the account `current` reads; a read that throws is no
- *  answer, so unreadable account evidence replaces nothing. */
+ *  answer, so unreadable account evidence replaces nothing. In one home, the account key a start
+ *  would record now tells accounts apart (agy swaps its one login there). */
 async function launchedUnderOtherAccount(
   child: OutgrownChildReading['child'],
-  current: (() => Promise<AgentSessionAccountHome | null>) | undefined
+  current: (() => Promise<AgentSessionAccountHome | null>) | undefined,
+  currentKey: (() => string | null) | undefined
 ): Promise<boolean> {
-  if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
+  if (!child || child.phase === 'starting' || child.close) {
     return false
   }
-  const home = await current().catch(() => null)
-  return home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)
+  if (child.accountHome && current) {
+    const home = await current().catch(() => null)
+    if (home !== null && !agentSessionAccountHomesEqual(home, child.accountHome)) {
+      return true
+    }
+  }
+  const key = child.accountKey === undefined ? null : (currentKey?.() ?? null)
+  return key !== null && key !== child.accountKey
 }
 
 /** The bot's tools changed since this child launched; a start reads them again. */
@@ -104,6 +112,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
+    launchAccountKey?: () => string | null
     launchToolsChanged?: () => Promise<boolean>
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission
@@ -128,7 +137,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
   const { accountSwitch } = deps
   if (accountSwitch) {
     // The account first: its lookup can wait on files while the provider opens work.
-    if (!(await launchedUnderOtherAccount(child, deps.launchAccountHome))) {
+    if (!(await launchedUnderOtherAccount(child, deps.launchAccountHome, deps.launchAccountKey))) {
       return
     }
     const { journal } = session
@@ -174,7 +183,11 @@ export async function retireOutgrownStructuredAgentSessionChild(
               deps.permissionRequiresAcquisition
             ))
           ? 'permission-mode'
-          : (await launchedUnderOtherAccount(session.child, deps.launchAccountHome))
+          : (await launchedUnderOtherAccount(
+                session.child,
+                deps.launchAccountHome,
+                deps.launchAccountKey
+              ))
             ? 'account'
             : (await launchedWithOtherTools(session.child, deps.launchToolsChanged))
               ? 'tools'

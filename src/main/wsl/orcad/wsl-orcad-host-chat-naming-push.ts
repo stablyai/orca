@@ -1,5 +1,8 @@
-/** Chat naming runs on the host, so a WSL host follows this desktop's "Name chats automatically" switch. */
-import { HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
+/** Chat naming runs on the host, so a WSL host follows this desktop's chat naming switches. */
+import {
+  HOST_ANTIGRAVITY_CHAT_NAMING_SETTING_RUNTIME_CAPABILITY,
+  HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY
+} from '../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
 import type { WslOrcadHostAccountPush } from './wsl-orcad-host-account-push'
 import {
   createWslOrcadHostPushQueue,
@@ -9,26 +12,38 @@ import {
 
 const queue = createWslOrcadHostPushQueue()
 
-/** Reads the switch when sent, so quick toggles end on the latest value. */
+export type WslHostChatNaming = { nativeChatAutoName: boolean; antigravityChatNaming: boolean }
+
+/** Reads the switches when sent, so quick toggles end on the latest values. */
 export function pushWslOrcadHostChatAutoName(
   push: Pick<WslOrcadHostAccountPush, 'environmentId' | 'hostSupports' | 'call'>,
-  readAutoName: () => boolean,
+  readNaming: () => WslHostChatNaming,
   retryDelaysMs: readonly number[] = WSL_HOST_PUSH_RETRY_DELAYS_MS
 ): Promise<void> {
   return pushToWslOrcadHostWithRetry(
     queue,
     push.environmentId,
     async () => {
-      const verdict = await push.hostSupports(HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY)
-      if (verdict === 'unknown') {
+      // One after the other, so the second reads the status the first cached.
+      const verdicts = [
+        await push.hostSupports(HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY),
+        await push.hostSupports(HOST_ANTIGRAVITY_CHAT_NAMING_SETTING_RUNTIME_CAPABILITY)
+      ]
+      if (verdicts.includes('unknown')) {
         // Unknown capabilities are not proof of an old host; fail so the push retries.
         throw new Error('The host did not report its capabilities.')
       }
-      // An older host refuses the key (settings.update is strict).
-      if (verdict === 'unsupported') {
+      const [autoName, antigravity] = verdicts.map((verdict) => verdict === 'supported')
+      // An older host refuses a key it doesn't know (settings.update is strict).
+      const naming = readNaming()
+      const updates = {
+        ...(autoName ? { nativeChatAutoName: naming.nativeChatAutoName } : {}),
+        ...(antigravity ? { antigravityChatNaming: naming.antigravityChatNaming } : {})
+      }
+      if (Object.keys(updates).length === 0) {
         return
       }
-      const response = await push.call('settings.update', { nativeChatAutoName: readAutoName() })
+      const response = await push.call('settings.update', updates)
       if (!response.ok) {
         throw new Error(response.error.message)
       }
