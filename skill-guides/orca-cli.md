@@ -60,7 +60,7 @@ ORCA agent launch --agent codex --worktree id:<repoId>::<worktreePath> --prompt 
 Handoff to an agent that is already running:
 
 ```text
-ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --subject "<task name>" --body "<task brief>" --json
+ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> --subject "<task name>" --body-file <file> --json
 ```
 
 ## Starting agents
@@ -85,12 +85,12 @@ A chat keeps its ID across `/clear`; a terminal agent gets a new one, and its ol
 
 Send another agent a message with Orca mail, never by typing into its terminal:
 
-Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file.
+Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file. Never pass text you composed to --body "...": the shell runs $(...) and backticks inside double quotes before the command sees them, so your message would arrive as command output.
 Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
 If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
 
 ```text
-ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--type question|dispatch|merge_ready|handoff] --subject "<topic>" --body "<message>" --json
+ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--type question|dispatch|merge_ready|handoff] --subject "<topic>" --body-file <file> --json
 ```
 
 - Set `--type` for what you need: `question` when you want an answer (the receiver gets a reply hint), `dispatch` to give it a task, `merge_ready` when your branch is ready to merge, `handoff` to pass work on. Without `--type` the mail is `status`, an update that needs no answer.
@@ -98,7 +98,7 @@ ORCA orchestration send --to <terminal handle or orca_session_id:<chat id>> [--t
 - To find a terminal agent by its tab's name, match that name to a tab `title` in `terminal list --include-visual-layouts --json` and use the handle of the terminal in that tab. A terminal's own `title` is the agent's running title, and an agent may put the task's words in it, so it can repeat the name you are looking for. Chat tabs are not in that list; find a chat by its `title` in `agent list --json`. If no tab or several terminals match, ask the user. In a terminal, `ORCA_TERMINAL_HANDLE`, when set, is your own handle; never send to it.
 - A one-way message needs no Task or Run. For a terminal, the warning that it "is a live terminal-only mailbox" and delivery "is not durable after that terminal closes" is expected; it only means the mail is lost if that terminal closes.
 - For ordinary mail, the receipt means the mail was stored, not that the agent read it or started work. Exception: a send to a finished worker's `dispatch:<id>` can start a follow-up Task, and Orca enters its body in the worker as that task's prompt (the receipt says so). Follow progress with `agent read` or `terminal read`.
-- For ordinary mail, a chat gets the whole message with its sender header; one too large for a chat message gets a note to run `orca orchestration check` instead. Ordinary mail never types your words into a terminal agent's input: when Orca wakes one, it types only that note, and the agent reads the mail by running the `check` command the note names (an agent already waiting in `check --wait` gets it as that call's result). Either answers with `ORCA orchestration reply --id <message_id> --body "<answer>" --json`.
+- For ordinary mail, a chat gets the whole message with its sender header; one too large for a chat message gets a note to run `orca orchestration check` instead. Ordinary mail never types your words into a terminal agent's input: when Orca wakes one, it types only that note, and the agent reads the mail by running the `check` command the note names (an agent already waiting in `check --wait` gets it as that call's result). Either answers with `ORCA orchestration reply --id <message_id> --body-file <file> --json`.
 - In a terminal, Orca types that note only once the agent's live status shows it takes input (idle or working). Until then the mail waits unread, and the send receipt says so in a `recipient_delivery_held` warning; the warning stays true whether the status is late or never comes. The command it names is for the agent in that terminal to run in its own terminal; don't run it yourself, because it would read that agent's mail. If the receipt says that terminal won't read the mail, do what it says instead (message that terminal's handle or its coordinator); its own check can't read that message. An agent already waiting in `check --wait` (with no `--types`, or with types that include this message's) gets the mail without a note or warning. For a Run, the receipt reports its current coordinator. Start agents with `agent launch` or `worktree create --agent`, and put the first task in `--prompt`.
 - On Windows, send and reply with `orca` or `orca.exe`; `orca.cmd` refuses `orchestration send` and `reply` because cmd.exe can't pass a message body safely.
 - A terminal opened through Orca's older SSH relay can read mail only while it works a Task or coordinates a Run; otherwise its `orchestration check` is refused, so tell the user instead of messaging it.
@@ -234,8 +234,8 @@ ORCA reference find STA-1234 --json
 - Message the agent with `orchestration send` to the returned `mailbox` (`dispatch:<id>` / `orca_session_id:<id>`) when there is one, otherwise to its exact `terminal` handle. A `dispatch:<id>` mailbox means the agent is a supervised worker. A `run:<id>` targets a coordinator. Find does not send, and adding links from a shell records no agent ownership.
 
 ```text
-ORCA orchestration send --to <terminal-from-find> --subject "Status" --body "Status?" --type question --json
-ORCA orchestration send --to <mailbox-from-find> --subject "Status" --body "Status?" --type question --json
+ORCA orchestration send --to <terminal-from-find> --subject "Status" --type question --body-file <file> --json
+ORCA orchestration send --to <mailbox-from-find> --subject "Status" --type question --body-file <file> --json
 ```
 
 ## Worktree Comments

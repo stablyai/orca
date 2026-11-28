@@ -15,7 +15,7 @@ type FollowUpCommandAction = Exclude<ReportFollowUpAction, { kind: 'information'
 export function formatReportFollowUpCommand(action: FollowUpCommandAction, cli = 'orca'): string {
   switch (action.kind) {
     case 'send':
-      return `${cli} orchestration send --to dispatch:${action.dispatchId} --subject "..." --body "..."`
+      return `${cli} orchestration send --to dispatch:${action.dispatchId} --subject "..." --body-file <file>`
     case 'worker_start_on':
       return `${cli} orchestration worker-start --on ${quoteArgument(action.server)} --spec "..."`
     case 'worker_start':
@@ -23,8 +23,8 @@ export function formatReportFollowUpCommand(action: FollowUpCommandAction, cli =
     case 'mail_sender':
       // Mail to a bot's chat is a request, so it names one of the request types.
       return action.chat
-        ? `${cli} orchestration send --to ${quoteArgument(action.to)} --chat ${action.chat} --type question --subject "..." --body "..."`
-        : `${cli} orchestration send --to ${quoteArgument(action.to)} --subject "..." --body "..."`
+        ? `${cli} orchestration send --to ${quoteArgument(action.to)} --chat ${action.chat} --type question --subject "..." --body-file <file>`
+        : `${cli} orchestration send --to ${quoteArgument(action.to)} --subject "..." --body-file <file>`
   }
 }
 
