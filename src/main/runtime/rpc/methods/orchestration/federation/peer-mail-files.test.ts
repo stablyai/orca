@@ -84,6 +84,7 @@ describe('files sent with mail to a bot on a paired server', () => {
   /** The upload (1-based) whose commit stores the file and then loses its answer. */
   let lostCommit: number | null
   let releaseFails: boolean
+  let deliveryTimesOut: boolean
 
   function openSide(name: string, machine: string, transport?: OrchestrationEnvironmentTransport) {
     const db = new OrchestrationDb(join(dir, `${name}.db`))
@@ -152,6 +153,9 @@ describe('files sent with mail to a bot on a paired server', () => {
       }
       if (method === 'agentSessionAttachment.uploadStart' && uploads.size + 1 === failingUpload) {
         return { id: method, ok: false, error: { code: 'upload_failed', message: 'Disk full' } }
+      }
+      if (method === 'orchestration.peerMailDeliver' && deliveryTimesOut) {
+        return { id: method, ok: false, error: { code: 'runtime_timeout', message: 'Timed out' } }
       }
       if (method === 'agentSessionAttachment.uploadCommit' && uploads.size === lostCommit) {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every upload call carries an object of params.
@@ -263,6 +267,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     failingUpload = null
     lostCommit = null
     releaseFails = false
+    deliveryTimesOut = false
     duringClaim = undefined
     chatClosed = false
     uploads.clear()
@@ -635,5 +640,19 @@ describe('files sent with mail to a bot on a paired server', () => {
     })
 
     expect(claimsOn(path)).toEqual([B_SESSION])
+  })
+  it('forgets a question whose delivery outcome is unknown, as before, and still pulls replies', async () => {
+    deliveryTimesOut = true
+    const relay = vi
+      .spyOn(a.runtime, 'ensureOrchestrationPeerMailRelay')
+      .mockImplementation(() => {})
+
+    await expect(send({ to: 'bot:Docs', files: [file] })).rejects.toMatchObject({
+      code: 'runtime_timeout',
+      message: 'Timed out'
+    })
+    // It may never have arrived: kept, it would settle a later reply in its thread.
+    expect(questionsOut()).toBe(0)
+    expect(relay).toHaveBeenCalledWith('env_b')
   })
 })

@@ -124,7 +124,6 @@ export async function sendPeerMail(args: {
     })
     warnings.push(...held)
   } catch (error) {
-    // Kept unless the server surely stored nothing: mail it may hold can still be answered.
     const storedNothing = !delivering || peerMailStoredNothing(error)
     if (!storedNothing) {
       // The server may hold the mail: pull its reply as a delivered send would.
@@ -134,7 +133,10 @@ export async function sendPeerMail(args: {
         console.warn('[orchestration] arming the peer mail relay failed', relay)
       }
     }
-    if (recorded && storedNothing) {
+    // Kept only for mail the server says it stored, whose answer will come. An unknown outcome
+    // forgets it as before: one that never arrived would settle a later reply in its thread.
+    const stored = error instanceof OrchestrationError && error.code === 'peer_mail_stored'
+    if (recorded && !stored) {
       // A cleanup that fails too mustn't hide why the send failed, or the files it left there.
       try {
         forgetPeerQuestionOut(db, id)
