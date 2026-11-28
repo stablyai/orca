@@ -37,9 +37,13 @@ export function BotGroupApprovalDock({
     return null
   }
   return (
-    <div>
+    <div
+      className={
+        session.prompts[0]?.body.kind === 'question' ? 'flex min-h-0 shrink flex-col' : undefined
+      }
+    >
       {waiting.length > 1 ? (
-        <div className="mx-auto max-w-3xl px-4">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-4">
           <Select value={member.botId} onValueChange={setSelected}>
             <SelectTrigger className="h-8 w-fit">
               <SelectValue />
@@ -54,7 +58,7 @@ export function BotGroupApprovalDock({
           </Select>
         </div>
       ) : (
-        <div className="mx-auto max-w-3xl px-4 text-xs text-chat-foreground-faint">
+        <div className="mx-auto w-full max-w-3xl shrink-0 px-4 text-xs text-chat-foreground-faint">
           {memberName(member.botId)} {t('bots.groups.needsYou', '· Needs you')}
         </div>
       )}

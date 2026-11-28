@@ -19,6 +19,8 @@ const FLOOR_SELECTOR = '[data-native-chat-dock-floor-lines]'
 const FIRST_ITEM_SELECTOR = '[data-native-chat-dock-floor-first-item]'
 const CONTENTS_SELECTOR = '[data-native-chat-dock-contents]'
 export const NATIVE_CHAT_DOCK_ITEM_SELECTOR = `:scope > :not(${CONTENTS_SELECTOR}), :scope > ${CONTENTS_SELECTOR}:not([hidden]) > *`
+// The subagent portal can nest the question's wrapper under a boxless anchor.
+const FIT_ITEM_SELECTOR = `${NATIVE_CHAT_DOCK_ITEM_SELECTOR}, :scope > .contents ${CONTENTS_SELECTOR}:not([hidden]) > *`
 export const NATIVE_CHAT_DOCK_OBSERVED_SELECTOR =
   '[data-native-chat-dock-pinned], [data-native-chat-dock-content]'
 export const NATIVE_CHAT_DOCK_INVALIDATE_EVENT = 'native-chat-dock-invalidate'
@@ -54,10 +56,10 @@ function clipsPinnedContent(element: Element): boolean {
 }
 
 /** Every in-flow item ends inside the dock, and no item was flexed down far enough to clip a pinned part. */
-export function nativeChatDockFits(dock: HTMLElement): boolean {
+export function nativeChatDockFits(dock: HTMLElement, allowCardScroll: boolean): boolean {
   const box = dock.getBoundingClientRect()
   // A display:contents wrapper keeps a collapsed prompt mounted; the card itself owns the flex box.
-  const items = new Set(dock.querySelectorAll(NATIVE_CHAT_DOCK_ITEM_SELECTOR))
+  const items = new Set(dock.querySelectorAll(FIT_ITEM_SELECTOR))
   for (const item of items) {
     if (isRendered(item) && item.getBoundingClientRect().bottom > box.bottom + SLACK) {
       return false
@@ -67,14 +69,17 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
     if (!isRendered(pinned)) {
       continue
     }
-    const rect = pinned.getBoundingClientRect()
-    // Its own item, so a squeezed item (one the next item then overlaps) cannot pass for fitting.
     const clip = pinned.closest(CLIP_SELECTOR)
-    const scrollsWithinClip = clip != null && !clipsPinnedContent(clip)
-    if (scrollsWithinClip && clip instanceof HTMLElement && clip.clientHeight > 0) {
-      // The item's own box was checked above; a card scroller owns reachability of its contents.
+    if (
+      allowCardScroll &&
+      clip instanceof HTMLElement &&
+      clip.clientHeight > 0 &&
+      !clipsPinnedContent(clip)
+    ) {
       continue
     }
+    const rect = pinned.getBoundingClientRect()
+    // Its own item, so a squeezed item (one the next item then overlaps) cannot pass for fitting.
     const bounds = [box]
     for (const outer of [dockItemOf(items, pinned), clip]) {
       if (outer) {
@@ -151,7 +156,7 @@ export function runNativeChatDockFit(root: HTMLElement, dock: HTMLElement): numb
     } else {
       root.removeAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)
     }
-    if (level === last || nativeChatDockFits(dock)) {
+    if (level === last || nativeChatDockFits(dock, tokens.split(' ').includes('card'))) {
       return level
     }
   }

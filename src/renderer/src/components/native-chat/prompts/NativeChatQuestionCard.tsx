@@ -323,10 +323,7 @@ export function NativeChatQuestionCard({
               <div
                 // The fit keeps option 1 whole before it lets the options shrink further.
                 data-native-chat-dock-floor-first-item
-                className={cn(
-                  'native-chat-question-card-options min-h-[calc(var(--spacing)*12)] shrink-[100] overflow-y-auto px-3.5 pt-2.5 pb-1 scrollbar-sleek',
-                  'min-h-0 shrink-0 overflow-visible'
-                )}
+                className="native-chat-question-card-options min-h-0 shrink-0 overflow-visible px-3.5 pt-2.5 pb-1"
               >
                 <div data-native-chat-dock-content className="flex flex-col gap-1.5">
                   {q.options.map((opt, i) => (
