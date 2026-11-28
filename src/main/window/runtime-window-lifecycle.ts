@@ -191,7 +191,7 @@ export function registerRuntimeWindowLifecycle(
         ...(opts.activate === false ? { activate: false } : {})
       })
     },
-    renameTerminal: (tabId, title, options) =>
+    renameTerminal: (tabId, title, _worktreeId, options) =>
       send('ui:renameTerminal', { tabId, title, ...options }),
     setPaneTitle: (tabId, leafId, title) => send('ui:setPaneTitle', { tabId, leafId, title }),
     focusTerminal: (tabId, worktreeId, leafId) =>
@@ -234,7 +234,7 @@ export function registerRuntimeWindowLifecycle(
       }),
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),
-    closeTerminalTab: (tabId, options) =>
+    closeTerminalTab: (tabId, _worktreeId, options) =>
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     sleepingMailChanged: (change) => send('ui:sleepingMailChanged', change),

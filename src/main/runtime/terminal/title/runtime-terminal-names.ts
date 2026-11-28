@@ -37,7 +37,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       }
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
+          this.notifier?.renameTerminal(leaf.tabId, title, leaf.worktreeId)
           return { handle, tabId: leaf.tabId, title }
         }
       }
@@ -45,13 +45,13 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       // A window without this pane cannot publish the rename for paired clients.
       if (this.notifier?.renameTerminal && tabId) {
         this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabId, customTitle)
-        this.notifier.renameTerminal(tabId, title)
+        this.notifier.renameTerminal(tabId, title, pty.pty.worktreeId)
       }
       return { handle, tabId, title }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
+    this.notifier?.renameTerminal(leaf.tabId, title, leaf.worktreeId)
     return { handle, tabId: leaf.tabId, title }
   }
 
@@ -83,7 +83,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
     }
     const normalizedTitle = title?.trim() || null
-    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle)) {
+    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle, leaf.worktreeId)) {
       throw new Error('runtime_unavailable')
     }
     return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }

@@ -163,7 +163,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         const owed = this.captureOwedPtyStops(ptyIdsToKill)
         let tabClosed = true
         try {
-          await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+          await this.closeWindowTabStoppedByMain(tabId, pty.pty.worktreeId)
         } catch (error) {
           // The tab went away concurrently; fall through and close the PTY alone.
           if (!(error instanceof Error) || error.message !== 'tab_not_found') {
@@ -229,7 +229,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     const owed = this.captureOwedPtyStops(ptyIdsToKill)
     if (closesTab && this.notifier?.closeTerminalTab) {
       try {
-        await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
+        await this.closeWindowTabStoppedByMain(leaf.tabId, leaf.worktreeId)
       } catch (error) {
         if (hostClose || !leaf.ptyId) {
           throw error
@@ -241,7 +241,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
       if (!closesTab) {
         await this.closeTerminalPane(leaf.worktreeId, paneTarget)
       } else if (!this.notifier?.closeTerminalTab) {
-        this.notifier?.closeTerminal(leaf.tabId)
+        this.notifier?.closeTerminal(leaf.tabId, leaf.worktreeId)
       }
       return { handle, tabId: leaf.tabId, ...hostClose.close }
     }
@@ -251,7 +251,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     if (!closesTab) {
       await this.closeTerminalPane(leaf.worktreeId, paneTarget)
     } else if (!this.notifier?.closeTerminalTab) {
-      this.notifier?.closeTerminal(leaf.tabId)
+      this.notifier?.closeTerminal(leaf.tabId, leaf.worktreeId)
     }
     return this.describeTerminalClose(handle, leaf.tabId, leaf.ptyId ?? null, stop)
   }

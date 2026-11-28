@@ -199,13 +199,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             : () => {}
         try {
           await (options.localPtyTeardownOwnedExternally
-            ? this.notifier.closeTerminalTab(tab.parentTabId, {
+            ? this.notifier.closeTerminalTab(tab.parentTabId, worktreeId, {
                 localPtyTeardownOwnedExternally: true,
                 ...(options.force ? { force: true } : {})
               })
             : options.force
-              ? this.notifier.closeTerminalTab(tab.parentTabId, { force: true })
-              : this.notifier.closeTerminalTab(tab.parentTabId))
+              ? this.notifier.closeTerminalTab(tab.parentTabId, worktreeId, { force: true })
+              : this.notifier.closeTerminalTab(tab.parentTabId, worktreeId))
         } finally {
           releasePublicationThrottle()
         }
@@ -263,7 +263,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
           this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
           return finishCommittedClose()
         }
-        this.notifier.closeTerminal(tab.parentTabId)
+        this.notifier.closeTerminal(tab.parentTabId, worktreeId)
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return delegatedMobileSessionTabClose()
       }

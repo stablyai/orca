@@ -303,7 +303,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           throw error
         }
         // A real spawn/handle failure left no live backing PTY; remove the ghost tab.
-        this.notifier?.closeTerminal(reply.tabId)
+        this.notifier?.closeTerminal(reply.tabId, worktreeId)
         throw error
       } finally {
         this.pendingMobileTerminalCreatesByKey.delete(pendingCreateKey)

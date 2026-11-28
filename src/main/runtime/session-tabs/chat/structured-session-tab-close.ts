@@ -34,6 +34,7 @@ import {
 import type { StructuredSessionTabPublicationInput as ChatPublication } from './structured-session-tab-publication'
 import type { StructuredSessionSurface } from '../../agent-session/lifecycle/structured-agent-session-close'
 import { windowOwns } from '../person/person-workspace-target'
+import type { WindowTarget } from '../../client/events/runtime-notifier-binding'
 
 export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithStructuredSessionTabProjection {
   protected abstract isHeadlessOwnedMobileBrowserTab(
@@ -125,13 +126,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
   }
 
   /** `of`: the workspace (or terminal) whose tabs held it, named before its close removed the tab. */
-  protected notifyRendererOfHeadlessTerminalClose(
-    of: Parameters<typeof this.windowNotifierFor>[0],
-    parentTabId: string
-  ): void {
+  protected notifyRendererOfHeadlessTerminalClose(of: WindowTarget, parentTabId: string): void {
     // After main teardown, renderer relay is advisory and cannot block flush or fail the close.
     try {
-      this.windowNotifierFor(of)?.closeTerminal(parentTabId)
+      this.windowNotifierFor(of)?.closeTerminal(parentTabId, this.tabWorkspaceOf(of))
     } catch (error) {
       console.warn('[runtime] failed to notify renderer after headless terminal close', {
         parentTabId,

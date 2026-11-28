@@ -122,7 +122,7 @@ export type RuntimeNotifier = {
   /** A launch pane's fate, for the window to keep on its tab or act on. */
   agentLaunchPaneVerdict?(event: AgentLaunchPaneVerdictEvent): void
   /** A launch's recipe when no reveal carried it, so resume can replay it. */
-  rememberLaunchRecipe?(recipe: PaneLaunchRecipe): void
+  rememberLaunchRecipe?(recipe: PaneLaunchRecipe, worktreeId: string): void
   /** A terminal worker's restart resume now waits on a person beside the cut chats. */
   restartOffersChanged?(): void
   resolveLegacyWorkerTerminalRecovery?(
@@ -134,12 +134,18 @@ export type RuntimeNotifier = {
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
-    opts: Omit<RendererTerminalSplitRequest, 'tabId' | 'paneRuntimeId'>
+    opts: Omit<RendererTerminalSplitRequest, 'tabId' | 'paneRuntimeId'> & { worktreeId: string }
   ): void
-  /** `recordInteraction: false` marks a title the host applied, not one the user typed. */
-  renameTerminal(tabId: string, title: string | null, options?: { recordInteraction: false }): void
+  /** `recordInteraction: false` marks a title the host applied, not one the user typed. Tab acts
+   *  name their tab's workspace, which the window guard reads (window-relay-guard.ts). */
+  renameTerminal(
+    tabId: string,
+    title: string | null,
+    worktreeId: string,
+    options?: { recordInteraction: false }
+  ): void
   /** False when the window could not be reached; absent on notifiers that predate pane titles. */
-  setPaneTitle?(tabId: string, leafId: string, title: string | null): boolean
+  setPaneTitle?(tabId: string, leafId: string, title: string | null, worktreeId: string): boolean
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   /** Raises the window onto a pane it shows; resolves false when the window does not know the worktree. */
   revealTerminalPane?(target: TerminalPaneRevealTarget): Promise<boolean>
@@ -172,11 +178,12 @@ export type RuntimeNotifier = {
     oldPath?: string
   ): void
   /** Closes the whole tab. */
-  closeTerminal(tabId: string): void
+  closeTerminal(tabId: string, worktreeId: string): void
   /** Drops one split pane main already closed; never closes its tab. */
-  closeTerminalPane?(tabId: string, leafId: string): void
+  closeTerminalPane?(tabId: string, leafId: string, worktreeId: string): void
   closeTerminalTab?(
     tabId: string,
+    worktreeId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }
   ): Promise<void>
   /** A sleep main runs, for the window to follow; optional as only the real bridge wires it. */
@@ -202,7 +209,8 @@ export type RuntimeNotifier = {
   terminalDriverChanged(ptyId: string, driver: RuntimeTerminalDriverState): void
   nativeChatLaunchDraftResolved?(
     tabId: string,
-    resolution: { text: string; createdAt: number }
+    resolution: { text: string; createdAt: number },
+    worktreeId: string
   ): void
   browserDriverChanged?(browserPageId: string, driver: RuntimeTerminalDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void

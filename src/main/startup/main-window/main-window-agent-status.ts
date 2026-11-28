@@ -8,13 +8,14 @@ import { mainProcessState as state } from '../main-process-state'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import { cliWriterTopology } from '../../agent-hooks/server/cli-writer-topology'
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
+import { ownerWindowShowsAgentPane } from '../../agent-hooks/window/owner-window-agent-status'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
   onRecordAgentState: (agentType: string, status: string) => void
 }
 
-/** Through the window guard, so a teammate's own pane reports to their own clients alone. */
+/** Through the window guard's surface; each pane is classified above, at this one source. */
 function sendAgentStatus(channel: string, payload: unknown, options?: { popout: true }): void {
   const desktop = getRuntimeDesktopSurface()
   for (const window of [state.mainWindow, options?.popout ? getDashboardPopoutWindow() : null]) {
@@ -58,7 +59,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       return
     }
     // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
-    if (structuredHost) {
+    if (structuredHost || !ownerWindowShowsAgentPane(state.core.runtime, { paneKey, worktreeId })) {
       return
     }
     const launchConfig = state.core.runtime?.getLaunchStatementForPaneKey(
@@ -134,13 +135,20 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     }
   })
   agentHookServer.setPaneStatusClearListener((clear) => {
-    if (state.mainWindow?.isDestroyed()) {
+    if (
+      state.mainWindow?.isDestroyed() ||
+      ('paneKey' in clear && !ownerWindowShowsAgentPane(state.core.runtime, clear))
+    ) {
       return
     }
     sendAgentStatus('agentStatus:clear', clear, { popout: true })
   })
   setMigrationUnsupportedPtyListener((event) => {
-    if (state.mainWindow?.isDestroyed()) {
+    const ptyId = event.type === 'set' ? event.entry.ptyId : event.ptyId
+    if (
+      state.mainWindow?.isDestroyed() ||
+      !ownerWindowShowsAgentPane(state.core.runtime, { ptyId })
+    ) {
       return
     }
     if (event.type === 'set') {

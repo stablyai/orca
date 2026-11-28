@@ -50,13 +50,16 @@ export function revealCreatedTerminal(args: {
   const reveal = notifier?.revealTerminalSession?.bind(notifier)
   const rememberLaunchRecipe = (): void => {
     if (effectiveLaunchConfig && !adoptedStablePane) {
-      notifier?.rememberLaunchRecipe?.({
-        tabId,
-        leafId,
-        launchConfig: effectiveLaunchConfig,
-        ...(launchToken ? { launchToken } : {}),
-        ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {})
-      })
+      notifier?.rememberLaunchRecipe?.(
+        {
+          tabId,
+          leafId,
+          launchConfig: effectiveLaunchConfig,
+          ...(launchToken ? { launchToken } : {}),
+          ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {})
+        },
+        workspace.id
+      )
     }
   }
   if (presentation !== 'background' && reveal) {

@@ -58,7 +58,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
-        this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
+        this.notifier?.renameTerminal(tabId, title, worktreeId, { recordInteraction: false })
         if (!this.hasAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, {

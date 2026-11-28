@@ -8,6 +8,10 @@ import type { AgentQuestionAnsweredInferenceRequest } from '../../../shared/agen
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { getMigrationUnsupportedPtySnapshot } from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import {
+  ownerWindowShowsAgentPane,
+  type OwnerWindowAgentStatusRuntime
+} from '../../agent-hooks/window/owner-window-agent-status'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
@@ -23,7 +27,8 @@ type AgentHookHandlerDependencies = {
 // Startup auto-installs hooks; renderer removal would misleadingly revert on the next launch.
 export function registerAgentHookHandlers(
   runtime?: AgentStatusRuntimeEnrichment &
-    Partial<Pick<OrcaRuntimeService, 'terminalWorkerRestartOffers'>>,
+    Partial<Pick<OrcaRuntimeService, 'terminalWorkerRestartOffers'>> &
+    Partial<OwnerWindowAgentStatusRuntime>,
   dependencies: AgentHookHandlerDependencies = {}
 ): void {
   // Allow safe re-registration independently of the outer module guard.
@@ -47,7 +52,10 @@ export function registerAgentHookHandlers(
       agentHookServer
         .getStatusSnapshot()
         // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
-        .filter((entry) => entry.structuredHost === undefined)
+        // The snapshot the owner's window pulls on load follows the rule its live pushes do.
+        .filter(
+          (entry) => entry.structuredHost === undefined && ownerWindowShowsAgentPane(runtime, entry)
+        )
         .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
     )
   })
@@ -73,6 +81,9 @@ export function registerAgentHookHandlers(
   )
   ipcMain.handle(
     'agentStatus:getMigrationUnsupportedSnapshot',
-    (): MigrationUnsupportedPtyEntry[] => getMigrationUnsupportedPtySnapshot()
+    (): MigrationUnsupportedPtyEntry[] =>
+      getMigrationUnsupportedPtySnapshot().filter((entry) =>
+        ownerWindowShowsAgentPane(runtime, entry)
+      )
   )
 }

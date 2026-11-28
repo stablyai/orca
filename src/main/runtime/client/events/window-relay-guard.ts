@@ -2,7 +2,6 @@
 // shared agent's Home reaches it. Every notifier method and desktop channel has a row here, and one
 // without a row is refused, so a new relay cannot reach the window unread.
 import { isPersonWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
-import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
   RendererReply,
   RendererRequest,
@@ -10,20 +9,19 @@ import type {
 } from '../../construction/runtime-desktop-surface'
 import type { RuntimeNotifier } from './runtime-notifier-contract'
 
-/** What a relay names. A held PTY, page or tab is in a teammate's own workspace. */
+/** What a relay names: the workspace whose tabs it acts on (a teammate's own is a `person:` key),
+ *  and the terminal or page it acts on, whose stamped holder says whose list it is in. Never a tab
+ *  id: a chat's or file's is shared by every list in a workspace. */
 export type WindowRelayTarget = {
   worktreeId?: string | null
-  tabId?: string | null
   ptyId?: string | null
   browserPageId?: string | null
-  paneKeys?: readonly string[]
 }
 
-/** How the host tells that a handle is in a teammate's own workspace. */
+/** How the host tells a terminal or page is a teammate's, from the holder stamped on its record. */
 export type WindowRelayLists = {
   heldPty(ptyId: string): boolean
   heldPage(browserPageId: string): boolean
-  heldTab(tabId: string): boolean
 }
 
 type NotifierMethod = keyof RuntimeNotifier
@@ -65,75 +63,53 @@ export const WINDOW_RELAY_TABLE: { [M in NotifierMethod]-?: WindowRelayRow<M> } 
   restartOffersChanged: 'host',
   sleepingMailChanged: 'host',
   claudeAccountSelected: 'host',
+  // The owner's Agents-list read marks, across workspaces; a teammate writes none (teammate-rules.ts).
+  applyAgentPaneActivity: 'host',
   activateWorktree: act((_repoId, worktreeId) => ({ worktreeId })),
   createTerminal: act((worktreeId) => ({ worktreeId })),
-  revealTerminalSession: act(
-    (worktreeId, opts) => ({ worktreeId, ptyId: opts.ptyId, tabId: opts.tabId }),
-    true
-  ),
-  publishAgentLaunchTab: act(
-    (request) => ({ worktreeId: request.worktreeId, tabId: request.tabId }),
-    true
-  ),
-  agentLaunchPaneVerdict: notice((event) => ({ worktreeId: event.worktreeId, tabId: event.tabId })),
-  rememberLaunchRecipe: notice((recipe) => ({ tabId: recipe.tabId })),
-  resolveLegacyWorkerTerminalRecovery: notice((paneKey, _resolution, ptyId) => ({
-    paneKeys: [paneKey],
-    ptyId
-  })),
-  splitTerminal: act((tabId, _paneRuntimeId, opts) => ({ tabId, worktreeId: opts.worktreeId })),
-  renameTerminal: act((tabId) => ({ tabId })),
-  setPaneTitle: act((tabId) => ({ tabId })),
-  focusTerminal: act((tabId, worktreeId) => ({ tabId, worktreeId })),
-  revealTerminalPane: act(
-    (target) => ({ worktreeId: target.worktreeId, tabId: target.tabId }),
-    true
-  ),
-  focusEditorTab: act((tabId, worktreeId) => ({ tabId, worktreeId })),
-  closeSessionTab: act((tabId, worktreeId) => ({ tabId, worktreeId }), true),
-  moveSessionTab: act((worktreeId, move) => ({ worktreeId, tabId: move.tabId })),
-  movePaneToNewTab: act((move) => ({ worktreeId: move.worktreeId, tabId: move.sourceTabId }), true),
+  revealTerminalSession: act((worktreeId, opts) => ({ worktreeId, ptyId: opts.ptyId }), true),
+  publishAgentLaunchTab: act((request) => ({ worktreeId: request.worktreeId }), true),
+  agentLaunchPaneVerdict: notice((event) => ({ worktreeId: event.worktreeId })),
+  rememberLaunchRecipe: notice((_recipe, worktreeId) => ({ worktreeId })),
+  resolveLegacyWorkerTerminalRecovery: notice((_paneKey, _resolution, ptyId) => ({ ptyId })),
+  splitTerminal: act((_tabId, _paneRuntimeId, opts) => ({ worktreeId: opts.worktreeId })),
+  renameTerminal: act((_tabId, _title, worktreeId) => ({ worktreeId })),
+  setPaneTitle: act((_tabId, _leafId, _title, worktreeId) => ({ worktreeId })),
+  focusTerminal: act((_tabId, worktreeId) => ({ worktreeId })),
+  revealTerminalPane: act((target) => ({ worktreeId: target.worktreeId }), true),
+  focusEditorTab: act((_tabId, worktreeId) => ({ worktreeId })),
+  closeSessionTab: act((_tabId, worktreeId) => ({ worktreeId }), true),
+  moveSessionTab: act((worktreeId) => ({ worktreeId })),
+  movePaneToNewTab: act((move) => ({ worktreeId: move.worktreeId }), true),
   openFile: act((worktreeId) => ({ worktreeId })),
-  revealEditorTab: act((reveal) => ({ worktreeId: reveal.worktreeId, tabId: reveal.tabId })),
+  revealEditorTab: act((reveal) => ({ worktreeId: reveal.worktreeId })),
   openDiff: act((worktreeId) => ({ worktreeId })),
-  closeTerminal: act((tabId) => ({ tabId })),
-  closeTerminalPane: act((tabId) => ({ tabId })),
-  closeTerminalTab: act((tabId) => ({ tabId }), true),
+  closeTerminal: act((_tabId, worktreeId) => ({ worktreeId })),
+  closeTerminalPane: act((_tabId, _leafId, worktreeId) => ({ worktreeId })),
+  closeTerminalTab: act((_tabId, worktreeId) => ({ worktreeId }), true),
   workspaceSleepChanged: notice((sleep) => ({ worktreeId: sleep.worktreeId })),
-  resumeSleepingAgents: act(
-    (worktreeId, paneKey) => ({ worktreeId, paneKeys: paneKey ? [paneKey] : [] }),
-    true
-  ),
-  applyAgentPaneActivity: act((change) => ({ paneKeys: change.paneKeys }), true),
+  resumeSleepingAgents: act((worktreeId) => ({ worktreeId }), true),
   terminalFitOverrideChanged: notice((ptyId) => ({ ptyId })),
   terminalDriverChanged: notice((ptyId) => ({ ptyId })),
-  nativeChatLaunchDraftResolved: notice((tabId) => ({ tabId })),
+  nativeChatLaunchDraftResolved: notice((_tabId, _resolution, worktreeId) => ({ worktreeId })),
   browserDriverChanged: notice((browserPageId) => ({ browserPageId })),
   browserRemoteViewersChanged: notice((browserPageId) => ({ browserPageId })),
   clientHostedBrowserRowsChanged: notice((event) => ({ worktreeId: event.worktreeId }))
 }
 
-type PayloadField =
-  | 'worktreeId'
-  | 'fallbackWorktreeId'
-  | 'tabId'
-  | 'splitFromTabId'
-  | 'ptyId'
-  | 'paneKey'
-type DesktopChannelRow = {
-  kind: 'notice' | 'act'
-  fields: readonly (PayloadField | 'browserPageId')[]
-}
+type PayloadField = 'worktreeId' | 'fallbackWorktreeId' | 'ptyId' | 'browserPageId'
+type DesktopChannelRow = { kind: 'notice' | 'act'; fields: readonly PayloadField[] }
 
-/** Every channel main sends or requests of the window through the desktop surface. */
+/** Every channel main sends or requests of the window through the desktop surface. Agent status
+ *  names no workspace of its own: its one source classifies each pane (`ownerWindowShowsAgentPane`). */
 export const DESKTOP_CHANNEL_TABLE: Readonly<Record<string, DesktopChannelRow>> = {
-  'terminal:requestTabMount': { kind: 'act', fields: ['worktreeId', 'tabId', 'ptyId'] },
+  'terminal:requestTabMount': { kind: 'act', fields: ['worktreeId', 'ptyId'] },
   'terminal:requestTabCreate': { kind: 'act', fields: ['worktreeId'] },
   'browser:requestTabCreate': {
     kind: 'act',
-    fields: ['worktreeId', 'fallbackWorktreeId', 'browserPageId', 'splitFromTabId']
+    fields: ['worktreeId', 'fallbackWorktreeId', 'browserPageId']
   },
-  'browser:requestTabClose': { kind: 'act', fields: ['worktreeId', 'tabId'] },
+  'browser:requestTabClose': { kind: 'act', fields: ['worktreeId'] },
   'browser:requestTabActivate': { kind: 'act', fields: ['browserPageId'] },
   'browser:requestTabSetProfile': { kind: 'act', fields: ['browserPageId'] },
   'browser:activateView': { kind: 'act', fields: ['worktreeId', 'browserPageId'] },
@@ -141,10 +117,10 @@ export const DESKTOP_CHANNEL_TABLE: Readonly<Record<string, DesktopChannelRow>> 
   'browser:pane-focus': { kind: 'notice', fields: ['worktreeId', 'browserPageId'] },
   'emulator:pane-focus': { kind: 'notice', fields: ['worktreeId'] },
   'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] },
-  'agentStatus:set': { kind: 'notice', fields: ['worktreeId', 'tabId', 'paneKey'] },
-  'agentStatus:clear': { kind: 'notice', fields: ['paneKey'] },
-  'agentStatus:migrationUnsupported': { kind: 'notice', fields: ['worktreeId', 'tabId', 'ptyId'] },
-  'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: ['ptyId'] }
+  'agentStatus:set': { kind: 'notice', fields: [] },
+  'agentStatus:clear': { kind: 'notice', fields: [] },
+  'agentStatus:migrationUnsupported': { kind: 'notice', fields: [] },
+  'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: [] }
 }
 
 /** The teammate's workspace a relay names, or null when every target is the window's. */
@@ -158,12 +134,7 @@ function personTargetOf(target: WindowRelayTarget, lists: WindowRelayLists): str
   if (target.browserPageId && lists.heldPage(target.browserPageId)) {
     return `page ${target.browserPageId}`
   }
-  const tabIds = [
-    target.tabId,
-    ...(target.paneKeys ?? []).map((paneKey) => parsePaneKey(paneKey)?.tabId)
-  ]
-  const tabId = tabIds.find((id) => id && lists.heldTab(id))
-  return tabId ? `tab ${tabId}` : null
+  return null
 }
 
 const warnedRefusals = new Set<string>()
@@ -233,16 +204,12 @@ export function guardWindowRelays(raw: RuntimeNotifier, lists: WindowRelayLists)
   })
 }
 
-const PAYLOAD_TARGET: Record<PayloadField | 'browserPageId', (value: string) => WindowRelayTarget> =
-  {
-    worktreeId: (worktreeId) => ({ worktreeId }),
-    fallbackWorktreeId: (worktreeId) => ({ worktreeId }),
-    tabId: (tabId) => ({ tabId }),
-    splitFromTabId: (tabId) => ({ tabId }),
-    ptyId: (ptyId) => ({ ptyId }),
-    paneKey: (paneKey) => ({ paneKeys: [paneKey] }),
-    browserPageId: (browserPageId) => ({ browserPageId })
-  }
+const PAYLOAD_TARGET: Record<PayloadField, (value: string) => WindowRelayTarget> = {
+  worktreeId: (worktreeId) => ({ worktreeId }),
+  fallbackWorktreeId: (worktreeId) => ({ worktreeId }),
+  ptyId: (ptyId) => ({ ptyId }),
+  browserPageId: (browserPageId) => ({ browserPageId })
+}
 
 /** Each field a channel's payload names, as its own target, so none hides behind another. */
 function payloadTargets(row: DesktopChannelRow, payload: unknown): WindowRelayTarget[] {

@@ -230,7 +230,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         const forwarded = paneTitlesForDesktopWindow({ root, titlesByLeafId, tab })
         for (const { leafId, title } of forwarded.filter(({ leafId }) => renamed.has(leafId))) {
           // A failed send must fail the call, so the client retries rather than dropping it.
-          if (!this.notifier.setPaneTitle(hostTabId, leafId, title)) {
+          if (!this.notifier.setPaneTitle(hostTabId, leafId, title, worktreeId)) {
             throw new Error('runtime_unavailable')
           }
         }

@@ -88,7 +88,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
     if (authoritativeWindow) {
       if (customTitle !== undefined) {
-        this.notifier?.renameTerminal(hostTabId, customTitle)
+        this.notifier?.renameTerminal(hostTabId, customTitle, worktreeId)
       }
       return { updated: true }
     }

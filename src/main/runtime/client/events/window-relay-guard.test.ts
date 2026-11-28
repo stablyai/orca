@@ -13,26 +13,17 @@ import type { RuntimeDesktopSurface } from '../../construction/runtime-desktop-s
 
 const K = 'person:home-1:bot-1:usr_mate'
 const LEAF = '0f8fad5b-d9cb-469f-a165-70867728950e'
-type Field = 'worktree' | 'tab' | 'pty' | 'page' | 'pane'
+// A chat's tab id and a file's path are the same in every list of a workspace, so the guard never
+// reads a tab: these are the same for the owner and the teammate.
+const TAB = 'agent-session:chat-k'
+const PANE = `${TAB}:${LEAF}`
+type Field = 'worktree' | 'pty' | 'page'
 type Names = Record<Field, string>
-const owner: Names = {
-  worktree: 'folder:home-1',
-  tab: 'owner-tab',
-  pty: 'owner-pty',
-  page: 'owner-page',
-  pane: `owner-tab:${LEAF}`
-}
-const teammate: Names = {
-  worktree: K,
-  tab: 'mate-tab',
-  pty: 'mate-pty',
-  page: 'mate-page',
-  pane: `mate-tab:${LEAF}`
-}
+const owner: Names = { worktree: 'folder:home-1', pty: 'owner-pty', page: 'owner-page' }
+const teammate: Names = { worktree: K, pty: 'mate-pty', page: 'mate-page' }
 const lists: WindowRelayLists = {
   heldPty: (ptyId) => ptyId === teammate.pty,
-  heldPage: (pageId) => pageId === teammate.page,
-  heldTab: (tabId) => tabId === teammate.tab
+  heldPage: (pageId) => pageId === teammate.page
 }
 
 type Census = { fields: Field[]; args: (n: Names) => unknown[] }
@@ -51,18 +42,19 @@ const HOST = [
   'workspaceCleanupRunFinished',
   'restartOffersChanged',
   'sleepingMailChanged',
-  'claudeAccountSelected'
+  'claudeAccountSelected',
+  'applyAgentPaneActivity'
 ]
 const NOTICES: Record<string, Census> = {
   agentLaunchPaneVerdict: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [{ worktreeId: n.worktree, tabId: n.tab, leafId: LEAF, verdict: 'started' }]
+    fields: ['worktree'],
+    args: (n) => [{ worktreeId: n.worktree, tabId: TAB, leafId: LEAF, verdict: 'started' }]
   },
-  rememberLaunchRecipe: { fields: ['tab'], args: (n) => [{ tabId: n.tab, leafId: LEAF }] },
-  resolveLegacyWorkerTerminalRecovery: {
-    fields: ['pane', 'pty'],
-    args: (n) => [n.pane, 'adopted', n.pty]
+  rememberLaunchRecipe: {
+    fields: ['worktree'],
+    args: (n) => [{ tabId: TAB, leafId: LEAF }, n.worktree]
   },
+  resolveLegacyWorkerTerminalRecovery: { fields: ['pty'], args: (n) => [PANE, 'adopted', n.pty] },
   workspaceSleepChanged: {
     fields: ['worktree'],
     args: (n) => [{ worktreeId: n.worktree, phase: 'started' }]
@@ -70,8 +62,8 @@ const NOTICES: Record<string, Census> = {
   terminalFitOverrideChanged: { fields: ['pty'], args: (n) => [n.pty, 'mobile-fit', 80, 24] },
   terminalDriverChanged: { fields: ['pty'], args: (n) => [n.pty, { kind: 'idle' }] },
   nativeChatLaunchDraftResolved: {
-    fields: ['tab'],
-    args: (n) => [n.tab, { text: 'hi', createdAt: 1 }]
+    fields: ['worktree'],
+    args: (n) => [TAB, { text: 'hi', createdAt: 1 }, n.worktree]
   },
   browserDriverChanged: { fields: ['page'], args: (n) => [n.page, { kind: 'idle' }] },
   browserRemoteViewersChanged: { fields: ['page'], args: (n) => [n.page, true] },
@@ -84,45 +76,44 @@ const ACTS: Record<string, Census> = {
   activateWorktree: { fields: ['worktree'], args: (n) => ['repo-1', n.worktree] },
   createTerminal: { fields: ['worktree'], args: (n) => [n.worktree, {}] },
   revealTerminalSession: {
-    fields: ['worktree', 'pty', 'tab'],
-    args: (n) => [n.worktree, { ptyId: n.pty, tabId: n.tab }]
+    fields: ['worktree', 'pty'],
+    args: (n) => [n.worktree, { ptyId: n.pty, tabId: TAB }]
   },
   publishAgentLaunchTab: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [{ worktreeId: n.worktree, tabId: n.tab, leafId: LEAF }]
+    fields: ['worktree'],
+    args: (n) => [{ worktreeId: n.worktree, tabId: TAB, leafId: LEAF }]
   },
   splitTerminal: {
-    fields: ['tab', 'worktree'],
-    args: (n) => [n.tab, 1, { direction: 'vertical', worktreeId: n.worktree }]
+    fields: ['worktree'],
+    args: (n) => [TAB, 1, { direction: 'vertical', worktreeId: n.worktree }]
   },
-  renameTerminal: { fields: ['tab'], args: (n) => [n.tab, 'Build'] },
-  setPaneTitle: { fields: ['tab'], args: (n) => [n.tab, LEAF, 'Build'] },
-  focusTerminal: { fields: ['tab', 'worktree'], args: (n) => [n.tab, n.worktree, LEAF] },
+  renameTerminal: { fields: ['worktree'], args: (n) => [TAB, 'Build', n.worktree] },
+  setPaneTitle: { fields: ['worktree'], args: (n) => [TAB, LEAF, 'Build', n.worktree] },
+  focusTerminal: { fields: ['worktree'], args: (n) => [TAB, n.worktree, LEAF] },
   revealTerminalPane: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [{ worktreeId: n.worktree, tabId: n.tab, leafId: LEAF, executionHostId: null }]
+    fields: ['worktree'],
+    args: (n) => [{ worktreeId: n.worktree, tabId: TAB, leafId: LEAF, executionHostId: null }]
   },
-  focusEditorTab: { fields: ['tab', 'worktree'], args: (n) => [n.tab, n.worktree] },
-  closeSessionTab: { fields: ['tab', 'worktree'], args: (n) => [n.tab, n.worktree] },
+  focusEditorTab: { fields: ['worktree'], args: (n) => [TAB, n.worktree] },
+  closeSessionTab: { fields: ['worktree'], args: (n) => [TAB, n.worktree] },
   moveSessionTab: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [n.worktree, { kind: 'move-to-group', tabId: n.tab, targetGroupId: 'g' }]
+    fields: ['worktree'],
+    args: (n) => [n.worktree, { kind: 'move-to-group', tabId: TAB, targetGroupId: 'g' }]
   },
   movePaneToNewTab: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [{ worktreeId: n.worktree, sourceTabId: n.tab, targetTabId: 't', leafId: LEAF }]
+    fields: ['worktree'],
+    args: (n) => [{ worktreeId: n.worktree, sourceTabId: TAB, targetTabId: 't', leafId: LEAF }]
   },
   openFile: { fields: ['worktree'], args: (n) => [n.worktree, '/a', 'a'] },
   revealEditorTab: {
-    fields: ['worktree', 'tab'],
-    args: (n) => [{ worktreeId: n.worktree, tabId: n.tab, filePath: '/a', relativePath: 'a' }]
+    fields: ['worktree'],
+    args: (n) => [{ worktreeId: n.worktree, tabId: '/a', filePath: '/a', relativePath: 'a' }]
   },
   openDiff: { fields: ['worktree'], args: (n) => [n.worktree, '/a', 'a', false] },
-  closeTerminal: { fields: ['tab'], args: (n) => [n.tab] },
-  closeTerminalPane: { fields: ['tab'], args: (n) => [n.tab, LEAF] },
-  closeTerminalTab: { fields: ['tab'], args: (n) => [n.tab] },
-  resumeSleepingAgents: { fields: ['worktree', 'pane'], args: (n) => [n.worktree, n.pane] },
-  applyAgentPaneActivity: { fields: ['pane'], args: (n) => [{ kind: 'read', paneKeys: [n.pane] }] }
+  closeTerminal: { fields: ['worktree'], args: (n) => [TAB, n.worktree] },
+  closeTerminalPane: { fields: ['worktree'], args: (n) => [TAB, LEAF, n.worktree] },
+  closeTerminalTab: { fields: ['worktree'], args: (n) => [TAB, n.worktree] },
+  resumeSleepingAgents: { fields: ['worktree'], args: (n) => [n.worktree, PANE] }
 }
 const ASYNC = [
   'revealTerminalSession',
@@ -131,8 +122,7 @@ const ASYNC = [
   'closeSessionTab',
   'movePaneToNewTab',
   'closeTerminalTab',
-  'resumeSleepingAgents',
-  'applyAgentPaneActivity'
+  'resumeSleepingAgents'
 ]
 
 /** Names `n`, with only `field` the teammate's. */
@@ -206,7 +196,7 @@ describe('the window relay table', () => {
     const { calls, answer, notifier } = recorder()
     const guarded = guardWindowRelays(notifier, lists)
     for (const name of HOST) {
-      expect(call(guarded, name, [K, teammate.tab]), name).toBe(answer)
+      expect(call(guarded, name, [K, TAB]), name).toBe(answer)
     }
     expect(calls.map((entry) => entry.name)).toEqual(HOST)
   })
@@ -245,7 +235,7 @@ describe('the window relay table', () => {
       const { calls, notifier } = recorder()
       const guarded = guardWindowRelays(notifier, lists)
       expect(call(guarded, 'createTerminal', [K, {}])).toBeUndefined()
-      await expect(call(guarded, 'closeTerminalTab', [teammate.tab])).rejects.toThrow(
+      await expect(call(guarded, 'closeTerminalTab', [TAB, K])).rejects.toThrow(
         'runtime_unavailable'
       )
       expect(calls).toEqual([])
@@ -259,20 +249,17 @@ describe('the desktop channel table', () => {
   const PAYLOAD_FIELD: Record<string, Field> = {
     worktreeId: 'worktree',
     fallbackWorktreeId: 'worktree',
-    tabId: 'tab',
-    splitFromTabId: 'tab',
     ptyId: 'pty',
-    paneKey: 'pane',
     browserPageId: 'page'
   }
   const CHANNELS: Record<string, { kind: 'notice' | 'act'; fields: string[] }> = {
-    'terminal:requestTabMount': { kind: 'act', fields: ['worktreeId', 'tabId', 'ptyId'] },
+    'terminal:requestTabMount': { kind: 'act', fields: ['worktreeId', 'ptyId'] },
     'terminal:requestTabCreate': { kind: 'act', fields: ['worktreeId'] },
     'browser:requestTabCreate': {
       kind: 'act',
-      fields: ['worktreeId', 'fallbackWorktreeId', 'browserPageId', 'splitFromTabId']
+      fields: ['worktreeId', 'fallbackWorktreeId', 'browserPageId']
     },
-    'browser:requestTabClose': { kind: 'act', fields: ['worktreeId', 'tabId'] },
+    'browser:requestTabClose': { kind: 'act', fields: ['worktreeId'] },
     'browser:requestTabActivate': { kind: 'act', fields: ['browserPageId'] },
     'browser:requestTabSetProfile': { kind: 'act', fields: ['browserPageId'] },
     'browser:activateView': { kind: 'act', fields: ['worktreeId', 'browserPageId'] },
@@ -280,13 +267,11 @@ describe('the desktop channel table', () => {
     'browser:pane-focus': { kind: 'notice', fields: ['worktreeId', 'browserPageId'] },
     'emulator:pane-focus': { kind: 'notice', fields: ['worktreeId'] },
     'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] },
-    'agentStatus:set': { kind: 'notice', fields: ['worktreeId', 'tabId', 'paneKey'] },
-    'agentStatus:clear': { kind: 'notice', fields: ['paneKey'] },
-    'agentStatus:migrationUnsupported': {
-      kind: 'notice',
-      fields: ['worktreeId', 'tabId', 'ptyId']
-    },
-    'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: ['ptyId'] }
+    // Classified at their one source (owner-window-agent-status.ts), pushed and pulled alike.
+    'agentStatus:set': { kind: 'notice', fields: [] },
+    'agentStatus:clear': { kind: 'notice', fields: [] },
+    'agentStatus:migrationUnsupported': { kind: 'notice', fields: [] },
+    'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: [] }
   }
   const payload = (fields: string[], names: Names) =>
     Object.fromEntries(fields.map((field) => [field, names[PAYLOAD_FIELD[field]!]]))

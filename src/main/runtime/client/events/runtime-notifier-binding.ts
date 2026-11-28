@@ -4,9 +4,10 @@ import { OrcaRuntimeWithPtyController } from '../../terminal/lifecycle/orca-runt
 import { guardDesktopSurface, guardWindowRelays, type WindowRelayLists } from './window-relay-guard'
 import { setRuntimeDesktopSurfaceGate } from '../../construction/runtime-desktop-surface'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
-import { isPersonWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
-import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
+
+/** A workspace, or a terminal whose tabs' workspace is its holder's list. */
+export type WindowTarget = string | Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 'holder'>
 
 export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyController {
   setNotifier(notifier: RuntimeNotifier | null): void {
@@ -19,12 +20,21 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
     }
   }
 
-  /** The window's notifier for a workspace's tabs, or a terminal's (its holder's list); none for a
-   *  teammate's own workspace, which no window shows. */
-  protected windowNotifierFor(
-    of: string | Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 'holder'>
-  ): RuntimeNotifier | null {
-    return windowOwns(typeof of === 'string' ? of : tabListOfPty(of)) ? this.notifier : null
+  /** The window's notifier for a workspace's tabs, or a terminal's; none for a teammate's own
+   *  workspace, which no window shows. */
+  protected windowNotifierFor(of: WindowTarget): RuntimeNotifier | null {
+    return windowOwns(this.tabWorkspaceOf(of)) ? this.notifier : null
+  }
+
+  /** The workspace whose tabs a target is: itself, or a terminal's holder's list (`tabListOfPty`). */
+  protected tabWorkspaceOf(of: WindowTarget): string {
+    return typeof of === 'string' ? of : tabListOfPty(of)
+  }
+
+  /** The workspace whose tabs hold a live terminal (`tabListOfPty`); null for none by that id. */
+  tabListOfPtyId(ptyId: string): string | null {
+    const pty = this.ptysById.get(ptyId)
+    return pty ? tabListOfPty(pty) : null
   }
 
   protected countTerminalSideEffectConsumingClientEventListeners(): number {
@@ -39,51 +49,7 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
         return pty !== undefined && !windowOwns(tabListOfPty(pty))
       },
       heldPage: (browserPageId) =>
-        getRuntimeBrowserPageRegistry(this).heldBy(browserPageId) !== null,
-      heldTab: (tabId) => this.personWorkspaceHoldsTab(tabId)
+        getRuntimeBrowserPageRegistry(this).heldBy(browserPageId) !== null
     }
-  }
-
-  private personWorkspaceHoldsTab(tabId: string): boolean {
-    // A teammate's terminal opened before their workspace existed is in their own list (#51293).
-    if (
-      this.personSessionTabs.holderOfSurface(
-        (surface) => surface.kind === 'terminal' && surface.parentTabId === tabId
-      )
-    ) {
-      return true
-    }
-    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
-      if (
-        isPersonWorkspaceKey(worktreeId) &&
-        snapshot.tabs.some(
-          (tab) => tab.id === tabId || (tab.type === 'terminal' && tab.parentTabId === tabId)
-        )
-      ) {
-        return true
-      }
-    }
-    const saved = this.store?.getWorkspaceSession?.(TEAMMATE_HOMES_SESSION_PARTITION)
-    if (!saved) {
-      return false
-    }
-    const keys = new Set([
-      ...Object.keys(saved.tabsByWorktree ?? {}),
-      ...Object.keys(saved.unifiedTabs ?? {}),
-      ...Object.keys(saved.openFilesByWorktree ?? {})
-    ])
-    for (const worktreeId of keys) {
-      if (
-        isPersonWorkspaceKey(worktreeId) &&
-        (saved.tabsByWorktree?.[worktreeId]?.some((tab) => tab.id === tabId) ||
-          saved.unifiedTabs?.[worktreeId]?.some(
-            (tab) => tab.id === tabId || tab.entityId === tabId
-          ) ||
-          saved.openFilesByWorktree?.[worktreeId]?.some((file) => file.filePath === tabId))
-      ) {
-        return true
-      }
-    }
-    return false
   }
 }

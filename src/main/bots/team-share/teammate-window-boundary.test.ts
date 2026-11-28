@@ -1,6 +1,6 @@
 // A teammate's own workspace beside the owner's open window: its tab acts run headless, as on a
 // paired server, and the window guard keeps every relay about it from the owner. Real runtime and store.
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
 import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
@@ -98,7 +98,7 @@ it("refuses a relay to the owner's window that names a teammate's workspace, and
   try {
     const notifier = r.runtime['notifier']!
     expect(() => notifier.createTerminal(K, {})).toThrow(/window_relay_refused: createTerminal/)
-    expect(() => notifier.renameTerminal('tab-a', 'x')).toThrow(/window_relay_refused/)
+    expect(() => notifier.renameTerminal('tab-a', 'x', K)).toThrow(/window_relay_refused/)
     // A fact the window mirrors is dropped, not thrown.
     notifier.workspaceSleepChanged?.({ worktreeId: K, phase: 'started' })
     const desktop = getRuntimeDesktopSurface()
@@ -108,7 +108,7 @@ it("refuses a relay to the owner's window that names a teammate's workspace, and
     expect(probe.relays).toEqual([])
 
     notifier.createTerminal(r.home, {})
-    notifier.renameTerminal('owner-tab', 'x')
+    notifier.renameTerminal('owner-tab', 'x', r.home)
     notifier.workspaceSleepChanged?.({ worktreeId: r.home, phase: 'started' })
     desktop.sendToWindow(1, 'terminal:requestTabMount', { worktreeId: r.home, tabId: 'owner-tab' })
     expect(probe.relays.map((relay) => relay.name)).toEqual([
@@ -124,6 +124,8 @@ it("refuses a relay to the owner's window that names a teammate's workspace, and
 
 it("closes a teammate's tab and pane, and activates their file, without telling the owner's window", async () => {
   const { r, K, probe, saved, before } = await besideOwnerWindow()
+  // A relay the guard refused is no relay either; none may be tried.
+  const warn = vi.spyOn(console, 'warn')
   try {
     const listed = await r.runtime.listMobileSessionTabs(`id:${K}`)
     const file = listed.tabs.find((tab) => tab.type !== 'terminal')
@@ -134,6 +136,7 @@ it("closes a teammate's tab and pane, and activates their file, without telling 
 
     expect(saved().map((tab) => tab.id)).toEqual(['tab-b'])
     expect(probe.relays).toEqual([])
+    expect(warn.mock.calls.flat().map(String).join('\n')).not.toMatch(/renderer|window_relay/)
     expect(await probe.ownerState()).toBe(before)
   } finally {
     probe.close()
@@ -166,6 +169,48 @@ it("saves a teammate's chat tab in their own workspace beside the owner's window
     expect(unified.some((tab) => tab.contentType === 'agent-session')).toBe(true)
     expect(probe.relays).toEqual([])
     expect(await probe.ownerState()).toBe(before)
+  } finally {
+    probe.close()
+  }
+})
+
+it("forwards the owner's acts on a chat or file a teammate also has open in their own workspace", async () => {
+  const { r, K, probe } = await besideOwnerWindow()
+  const CHAT = 'agent-session:chat-k'
+  try {
+    // The teammate holds the same chat and file (FILE, saved above) in their own workspace.
+    await r.runtime['changeWindowlessChatTabs'](K, [
+      { open: { sessionId: 'chat-k', agent: 'claude', tabId: CHAT } }
+    ])
+    await r.runtime.listMobileSessionTabs(`id:${K}`)
+    const notifier = r.runtime['notifier']!
+    notifier.focusEditorTab?.(CHAT, r.home)
+    await notifier.closeSessionTab?.(FILE, r.home)
+    notifier.moveSessionTab?.(r.home, { kind: 'move-to-group', tabId: CHAT, targetGroupId: 'g' })
+    notifier.revealEditorTab?.({
+      worktreeId: r.home,
+      tabId: FILE,
+      filePath: FILE,
+      relativePath: 'notes.md'
+    })
+    expect(probe.relays.map((relay) => relay.name)).toEqual([
+      'focusEditorTab',
+      'closeSessionTab',
+      'moveSessionTab',
+      'revealEditorTab'
+    ])
+  } finally {
+    probe.close()
+  }
+})
+
+it("follows a launched chat in the owner's window for the owner's workspace alone", async () => {
+  const { r, K, probe } = await besideOwnerWindow()
+  try {
+    r.runtime.focusLaunchedChatInHostWindow(K, 'chat-k')
+    expect(probe.relays).toEqual([])
+    r.runtime.focusLaunchedChatInHostWindow(r.home, 'chat-o')
+    expect(probe.relays.map((relay) => relay.name)).toEqual(['focusEditorTab'])
   } finally {
     probe.close()
   }
