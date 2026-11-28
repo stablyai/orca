@@ -7,6 +7,7 @@ import {
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
 } from '../../opencode/accounts/opencode-go-api-key-store'
+import { setAntigravityStatusLineUnsupported } from '../../antigravity/statusline-setting'
 import { isWslGuestProcessAsync } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
@@ -37,6 +38,9 @@ export async function initializeMainProcessAccountServices(
     isQuitting
   )
   const wslGuest = await isWslGuestProcessAsync()
+  if (wslGuest) {
+    setAntigravityStatusLineUnsupported('Not available when Orca runs inside WSL.')
+  }
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: core.codexSessionMigration.requestRun },
     setClaudeStatusLineListener: (listener) =>

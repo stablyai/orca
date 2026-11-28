@@ -18,6 +18,7 @@ export function AntigravityStatusLineUsageSetting({
   const [status, setStatus] = useState<AntigravityStatusLineStatus | null>(null)
   const enabled = settings?.antigravityStatusLineUsageEnabled === true
   // Orca's status-hook gate also blocks this feed, so the row says so instead of staying empty.
+  const unsupported = windows || status?.state === 'unsupported'
   const statusHooksOff = settings?.agentStatusHooksEnabled === false
   // Main installs or removes the hook when the setting flips; reading waits for that to finish.
   useEffect(() => {
@@ -52,8 +53,8 @@ export function AntigravityStatusLineUsageSetting({
         <Switch
           id="antigravity-statusline-usage"
           aria-describedby="antigravity-statusline-usage-description"
-          checked={enabled && !windows}
-          disabled={windows}
+          checked={enabled && !unsupported}
+          disabled={unsupported}
           onCheckedChange={(checked) => {
             recordFeatureInteraction('usage-tracking')
             void updateSettings({ antigravityStatusLineUsageEnabled: checked })
@@ -69,7 +70,12 @@ export function AntigravityStatusLineUsageSetting({
               'accounts.antigravity.statusLineUsage.windows',
               "Not available on Windows: agy's status line runs through a POSIX shell."
             )
-          : description}
+          : status?.state === 'unsupported'
+            ? t(
+                'accounts.antigravity.statusLineUsage.wsl',
+                'Not available when Orca runs inside WSL: agy runs on another host.'
+              )
+            : description}
       </p>
       {enabled && statusHooksOff ? (
         <p className="mt-1 text-xs text-muted-foreground">

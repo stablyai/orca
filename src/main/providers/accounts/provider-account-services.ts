@@ -175,7 +175,7 @@ export function createProviderAccountServices(
     const enabled = (): boolean => store.getSettings().antigravityStatusLineUsageEnabled === true
     rateLimits.setAntigravityLiveUsageEnabledResolver(enabled)
     // On refreshes the managed script after an update; off retries a removal that failed earlier.
-    void reconcileAntigravityStatusLineAtStartup(enabled())
+    void reconcileAntigravityStatusLineAtStartup(enabled(), enabled)
   }
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))

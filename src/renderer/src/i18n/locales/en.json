@@ -25708,6 +25708,7 @@
         "title": "Show usage from agy's status line",
         "description": "Orca reads the quota agy already shows to its status line in Orca terminals. Orca never runs agy for this. Your own status line keeps working.",
         "needsStatusHooks": "Usage needs Agent Status Hooks, which are off. Turn them on in Settings → Agents.",
+        "wsl": "Not available when Orca runs inside WSL: agy runs on another host.",
         "windows": "Not available on Windows: agy's status line runs through a POSIX shell.",
         "error": "Orca couldn't update agy's status line."
       },
