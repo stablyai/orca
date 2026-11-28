@@ -58,6 +58,7 @@ import { BotSharingGroup } from './BotSharingPage'
 import { useBotComputerName } from './BotComputerPage'
 import type { BotSettingsPage } from './bot-settings-place'
 import { SettingsControlsOffContext, SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
+import { BotSettingsTags } from './BotSettingsTags'
 import { BotItemsSettingsGroup } from './BotItemsSettingsGroup'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
@@ -346,6 +347,7 @@ export function BotSettingsRoot({
           </div>
         </div>
       </div>
+      <BotSettingsTags key={bot.id} bot={bot} update={update} />
       <SettingsInsetGroup title={t('settings.bots.agent', 'Agent')}>
         <SettingsInsetRow
           icon={<BotIcon />}

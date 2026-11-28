@@ -1,5 +1,6 @@
 // Where the sidebar lists what is in front: a Projects row, a Bots row, or no row (and why).
 // Derived on demand from state that already exists; nothing here is stored.
+import type { BotSidebarHiddenReason } from '../bots/bot-sidebar-view'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import { getRepoExecutionHostId } from '../execution-host/execution-host'
 import { getFolderWorkspaceChildWorktrees } from '../folder-workspace-child-worktrees'
@@ -18,7 +19,7 @@ export type SidebarRevealNoneReason =
   | 'full-page-view'
   | 'archived'
   | 'bots-off'
-  | 'bot-hidden'
+  | BotSidebarHiddenReason
 
 type WorkerRef = Pick<Worktree, 'id' | 'hostId'>
 
@@ -50,8 +51,8 @@ export type SidebarRevealOwner = {
   kind: 'bot' | 'group'
   entryKey: string
   home: Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'>
-  /** Left out of the list by Bot options (paused and hidden). */
-  hidden: boolean
+  /** Left out of the list by Bot options or the tag filter. */
+  hiddenReason: BotSidebarHiddenReason | null
   hostDown: boolean
 }
 
@@ -61,7 +62,7 @@ export type BotWorkerOwnership = { entryKey: string; ancestors: readonly WorkerR
 /** Each worker line's bot, by host identity, over the bots' homes and the sidebar's lineage;
  *  nested workers (a worker's own children) included. Groups list no workers. */
 export function buildBotWorkerOwners(
-  owners: readonly SidebarRevealOwner[],
+  owners: readonly Pick<SidebarRevealOwner, 'kind' | 'entryKey' | 'home'>[],
   childrenByParentIdentity: ReadonlyMap<string, readonly Worktree[]>
 ): ReadonlyMap<string, BotWorkerOwnership> {
   const result = new Map<string, BotWorkerOwnership>()
@@ -104,7 +105,7 @@ export type SidebarWorkspaceOwnerInputs = {
 export type SidebarWorkspaceOwner =
   | { section: 'projects' }
   | Omit<SidebarBotsRevealTarget, 'chatId'>
-  | { section: 'none'; reason: 'bots-off' | 'bot-hidden' }
+  | { section: 'none'; reason: 'bots-off' | BotSidebarHiddenReason }
 
 function ownerOfHome(
   owners: readonly SidebarRevealOwner[],
@@ -159,8 +160,8 @@ export function resolveSidebarWorkspaceOwner(
     if (!input.botsEnabled) {
       return { section: 'none', reason: 'bots-off' }
     }
-    if (home.hidden) {
-      return { section: 'none', reason: 'bot-hidden' }
+    if (home.hiddenReason) {
+      return { section: 'none', reason: home.hiddenReason }
     }
     return { section: 'bots', entryKey: home.entryKey, hostDown: home.hostDown }
   }
@@ -173,8 +174,8 @@ export function resolveSidebarWorkspaceOwner(
     return { section: 'projects' }
   }
   const owner = input.owners.find((candidate) => candidate.entryKey === worker.entryKey)
-  if (!owner || owner.hidden) {
-    return { section: 'none', reason: 'bot-hidden' }
+  if (!owner || owner.hiddenReason) {
+    return { section: 'none', reason: owner?.hiddenReason ?? 'bot-hidden' }
   }
   return {
     section: 'bots',

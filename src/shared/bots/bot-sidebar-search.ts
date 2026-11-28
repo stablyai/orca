@@ -154,7 +154,7 @@ export function createBotSidebarSearchIndex<E extends SearchableEntry>({
 }: {
   /** The entries as the list shows them, in its order. */
   shown: readonly E[]
-  /** Every entry, filters ignored, for the hidden paused bots that match. */
+  /** Entries before hiding paused bots, for the paused matches the list omits. */
   all: readonly E[]
   purposeOf: (entry: E) => string | null
 }): (query: string, currentPurposeOf?: (entry: E) => string | null) => BotSidebarSearchResult<E> {

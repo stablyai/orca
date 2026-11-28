@@ -52,7 +52,10 @@ export function useBotHomeWorkers(homes: readonly FolderWorkspace[]): {
 type Entry = BotSidebarEntry<Bot, BotGroup, FolderWorkspace>
 
 /** The Bots section's entries as Bot options list them, held still while the pointer is on the list. */
-export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
+export function useBotSidebarArrangement(
+  entries: readonly Entry[],
+  activeTags: ReadonlySet<string>
+): Entry[] {
   const view = useAppStore((s) => s.botSidebarView)
   const homes = useMemo(() => entries.map((entry) => entry.home), [entries])
   const homeWorkers = useBotHomeWorkers(homes)
@@ -69,7 +72,8 @@ export function useBotSidebarArrangement(entries: readonly Entry[]): Entry[] {
           ...workers.map((worker) => worker.lastActivityAt)
         )
       }
-    }
+    },
+    activeTags
   ).map(({ id }) => id)
   const shownIds = useOrderHeldWhileEngaged(ranked, view.sortBy, 'bots')
   return useMemo(() => {

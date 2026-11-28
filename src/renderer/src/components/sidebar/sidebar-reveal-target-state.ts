@@ -29,6 +29,10 @@ import { getHostKeyedBotSidebarEntries } from '@/components/bots/bot-sidebar-ent
 import { getKnownSidebarWorktreeById } from '@/components/sidebar/worktree-list/navigation/folder-reveal'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
+import {
+  activeBotSidebarTags,
+  botSidebarHiddenReason
+} from '../../../../shared/bots/bot-sidebar-view'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { getActiveSidebarWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
@@ -44,13 +48,7 @@ import {
   type SidebarWorkspaceOwnerInputs
 } from '../../../../shared/sidebar-list/sidebar-reveal-target'
 
-type OwnerEntry = {
-  kind: 'bot' | 'group'
-  entryKey: string
-  home: FolderWorkspace
-  paused: boolean
-  hostId: ExecutionHostId
-}
+type OwnerEntry = Omit<SidebarRevealOwner, 'hostDown'> & { hostId: ExecutionHostId }
 
 const NO_WORKER_OWNERS: ReadonlyMap<string, BotWorkerOwnership> = new Map()
 
@@ -64,17 +62,19 @@ function sameInputs(previous: readonly unknown[] | undefined, next: readonly unk
   return previous !== undefined && next.every((input, index) => input === previous[index])
 }
 
-// Rebuilt only when the lists change, not on every store write.
+// Rebuilt only when the lists or visibility options change.
 function ownerEntries(
   bots: readonly Bot[],
   groups: readonly BotGroup[],
   folderWorkspaces: readonly FolderWorkspace[],
-  hostIds: readonly ExecutionHostId[]
+  hostIds: readonly ExecutionHostId[],
+  { hidePausedBots, tagFilter }: AppState['botSidebarView']
 ): OwnerEntry[] {
-  const inputs = [bots, groups, folderWorkspaces, hostIds]
+  const inputs = [bots, groups, folderWorkspaces, hostIds, hidePausedBots, tagFilter]
   if (lastEntries && sameInputs(lastEntries.inputs, inputs)) {
     return lastEntries.entries
   }
+  const activeTags = activeBotSidebarTags(tagFilter, bots)
   const entries =
     bots.length === 0 && groups.length === 0
       ? []
@@ -86,7 +86,10 @@ function ownerEntries(
           kind: entry.kind,
           entryKey: entry.id,
           home: entry.home,
-          paused: entry.kind === 'bot' && entry.bot.paused,
+          hiddenReason:
+            entry.kind === 'bot'
+              ? botSidebarHiddenReason(entry.bot, hidePausedBots, activeTags)
+              : null,
           hostId: entry.kind === 'bot' ? entry.bot.hostId : entry.group.hostId
         }))
   lastEntries = { inputs, entries }
@@ -109,10 +112,7 @@ function workerOwners(
   if (lastWorkerOwners && sameInputs(lastWorkerOwners.inputs, inputs)) {
     return lastWorkerOwners.owners
   }
-  const owners = buildBotWorkerOwners(
-    entries.map((entry) => ({ ...entry, hidden: false, hostDown: false })),
-    childrenByParent
-  )
+  const owners = buildBotWorkerOwners(entries, childrenByParent)
   lastWorkerOwners = { inputs, owners }
   return owners
 }
@@ -123,16 +123,18 @@ function ownerInputs(
   bots: readonly Bot[],
   groups: readonly BotGroup[]
 ): SidebarWorkspaceOwnerInputs {
-  const entries = ownerEntries(bots, groups, selectFolderWorkspaces(state) ?? [], readBotHostIds())
+  const entries = ownerEntries(
+    bots,
+    groups,
+    selectFolderWorkspaces(state) ?? [],
+    readBotHostIds(),
+    state.botSidebarView
+  )
   const botsEnabled = state.settings?.botsEnabled !== false
   const hideBotCreatedWorkspaces = state.hideBotCreatedWorkspaces !== false
-  const hidePausedBots = state.botSidebarView?.hidePausedBots === true
-  const owners: SidebarRevealOwner[] = entries.map((entry) => ({
-    kind: entry.kind,
-    entryKey: entry.entryKey,
-    home: entry.home,
-    hidden: hidePausedBots && entry.paused,
-    hostDown: readBotHostState(entry.hostId) === 'offline'
+  const owners: SidebarRevealOwner[] = entries.map(({ hostId, ...entry }) => ({
+    ...entry,
+    hostDown: readBotHostState(hostId) === 'offline'
   }))
   return {
     botsEnabled,

@@ -55,6 +55,7 @@ type SettingsInsetRowProps = {
   value?: string | null
   /** A control at the row's end (a switch, a button). Without one, `onOpen` draws a chevron. */
   end?: React.ReactNode
+  endClassName?: string
   onOpen?: () => void
   /** The subpage it opens, so Back returns focus here. */
   page?: BotSettingsPage
@@ -129,6 +130,7 @@ function RowText({
 /** One row: opens a subpage when it has `onOpen` and no `end`; otherwise holds its control. */
 export function SettingsInsetRow({
   end,
+  endClassName,
   onOpen,
   page,
   wrapEnd,
@@ -184,7 +186,8 @@ export function SettingsInsetRow({
             'flex shrink-0 items-center gap-1.5',
             wrapEnd
               ? '@max-[300px]/settings-view:basis-full @max-[300px]/settings-view:pl-6.5'
-              : null
+              : null,
+            endClassName
           )}
         >
           {end}

@@ -8,6 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../execution-host/execution-host'
 import { BotLookAroundSchema } from './bot-look-around'
 import { BotLaunchSchema } from './bot-launch'
 import { BotTidyUpSchema } from './bot-tidy-up'
+import { normalizeBotTags } from './bot-tags'
 import { BotOfferAnswerSchema } from './bot-offer-answers'
 import { BotCancelledWaitSchema } from './bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bot-avatar-color'
@@ -195,6 +196,15 @@ export const BotSchema = lazyZodSchema(() =>
     skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
     /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
     sidebarOrder: z.number().int().nonnegative().optional(),
+    /** Labels the owner uses to filter the Bots sidebar; absent means no tags. */
+    tags: z
+      .array(z.string())
+      .transform((values) => {
+        const tags = normalizeBotTags(values)
+        return tags.length > 0 ? tags : undefined
+      })
+      .optional()
+      .catch(undefined),
     /** The bot's Chat, its one ongoing conversation; null until first opened. */
     chatSessionId: z.string().min(1).nullable().default(null),
     /** Look around, once changed; absent is on with the defaults. Older hosts drop it. */

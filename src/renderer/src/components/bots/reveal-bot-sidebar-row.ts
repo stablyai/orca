@@ -1,6 +1,11 @@
 import { useAppStore } from '@/store'
+import {
+  activeBotSidebarTags,
+  botSidebarHiddenReason
+} from '../../../../shared/bots/bot-sidebar-view'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
+import { readBots } from '@/lib/bot-catalog-snapshot'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
 
 const READY_DEADLINE_MS = 500
@@ -106,22 +111,24 @@ export function setBotSidebarSearchHasQuery(hasQuery: boolean): void {
   sidebarSearchHasQuery = hasQuery
 }
 
+type RevealEntry = { kind: 'bot' | 'group'; paused: boolean; tags?: readonly string[] }
+
 /**
  * Whether Cmd+K may reveal this entry: the sidebar shows an unfolded Bots section, the entry is listed under
  * the current view options, and the sidebar's own search isn't showing results. When false, nothing changes.
  */
-export function canRevealBotSidebarEntry(entry: {
-  kind: 'bot' | 'group'
-  paused: boolean
-}): boolean {
+export function canRevealBotSidebarEntry(entry: RevealEntry): boolean {
   const state = useAppStore.getState()
+  const { hidePausedBots, tagFilter } = state.botSidebarView
   return (
     state.sidebarOpen &&
     !state.collapsedGroups.has(BOTS_GROUP_KEY) &&
     (state.sidebarBody ?? 'workspaces') !== 'agents' &&
     readBotsEnabled() &&
-    !(entry.kind === 'bot' && entry.paused && state.botSidebarView.hidePausedBots) &&
-    !sidebarSearchHasQuery
+    !sidebarSearchHasQuery &&
+    (entry.kind === 'group' ||
+      botSidebarHiddenReason(entry, hidePausedBots, activeBotSidebarTags(tagFilter, readBots())) ===
+        null)
   )
 }
 
@@ -164,7 +171,7 @@ export function revealBotSidebarRowAfterOpen({
 }: {
   sidebarKey: string
   /** The entry as it is now: null once removed. */
-  readEntry: () => { kind: 'bot' | 'group'; paused: boolean } | null
+  readEntry: () => RevealEntry | null
   generation: number
   /** The tab the open showed: the bot's chat, the group's room, or the home's active tab. */
   destinationTabId: string

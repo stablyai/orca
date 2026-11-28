@@ -154,6 +154,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
         .object({
           sortBy: z.enum(['manual', 'smart', 'recent', 'name']),
           hidePausedBots: z.boolean(),
+          tagFilter: z.array(z.string()).optional(),
           hideSleepingWorkers: z.boolean()
         })
         .optional(),
