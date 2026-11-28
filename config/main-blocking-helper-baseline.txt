@@ -85,8 +85,7 @@
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
 14 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential; +1 botToolCredentialsReader: one store read serves every sign-in and saved-value lookup of a list, check or write
-3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
-2 src/main/bots/bot-tool-saved-headers.ts # withSavedBotToolHeaders moved from bot-tool-credentials.ts (its row went 16 to 14), read per edit
+5 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read; +2 withSavedBotToolHeaders moved from bot-tool-credentials.ts (its row went 16 to 14), read per edit
 3 src/main/bots/bot-tool-secret-scrub.ts
 3 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: one read of the account config for its user and per-folder servers, once per chat launch that has host servers
 21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys; +1 botOwnTools and changeSnapshot: one credential store read per list and write instead of one per row

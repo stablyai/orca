@@ -12,9 +12,12 @@ import {
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
-import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
+import {
+  botToolDetailsOf,
+  resolveBotToolInput,
+  withSavedBotToolHeaders
+} from '../bots/bot-tool-details'
 import { botToolCredentialsFingerprint } from '../bots/bot-tool-credentials'
-import { withSavedBotToolHeaders } from '../bots/bot-tool-saved-headers'
 import {
   botOwnTools,
   botToolEntries,
