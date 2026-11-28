@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 
@@ -8,7 +8,19 @@ vi.mock('@/store/index', async () => {
   return { useAppStore: createEditorTabsStore() }
 })
 
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await importOriginal())
+)
+
 const { useAppStore: store } = await import('@/store/index')
+const { drawTabsFromMain } = await import('@/store/slices/tabs/tabs-drawn-from-main.test-fixture')
 const { openGitGraph } = await import('./git-graph-tab')
 const { editorTabWorkspace } = await import('@/store/slices/editor/tabs/workspace-editor-files')
 
@@ -19,7 +31,11 @@ function repo(id: string, path: string): Repo {
   return { id, path, displayName: id, badgeColor: '#000000', addedAt: 0 }
 }
 
-function seedFolder(): void {
+let main: Awaited<ReturnType<typeof drawTabsFromMain>> | undefined
+
+afterEach(() => main?.close())
+
+async function seedFolder(): Promise<void> {
   store.setState(store.getInitialState(), true)
   store.setState({
     activeWorktreeId: 'folder:F',
@@ -29,13 +45,20 @@ function seedFolder(): void {
       'repo-2': [makeWorktree({ id: OTHER_CHILD, repoId: 'repo-2', path: '/other' })]
     }
   })
+  main = await drawTabsFromMain(store)
+}
+
+/** Opens the graph, then waits for main's answer and the frame that draws it. */
+async function open(...args: Parameters<typeof openGitGraph>): Promise<void> {
+  await openGitGraph(...args)
+  await main?.settle()
 }
 
 it('opens a folder section repo graph in the folder workspace, one tab per repo', async () => {
-  seedFolder()
-  await openGitGraph(CHILD, undefined, 'folder:F')
-  await openGitGraph(OTHER_CHILD, undefined, 'folder:F')
-  await openGitGraph(CHILD, undefined, 'folder:F')
+  await seedFolder()
+  await open(CHILD, undefined, 'folder:F')
+  await open(OTHER_CHILD, undefined, 'folder:F')
+  await open(CHILD, undefined, 'folder:F')
 
   const state = store.getState()
   expect(state.unifiedTabsByWorktree[CHILD] ?? []).toEqual([])
@@ -50,9 +73,9 @@ it('opens a folder section repo graph in the folder workspace, one tab per repo'
 })
 
 it('shows a graph already open in the child as its own tab in the folder', async () => {
-  seedFolder()
-  await openGitGraph(CHILD)
-  await openGitGraph(CHILD, undefined, 'folder:F')
+  await seedFolder()
+  await open(CHILD)
+  await open(CHILD, undefined, 'folder:F')
 
   const state = store.getState()
   expect(state.openFiles.filter((file) => file.mode === 'git-graph')).toHaveLength(1)
@@ -65,16 +88,16 @@ it('shows a graph already open in the child as its own tab in the folder', async
 })
 
 it('places a child graph in the split target when the folder does not show it yet', async () => {
-  seedFolder()
-  await openGitGraph(OTHER_CHILD, undefined, 'folder:F')
-  await openGitGraph(CHILD)
+  await seedFolder()
+  await open(OTHER_CHILD, undefined, 'folder:F')
+  await open(CHILD)
   const [sourceGroup] = store.getState().groupsByWorktree['folder:F']
   const splitTarget = vi.fn(
     () => store.getState().createEmptySplitGroup('folder:F', sourceGroup.id, 'right') ?? undefined
   )
 
-  await openGitGraph(CHILD, splitTarget, 'folder:F')
-  await openGitGraph(CHILD, splitTarget, 'folder:F')
+  await open(CHILD, splitTarget, 'folder:F')
+  await open(CHILD, splitTarget, 'folder:F')
 
   const state = store.getState()
   const splitGroupId = splitTarget.mock.results[0]?.value

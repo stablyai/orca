@@ -37,17 +37,29 @@ export class ProvisioningRuntime extends OrcaRuntimeService {
 
 export function setupLayoutOwnerRuntime() {
   let session: WorkspaceSessionState = getDefaultWorkspaceSession()
+  // As the Store does: every write tells main, which merges it into the rows it holds.
+  const written = new Set<(hostId: string | null) => void>()
+  const write = (next: WorkspaceSessionState): void => {
+    session = next
+    for (const listener of written) {
+      listener('local')
+    }
+  }
   const store = withDurableRuntimeStore(
     withRuntimePaneAdmission({
       getRepos: () => [REPO],
       getRepo: (id: string) => (id === REPO.id ? REPO : undefined),
       getWorkspaceSession: () => session,
-      setWorkspaceSession: (next: WorkspaceSessionState) => {
-        session = next
+      onWorkspaceSessionWritten: (listener: (hostId: string | null) => void) => {
+        written.add(listener)
+        return () => written.delete(listener)
       },
+      setWorkspaceSession: write,
       applyLayoutCommand: async (command: LayoutCommand, hostIds: readonly string[] = []) => {
         const change = applyCommandToSession(resolveHostId(hostIds[0]), session, command)
-        session = change.session ?? session
+        if (change.session) {
+          write(change.session)
+        }
         return change.value
       },
       getSettings: () => ({}),
