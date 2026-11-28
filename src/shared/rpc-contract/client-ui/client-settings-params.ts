@@ -3,6 +3,7 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { isTaskProvider } from '../../work-items/task-providers'
 import type { TaskProvider } from '../../work-items/task-providers'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import { AGENT_HOOK_TARGETS } from '../../agent-hook-listener/configuration/agent-hook-types'
 import { normalizeDisabledTuiAgents } from '../../agent-launch/catalog/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -148,6 +149,9 @@ export const SettingsUpdate = lazyZodSchema(() =>
       /** The host-side switch for bots, so a headless server can turn them on. */
       botsEnabled: z.boolean().optional(),
       agentStatusHooksEnabled: z.boolean().optional(),
+      agentHookConsent: z
+        .partialRecord(z.enum(AGENT_HOOK_TARGETS), z.enum(['granted', 'declined']))
+        .optional(),
       claudeSubagentNavigationEnabled: z.boolean().optional(),
       defaultRepoSelection: z.array(z.string()).nullable().optional(),
       defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

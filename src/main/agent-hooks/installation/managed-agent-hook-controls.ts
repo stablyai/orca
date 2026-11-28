@@ -12,6 +12,7 @@ import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { isAgentHookConsentGranted } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { probeClaudeCliVersion } from '../../claude/cli-capabilities/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
@@ -25,7 +26,10 @@ import {
 } from './managed-agent-hook-registry'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
+  Pick<
+    GlobalSettings,
+    'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'agentHookConsent'
+  >
 > | null
 
 type InstallOptions = {
@@ -116,10 +120,17 @@ async function runInstaller(
 }
 
 // Refresh owned scripts before CLI presence gating; user-wide configs may still invoke them.
-async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
+async function refreshExistingManagedScripts(
+  settings: ManagedHookSettings,
+  options: InstallOptions
+): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
   for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
-    if (allowed !== null && !allowed.has(agent)) {
+    if ((allowed !== null && !allowed.has(agent)) || !isAgentHookConsentGranted(settings, agent)) {
+      continue
+    }
+    // Live check: a decline can land while an earlier refresher awaits file I/O.
+    if (options.shouldContinue && !options.shouldContinue(agent)) {
       continue
     }
     try {
@@ -134,10 +145,12 @@ export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
-  await refreshExistingManagedScripts(options)
+  await refreshExistingManagedScripts(settings, options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
-  const enabledInstallers = installers.filter(([agent]) => !disabled.has(agent))
+  const enabledInstallers = installers.filter(
+    ([agent]) => !disabled.has(agent) && isAgentHookConsentGranted(settings, agent)
+  )
   const targets = enabledInstallers.flatMap(([agent]) => {
     const target = getManagedAgentHookTarget(agent)
     return target ? [target] : []
@@ -161,6 +174,10 @@ export async function installManagedAgentHooks(
     const [agent] = entry
     if (disabled.has(agent)) {
       results.push(skippedStatus(agent, 'agent_disabled', 'Agent is disabled in Settings.'))
+      continue
+    }
+    if (!isAgentHookConsentGranted(settings, agent)) {
+      results.push(skippedStatus(agent, 'not_consented', 'Hooks for this agent were not approved.'))
       continue
     }
     if (options.shouldContinue && !options.shouldContinue(agent)) {
@@ -188,6 +205,11 @@ export async function installManagedAgentHooks(
       agent === 'claude' && presence.executablePath
         ? await probeClaudeCliVersion(presence.executablePath)
         : null
+    // Why re-check: a decline can land while the probe runs.
+    if (options.shouldContinue && !options.shouldContinue(agent)) {
+      results.push(skippedStatus(agent, 'not_consented', 'Hooks for this agent were not approved.'))
+      continue
+    }
     results.push(
       await runInstaller(entry, options.onInstallError, {
         ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),

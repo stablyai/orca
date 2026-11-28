@@ -33,6 +33,7 @@ export type AgentHookInstallSkipReason =
   | 'cli_not_found'
   | 'cli_presence_unknown'
   | 'hooks_disabled'
+  | 'not_consented'
 
 export type AgentHookInstallStatus = {
   agent: AgentHookTarget

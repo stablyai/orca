@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
-import { isAgentStatusHooksEnabledForAgent } from '../../../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { isAgentStatusHooksSwitchedOnForAgent } from '../../../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
 import { hookLaneCanAnnouncePaneTurnEnd } from './agent-hook-completion-notifications'
@@ -22,7 +22,8 @@ export function hookLaneTurnEndEvidence(
     row?.state !== 'done' ||
     evidence === 'legacy' ||
     !isTuiAgent(owner) ||
-    !isAgentStatusHooksEnabledForAgent(settings, owner) ||
+    // Not this computer's consent: an SSH host installs its own hooks, and a hook `done` proves they run.
+    !isAgentStatusHooksSwitchedOnForAgent(settings, owner) ||
     !hookLaneCanAnnouncePaneTurnEnd(paneKey)
   ) {
     return null

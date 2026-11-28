@@ -45,3 +45,8 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
   // Capitalize well-known names nicely; pass through custom names as-is
   return WELL_KNOWN_LABELS[agentType] ?? agentType
 }
+
+/** The agent named as its product names itself (Claude Code, not Claude), for setup and settings copy. */
+export function formatAgentProductName(agentType: AgentType | null | undefined): string {
+  return agentType === 'claude' ? 'Claude Code' : formatAgentTypeLabel(agentType)
+}

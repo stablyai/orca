@@ -13,6 +13,7 @@ import {
   type WslFsResult
 } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import { isAgentHookConsentGranted } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer
@@ -20,7 +21,8 @@ export async function installWslGuestHooks(options: {
   codexHomePath: string | null
   distro: string
   installHooks: typeof installRemoteManagedAgentHooks
-  settings: ManagedHookDetectionSettings
+  /** Read live: a decline can land while guest detection runs. */
+  settings: () => ManagedHookDetectionSettings
   warn: (message: string) => void
   /** Canonical runtime-host installer for redirected Codex homes. */
   installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
@@ -32,10 +34,12 @@ export async function installWslGuestHooks(options: {
   try {
     const detected = readManagedHookDetectionResult(
       await mux.request('preflight.detectAgents', {
-        commands: buildManagedHookDetectionCommands(settings, 'linux')
+        commands: buildManagedHookDetectionCommands(settings(), 'linux')
       })
     )
-    agents = detected.agents
+    // Only agents the user agreed to; the guest's configs are theirs too.
+    const current = settings()
+    agents = detected.agents.filter((agent) => isAgentHookConsentGranted(current, agent))
     claudeVersion = detected.claudeVersion
   } catch (error) {
     warn(
@@ -63,9 +67,14 @@ export async function installWslGuestHooks(options: {
     }
   }
   // Redirected Codex homes use the canonical runtime writer; the relay adapter handles other agents.
-  const remoteAgents = agents.filter((agent) => agent !== 'codex')
+  // Re-read: a decline can land while the Codex install above runs.
+  const latest = settings()
+  const remoteAgents = agents.filter(
+    (agent) => agent !== 'codex' && isAgentHookConsentGranted(latest, agent)
+  )
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
+    shouldContinue: (agent) => isAgentHookConsentGranted(settings(), agent),
     ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length

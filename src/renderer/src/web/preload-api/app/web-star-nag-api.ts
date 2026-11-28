@@ -16,6 +16,12 @@ export function createWebStarNagApi(): Partial<PreloadApi> {
       agentValueMoment: () => Promise.resolve({ status: 'skipped' }),
       showAgentValueMoment: () => Promise.resolve(),
       onboardingCompleted: () => Promise.resolve()
+    },
+    // Hooks install on the host's own desktop; a paired browser never asks.
+    agentHookConsent: {
+      offer: () => Promise.resolve({ ask: false, agents: [], configPath: '' }),
+      decide: () => Promise.resolve([]),
+      statuses: () => Promise.resolve([])
     }
   }
 }

@@ -37,7 +37,7 @@ export function stopOrcadAgentListeners(server: AgentHookServer): void {
  * Call `readinessPublished` once readiness is out; work held off the ready path starts then.
  */
 export function startOrcadManagedAgentHooks(
-  store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged'>,
+  store: Pick<ProfilePreferences, 'getSettings' | 'onSettingsChanged' | 'updateSettings'>,
   setStatusHooksEnabled: (enabled: boolean) => void,
   registerCleanup: (cleanup: BackendServiceCleanup) => void
 ): { readinessPublished: () => void } {
@@ -67,8 +67,12 @@ export function startOrcadManagedAgentHooks(
   void adoptLoginShellAgentHomes().then(() =>
     reconcileStartupManagedAgentHooks({
       getSettings,
+      writeConsent: (agentHookConsent) =>
+        store.updateSettings({ agentHookConsent }, { notifyListeners: true }),
       isQuitting: () => stopping,
-      shouldHydrateShellPath
+      shouldHydrateShellPath,
+      // Consent is asked on the desktop for this computer only; remote servers install as before.
+      grantUnasked: true
     })
   )
   // Grok's, Cursor's and Droid's own MCP files follow this host's list; off with its switch.

@@ -30,6 +30,7 @@ import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentWorkspaceTrustSetting } from './behavior/AgentWorkspaceTrustSetting'
+import { AgentHookConsentRows } from './behavior/AgentHookConsentRows'
 
 type AgentSettingProps = {
   settings: GlobalSettings
@@ -129,13 +130,17 @@ function AgentStatusHooksSetting({ settings, updateSettings }: AgentSettingProps
   const t = useTranslate()
   const enabled = settings.agentStatusHooksEnabled !== false
   return (
-    <SettingsSwitchRow
-      label={getAgentStatusHooksTitle(t)}
-      description={getAgentStatusHooksDescription(t)}
-      checked={enabled}
-      onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
-      ariaLabel={getAgentStatusHooksTitle(t)}
-    />
+    <>
+      <SettingsSwitchRow
+        label={getAgentStatusHooksTitle(t)}
+        description={getAgentStatusHooksDescription(t)}
+        checked={enabled}
+        onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
+        ariaLabel={getAgentStatusHooksTitle(t)}
+      />
+      {/* Install and Remove act on this computer's agent configs, which a paired browser can't reach. */}
+      {enabled && !isPairedWebClientWindow() ? <AgentHookConsentRows /> : null}
+    </>
   )
 }
 

@@ -36,6 +36,8 @@ export type RemoteManagedHookInstallOptions = {
   claudeVersion?: string
   /** Cancellation stops the next installer; individual mutations remain atomic. */
   signal?: AbortSignal
+  /** Live per-agent check before each installer, so a decline mid-batch skips the rest. */
+  shouldContinue?: (agent: AgentHookTarget) => boolean
   /** Only positively detected, enabled agents may mutate configs; omitted/empty installs nothing. */
   agents?: readonly AgentHookTarget[]
 }
@@ -110,7 +112,7 @@ export async function installRemoteManagedAgentHooks(
   }
   const results: AgentHookInstallStatus[] = []
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
-    if (!allowedAgents.has(agent)) {
+    if (!allowedAgents.has(agent) || options?.shouldContinue?.(agent) === false) {
       continue
     }
     // Stop further config mutations when the owning relay request disappears.

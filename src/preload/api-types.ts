@@ -41,6 +41,7 @@ import type { LinearApi } from './api/work-items/linear-api'
 import type { MobileApi } from './api/mobile/mobile-api'
 import type { NativeChatApi } from './api/native-chat/native-chat-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding/onboarding-api'
+import type { AgentHookConsentApi } from './api/agent-hook-consent/agent-hook-consent-api'
 import type { OrcaProfileApi } from './api/profiles/orca-profile-api'
 import type {
   ComputerUsePermissionsApi,
@@ -122,6 +123,7 @@ export type PreloadApi = {
   linear: LinearApi
   jira: JiraApi
   starNag: StarNagApi
+  agentHookConsent: AgentHookConsentApi
   telemetryTrack: TelemetryApi['telemetryTrack']
   telemetrySetOptIn: TelemetryApi['telemetrySetOptIn']
   diagnostics: DiagnosticsApi

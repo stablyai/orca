@@ -1,9 +1,12 @@
 import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../agent-launch/catalog/tui-agent-selection'
+import { isAgentHookConsentGranted } from './agent-hook-consent'
 
 export type AgentStatusHooksSettings =
-  | Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents'>>
+  | Partial<
+      Pick<GlobalSettings, 'agentStatusHooksEnabled' | 'disabledTuiAgents' | 'agentHookConsent'>
+    >
   | null
   | undefined
 
@@ -14,12 +17,24 @@ export function isAgentStatusHooksEnabled(
   return settings?.agentStatusHooksEnabled !== false
 }
 
-// Why: turning an agent off removes its hooks, so any install that reads only the global switch writes them back.
-export function isAgentStatusHooksEnabledForAgent(
+/** The user's switches only, without this computer's consent: for panes whose host installs its own hooks. */
+export function isAgentStatusHooksSwitchedOnForAgent(
   settings: AgentStatusHooksSettings,
   agent: TuiAgent
 ): boolean {
   return (
     isAgentStatusHooksEnabled(settings) && isTuiAgentEnabled(agent, settings?.disabledTuiAgents)
+  )
+}
+
+// Why: turning an agent off removes its hooks, so any install that reads only the global switch writes them back;
+// hooks edit the user's agent config, so an agent is managed only after the user agrees.
+export function isAgentStatusHooksEnabledForAgent(
+  settings: AgentStatusHooksSettings,
+  agent: TuiAgent
+): boolean {
+  return (
+    isAgentStatusHooksSwitchedOnForAgent(settings, agent) &&
+    isAgentHookConsentGranted(settings, agent)
   )
 }

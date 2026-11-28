@@ -16,6 +16,7 @@ export type ManagedHookDetectionSettings = Partial<
     | 'disabledTuiAgents'
     | 'agentStatusHooksEnabled'
     | 'claudeSubagentNavigationEnabled'
+    | 'agentHookConsent'
   >
 > | null
 

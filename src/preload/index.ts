@@ -34,6 +34,7 @@ import { bitbucketApi } from './api/hosted-review/bitbucket-bridge'
 import { linearApi } from './api/work-items/linear-bridge'
 import { jiraApi } from './api/work-items/jira-bridge'
 import { starNagApi } from './api/onboarding/star-nag-bridge'
+import { agentHookConsentApi } from './api/agent-hook-consent/agent-hook-consent-bridge'
 import { diagnosticsApi } from './api/diagnostics/diagnostics-bridge'
 import { settingsApi } from './api/preferences/settings-bridge'
 import { agentAwakeApi } from './api/agent-status/agent-awake-bridge'
@@ -144,6 +145,7 @@ const api = {
   linear: linearApi,
   jira: jiraApi,
   starNag: starNagApi,
+  agentHookConsent: agentHookConsentApi,
   telemetryTrack: telemetryTrackApi,
   telemetrySetOptIn: telemetrySetOptInApi,
   telemetryAcknowledgeBanner: telemetryAcknowledgeBannerApi,

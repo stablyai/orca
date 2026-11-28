@@ -72,7 +72,7 @@ async function readAdmittedHookSettingsFromDisk(): Promise<
 
 async function updateEnabledOnDisk(enabled: boolean): Promise<{
   settingsPath: string
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentHookConsent'>
 }> {
   const { assertOfflineProfileStateMutationRuntime } =
     await import('../../main/persistence/profile-state/offline-access/profile-state-offline-settings.js')
@@ -90,7 +90,7 @@ async function updateEnabledOnDisk(enabled: boolean): Promise<{
 
 async function updateAdmittedEnabledOnDisk(enabled: boolean): Promise<{
   settingsPath: string
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents' | 'agentHookConsent'>
 }> {
   const { updateAgentHookSettingsFromProfileState, readAgentHookSettingsFromProfileState } =
     await import('../../main/persistence/profile-state/offline-access/profile-state-offline-settings.js')
