@@ -9,6 +9,10 @@ import {
   DaemonRouterPreRpcRetirement,
   type PreRpcRetirementTiming
 } from './daemon-router-pre-rpc-retirement'
+import {
+  DaemonRouterRetiredExitDelivery,
+  type RetiredExitDeliveryOptions
+} from './daemon-router-retired-exit-delivery'
 
 /** A retiring generation closes, then exits; both are proven within a few of these. */
 const RETIRED_CONFIRM_DELAYS_MS = [0, 50, 100, 250, 500, 1_000, 2_000]
@@ -20,6 +24,8 @@ export type LegacyIdleRetirementOptions = {
   legacy: () => readonly DaemonPtyAdapter[]
   /** Forgets a generation that accepted retirement. */
   drop: (adapter: DaemonPtyAdapter) => void
+  unroute: RetiredExitDeliveryOptions['unroute']
+  release: RetiredExitDeliveryOptions['release']
   timing?: PreRpcRetirementTiming
 }
 
@@ -34,13 +40,23 @@ export class DaemonRouterLegacyIdleRetirement {
   private readonly askAttempts = new WeakMap<DaemonPtyAdapter, number>()
   private readonly askTimers = new Map<DaemonPtyAdapter, ReturnType<typeof setTimeout>>()
   private readonly preRpc: DaemonRouterPreRpcRetirement
+  private readonly exitDelivery: DaemonRouterRetiredExitDelivery
   private disposed = false
 
   constructor(private readonly options: LegacyIdleRetirementOptions) {
+    this.exitDelivery = new DaemonRouterRetiredExitDelivery({
+      unroute: options.unroute,
+      release: (adapter) => {
+        this.stopWatching(adapter)
+        options.release(adapter)
+      },
+      drop: (adapter) => this.forget(adapter),
+      maxMs: options.timing?.exitDeliveryMaxMs
+    })
     this.preRpc = new DaemonRouterPreRpcRetirement({
       applies: (adapter) =>
         this.isRetirableLegacy(adapter) && this.modes.get(adapter) === 'pre-rpc',
-      forget: (adapter) => this.forget(adapter),
+      retired: (adapter) => this.exitDelivery.settle(adapter),
       timing: options.timing
     })
   }
@@ -51,13 +67,16 @@ export class DaemonRouterLegacyIdleRetirement {
 
   /** An exit or discovery on the generation. */
   noteActivity(adapter: DaemonPtyAdapter): void {
+    if (!this.disposed && this.exitDelivery.isLingering(adapter)) {
+      this.exitDelivery.settle(adapter)
+      return
+    }
     if (this.disposed || !this.isRetirableLegacy(adapter)) {
       return
     }
     // Accepted under another router (a restart carries adapters over): it is already leaving.
     if (adapter.hasRetiredForIdle()) {
-      // Each exit still owed to a watched terminal (a WSL pane's comes late) must reach the app first.
-      this.preRpc.forgetOnceExited(adapter)
+      this.exitDelivery.settle(adapter)
       return
     }
     const mode = this.modes.get(adapter)
@@ -83,9 +102,11 @@ export class DaemonRouterLegacyIdleRetirement {
       return false
     }
     const reached = target && target !== 'any' ? target : undefined
-    // Retired, it owns nothing; a spawn it refused while its last exits arrive is routed without it.
-    if (reached?.hasRetiredForIdle() && this.options.legacy().includes(reached)) {
-      this.forget(reached)
+    // Retired, it owns nothing: route again without it (it keeps delivering exits it still owes).
+    if (reached && (reached.hasRetiredForIdle() || !this.options.legacy().includes(reached))) {
+      if (reached.hasRetiredForIdle()) {
+        this.exitDelivery.settle(reached)
+      }
       return true
     }
     // Refused while an older generation decided past the fence: route again once it has answered.
@@ -200,6 +221,7 @@ export class DaemonRouterLegacyIdleRetirement {
   dispose(): void {
     this.disposed = true
     this.preRpc.dispose()
+    this.exitDelivery.dispose()
     for (const timer of this.askTimers.values()) {
       clearTimeout(timer)
     }
@@ -222,10 +244,13 @@ export class DaemonRouterLegacyIdleRetirement {
   }
 
   private forget(adapter: DaemonPtyAdapter): void {
-    this.preRpc.release(adapter)
+    this.stopWatching(adapter)
+    this.options.drop(adapter)
+  }
+
+  private stopWatching(adapter: DaemonPtyAdapter): void {
     this.lostListeners.get(adapter)?.()
     this.lostListeners.delete(adapter)
-    this.options.drop(adapter)
   }
 }
 

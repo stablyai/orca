@@ -263,6 +263,13 @@ describe.skipIf(process.platform === 'win32')(
       const fresh = await app.router.spawn({ ...size, cwd: dir })
       expect(current.server.host.listSessions().map((s) => s.sessionId)).toContain(fresh.id)
       expect(reattachSettled).toBe(false)
+      // A terminal already on current reattaches without waiting for the older generation's decision.
+      let currentReattached = false
+      void app.router
+        .spawn({ ...size, sessionId: fresh.id, cwd: dir })
+        .then(() => (currentReattached = true))
+      await vi.waitFor(() => expect(currentReattached).toBe(true))
+      expect(reattachSettled).toBe(false)
 
       decision.release()
       const restored = await reattach
@@ -363,7 +370,9 @@ describe('the transitional recheck timer', () => {
     const retirement = new DaemonRouterLegacyIdleRetirement({
       current: () => current,
       legacy: () => legacy,
-      drop: () => {}
+      drop: () => {},
+      unroute: () => true,
+      release: () => {}
     })
     retirement.noteAll()
     retirement.noteActivity(held)
@@ -378,7 +387,9 @@ describe('the transitional recheck timer', () => {
     const retirement = new DaemonRouterLegacyIdleRetirement({
       current: () => current,
       legacy: () => legacy,
-      drop: (adapter) => legacy.splice(legacy.indexOf(adapter), 1)
+      drop: (adapter) => legacy.splice(legacy.indexOf(adapter), 1),
+      unroute: () => true,
+      release: () => {}
     })
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(1_000)
@@ -407,7 +418,9 @@ describe('the transitional recheck timer', () => {
     const retirement = new DaemonRouterLegacyIdleRetirement({
       current: () => current,
       legacy: () => legacy,
-      drop: () => {}
+      drop: () => {},
+      unroute: () => true,
+      release: () => {}
     })
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(24 * 60 * 60_000)
@@ -418,12 +431,18 @@ describe('the transitional recheck timer', () => {
 
   function track(preRpc: DaemonPtyAdapter, current: DaemonPtyAdapter) {
     const legacy = [preRpc]
+    // Released: unsubscribed from its exits and disconnected.
+    const released: DaemonPtyAdapter[] = []
+    const unroute = (adapter: DaemonPtyAdapter): boolean =>
+      legacy.includes(adapter) && legacy.splice(legacy.indexOf(adapter), 1).length === 1
     const retirement = new DaemonRouterLegacyIdleRetirement({
       current: () => current,
       legacy: () => legacy,
-      drop: (adapter) => legacy.splice(legacy.indexOf(adapter), 1)
+      drop: (adapter) => unroute(adapter) && released.push(adapter),
+      unroute,
+      release: (adapter) => released.push(adapter)
     })
-    return { legacy, retirement }
+    return { legacy, released, retirement }
   }
 
   it('reads nothing while a terminal it still watches is alive', async () => {
@@ -446,15 +465,17 @@ describe('the transitional recheck timer', () => {
     // Fenced by an unanswered decision, so it is asked even while a terminal is watched.
     Object.assign(state, { watched: true, admissionClosed: true })
     inventory.liveRelays = 0
-    const { legacy, retirement } = track(preRpc, current)
+    const { legacy, released, retirement } = track(preRpc, current)
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(1_000)
     expect(state.retired).toBe(true)
+    // No new work goes to it, but it still delivers the exit it owes.
+    expect(legacy).toEqual([])
     retirement.noteActivity(preRpc)
-    expect(legacy).toEqual([preRpc])
+    expect(released).toEqual([])
     state.watched = false
     retirement.noteActivity(preRpc)
-    expect(legacy).toEqual([])
+    expect(released).toEqual([preRpc])
   })
 
   it('forgets a retired generation whose last exit never arrives', async () => {
@@ -462,12 +483,12 @@ describe('the transitional recheck timer', () => {
     const { current, preRpc, inventory, state } = stubs()
     Object.assign(state, { watched: true, admissionClosed: true })
     inventory.liveRelays = 0
-    const { legacy, retirement } = track(preRpc, current)
+    const { released, retirement } = track(preRpc, current)
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(29_000)
-    expect(legacy).toEqual([preRpc])
+    expect(released).toEqual([])
     await vi.advanceTimersByTimeAsync(2_000)
-    expect(legacy).toEqual([])
+    expect(released).toEqual([preRpc])
     expect(vi.getTimerCount()).toBe(0)
   })
 
@@ -486,7 +507,7 @@ describe('the transitional recheck timer', () => {
           }
         })
     )
-    const { legacy, retirement } = track(preRpc, current)
+    const { released, retirement } = track(preRpc, current)
     retirement.noteAll()
     await vi.advanceTimersByTimeAsync(1_000)
     // Another exit while the decision is pending asks for a second check after it.
@@ -494,9 +515,22 @@ describe('the transitional recheck timer', () => {
     await vi.advanceTimersByTimeAsync(1_000)
     answer()
     await vi.advanceTimersByTimeAsync(5_000)
-    expect(legacy).toEqual([preRpc])
+    expect(released).toEqual([])
     await vi.advanceTimersByTimeAsync(30_000)
-    expect(legacy).toEqual([])
+    expect(released).toEqual([preRpc])
+  })
+
+  it('routes a spawn refused by a retired generation elsewhere while it still delivers the exits it owes', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state } = stubs()
+    Object.assign(state, { watched: true, admissionClosed: true })
+    inventory.liveRelays = 0
+    const { released, retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    const refused = new Error('Terminal daemon is decommissioning')
+    await expect(retirement.settleHeldRetirements(refused, 1, preRpc)).resolves.toBe(true)
+    expect(released).toEqual([])
   })
 
   it('stops rechecking a fenced generation after the cap, and asks it again when it refuses a spawn', async () => {

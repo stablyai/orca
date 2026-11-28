@@ -239,6 +239,7 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
         // the user's own, so it closes at once, without the settle wait or classification.
         if (wslDistro && event.payload.code !== 0 && isProvenProcessExit(event.payload.code)) {
           const exitAt = performance.now()
+          this.exitsClassifying++
           void this.finishWslBridgeExit(event.sessionId, event.payload, wslDistro, exitAt)
           return
         }
@@ -263,7 +264,7 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
   ): Promise<void> {
     const verdict = await classifyWslBridgeExit(wslDistro, exitAt, this.readRunningWslDistros, () =>
       this.wslBridgeBootIdentity.rebootedSinceSpawn(sessionId, wslDistro)
-    )
+    ).finally(() => this.exitsClassifying--)
     // Lost, or booted again since the spawn, keeps the tab; an unanswered check reads as an exit.
     // The code shows a verify run which codes a terminate yields.
     const probeMs = Math.round(performance.now() - exitAt)

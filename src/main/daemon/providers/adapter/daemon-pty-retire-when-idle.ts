@@ -15,6 +15,8 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
   /** The newer protocol that asked; every new connection is asked again. */
   private retireWhenIdleFor: number | null = null
   private stopHeldWatch: (() => void) | null = null
+  /** Bridge exits awaiting classification: their sessions may already be gone from `activeSessionIds`. */
+  protected exitsClassifying = 0
 
   /** Asks an older generation to retire by itself once it owns nothing; 'unsupported' predates the request. */
   async askRetireWhenIdle(
@@ -68,7 +70,7 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
       return 'connected'
     }
     const asked = this.heldConnectionDropped || this.idleRetirementState === 'unverifiable'
-    if (!asked || this.activeSessionIds.size > 0) {
+    if (!asked || this.hasWatchedSessions()) {
       return 'unknown'
     }
     try {
@@ -79,7 +81,7 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
       // A missing name alone proves nothing on POSIX, where something else may have unlinked it.
       if (
         !isDaemonEndpointGoneError(error) ||
-        this.activeSessionIds.size > 0 ||
+        this.hasWatchedSessions() ||
         !this.daemonProcessExited(this.lastAuthenticatedIdentity?.pid)
       ) {
         return 'unknown'
@@ -125,9 +127,9 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
     )
   }
 
-  /** This app holds a live attachment to at least one of its terminals, so their exits will arrive. */
+  /** This app holds a live attachment to at least one of its terminals, or one's exit is still being classified. */
   hasWatchedSessions(): boolean {
-    return this.activeSessionIds.size > 0
+    return this.activeSessionIds.size > 0 || this.exitsClassifying > 0
   }
 
   protected daemonProcessExited(pid: number | undefined): boolean {

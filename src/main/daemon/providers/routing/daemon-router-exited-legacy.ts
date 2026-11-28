@@ -31,16 +31,31 @@ export function dropLegacyAdapter(
   legacy: DaemonPtyAdapter[],
   subscriptions: DaemonPtyAdapterSubscriptionFanout
 ): boolean {
+  if (!unrouteLegacyAdapter(adapter, legacy)) {
+    return false
+  }
+  releaseLegacyAdapter(adapter, subscriptions)
+  return true
+}
+
+/** No more work goes to it; its exit subscription stays. */
+export function unrouteLegacyAdapter(adapter: DaemonPtyAdapter, legacy: DaemonPtyAdapter[]): boolean {
   const index = legacy.indexOf(adapter)
   if (index === -1) {
     return false
   }
   legacy.splice(index, 1)
+  return true
+}
+
+export function releaseLegacyAdapter(
+  adapter: DaemonPtyAdapter,
+  subscriptions: DaemonPtyAdapterSubscriptionFanout
+): void {
   // The subscription fanout holds its own copy of the adapter list.
   subscriptions.dropAdapter(adapter)
   // Disconnect failure must not undo proven retirement.
   void Promise.resolve()
     .then(() => adapter.disconnectOnly())
     .catch(() => undefined)
-  return true
 }

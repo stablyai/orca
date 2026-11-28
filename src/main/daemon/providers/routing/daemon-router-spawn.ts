@@ -3,7 +3,11 @@ import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type { LegacyDaemonExitProof } from './daemon-legacy-exit-proof'
 import type { DaemonPtyAdapterSubscriptionFanout } from './daemon-pty-adapter-subscription-fanout'
-import { dropLegacyAdapter } from './daemon-router-exited-legacy'
+import {
+  dropLegacyAdapter,
+  releaseLegacyAdapter,
+  unrouteLegacyAdapter
+} from './daemon-router-exited-legacy'
 import {
   DaemonRouterLegacyIdleRetirement,
   type LegacyIdleRetirementOptions
@@ -37,6 +41,14 @@ export class DaemonRouterSpawn {
           state.ownerResolver().retireProvider(adapter)
         }
       },
+      unroute: (adapter) => {
+        if (!unrouteLegacyAdapter(adapter, state.legacy)) {
+          return false
+        }
+        state.ownerResolver().retireProvider(adapter)
+        return true
+      },
+      release: (adapter) => releaseLegacyAdapter(adapter, state.subscriptions()),
       ...(state.legacyIdleRetirementTiming ? { timing: state.legacyIdleRetirementTiming } : {})
     })
   }
@@ -67,9 +79,13 @@ export class DaemonRouterSpawn {
     attempt: { target?: DaemonPtyAdapter }
   ): Promise<PtySpawnResult> {
     const { retirement, sessionAdapters } = this.state
-    // Only a known or routed session can reach an older generation; other fresh ones start on current.
+    // Only a known or routed session can reach an older generation; fresh ones and those routed to current never do.
+    const route = opts.sessionId === undefined ? undefined : sessionAdapters.get(opts.sessionId)
     const mayReachLegacy =
-      opts.sessionId !== undefined && (!opts.isNewSession || sessionAdapters.has(opts.sessionId))
+      opts.sessionId !== undefined &&
+      this.state.legacy.length > 0 &&
+      route !== this.state.current() &&
+      (!opts.isNewSession || route !== undefined)
     const releaseReattach = mayReachLegacy ? await this.legacyIdle.admitReattach() : null
     if (retirement.admissionClosed) {
       releaseReattach?.()
