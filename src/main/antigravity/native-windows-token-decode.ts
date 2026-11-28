@@ -13,7 +13,7 @@ const storedStrings = [
   'id_token'
 ]
 const tokenStrings = ['access_token', 'token_type', 'refresh_token']
-type Token = { strings: Map<string, string>; idToken: string | null }
+type Token = { strings: Map<string, string>; idToken: string | null; expiry?: string }
 type StoredToken = { token: Token | null; strings: Map<string, string> }
 
 // The host decoder replaces each invalid UTF-8 byte, rather than a truncated sequence.
@@ -148,7 +148,11 @@ function decodeToken(node: Node, token: Token, text: string): boolean {
     if (tokenStrings.includes(name)) {
       valid = assignString(token.strings, name, value) && valid
     } else if (name === 'expiry') {
-      valid = validExpiry(value) && valid
+      const expiry = validExpiry(value) ? stringValue(value) : undefined
+      valid = expiry !== undefined && valid
+      if (expiry) {
+        token.expiry = expiry
+      }
     } else if (name === 'expires_in') {
       valid = validInt64(value, text) && valid
     }
@@ -246,6 +250,7 @@ export function projectAntigravityWindowsToken(
     authMethod: decoded.strings.get('auth_method') ?? '',
     accessToken: decoded.token?.strings.get('access_token') ?? '',
     refreshToken: decoded.token?.strings.get('refresh_token') ?? null,
-    idToken: decoded.strings.get('id_token') ?? decoded.token?.idToken
+    idToken: decoded.strings.get('id_token') ?? decoded.token?.idToken,
+    expiry: decoded.token?.expiry
   })
 }

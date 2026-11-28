@@ -111,7 +111,6 @@ const agySignInHost = (runtime: OrcaRuntimeService): AntigravityChatSignInHost =
     forgetAgyLogin(runtime)
     // A new login with no new selection: idle chats start again on it.
     restartIdleAgyChats({ runtime: 'host' })
-    watchAgyLoginChanges()
     if (intent === 'changeAccount') {
       await saveCurrentAgyLogin()
     }
@@ -235,8 +234,14 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      watchAgyLoginChanges()
-      dispose = subscribeAntigravityChatSignIn(() => emit(readAntigravityChatSignInStatus(owner)))
+      const release = watchAgyLoginChanges()
+      const unsubscribe = subscribeAntigravityChatSignIn(() =>
+        emit(readAntigravityChatSignInStatus(owner))
+      )
+      dispose = () => {
+        unsubscribe()
+        release()
+      }
       emit(readAntigravityChatSignInStatus(owner))
       readAgySignInInBackground(ctx.runtime)
     }

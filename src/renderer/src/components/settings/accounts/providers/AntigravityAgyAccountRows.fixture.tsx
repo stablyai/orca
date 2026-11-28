@@ -125,7 +125,8 @@ export const expiredLoginWithAdc = defineFixture({
         subject: null,
         authMethod: 'consumer',
         identityKnown: false,
-        expiredAt: Date.UTC(2026, 10, 20, 6)
+        expiredAt: Date.UTC(2026, 10, 20, 6),
+        cannotRefresh: true
       }
     })
 })
@@ -149,7 +150,8 @@ export const expiredLogin = defineFixture({
         subject: null,
         authMethod: 'consumer',
         identityKnown: false,
-        expiredAt: Date.UTC(2026, 10, 20, 6)
+        expiredAt: Date.UTC(2026, 10, 20, 6),
+        cannotRefresh: true
       }
     })
 })
@@ -200,7 +202,8 @@ export const savedLoginExpired = defineFixture({
         subject: saved.subject,
         authMethod: 'consumer',
         identityKnown: true,
-        expiredAt: Date.UTC(2026, 10, 20, 6)
+        expiredAt: Date.UTC(2026, 10, 20, 6),
+        cannotRefresh: true
       }
     })
 })

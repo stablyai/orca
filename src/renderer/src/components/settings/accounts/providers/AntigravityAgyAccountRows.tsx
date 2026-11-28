@@ -36,8 +36,14 @@ export function AntigravityAgyAccountRows({
   const signingIn = signIn?.ownFlow === true
   // Until Orca reads agy's login it can't tell which account holds it, so nothing changed yet.
   const unread = state?.currentAccount?.unread === true
-  // agy's login, saved or not, whose access token expired; its row offers Sign in again.
-  const currentExpiredAt = state?.currentAccount?.expiredAt
+  // agy's login, saved or not, that is expired for good: agy renews an expired access token on its
+  // next run, unless it signs in with gcloud, has no refresh token, or says it's signed out.
+  const current = state?.currentAccount
+  const currentExpiredAt =
+    current?.expiredAt !== undefined &&
+    (current.cannotRefresh || state?.agyAdcAuth || state?.chatAgySignedOut)
+      ? current.expiredAt
+      : undefined
   const expiredAt = state?.activeAccountId ? undefined : currentExpiredAt
   const changed = Boolean(
     !unread && state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
@@ -66,14 +72,8 @@ export function AntigravityAgyAccountRows({
     <Badge variant="warning">{t('accounts.antigravity.expired', 'Expired')}</Badge>
   )
   const expiredDate = (at: number) => new Date(at).toLocaleDateString(locale)
-  const expiredRunAgy = (at: number) =>
-    t(
-      'accounts.antigravity.expiredRunAgy',
-      'Expired {{date}} · run agy to refresh it, or sign in again',
-      {
-        date: expiredDate(at)
-      }
-    )
+  const expiredOn = (at: number) =>
+    t('accounts.antigravity.expiredOn', 'Expired {{date}}', { date: expiredDate(at) })
   const signInAgain = signIn ? (
     <Button
       size="xs"
@@ -84,6 +84,11 @@ export function AntigravityAgyAccountRows({
       {t('accounts.antigravity.signInAgain', 'Sign in again')}
     </Button>
   ) : undefined
+  const saveCurrent = (
+    <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
+      {t('accounts.antigravity.saveShort', 'Save')}
+    </Button>
+  )
   // An error about agy's current login sits on its row, or on Add account when it's saved.
   const currentLoginError = state && error?.accountId === null ? error.message : null
   let currentLoginErrorShown = false
@@ -96,10 +101,18 @@ export function AntigravityAgyAccountRows({
         badge={
           <Badge variant="outline">{t('accounts.antigravity.environment', 'Environment')}</Badge>
         }
-        detail={t(
-          'accounts.antigravity.adcAuth',
-          'AGY_ADC_AUTH is set, so agy and chats use gcloud · unset it to use a Google account'
-        )}
+        detail={
+          // Chats in Orca's own agy home (Gemini API key, Enterprise) launch without it.
+          state?.chatUsesAgy || state?.chatAgySignedOut
+            ? t(
+                'accounts.antigravity.adcAuth',
+                'AGY_ADC_AUTH is set, so agy and chats use gcloud · unset it to use a Google account'
+              )
+            : t(
+                'accounts.antigravity.adcAuthTerminal',
+                'AGY_ADC_AUTH is set, so agy in the terminal uses gcloud · unset it to use a Google account'
+              )
+        }
       />
     )
   }
@@ -204,9 +217,14 @@ export function AntigravityAgyAccountRows({
             ? t('accounts.antigravity.expiredUnused', 'Expired {{date}} · not saved', {
                 date: expiredDate(expiredAt)
               })
-            : expiredRunAgy(expiredAt)
+            : expiredOn(expiredAt)
         }
-        actions={signInAgain}
+        actions={
+          <>
+            {state.currentAccount.identityKnown ? saveCurrent : null}
+            {signInAgain}
+          </>
+        }
       />
     )
   } else if (state?.currentAccount && !state.activeAccountId) {
@@ -227,11 +245,7 @@ export function AntigravityAgyAccountRows({
             t('accounts.antigravity.noEmailNotSaved', "agy didn't report an email · not saved")
           )
         }
-        actions={
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('AddCurrent')}>
-            {t('accounts.antigravity.saveShort', 'Save')}
-          </Button>
-        }
+        actions={saveCurrent}
       />
     )
   }
@@ -256,11 +270,7 @@ export function AntigravityAgyAccountRows({
         }
         detail={
           expired
-            ? adc
-              ? t('accounts.antigravity.expiredOn', 'Expired {{date}}', {
-                  date: expiredDate(currentExpiredAt)
-                })
-              : expiredRunAgy(currentExpiredAt)
+            ? expiredOn(currentExpiredAt)
             : account.id === launchesUse
               ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
               : launchesUse && active
@@ -287,7 +297,8 @@ export function AntigravityAgyAccountRows({
       />
     )
   }
-  if (state?.currentAccount && !signingIn && currentExpiredAt === undefined) {
+  // An expired login's row offers Sign in again instead, where this host can sign in.
+  if (state?.currentAccount && !signingIn && (currentExpiredAt === undefined || !signIn)) {
     const showsCurrentError = Boolean(signIn) && !currentLoginErrorShown
     if (showsCurrentError) {
       currentLoginErrorShown = true

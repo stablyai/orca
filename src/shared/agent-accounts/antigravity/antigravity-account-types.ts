@@ -25,9 +25,12 @@ export type AntigravityAccountState = {
      *  read may ask for keychain access, so only `accounts.antigravityReadCurrent` makes it. The
      *  other fields are empty and no saved account is active. Absent from older hosts. */
     unread?: true
-    /** When agy's stored access token expired; Google rejects it until agy refreshes it. Absent
-     *  while it still works, when agy saved no expiry, and from older hosts. */
+    /** When agy's stored access token expired. agy renews it on its next run with its refresh
+     *  token, so on its own this doesn't mean signed out. Absent while it still works, when agy
+     *  saved no expiry, and from older hosts. */
     expiredAt?: number
+    /** With `expiredAt`: the login has no refresh token, so agy can't renew it. */
+    cannotRefresh?: true
   } | null
   selectedAccountId: string | null
   /** New agy launches put the selected account back when another saved one took agy's login.

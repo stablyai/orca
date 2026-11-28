@@ -20,6 +20,8 @@ export type VerifiedAntigravityLogin = {
   accountId: string | null
   /** When the login's access token expires; absent where agy saved none, and in older vaults. */
   expiresAt?: number
+  /** The login has no refresh token, so agy can't renew it once its access token expires. */
+  cannotRefresh?: true
 }
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
@@ -62,7 +64,8 @@ function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
     nullableString(value.subject) &&
     typeof value.authMethod === 'string' &&
     nullableString(value.accountId) &&
-    (value.expiresAt === undefined || Number.isFinite(value.expiresAt))
+    (value.expiresAt === undefined || Number.isFinite(value.expiresAt)) &&
+    (value.cannotRefresh === undefined || value.cannotRefresh === true)
   )
 }
 
@@ -146,7 +149,8 @@ export function createEncryptedAntigravityAccountStore(
                     accountId: value.verifiedLogin.accountId,
                     ...(value.verifiedLogin.expiresAt === undefined
                       ? {}
-                      : { expiresAt: value.verifiedLogin.expiresAt })
+                      : { expiresAt: value.verifiedLogin.expiresAt }),
+                    ...(value.verifiedLogin.cannotRefresh ? { cannotRefresh: true as const } : {})
                   }
                 }
               : {})

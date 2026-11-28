@@ -1,14 +1,14 @@
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { useOnLaterChange } from './use-on-later-change'
 
+// Saving the current login (as a sign-in does before it starts) changes the active account, not the
+// login, so it isn't part of the key.
 function loginKey(state: AntigravityAccountState | null): string | null {
   if (!state) {
     return null
   }
   const current = state.currentAccount
-  return current
-    ? [current.subject, current.email, current.expiredAt, state.activeAccountId].join('|')
-    : 'signedOut'
+  return current ? [current.subject, current.email, current.expiredAt].join('|') : 'signedOut'
 }
 
 /** Re-reads the rows each time the host sees agy's stored login change (a terminal sign-in, a
