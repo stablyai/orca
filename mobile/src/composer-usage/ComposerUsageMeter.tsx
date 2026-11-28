@@ -21,6 +21,7 @@ import {
 } from './agent-usage-provider'
 import {
   ComposerUsageClientContext,
+  ComposerUsagePaneWidthContext,
   ComposerUsageTabAgentContext
 } from './composer-usage-client-context'
 import { useComposerUsageDisplay } from './composer-usage-display-preference'
@@ -31,7 +32,10 @@ import {
 import { useComposerUsagePosition } from './composer-usage-position-preference'
 import { useComposerUsageWindow } from './composer-usage-window-preference'
 import { useComposerUsageSheetOpener } from './ComposerUsageSheetHost'
-import { composerUsageWideMeterLayout } from './composer-usage-wide-meter'
+import {
+  composerUsagePaneAllowsWideMeter,
+  composerUsageWideMeterLayout
+} from './composer-usage-wide-meter'
 import { ComposerUsageTrack, TRACK_MIN_WIDTH } from './ComposerUsageTrack'
 import {
   COMPOSER_USAGE_WIDE_GAP,
@@ -122,6 +126,8 @@ export function ComposerUsageSlot({ agent, spanSideStrip }: Props): React.JSX.El
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
 
   const position = useComposerUsagePosition()
+  const paneWidth = useContext(ComposerUsagePaneWidthContext)
+  const widePane = composerUsagePaneAllowsWideMeter(paneWidth)
   const [room, setRoom] = useState<number | null>(null)
   // The full meter's width, whatever part of it shows, so the row never re-splits as parts drop.
   const [basis, setBasis] = useState<number | null>(null)
@@ -130,17 +136,21 @@ export function ComposerUsageSlot({ agent, spanSideStrip }: Props): React.JSX.El
   }
   return (
     <View
-      style={[
-        composerInputStyles.actionSpacer,
-        styles.slot,
-        basis !== null && { flexBasis: basis }
-      ]}
-      onLayout={(event) => setRoom(event.nativeEvent.layout.width)}
+      style={
+        widePane
+          ? [composerInputStyles.actionSpacer, styles.slot, basis !== null && { flexBasis: basis }]
+          : styles.compactSlot
+      }
+      onLayout={(event) => {
+        const width = event.nativeEvent.layout.width
+        setRoom((current) => (current === width ? current : width))
+      }}
     >
       <ComposerUsageMeter
         agent={agent}
         spanSideStrip={spanSideStrip}
-        room={room}
+        room={widePane ? room : null}
+        paneWidth={paneWidth}
         onFullWidth={setBasis}
       />
     </View>
@@ -152,10 +162,13 @@ export function ComposerUsageMeter({
   agent,
   spanSideStrip = false,
   room = null,
+  paneWidth,
   onFullWidth
 }: Props & {
   /** The slot's width: short of the full meter, the reset label shortens, then it and the meter drop. */
   room?: number | null
+  /** Live chat pane width. Omit to read it from the session host. */
+  paneWidth?: number | null
   onFullWidth?: (width: number | null) => void
 }): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
@@ -180,16 +193,25 @@ export function ComposerUsageMeter({
       ? composerUsageMeterWidth(resetWidth + LABEL_GAP + TRACK_MIN_WIDTH, percentWidth)
       : null
   useEffect(() => onFullWidth?.(fullWidth), [fullWidth, onFullWidth])
-  const wide = composerUsageWideMeterLayout({
-    room,
-    fullLabelWidth: wideResetWidth,
-    percentWidth: widePercentWidth,
-    gap: COMPOSER_USAGE_WIDE_GAP
-  })
+  const contextPaneWidth = useContext(ComposerUsagePaneWidthContext)
+  const resolvedPaneWidth = paneWidth === undefined ? contextPaneWidth : paneWidth
+  const widePane = composerUsagePaneAllowsWideMeter(resolvedPaneWidth)
+  const wide = widePane
+    ? composerUsageWideMeterLayout({
+        room,
+        paneWidth: resolvedPaneWidth,
+        fullLabelWidth: wideResetWidth,
+        percentWidth: widePercentWidth,
+        gap: COMPOSER_USAGE_WIDE_GAP
+      })
+    : null
   if (!reading) {
     return null
   }
-  const fit = composerUsageMeterFit(room, resetWidth, compactWidth, percentWidth)
+  // A narrow pane always shows the short bar, so the model name keeps the leftover width.
+  const fit = widePane
+    ? composerUsageMeterFit(room, resetWidth, compactWidth, percentWidth)
+    : { meter: true, resetText: 'compact' as const }
   return (
     <>
       {wide !== null ? (
@@ -348,6 +370,13 @@ const stylesSheet = themedStyleSheet((colors) => ({
   // Cancels one row gap, so an empty spacer squeezed to nothing hands the model pill all its room.
   emptySlot: {
     marginLeft: -spacing.sm
+  },
+  // Hugs the compact meter so the model pill keeps the leftover width on a narrow pane.
+  compactSlot: {
+    flexGrow: 0,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   meter: {
     justifyContent: 'center',

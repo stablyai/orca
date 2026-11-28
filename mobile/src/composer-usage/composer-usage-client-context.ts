@@ -6,3 +6,6 @@ export const ComposerUsageClientContext = createContext<RpcClient | null>(null)
 
 /** The active tab's agent as the host identifies it; used when the chat or dock has not resolved one. */
 export const ComposerUsageTabAgentContext = createContext<string | null>(null)
+
+/** The chat pane's live width, so a folded screen or a split keeps the compact meter. */
+export const ComposerUsagePaneWidthContext = createContext<number | null>(null)
