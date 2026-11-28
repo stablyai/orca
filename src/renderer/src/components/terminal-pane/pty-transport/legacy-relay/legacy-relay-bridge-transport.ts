@@ -293,6 +293,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     isConnectPending: () => (bridged() ? false : (inner.isConnectPending?.() ?? false)),
     // Why not pending: selecting the bridge never drains the inner hold.
     isHoldingInput: () => mode === 'inner' && (inner.isHoldingInput?.() ?? false),
+    acceptsInputNow: () => mode === 'inner' && (inner.acceptsInputNow?.() ?? false),
     getRuntimeEnvironmentId: () => (bridged() ? null : (inner.getRuntimeEnvironmentId?.() ?? null)),
     getExecutionHostId: () => (bridged() ? null : (inner.getExecutionHostId?.() ?? null)),
     onExecutionHostChange: (listener) => inner.onExecutionHostChange?.(listener) ?? (() => {}),
