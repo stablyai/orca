@@ -62,9 +62,8 @@ export class ClaudeChildWake {
     }
   }
 
-  /** Accept a later running report for an owner whose wake ran out; `false` for any other ended task. */
-  confirmedRunning(id: string): boolean {
-    return this.expired.delete(id)
+  drop(id: string): void {
+    this.wakes.delete(id)
   }
 
   /** Settle the wakes that ran out before anyone reads the row; no further frame need arrive. */
@@ -75,8 +74,11 @@ export class ClaudeChildWake {
     const due = [...this.wakes].filter(([, wake]) => wake.at! <= now)
     for (const [ownerId, wake] of due) {
       this.wakes.delete(ownerId)
-      this.expired.add(ownerId)
       this.host.restore(ownerId, wake.owner)
+      // Only an owner actually put back may later be revived; a real ending already settled it.
+      if (this.host.endedOwner(ownerId) === wake.owner) {
+        this.expired.add(ownerId)
+      }
     }
   }
 

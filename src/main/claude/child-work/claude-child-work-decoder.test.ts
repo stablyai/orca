@@ -105,12 +105,30 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
     expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
   })
 
-  it('keeps the lease when a frame naming the owner is rejected as historical', () => {
+  it('keeps the lease when a running report for the owner is from an older run', () => {
     const decoder = new ClaudeChildWorkDecoder()
     finishOwnerThenChildEnds(decoder)
-    observe(decoder, notification(OWNER, 'toolu_parent_stale', 'completed'))
+    const stale = { task_id: OWNER, tool_use_id: 'toolu_parent_stale', status: 'running' }
+    observe(decoder, { type: 'system', subtype: 'task_progress', ...stale })
+    observe(decoder, { type: 'system', subtype: 'background_tasks_changed', tasks: [stale] })
     const evidence = decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
     expect(evidence.map((edge) => edge.type)).toEqual(['ended'])
+  })
+
+  it('never puts back the guessed ending over a real one that arrived inside the lease', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    observe(decoder, notification(OWNER, PARENT, 'completed'))
+    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)).toEqual([])
+    // That run is over: a late frame from it must not reopen the row with no lease left.
+    const late = observe(decoder, {
+      type: 'system',
+      subtype: 'task_progress',
+      task_id: OWNER,
+      tool_use_id: PARENT,
+      summary: 'late'
+    })
+    expect(states(late)).toEqual([])
   })
 
   it('revives an expired owner, with its saved name, only from a report that it runs', () => {

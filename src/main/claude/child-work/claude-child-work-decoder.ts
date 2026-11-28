@@ -65,7 +65,11 @@ export class ClaudeChildWorkDecoder {
     }
     if (message.subtype === 'background_tasks_changed') {
       for (const { id, task } of tf.claudeRosterConfirmations(message)) {
-        this.wake.confirmRunning(id, task)
+        // Same currency gate as a task frame: a stale entry must not cancel a held wake.
+        const selected = this.taskInvocations.selection(task, id)
+        if (!selected || (selected.current && !selected.invocation.excluded)) {
+          this.wake.confirmRunning(id, task)
+        }
       }
       const known = { live: this.live, ended: this.ended, parentOf: this.taskInvocations.parentOf }
       for (const [id, task] of tf.claudeRosterStarts(message, known)) {
@@ -239,11 +243,6 @@ export class ClaudeChildWorkDecoder {
       return
     }
     if (!existing && this.ended.has(id)) {
-      // An owner whose wake already ran out may still be reported running; any other ended task
-      // stays done, and a frame that does not report running proves nothing about the resume.
-      if (liveClaudeTaskRunState(patch.status) !== null && this.wake.confirmedRunning(id)) {
-        this.started(id, tf.claudeRosterStart(id, patch), true)
-      }
       return
     }
     const kind =
@@ -322,6 +321,8 @@ export class ClaudeChildWorkDecoder {
     this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
     this.childrenByOwner.forget(id, task)
     this.live.delete(id)
+    // A real ending replaces any guess about this task.
+    this.wake.drop(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {
       run: reported.runId ?? task?.toolUseId,
