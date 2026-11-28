@@ -48,7 +48,8 @@ export function retainReadClaims(
     if (absent.length === 0) {
       continue
     }
-    if (readJournalLegacyFailure(db, id)?.claims === journalLegacyClaimsFingerprint(absent)) {
+    const refusal = readJournalLegacyFailure(db, id)?.claims
+    if (refusal !== undefined && refusal === journalLegacyClaimsFingerprint(absent)) {
       refused = true
     } else {
       retainable.set(id, absent)

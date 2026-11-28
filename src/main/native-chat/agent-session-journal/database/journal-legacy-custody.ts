@@ -1,6 +1,6 @@
 import { lstatSync } from 'node:fs'
 import { join } from 'node:path'
-import type Database from '../../../sqlite/sync-database'
+import Database from '../../../sqlite/sync-database'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { agentSessionAttachmentStoreRoot } from '../../agent-session-attachments/agent-session-attachment-references'
 import { journalForkAttachmentHeld } from '../journal-fork-stage-state'
@@ -49,16 +49,21 @@ export function journalLegacyCustodyFrom(
     : JOURNAL_LEGACY_CUSTODY_UNKNOWN
 }
 
+/** Legacy claims one writer admission checks, so a large original never holds chat writes long. */
+export const JOURNAL_LEGACY_CUSTODY_PAGE = 128
+
 /**
- * Asked once per sweep pass, before it removes anything. The original must still be exactly what
- * this open reconciled, and every upload it claims must be claimed here, gone, or held only by a
- * chat neither journal shows. A saved receipt from an earlier launch never stands in for this read.
+ * One bounded step of a sweep pass's proof, before it removes anything: true when proven, false
+ * when unknown, or the cursor of the next page. The original must still be exactly what this open
+ * reconciled, and every upload it claims must be claimed here, gone, or held only by a chat neither
+ * journal shows. A saved receipt from an earlier launch never stands in for this read.
  */
-export function journalLegacyCustodyKnown(
+export function journalLegacyCustodyPage(
   stateDirectory: string,
   db: Database.Database,
-  start: JournalLegacyCustodyStart
-): boolean {
+  start: JournalLegacyCustodyStart,
+  after: number
+): boolean | number {
   try {
     const sourcePath = journalDatabasePath(stateDirectory)
     if (start.kind === 'absent') {
@@ -73,24 +78,27 @@ export function journalLegacyCustodyKnown(
     if (!unchanged()) {
       return false
     }
-    const { source } = openJournalLegacySourceChecked(sourcePath)
-    let kept: boolean
+    // No busy wait: an original another process holds leaves this pass unknown, never chats stalled.
+    const source = new Database(sourcePath, { readonly: true, fileMustExist: true, timeout: 0 })
+    let page: boolean | number
     try {
-      kept = journalLegacyClaimsKept(source, db, agentSessionAttachmentStoreRoot(stateDirectory))
+      page = legacyClaimsPage(source, sourcePath, db, stateDirectory, after)
     } finally {
       source.close()
     }
-    return kept && unchanged()
+    return page !== false && unchanged() ? page : false
   } catch {
     return false
   }
 }
 
-function journalLegacyClaimsKept(
+function legacyClaimsPage(
   source: Database.Database,
+  sourcePath: string,
   db: Database.Database,
-  root: string
-): boolean {
+  stateDirectory: string,
+  after: number
+): boolean | number {
   // Physical tables only: the reader's TEMP stand-in for a dropped table reads as empty.
   const tables = new Set(
     source
@@ -106,11 +114,18 @@ function journalLegacyClaimsKept(
       tables.has('journal_rows')
     )
   }
+  const claims = source
+    .prepare(`SELECT rowid, upload_id, session_id FROM main.agent_session_attachment_claims
+      WHERE rowid>? ORDER BY rowid LIMIT ?`)
+    .all(after, JOURNAL_LEGACY_CUSTODY_PAGE)
+  const root = agentSessionAttachmentStoreRoot(stateDirectory)
   const claimedHere = db.prepare('SELECT 1 FROM agent_session_attachment_claims WHERE upload_id=?')
   const recordedHere = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
   const recordedThere = tables.has('agent_session_records')
     ? source.prepare('SELECT 1 FROM main.agent_session_records WHERE session_id=?')
     : undefined
+  // Revisions read tables an older file may lack, through the stand-ins only the checked open adds.
+  let revisions: Database.Database | undefined
   const resolved = new Map<string, boolean>()
   const chatResolved = (sessionId: string): boolean => {
     // A chat that failed to join keeps its original's revision too, so a failure never resolves.
@@ -126,26 +141,32 @@ function journalLegacyClaimsKept(
     }
     // Deleted here, and the older Orca has not written the chat since.
     const shown = readMeta(db, journalLegacyChatRevisionKey(sessionId))
-    return shown !== undefined && shown === (journalLegacyChatRevision(source, sessionId) ?? 'null')
-  }
-  for (const claim of source
-    .prepare('SELECT upload_id, session_id FROM main.agent_session_attachment_claims')
-    .all()) {
-    const uploadId = String(claim.upload_id)
-    if (claimedHere.get(uploadId) !== undefined || !sweepable(root, uploadId)) {
-      continue
-    }
-    const sessionId = String(claim.session_id)
-    let done = resolved.get(sessionId)
-    if (done === undefined) {
-      done = chatResolved(sessionId)
-      resolved.set(sessionId, done)
-    }
-    if (!done) {
+    if (shown === undefined) {
       return false
     }
+    revisions ??= openJournalLegacySourceChecked(sourcePath, { timeout: 0 }).source
+    return shown === (journalLegacyChatRevision(revisions, sessionId) ?? 'null')
   }
-  return true
+  try {
+    for (const claim of claims) {
+      const uploadId = String(claim.upload_id)
+      if (claimedHere.get(uploadId) !== undefined || !sweepable(root, uploadId)) {
+        continue
+      }
+      const sessionId = String(claim.session_id)
+      let done = resolved.get(sessionId)
+      if (done === undefined) {
+        done = chatResolved(sessionId)
+        resolved.set(sessionId, done)
+      }
+      if (!done) {
+        return false
+      }
+    }
+  } finally {
+    revisions?.close()
+  }
+  return claims.length < JOURNAL_LEGACY_CUSTODY_PAGE ? true : Number(claims.at(-1)!.rowid)
 }
 
 /** Only a present folder named by the id can be swept; an unreadable one counts as present. */

@@ -14,7 +14,7 @@ import {
 } from './database/journal-domain-database'
 import {
   JOURNAL_LEGACY_CUSTODY_UNKNOWN,
-  journalLegacyCustodyKnown
+  journalLegacyCustodyPage
 } from './database/journal-legacy-custody'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { journalWalWriterRelief } from './database/journal-wal-writer-relief'
@@ -180,7 +180,8 @@ async function drain(): Promise<void> {
       executor: commands,
       forks: forks!,
       stateDirectory,
-      legacyCustodyKnown: () => journalLegacyCustodyKnown(stateDirectory, database, legacyCustody),
+      legacyCustodyPage: (after) =>
+        journalLegacyCustodyPage(stateDirectory, database, legacyCustody, after),
       destinationCurrent: (operation) =>
         destinationMain === legacyDestinationMain(workerData.filename) &&
         (!operation.destination ||

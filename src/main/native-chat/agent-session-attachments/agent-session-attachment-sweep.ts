@@ -13,7 +13,7 @@ export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type AgentSessionAttachmentSweepFacts = {
   /** True only when no older Orca's journal may hold an upload unclaimed here; else remove nothing. */
-  legacyCustodyKnown: () => boolean | Promise<boolean>
+  legacyCustodyKnown: (stopped: () => boolean) => boolean | Promise<boolean>
   isUnclaimed: (uploadId: string) => boolean | Promise<boolean>
   listBeingSwept: () => readonly string[] | Promise<readonly string[]>
   markForSweep: (uploadId: string, now: number) => boolean | Promise<boolean>
@@ -38,7 +38,7 @@ export async function sweepAgentSessionAttachments(
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
   // Before any mark, folder or claim prune: a pruned claim of an unadopted chat loses its upload.
-  if (!(await facts.legacyCustodyKnown())) {
+  if (!(await facts.legacyCustodyKnown(stopped))) {
     facts.onLegacyCustodyUnknown?.()
     return { removed }
   }

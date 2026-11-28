@@ -20,8 +20,8 @@ export type JournalSqlWriteContext = {
   executor: JournalSqlCommand
   forks: JournalForkStages
   stateDirectory: string
-  /** Whether no upload an older Orca's journal holds is unclaimed here, proven now. */
-  legacyCustodyKnown: () => boolean
+  /** One page of proving no upload an older Orca's journal holds is unclaimed here. */
+  legacyCustodyPage: (after: number) => boolean | number
   /** Whether the destination a durable retirement save names is still the open database. */
   destinationCurrent: (
     operation: Extract<
@@ -67,7 +67,7 @@ export async function applyJournalSqlWriteRequest(
           id,
           results: command.effects.map((effect) =>
             effect.kind === 'sweep' && effect.operation.kind === 'legacy-custody'
-              ? context.legacyCustodyKnown()
+              ? context.legacyCustodyPage(effect.operation.after)
               : applyJournalWriterEffect(database, stateDirectory, effect)
           )
         }

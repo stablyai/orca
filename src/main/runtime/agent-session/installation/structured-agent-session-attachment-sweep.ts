@@ -12,9 +12,18 @@ export function structuredAgentSessionAttachmentSweepFacts(
     writable() ? (await database.effects([{ kind: 'sweep', operation }]))[0] : undefined
   return {
     ...(retainedUploadIds ? { retention: { uploads: retainedUploadIds } } : {}),
-    // A closed writer or failed request is unknown custody.
-    legacyCustodyKnown: async () =>
-      (await sweep({ kind: 'legacy-custody' }).catch(() => undefined)) === true,
+    // Page by page, so other writes interleave; a closed writer, failure or stop is unknown.
+    legacyCustodyKnown: async (stopped) => {
+      let after = 0
+      while (!stopped()) {
+        const page = await sweep({ kind: 'legacy-custody', after }).catch(() => undefined)
+        if (typeof page !== 'number' || page <= after) {
+          return page === true
+        }
+        after = page
+      }
+      return false
+    },
     isUnclaimed: async (uploadId) => (await sweep({ kind: 'unclaimed', uploadId })) === true,
     listBeingSwept: async () => {
       const uploads: string[] = []

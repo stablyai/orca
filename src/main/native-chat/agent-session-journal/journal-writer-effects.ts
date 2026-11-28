@@ -65,8 +65,8 @@ export type JournalWriterEffect =
         | { kind: 'mark'; uploadId: string; now: number }
         | { kind: 'finish'; uploadId: string }
         | { kind: 'prune'; pairs: readonly { uploadId: string; sessionId: string }[] }
-        /** Answered by the writer request with this open's custody; anywhere else, unknown. */
-        | { kind: 'legacy-custody' }
+        /** One page of this open's custody proof, from the writer request; anywhere else, unknown. */
+        | { kind: 'legacy-custody'; after: number }
     }
 
 export type JournalReceiptRowBinding = {
