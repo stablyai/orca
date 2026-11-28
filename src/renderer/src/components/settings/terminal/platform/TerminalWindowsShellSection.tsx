@@ -87,7 +87,7 @@ export function TerminalWindowsShellSection({
         )}
       >
         <SettingsRow
-          className="flex-col items-stretch @lg:flex-row @lg:items-center"
+          className="grid items-stretch @lg:flex @lg:items-center"
           label={t('auto.components.settings.TerminalPane.e9c84d0338', 'Default shell')}
           description={t(
             'auto.components.settings.TerminalPane.09bf02de9a',
@@ -162,7 +162,11 @@ export function TerminalWindowsShellSection({
                   ? [
                       {
                         value: 'custom',
-                        label: t('auto.components.settings.TerminalPane.f51cc79784', 'Custom shell')
+                        label: (
+                          <span className="whitespace-nowrap">
+                            {t('auto.components.settings.TerminalPane.f51cc79784', 'Custom shell')}
+                          </span>
+                        )
                       }
                     ]
                   : [])
