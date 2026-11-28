@@ -19,6 +19,7 @@ import {
 import { NATIVE_CHAT_VISUAL_RESERVED_HEIGHT, NativeChatVisualFrame } from './NativeChatVisualFrame'
 import { observeTranscriptVisibility } from '../images/native-chat-image-visibility'
 import { NativeChatForwardedGestureContext } from '../../viewport/scroll/native-chat-reader-scroll-input'
+import { NativeChatCardFrame } from '../../NativeChatCardFrame'
 import { readNativeChatVisual } from './native-chat-visual-read-client'
 import { useNativeChatVisualDocument } from './use-native-chat-visual-document'
 import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
@@ -90,7 +91,6 @@ export function NativeChatInlineVisual({
   const boxRef = useRef<HTMLDivElement | null>(null)
   const [near, setNear] = useState(false)
   const [retired, setRetired] = useState(false)
-  // Share's popover is portalled, so hover and focus-within can't keep the toolbar shown.
   const [shareOpen, setShareOpen] = useState(false)
   const forwardGesture = useContext(NativeChatForwardedGestureContext)
   const state = useNativeChatVisualDocument(
@@ -117,46 +117,50 @@ export function NativeChatInlineVisual({
   const openLabel = t('components.native-chat.visualOpenInNewTab', 'Open in new tab')
 
   return (
-    <div ref={boxRef} className="group/visual my-3 last:mb-0">
+    <div ref={boxRef} className="my-3 last:mb-0">
       {state.status === 'ready' && near ? (
-        <>
-          {/* Above the frame, not over it: the page owns every pixel of its box. */}
-          <div
-            data-share-open={shareOpen}
-            className="flex items-center justify-end gap-1 pb-1 transition-opacity can-hover:opacity-0 group-hover/visual:opacity-100 focus-within:opacity-100 data-[share-open=true]:opacity-100"
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="icon-xs"
-                  aria-label={openLabel}
-                  onClick={() => openNativeChatVisualFile(owner, state.document.path)}
-                >
-                  <SquareArrowOutUpRight />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                {openLabel}
-              </TooltipContent>
-            </Tooltip>
-            <ArtifactPublishButton
-              variant="outline"
-              size="icon-xs"
-              sourceKey={nativeChatVisualShareKey(owner, state.document.path)}
-              createRequest={() => readNativeChatVisualShareRequest(owner, file)}
-              open={shareOpen}
-              onOpenChange={setShareOpen}
+        <NativeChatCardFrame
+          heading={t('components.native-chat.visualLabel', 'Visualization')}
+          title={title ?? <span className="font-mono text-chat-code">{file}</span>}
+          label={label}
+          trailing={
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={openLabel}
+                    onClick={() => openNativeChatVisualFile(owner, state.document.path)}
+                  >
+                    <SquareArrowOutUpRight />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {openLabel}
+                </TooltipContent>
+              </Tooltip>
+              <ArtifactPublishButton
+                variant="ghost"
+                size="icon-xs"
+                sourceKey={nativeChatVisualShareKey(owner, state.document.path)}
+                createRequest={() => readNativeChatVisualShareRequest(owner, file)}
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+              />
+            </div>
+          }
+        >
+          <div className="mt-3 overflow-hidden rounded-md">
+            <NativeChatVisualFrame
+              document={state.document}
+              title={label}
+              themeScope={boxRef}
+              onRetired={() => setRetired(true)}
+              onReaderGesture={forwardGesture ?? undefined}
             />
           </div>
-          <NativeChatVisualFrame
-            document={state.document}
-            title={label}
-            themeScope={boxRef}
-            onRetired={() => setRetired(true)}
-            onReaderGesture={forwardGesture ?? undefined}
-          />
-        </>
+        </NativeChatCardFrame>
       ) : (
         <div
           role="status"
