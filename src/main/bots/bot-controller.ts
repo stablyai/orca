@@ -23,6 +23,7 @@ import { proposalSoul } from '../../shared/bots/bot-proposal'
 import { botTemplate } from '../../shared/bots/bot-templates'
 import { templateBotFolderName } from '../../shared/bots/bot-template-view'
 import { botOfferCreation } from './bot-offer-creation'
+import { BotOfferAnswerWrites } from './bot-offer-answer-writes'
 import { assertBotOwnsHome, type BotHomeFilesystem, botHomeFolder, writeBotHome } from './bot-home'
 import { type BotSlackIcons, botSlackIconsOf } from './bot-slack-icon-store'
 import { type BotMemoryRecord, hostBotMemoryRecord } from './bot-memory-record'
@@ -73,6 +74,7 @@ export type BotControllerDependencies = {
 export class BotController {
   // One change at a time: two creates must never write the same home folder.
   private tail: Promise<unknown> = Promise.resolve()
+  readonly offerAnswerWrites = new BotOfferAnswerWrites()
 
   /** Each bot's MEMORY.md as Orca last recorded it: turn ends restore against it, Forget edits it. */
   readonly memory: BotMemoryRecord
@@ -94,7 +96,7 @@ export class BotController {
   }
 
   list(): Bot[] {
-    return this.deps.getStore()?.getBots?.() ?? []
+    return this.offerAnswerWrites.list(this.deps.getStore()?.getBots?.() ?? [])
   }
 
   /** A fresh Generate can recover a lost profile save. A concurrent catalog change keeps its original guard. */
@@ -250,15 +252,12 @@ export class BotController {
       if (next.name !== bot.name) {
         store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
       }
-      store.saveBot(next)
-      if (updates.offerAnswers !== undefined) {
-        await persistBotStore(store)
-      }
+      await this.offerAnswerWrites.save(store, bot, next, updates.offerAnswerConfirmation?.cardId)
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)
       }
-      return next
+      return this.offerAnswerWrites.project(next)
     })
   }
 
@@ -284,7 +283,7 @@ export class BotController {
       )
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
-      return next
+      return this.offerAnswerWrites.project(next)
     })
   }
 
@@ -307,7 +306,7 @@ export class BotController {
       const next: Bot = { ...bot, chatSessionId, updatedAt: Date.now() }
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)
-      return next
+      return this.offerAnswerWrites.project(next)
     })
   }
 
@@ -346,6 +345,7 @@ export class BotController {
         await this.deps.filesystem.removeTree(folderPath)
       }
       store.removeBot(bot)
+      this.offerAnswerWrites.forget(bot.id)
       await persistBotStore(store)
       this.deps.forgetBot?.(bot.id)
       this.deps.notifyBotsWritten(true)

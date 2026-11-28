@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { BotRowStatus } from '../../../src/shared/bots/bot-row-status'
 import type { ConnectorCloudStatus } from '../../../src/shared/bots/connector-cloud-status'
-import type { BotOfferAnswer } from '../../../src/shared/bots/bot-offer-answers'
+import { withBotOfferAnswer, type BotOfferAnswer } from '../../../src/shared/bots/bot-offer-answers'
 import type { PhoneBot } from './host-bots-operations'
 
 // Every screen reads a host's bots from here, so the list, a link and a bot's sheet show one answer.
@@ -67,8 +67,7 @@ export function publishHostBotOfferAnswer(
 ): void {
   const bot = entries.get(key)?.bots.find((entry) => entry.id === botId)
   if (bot) {
-    const others = bot.offerAnswers?.filter((entry) => entry.cardId !== answer.cardId) ?? []
-    publishHostBot(key, { ...bot, offerAnswers: [...others, answer] })
+    publishHostBot(key, { ...bot, offerAnswers: withBotOfferAnswer(bot.offerAnswers, answer) })
   }
 }
 

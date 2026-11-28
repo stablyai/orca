@@ -71,7 +71,7 @@ export function NativeChatGoogleOfferCard({
         botId: bot.id,
         account: connected.email,
         ...(chat?.sessionId ? { sessionId: chat.sessionId } : {}),
-        card: { cardId: messageId, actionId: createNonSecureContextUuid() }
+        card: { cardId: messageId, actionId: `${Date.now()}-${createNonSecureContextUuid()}` }
       }
       answering.confirm(() => callBotRpc<BotOfferTold>(bot, 'google.bot.connected', params))
       return

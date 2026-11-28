@@ -4,7 +4,17 @@ import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import * as z from 'zod'
 
 export const BotOfferCardIdSchema = lazyZodSchema(() => z.string().min(1).max(512))
-export const BotOfferActionIdSchema = lazyZodSchema(() => z.string().min(1).max(128))
+export const BotOfferActionIdSchema = lazyZodSchema(() =>
+  z.string().regex(/^\d{13}-[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/u)
+)
+
+export const GOOGLE_OFFER_REPLAY_WINDOW_MS = 24 * 60 * 60 * 1000
+export const GOOGLE_OFFER_CLOCK_SKEW_MS = 10 * 60 * 1000
+export const MAX_GOOGLE_OFFER_ACTIONS = 64
+
+export function googleOfferActionTime(actionId: string): number {
+  return Number(actionId.slice(0, 13))
+}
 
 const BotOfferAnswerFields = lazyZodSchema(() =>
   z.object({
@@ -20,7 +30,13 @@ const BotOfferAnswerFields = lazyZodSchema(() =>
 export const BotOfferAnswerSchema = lazyZodSchema(() =>
   BotOfferAnswerFields.extend({
     /** Accepted sign-ins, including older ones retried after the card moved to another account. */
-    googleActionIds: z.array(BotOfferActionIdSchema).optional()
+    googleActionIds: z
+      .array(BotOfferActionIdSchema)
+      .max(MAX_GOOGLE_OFFER_ACTIONS)
+      .optional()
+      .catch(undefined),
+    /** Retired action IDs stay expired if the host clock moves backward. */
+    googleReplayCutoff: z.number().int().nonnegative().optional()
   })
 )
 

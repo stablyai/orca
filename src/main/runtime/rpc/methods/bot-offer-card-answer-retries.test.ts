@@ -1,7 +1,12 @@
+import { randomUUID } from 'node:crypto'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  GOOGLE_OFFER_REPLAY_WINDOW_MS,
+  MAX_GOOGLE_OFFER_ACTIONS
+} from '../../../../shared/bots/bot-offer-answers'
 import { BotController } from '../../../bots/bot-controller'
 import { localBotHomeFilesystem } from '../../../bots/bot-home'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
@@ -82,9 +87,12 @@ vi.mock('../../../bots/bot-chat-session', async (actual) => {
 
 let store: ReturnType<typeof createStore>
 let dispatcher: RpcDispatcher
+let bots: BotController
+const actionIds = new Map<string, string>()
 
 beforeEach(async () => {
   sends.length = 0
+  actionIds.clear()
   chat.beforeNext = async () => true
   testState.dir = await mkdtemp(join(tmpdir(), 'orca-bot-offer-'))
   store = createStore()
@@ -99,7 +107,11 @@ beforeEach(async () => {
     })
   )
   await store.flushPendingOrThrowAsync()
-  const bots = new BotController({
+  startHost()
+})
+
+function startHost(): void {
+  bots = new BotController({
     getStore: () => store,
     notifyBotsWritten: () => {},
     createFolderWorkspace: async () => {
@@ -126,7 +138,13 @@ beforeEach(async () => {
       )
     ]
   })
-})
+}
+
+async function restartHost(): Promise<void> {
+  await closeTestStores()
+  store = createStore()
+  startHost()
+}
 
 afterEach(async () => {
   vi.restoreAllMocks()
@@ -169,12 +187,22 @@ function importItems(items: string[], sessionId: string | undefined = 'chat-1') 
   )
 }
 
-function googleAccount(account: string, actionId: string, sessionId?: string) {
+function actionId(label: string): string {
+  const prior = actionIds.get(label)
+  if (prior) {
+    return prior
+  }
+  const id = `${Date.now()}-${randomUUID()}`
+  actionIds.set(label, id)
+  return id
+}
+
+function googleAccount(account: string, action: string, sessionId?: string) {
   return request('google.bot.connected', {
     botId: 'b1',
     sessionId,
     account: `${account}@example.com`,
-    card: { cardId: 'google', actionId }
+    card: { cardId: 'google', actionId: actionId(action) }
   })
 }
 
@@ -198,6 +226,7 @@ describe('host-confirmed offer answers', () => {
       throw new Error('The connection closed before the reply.')
     })
     await expect(lostReply).rejects.toThrow('closed before the reply')
+    await restartHost()
     const retry = await importItems(['1'])
     expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Import 1,2'])
     expect(retry).toMatchObject({ sent: true, answer: { sent: { chosen: ['1', '2'] } } })
@@ -216,6 +245,12 @@ describe('host-confirmed offer answers', () => {
         throw new Error('Profile write unconfirmed')
       })
       await expect(importItems(['1', '2'])).rejects.toThrow('Profile write unconfirmed')
+      expect(bots.list()[0]?.offerAnswers).toBeUndefined()
+      expect(persistedCard('plan')).toEqual(
+        committed ? { cardId: 'plan', sent: { chosen: ['1', '2'] } } : undefined
+      )
+      const edited = await bots.update('b1', { offerAnswer: { cardId: 'other', dismissed: true } })
+      expect(edited.offerAnswers).toEqual([{ cardId: 'other', dismissed: true }])
       await expect(importItems(['2'])).resolves.toMatchObject({
         answer: { sent: { chosen: ['1', '2'] } }
       })
@@ -223,6 +258,17 @@ describe('host-confirmed offer answers', () => {
       expect(persistedCard('plan')).toMatchObject({ sent: { chosen: ['1', '2'] } })
     }
   )
+
+  it('discards an admitted answer awaiting a save when the bot is deleted', async () => {
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(
+      new Error('Profile unavailable')
+    )
+    await expect(importItems(['1'])).rejects.toThrow('Profile unavailable')
+    expect(bots.offerAnswerWrites.pending.size).toBe(1)
+    await bots.delete({ botId: 'b1', deleteFolder: false })
+    expect(bots.offerAnswerWrites.pending.size).toBe(0)
+    expect(bots.list()).toEqual([])
+  })
 
   it('keeps a newer Google choice across a competing refusal, a delayed sign-in, and a replay', async () => {
     await googleAccount('a', 'first')
@@ -257,6 +303,7 @@ describe('host-confirmed offer answers', () => {
       answer: { sent: { chosen: ['b@example.com'] } }
     })
     await googleAccount('a', 'return-to-first')
+    await restartHost()
     await expect(googleAccount('c', 'newer')).resolves.toMatchObject({
       answer: { sent: { chosen: ['a@example.com'] } }
     })
@@ -276,12 +323,64 @@ describe('host-confirmed offer answers', () => {
 
   it('remembers a default-account sign-in without pinning the account or announcing it', async () => {
     await googleAccount('default', 'default-sign-in')
-    expect(persistedCard('google')).toEqual({
+    expect(persistedCard('google')).toMatchObject({
       cardId: 'google',
-      googleActionIds: ['default-sign-in']
+      googleActionIds: [actionId('default-sign-in')]
     })
+    expect(persistedCard('google')).not.toHaveProperty('sent')
     await googleAccount('a', 'another-account')
     await googleAccount('default', 'default-sign-in', 'chat-1')
     expect(heardAccounts()).toEqual(['a@example.com'])
+  })
+
+  it('replays an action through the retention boundary and refuses it after expiry', async () => {
+    const now = Date.now()
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
+    await googleAccount('a', 'first')
+    clock.mockReturnValue(now + GOOGLE_OFFER_REPLAY_WINDOW_MS)
+    await expect(googleAccount('a', 'first')).resolves.toMatchObject({
+      answer: { sent: { chosen: ['a@example.com'] } }
+    })
+
+    clock.mockReturnValue(now + GOOGLE_OFFER_REPLAY_WINDOW_MS + 1)
+    await expect(googleAccount('a', 'first')).rejects.toThrow('card answer expired')
+    await googleAccount('b', 'newly-signed-in')
+    clock.mockReturnValue(now + GOOGLE_OFFER_REPLAY_WINDOW_MS)
+    await expect(googleAccount('a', 'first')).rejects.toThrow('card answer expired')
+    expect(heardAccounts()).toEqual(['a@example.com', 'b@example.com'])
+    expect(persistedCard('google')).toMatchObject({
+      googleActionIds: [actionId('newly-signed-in')]
+    })
+  })
+
+  it('keeps every unexpired receipt when the card reaches its limit', async () => {
+    const ids = Array.from({ length: MAX_GOOGLE_OFFER_ACTIONS }, (_, index) =>
+      actionId(`existing-${index}`)
+    )
+    await bots.update('b1', {
+      offerAnswerConfirmation: {
+        cardId: 'google',
+        answers: [{ cardId: 'google', sent: { chosen: ['a@example.com'] }, googleActionIds: ids }]
+      }
+    })
+    await expect(googleAccount('b', 'over-limit')).rejects.toThrow('too many recent Google answers')
+    await expect(googleAccount('a', 'existing-0')).resolves.toMatchObject({
+      answer: { sent: { chosen: ['a@example.com'] } }
+    })
+    expect(sends).toEqual([])
+    expect(persistedCard('google')).toMatchObject({ googleActionIds: ids })
+  })
+
+  it('retains an older stored choice without replay receipts through a reopen', async () => {
+    await bots.update('b1', {
+      offerAnswerConfirmation: {
+        cardId: 'google',
+        answers: [{ cardId: 'google', sent: { chosen: ['a@example.com'] } }]
+      }
+    })
+    await restartHost()
+    expect(bots.list()[0]?.offerAnswers).toMatchObject([{ sent: { chosen: ['a@example.com'] } }])
+    await googleAccount('b', 'new-action-on-older-card')
+    expect(heardAccounts()).toEqual(['b@example.com'])
   })
 })
