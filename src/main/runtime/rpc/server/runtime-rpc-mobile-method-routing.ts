@@ -31,6 +31,7 @@ export const EXECUTION_HOST_METHODS = [
   'agent.launch',
   'agent.launchReplay',
   // Agent ids, chat records and transcripts live on the host that runs the agent.
+  'agent.close',
   'agent.list',
   'agent.read',
   'agent.show',

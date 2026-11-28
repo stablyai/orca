@@ -36,6 +36,15 @@ export type AgentShowResult = {
   places: AgentConversationRow[]
 }
 
+/** `closed` lists each place that was closed; none means the agent was not open, so nothing changed. */
+export type AgentCloseResult = {
+  orcaSessionId: string
+  kind: AgentConversationKind
+  closed: AgentConversationRow[]
+  /** Places left open: a sleeping terminal agent has no live tab to close. */
+  skipped: AgentConversationRow[]
+}
+
 export type AgentReadTool = { name: string; state?: string }
 
 /** Every entry may say `shortened`: its text was cut to fit one reply; the app keeps it whole. */

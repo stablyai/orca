@@ -1,14 +1,17 @@
 import { defineMethod } from '../../core'
 import {
+  AgentCloseParams,
   AgentListParams,
   AgentReadParams,
   AgentShowParams
 } from '../../../../../shared/rpc-contract/agent-conversation-params'
 import type {
+  AgentCloseResult,
   AgentListResult,
   AgentReadResult,
   AgentShowResult
 } from '../../../../../shared/agent-conversations/agent-conversation-contracts'
+import { closeAgentConversation } from '../../../agent-conversations/agent-conversation-close'
 import {
   agentConversationPlaces,
   projectAgentConversationList
@@ -19,8 +22,8 @@ import { readAgentConversation } from '../../../agent-conversations/agent-conver
 // Listing reads every workspace's open agents, so no workspace page may hide one.
 const AGENT_LIST_WORKTREE_LIMIT = 10_000
 
-/** `orca agent list/show/read`: agents by their Orca session ID, chats and terminals alike.
- *  Read-only: none of these sends to, starts or wakes an agent. */
+/** `orca agent list/show/read/close`: agents by their Orca session ID, chats and terminals alike.
+ *  list, show and read never send to, start or wake an agent; close only closes open tabs. */
 export const AGENT_CONVERSATION_METHODS = [
   defineMethod({
     name: 'agent.list',
@@ -51,5 +54,12 @@ export const AGENT_CONVERSATION_METHODS = [
     params: AgentReadParams,
     handler: async (params, ctx): Promise<AgentReadResult> =>
       readAgentConversation(ctx, await resolveAgentConversation(ctx.runtime, params.id), params)
+  }),
+  defineMethod({
+    name: 'agent.close',
+    permission: 'workspace',
+    params: AgentCloseParams,
+    handler: async (params, ctx): Promise<AgentCloseResult> =>
+      closeAgentConversation(ctx, await resolveAgentConversation(ctx.runtime, params.id))
   })
 ]

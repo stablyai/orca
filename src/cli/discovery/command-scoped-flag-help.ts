@@ -29,6 +29,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
   },
   'agent show': { id: AGENT_ID_FLAG_HELP },
+  'agent close': { id: AGENT_ID_FLAG_HELP },
   'agent read': {
     id: AGENT_ID_FLAG_HELP,
     limit: '--limit <n>            Newest entries to return (default 20, at most 100)'
