@@ -333,8 +333,10 @@ export async function openKeptCodexState(input: {
       items.flatMap((item) => (item.status === 'inProgress' ? [] : [`${threadId}\u0000${item.id}`]))
     )
   )
+  // Only on a thread Codex just read: an older row it can't vouch for isn't restated as running.
+  const read = new Set(snapshot.turns.map(({ threadId }) => threadId))
   const open = saved?.commands.filter(
-    ([threadId, itemId]) => !ended.has(`${threadId}\u0000${itemId}`)
+    ([threadId, itemId]) => read.has(threadId) && !ended.has(`${threadId}\u0000${itemId}`)
   )
   await seedCarriedKeptCodexCommands(
     translator,
