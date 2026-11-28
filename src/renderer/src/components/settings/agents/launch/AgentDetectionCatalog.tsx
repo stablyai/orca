@@ -50,21 +50,18 @@ export function AgentDetectionCatalog({
     agents.map((agent) => ({ agent, installed, row: getRowProps(agent, installed) }))
   )
   const availableRows = rows.filter((row) => !row.installed)
-  const setAvailableEnabled = async (enabled: boolean): Promise<void> => {
+  const setAvailableEnabled = (enabled: boolean): void => {
     if (!onSetAvailableEnabled || savingAvailability) {
       return
     }
     setSavingAvailability(true)
-    try {
-      await onSetAvailableEnabled(
-        availableRows.map(({ agent }) => agent.id),
-        enabled
-      )
-    } catch {
+    void onSetAvailableEnabled(
+      availableRows.map(({ agent }) => agent.id),
+      enabled
+    )
       // The settings owner reports save errors.
-    } finally {
-      setSavingAvailability(false)
-    }
+      .catch(() => {})
+      .then(() => setSavingAvailability(false))
   }
   const arriving = rows.filter(({ agent }) => !Object.hasOwn(expandedByAgent, agent.id))
   if (arriving.length > 0) {
@@ -186,7 +183,7 @@ export function AgentDetectionCatalog({
                         isRefreshing ||
                         availableRows.every(({ row }) => row.isEnabled === enabled)
                       }
-                      onClick={() => void setAvailableEnabled(enabled)}
+                      onClick={() => setAvailableEnabled(enabled)}
                     >
                       {enabled
                         ? t('settings.agents.enableAllAvailable', 'Enable all')
