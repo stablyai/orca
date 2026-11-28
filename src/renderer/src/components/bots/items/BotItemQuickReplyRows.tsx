@@ -151,7 +151,10 @@ export function BotItemQuickReplyRows({
           <span className="flex min-w-0 flex-1 items-baseline gap-2.5 @max-[18rem]/item-pane:flex-col @max-[18rem]/item-pane:gap-0 @max-[18rem]/item-pane:py-1">
             <span className="w-full min-w-0 flex-1 truncate text-foreground">{reply.label}</span>
             {reply.recommended ? (
-              <span className="shrink-0 text-xs text-theme-accent">{suggested}</span>
+              // The accent a fifth toward the text color: 4.5:1 on the row's tint, hovered too.
+              <span className="shrink-0 text-xs text-[color-mix(in_srgb,var(--color-theme-accent)_80%,var(--color-foreground))]">
+                {suggested}
+              </span>
             ) : null}
           </span>
           {reply.label === current ? (
