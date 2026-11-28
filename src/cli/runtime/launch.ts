@@ -1,4 +1,4 @@
-import { spawn, type SpawnOptions } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
@@ -72,7 +72,7 @@ const STARTUP_ABORT_MS = 30_000
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
-    spawnDetached(overrideCommand, [], { shell: true })
+    spawnDetachedShellCommand(overrideCommand)
     return
   }
 
@@ -85,10 +85,7 @@ export function launchOrcaApp(): void {
       stripElectronRunAsNode(process.env),
       userDataPath
     )
-    spawnDetached(overrideExecutable, pinned.args, {
-      ...getExecutableSpawnOptions(overrideExecutable),
-      env: pinned.env
-    })
+    spawnDetached(overrideExecutable, pinned.args, pinned.env)
     return
   }
 
@@ -97,9 +94,11 @@ export function launchOrcaApp(): void {
       const appBundlePath = getMacAppBundlePath(process.execPath)
       if (appBundlePath) {
         // Launch the macOS bundle through Launch Services to preserve its app lifecycle.
-        spawnDetached('open', getMacOpenArgs(appBundlePath, userDataPath), {
-          env: stripElectronRunAsNode(process.env)
-        })
+        spawnDetached(
+          'open',
+          getMacOpenArgs(appBundlePath, userDataPath),
+          stripElectronRunAsNode(process.env)
+        )
         return
       }
     }
@@ -109,7 +108,7 @@ export function launchOrcaApp(): void {
       stripElectronRunAsNode(process.env),
       userDataPath
     )
-    spawnDetached(process.execPath, pinned.args, { env: pinned.env })
+    spawnDetached(process.execPath, pinned.args, pinned.env)
     return
   }
 
@@ -134,12 +133,16 @@ export function getMacOpenArgs(appBundlePath: string, userDataPath: string): str
   ]
 }
 
-function spawnDetached(command: string, args: string[], options: SpawnOptions): void {
-  const child = spawn(command, args, {
-    detached: true,
-    stdio: 'ignore',
-    ...options
-  })
+function spawnDetached(program: string, args: string[], env: NodeJS.ProcessEnv): void {
+  // Windows .cmd/.bat shims need resolveSpawn's quoting; shell:true splits spaced arguments.
+  const child = spawnProcess({ program, args, env, detached: true, stdio: 'ignore' })
+  // Handle asynchronous spawn errors; openOrca reports startup failure via its timeout.
+  child.once('error', () => {})
+  child.unref()
+}
+
+function spawnDetachedShellCommand(command: string): void {
+  const child = spawn(command, [], { detached: true, stdio: 'ignore', shell: true })
   // Handle asynchronous spawn errors; openOrca reports startup failure via its timeout.
   child.once('error', () => {})
   child.unref()
@@ -323,8 +326,4 @@ function spawnElectronServe(
     }
     throw error
   })
-}
-
-function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
-  return process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable) ? { shell: true } : {}
 }
