@@ -7,6 +7,7 @@ import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/c
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type Database from '../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../orca-runtime'
+import type { SleptPaneResume } from '../routing/slept-pane-resume'
 import type {
   RestoredPane,
   RestoredPaneTrigger,
@@ -89,6 +90,11 @@ class MailboxRuntime extends OrcaRuntimeService {
 
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
+  }
+
+  /** The one resume every slept-pane wake takes. */
+  resumeSleptPane(worktreeId: string, paneKey: string, opts: SleptPaneResume): Promise<boolean> {
+    return this.resumeSleptPaneTerminal(worktreeId, paneKey, opts)
   }
 
   protected override async startRestoredPaneTerminal(
