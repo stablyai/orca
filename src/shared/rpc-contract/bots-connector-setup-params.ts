@@ -25,6 +25,9 @@ export const BotSlackTeam = lazyZodSchema(() => z.object({ teamId: Id }))
 /** Without a team, the bot's first workspace (remove: every workspace). */
 export const BotSlackBot = lazyZodSchema(() => z.object({ botId: Id, teamId: Id.optional() }))
 export const BotSlackSetUp = lazyZodSchema(() => z.object({ botId: Id, teamId: Id }))
+export const BotSlackThreadLink = lazyZodSchema(() =>
+  BotSlackSetUp.extend({ showOrcaThreadLink: z.boolean() })
+)
 export const BotSlackMembers = lazyZodSchema(() =>
   z.object({ botId: Id, query: Query, teamId: Id.optional() })
 )

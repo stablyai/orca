@@ -10,6 +10,7 @@ import {
   type ConnectorBotSlackMembersResponse,
   type ConnectorBotSlackPostAsResponse,
   type ConnectorBotSlackStateResponse,
+  type ConnectorBotSlackThreadLinkResponse,
   type SlackPostAs
 } from '../../../shared/connector-bot-slack-contract'
 import type {
@@ -72,7 +73,9 @@ export function botSlackCalls(hostId: ExecutionHostId) {
       args:
         | { botId: string; teamId: string; postAs: SlackPostAs; setupState?: string }
         | { botId: string; teamId: string; cancel: true }
-    ) => call<ConnectorBotSlackPostAsResponse | undefined>(hostId, 'bots.slack.setPostAs', args)
+    ) => call<ConnectorBotSlackPostAsResponse | undefined>(hostId, 'bots.slack.setPostAs', args),
+    setThreadLink: (args: { botId: string; teamId: string; showOrcaThreadLink: boolean }) =>
+      call<ConnectorBotSlackThreadLinkResponse>(hostId, 'bots.slack.setThreadLink', args)
   }
 }
 

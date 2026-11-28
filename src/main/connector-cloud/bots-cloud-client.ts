@@ -8,11 +8,13 @@ import {
   ConnectorBotSlackMembersResponse,
   ConnectorBotSlackPostAsResponse,
   ConnectorBotSlackStateResponse,
+  ConnectorBotSlackThreadLinkResponse as SlackThreadLinkResponse,
   ConnectorSlackGrantResponse,
   BOT_SLACK_SIGN_IN_OFF,
   type BotSlackResult,
   type ConnectorBotAvatarRequest,
-  type ConnectorBotSlackPostAsRequest
+  type ConnectorBotSlackPostAsRequest,
+  type ConnectorBotSlackThreadLinkRequest
 } from '../../shared/connector-bot-slack-contract'
 import {
   BOT_LINEAR_OFF,
@@ -143,6 +145,8 @@ export function botsCloudClient(cloud: Pick<ConnectorCloud, 'call'>) {
               { timeoutMs: APP_SETUP_TIMEOUT_MS }
             )
       ),
+    setSlackThreadLink: async (botId: string, request: ConnectorBotSlackThreadLinkRequest) =>
+      answer(await cloud.call(`${botSlack(botId)}/thread-link`, request, SlackThreadLinkResponse)),
     /** A one-time code another signed-in Orca account redeems to create this bot's app with its own grant. */
     handOffSlackApp: async (botId: string, teamId: string) =>
       answer(

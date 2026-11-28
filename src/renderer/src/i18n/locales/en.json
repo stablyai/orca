@@ -28143,6 +28143,11 @@
         "pasteNeeded": "Paste a token to continue.",
         "continue": "Continue"
       },
+      "threadLink": {
+        "saveFailed": "Couldn’t save the Slack reply link setting.",
+        "label": "Show “Open this thread in Orca” link",
+        "description": "Include the link in new bot replies in this workspace."
+      },
       "problem": {
         "reconnecting": "Waiting for {{host}} to reconnect…",
         "reconnectingNext": "Slack setup starts again by itself once {{host}} is back. You don’t need to start over or paste a token.",

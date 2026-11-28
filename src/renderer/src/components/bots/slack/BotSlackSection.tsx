@@ -1,7 +1,12 @@
 // One installed Slack workspace's body, the same in the connector panel and the after-install dialog:
 // how to ask, Who can ask, and who messages typed in Orca show as.
-import React from 'react'
+import React, { useState } from 'react'
+import { toast } from 'sonner'
+import { SettingsSwitchRow } from '@/components/settings/form-controls/SettingsFormControls'
+import { SettingsGroup } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
+import { botSlackCalls } from '@/lib/bot-connector-host-calls'
+import { refreshBotSlack } from '@/lib/bot-slack-state'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { ConnectorBotSlackState } from '../../../../../shared/connector-bot-slack-contract'
 import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
@@ -50,6 +55,53 @@ export function BotSlackSection({
           className={paged ? undefined : 'mt-3 px-3'}
         />
       </BotConnectorSection>
+      {paged && slack.showOrcaThreadLink !== undefined ? (
+        <BotSlackThreadLink bot={bot} teamId={slack.teamId} checked={slack.showOrcaThreadLink} />
+      ) : null}
     </div>
+  )
+}
+
+function BotSlackThreadLink({
+  bot,
+  teamId,
+  checked
+}: {
+  bot: Bot
+  teamId: string
+  checked: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [saving, setSaving] = useState(false)
+  const save = async (): Promise<void> => {
+    setSaving(true)
+    const showOrcaThreadLink = !checked
+    const result = await botSlackCalls(bot.hostId).setThreadLink({
+      botId: bot.id,
+      teamId,
+      showOrcaThreadLink
+    })
+    await refreshBotSlack(bot, !result.ok)
+    setSaving(false)
+    if (!result.ok || result.value.showOrcaThreadLink !== showOrcaThreadLink) {
+      toast.error(
+        t('bots.slack.threadLink.saveFailed', 'Couldn’t save the Slack reply link setting.')
+      )
+    }
+  }
+
+  return (
+    <SettingsGroup className="mt-3.5">
+      <SettingsSwitchRow
+        label={t('bots.slack.threadLink.label', 'Show “Open this thread in Orca” link')}
+        description={t(
+          'bots.slack.threadLink.description',
+          'Include the link in new bot replies in this workspace.'
+        )}
+        checked={checked}
+        disabled={saving}
+        onChange={() => void save()}
+      />
+    </SettingsGroup>
   )
 }
