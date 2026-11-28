@@ -19,8 +19,8 @@ const OUTBOUND_REPORT_TYPES = new Set([
   'merge_ready',
   'handoff'
 ])
-// Reports that end the worker's part of the exchange; a plain status does not cover mail that came after it.
-const TERMINAL_REPORT_TYPES = new Set(['worker_done', 'question', 'escalation'])
+// Reports that leave the next move to the coordinator; a plain status does not cover mail that came after it.
+const HANDOFF_REPORT_TYPES = new Set(['question', 'escalation'])
 const SYSTEM_REPORT_ID_PREFIXES = [
   'msg_stop_',
   'msg_rest_',
@@ -99,9 +99,17 @@ export function hasOutboundCoordinatorReport(
       (sentInCurrentLocalTurn(candidate, stop) &&
         (latest === undefined ||
           candidate.sequence > latest.sequence ||
-          TERMINAL_REPORT_TYPES.has(candidate.type)))
+          endsExchange(candidate.type, candidate.id, latest)))
     return reports && reachesCoordinator(candidate.to)
   })
+}
+
+/** A question or escalation the latest coordinator mail answered is the coordinator's move done, not the worker's. */
+function endsExchange(type: string, id: string, latest: ConsumedCoordinatorMessage): boolean {
+  return (
+    type === 'worker_done' ||
+    (HANDOFF_REPORT_TYPES.has(type) && latest.threadId !== id && latest.replyTo !== id)
+  )
 }
 
 function isWorkerReportCandidate(
@@ -235,9 +243,10 @@ function hasRemoteOutboundReport(
         return false
       }
       if (
+        latest &&
         latestSec !== null &&
         Math.floor(parseDispatchUtcMs(createdAt) / 1000) < latestSec &&
-        !TERMINAL_REPORT_TYPES.has(kind)
+        !endsExchange(kind, messageId, latest)
       ) {
         return false
       }

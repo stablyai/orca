@@ -557,9 +557,9 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
 
   function workerReport(
     to: string,
-    opts: { threadId?: string; type?: 'status' | 'escalation' } = {}
-  ): void {
-    db.insertMessage({
+    opts: { threadId?: string; type?: 'status' | 'escalation' | 'question' } = {}
+  ) {
+    return db.insertMessage({
       from: WORKER_ADDRESS,
       to,
       subject: 'Status',
@@ -642,6 +642,26 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
     sendCoordinatorMail('keep waiting')
     completeTurn(reporter, 'turn-mail-after-report')
     expect(stopEscalations()).toEqual([])
+  })
+
+  it('still escalates when the coordinator answered the worker question in the turn and the worker stopped', () => {
+    const reporter = createReporter()
+    sendCoordinatorMail('first')
+    startTurn()
+    const question = workerReport(`run:${runId}`, { type: 'question' })
+    const answer = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: `dispatch:${dispatchId}`,
+      subject: 'Re: question',
+      body: 'Yes, go ahead.',
+      type: 'status',
+      threadId: question.id,
+      replyTo: question.id,
+      runId
+    })
+    db.markAsRead([answer.id], { kind: 'session', sessionId: WORKER_SESSION })
+    completeTurn(reporter, 'turn-answer-not-acted-on')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
   })
 
   it('still escalates when a plain status came before new coordinator work the turn left unanswered', () => {
