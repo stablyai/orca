@@ -4,11 +4,12 @@
 // by its key's fingerprint, so a regenerated key looks like another project: every key removes what
 // it can see of a listed bot, and only its own project's key, or one shown to reach it, drops it.
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { composioUserOfBot } from '../../shared/composio/composio-apps'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 import type { ComposioApi } from './composio-api'
 import { composioKeyEnvelopeFile } from './composio-key-store'
 
@@ -18,6 +19,7 @@ const Entry = lazyZodSchema(() =>
 )
 type Entry = z.infer<typeof Entry>
 const PendingFile = lazyZodSchema(() => z.object({ bots: z.array(Entry) }))
+const UNREADABLE = '[composio] the deleted-bot cleanup list could not be read; not rewriting it'
 
 /** Next to the key, on the host that runs the bots. */
 export const composioCleanupFile = (): string =>
@@ -40,19 +42,25 @@ export async function removeComposioUser(api: ComposioApi, userId: string): Prom
 export class ComposioCleanup {
   constructor(private readonly file: string) {}
 
-  pending(): Entry[] {
-    if (!existsSync(this.file)) {
-      return []
-    }
+  /** Null when the file exists but could not be read: never the same as empty, since a write would drop it. */
+  private entries(): Entry[] | null {
     try {
       return PendingFile.parse(JSON.parse(readFileSync(this.file, 'utf8'))).bots
-    } catch {
-      return []
+    } catch (error) {
+      return errnoCodeOrUnknown(error) === 'ENOENT' ? [] : null
     }
   }
 
+  pending(): Entry[] {
+    return this.entries() ?? []
+  }
+
   add(entry: Entry): void {
-    const bots = this.pending()
+    const bots = this.entries()
+    if (!bots) {
+      console.warn(UNREADABLE)
+      return
+    }
     if (!bots.some((listed) => listed.botId === entry.botId)) {
       this.write([...bots, entry])
     }
@@ -60,9 +68,14 @@ export class ComposioCleanup {
 
   /** Cleans up every listed bot that's gone, as far as this key sees; its own project's are done. */
   async drain(api: ComposioApi, key: string, live: (botId: string) => boolean): Promise<void> {
+    const listed = this.entries()
+    if (!listed) {
+      console.warn(UNREADABLE)
+      return
+    }
     const project = composioProjectOf(key)
     const done = new Set<string>()
-    for (const entry of this.pending()) {
+    for (const entry of listed) {
       if (live(entry.botId)) {
         continue
       }
@@ -76,12 +89,21 @@ export class ComposioCleanup {
       }
     }
     // Re-read, so a bot listed during the pass stays for the next one.
-    this.write(this.pending().filter((entry) => !done.has(entry.botId)))
+    const remaining = this.entries()
+    if (!remaining) {
+      console.warn(UNREADABLE)
+      return
+    }
+    this.write(remaining.filter((entry) => !done.has(entry.botId)))
   }
 
   /** `from`'s key was shown to reach `to`'s project (a regenerated key): its entries are `to`'s. */
   relabel(from: string, to: string): void {
-    const bots = this.pending()
+    const bots = this.entries()
+    if (!bots) {
+      console.warn(UNREADABLE)
+      return
+    }
     if (from !== to && bots.some((entry) => entry.project === from)) {
       this.write(bots.map((entry) => (entry.project === from ? { ...entry, project: to } : entry)))
     }

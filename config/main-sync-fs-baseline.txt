@@ -155,8 +155,8 @@
 1 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-4 src/main/composio/composio-cleanup.ts
-5 src/main/composio/composio-events-ingress.ts
+3 src/main/composio/composio-cleanup.ts
+4 src/main/composio/composio-events-ingress.ts
 3 src/main/computer/macos-native/macos-native-provider-paths.ts
 1 src/main/computer/sidecar-transport/sidecar-client.ts
 1 src/main/connector-cloud/connector-turn-outbox-file.ts
