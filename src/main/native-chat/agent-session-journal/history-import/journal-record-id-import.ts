@@ -12,7 +12,7 @@ export type RecordIdImportResult =
 /** A transcript's newest words, for an agent whose records carry stable ids: those ids are the
  *  journal's record ids. `observe` sees lines until it returns true; `validate` runs after them. */
 export async function prepareRecordIdTranscriptImport(input: {
-  agent: 'antigravity' | 'droid'
+  agent: 'antigravity' | 'droid' | 'kimi'
   sessionId: string
   filePath: string
   decode: (line: string) => { recordId: string; message: NativeChatMessage } | null

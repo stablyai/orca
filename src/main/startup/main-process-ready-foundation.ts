@@ -301,7 +301,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
-  initializeBrowserSessionsForApp({
+  await initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
     profileDirectory: profile.profileDirectory,
     // Sweep against current SSH targets or live target cookie jars look orphaned.

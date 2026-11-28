@@ -47,7 +47,6 @@ import {
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../../plugins/panels/guest-isolation/plugin-frame-guest-registry'
-import { attachBrowserPasswordGuest } from '../../browser-passwords/browser-password-guest-service'
 import {
   admitBrowserExtensionSidePanelAttach,
   isBrowserExtensionSidePanelAttachMarker,
@@ -242,7 +241,23 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     const routeGuest = browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
-    attachBrowserPasswordGuest(guest)
+    let domReadyFired = false
+    const onEarlyDomReady = (): void => {
+      domReadyFired = true
+    }
+    guest.once('dom-ready', onEarlyDomReady)
+    void import('../../browser-passwords/browser-password-guest-service')
+      .then(({ attachBrowserPasswordGuest }) => {
+        if (guest.isDestroyed()) {
+          return
+        }
+        guest.removeListener('dom-ready', onEarlyDomReady)
+        attachBrowserPasswordGuest(guest, domReadyFired)
+      })
+      .catch((error) => {
+        guest.removeListener('dom-ready', onEarlyDomReady)
+        console.warn('[browser-passwords] Failed to load password guest service:', error)
+      })
     if (!routeGuest) {
       startBrowserPageAttach(guest)
     }

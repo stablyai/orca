@@ -19,6 +19,13 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
+import {
+  connectorOfferThreadNote,
+  type ConnectorOfferCardKind
+} from '../../../../shared/bots/bot-connector-offer-thread-note'
+import { findLinksForSession } from '../../../external-conversations/external-conversation-links'
+import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
+import { CONNECTOR_OFFER_NO_DIRECTIONS } from '../../../../shared/bots/connector-offer-directions'
 
 /** The bot whose own chat on this host asks; never one a paired device or a Look around names. */
 function offeringBot(
@@ -37,13 +44,13 @@ function offeringBot(
   return bot
 }
 
-/** Puts the Connect card in the asking chat. */
+/** Puts the Connect card in the asking chat; false when the chat changed before it was written. */
 export async function postConnectorOffer(
   callerSessionId: string,
   bot: Pick<Bot, 'name'>,
   offer: ConnectorOffer,
   runtime: Pick<OrcaRuntimeService, 'servesWithoutWindow'>
-): Promise<void> {
+): Promise<boolean> {
   refuseBotGroupRoomCard(callerSessionId)
   const host = getStructuredAgentSessionHost()
   // Null for a session this host doesn't run.
@@ -51,7 +58,7 @@ export async function postConnectorOffer(
   if (!host || !destination) {
     throw new InvalidArgumentError('Run this from your chat in Orca.')
   }
-  await host.appendAgentStart(
+  return host.appendAgentStart(
     destination,
     {
       body: connectorOfferBody(offer, bot.name, orcaSignInServer(runtime)),
@@ -59,6 +66,67 @@ export async function postConnectorOffer(
     },
     Date.now()
   )
+}
+
+export const CONNECTOR_OFFER_NOT_SHOWN =
+  'No card was shown: this chat changed while Orca was adding it. Run the same command again.'
+
+/**
+ * Posts the card and answers for it: when its chat answers a Slack, Linear or GitHub thread, the
+ * answer says the card is only in Orca and gives the line that sends the owner to it.
+ */
+export async function offerConnectorCard(
+  runtime: Pick<
+    OrcaRuntimeService,
+    | 'servesWithoutWindow'
+    | 'requireStore'
+    | 'getExternalConversationSeam'
+    | 'ensureStructuredAgentSessionHost'
+  >,
+  callerSessionId: string,
+  bot: Pick<Bot, 'id' | 'name'>,
+  offer: ConnectorOffer,
+  message: string,
+  kind: ConnectorOfferCardKind = {}
+): Promise<{ shown: boolean; message: string }> {
+  if (!(await postConnectorOffer(callerSessionId, bot, offer, runtime))) {
+    return { shown: false, message: CONNECTOR_OFFER_NOT_SHOWN }
+  }
+  const note = connectorOfferThreadNote(
+    bot.id,
+    answeredThread(runtime, callerSessionId, bot),
+    offer,
+    kind
+  )
+  return {
+    shown: true,
+    message: note ? `${message.replace(CONNECTOR_OFFER_NO_DIRECTIONS, '')} ${note}` : message
+  }
+}
+
+/** The bot's thread this turn answers, as its workers' reports go there; null for a turn in Orca. */
+function answeredThread(
+  runtime: Pick<
+    OrcaRuntimeService,
+    'requireStore' | 'getExternalConversationSeam' | 'ensureStructuredAgentSessionHost'
+  >,
+  sessionId: string,
+  bot: Pick<Bot, 'id'>
+) {
+  try {
+    const seam = runtime.getExternalConversationSeam()
+    if (!seam?.conversationTurn(runtimeChatHost(runtime), sessionId)) {
+      return null
+    }
+    return (
+      findLinksForSession(runtime.requireStore(), sessionId).find(
+        (entry) => entry.link.bot?.botId === bot.id
+      )?.link ?? null
+    )
+  } catch {
+    // No store yet: the card is posted, so answer without the note rather than fail the offer.
+    return null
+  }
 }
 
 export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
@@ -76,28 +144,37 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
     )
     if (signIn) {
       if (signIn.offered) {
-        await postConnectorOffer(
+        const card = await offerConnectorCard(
+          runtime,
           callerSessionId,
           bot,
           { botId: bot.id, source, signIn: true },
-          runtime
+          signIn.message
         )
+        return { offered: card.shown, message: card.message }
       }
       return signIn
     }
     if (source === 'webhook') {
       throw new InvalidArgumentError('Webhooks are offered only as Sign in.')
     }
-    const answer: ReturnType<typeof connectorOfferReply> =
-      source === 'google'
-        ? googleOfferReply(await hostGoogleBotState(bot), {
-            headless: noWindowAnswersGoogleCards(runtime),
-            botName: bot.name
-          })
-        : connectorOfferReply(bot, source, workspace)
+    let answer: ReturnType<typeof connectorOfferReply>
+    let kind: ConnectorOfferCardKind = {}
+    if (source === 'google') {
+      const google = await hostGoogleBotState(bot)
+      answer = googleOfferReply(google, {
+        headless: noWindowAnswersGoogleCards(runtime),
+        botName: bot.name
+      })
+      // Google already on: its Connected card adds another account (googleBotAsk).
+      kind = { googleAnotherAccount: google.allowed && google.host === 'connected' }
+    } else {
+      answer = connectorOfferReply(bot, source, workspace)
+    }
     const { addAccess, ...reply } = answer
     if (reply.offered) {
-      await postConnectorOffer(
+      const card = await offerConnectorCard(
+        runtime,
         callerSessionId,
         bot,
         {
@@ -106,8 +183,10 @@ export const BOT_CONNECTOR_OFFER_METHOD = defineMethod({
           ...(workspace ? { workspace } : {}),
           ...(addAccess ? { addAccess } : {})
         },
-        runtime
+        reply.message,
+        kind
       )
+      return { offered: card.shown, message: card.message }
     }
     return reply
   }

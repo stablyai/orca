@@ -36,7 +36,13 @@ export type BrowserSessionTabSelectionOptions = {
   /** Required to force each caller to decide whether shared host selection moves. */
   focusesHost: boolean
   /** Navigation audience, with the paired origin when a client asked; a local caller has no id. */
-  caller?: { clientNavigationId?: string; navigation: RuntimeNavigationTarget; follows?: boolean }
+  caller?: {
+    clientNavigationId?: string
+    navigation: RuntimeNavigationTarget
+    follows?: boolean
+    /** Of the audience, only screens now showing this top-level tab move. */
+    showingTabId?: string
+  }
 }
 
 export type BrowserTabCreatePublication = {
@@ -47,6 +53,8 @@ export type BrowserTabCreatePublication = {
   clientNavigationId?: string
   /** A link a page opened, not a create anyone asked for: its client has no pending focus, and no one picked it otherwise. */
   opensPageLink?: boolean
+  /** Only screens showing this terminal tab follow; the rest just list the new tab. */
+  followsFromTabId?: string
   targetGroupId?: string
 }
 
@@ -227,7 +235,14 @@ export async function publishCreatedBrowserSessionTab(
             }
           : navigationTargetsClients(publication.focus.navigation)
             ? // A windowless host's own CLI has no screen; its clients are where the tab is seen.
-              { caller: { navigation: publication.focus.navigation } }
+              {
+                caller: {
+                  navigation: publication.focus.navigation,
+                  ...(publication.followsFromTabId
+                    ? { showingTabId: publication.followsFromTabId }
+                    : {})
+                }
+              }
             : {})
       }
     )

@@ -10,6 +10,9 @@ export function useWorktreeCardDetailsHoverControl() {
   const openMenuRef = useRef<WorktreeCardDetailMenu | null>(null)
   const pendingHoverCloseRef = useRef(false)
   const holdOpenUntilRefocusRef = useRef(false)
+  // Counted: one card can hold several reference peeks; details stay shut while any is open.
+  const openReferencePeeksRef = useRef(0)
+  const [referencePeekOpen, setReferencePeekOpenState] = useState(false)
 
   const setOpenMenu = useCallback((menu: WorktreeCardDetailMenu | null) => {
     openMenuRef.current = menu
@@ -24,7 +27,7 @@ export function useWorktreeCardDetailsHoverControl() {
   }, [setOpenMenu])
 
   const handleHoverOpenChange = useCallback((next: boolean) => {
-    if (next && contextMenuOpenRef.current) {
+    if (next && (contextMenuOpenRef.current || openReferencePeeksRef.current > 0)) {
       return
     }
     // Why: portaled detail menus sit outside HoverCardContent — keep the card
@@ -79,6 +82,11 @@ export function useWorktreeCardDetailsHoverControl() {
     [setOpenMenu]
   )
 
+  const handleReferencePeekOpenChange = useCallback((next: boolean) => {
+    openReferencePeeksRef.current = Math.max(0, openReferencePeeksRef.current + (next ? 1 : -1))
+    setReferencePeekOpenState(openReferencePeeksRef.current > 0)
+  }, [])
+
   const holdOpenUntilRefocus = useCallback(() => {
     if (holdOpenUntilRefocusRef.current) {
       return
@@ -102,6 +110,8 @@ export function useWorktreeCardDetailsHoverControl() {
     handleIssueMenuOpenChange: (next: boolean) => setDetailMenuOpen('issue', next),
     handleReviewMenuOpenChange: (next: boolean) => setDetailMenuOpen('review', next),
     handleLinkActionsOpenChange: (next: boolean) => setDetailMenuOpen('link-actions', next),
+    referencePeekOpen,
+    handleReferencePeekOpenChange,
     holdOpenUntilRefocus,
     closeHover
   }

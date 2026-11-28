@@ -1,4 +1,5 @@
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { noteAiVaultScanContentRead } from '../scan-lifecycle/ai-vault-scan-progress'
 import {
   openTranscriptReadStream,
   readTranscriptSlice,
@@ -82,6 +83,7 @@ async function readDocumentCwd(
   if (content === null) {
     return null
   }
+  noteAiVaultScanContentRead(signal, Buffer.byteLength(content))
   try {
     return { cwd: cwdOf(content) }
   } catch {
@@ -209,6 +211,7 @@ export async function readTranscriptHeadCwd(
       }
       return null
     }
+    noteAiVaultScanContentRead(signal, head.length)
     const lines = head.toString('utf8').split(/\r?\n/)
     // A slice shorter than asked ended at EOF, so its last line is complete too.
     const complete = head.length < length ? lines : lines.slice(0, -1)

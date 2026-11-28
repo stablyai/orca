@@ -3,6 +3,7 @@
 import { HOST_ACCOUNT_SIGN_IN_FAILURE_COPY } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { GoogleSignInPrompt } from '../../shared/google/google-connect-types'
 import type { LoopbackCallbackHold } from '../orca-profiles/cloud-auth/loopback-callback'
+import type { SignInFlowStop } from '../runtime/caller-owned-sign-in-contract'
 import {
   orcaCallbackOutcome,
   orcaCallbackReceivedPage
@@ -32,16 +33,13 @@ export const GOOGLE_RETURN_PAGES = {
   })
 } as const
 /** A tab whose sign-in ended without an account says what Orca and the CLI say: a silent stop wins over the step that failed. */
-export function googleFailedReturnPage(
-  stopped: 'cancelled' | 'silent' | null,
-  error: unknown
-): string {
+export function googleFailedReturnPage(stopped: SignInFlowStop | null, error: unknown): string {
   if (stopped === 'cancelled') {
     return GOOGLE_RETURN_PAGES.cancelled
   }
   return GOOGLE_RETURN_PAGES.notSignedIn(
-    stopped === 'silent'
-      ? HOST_ACCOUNT_SIGN_IN_FAILURE_COPY.ownerSilent
+    stopped === 'silent' || stopped === 'noPrompt'
+      ? HOST_ACCOUNT_SIGN_IN_FAILURE_COPY[stopped === 'silent' ? 'ownerSilent' : 'noPrompt']
       : error instanceof Error
         ? error.message
         : 'Return to Orca and try again.'

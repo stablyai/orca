@@ -7,7 +7,6 @@ import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
-import type { BotToolServer } from '../../shared/bot-tools'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
 import {
   type Entry,
@@ -152,6 +151,8 @@ export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry 
 type BotToolCredentialsReader = {
   credential: (id: string) => BotToolCredential | null
   oauth: (id: string) => BotToolOAuthEntry | null
+  /** An entry is stored under `id` but doesn't open here (sealed under another keychain, or moved). */
+  unreadable: (id: string) => boolean
 }
 
 /**
@@ -160,8 +161,13 @@ type BotToolCredentialsReader = {
  */
 export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
   let sealed: Stored | undefined
-  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
-  return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
+  const store = () => (sealed ??= readSealed(folder))
+  const entry = (id: string) => entryOf(store(), id)
+  return {
+    credential: (id) => credentialOf(entry(id)),
+    oauth: (id) => oauthOf(entry(id)),
+    unreadable: (id) => Object.hasOwn(store(), id) && entry(id) === null
+  }
 }
 
 function credentialOf(entry: Entry | null): BotToolCredential | null {
@@ -292,6 +298,7 @@ export function changeBotToolCredentials(
  * Commits a sign-in in one step: `change` gets the stored entry (null when there is none) and answers
  * the next one, null to remove it, or `undefined` to leave it as it is. Each commit bumps the revision,
  * except a `statusOnly` one (no tokens change), so a refresh under way still commits its tokens.
+ * `replaceUnreadable`: commit only over an entry that doesn't open here, which `change` sees as null.
  * Answers the entry as committed, or `undefined` when nothing was written.
  */
 export function commitBotToolOAuth(
@@ -300,12 +307,19 @@ export function commitBotToolOAuth(
   change: (
     current: BotToolOAuthEntry | null
   ) => { url: string; grant: number; record: BotToolOAuthRecord } | null | undefined,
-  { statusOnly = false }: { statusOnly?: boolean } = {}
+  {
+    statusOnly = false,
+    replaceUnreadable = false
+  }: { statusOnly?: boolean; replaceUnreadable?: boolean } = {}
 ): BotToolOAuthEntry | null | undefined {
   const path = botToolCredentialsPath(folder)
   const text = readFileText(path)
   const stored = parseStored(folder, text)
   const existing = entryOf(stored, id)
+  // Only an entry stored under `id` that doesn't open here (a reset keychain) is replaced.
+  if (replaceUnreadable && (existing !== null || !Object.hasOwn(stored, id))) {
+    return undefined
+  }
   if (existing && existing.kind !== 'oauth') {
     throw signInManaged()
   }
@@ -355,25 +369,4 @@ export function forgetBotToolCredentials(folder: string): BotToolOAuthEntry[] {
   rmSync(botToolCredentialsPath(folder), { force: true })
   announceBotToolCredentialsEnded(folder, ids)
   return entries
-}
-
-/**
- * A stored tool as an edit starts from: its saved values and the address they're bound to, and a
- * credential id only for Orca's own sign-in, which the edit keeps.
- */
-export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
-  if (!('url' in server) || !server.credential) {
-    return server
-  }
-  if (readBotToolOAuth(folder, server.credential)) {
-    // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
-    return server
-  }
-  const { credential, ...rest } = server
-  const saved = readBotToolCredential(folder, credential)
-  if (saved?.source) {
-    // Its headers come from a source Orca fills per call; a generic edit would drop them.
-    throw new BotFailureError('toolSourceManaged')
-  }
-  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

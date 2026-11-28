@@ -43,8 +43,8 @@ import { registerLazyCodexAccountHandlers } from '../accounts/lazy-codex-account
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
 import { registerLazyClaudeAccountHandlers } from '../accounts/lazy-claude-accounts-handlers'
-import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
-import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/updater-ipc-handlers'
+import { registerLazyClipboardHandlers } from '../../window/clipboard/lazy-clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
@@ -54,11 +54,6 @@ import type { AutomationService } from '../../automations/automation-service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import {
-  ensurePersistedStructuredAgentSessionHostUnlessRefused,
-  ensureStructuredAgentSessionHostUnlessRefused
-} from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
-import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugins/plugin-marketplaces'
 import {
@@ -168,18 +163,28 @@ export async function registerCoreHandlers(
     installProjectRuntimeGitRouter(store)
     registerLazyEphemeralVmHandlers(store, pluginService)
     // Session history and terminal resume are not chats; skip booting an empty chat journal host.
-    const ensureStructuredSessionOwnership = () =>
-      ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+    const ensureStructuredSessionOwnership = async () => {
+      const { ensurePersistedStructuredAgentSessionHostUnlessRefused } =
+        await import('../../runtime/agent-session/installation/structured-agent-session-host-refusal')
+      return ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
+    }
     registerLazyAiVaultHandlers({
       ensureStructuredSessionOwnership,
       getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
       prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume
     })
     registerLazyNativeChatHandlers()
-    registerClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
+    registerLazyClipboardHandlers((path) => resolveDesktopAuthorizedPath(path, store), {
       localChatAttachmentStore: async () => {
+        const [
+          { ensureStructuredAgentSessionHostUnlessRefused },
+          { getAgentSessionAttachmentStore }
+        ] = await Promise.all([
+          import('../../runtime/agent-session/installation/structured-agent-session-host-refusal'),
+          import('../../native-chat/agent-session-attachments/agent-session-attachment-store-registry')
+        ])
         await ensureStructuredAgentSessionHostUnlessRefused(() =>
           runtime.ensureStructuredAgentSessionHost()
         )

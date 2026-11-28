@@ -1,14 +1,8 @@
 import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
-import { browserSiteDisplayController } from '../../browser/site-settings/display/browser-site-display-controller'
 import { isBrowserPageZoomDirection } from '../../../shared/browser/site-settings/browser-page-zoom'
-import { publishBrowserClientPageMetadata } from '../../browser/client-pages/renderer/browser-client-page-metadata-transport'
-import {
-  BrowserClientPageMetadataParams,
-  type BrowserClientPageMetadataPublishOutcome
-} from '../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 import type { BrowserViewportOverride } from '../../../shared/browser/workspaces/browser-workspace-types'
 import { isValidBrowserGrabRect } from '../../../shared/browser/annotations/browser-annotation-viewport-report'
 import {
@@ -66,35 +60,47 @@ export function registerBrowserGuestViewHandlers(): void {
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',
-    (event, args: { browserPageId: string }): BrowserPageSiteDisplay | null => {
+    async (event, args: { browserPageId: string }): Promise<BrowserPageSiteDisplay | null> => {
       const guestId = pageGuestId(event, args?.browserPageId)
-      return guestId === null ? null : browserSiteDisplayController.getPageDisplay(guestId)
+      if (guestId === null) {
+        return null
+      }
+      const { browserSiteDisplayController } =
+        await import('../../browser/site-settings/display/browser-site-display-controller')
+      return browserSiteDisplayController.getPageDisplay(guestId)
     }
   )
 
   ipcMain.handle(
     'browser:zoomPage',
-    (event, args: { browserPageId: string; direction: unknown }): BrowserPageSiteDisplay | null => {
+    async (
+      event,
+      args: { browserPageId: string; direction: unknown }
+    ): Promise<BrowserPageSiteDisplay | null> => {
       const guestId = pageGuestId(event, args?.browserPageId)
       const { direction } = args
       if (guestId === null || !isBrowserPageZoomDirection(direction)) {
         return null
       }
+      const { browserSiteDisplayController } =
+        await import('../../browser/site-settings/display/browser-site-display-controller')
       return browserSiteDisplayController.zoomPage(guestId, direction)
     }
   )
 
   ipcMain.handle(
     'browser:setPageSiteColorScheme',
-    (
+    async (
       event,
       args: { browserPageId: string; colorScheme: unknown }
-    ): BrowserPageSiteDisplay | null => {
+    ): Promise<BrowserPageSiteDisplay | null> => {
       const guestId = pageGuestId(event, args?.browserPageId)
       const { colorScheme } = args
       if (guestId === null || (colorScheme !== null && !isBrowserSiteColorScheme(colorScheme))) {
         return null
       }
+      const { browserSiteDisplayController } =
+        await import('../../browser/site-settings/display/browser-site-display-controller')
       return browserSiteDisplayController.setColorScheme(guestId, colorScheme)
     }
   )
@@ -277,33 +283,11 @@ export function registerBrowserGuestViewHandlers(): void {
     }
   )
 
-  // Publish through main's attached browser-host lease; direct renderer traffic would be refused as stale.
-  ipcMain.handle(
-    'browser:publishClientPageMetadata',
-    async (
-      event,
-      args: { environmentId: string; params: unknown }
-    ): Promise<BrowserClientPageMetadataPublishOutcome> => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
-        return { status: 'refused' }
-      }
-      if (typeof args?.environmentId !== 'string' || !args.environmentId) {
-        return { status: 'refused' }
-      }
-      const params = BrowserClientPageMetadataParams.safeParse(args.params)
-      if (!params.success) {
-        return { status: 'refused' }
-      }
-      try {
-        return {
-          status: 'published',
-          ...(await publishBrowserClientPageMetadata(args.environmentId, params.data))
-        }
-      } catch (error) {
-        return { status: 'failed', errorCode: browserClientPageMetadataErrorCode(error) }
-      }
-    }
-  )
+  registerLazyIpcHandleGroup(['browser:publishClientPageMetadata'], async (ipc) => {
+    const { registerBrowserClientPageMetadataHandler } =
+      await import('./browser-client-page-metadata-ipc')
+    registerBrowserClientPageMetadataHandler(ipc)
+  })
 
   ipcMain.handle('browser:cancelDownload', (event, args: { downloadId: string }) => {
     if (!isTrustedBrowserRenderer(event.sender)) {
@@ -314,11 +298,4 @@ export function registerBrowserGuestViewHandlers(): void {
       senderWebContentsId: event.sender.id
     })
   })
-}
-
-function browserClientPageMetadataErrorCode(error: unknown): string {
-  if (error instanceof RemoteRuntimeClientError) {
-    return error.code
-  }
-  return error instanceof Error ? error.message : 'browser_client_page_metadata_failed'
 }
