@@ -87,7 +87,12 @@ export async function timeLayoutAction(
           }
           t0 = performance.now()
           button.click()
-          await until(() => tabs().length > before && panes() > 0)
+          // Without frames, pane mount can wait a throttled tick: stop at the new tab selected.
+          await until(() =>
+            drawn
+              ? tabs().length > before && panes() > 0
+              : tabs().length > before && st().activeTabId === tabs().at(-1)?.id
+          )
           break
         }
         case 'split': {
