@@ -12,6 +12,7 @@ import type {
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { agentSessionRecordShownName } from '../../../../runtime/agent-session/records/agent-session-record-shown-name'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
+import { hasJournalStoredOutput } from '../../../agent-session-journal/journal-stored-output'
 import type { HistoryReader } from './agent-session-history-page-bounds'
 
 export type ForkMarker = {
@@ -163,9 +164,12 @@ export function withForkMarker(
         return reader.snapshot?.(journal, raw, touched) ?? raw
       }
       const previous = projectedPositions.get(journal)
+      let groupSequence = previous?.restored ?? previous?.sequence
+      // Without a snapshot the group is the page, so it is read whole; otherwise as previews.
       let group = await journal.reads.forkMarkerGroup(
         marker.forkedFrom.childBoundary,
-        previous?.restored ?? previous?.sequence
+        groupSequence,
+        !snapshot
       )
       const raw = snapshot ?? group
       const sameEpoch = previous !== undefined && previous.epoch === raw.cursor.epoch
@@ -181,7 +185,12 @@ export function withForkMarker(
         oldSequence !== undefined &&
         oldSequence !== (previous?.restored ?? previous?.sequence)
       ) {
-        group = await journal.reads.forkMarkerGroup(marker.forkedFrom.childBoundary, oldSequence)
+        groupSequence = oldSequence
+        group = await journal.reads.forkMarkerGroup(
+          marker.forkedFrom.childBoundary,
+          oldSequence,
+          !snapshot
+        )
       }
       projectedPositions.set(journal, {
         epoch: raw.cursor.epoch,
@@ -191,7 +200,7 @@ export function withForkMarker(
       if (!touched) {
         return projectForkMarker((await reader.snapshot?.(journal, raw)) ?? raw, marker)
       }
-      const live = journalItemsById([...raw.items, ...group.items])
+      let live = journalItemsById([...raw.items, ...group.items])
       const boundary = marker.forkedFrom.childBoundary
       const affected =
         (moved && oldSequence !== undefined) ||
@@ -207,6 +216,15 @@ export function withForkMarker(
             }
           }
         }
+      }
+      // A saved output the group publishes is read again whole.
+      if (group.items.some((row) => touched.has(row.itemId) && hasJournalStoredOutput(row))) {
+        group = await journal.reads.forkMarkerGroup(
+          marker.forkedFrom.childBoundary,
+          groupSequence,
+          true
+        )
+        live = journalItemsById([...raw.items, ...group.items])
       }
       const selected = {
         ...raw,

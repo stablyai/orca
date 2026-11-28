@@ -6,7 +6,10 @@ import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS } from './durable-rows/journal-row-schema'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import type { HistoryItemForm } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
-import { readJournalDomainClientForms } from './journal-domain-item-presentation'
+import {
+  readJournalDomainClientForms,
+  type JournalDomainClientFormTarget
+} from './journal-domain-item-presentation'
 import { readJournalDomainStopStates } from './journal-domain-item-display'
 
 export type JournalDomainHistoryHeader = {
@@ -138,7 +141,7 @@ export function admitJournalDomainHistoryGroups(
   window: readonly JournalDomainHistoryHeader[],
   budgetBytes: number,
   db: Database.Database,
-  target: { sessionId: string; epoch: string },
+  target: JournalDomainClientFormTarget,
   forms: Map<string, HistoryItemForm>
 ): { groups: JournalDomainHistoryHeader[][]; oversized: boolean } {
   const groups: JournalDomainHistoryHeader[][] = []
