@@ -85,11 +85,11 @@ export class BotToolRelay {
     return owner === MCP_HOST_LIST_RELAY_OWNER ? null : owner
   }
 
-  /** A deleted bot's token stops working (daemons drop its kept grants first); its calls are cut. */
+  /** A deleted bot's token stops working and its calls are cut at once; daemons then drop its kept grants. */
   async revoke(botId: string): Promise<void> {
-    await this.kept
-      .revoke(botId)
-      .finally(() => this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED))
+    const dropped = this.kept.revoke(botId)
+    this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
+    await dropped
   }
 
   /** Why the tool's server last refused, for the Tools row; null when it hasn't. */

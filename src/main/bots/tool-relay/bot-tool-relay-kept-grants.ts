@@ -89,6 +89,9 @@ export class KeptRelayGrants {
     const origin = await appOrigin()
     const token = this.grants.grant(owner, folders)
     const front = keepFor === undefined ? null : await this.fronts.current(keepFor)
+    if (this.fronts.watchedCount > 1) {
+      void this.retireGone()
+    }
     const granted = this.grants.of(token)
     if (!front || !granted || keepFor === undefined) {
       return { origin, token }
@@ -169,28 +172,26 @@ export class KeptRelayGrants {
   }
 
   /**
-   * The owner's token stops working: every daemon start drops the owner's grants and callers first
-   * (so no restarted app takes them back), then this run forgets them.
+   * The owner's token stops working here at once, then every daemon start drops the owner's grants
+   * and callers. A start that doesn't answer can't bring them back: this run's adoption skips a
+   * revoked owner, and a restarted app's skips a bot that no longer exists.
    */
   async revoke(owner: string): Promise<void> {
     this.revoked.set(owner, true)
-    try {
-      const clients =
-        (await providerRelayRoute()
-          ?.all()
-          .catch(() => [])) ?? []
-      await Promise.all(
-        clients
-          .filter((client) => client.getDaemonIdentity()?.toolRelayFront)
-          .map((client) => revokeOn(client, owner))
-      )
-    } finally {
-      this.grants.revoke(owner)
-      forgetKeptSharedToolCallers(owner)
-      for (const adopted of this.adopted.values()) {
-        retireOwner(adopted, owner)
-      }
+    this.grants.revoke(owner)
+    forgetKeptSharedToolCallers(owner)
+    for (const adopted of this.adopted.values()) {
+      retireOwner(adopted, owner)
     }
+    const clients =
+      (await providerRelayRoute()
+        ?.all()
+        .catch(() => [])) ?? []
+    await Promise.all(
+      clients
+        .filter((client) => client.getDaemonIdentity()?.toolRelayFront)
+        .map((client) => revokeOn(client, owner))
+    )
   }
 
   /**
@@ -246,6 +247,17 @@ export class KeptRelayGrants {
     }
   }
 
+  /** A daemon client the route no longer lists went with its agents: what it handed back goes. */
+  private async retireGone(): Promise<void> {
+    const all = await providerRelayRoute()
+      ?.all()
+      .catch(() => null)
+    for (const client of all ? this.fronts.retireAllBut(new Set(all)) : []) {
+      this.adopt(client, [])
+      this.adopted.delete(client)
+    }
+  }
+
   /** A relay that daemon start kept ended: only its agent's tokens and caller go. */
   keptEnded(client: DaemonClient, relayId: string): void {
     const adopted = this.adopted.get(client)
@@ -293,7 +305,7 @@ export class KeptRelayGrants {
     }
     const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(req.headers.host ?? '')
     const port = match ? Number(match[1]) : null
-    return port !== null && (port === ownPort || this.fronts.serves(port))
+    return port !== null && (port === ownPort || this.fronts.servedAt(port) !== null)
   }
 
   close(): void {

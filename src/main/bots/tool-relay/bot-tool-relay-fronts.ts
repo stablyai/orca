@@ -127,24 +127,26 @@ export class ToolRelayFronts {
     }
   }
 
-  /** The serve of the daemon start whose front is `port`: its kept agents' tokens are known once it settles. */
+  /**
+   * The serve of the daemon start whose front is `port` (its kept agents' tokens are known once it
+   * settles); null for a port that is none of the fronts this app serves.
+   */
   servedAt(port: number): Promise<void> | null {
-    for (const watched of this.watched.values()) {
-      if (watched.port === port) {
-        return watched.served
-      }
-    }
-    return null
+    return [...this.watched.values()].find((watched) => watched.port === port)?.served ?? null
   }
 
-  /** A Host header the relay may answer: one of the fronts it serves. */
-  serves(port: number): boolean {
-    for (const watched of this.watched.values()) {
-      if (watched.port === port) {
-        return true
-      }
+  /** Stops watching daemon clients the route no longer lists (a replaced terminal service). */
+  retireAllBut(live: ReadonlySet<DaemonClient>): DaemonClient[] {
+    const gone = [...this.watched.keys()].filter((client) => !live.has(client))
+    for (const client of gone) {
+      this.watched.get(client)?.stop()
+      this.watched.delete(client)
     }
-    return false
+    return gone
+  }
+
+  get watchedCount(): number {
+    return this.watched.size
   }
 
   close(): void {
