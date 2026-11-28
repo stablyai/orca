@@ -30,6 +30,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         sendBinary,
         registerBinaryStreamHandler,
         signal,
+        closeConnection,
         clientId,
         clientCapabilities
       },
@@ -51,6 +52,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         sendBinary,
         registerBinaryStreamHandler,
         signal,
+        closeConnection,
         emit,
         closed: false,
         cursor: 0,

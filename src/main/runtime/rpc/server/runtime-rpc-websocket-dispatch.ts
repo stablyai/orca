@@ -5,6 +5,7 @@ import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchan
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
+import { closeWebSocketWithinFlushBound } from '../transports/websocket/ws-bounded-close'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
@@ -298,6 +299,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
             : undefined,
         signal: abortRegistration?.signal,
         sendBinary,
+        closeConnection: ws
+          ? (code, reason) => closeWebSocketWithinFlushBound(ws, code, reason)
+          : undefined,
         registerBinaryStreamHandler: (streamId, handler) =>
           this.registerBinaryStreamHandler(connectionId, streamId, handler),
         registerBinaryMessageHandler: (handler) =>
