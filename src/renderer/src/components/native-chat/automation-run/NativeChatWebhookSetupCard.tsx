@@ -156,7 +156,9 @@ function WebhookSetupKeyFields({
   const host = webhookHostState(summary, refreshError, botName, target)
   return (
     <>
-      {host.line ? <p className="pt-1 text-xs text-muted-foreground">{host.line}</p> : null}
+      {host.line ? (
+        <p className="pt-1 text-xs text-muted-foreground [overflow-wrap:anywhere]">{host.line}</p>
+      ) : null}
       <WebhookKeyFields
         key={keyScope}
         target={target}

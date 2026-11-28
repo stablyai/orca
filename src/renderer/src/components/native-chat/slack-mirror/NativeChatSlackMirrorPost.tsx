@@ -62,9 +62,9 @@ export function NativeChatSlackMirrorPostLine({
   }
   return (
     <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
-      <span className="flex min-w-0 items-center gap-1 break-words">
+      <span className="flex min-w-0 items-center gap-1">
         <AlertCircle className="size-3 shrink-0" aria-hidden />
-        {say(line.copy)}
+        <span className="min-w-0 [overflow-wrap:anywhere]">{say(line.copy)}</span>
       </span>
       {mirror.link.mirrorBlocked ? null : (
         <Button

@@ -224,7 +224,7 @@ function NativeChatDeliveryLine({
   const t = useTranslate()
   return (
     <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
-      <span className="min-w-0 break-words">{notice.text}</span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{notice.text}</span>
       <NativeChatSetupButton failureKind={notice.failureKind} rowId={rowId} />
       {notice.onSend ? (
         <Button type="button" variant="ghost" size="xs" onClick={notice.onSend}>

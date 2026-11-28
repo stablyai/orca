@@ -78,6 +78,10 @@ function AttachmentButton({
   const [open, setOpen] = useState(false)
   const opener = useContext(NativeChatTextAttachmentOpener)
   const visible = useContext(NativeChatMarkdownImageOwnerContext)?.isVisible ?? true
+  const name = chatTextAttachmentName(
+    path,
+    t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
+  )
   if (open && !visible) {
     setOpen(false)
   }
@@ -87,12 +91,11 @@ function AttachmentButton({
         type="button"
         variant="outline"
         size="sm"
+        className="max-w-full"
+        title={name}
         onClick={() => visible && (opener ? opener(path) : setOpen(true))}
       >
-        {chatTextAttachmentName(
-          path,
-          t('components.native-chat.composer.pastedTextLabel', 'Pasted text')
-        )}
+        <span className="truncate">{name}</span>
       </Button>
       {open && visible ? (
         <NativeChatTextAttachmentPreview

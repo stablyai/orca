@@ -1,7 +1,7 @@
 import type { Element, Root, RootContent } from 'hast'
 import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
-import { visit, SKIP } from 'unist-util-visit'
+import { visit, EXIT, SKIP } from 'unist-util-visit'
 import type { VFile } from 'vfile'
 import type { typesetChatMath } from './chat-markdown-math-typeset'
 
@@ -37,6 +37,26 @@ export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof 
     }
   })
   return () => rehypeChatMath(typeset, parsed)
+}
+
+// KaTeX breaks inline lines only between top-level `.katex-base` parts; a single part needs its own scroller.
+function isUnbreakableInlineMath(content: RootContent[]): boolean {
+  let parts = -1
+  const root: Root = { type: 'root', children: content }
+  visit(root, 'element', (node) => {
+    const names = node.properties.className
+    if (Array.isArray(names) && names.includes('katex-html')) {
+      parts = node.children.filter(
+        (child) =>
+          child.type === 'element' &&
+          Array.isArray(child.properties.className) &&
+          child.properties.className.includes('katex-base')
+      ).length
+      return EXIT
+    }
+    return undefined
+  })
+  return parts === 1
 }
 
 /** Sanitized input enters KaTeX; invalid formulas keep readable source without error UI. */
@@ -102,7 +122,19 @@ function rehypeChatMath(
                     'Scroll display equation'
                   )
                 }
-              : {})
+              : isUnbreakableInlineMath(content)
+                ? {
+                    className: [
+                      'inline-flex',
+                      'min-w-0',
+                      'max-w-full',
+                      'overflow-x-auto',
+                      'overflow-y-clip',
+                      'px-[0.1em]',
+                      'py-px'
+                    ]
+                  }
+                : {})
         },
         children:
           display && !invalid
