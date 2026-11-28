@@ -3,10 +3,14 @@ import type { NotificationDispatchRequest } from '../../shared/notifications/not
 import { getDefaultNotificationSettings } from '../../shared/notifications/notification-settings-defaults'
 import { createNotificationDeliveryService } from './notification-delivery-service'
 
-it('admits each unread agent notification once with native banners switched off', () => {
+it('admits each unread agent notification once across native banner toggles', () => {
+  let nativeEnabled = false
   const announced: string[] = []
   const service = createNotificationDeliveryService({
-    readNotificationSettings: () => ({ ...getDefaultNotificationSettings(), enabled: false }),
+    readNotificationSettings: () => ({
+      ...getDefaultNotificationSettings(),
+      enabled: nativeEnabled
+    }),
     findActiveWindow: () => null,
     isWindowVisible: () => false,
     setTrayAttention: () => {},
@@ -34,6 +38,12 @@ it('admits each unread agent notification once with native banners switched off'
     reason: 'disabled'
   })
   service.dispatch({ ...completion, attentionKey: 'first-turn' })
+  nativeEnabled = true
+  expect(service.dispatch({ ...completion, attentionKey: 'first-turn' })).toEqual({
+    delivered: true
+  })
+  service.dispatch({ ...completion, attentionKey: 'second-turn' })
+  nativeEnabled = false
   service.dispatch({ ...completion, attentionKey: 'second-turn' })
   service.dispatch({ source: 'terminal-bell', worktreeId: 'workspace' })
 

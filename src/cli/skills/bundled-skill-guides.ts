@@ -3912,7 +3912,7 @@ const ORCA_PLUGIN_AUTHORING_MANIFEST_REFERENCE_MARKDOWN = [
   "",
   "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events. Editor events need no capability.",
   "",
-  "- `on` (\"workspace.created\" | \"workspace.removed\" | \"agent.status.changed\" | \"agent.attention\" | \"workspace.changed\" | \"editor.typography.changed\", required, since 1.4.160): Event delivered to the plugin worker.",
+  "- `on` (\"workspace.created\" | \"workspace.removed\" | \"agent.status.changed\" | \"agent.attention\" | \"workspace.changed\" | \"editor.typography.changed\", required, since 1.4.160): Event delivered to the plugin worker. Subscribing to `agent.attention` requires an `engines.orca` floor of `>=1.4.281`.",
   "",
   "## HookContribution",
   "",

@@ -203,18 +203,18 @@ export function createNotificationDeliveryService(
         return desktopSuppression ?? { delivered: false, reason: 'suppressed-focus' }
       }
 
-      if (
-        request.source !== 'test' &&
-        !reserveNotificationCooldown(
-          desktopSuppression ? recentPluginAttention : recentDesktopNotifications,
-          dedupeKeyFor(request),
-          deps.now()
-        )
-      ) {
-        return desktopSuppression ?? { delivered: false, reason: 'cooldown' }
-      }
-      if (emitAttention) {
-        deps.emitAgentAttention?.(request)
+      if (request.source !== 'test') {
+        const dedupeKey = dedupeKeyFor(request)
+        const now = deps.now()
+        if (
+          !desktopSuppression &&
+          !reserveNotificationCooldown(recentDesktopNotifications, dedupeKey, now)
+        ) {
+          return { delivered: false, reason: 'cooldown' }
+        }
+        if (emitAttention && reserveNotificationCooldown(recentPluginAttention, dedupeKey, now)) {
+          deps.emitAgentAttention?.(request)
+        }
       }
       if (desktopSuppression) {
         return desktopSuppression

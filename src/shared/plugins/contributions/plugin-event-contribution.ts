@@ -65,7 +65,10 @@ export function pluginEventCapabilityGranted(
 export const pluginEventContributionSchema = z
   .object({
     on: z.enum(PLUGIN_EVENT_NAMES).meta({
-      ...pluginFieldDoc('Event delivered to the plugin worker.', PLUGIN_SCHEMA_SINCE_V1),
+      ...pluginFieldDoc(
+        `Event delivered to the plugin worker. Subscribing to \`agent.attention\` requires an \`engines.orca\` floor of \`>=${PLUGIN_AGENT_ATTENTION_SINCE}\`.`,
+        PLUGIN_SCHEMA_SINCE_V1
+      ),
       [PLUGIN_ENUM_SINCE_KEY]: PLUGIN_EVENT_SINCE
     })
   })

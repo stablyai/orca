@@ -777,7 +777,7 @@
             "workspace.changed",
             "editor.typography.changed"
           ],
-          "description": "Event delivered to the plugin worker.",
+          "description": "Event delivered to the plugin worker. Subscribing to `agent.attention` requires an `engines.orca` floor of `>=1.4.281`.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace.created": "1.4.245",
