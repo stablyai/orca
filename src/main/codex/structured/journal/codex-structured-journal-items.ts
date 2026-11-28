@@ -210,8 +210,8 @@ export class CodexJournalItems {
   }
 
   /** A kept agent's running command: later output streams onto its row with its saved fields. */
-  seedRunning(threadId: string, turnId: string, item: CodexThreadItem): AgentJournalItemIdentity {
-    return this.track(threadId, turnId, item, this.identityFor(threadId, turnId, item))
+  seedRunning(thread: string, turn: string, item: CodexThreadItem, id?: AgentJournalItemIdentity) {
+    return this.track(thread, turn, item, id ?? this.identityFor(thread, turn, item))
   }
 
   private track(

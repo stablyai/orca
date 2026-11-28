@@ -107,8 +107,8 @@ function createCodexTranslation(
   return {
     seedTurnOrdinals: (threadId, turnId, ids) =>
       ids.forEach((id) => items.ordinals.ordinalFor(threadId, turnId, id)),
-    seedRunningItems: (threadId, turnId, running) =>
-      running.map((item) => items.seedRunning(threadId, turnId, item)),
+    seedRunningItems: (threadId, turnId, running, identities) =>
+      running.map((item, i) => items.seedRunning(threadId, turnId, item, identities?.[i])),
     seedRunningOutput: (threadId, itemId, output) =>
       items.streams.seedText(threadId, itemId, output),
     seedKeptTurns: (threadId, turns) => turnBoundaries.seedKept(threadId, turns),

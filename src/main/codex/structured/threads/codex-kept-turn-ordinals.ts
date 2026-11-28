@@ -73,12 +73,13 @@ export async function seedCarriedKeptCodexCommands(
       running.map(({ itemId }) => `${threadId}\u0000${itemId}`)
     )
   )
-  for (const [threadId, itemId] of journal ? open : []) {
+  // A saved row's own key ([threadId, itemId, key]) when it came from a history import.
+  for (const [threadId, itemId, savedKey] of journal ? open : []) {
     const turnId = turns.find((turn) => turn.threadId === threadId)?.turnId
     if (!threadId || !itemId || !turnId || seeded.has(`${threadId}\u0000${itemId}`)) {
       continue
     }
-    const key = agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
+    const key = savedKey ?? agentJournalItemKey(codexNonMessageIdentity(threadId, turnId, itemId))
     const body = await journal!.reads.itemBody(key).catch(() => null)
     if (body?.kind !== 'tool-call') {
       continue
@@ -91,7 +92,12 @@ export async function seedCarriedKeptCodexCommands(
       command: input.command ?? null,
       cwd: input.cwd ?? null
     }
-    translator.seedRunningItems(threadId, turnId, [item])
+    translator.seedRunningItems(
+      threadId,
+      turnId,
+      [item],
+      [savedKey ? (parseAgentJournalItemKey(savedKey) ?? undefined) : undefined]
+    )
     if (body.output) {
       translator.seedRunningOutput(
         threadId,
@@ -261,7 +267,7 @@ export async function savedRunningCodexRows(
       helpers.add(address[0])
     }
     if (body.kind === 'tool-call' && Object.hasOwn(jsonObject(body.input) ?? {}, 'command')) {
-      commands.push(address)
+      commands.push([...address, itemId])
     }
   })
   return { helpers: [...helpers], commands }
