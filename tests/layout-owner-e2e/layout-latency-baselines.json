@@ -1,0 +1,4 @@
+{
+  "note": "Switch-off input-to-drawn p95 per platform, from layout-latency-budget.spec.ts on a switch-off build (20 samples after 3 warm-ups). Refresh with a switch-off run of that spec.",
+  "switchOffP95Ms": {}
+}
