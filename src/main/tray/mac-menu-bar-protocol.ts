@@ -1,3 +1,4 @@
+import type { spawnProcess } from '@orca/process-host'
 export type MenuBarAction = 'open' | 'settings' | 'updates' | 'quit-completely' | 'quit'
 export type MenuBarItem = {
   id?: MenuBarAction
@@ -21,7 +22,7 @@ export const FRAME_LIMIT = 256 * 1024
 const ACTIONS = new Set(['open', 'settings', 'updates', 'quit-completely', 'quit'])
 type Message =
   | { type: 'ready' }
-  | { type: 'applied' | 'deferred' | 'pong'; id: number }
+  | { type: 'applied' | 'applying' | 'deferred' | 'pong'; id: number }
   | { type: 'action'; sequence: number; action: MenuBarAction }
   | { type: 'qa'; [key: string]: unknown }
 
@@ -45,7 +46,10 @@ export class MenuBarOutput {
         !(
           message.type === 'ready' ||
           message.type === 'qa' ||
-          ((message.type === 'applied' || message.type === 'deferred' || message.type === 'pong') &&
+          ((message.type === 'applied' ||
+            message.type === 'applying' ||
+            message.type === 'deferred' ||
+            message.type === 'pong') &&
             Number.isSafeInteger(message.id) &&
             message.id > 0) ||
           (message.type === 'action' &&
@@ -100,4 +104,16 @@ export class MenuBarQARequest {
     this.reply.reject(new Error('Menu bar helper retired'))
     this.reply = null
   }
+}
+
+export type MenuBarProcessOptions = {
+  onAction: (action: MenuBarAction) => void
+  onCreated?: () => void
+  /** True once a helper shows the icon, false when that helper exits. */
+  onOwnerChange?: (owned: boolean) => void
+  /** 'fallback': the helper can't start, use the in-process icon; 'off': started helpers keep failing. */
+  onUnavailable?: (reason: 'fallback' | 'off') => void
+  spawn?: typeof spawnProcess
+  qa?: boolean
+  executable?: string
 }

@@ -219,6 +219,10 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
 }
 
 function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
+  if (process.platform !== 'win32') {
+    // Tagged before creation, which can itself hit the AppKit deadlock.
+    reportMenuBarHost(inProcessMenuBarHost())
+  }
   const nativeTray = new Tray(image)
   if (process.platform === 'win32') {
     // Windows left-click restores the app; macOS uses its attached menu.
@@ -227,7 +231,6 @@ function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
       safeMenuAction(() => opts.onOpen())
     )
   } else {
-    reportMenuBarHost(inProcessMenuBarHost())
     markMacIconShown(true)
   }
   return nativeTray

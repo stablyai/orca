@@ -155,6 +155,20 @@ it('keeps a helper whose open menu defers an update', () => {
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
+it('replaces a helper that hangs applying a deferred update after the menu closes, with no focus event', () => {
+  const { process } = owner()
+  const helper = helpers[0]
+  helper.send({ type: 'ready' })
+  helper.send({ type: 'applied', id: helper.requests[0].id })
+  process.update({ ...snapshot, tooltip: 'while the menu is open' })
+  const id = helper.requests.at(-1)!.id
+  helper.send({ type: 'deferred', id })
+  vi.advanceTimersByTime(60_000)
+  helper.send({ type: 'applying', id })
+  vi.advanceTimersByTime(16_000)
+  expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
+})
+
 it('replaces a hung helper on the next probe and keeps no timer while idle', () => {
   const { process } = owner()
   const helper = helpers[0]

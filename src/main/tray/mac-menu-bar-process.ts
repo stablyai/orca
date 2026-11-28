@@ -1,12 +1,11 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
-import type { spawnProcess } from '@orca/process-host'
 
 import { killMenuBarChild, spawnMenuBarChild } from './mac-menu-bar-child'
 import {
   FRAME_LIMIT,
   MenuBarOutput,
   MenuBarQARequest,
-  type MenuBarAction,
+  type MenuBarProcessOptions,
   type MenuBarQACommand,
   type MenuBarSnapshot
 } from './mac-menu-bar-protocol'
@@ -30,18 +29,6 @@ type Generation = {
   started: number
 }
 
-type Options = {
-  onAction: (action: MenuBarAction) => void
-  onCreated?: () => void
-  /** True once a helper shows the icon, false when that helper exits. */
-  onOwnerChange?: (owned: boolean) => void
-  /** 'fallback': the helper can't start, use the in-process icon; 'off': started helpers keep failing. */
-  onUnavailable?: (reason: 'fallback' | 'off') => void
-  spawn?: typeof spawnProcess
-  qa?: boolean
-  executable?: string
-}
-
 /** One disposable native owner; no operation waits for its UI thread. */
 export class MacMenuBarProcess {
   private current: Generation | null = null
@@ -56,7 +43,7 @@ export class MacMenuBarProcess {
   private stopped = false
   private readonly qa = new MenuBarQARequest()
 
-  constructor(private readonly options: Options) {}
+  constructor(private readonly options: MenuBarProcessOptions) {}
 
   update(snapshot: MenuBarSnapshot): void {
     if (this.stopped) {
@@ -199,6 +186,12 @@ export class MacMenuBarProcess {
           if (generation.probe === null) {
             this.deadline.disarm()
           }
+        } else if (message.type === 'applying' && message.id === generation.sentRevision) {
+          // The menu closed and the deferred update is about to touch the status item: watch it again.
+          if (generation.deferred && !this.deadline.armed) {
+            this.arm(generation)
+          }
+          generation.deferred = false
         } else if (message.type === 'applied' && message.id === generation.sentRevision) {
           const first = generation.appliedRevision === 0
           generation.appliedRevision = message.id

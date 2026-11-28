@@ -127,9 +127,10 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   @objc private func selected(_ item: NSMenuItem) {
     guard item.isEnabled, let action = item.representedObject as? String, actions.contains(action) else { return }
-    // The click went to the helper, so it hands activation to Orca (macOS 14 cooperative activation).
+    // The click went to the helper, so it hands activation to Orca (macOS 14 cooperative activation),
+    // including Quit, whose unsaved-work or running-terminal prompt must not open behind the front app.
     // QA-hook invocations carry no user click and must not take focus.
-    if !invokingForQA, action != "quit",
+    if !invokingForQA,
       let parent = NSRunningApplication(processIdentifier: getppid()) {
       if #available(macOS 14.0, *) {
         NSApp.yieldActivation(to: parent)
@@ -145,6 +146,8 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
   func menuWillOpen(_ menu: NSMenu) { tracking = true }
   func menuDidClose(_ menu: NSMenu) {
     tracking = false
+    // Orca stops watching a deferred update; this re-arms its deadline before the status-item write.
+    if let id = pending?.id, id > 0 { emit(["type": "applying", "id": id]) }
     RunLoop.main.perform(inModes: [.default]) { self.applyPending() }
   }
 
