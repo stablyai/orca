@@ -70,6 +70,9 @@ export class AcpRelayTurns {
       if (this.running) {
         this.running = false
         this.promptId = null
+        if (this.current) {
+          this.current.promptId = null
+        }
         this.current?.endTurn(true)
         this.onAgentTurnOver?.()
       }
