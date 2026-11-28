@@ -18,7 +18,10 @@ import {
   waitForWorktreeTabRegistration
 } from '../../../ipc/browser/browser-tab-registration-wait'
 import { whenBrowserMainWindowReady } from '../../../browser/guest-lifecycle/browser-main-window-readiness'
-import type { BrowserSnapshotResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type {
+  BrowserSnapshotResult,
+  BrowserTabCdpResult
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
   BrowserAnswerAdmission,
@@ -321,6 +324,14 @@ export class RuntimeBrowserCommandTargets {
       target.worktreeId,
       target.browserPageId,
       params
+    )
+  }
+
+  async browserTabCdp(params: BrowserCommandTargetParams): Promise<BrowserTabCdpResult> {
+    const target = await this.resolveBrowserCommandTarget(params)
+    return this.requireAgentBrowserBridge().directCdpEndpoint(
+      target.worktreeId,
+      target.browserPageId
     )
   }
 }

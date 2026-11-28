@@ -10,6 +10,7 @@ import {
   type AgentCommandLease,
   type AgentPointerInput
 } from '../page-activity/browser-agent-activity'
+import { DirectAgentPointerEcho } from '../page-activity/direct-agent-pointer-echo'
 import { BrowserPageEvents, type BrowserPageEvent } from '../page-activity/browser-page-events'
 import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-page-input-credit'
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
@@ -281,6 +282,18 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
   holdGuestActive(guestWebContentsId: number): () => void {
     const guest = webContents.fromId(guestWebContentsId)
     return guest && !guest.isDestroyed() ? rendererPublicationThrottle.acquire(guest) : () => {}
+  }
+
+  private readonly directPointerEcho = new DirectAgentPointerEcho({
+    pageIdForGuest: (guestWebContentsId) =>
+      this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),
+    rendererForPage: (browserPageId) => this.resolveRendererForBrowserTab(browserPageId),
+    markActive: (browserPageId) => this.agentActivity.markDirectInput(browserPageId)
+  })
+
+  /** An `orca tab cdp` client's pointer: drawn after its input, never awaited. */
+  echoDirectAgentPointer(guest: Electron.WebContents, input: AgentPointerInput): void {
+    this.directPointerEcho.echo(guest, input)
   }
 
   // Do not await the renderer: minimized or throttled windows must not stall frame capture.

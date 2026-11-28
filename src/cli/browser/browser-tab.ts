@@ -1,6 +1,7 @@
 import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import type {
   BrowserTabAnnotationsResult,
+  BrowserTabCdpResult,
   BrowserTabCurrentResult,
   BrowserTabListResult,
   BrowserTabShowResult,
@@ -59,6 +60,18 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserTabAnnotationsResult>('browser.tabAnnotations', target)
     printResult(result, json, formatTabAnnotations)
+  },
+  'tab cdp': async ({ flags, client, cwd, json }) => {
+    // The endpoint is a loopback URL on this machine; a paired or remote Orca's would not resolve here.
+    if (client.isRemote) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'orca tab cdp works only against the local Orca app, not over --environment or pairing'
+      )
+    }
+    const target = await getBrowserCommandTarget(flags, cwd, client)
+    const result = await client.call<BrowserTabCdpResult>('browser.tabCdp', target)
+    printResult(result, json, (v) => v.url)
   },
   'tab current': async ({ flags, client, cwd, json }) => {
     const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)

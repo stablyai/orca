@@ -19,6 +19,7 @@ import { admitBrowserPageCommands } from './browser-command-page-admission'
 
 export class RuntimeBrowserCommands {
   readonly browserSnapshot: RuntimeBrowserCommandTargets['browserSnapshot']
+  readonly browserTabCdp: RuntimeBrowserCommandTargets['browserTabCdp']
   readonly browserClick: RuntimeBrowserNavigation['browserClick']
   readonly browserGoto: RuntimeBrowserNavigation['browserGoto']
   readonly browserBack: RuntimeBrowserNavigation['browserBack']
@@ -158,6 +159,7 @@ export class RuntimeBrowserCommands {
     this.browserProfileClearCookies = profiles.browserProfileClearCookies.bind(profiles)
 
     this.browserSnapshot = targets.browserSnapshot.bind(targets)
+    this.browserTabCdp = targets.browserTabCdp.bind(targets)
     this.browserClick = navigation.browserClick.bind(navigation)
     this.browserGoto = navigation.browserGoto.bind(navigation)
     this.browserBack = navigation.browserBack.bind(navigation)

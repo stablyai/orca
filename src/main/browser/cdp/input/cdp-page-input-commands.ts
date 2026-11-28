@@ -21,8 +21,12 @@ import type { AgentPointerInput } from '../../guest-lifecycle/page-activity/brow
 import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import { waitForGuestFirstPaint } from '../debugger/guest-first-paint'
 
-/** Shows the agent's pointer at an input's point and resolves once it has landed. */
-export type ShowAgentPointer = (input: AgentPointerInput) => Promise<void>
+export type AgentPointer = {
+  /** Shows the agent's pointer at an input's point and resolves once it has landed. */
+  show: (input: AgentPointerInput) => Promise<void>
+  /** The agent's running command passed `--no-effects`, so it waits on the page for nothing. */
+  skipsInputWaits: () => boolean
+}
 
 /** Protect user focus while routing CDP input. */
 export class CdpPageInputCommands {
@@ -34,7 +38,7 @@ export class CdpPageInputCommands {
     private readonly debuggerChannel: CdpDebuggerChannel,
     private readonly domFocusReplay: CdpDomFocusReplay,
     private readonly guardFocus: AgentInputFocusGuard,
-    private readonly showAgentPointer: ShowAgentPointer,
+    private readonly agentPointer: AgentPointer | undefined,
     private readonly holdPaint: CapturePaintHold
   ) {}
 
@@ -53,7 +57,7 @@ export class CdpPageInputCommands {
       if (!Array.isArray(quad) || quad.length !== 8 || !quad.every(Number.isFinite)) {
         return
       }
-      await this.showAgentPointer({
+      await this.agentPointer?.show({
         type: 'mouseMoved',
         x: (quad[0] + quad[2] + quad[4] + quad[6]) / 4,
         y: (quad[1] + quad[3] + quad[5] + quad[7]) / 4
@@ -110,10 +114,16 @@ export class CdpPageInputCommands {
   ): Promise<unknown> {
     // Frame sessions use frame-local points, so only root-session pointers are shown.
     if (method === 'Input.dispatchMouseEvent' && !sessionId) {
-      await this.showAgentPointer(params)
+      await this.agentPointer?.show(params)
     }
     if (method === 'Input.dispatchKeyEvent' && !sessionId) {
-      return await dispatchPageKeyEvent(this.webContents, params, this.sendRoot, this.guardFocus)
+      return await dispatchPageKeyEvent(
+        this.webContents,
+        params,
+        this.sendRoot,
+        this.guardFocus,
+        this.agentPointer?.skipsInputWaits() === true
+      )
     }
     if (!isEmbeddedGuest(this.webContents)) {
       // Popup and serve pages never borrow native focus, so emulate it as the bridge does.
@@ -130,6 +140,17 @@ export class CdpPageInputCommands {
       )
     if (!sessionId && isFocusRoutedCdpInput(method)) {
       throw pageInputRouteUnavailableError()
+    }
+    if (
+      method === 'Input.dispatchMouseEvent' &&
+      params.type === 'mouseMoved' &&
+      this.agentPointer?.skipsInputWaits() === true &&
+      !this.webContents.isOffscreen()
+    ) {
+      // Chromium acks a move on the page's next frame, about once a second on a throttled page. The
+      // move is already queued ahead of later input, so a --no-effects command does not wait for it.
+      void send().catch(() => undefined)
+      return {}
     }
     if (!isFocusTakingCdpInput(method, params)) {
       return await send()

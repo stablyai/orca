@@ -19,6 +19,7 @@ import {
   type RemoteCliBrowserController
 } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AGENT_PAGE_ACTIVITY_IDLE_MS } from '../../agent-browser/session-routing/person-pick-hold'
+import { directClientPageActivity } from './direct-agent-pointer-echo'
 
 const CURSOR_ARRIVAL_TIMEOUT_MS = 1500
 
@@ -292,6 +293,20 @@ export class BrowserAgentActivity {
     this.pendingArrivals.delete(sequence)
     clearTimeout(pending.timer)
     pending.resolve()
+  }
+
+  /** A direct client has no commands, so its last input starts the idle window that unmarks the page. */
+  markDirectInput(browserPageId: string): void {
+    let page = this.pages.get(browserPageId)
+    if (!page) {
+      page = directClientPageActivity()
+      this.pages.set(browserPageId, page)
+      this.publish(browserPageId, true, page)
+      this.deps.onPageActiveChanged?.(browserPageId)
+    }
+    if (page.commands === 0) {
+      this.restartIdleWindow(browserPageId, page)
+    }
   }
 
   private listenForArrivals(): void {

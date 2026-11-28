@@ -97,9 +97,10 @@ export async function dispatchPageKeyEvent(
   webContents: WebContents,
   params: Record<string, unknown>,
   send: GuestSessionCdpSender,
-  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
+  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD,
+  skipsInputWaits = false
 ): Promise<unknown> {
-  return await dispatchPageKeyEvents(webContents, [params], send, guardFocus)
+  return await dispatchPageKeyEvents(webContents, [params], send, guardFocus, skipsInputWaits)
 }
 
 const isTabDown = (params: Record<string, unknown>): boolean =>
@@ -110,7 +111,9 @@ export async function dispatchPageKeyEvents(
   webContents: WebContents,
   events: readonly Record<string, unknown>[],
   send: GuestSessionCdpSender,
-  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD
+  guardFocus: AgentInputFocusGuard = NO_FOCUS_GUARD,
+  // The caller reads nothing back right away, so the run need not wait for the page to handle it.
+  skipsInputWaits = false
 ): Promise<unknown> {
   let result: unknown = {}
   if (!isEmbeddedGuest(webContents)) {
@@ -180,7 +183,8 @@ export async function dispatchPageKeyEvents(
             }
           )
         }
-        if (unsettled) {
+        // Edit commands above still wait for the keys before them; only the trailing wait is skipped.
+        if (unsettled && !skipsInputWaits) {
           await waitForPageToHandleInput(send)
         }
       })

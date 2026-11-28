@@ -45,6 +45,7 @@ import { ORCHESTRATION_METHODS } from './orchestration/orchestration'
 import { PAIRED_SERVER_ASKS_METHODS } from './paired-server-asks/paired-server-asks-methods'
 import { REFERENCE_METHODS } from './reference/reference'
 import { BROWSER_CORE_METHODS } from './browser/browser-core'
+import { BROWSER_TAB_CDP_METHODS } from './browser/browser-tab-cdp-rpc-method'
 import { BROWSER_IDENTITY_METHODS } from './browser/browser-identity-rpc'
 import { BROWSER_EXTRA_METHODS } from './browser/browser-extras'
 import { BROWSER_SCREENCAST_METHODS } from './browser/browser-screencast'
@@ -148,6 +149,7 @@ const SERVICE_RPC_METHODS = [
   ...MOBILE_WEB_BUNDLE_METHODS,
   ...ORCHESTRATION_METHODS,
   ...BROWSER_CORE_METHODS,
+  ...BROWSER_TAB_CDP_METHODS,
   ...BROWSER_IDENTITY_METHODS,
   ...BROWSER_SCREENCAST_METHODS,
   ...BROWSER_GRAB_METHODS,
