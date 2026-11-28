@@ -59,6 +59,9 @@ export async function sweepAgentSessionAttachments(
     facts.onUploadRemoved?.(uploadDir)
   }
   for (const uploadId of await facts.listBeingSwept()) {
+    if (stopped()) {
+      return { removed }
+    }
     // A claim that landed after the mark, such as one an older Orca's journal carried in, wins.
     if (!(await facts.isUnclaimed(uploadId))) {
       await facts.finishSweep(uploadId)
@@ -79,6 +82,9 @@ export async function sweepAgentSessionAttachments(
     await facts.finishSweep(uploadId)
   }
   for (const uploadId of await listDirectories(store.rootDir)) {
+    if (stopped()) {
+      return { removed }
+    }
     if (store.isUploadInFlight(uploadId)) {
       continue
     }
