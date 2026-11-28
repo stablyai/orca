@@ -124,7 +124,7 @@ export function AntigravityAccountSection({
         title={TUI_AGENT_DISPLAY_NAMES.antigravity}
         icon={<MobileAgentIcon agentId="antigravity" size={14} />}
       />
-      <ListGroup style={styles.group}>
+      <ListGroup>
         {state.accounts.map((account) => {
           const active = state.activeAccountId === account.id
           // agy on a saved login other than the selection can still be picked, which selects it.

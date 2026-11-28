@@ -37,7 +37,7 @@ import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
-import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { NavBarButton, NavBarButtonOnSheetContext } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
@@ -213,7 +213,7 @@ export function MobileAccountsScreen() {
           icon={<Icon size={14} />}
           first={provider === 'claude'}
         />
-        <ListGroup style={styles.group}>
+        <ListGroup>
           {/* A blocked row drops its press instead of dimming, so the picked one keeps full contrast. */}
           <ListRow
             key="default"
@@ -298,26 +298,30 @@ export function MobileAccountsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <NavBar
-        leading={
-          <NavBarButton
-            icon={ChevronLeft}
-            onPress={() => router.back()}
-            accessibilityLabel={t('common.back', 'Back')}
-          />
-        }
-        title={t('accounts.screen.title', 'Accounts')}
-        subtitle={hostName || undefined}
-        refreshing={showRefreshLine}
-        trailing={
-          <NavBarButton
-            icon={refreshing ? RefreshingIcon : RefreshCw}
-            onPress={() => void refresh()}
-            disabled={!client || refreshing || connState !== 'connected'}
-            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
-          />
-        }
-      />
+      {/* The bar takes the grouped page's grey, so its buttons need the fill that reads on it. */}
+      <NavBarButtonOnSheetContext.Provider value>
+        <NavBar
+          style={styles.bar}
+          leading={
+            <NavBarButton
+              icon={ChevronLeft}
+              onPress={() => router.back()}
+              accessibilityLabel={t('common.back', 'Back')}
+            />
+          }
+          title={t('accounts.screen.title', 'Accounts')}
+          subtitle={hostName || undefined}
+          refreshing={showRefreshLine}
+          trailing={
+            <NavBarButton
+              icon={refreshing ? RefreshingIcon : RefreshCw}
+              onPress={() => void refresh()}
+              disabled={!client || refreshing || connState !== 'connected'}
+              accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
+            />
+          }
+        />
+      </NavBarButtonOnSheetContext.Provider>
 
       <ScrollView
         contentContainerStyle={[
