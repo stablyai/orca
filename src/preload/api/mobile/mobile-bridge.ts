@@ -7,7 +7,12 @@ import type { PreloadApi } from '../../api-types'
 
 export const mobileApi = {
   listNetworkInterfaces: (): Promise<{
-    interfaces: { name: string; address: string; hasDefaultRoute?: boolean }[]
+    interfaces: {
+      name: string
+      address: string
+      hasDefaultRoute?: boolean
+      isUsbTether?: boolean
+    }[]
   }> => ipcRenderer.invoke('mobile:listNetworkInterfaces'),
 
   getPairingQR: (args?: {

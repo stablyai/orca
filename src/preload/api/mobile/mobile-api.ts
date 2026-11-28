@@ -6,7 +6,12 @@ import type { RuntimeAccessGrant } from '../../../shared/remote-runtime/host-cat
 
 export type MobileApi = {
   listNetworkInterfaces: () => Promise<{
-    interfaces: { name: string; address: string; hasDefaultRoute?: boolean }[]
+    interfaces: {
+      name: string
+      address: string
+      hasDefaultRoute?: boolean
+      isUsbTether?: boolean
+    }[]
   }>
   getPairingQR: (args?: {
     address?: string

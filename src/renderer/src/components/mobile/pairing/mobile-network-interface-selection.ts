@@ -24,7 +24,8 @@ export function selectRefreshedNetworkAddress(
   if (
     currentInterface &&
     (currentAddressWasExplicitlySelected ||
-      !isVirtualBridgeInterface(currentInterface.name, currentInterface.hasDefaultRoute))
+      (!currentInterface.isUsbTether &&
+        !isVirtualBridgeInterface(currentInterface.name, currentInterface.hasDefaultRoute)))
   ) {
     return currentAddress
   }

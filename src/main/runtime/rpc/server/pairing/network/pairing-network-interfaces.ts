@@ -9,11 +9,16 @@ import { isTailnetIPv4Address } from '../../../../../../shared/network/tailnet-a
 import { isPairingWildcardHostname } from '../../../../../../shared/network/pairing-url'
 import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
+import {
+  getLinuxUsbTetherInterfaceNames,
+  type UsbTetherInterfaceLookup
+} from './linux-usb-tether-interfaces'
 
 export type NetworkInterface = {
   name: string
   address: string
   hasDefaultRoute?: boolean
+  isUsbTether?: boolean
 }
 
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
@@ -39,7 +44,8 @@ function isProxyFakeIpIPv4Address(address: string): boolean {
 /** `listenerHost` is the WS listener's network bind; only addresses it answers on are offered. */
 export async function getPairingNetworkInterfaces(
   listenerHost: string,
-  getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
+  getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames,
+  getUsbTetherInterfaceNames: UsbTetherInterfaceLookup = getLinuxUsbTetherInterfaceNames
 ): Promise<NetworkInterface[]> {
   const pinned = pinnedListenerAddress(listenerHost)
   if (pinned === null) {
@@ -49,6 +55,7 @@ export async function getPairingNetworkInterfaces(
   const listenerCanonical = canonicalIpLiteral(listenerHost)
   const result: NetworkInterface[] = []
   const interfaces = networkInterfaces()
+  const usbTetherInterfaceNames = await getUsbTetherInterfaceNames(Object.keys(interfaces))
   const hasHyperVInterface = Object.keys(interfaces).some((name) => /^vEthernet /i.test(name))
   // Unknown default route cannot attest vEthernet reachability.
   const defaultRouteInterfaceNames = hasHyperVInterface
@@ -79,18 +86,19 @@ export async function getPairingNetworkInterfaces(
         address: addr.address,
         ...(normalizedDefaultRouteInterfaceNames?.has(name.toLowerCase())
           ? { hasDefaultRoute: true }
-          : {})
+          : {}),
+        ...(usbTetherInterfaceNames.has(name) ? { isUsbTether: true } : {})
       })
     }
   }
   return result.sort((a, b) => rankInterface(a) - rankInterface(b))
 }
 
-function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): number {
+function rankInterface({ name, address, hasDefaultRoute, isUsbTether }: NetworkInterface): number {
   if (isTailnetIPv4Address(address)) {
     return 0
   }
-  const bridgePenalty = isVirtualBridgeInterface(name, hasDefaultRoute) ? 2 : 0
+  const bridgePenalty = isVirtualBridgeInterface(name, hasDefaultRoute) || isUsbTether ? 2 : 0
   // The default-route adapter is the one the LAN reaches; it wins ties with idle or VPN adapters.
   const defaultRouteBonus = hasDefaultRoute ? 0.5 : 0
   return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
@@ -114,7 +122,8 @@ export function pinnedListenerAddress(listenerHost: string): string | null | und
 
 export async function getDefaultPairingAddress(
   listenerHost: string,
-  getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
+  getDefaultRouteInterfaceNames: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames,
+  getUsbTetherInterfaceNames: UsbTetherInterfaceLookup = getLinuxUsbTetherInterfaceNames
 ): Promise<string | null> {
   const pinned = pinnedListenerAddress(listenerHost)
   if (pinned !== undefined) {
@@ -122,7 +131,11 @@ export async function getDefaultPairingAddress(
   }
   return (
     selectAutoAdvertisedPairingAddress(
-      await getPairingNetworkInterfaces(listenerHost, getDefaultRouteInterfaceNames)
+      await getPairingNetworkInterfaces(
+        listenerHost,
+        getDefaultRouteInterfaceNames,
+        getUsbTetherInterfaceNames
+      )
     ) ?? null
   )
 }
