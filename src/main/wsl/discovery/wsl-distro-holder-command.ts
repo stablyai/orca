@@ -40,7 +40,7 @@ export function buildWslDistroHolderScript(
     'rm -f "$f" "$b" "$b".*',
     // Fails toward holding: any live process of this user outside the holder itself counts, so a
     // distro whose default user is root never releases; so does a /proc it cannot read, or a
-    // status file it cannot parse. One exception: with /proc mounted hidepid, another user's
+    // status file it cannot parse. Exceptions: the idle login shell below, and with /proc hidepid another user's
     // container shim is invisible and does not hold. Leaves the first names it found in $why.
     'user_busy() {',
     'why=; c=0',
@@ -57,7 +57,12 @@ export function buildWslDistroHolderScript(
     'case $n in containerd-shim*) ;; *)',
     '[ "$u" = "$me" ] && [ "$pp" != "$$" ] || continue',
     'case $s in Z*) continue ;; esac',
-    `case $n in ${ignored}) continue ;; esac ;;`,
+    `case $n in ${ignored}) continue ;; esac`,
+    // WSL's systemd mode parks an idle shell under a root `/bin/login -f` for each account it runs
+    // (the holder's own included): session plumbing, not work. Its children still count; a
+    // wsl.exe session's own shell runs under WSL's init, never under login.
+    `pn= pu=; { while read -r k v r; do case $k in Name:) pn=$v ;; Uid:) pu=$v; break ;; esac; done < "${procRoot}/$pp/status"; } 2>/dev/null`,
+    '[ "$pn" = login ] && [ "$pu" = 0 ] && continue ;;',
     'esac',
     `why="$why $n"; c=$((c + 1)); [ "$c" -lt ${WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX} ] || return 0`,
     'done; [ -n "$why" ]; }',
