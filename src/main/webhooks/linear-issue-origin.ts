@@ -6,6 +6,7 @@ import type { WebhookEnvelope } from '../../shared/connector-webhook-routes'
 import type { LinearIssueIntake } from '../../shared/linear/issue-intake'
 import {
   automationWebhookTrigger,
+  type AutomationWebhookTrigger,
   type AutomationRunWebhookCall
 } from '../../shared/automation-event-triggers'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
@@ -17,6 +18,49 @@ function record(value: unknown): value is Record<string, unknown> {
 
 function uuid(value: unknown): value is string {
   return typeof value === 'string' && isLinearUuid(value)
+}
+
+function uniqueProject(rule: AutomationWebhookTrigger): string | null {
+  const filters = rule.where?.filter((filter) => filter.path === 'body.data.projectId') ?? []
+  const filter = filters[0]
+  const project = filter?.values?.[0]
+  return filters.length === 1 && filter.op === '=' && filter.values?.length === 1 && uuid(project)
+    ? project
+    : null
+}
+
+type SeatConfig = Pick<Automation, 'bot' | 'enabled' | 'on'>
+
+export function linearAssignmentMatches(
+  intake: LinearIssueIntake,
+  target: SeatConfig | undefined,
+  hookId: string,
+  receivingBotId: string | undefined
+): boolean {
+  const rule = target && automationWebhookTrigger(target)
+  return !!(
+    target?.enabled &&
+    receivingBotId === intake.configuredBotId &&
+    target.bot?.botId === receivingBotId &&
+    rule?.id === `wh-${hookId}` &&
+    rule.rev === intake.ruleRevision &&
+    rule.subjectFrom === 'body.data.id' &&
+    rule.subject === undefined &&
+    intake.assignedProjectId &&
+    uniqueProject(rule) === intake.assignedProjectId
+  )
+}
+
+// Keep the original return address for clarification. A mismatch at start must survive later edits.
+export function linearIntakeAtStart(
+  intake: LinearIssueIntake,
+  target: SeatConfig | undefined,
+  hookId: string,
+  receivingBotId: string | undefined
+): LinearIssueIntake {
+  return linearAssignmentMatches(intake, target, hookId, receivingBotId)
+    ? intake
+    : { ...intake, assignedProjectId: null }
 }
 
 export function linearSeatAtReceipt(
@@ -51,13 +95,7 @@ export function linearSeatAtReceipt(
   ) {
     return
   }
-  const filters = rule.where?.filter((filter) => filter.path === 'body.data.projectId') ?? []
-  const filter = filters[0]
-  const project = filter?.values?.[0]
-  const assignedProjectId =
-    filters.length === 1 && filter.op === '=' && filter.values?.length === 1 && uuid(project)
-      ? project
-      : null
+  const assignedProjectId = uniqueProject(rule)
   return { configuredBotId, assignedProjectId, ruleRevision: rule.rev }
 }
 
@@ -104,11 +142,14 @@ export function webhookRunCall(
   call: Pick<
     LedgerCall,
     'hookId' | 'callId' | 'first' | 'sample' | 'subject' | 'routed' | 'linearAdmission'
-  >
+  >,
+  target: SeatConfig | undefined
 ): AutomationRunWebhookCall {
   const origin = captureLinearIssueIntake(envelope, call)
   return {
-    ...(origin ? { linearIssueIntake: origin } : {}),
+    ...(origin
+      ? { linearIssueIntake: linearIntakeAtStart(origin, target, call.hookId, target?.bot?.botId) }
+      : {}),
     hookId: call.hookId,
     callId: call.callId,
     file: null,

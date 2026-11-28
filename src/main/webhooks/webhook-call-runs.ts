@@ -237,7 +237,7 @@ export class WebhookCallRuns {
   ): Promise<void> {
     const rule = target && automationWebhookTrigger(target)
     const folder = target?.bot ? this.deps.botFolder(target.bot.botId) : null
-    const webhook = webhookRunCall(value, call)
+    const webhook = webhookRunCall(value, call, target)
     const event: AutomationRunEvent = {
       triggerId: call.triggerId,
       source: 'webhook',

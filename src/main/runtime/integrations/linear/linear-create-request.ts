@@ -5,7 +5,7 @@ import { chatPaneKey } from '../../../external-conversations/external-conversati
 import { createHash } from 'node:crypto'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../bots/bot-chat-session'
-import { automationWebhookTrigger } from '../../../../shared/automation-event-triggers'
+import { linearAssignmentMatches } from '../../../webhooks/linear-issue-origin'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../../rpc/core'
@@ -208,17 +208,11 @@ async function readLinearCreateRequest(
     const matches = runtime
       .listAutomationsForScope()
       .automations.filter((a) => a.id === run.automation.id && a.enabled && a.bot?.botId === bot.id)
-    const rule = matches.length === 1 ? automationWebhookTrigger(matches[0]) : null
-    const filters = rule?.where?.filter((f) => f.path === 'body.data.projectId') ?? []
-    const filter = filters[0]
+    const webhook = run.event?.webhook
     if (
-      !rule ||
-      rule.id !== `wh-${run.event?.webhook?.hookId}` ||
-      rule.rev !== intake.ruleRevision ||
-      filters.length !== 1 ||
-      filter?.op !== '=' ||
-      filter.values?.length !== 1 ||
-      filter.values[0] !== intake.assignedProjectId
+      !webhook ||
+      matches.length !== 1 ||
+      !linearAssignmentMatches(intake, matches[0], webhook.hookId, bot.id)
     ) {
       return null
     }

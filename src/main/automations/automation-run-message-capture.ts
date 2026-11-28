@@ -14,6 +14,7 @@ import type {
   AutomationRunMessage,
   AutomationRunMessageEvent
 } from '../../shared/automations/automation-run-message'
+import { linearIntakeAtStart } from '../webhooks/linear-issue-origin'
 import type { AutomationEventAsker } from './automation-event-prompt'
 
 function runEvent(
@@ -62,11 +63,19 @@ export function captureAutomationRunMessage(
   if (!text.startsWith(automation.prompt)) {
     return undefined
   }
-  const intake = run.trigger === 'event' ? run.event?.webhook?.linearIssueIntake : undefined
+  const webhook = run.trigger === 'event' ? run.event?.webhook : undefined
+  const intake = webhook?.linearIssueIntake
   const wait = onceRunEnding(automation, run)
   return {
     runId: run.id,
-    ...(intake && receivingBotId ? { linearIssueIntake: { ...intake, receivingBotId } } : {}),
+    ...(webhook && intake && receivingBotId
+      ? {
+          linearIssueIntake: {
+            ...linearIntakeAtStart(intake, automation, webhook.hookId, receivingBotId),
+            receivingBotId
+          }
+        }
+      : {}),
     automation: botAutomationFacts(automation),
     trigger: run.trigger,
     ...(run.trigger === 'scheduled' ? { scheduledFor: run.scheduledFor } : {}),
