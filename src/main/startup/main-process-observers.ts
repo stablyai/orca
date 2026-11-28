@@ -23,7 +23,6 @@ import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-g
 import { initObservability } from '../observability/index'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { trackUnrecoveredStallImport } from '../hang-watchdog/previous-unrecovered-stall-import'
 import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
@@ -138,18 +137,24 @@ export function initializeMainProcessObservers(store: Store): void {
   const { unrecoveredStall } = previousHang
   if (unrecoveredStall && state.crashReports) {
     const store = state.crashReports
-    trackUnrecoveredStallImport(
-      import('../hang-watchdog/unrecovered-stall-report')
-        .then(async ({ importUnrecoveredStallReport }) =>
-          (await importUnrecoveredStallReport(store, unrecoveredStall))
-            ? unrecoveredStall.detectedAt
-            : null
+    void import('../hang-watchdog/previous-unrecovered-stall-import')
+      .then(({ trackUnrecoveredStallImport }) => {
+        trackUnrecoveredStallImport(
+          import('../hang-watchdog/unrecovered-stall-report')
+            .then(async ({ importUnrecoveredStallReport }) =>
+              (await importUnrecoveredStallReport(store, unrecoveredStall))
+                ? unrecoveredStall.detectedAt
+                : null
+            )
+            .catch((error) => {
+              console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+              return null
+            })
         )
-        .catch((error) => {
-          console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
-          return null
-        })
-    )
+      })
+      .catch((error) => {
+        console.warn('[hang-watchdog] Failed to load unrecovered stall tracker:', error)
+      })
   }
   if (state.hangDetection) {
     const marker = state.hangDetection
