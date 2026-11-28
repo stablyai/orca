@@ -19,11 +19,17 @@ export type VerifiedAntigravityLogin = {
   authMethod: string
   accountId: string | null
 }
+export type DisplacedAntigravityLogin = {
+  authMethod: string
+  subjectSha256: string | null
+  refreshTokenSha256: string | null
+}
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
   /** Older builds drop it when they write the vault; Orca then reads the login again on request. */
   verifiedLogin?: VerifiedAntigravityLogin
+  displacedLogins?: DisplacedAntigravityLogin[]
 }
 export type AntigravityAccountStore = {
   read(): Promise<AntigravityAccountVault>
@@ -31,6 +37,7 @@ export type AntigravityAccountStore = {
 }
 
 const MAX_VAULT_BYTES = 4 * 1024 * 1024
+export const MAX_DISPLACED_LOGINS = 32
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -60,6 +67,23 @@ function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
     nullableString(value.subject) &&
     typeof value.authMethod === 'string' &&
     nullableString(value.accountId)
+  )
+}
+
+function isDisplacedLogin(value: unknown): value is DisplacedAntigravityLogin {
+  if (!isRecord(value)) {
+    return false
+  }
+  const subjectSha256 = value.subjectSha256
+  const refreshTokenSha256 = value.refreshTokenSha256
+  const hasSubjectSha256 = typeof subjectSha256 === 'string' && /^[\da-f]{64}$/.test(subjectSha256)
+  const hasRefreshTokenSha256 =
+    typeof refreshTokenSha256 === 'string' && /^[\da-f]{64}$/.test(refreshTokenSha256)
+  return (
+    typeof value.authMethod === 'string' &&
+    (subjectSha256 === null || hasSubjectSha256) &&
+    (refreshTokenSha256 === null || hasRefreshTokenSha256) &&
+    (hasSubjectSha256 || hasRefreshTokenSha256)
   )
 }
 
@@ -142,6 +166,13 @@ export function createEncryptedAntigravityAccountStore(
                     authMethod: value.verifiedLogin.authMethod,
                     accountId: value.verifiedLogin.accountId
                   }
+                }
+              : {}),
+            ...(Array.isArray(value.displacedLogins)
+              ? {
+                  displacedLogins: value.displacedLogins
+                    .filter(isDisplacedLogin)
+                    .slice(-MAX_DISPLACED_LOGINS)
                 }
               : {})
           }

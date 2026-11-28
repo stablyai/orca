@@ -311,6 +311,55 @@ describe('protected Antigravity account snapshots', () => {
     })
   })
 
+  it('restores the selected account after a removed login is refreshed back into agy', async () => {
+    const h = harness(credential('synthetic-user-a'))
+    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
+    const launchRestore = { signInHoldsLogin: () => false }
+    const service = new AntigravityAccountService(
+      store,
+      h.backend,
+      Date.now,
+      h.lookupIdentity,
+      launchRestore
+    )
+    const removed = (await service.addCurrentAccount()).activeAccountId!
+    h.setNative(credential('synthetic-user-b', 2))
+    const selected = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(selected)
+    await service.removeAccount(removed)
+
+    const vault = await store.read()
+    expect(vault).toMatchObject({
+      selectedAccountId: selected,
+      accounts: [{ id: selected, subject: 'synthetic-user-b' }],
+      displacedLogins: [
+        {
+          authMethod: 'consumer',
+          subjectSha256: expect.any(String),
+          refreshTokenSha256: expect.any(String)
+        }
+      ]
+    })
+    expect(JSON.stringify(vault.displacedLogins)).not.toContain('synthetic-user-a')
+    expect(JSON.stringify(vault.displacedLogins)).not.toContain(credential('synthetic-user-a'))
+
+    h.setNative(refreshedWithoutIdToken(3, ['refresh', 1].join('-')))
+    const restarted = new AntigravityAccountService(
+      store,
+      h.backend,
+      Date.now,
+      h.lookupIdentity,
+      launchRestore
+    )
+    await restarted.prepareForLaunch()
+
+    expect(h.getNative()).toBe(credential('synthetic-user-b', 2))
+    expect(await store.read()).toMatchObject({
+      selectedAccountId: selected,
+      accounts: [{ id: selected, subject: 'synthetic-user-b' }]
+    })
+  })
+
   it('names a keychain login only from a read made while its item is unchanged, and never reads it to list', async () => {
     const h = harness(credential('a'), { keychain: true })
     const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
