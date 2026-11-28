@@ -1,3 +1,4 @@
+import { Copy, TextWrap } from 'lucide-react-native'
 import { ScrollView, Text, View, useWindowDimensions } from 'react-native'
 import { MobileSyntaxSegments } from '../components/code-presentation/MobileSyntaxSegments'
 import {
@@ -15,15 +16,18 @@ import {
 } from '../session/native-chat/transcript/tool-results/mobile-native-chat-tool-styles'
 import { radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 const PREVIEW_CODE_LANGUAGE = 'ts'
 
-// Pre-tokenized preview snippet: avoids bundling markdown-it, entities, lowlight, and highlight.js in the native shell for one static Settings preview.
+// Pre-tokenized preview snippet matching highlightMobileCode(CODE, 'ts'): avoids bundling markdown-it, entities, lowlight, and highlight.js in the native shell for one static Settings preview.
 const PREVIEW_CODE_SEGMENTS: MobileSyntaxSegment[] = [
   { text: 'await', kind: 'keyword' },
   { text: ' vi.', kind: 'plain' },
   { text: 'waitFor', kind: 'function' },
-  { text: '(() =>\n  ', kind: 'plain' },
+  { text: '(', kind: 'plain' },
+  { text: '() =>', kind: 'function' },
+  { text: '\n  ', kind: 'plain' },
   { text: 'expect', kind: 'function' },
   { text: '(rows).', kind: 'plain' },
   { text: 'toHaveLength', kind: 'function' },
@@ -54,6 +58,7 @@ function renderInlineCodeParts(text: string): InlineCodePart[] {
 
 /** The chat's own parts at the chosen text settings: your bubble, a tool line, prose and code. */
 export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: number }) {
+  const colors = useMobileColors()
   const styles = useThemedStyles(stylesSheet)
   const markdownStyles = useThemedStyles(markdownStylesSheet)
   const tones = useThemedStyles(markdownTonesSheet)
@@ -127,6 +132,14 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
             <Text numberOfLines={1} style={markdownStyles.codeLanguage}>
               {PREVIEW_CODE_LANGUAGE}
             </Text>
+            <View style={markdownStyles.codeActions}>
+              <View style={markdownStyles.codeWrapButton}>
+                <TextWrap size={14} color={colors.textMuted} />
+              </View>
+              <View style={markdownStyles.codeWrapButton}>
+                <Copy size={14} color={colors.textMuted} />
+              </View>
+            </View>
           </View>
           <View style={markdownStyles.codeBody}>
             <Text
@@ -137,7 +150,7 @@ export function NativeChatTextPreview({ fontScale: chatScale }: { fontScale: num
               {'1\n2'}
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text style={[codeMetrics, markdownStyles.codeLines]}>
+              <Text selectable style={[codeMetrics, markdownStyles.codeLines]}>
                 <MobileSyntaxSegments segments={PREVIEW_CODE_SEGMENTS} />
               </Text>
             </ScrollView>

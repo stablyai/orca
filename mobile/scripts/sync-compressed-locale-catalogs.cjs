@@ -10,13 +10,27 @@ const enRuntimeRequiredPath = path.join(mobileRoot, 'src', 'i18n', 'en-runtime-r
 const outputDir = path.join(mobileRoot, 'src', 'i18n', 'locales-compressed')
 
 const BUNDLED_LOCALES = ['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'tr', 'zh', 'zh-Hant']
-const RESOLVE_EXTS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json']
+const RESOLVE_EXTS = [
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+  '.json',
+  '.native.ts',
+  '.native.tsx',
+  '.android.ts',
+  '.android.tsx',
+  '.ios.ts',
+  '.ios.tsx'
+]
 const IMPORT_RE =
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"](\.\.?\/[^'"]+)['"]|import\s+['"](\.\.?\/[^'"]+)['"]/g
 const DOTTED_LITERAL_RE = /['"]([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)+)['"]/g
 const DYNAMIC_PREFIX_RE = /`([a-zA-Z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)*\.)\$\{/g
 
-function resolveRelativeModule(fromFile, spec) {
+function resolveRelativeModules(fromFile, spec) {
   const base = path.resolve(path.dirname(fromFile), spec)
   const candidates = [base]
   for (const ext of RESOLVE_EXTS) {
@@ -25,16 +39,17 @@ function resolveRelativeModule(fromFile, spec) {
   for (const ext of RESOLVE_EXTS) {
     candidates.push(path.join(base, `index${ext}`))
   }
+  const found = []
   for (const candidate of candidates) {
     try {
       if (fs.statSync(candidate).isFile()) {
-        return candidate
+        found.push(candidate)
       }
     } catch {
       // Try next candidate
     }
   }
-  return null
+  return found
 }
 
 function collectNativeAppEntries(dir, out) {
@@ -105,9 +120,10 @@ function collectNativeKeyFilter() {
       if (!spec || spec.includes('/locales-compressed/') || spec.includes('/locales/')) {
         continue
       }
-      const resolved = resolveRelativeModule(file, spec)
-      if (resolved && !visited.has(resolved) && !/\.web\.[tj]sx?$/.test(resolved)) {
-        queue.push(resolved)
+      for (const resolved of resolveRelativeModules(file, spec)) {
+        if (!visited.has(resolved) && !/\.web\.[tj]sx?$/.test(resolved)) {
+          queue.push(resolved)
+        }
       }
     }
   }
