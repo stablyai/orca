@@ -2,6 +2,7 @@
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { decodeWindowsRegistryOutputAsync } from '../../windows/windows-shell-output-decoding'
 
 const LXSS_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'
 const REG_QUERY_TIMEOUT_MS = 5_000
@@ -61,12 +62,21 @@ function regQuerySpec(args: string[]): ProcessSpec {
   return { program: windowsSystem32Binary('reg.exe'), args, timeoutMs: REG_QUERY_TIMEOUT_MS }
 }
 
-/** `reg query <Lxss> /s`, for readers that run it themselves. */
-export function lxssRegQuerySpec(): ProcessSpec {
-  return regQuerySpec(['query', LXSS_KEY, '/s'])
+// reg.exe prints in the console code page (GBK on Chinese Windows), so its text is decoded from the bytes.
+async function runRegQuery(spec: ProcessSpec): Promise<{ code: number | null; stdout: string }> {
+  const result = await runProcess({ ...spec, captureStdoutAsBytes: true })
+  return {
+    code: result.code,
+    stdout: await decodeWindowsRegistryOutputAsync(result.stdoutBytes ?? Buffer.alloc(0))
+  }
 }
 
-const defaultRegQuery: RegQuery = (args) => runProcess(regQuerySpec(args))
+const defaultRegQuery: RegQuery = (args) => runRegQuery(regQuerySpec(args))
+
+/** `reg query <Lxss> /s`, for readers that run it themselves. */
+export function readLxssRegistry(): ReturnType<RegQuery> {
+  return defaultRegQuery(['query', LXSS_KEY, '/s'])
+}
 
 /** Every registered distro, or null when the registry cannot be read. */
 export async function readWslDistroRegistrations(

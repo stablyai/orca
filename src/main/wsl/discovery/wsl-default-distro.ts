@@ -3,12 +3,11 @@
  * it, so a one-off registry miss can't make the act and a gate disagree on which distro it is.
  */
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { runProcess } from '@orca/process-host'
 import { getCachedWslDistros, listWslDistrosAsync } from './distro-catalog'
 import {
-  lxssRegQuerySpec,
   parseDefaultWslDistroId,
-  parseWslDistroRegistrations
+  parseWslDistroRegistrations,
+  readLxssRegistry
 } from './wsl-distro-registry-id'
 
 /** WSL couldn't say which distro is the default (registry and `wsl --list` both failed). */
@@ -24,7 +23,7 @@ const pinned = new AsyncLocalStorage<{ value: WslDefaultDistro; active: boolean 
 
 async function readRegistryDefault(): Promise<{ distro: string | null } | 'unreadable'> {
   try {
-    const result = await runProcess(lxssRegQuerySpec())
+    const result = await readLxssRegistry()
     if (result.code !== 0) {
       return 'unreadable'
     }

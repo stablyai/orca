@@ -1,12 +1,11 @@
 // Some WSL 3 hosts exit 0 with nothing on a redirected `wsl.exe --list` (#35509), which reads as "no distros".
-import { runProcess } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { listRunningWslDistrosViaConsole } from './wsl-console-running-distros'
 import { filterUserWslDistros } from './wsl-distro-list-output'
 import {
-  lxssRegQuerySpec,
   parseDefaultWslDistroId,
-  parseWslDistroRegistrations
+  parseWslDistroRegistrations,
+  readLxssRegistry
 } from './wsl-distro-registry-id'
 
 /** Registered user distros, default first as `wsl --list` orders them; empty when the registry is unreadable. */
@@ -37,7 +36,7 @@ export async function listedOrRegisteredWslDistros(listed: string[]): Promise<st
     return listed
   }
   try {
-    return registeredWhenListedNone(registeredUserWslDistros(await runProcess(lxssRegQuerySpec())))
+    return registeredWhenListedNone(registeredUserWslDistros(await readLxssRegistry()))
   } catch {
     return []
   }
