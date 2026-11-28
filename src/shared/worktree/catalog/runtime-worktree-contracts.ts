@@ -41,6 +41,8 @@ export type RuntimeWorktreeAgentRow = {
   address?: string
   /** The host's Orca id for this agent's conversation (a chat's /clear root); old hosts omit it. */
   orcaSessionId?: string
+  /** The orchestration dispatch associated with this agent, when available. */
+  dispatchId?: string
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode
