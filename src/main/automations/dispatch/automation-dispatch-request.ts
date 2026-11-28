@@ -82,7 +82,9 @@ export async function requestAutomationDispatch(
   ctx: DispatchContext,
   automation: Automation,
   run: AutomationRun,
-  expectedTarget: AutomationRunTargetResult
+  expectedTarget: AutomationRunTargetResult,
+  /** Only restart recovery: a run claimed before the restart whose prompt never reached its agent. */
+  resume = false
 ): Promise<AutomationRun> {
   const expectedDefinition = structuredClone(definition(automation))
   const expectedDestination = expectedTarget.ok ? destination(expectedTarget) : undefined
@@ -134,7 +136,7 @@ export async function requestAutomationDispatch(
   }
 
   run = readRun()
-  if (run.status !== 'pending') {
+  if (run.status !== (resume ? 'dispatching' : 'pending')) {
     return returnDurable(run)
   }
   let target = resolveCurrentTarget()

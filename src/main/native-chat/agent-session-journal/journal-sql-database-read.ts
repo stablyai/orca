@@ -51,6 +51,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
   | { kind: 'chat-exists'; sessionId: string }
+  | { kind: 'run-chats'; messageId: string; runId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
@@ -73,6 +74,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
   | { kind: 'chat-exists'; exists: boolean }
+  | { kind: 'run-chats'; byMessage: string[]; byRun: string[] }
   | { kind: 'legacy-compares'; compares: JournalLegacyCompare[] }
   | { kind: 'retired-heads'; heads: JournalRetiredHead[]; through: string | null }
   | {
@@ -241,5 +243,38 @@ function read(
       }
     case 'deleted-chats':
       return { kind: 'deleted-chats', chats: readDeletedChats(db) }
+    case 'run-chats':
+      return { kind: 'run-chats', ...readRunChats(db, operation.messageId, operation.runId) }
   }
+}
+
+/** Chats whose current history holds a message by this id, and chats holding any message that
+ *  carries the run (a send from builds before run-derived ids). No index leads with either key:
+ *  callers read this once per run Orca lost track of, never per message. */
+function readRunChats(
+  db: Database.Database,
+  messageId: string,
+  runId: string
+): { byMessage: string[]; byRun: string[] } {
+  const current = 'JOIN journal_chat_state c ON c.session_id=r.session_id AND c.epoch=r.epoch'
+  const sessions = (sql: string, key: string) =>
+    db
+      .prepare(sql)
+      .all(key)
+      .map((row) => String(row.session_id))
+  const byMessage = sessions(
+    `SELECT r.session_id FROM journal_submission_attempts r ${current} WHERE r.message_id=?1 AND r.current=1
+      UNION SELECT r.session_id FROM journal_queue_cards r ${current} WHERE r.message_id=?1`,
+    messageId
+  )
+  const byRun = sessions(
+    `SELECT r.session_id FROM journal_items r ${current} WHERE r.kind='message'
+        AND (CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json,'$.body.automationRun.runId') END)=?1
+      UNION SELECT r.session_id FROM journal_submission_attempts r ${current}
+        WHERE (CASE WHEN json_valid(r.admission_body_json) THEN json_extract(r.admission_body_json,'$.automationRun.runId') END)=?1
+      UNION SELECT r.session_id FROM journal_queue_cards r ${current}
+        WHERE (CASE WHEN json_valid(r.payload_json) THEN json_extract(r.payload_json,'$.body.automationRun.runId') END)=?1`,
+    runId
+  )
+  return { byMessage, byRun }
 }

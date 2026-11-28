@@ -3,7 +3,7 @@ import {
   requestAutomationDispatch,
   runAutomationRequestPrecheck
 } from './dispatch/automation-dispatch-request'
-import { AutomationDispatchCancelledError } from './dispatch/automation-dispatch-cancelled-error'
+import { recordFailedLaunch } from './dispatch/automation-failed-launch'
 import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
@@ -170,28 +170,21 @@ export class AutomationService {
     run: AutomationRun,
     target: AutomationRunTargetResult,
     generation: number,
-    afterCreate?: () => Promise<unknown>
+    afterCreate?: () => Promise<unknown>,
+    resume = false
   ): void {
     void (async () => {
       // A blocked lane must not defer the schedule advance.
       await afterCreate?.()
-      await this.requestDispatch(automation, run, target, generation)
+      await this.requestDispatch(automation, run, target, generation, resume)
     })()
-      .catch((error: unknown) => this.recordFailedLaunch(run, generation, error))
+      .catch((error: unknown) => {
+        const active = !this.stopped && generation === this.dispatchGeneration
+        return recordFailedLaunch(this.store, run, active, error, (r) => this.markDispatchResult(r))
+      })
       .catch((writeError: unknown) =>
         console.error('[automations] could not record a failed launch', writeError)
       )
-  }
-
-  /** Only an unlaunched run of this generation fails; a flush error after launch is not a launch failure. */
-  private async recordFailedLaunch(run: AutomationRun, generation: number, error: unknown) {
-    const current = this.store.listAutomationRuns(run.automationId).find((r) => r.id === run.id)
-    const unlaunched = current?.status === 'pending' || current?.status === 'dispatching'
-    const active = !this.stopped && generation === this.dispatchGeneration
-    if (unlaunched && active && !(error instanceof AutomationDispatchCancelledError)) {
-      const message = error instanceof Error ? error.message : String(error)
-      await this.markDispatchResult({ runId: run.id, status: 'dispatch_failed', error: message })
-    }
   }
 
   /** One run per source event; null when the automation no longer takes it (removed, paused, trigger gone). */
@@ -302,11 +295,19 @@ export class AutomationService {
     return runKeyedSerializedOperation(this.automationLanes, automationId, operation)
   }
 
+  /** Restart recovery only: launches a run claimed before the restart whose prompt never reached its
+   *  agent, as any launch (same checks, its own completion), and settles it. */
+  resumeUnsentDispatch(automation: Automation, run: AutomationRun): void {
+    const target = this.resolveTarget(automation)
+    this.launchInLane(automation, run, target, this.dispatchGeneration, undefined, true)
+  }
+
   private requestDispatch(
     automation: Automation,
     run: AutomationRun,
     target: AutomationRunTargetResult,
-    generation: number
+    generation: number,
+    resume = false
   ): Promise<AutomationRun> {
     return this.runInAutomationLane(automation.id, () =>
       requestAutomationDispatch(
@@ -326,7 +327,8 @@ export class AutomationService {
         },
         automation,
         run,
-        target
+        target,
+        resume
       )
     )
   }

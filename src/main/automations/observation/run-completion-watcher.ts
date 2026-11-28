@@ -20,7 +20,8 @@ export type AutomationRunTerminalObserver = {
   observeCompletion: (
     handle: string,
     options: { signal: AbortSignal; run?: AutomationRun }
-  ) => Promise<AutomationRunCompletionObservation>
+    /** Null: another owner (the run's own launch) settles the run. */
+  ) => Promise<AutomationRunCompletionObservation | null>
 }
 
 export function describeStrandedAutomationRun(run: AutomationRun): string {
@@ -119,7 +120,7 @@ export class AutomationRunCompletionWatcher {
     handle: string,
     controller: AbortController
   ): Promise<void> {
-    let observation: AutomationRunCompletionObservation
+    let observation: AutomationRunCompletionObservation | null
     try {
       observation = await this.observer.observeCompletion(handle, {
         signal: controller.signal,
@@ -132,6 +133,9 @@ export class AutomationRunCompletionWatcher {
         return
       }
       observation = { status: 'dispatch_failed', error: describeObservationError(error) }
+    }
+    if (!observation) {
+      return
     }
     try {
       await this.finalize(run, observation)
