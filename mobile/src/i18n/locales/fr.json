@@ -470,7 +470,8 @@
       "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
       "forkedFrom": "Branche créée à partir de",
       "notSignedIn": "{{agent}} n’est pas connecté.",
-      "signInAccountHint": "Reconnecte ce compte sur l’ordinateur qui exécute ce chat"
+      "signInAccountHint": "Reconnecte ce compte sur l’ordinateur qui exécute ce chat",
+      "signedInSendAgain": "Connecté. Renvoyez votre message."
     },
     "ciResultLine": {
       "failingLead": "CI en échec sur",

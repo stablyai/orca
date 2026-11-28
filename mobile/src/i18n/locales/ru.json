@@ -478,7 +478,8 @@
       "botCreated": "Бот создан",
       "autoReviewDenied": "Автоматическая проверка {{agent}} отклонила: {{action}}",
       "notSignedIn": "Вход в {{agent}} не выполнен.",
-      "signInAccountHint": "Повторно входит в этот аккаунт на компьютере, где работает этот чат"
+      "signInAccountHint": "Повторно входит в этот аккаунт на компьютере, где работает этот чат",
+      "signedInSendAgain": "Вход выполнен. Отправьте снова."
     },
     "ciResultLine": {
       "failingLead": "CI с ошибками в",

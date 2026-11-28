@@ -463,7 +463,8 @@
       "signInHint": "在執行此聊天的電腦上開啟終端機",
       "forkedFrom": "分支來源",
       "notSignedIn": "{{agent}} 尚未登入。",
-      "signInAccountHint": "在執行此聊天的電腦上重新登入此帳號"
+      "signInAccountHint": "在執行此聊天的電腦上重新登入此帳號",
+      "signedInSendAgain": "已登入。請重新傳送。"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗於",

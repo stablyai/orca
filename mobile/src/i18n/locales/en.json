@@ -3573,7 +3573,8 @@
       "signIn": "Sign in",
       "signInHint": "Opens a terminal on the computer running this chat",
       "notSignedIn": "{{agent}} isn't signed in.",
-      "signInAccountHint": "Signs this account in again on the computer running this chat"
+      "signInAccountHint": "Signs this account in again on the computer running this chat",
+      "signedInSendAgain": "Signed in. Send again."
     },
     "ciResultLine": {
       "failingLead": "CI failing on",

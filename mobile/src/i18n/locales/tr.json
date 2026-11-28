@@ -508,7 +508,8 @@
       "botCreated": "Bot oluşturuldu",
       "autoReviewDenied": "{{agent}} ajanının otomatik incelemesi işlemi reddetti: {{action}}",
       "notSignedIn": "{{agent}} oturumu açık değil.",
-      "signInAccountHint": "Bu sohbeti çalıştıran bilgisayarda bu hesapta yeniden oturum açar"
+      "signInAccountHint": "Bu sohbeti çalıştıran bilgisayarda bu hesapta yeniden oturum açar",
+      "signedInSendAgain": "Oturum açıldı. Yeniden gönderin."
     },
     "ciResultLine": {
       "failingLead": "CI başarısız:",

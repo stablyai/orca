@@ -373,7 +373,7 @@ export function MobileSessionActiveContent({
                     hostOutage={nativeChatHostOutage}
                     onRunInTerminal={nativeChatTerminalRunner(controller)}
                     onOpenAccounts={chatAccounts.openAccounts}
-                    onSignInAccount={chatAccounts.signInAccount}
+                    accountSignIn={chatAccounts.accountSignIn}
                   />
                 </MobileSessionBotIdentity>
               </MobileBotCardHostProvider>

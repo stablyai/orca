@@ -470,7 +470,8 @@
       "forkedFrom": "Rama creada desde",
       "autoReviewDenied": "La revisión automática de {{agent}} denegó: {{action}}",
       "notSignedIn": "{{agent}} no ha iniciado sesión.",
-      "signInAccountHint": "Vuelve a iniciar sesión en esta cuenta en el ordenador que ejecuta este chat"
+      "signInAccountHint": "Vuelve a iniciar sesión en esta cuenta en el ordenador que ejecuta este chat",
+      "signedInSendAgain": "Sesión iniciada. Vuelve a enviarlo."
     },
     "ciResultLine": {
       "failingLead": "CI fallando en",

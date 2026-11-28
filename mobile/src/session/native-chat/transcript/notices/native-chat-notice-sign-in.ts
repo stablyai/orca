@@ -11,6 +11,7 @@ import type { MobileNativeChatNoticeView } from './mobile-native-chat-notice-con
 export function nativeChatNoticeSignIn(input: {
   /** The row's unresolved not-signed-in failure, or null. */
   failure: AgentSessionFailureFact | null
+  rowId: string | undefined
   names: MobileNativeChatNoticeView
   lineText: string
   failureDetail: string | undefined
@@ -19,14 +20,16 @@ export function nativeChatNoticeSignIn(input: {
   signIn: { onPress: () => void; hint: string } | null
   shownText: string
   detail: string | undefined
+  /** This row's Sign in finished: it reads as settled, as desktop's notice does. */
+  signedIn: boolean
 } {
-  const { failure, names, lineText, failureDetail, t } = input
+  const { failure, names, lineText, failureDetail, rowId, t } = input
   const managedAgent =
     failure?.account === 'managed' ? agentSessionSetupFor(names.agentName)?.agent : undefined
-  const signInAccount = names.signInAccount
+  const accountSignIn = names.accountSignIn
   const onHost =
-    signInAccount && (managedAgent === 'claude' || managedAgent === 'codex')
-      ? () => signInAccount(managedAgent)
+    accountSignIn && (managedAgent === 'claude' || managedAgent === 'codex')
+      ? () => accountSignIn.signIn(managedAgent, rowId)
       : null
   const command =
     failure && !onHost
@@ -34,6 +37,14 @@ export function nativeChatNoticeSignIn(input: {
       : null
   const runInTerminal = names.onRunInTerminal
   const failureWords = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
+  if (onHost && rowId !== undefined && accountSignIn?.signedInRow === rowId) {
+    return {
+      signIn: null,
+      shownText: t('chat.notice.signedInSendAgain', 'Signed in. Send again.'),
+      detail: undefined,
+      signedIn: true
+    }
+  }
   if (!onHost) {
     return {
       signIn:
@@ -47,7 +58,8 @@ export function nativeChatNoticeSignIn(input: {
             }
           : null,
       shownText: lineText,
-      detail: failureWords
+      detail: failureWords,
+      signedIn: false
     }
   }
   // One sentence says what's wrong; the host's longer words stay under Details.
@@ -66,6 +78,7 @@ export function nativeChatNoticeSignIn(input: {
     shownText,
     detail:
       [hostWords, failureWords].filter((words): words is string => Boolean(words)).join('\n\n') ||
-      undefined
+      undefined,
+    signedIn: false
   }
 }

@@ -1,6 +1,6 @@
 // A chat's "isn't signed in" notice on a managed account: Sign in signs that account in again on the
 // paired computer through the Accounts sheet. Chats on the agent's own login keep the terminal.
-import { useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { HostAccountSignInProvider } from '../../../../src/shared/agent-accounts/host-account-sign-in-types'
 import { MOBILE_HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -27,9 +27,17 @@ async function selectedManagedAccount(
   client: RpcClient,
   provider: HostAccountSignInProvider
 ): Promise<string | null> {
-  const snapshot = accountsList.interpret(await accountsList.request(client, { refreshUsage: false }))
+  const snapshot = accountsList.interpret(
+    await accountsList.request(client, { refreshUsage: false })
+  )
   const state = snapshot[provider]
   return state.activeAccountIdsByRuntime?.host ?? state.activeAccountId
+}
+
+/** A chat notice's Sign in, and the notice row whose Sign in last finished. */
+export type ChatAccountSignIn = {
+  signIn: (provider: HostAccountSignInProvider, rowId: string | undefined) => void
+  signedInRow: string | null
 }
 
 export function useChatAccountSignIn(input: {
@@ -42,7 +50,7 @@ export function useChatAccountSignIn(input: {
 }): {
   /** Opens the paired host's Accounts; absent for a chat another server runs. */
   openAccounts: (() => void) | undefined
-  signInAccount: ((provider: HostAccountSignInProvider) => void) | undefined
+  accountSignIn: ChatAccountSignIn | undefined
   sheet: ReactNode
 } {
   const { client, onSignedIn } = input
@@ -53,7 +61,14 @@ export function useChatAccountSignIn(input: {
     useOptionalHostProtocolGates()?.hostCapabilities.includes(
       MOBILE_HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
     ) === true
+  // The notice row whose Sign in is running, and the last one it signed in (as desktop keeps one).
+  const askingRow = useRef<string | undefined>(undefined)
+  const [signedInRow, setSignedInRow] = useState<string | null>(null)
   const signIn = useHostAccountSignIn(client, (account) => {
+    const row = askingRow.current
+    if (row !== undefined) {
+      setSignedInRow(row)
+    }
     if (account) {
       onSignedIn(
         t('accounts.hostSignIn.signedInAs', 'Signed in as {{email}}', { email: account.email })
@@ -72,11 +87,12 @@ export function useChatAccountSignIn(input: {
     }
   }, [])
   const signInAccount = useCallback(
-    (provider: HostAccountSignInProvider) => {
+    (provider: HostAccountSignInProvider, rowId: string | undefined) => {
       if (!client || looking.current) {
         return
       }
       looking.current = true
+      askingRow.current = rowId
       const asked = ++lookup.current
       void selectedManagedAccount(client, provider)
         .then(
@@ -97,9 +113,15 @@ export function useChatAccountSignIn(input: {
     },
     [client, onOpenAccounts, start]
   )
+  const offered = supported && input.onPairedHost
+  // Why memoized: notice rows read it through context, and a chat re-renders on every streamed token.
+  const accountSignIn = useMemo(
+    () => (offered ? { signIn: signInAccount, signedInRow } : undefined),
+    [offered, signInAccount, signedInRow]
+  )
   return {
     openAccounts: onOpenAccounts,
-    signInAccount: supported && input.onPairedHost ? signInAccount : undefined,
+    accountSignIn,
     sheet: (
       <MobileHostAccountSignInSheet
         target={signIn.target}

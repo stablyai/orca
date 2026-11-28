@@ -1,4 +1,4 @@
-import type { HostAccountSignInProvider } from '../../../../../../src/shared/agent-accounts/host-account-sign-in-types'
+import type { ChatAccountSignIn } from '../../../../accounts/sign-in/use-chat-account-sign-in'
 import { createContext } from 'react'
 import type { MobileStructuredInterruptedContinue } from '../../composer/delivery/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatUsageLimit } from '../../status/use-mobile-native-chat-usage-limit'
@@ -18,7 +18,7 @@ export type MobileNativeChatNoticeView = {
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   openAccounts?: () => void
   /** Signs the chat's managed account in again on its host; absent where the phone can't. */
-  signInAccount?: (provider: HostAccountSignInProvider) => void
+  accountSignIn?: ChatAccountSignIn
   /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
   unresolvedFailureRows?: ReadonlySet<string>
 }

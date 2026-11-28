@@ -1,4 +1,4 @@
-import type { HostAccountSignInProvider } from '../../../../src/shared/agent-accounts/host-account-sign-in-types'
+import type { ChatAccountSignIn } from '../../accounts/sign-in/use-chat-account-sign-in'
 import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
 import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
@@ -65,7 +65,7 @@ type Props = {
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   onOpenAccounts?: () => void
   /** Signs the chat's managed account in again on its host; absent where the phone can't. */
-  onSignInAccount?: (provider: HostAccountSignInProvider) => void
+  accountSignIn?: ChatAccountSignIn
   /** Opens tapped links in Orca's browser; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
   linkOpenMode: MobileLinkOpenMode
@@ -123,7 +123,7 @@ function MobileNativeChatOverlayContent({
   onRunInTerminal,
   hostOutage = null,
   onOpenAccounts,
-  onSignInAccount
+  accountSignIn
 }: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
@@ -234,7 +234,7 @@ function MobileNativeChatOverlayContent({
       usageLimit: controller.nativeChatUsageLimit,
       unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
       ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
-      ...(onSignInAccount ? { signInAccount: onSignInAccount } : {}),
+      ...(accountSignIn ? { accountSignIn } : {}),
       ...(continuation
         ? {
             continuation: {
@@ -257,7 +257,7 @@ function MobileNativeChatOverlayContent({
       controller.nativeChatUsageLimit,
       controller.nativeChatUnresolvedFailureRows,
       onOpenAccounts,
-      onSignInAccount
+      accountSignIn
     ]
   )
   const continueFailed = sendErrorMessage === null && continuation?.failed === true

@@ -470,7 +470,8 @@
       "signInHint": "Abre um terminal no computador que executa este chat",
       "forkedFrom": "Ramificado de",
       "notSignedIn": "O {{agent}} não está conectado à conta.",
-      "signInAccountHint": "Entra novamente nesta conta no computador que executa este chat"
+      "signInAccountHint": "Entra novamente nesta conta no computador que executa este chat",
+      "signedInSendAgain": "Login feito. Envie novamente."
     },
     "ciResultLine": {
       "failingLead": "CI falhando em",

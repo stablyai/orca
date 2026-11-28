@@ -731,7 +731,8 @@
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
       "forkedFrom": "분기 원본",
       "notSignedIn": "{{agent}}에 로그인하지 않았습니다.",
-      "signInAccountHint": "이 채팅을 실행하는 컴퓨터에서 이 계정에 다시 로그인합니다"
+      "signInAccountHint": "이 채팅을 실행하는 컴퓨터에서 이 계정에 다시 로그인합니다",
+      "signedInSendAgain": "로그인했습니다. 다시 보내세요."
     },
     "ciResultLine": {
       "failingLead": "CI 실패:",

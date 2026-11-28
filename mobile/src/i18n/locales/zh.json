@@ -480,7 +480,8 @@
       "signInHint": "在运行此聊天的电脑上打开终端",
       "forkedFrom": "分支来源",
       "notSignedIn": "{{agent}} 尚未登录",
-      "signInAccountHint": "在运行此聊天的电脑上重新登录此账户"
+      "signInAccountHint": "在运行此聊天的电脑上重新登录此账户",
+      "signedInSendAgain": "已登录，请重新发送"
     },
     "ciResultLine": {
       "failingLead": "CI 失败:",

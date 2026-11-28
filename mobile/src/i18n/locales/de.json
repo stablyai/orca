@@ -463,7 +463,8 @@
       "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
       "forkedFrom": "Abgezweigt von",
       "notSignedIn": "{{agent}} ist nicht angemeldet.",
-      "signInAccountHint": "Meldet dieses Konto auf dem Computer, auf dem dieser Chat läuft, erneut an"
+      "signInAccountHint": "Meldet dieses Konto auf dem Computer, auf dem dieser Chat läuft, erneut an",
+      "signedInSendAgain": "Angemeldet. Erneut senden."
     },
     "ciResultLine": {
       "failingLead": "CI fehlgeschlagen bei",

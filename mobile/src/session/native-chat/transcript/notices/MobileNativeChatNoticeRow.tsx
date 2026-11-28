@@ -6,7 +6,7 @@ import {
 } from '../../../../../../src/shared/native-chat/transcript/notices/agent-account-switch-notice'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
+import { AlertCircle, AlertTriangle, CircleCheck, Info } from 'lucide-react-native'
 import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,
@@ -130,13 +130,15 @@ export function MobileNativeChatNoticeRow({
     cardId !== undefined &&
     names.unresolvedFailureRows !== undefined &&
     !names.unresolvedFailureRows.has(cardId)
-  const { signIn, shownText, detail } = nativeChatNoticeSignIn({
+  const { signIn, shownText, detail, signedIn } = nativeChatNoticeSignIn({
     failure: failure?.kind === 'notSignedIn' && !resolved ? failure : null,
+    rowId: cardId,
     names,
     lineText,
     failureDetail,
     t
   })
+  const muted = resolved || signedIn
   const reviewed = look.kind === 'settled-permission' || look.kind === 'auto-review-denied'
   const diagnosticText = reviewed ? notice.text : detail
   const payload = notice.providerFrame?.payload
@@ -289,7 +291,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(colors, resolved ? 'notice' : look.tone) }
+        look.tone && { color: toneColor(colors, muted ? 'notice' : look.tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -336,13 +338,18 @@ export function MobileNativeChatNoticeRow({
       if (!look.tone) {
         return content
       }
-      const Icon =
-        look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
+      const Icon = signedIn
+        ? CircleCheck
+        : look.tone === 'warning'
+          ? AlertTriangle
+          : look.tone === 'error'
+            ? AlertCircle
+            : Info
       return (
-        <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
+        <View style={muted ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(colors, resolved ? 'notice' : look.tone)}
+            color={toneColor(colors, muted ? 'notice' : look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />

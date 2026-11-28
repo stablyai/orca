@@ -463,7 +463,8 @@
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
       "forkedFrom": "分岐元",
       "notSignedIn": "{{agent}} にサインインしていません。",
-      "signInAccountHint": "このチャットを実行しているコンピューターでこのアカウントに再度サインインします"
+      "signInAccountHint": "このチャットを実行しているコンピューターでこのアカウントに再度サインインします",
+      "signedInSendAgain": "サインインしました。もう一度送信してください。"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗:",
