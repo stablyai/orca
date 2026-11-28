@@ -39,7 +39,7 @@ export function useChatMathRendering(enabled: boolean): () => ReturnType<typeof 
   return () => rehypeChatMath(typeset, parsed)
 }
 
-// KaTeX breaks inline lines only between top-level `.base` parts; a single part needs its own scroller.
+// KaTeX breaks inline lines only between top-level `.katex-base` parts; a single part needs its own scroller.
 function isUnbreakableInlineMath(content: RootContent[]): boolean {
   let parts = -1
   const root: Root = { type: 'root', children: content }
@@ -50,7 +50,7 @@ function isUnbreakableInlineMath(content: RootContent[]): boolean {
         (child) =>
           child.type === 'element' &&
           Array.isArray(child.properties.className) &&
-          child.properties.className.includes('base')
+          child.properties.className.includes('katex-base')
       ).length
       return EXIT
     }
