@@ -51,6 +51,7 @@ export function MobileNativeChatComposerField({
   onKeyboardSubmit,
   onKeyPress,
   onWebPaste,
+  maxHeight,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   const colors = useMobileColors()
@@ -85,7 +86,11 @@ export function MobileNativeChatComposerField({
   const shareMaxHeight = Math.max(MESSAGE_MIN_HEIGHT, Math.round(visibleHeight * MAX_HEIGHT_SHARE))
   const sizing = {
     height: Math.max(contentHeight ?? 0, placeholderHeight ?? 0) || undefined,
-    maxHeight: Math.min(shareMaxHeight, allocation?.fieldMaxHeight ?? shareMaxHeight)
+    maxHeight: Math.min(
+      shareMaxHeight,
+      allocation?.fieldMaxHeight ?? shareMaxHeight,
+      maxHeight ?? shareMaxHeight
+    )
   }
   const copied = Boolean(skillToken || dictationPreview)
   // Keep one tree so adding/removing a skill or dictation cannot remount the field and drop focus.

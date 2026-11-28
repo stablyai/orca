@@ -1,5 +1,5 @@
-// An item's Activity on the phone, in the desktop's order and words: comments as chat-style rows (an
-// agent's question with its question lines), and one muted line per other event; comments
+// An item's Activity on the phone, in the desktop's order and words: comments on their own cards (an
+// agent's question with its question lines), and one muted line per other event between them; comments
 // sent from the box that the host's read doesn't show yet come last, as sent. A reply's quote shows its
 // question: scrolled to the middle and briefly lit, as the desktop's comment box does (a tap has no focus ring).
 import { useCallback, useRef, useState } from 'react'
@@ -44,14 +44,16 @@ import { fieldName, statusWord, str } from './bot-item-activity-words'
 import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { spacing, typography } from '../../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
+import type { MobileBotAvatarSource } from '../host-bot-row-facts'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
-const ICON = 13
+const ICON = 14
 
 /** "changed done means ⌄": the before and after open on tap, as on the desktop. */
 function FieldChange({ by, field, change }: { by: string; field: string; change: unknown }) {
@@ -246,25 +248,25 @@ export function MobileBotItemActivity({
   item,
   events,
   attachments,
+  botAvatar,
   pending,
   onReveal,
   sent,
-  asking,
-  onQuote
+  asking
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
   /** Comments sent from the box that the item's read doesn't show yet: last, as sent. */
   pending: Pick<BotItemPendingComments, 'shown' | 'retry' | 'discard'>
   attachments: MobileBotItemAttachmentSource
+  /** The item's bot's picture, beside its comments. */
+  botAvatar: MobileBotAvatarSource
   /** Scrolls the page to a span measured in the window. */
   onReveal: (y: number, height: number, animated: boolean) => void
   /** Answers just posted as one comment. */
   sent: BotItemSentAnswers | null
   /** The docked answer card asks the waiting question now, so its comment doesn't repeat it. */
   asking: boolean
-  /** Quotes a comment's words into the comment box. */
-  onQuote: (text: string) => void
 }) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
@@ -309,6 +311,7 @@ export function MobileBotItemActivity({
                   : entry
               }
               attachments={attachments}
+              botAvatar={botAvatar}
               ref={(node) => {
                 if (node) {
                   cards.current.set(entry.key, node)
@@ -324,7 +327,6 @@ export function MobileBotItemActivity({
               }
               sent={sent}
               asking={asking}
-              onQuote={onQuote}
               {...(flash?.id === entry.key
                 ? { flash: { at: flash.at, still, end: endFlash } }
                 : {})}
@@ -359,6 +361,7 @@ export function MobileBotItemActivity({
             item={item}
             entry={beside === null ? { event, waiting: false } : { event, waiting: false, beside }}
             attachments={attachments}
+            botAvatar={botAvatar}
             failed={
               failed
                 ? {
@@ -367,7 +370,6 @@ export function MobileBotItemActivity({
                   }
                 : undefined
             }
-            onQuote={failed ? undefined : onQuote}
           />
         )
       })}
@@ -385,13 +387,13 @@ const stylesSheet = themedStyleSheet((colors) => ({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingVertical: 6,
-    paddingHorizontal: spacing.xs
+    paddingVertical: spacing.sm,
+    paddingHorizontal: LIST_ROW_PADDING
   },
-  eventIcon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
+  eventIcon: { width: 16, height: 20, alignItems: 'center', justifyContent: 'center' },
   eventBody: { flex: 1, minWidth: 0 },
-  line: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
-  none: { paddingHorizontal: spacing.xs, paddingTop: spacing.xs },
+  line: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textMuted },
+  none: { paddingHorizontal: LIST_ROW_PADDING, paddingTop: spacing.xs },
   actor: { fontWeight: '500', color: colors.textSecondary },
   inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chevronClosed: { transform: [{ rotate: '-90deg' }] },
@@ -403,11 +405,11 @@ const stylesSheet = themedStyleSheet((colors) => ({
     gap: 2
   },
   removed: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: typography.bodySize,
+    lineHeight: 20,
     color: colors.textMuted,
     textDecorationLine: 'line-through'
   },
-  added: { fontSize: 13, lineHeight: 18, color: colors.textPrimary },
+  added: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textPrimary },
   meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))

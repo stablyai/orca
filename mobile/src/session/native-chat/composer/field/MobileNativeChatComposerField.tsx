@@ -5,7 +5,10 @@ import {
   type MobileNativeChatComposerFieldProps
 } from './mobile-native-chat-composer-field-skill'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
-import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import {
+  composerInputStylesSheet,
+  MESSAGE_MAX_HEIGHT
+} from '../../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export function MobileNativeChatComposerField({
@@ -16,10 +19,14 @@ export function MobileNativeChatComposerField({
   ref,
   onKeyboardSubmit: _onKeyboardSubmit,
   onWebPaste: _onWebPaste,
+  maxHeight,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   const styles = useThemedStyles(mobileNativeChatComposerSkillStylesSheet)
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  // As on the web, a cap only lowers the field's own.
+  const cap =
+    maxHeight === undefined ? null : { maxHeight: Math.min(maxHeight, MESSAGE_MAX_HEIGHT) }
   const [fieldHeight, setFieldHeight] = useState(0)
   // Keep one tree so a skill or dictation coming and going cannot remount the field and drop focus.
   return (
@@ -30,7 +37,7 @@ export function MobileNativeChatComposerField({
       {skillToken && !dictationPreview ? (
         <TextInput
           ref={ref}
-          style={composerInputStyles.messageText}
+          style={[composerInputStyles.messageText, cap]}
           placeholder={placeholder}
           {...props}
         >
@@ -42,11 +49,7 @@ export function MobileNativeChatComposerField({
         <TextInput
           ref={ref}
           value={value}
-          style={
-            dictationPreview
-              ? [composerInputStyles.messageText, frameStyles.hiddenText]
-              : composerInputStyles.messageText
-          }
+          style={[composerInputStyles.messageText, cap, dictationPreview && frameStyles.hiddenText]}
           placeholder={dictationPreview ? undefined : placeholder}
           {...props}
         />

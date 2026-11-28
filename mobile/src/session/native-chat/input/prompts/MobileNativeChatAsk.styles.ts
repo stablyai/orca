@@ -61,8 +61,10 @@ export const mobileNativeChatAskStylesSheet = themedStyleSheet((colors) => ({
     flex: 1,
     marginVertical: 10
   },
+  // Off a sheet, a field takes the translucent grey that reads on any surface (composer-input's filledFill).
   other: {
-    marginBottom: spacing.xs
+    marginBottom: spacing.xs,
+    backgroundColor: colors.translucentFill
   },
   footer: {
     flexDirection: 'row',

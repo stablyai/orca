@@ -31,6 +31,8 @@ import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileNativeChatFloatingControls } from '../../session/native-chat/lower-region/MobileNativeChatFloatingControls'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import type { BotItemQuestionStepsSend } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import { mobileBotAvatarSource } from '../host-bot-row-facts'
+import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotItemActivity } from './MobileBotItemActivity'
 import { MobileBotItemCommentBox } from './MobileBotItemCommentBox'
 import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
@@ -48,11 +50,7 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import {
-  botItemCommentDraftKey,
-  quoteIntoBotItemCommentDraft,
-  useBotItemCommentDraftEmpty
-} from './bot-item-comment-drafts'
+import { botItemCommentDraftKey, useBotItemCommentDraftEmpty } from './bot-item-comment-drafts'
 import { useMobileNativeChatDraftInputs } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
@@ -80,7 +78,10 @@ export function MobileBotItemPage({
   hostKey: string
   /** That host's id, which the bot folder's file and skill reads go through. */
   hostId: string
-  bot: { id: string; name: string; folderWorkspaceId: string; agent: string }
+  bot: Pick<
+    PhoneBot,
+    'id' | 'name' | 'folderWorkspaceId' | 'agent' | 'avatar' | 'avatarColor' | 'avatarOutfit'
+  >
   uid: string
   /** Up and down through the list the item opened from; null when it opened from elsewhere. */
   stepper: PhoneBotItemStepper | null
@@ -153,15 +154,6 @@ export function MobileBotItemPage({
     send: quick
   })
   const commentField = useRef<TextInputInstance>(null)
-  // Quoting starts a comment, so the answer card folds to its strip and the box shows.
-  const quoteComment = (text: string): void => {
-    if (askShown) {
-      ask.fold()
-    }
-    quoteIntoBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
-    // In the tap itself: iOS opens the keyboard only for a focus the gesture made.
-    commentField.current?.focus()
-  }
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
@@ -324,11 +316,11 @@ export function MobileBotItemPage({
                 item={item}
                 events={view.events}
                 attachments={{ client, onOpenFile }}
+                botAvatar={mobileBotAvatarSource(bot)}
                 pending={pending}
                 onReveal={jump.center}
                 sent={sent}
                 asking={askOpen}
-                onQuote={quoteComment}
               />
             </ScrollView>
             {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}

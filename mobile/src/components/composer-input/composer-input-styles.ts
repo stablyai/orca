@@ -18,7 +18,8 @@ export const linesHeight = (lines: number) =>
   lines * COMPOSER_LINE_HEIGHT + 2 * MESSAGE_PADDING_VERTICAL
 // A box with no controls is a form field: it opens a few lines tall so it reads as room to write.
 export const FORM_MESSAGE_MIN_HEIGHT = linesHeight(3)
-export const MESSAGE_MAX_HEIGHT = 7 * COMPOSER_LINE_HEIGHT
+// Seven whole lines, the text's own padding included, so the seventh is not cut.
+export const MESSAGE_MAX_HEIGHT = linesHeight(7)
 export const FIELD_MIN_HEIGHT = 44
 /** A field is a row of a grouped list: ListRow's height, its text on the row's 16 pt inset. */
 export const FIELD_ROW_HEIGHT = 48
