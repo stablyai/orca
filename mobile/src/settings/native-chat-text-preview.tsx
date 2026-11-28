@@ -32,8 +32,10 @@ const PREVIEW_CODE_SEGMENTS: MobileSyntaxSegment[] = [
   { text: '))', kind: 'plain' }
 ]
 
-function renderInlineCodeParts(text: string): Array<{ key: string; text: string; code: boolean }> {
-  const parts: Array<{ key: string; text: string; code: boolean }> = []
+type InlineCodePart = { key: string; text: string; code: boolean }
+
+function renderInlineCodeParts(text: string): InlineCodePart[] {
+  const parts: InlineCodePart[] = []
   const re = /`([^`]+)`/g
   let lastIndex = 0
   for (const match of text.matchAll(re)) {
