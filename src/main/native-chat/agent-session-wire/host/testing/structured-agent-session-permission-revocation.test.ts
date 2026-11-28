@@ -57,7 +57,8 @@ it.each([
   await workingRig()
   await rig.workingSend()
   await run().catch(() => {})
-  expect(revoked).not.toHaveBeenCalled()
+  // Never cut (a no-op hand-back after the refusal is fine).
+  expect(revoked.mock.calls.filter((call) => call[3] === true)).toEqual([])
   expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child).toBeDefined()
 })
 
