@@ -1,12 +1,14 @@
 import {
   FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY,
-  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY
+  FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY,
+  MOBILE_FILE_WRITE_RUNTIME_CAPABILITY
 } from '../file-write/file-write-disk-precondition'
 import {
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY,
   STAGED_FILE_UPLOAD_RUNTIME_CAPABILITY
 } from '../file-write/staged-file-save'
 import { FILE_REPLACE_WITH_UPLOAD_RUNTIME_CAPABILITY } from '../file-write/file-bytes-write'
+import { MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY } from '../file-search/mobile-file-content-search'
 
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
@@ -22,6 +24,10 @@ export const FILE_DOC_PREVIEW_RUNTIME_CAPABILITY = 'files.readDocPreview' as con
 export const TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY =
   'files.readTerminalArtifactChunk.v1' as const
 
+// Why: older hosts refuse phones files.createDir, files.rename, files.copy and files.delete, so the phone hides those actions.
+export const FILE_MOBILE_EXPLORER_MUTATIONS_RUNTIME_CAPABILITY =
+  'files.mobile-explorer-mutations.v1' as const
+
 export const FILES_RUNTIME_CAPABILITIES = [
   'files.pathsExist',
   'files.resolve-terminal-path.cross-workspace.v1',
@@ -35,5 +41,8 @@ export const FILES_RUNTIME_CAPABILITIES = [
   STAGED_FILE_SAVE_RUNTIME_CAPABILITY,
   STAGED_FILE_UPLOAD_RUNTIME_CAPABILITY,
   FILE_REPLACE_WITH_UPLOAD_RUNTIME_CAPABILITY,
-  TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY
+  TERMINAL_ARTIFACT_CHUNK_RUNTIME_CAPABILITY,
+  MOBILE_FILE_WRITE_RUNTIME_CAPABILITY,
+  MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY,
+  FILE_MOBILE_EXPLORER_MUTATIONS_RUNTIME_CAPABILITY
 ] as const

@@ -16,6 +16,7 @@ import type { WslHostConnector } from './wsl-host-connector-contract'
 import { noteWslHostUserAction } from './wsl-host-user-actions'
 import { forgetWslHostKeptForPeers, recordWslHostKeptForPeers } from './wsl-host-kept-for-peers'
 import { stopAsHostAccount } from './wsl-host-account-migration'
+import { isWslHostKeyChangedRefusal } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 export type WslHostRemoval = { serverStop: WslHostServerStop; removed: boolean }
 
@@ -48,11 +49,16 @@ export async function removeWslHostServer(
       const name = current ?? record.distro
       const stop = () => connector.stopServer(name, record.environmentId)
       serverStop = await stopAsHostAccount(userDataPath, record, name, stop).catch(
-        (error: unknown): WslHostServerStop => ({
-          stopped: false,
-          verdict: 'unverifiable',
-          reason: errorMessage(error)
-        })
+        (error: unknown): WslHostServerStop =>
+          // The pinned account's server holds another key, so the paired one no longer runs: one Remove.
+          isWslHostKeyChangedRefusal(error)
+            ? {
+                stopped: false,
+                verdict: 'unverifiable',
+                ...wslHostServerStopReason('serverIdentityReset'),
+                forgotten: true
+              }
+            : { stopped: false, verdict: 'unverifiable', reason: errorMessage(error) }
       )
     }
     await connector.disconnect(record.distro)

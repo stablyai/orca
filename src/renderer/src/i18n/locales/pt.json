@@ -2794,7 +2794,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "HTTP Streamable · localhost significa o computador deste bot.",
           "headers": "Cabeçalhos",
-          "authHint": "Se o servidor precisa de login no navegador, Conectar aparece após sua verificação nativa.",
+          "authHint": "Se o servidor precisa de login no navegador, o botão “Entrar” aparece após sua verificação nativa.",
           "executable": "Executável",
           "commandPlaceholder": "npx",
           "args": "Argumentos",
@@ -4846,9 +4846,8 @@
             "84c3b15dca": "Limites de uso do agente",
             "d663430cf9": "Configurar acompanhamento de uso",
             "remoteLabel": "Sem dados de uso em {{host}}",
-            "remoteTitle": "Uso em {{host}}",
-            "remoteBody": "Este espaço de trabalho é executado em {{host}}, então a barra mostra o uso desse host. Entre em um agente lá ou selecione um espaço de trabalho local para ver o uso deste computador.",
-            "remoteOpenAccounts": "Abrir contas de {{host}}"
+            "remoteNoUsageYet": "Ainda sem uso. Entre lá.",
+            "remoteAccounts": "Contas"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Atualizando skills",
@@ -11894,7 +11893,10 @@
             "operationResolve": "Resolver",
             "operationResolveLabel": "Resolver conflitos com IA",
             "operationMoreActions": "Mais ações",
-            "operationAbortConfirm": "Selecione novamente para abortar"
+            "operationAbortConfirm": "Selecione novamente para abortar",
+            "operationRunChangedTitle": "Nada foi abortado",
+            "operationRunChangedDescription": "A operação mudou depois que Abortar foi escolhido. Verifique o estado atual e tente novamente.",
+            "operationRunUnknown": "Não é possível saber qual execução está pausada, então Abortar está desativado aqui. Atualize o controle de código-fonte ou aborte-a em um terminal."
           },
           "checks": {
             "panel": {
@@ -16767,7 +16769,7 @@
           "runStatusDispatchFailed": "Falhou"
         },
         "runContent": {
-          "noOutput": "Nenhum conteúdo de saída disponível."
+          "noOutput": "Sem saída."
         },
         "runViewState": {
           "viewRun": "Ver execução",
@@ -23990,10 +23992,7 @@
         "refused": "O Google recusou as credenciais deste chat.",
         "usageLimit": "Este login atingiu o limite de uso.",
         "signInGoogle": "Entrar com o Google",
-        "yourAgy": "Seu agy",
         "yourAgyVersion": "Seu agy · v{{version}}",
-        "orcasAgy": "agy do Orca",
-        "orcasAgyVersion": "agy do Orca · v{{version}}",
         "runsOn": "Executa em: {{program}}",
         "keepsOwnLogin": "Este chat mantém o login do Google do próprio agy. Os novos chats usam {{method}}.",
         "apiKeyEnvironment": "Do seu ambiente",
@@ -25084,6 +25083,9 @@
           "never": "Nunca"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Configurações de compatibilidade de baixo nível para solução de problemas. Estas configurações ficam salvas neste computador, não em {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Variáveis de ambiente disponíveis"
       },
@@ -26112,7 +26114,6 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "active": "Ativo",
-      "runtime": "Runtime",
       "chatTitle": "Chat do Antigravity",
       "terminalTitle": "agy no terminal",
       "terminalDescription": "Usa as contas salvas do próprio agy. A troca vale para novas sessões do agy.",
@@ -29555,14 +29556,13 @@
         "serverPr": "PR ainda não exibido para trabalho em servidor"
       },
       "menu": {
-        "waiting": "Aguardando…",
-        "cancel": "Cancelar",
-        "done": "Concluído"
+        "waiting": "Aguardando…"
       },
       "loading": "Carregando itens…",
       "row": {
-        "more": "Mais",
+        "cancel": "Cancelar",
         "done": "Concluído",
+        "more": "Mais",
         "select": "Selecionar {{title}}"
       },
       "snooze": {

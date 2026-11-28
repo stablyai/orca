@@ -15,6 +15,7 @@ import {
   onStructuredAgentSessionHostChanged
 } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { SlackMirror } from './slack-mirror'
+import { startThreadStatus } from './thread-status/thread-status-start'
 import { connectorAskerImages } from './connector-asker-images'
 import { postConnectorAction } from '../connector-cloud/connector-actions'
 import { cloudConversation } from '../../shared/connectors/connector-cloud-contract'
@@ -112,7 +113,7 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
-    const lines = leaveLines({
+    const lineDeps: Parameters<typeof leaveLines>[0] = {
       store,
       cloud: () => runtime.getConnectorCloud?.() ?? null,
       ...(store.flushPendingOrThrowAsync
@@ -127,8 +128,9 @@ export function installExternalConversations(
               ?.deps.store.connectorReplies()
               ?.unsentAnswer(link.sessionId, link, turnId)) === true
         )
-    })
-    installLeaveLines(lines)
+    }
+    const lines = installLeaveLines(leaveLines(lineDeps))
+    startThreadStatus({ ...lineDeps, store }, () => seam)
     const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({
       slackMirror: () => mirror,

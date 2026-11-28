@@ -218,11 +218,12 @@ export function useMobileTasksProjectThreadReplyActions(
     },
     [activeGitHubProjectHost, client, findProjectRowRepo, itemReplyDrafts, projectMutating]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     deleteProjectRowComment,
     toggleProjectGitHubReviewThread,
     replyToProjectGitHubComment
-  })
+  }
 }
 
 export type ProjectThreadReplyActionsModel = ReturnType<

@@ -8,7 +8,12 @@ import type { AppState } from '../../types'
 export type WorkspaceAttentionSet = Parameters<StateCreator<AppState>>[0]
 export type WorkspaceAttentionGet = Parameters<StateCreator<AppState>>[1]
 
-export type OnScreenAttentionTarget = { worktreeId: string | null; tabId: string }
+/** sessionId: the chat a structured tab shows, whose markers sit under its conversation address. */
+export type OnScreenAttentionTarget = {
+  worktreeId: string | null
+  tabId: string
+  sessionId?: string
+}
 
 /** What a visible, focused window shows: its workspaces (main and floating) and their tabs. */
 export type OnScreenAttention = {

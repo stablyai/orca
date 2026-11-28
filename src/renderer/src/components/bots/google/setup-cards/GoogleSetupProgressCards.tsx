@@ -1,6 +1,6 @@
 // The live step list, and the card for a step the person does. Neither posts a chat message: Done,
 // "Take over from here" and "Let me do this one" are card answers the bot reads.
-import React, { useCallback, useState } from 'react'
+import React, { useCallback } from 'react'
 import { Check, ExternalLink, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -32,6 +32,7 @@ import {
 } from './GoogleSetupCardParts'
 import { googleSetupStepTitle } from './google-setup-card-copy'
 import { answerGoogleSetup, stopGoogleSetup, useGoogleSetupBlocker } from './google-setup-run-store'
+import { useNativeChatViewGuard } from '../../../native-chat/pane/ownership/native-chat-view-memory'
 
 function keySource(run: GoogleSetupRun, armed: boolean): KeySource {
   // Orca's browser hands the key to main as it downloads; only the person's own browser needs a watch.
@@ -126,7 +127,8 @@ export function GoogleSetupProgressCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const capture = useSetupKeyCapture(bot, run, newest)
-  const [stopping, setStopping] = useState(false)
+  // Kept with the chat tab: a card released mid-stop returns still stopping.
+  const [stopping, setStopping] = useNativeChatViewGuard(`google-setup-stop:${run.id}`, false)
   const stop = (): void => {
     setStopping(true)
     void stopGoogleSetup(bot, run.id)
@@ -267,7 +269,8 @@ export function GoogleSetupStepCard({
   newest: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const [busy, setBusy] = useState(false)
+  // Kept with the chat tab: a step card released mid-answer returns still sending it.
+  const [busy, setBusy] = useNativeChatViewGuard(`google-setup-step:${run.id}:${step}`, false)
   const { n, total, done, handedBack, acts, ended, takeOver, watching } = googleSetupStepCardView(
     run,
     step,

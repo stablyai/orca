@@ -13,7 +13,6 @@ import type { Bot } from '../bot-types'
 import type { OrchestrationSessionWorker } from '../orchestration-session-workers'
 import type { ExternalConversationLink } from '../connectors/external-conversation-link'
 import { externalConversationTitle } from '../external-conversation-title'
-import { structuredAgentSessionStatusPaneKey } from '../agent-session/view/structured-agent-session-tab'
 import { botAutomationRows, type BotAutomationRow } from './bot-automation-rows'
 import {
   botWorkerTool,
@@ -25,6 +24,7 @@ import {
 import { handedAgentRows, type BotHandedAgentObservation } from './bot-activity-handed-agents'
 import type { BotUpNext } from './bot-look-around'
 import { pendingWaits, waitDueAt } from '../automation-once'
+import { chatPaneKey } from '../agent-session/view/structured-agent-session-projection'
 
 /** Completed work kept on screen; older rows live in the Automations page and Session History. */
 export const BOT_ACTIVITY_COMPLETED_LIMIT = 20
@@ -229,7 +229,7 @@ export function buildBotActivity(input: BotActivityInput): BotActivity {
     if (run.chatSessionId) {
       automationBySessionId.set(run.chatSessionId, automation)
       // A run's chat has no tab, so its workers find it by its status row's key.
-      originByPaneKey.set(structuredAgentSessionStatusPaneKey(run.chatSessionId), {
+      originByPaneKey.set(chatPaneKey(run.chatSessionId), {
         kind: 'automation',
         name: automation.name
       })

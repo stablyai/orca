@@ -1,12 +1,13 @@
 /** Which records the orchestrator may drop: distros with neither a WSL host nor bridge projects. */
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import { recordsUserChoice } from './wsl-move-orchestrator-external-transitions'
+import type { WslMoveInUseCheck } from './wsl-move-orchestrator-ports'
 
 export type WslMovePruneContext = {
   records: ReadonlyMap<string, WslMoveOrchestratorRecord>
   isBusy: (key: string) => boolean
   isDisposed: () => boolean
-  isDistroInUse: (distro: string) => boolean | Promise<boolean>
+  isDistroInUse: (distro: string, check: WslMoveInUseCheck) => boolean | Promise<boolean>
   drop: (key: string) => void
 }
 
@@ -23,7 +24,9 @@ export async function pruneWslMoveOrchestratorRecords(
     if (isBusy(key) || record.state.kind === 'moving' || recordsUserChoice(record)) {
       continue
     }
-    const inUse = await context.isDistroInUse(record.distro)
+    // A `stateLost` hold may guard a decline the set-aside file lost: it needs stronger proof.
+    const droppingLostHold = record.state.kind === 'parked' && record.state.stateLost === true
+    const inUse = await context.isDistroInUse(record.distro, { droppingLostHold })
     if (isDisposed()) {
       return false
     }

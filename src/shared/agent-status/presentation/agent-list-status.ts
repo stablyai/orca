@@ -71,6 +71,8 @@ export type AgentListVerdictUpdate =
 export type AgentPaneActivityChange = {
   kind: 'read' | 'unread' | 'clear'
   paneKeys: string[]
+  /** When set on a `read`, skip panes that already received a newer turn than this timestamp. */
+  upToTimestamp?: number
 }
 
 export type AgentPaneActivityRequest = AgentPaneActivityChange & { requestId: string }

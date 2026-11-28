@@ -80,15 +80,21 @@ function withPlatform(platform: RemoteHostPlatform | null): { platform?: RemoteH
   return platform ? { platform } : {}
 }
 
-/** Before any deploy (#49180): an unpinned host's default account must hold the paired key, or Orca would start a stranger. */
-export function refuseUnpairedDefaultAccount(
+/** Refuses an unpinned host's unpaired account (#49180); true is only a hint the pinned account's key changed. */
+export function refuseUnpairedHostAccount(
   distro: string,
   facts: WslAccountFacts,
   pairedKey: string | undefined
-): void {
-  if (facts.account && pairedKey && facts.ownKey !== pairedKey && !pinnedWslHostLinuxUser(distro)) {
+): boolean {
+  if (!facts.account || !pairedKey || facts.ownKey === pairedKey) {
+    return false
+  }
+  const pinned = pinnedWslHostLinuxUser(distro)
+  if (!pinned) {
     throw new WslHostAccountChangedError(distro, facts.account)
   }
+  // A missing key may be mid-write, and another account's key says nothing of the pinned one's.
+  return Boolean(facts.ownKey) && facts.account.name === pinned
 }
 
 /** WSL 1 runs no Linux kernel, so the pinned Node and its pty cannot run there. */
@@ -120,7 +126,7 @@ export async function holdWslDistroWithContext(
   if (facts.otherServerAccount) {
     noteWslOtherAccountServer(name, facts.otherServerAccount)
   }
-  refuseUnpairedDefaultAccount(name, facts, pairedOffer?.publicKeyB64)
+  const pairedKeyChanged = refuseUnpairedHostAccount(name, facts, pairedOffer?.publicKeyB64)
   // Once the hold fails, stop the probes: after dispose they fall back to fresh wsl.exe execs,
   // which would boot a distro that just went away (E9).
   const probes = new AbortController()
@@ -145,7 +151,12 @@ export async function holdWslDistroWithContext(
       readWslDefaultUserBesidePin(target, probes.signal)
     ])
     const linuxUser = facts.account?.name ?? null
-    const launchIdentity = { holder: held.outcome, linuxUser, defaultLinuxUser }
+    const launchIdentity = {
+      holder: held.outcome,
+      linuxUser,
+      defaultLinuxUser,
+      ...(pairedKeyChanged ? { pairedKeyChanged: true as const } : {})
+    }
     return { context, connectState: connectState.snapshot(), launchIdentity }
   } catch (error) {
     probes.abort(error)

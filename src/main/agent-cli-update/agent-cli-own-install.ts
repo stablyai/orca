@@ -36,14 +36,15 @@ export async function findOwnAgentCli(
   agent: AgentCliUpdateAgent,
   settings: AgentCliUpdateSettings
 ): Promise<OwnAgentCli | null> {
-  // A Command setting may name a wrapper, which has no update of its own.
-  if (hasExplicitTuiLaunchCommand(settings, agent)) {
+  const spec = acpLaunchSpecFor(agent)
+  // A Command setting may name a wrapper, which has no update of its own; chats that ignore it
+  // still run the stock CLI.
+  if (!spec?.ignoreAgentCommandSetting && hasExplicitTuiLaunchCommand(settings, agent)) {
     return null
   }
   const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
   const homePath = env.HOME ?? env.USERPROFILE
   // ACP chats also search their installers' folders after PATH.
-  const spec = acpLaunchSpecFor(agent)
   const command = spec?.command ?? agent
   const pathEnv = [
     env.PATH ?? env.Path,

@@ -1418,7 +1418,7 @@
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv",
-      "tapToPairAgain": "Zum erneuten Koppeln mit dem Desktop tippen"
+      "tapToPairAgain": "Zum erneuten Koppeln tippen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"
@@ -2047,7 +2047,9 @@
       "loading": "Dateien werden geladen…",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
-      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt"
+      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
+      "more": "Mehr",
+      "newEntry": "Neu"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
@@ -2062,7 +2064,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Namen kopieren",
-      "copyRelativePath": "Relativen Pfad kopieren"
+      "copyRelativePath": "Relativen Pfad kopieren",
+      "newFile": "Neue Datei",
+      "newFolder": "Neuer Ordner",
+      "rename": "Umbenennen",
+      "duplicate": "Duplizieren",
+      "create": "Erstellen",
+      "fileName": "Dateiname",
+      "folderName": "Ordnername",
+      "deleteTitle": "{{name}} löschen?",
+      "deleteFileDetail": "Dadurch wird die Datei dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "deleteFolderDetail": "Dadurch werden der Ordner und sein Inhalt dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "duplicateFailed": "{{name}} konnte nicht dupliziert werden. {{reason}}",
+      "duplicateUnconfirmed": "Die Kopie ist möglicherweise unvollständig. Prüfe sie und versuche es erneut.",
+      "deleteFailed": "{{name}} konnte nicht gelöscht werden. {{reason}}",
+      "deleteUnconfirmed": "Es ist noch vorhanden. Prüfe den Ordner und versuche es erneut.",
+      "renameFailed": "{{name}} konnte nicht umbenannt werden. {{reason}}",
+      "newFileFailed": "Die Datei konnte nicht erstellt werden. {{reason}}",
+      "newFolderFailed": "Der Ordner konnte nicht erstellt werden. {{reason}}",
+      "share": "Teilen",
+      "shareFailed": "{{name}} konnte nicht geteilt werden",
+      "shareTooLarge": "Dateien über 256 MB können nicht vom Telefon geteilt werden",
+      "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",

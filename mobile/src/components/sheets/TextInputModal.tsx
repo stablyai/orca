@@ -24,6 +24,8 @@ type SheetProps = {
   /** The back-out's label, when "Cancel" would read as the submit itself. */
   cancelLabel?: string
   selectTextOnFocus?: boolean
+  /** Part of the text selected when the field opens, e.g. a file's name without its extension; wins over selectTextOnFocus. */
+  initialSelection?: { start: number; end: number }
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
   /** Shown under the field; the text stays so the user can retry. */
@@ -92,6 +94,7 @@ export function TextInputSheetContent({
   submitLabel,
   cancelLabel,
   selectTextOnFocus = false,
+  initialSelection,
   allowEmpty = false,
   keyboardType,
   error,
@@ -107,6 +110,8 @@ export function TextInputSheetContent({
   const colors = useMobileColors()
   const t = useMobileTranslation()
 
+  // Applied once: the user's first move of the caret or selection takes over.
+  const [selection, setSelection] = useState(initialSelection)
   const filled = !submitBlocked && (allowEmpty || value.trim().length > 0)
   const canSubmit = !busy && filled
   const NoticeIcon = notice?.icon
@@ -137,7 +142,9 @@ export function TextInputSheetContent({
         autoFocus
         autoCapitalize="none"
         autoCorrect={false}
-        selectTextOnFocus={selectTextOnFocus}
+        selectTextOnFocus={selectTextOnFocus && !initialSelection}
+        selection={selection}
+        onSelectionChange={selection ? () => setSelection(undefined) : undefined}
         keyboardType={keyboardType}
         returnKeyType="done"
         onSubmitEditing={handleSubmit}

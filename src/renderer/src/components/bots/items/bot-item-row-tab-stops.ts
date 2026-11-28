@@ -1,5 +1,6 @@
 // Where Tab stops inside an item row, for a long group that moves Tab on to the next row.
 import type { BotItem } from '../../../../../shared/bots/bot-items'
+import { revealFocusBelowBotPanelHeader } from '../BotPanelStickyHeader'
 
 /** Which end of a row focus enters at: Tab forward lands on its first control, Shift+Tab on its last. */
 export type BotItemRowEdge = 'first' | 'last'
@@ -22,7 +23,7 @@ export function rowTabStops(row: HTMLElement, inOrder = true): HTMLElement[] {
 
 /** The control a row takes focus on: the row itself while its controls are off, else the end Tab came
  *  in from, else its title. */
-export function rowFocusControl(
+function rowFocusControl(
   row: HTMLElement,
   edge: BotItemRowEdge | undefined,
   disabled: boolean
@@ -36,6 +37,19 @@ export function rowFocusControl(
   }
   const controls = rowTabStops(row, false)
   return (edge === 'first' ? controls[0] : controls.at(-1)) ?? title
+}
+
+export function focusBotItemRow(
+  row: HTMLElement,
+  edge: BotItemRowEdge | undefined,
+  disabled: boolean,
+  quiet: boolean
+): void {
+  const control = rowFocusControl(row, edge, disabled)
+  if (quiet && control) {
+    revealFocusBelowBotPanelHeader(control, row)
+  }
+  control?.focus({ preventScroll: quiet })
 }
 
 /** Tab or Shift+Tab, with no other modifier and not already handled. */

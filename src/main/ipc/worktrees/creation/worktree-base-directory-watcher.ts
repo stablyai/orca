@@ -124,6 +124,7 @@ async function replaceWatch(
   const previous = activeWatches.get(target.key)
   if (previous) {
     previous.repos = target.repos
+    previous.subscription.syncRepos?.()
     previous.mainWindow = mainWindow
     applyActiveGitStatusRefBinding(previous)
     return

@@ -35,6 +35,9 @@ export type AntigravityAccountState = {
   chatUsesAgy?: boolean
   /** That agy's version, when new chats run on it. */
   chatAgyVersion?: string
+  /** Host only: whether agy is where new chats look for it (PATH, then Google's install folders).
+   *  Orca doesn't install it. Absent from older hosts, WSL, and a host that didn't answer in time. */
+  agyInstalled?: boolean
   /** Host only: new chats run on agy, which isn't signed in yet. Absent from older hosts and WSL. */
   chatAgySignedOut?: boolean
   /** Where new Google-account chats run, as the route answered: agy, or Orca's server sign-in.

@@ -1,6 +1,5 @@
 // Where an item's linked worker is, by its Dispatch: the host finds it (reopening a terminal Orca closed),
 // so a worker opens even when the Chats tree hasn't loaded its page.
-import { structuredAgentSessionPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
@@ -10,6 +9,7 @@ import { mobileStructuredSessionOpenMessage } from '../../session/native-chat/ag
 import { openMobileStructuredSession } from '../../session/native-chat/agent-session/open-mobile-structured-session'
 import { openMobileAgentMessageTerminal } from '../../session/tabs/mobile-agent-message-terminal'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 async function locateBotItemWorker(
   client: RpcClient,
@@ -31,7 +31,7 @@ async function locateBotItemWorker(
       case 'opened':
         return {
           worktreeId: result.target.worktreeId,
-          paneKey: structuredAgentSessionPaneKey(result.tab.id, result.target.sessionId)
+          paneKey: chatPaneKey(result.target.sessionId)
         }
       case 'terminal':
         return await openMobileAgentMessageTerminal(client, result.handle, current, deadline)

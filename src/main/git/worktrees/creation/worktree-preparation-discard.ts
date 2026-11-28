@@ -22,6 +22,7 @@ import {
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
 import {
+  matchesRecordedPreparationCheckoutIdentity,
   verifyOriginalPreparationDirectory,
   verifyWorktreePreparationLock,
   verifyWorktreePreparationLockAtPath,
@@ -102,6 +103,9 @@ async function verifyDiscardPreparationOwner(
       signal
     )
     if (!checkoutAbsent) {
+      if (!(await matchesRecordedPreparationCheckoutIdentity(gitDir, hostPath, signal))) {
+        throw new WorktreePreparationLockOwnershipError(error, true)
+      }
       await restoreMissingGitlink(hostPath, gitDir, signal)
     }
     return gitDir

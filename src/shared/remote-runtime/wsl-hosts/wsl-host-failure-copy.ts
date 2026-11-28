@@ -29,6 +29,8 @@ export const WSL_HOST_STATUS_DETAIL_COPY = {
   peerCheckFailed:
     'Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}',
   removalUnrecorded: 'Orca couldn’t record what this Remove left running: {{detail}}',
+  serverIdentityReset:
+    'It runs a reset or reinstalled server, not the one this desktop paired with. Add the host again to pair with it.',
   runsAsOtherUser: 'Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.',
   installLockWait: {
     one: 'Waiting for another Orca install in this distro to finish. If it doesn’t, Orca takes over in about {{count}} minute.',

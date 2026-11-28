@@ -262,7 +262,8 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setSetupPrompt(null)
     setOrcaYamlTrustPrompt(null)
   }, [])
-  return Object.assign(model, {
+  return {
+    ...model,
     keepSettings,
     resetGitHubItemsState,
     boundClient,
@@ -274,7 +275,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     persistGitHubProjectSettings,
     persistSetupHookTrust,
     resetWorkspaceCreateState
-  })
+  }
 }
 
 export type ClientSettingsActionsModel = ReturnType<typeof useMobileTasksClientSettingsActions>

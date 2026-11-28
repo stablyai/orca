@@ -37,6 +37,11 @@ function buildMobileTerminalClipboardTextPayload(
 
 type UseMobileTerminalPasteOptions = {
   readonly sendTerminalUserInput: typeof terminalInputSend.request
+  readonly sendTerminalUserInputChunks?: (
+    client: Parameters<typeof terminalInputSend.request>[0],
+    chunks: readonly Parameters<typeof terminalInputSend.request>[1][],
+    options?: Parameters<typeof terminalInputSend.request>[2]
+  ) => Promise<Awaited<ReturnType<typeof terminalInputSend.request>>[]>
   readonly agent?: string | null
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -57,6 +62,7 @@ type UseMobileTerminalPasteOptions = {
 
 export function useMobileTerminalPaste({
   sendTerminalUserInput,
+  sendTerminalUserInputChunks,
   activeHandle,
   agent,
   activeHandleRef,
@@ -159,39 +165,36 @@ export function useMobileTerminalPaste({
         showToast(translate('session.useTerminalPaste.pasteFailed', 'Paste failed'), 1500)
         return
       }
+      const buildChunkParams = (text: string) => ({
+        terminal: targetHandle,
+        text,
+        enter: false,
+        ...(deviceTokenRef.current
+          ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
+          : {})
+      })
       const sendChunk = (text: string) =>
-        sendTerminalUserInput(currentClient, {
-          terminal: targetHandle,
-          text,
-          enter: false,
-          ...(deviceTokenRef.current
-            ? { client: { id: deviceTokenRef.current, type: 'mobile' as const } }
-            : {})
-        }).then(
+        sendTerminalUserInput(currentClient, buildChunkParams(text)).then(
           (response) => terminalInputSend.interpret(response) === true,
           () => false
         )
-      let delivered = true
-      // Send in order and stop at the first refusal or reconnect, as desktop's remote paste does.
+      // Enqueue every chunk atomically as 1 waiter with no tail merging so >8 MiB pastes stay within
+      // cap, frames stay <= 64 KiB, and keyboard input cannot land inside a bracketed paste.
       const pasteEpoch = epoch(currentClient)
-      for (const [index, chunk] of splitTerminalInputChunks(
-        payload,
-        PASTE_SEND_CHUNK_BYTES
-      ).entries()) {
-        if (epoch(currentClient) !== pasteEpoch) {
-          delivered = false
-          break
-        }
-        if (!(await sendChunk(chunk))) {
-          // Close a bracketed paste whose start landed so the program leaves paste mode.
-          if (index > 0 && bracketed) {
-            await sendChunk(BRACKETED_PASTE_END)
-          }
-          delivered = false
-          break
-        }
+      const chunks = splitTerminalInputChunks(payload, PASTE_SEND_CHUNK_BYTES)
+      const results = sendTerminalUserInputChunks
+        ? await sendTerminalUserInputChunks(currentClient, chunks.map(buildChunkParams)).then(
+            (responses) =>
+              responses.map((response) => terminalInputSend.interpret(response) === true),
+            () => chunks.map(() => false)
+          )
+        : await Promise.all(chunks.map((chunk) => sendChunk(chunk)))
+      const firstRefused = results.indexOf(false)
+      if (firstRefused > 0 && bracketed && epoch(currentClient) === pasteEpoch) {
+        // Close a bracketed paste whose start landed so the program leaves paste mode.
+        await sendChunk(BRACKETED_PASTE_END)
       }
-      if (!delivered) {
+      if (firstRefused !== -1 || epoch(currentClient) !== pasteEpoch) {
         throw new Error('Terminal input was not accepted')
       }
       onSuccess()
@@ -222,6 +225,7 @@ export function useMobileTerminalPaste({
     }
   }, [
     sendTerminalUserInput,
+    sendTerminalUserInputChunks,
     activeHandle,
     agent,
     activeHandleRef,

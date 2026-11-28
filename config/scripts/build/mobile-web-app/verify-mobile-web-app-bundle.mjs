@@ -49,8 +49,10 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 // update (shellDownloadedAssets), so this budget also bounds that download.
 // Eager: main's own fence. 11 MiB since reverting #48282 put the diagram engine back in it, at 11,479,156
 // bytes (2026-11-24); +16 KiB when main reached 11,534,272 and item reply targets added ~1.8 KB (2026-11-26).
-// +1 MiB when React Compiler's memo caches took it from 11,530,494 to 12,657,291 (2026-11-27).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 12 * 1024 * 1024 + 112 * 1024
+// +1 MiB when React Compiler's memo caches took it from 11,530,494 to 12,657,291 (2026-11-27);
+// +16 KiB for main's growth since, 94 merges touching mobile code, to 12,699,706 (2026-11-28);
+// +240 KiB of room at 12,700,609 while the compiler's memo-cache cost is trimmed (2026-11-28).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 12 * 1024 * 1024 + 368 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 

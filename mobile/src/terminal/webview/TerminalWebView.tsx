@@ -7,7 +7,10 @@ import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-err
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
 import { xtermWebViewSource } from '../document/native-terminal-html'
 import { terminalBundledFontCss } from '../fonts/terminal-bundled-font-css'
-import { DEFAULT_TERMINAL_FONT_STYLE } from '../preferences/terminal-font-style'
+import {
+  DEFAULT_TERMINAL_FONT_STYLE,
+  type TerminalFontId
+} from '../preferences/terminal-font-style'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
@@ -26,8 +29,8 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
         shown: props.shownAtMount ?? true
       })
     )
-    // No asset server here: a bundled font travels with the first command that needs it after each load.
-    const fontInDocumentRef = useRef(startFontStyle.font)
+    // No asset server here: each bundled font travels once per document load on the first command that needs it.
+    const fontsInDocumentRef = useRef<Set<TerminalFontId>>(new Set([startFontStyle.font]))
 
     const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {
       const font =
@@ -35,9 +38,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           ? command.fontStyle?.font
           : undefined
       const fontFaceCss =
-        font && font !== fontInDocumentRef.current ? terminalBundledFontCss(font) : undefined
+        font && !fontsInDocumentRef.current.has(font) ? terminalBundledFontCss(font) : undefined
       if (font) {
-        fontInDocumentRef.current = font
+        fontsInDocumentRef.current.add(font)
       }
       webViewRef.current?.postMessage(
         JSON.stringify(fontFaceCss ? { ...command, fontFaceCss } : command)
@@ -59,7 +62,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
 
     useImperativeHandle(ref, () => handle, [handle])
     const handleLoadStart = useCallback(() => {
-      fontInDocumentRef.current = startFontStyle.font
+      fontsInDocumentRef.current = new Set([startFontStyle.font])
       resetReadiness()
     }, [resetReadiness, startFontStyle.font])
 

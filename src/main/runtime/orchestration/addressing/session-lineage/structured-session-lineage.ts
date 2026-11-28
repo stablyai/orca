@@ -2,11 +2,8 @@
 
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredWorkerHostScope } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type AgentSessionRecordReader = {
   getRecord: (sessionId: string) => AgentSessionConversationView | null
@@ -106,7 +103,7 @@ export type LineageRunningSession =
 
 /** The one forward walk: which session runs `sessionId`'s conversation now. */
 export function resolveLineageRunningSession(
-  store: AgentSessionRecordReader | null,
+  store: Pick<AgentSessionRecordReader, 'getRecord'> | null,
   sessionId: string
 ): LineageRunningSession {
   const lineage = [sessionId]
@@ -170,7 +167,7 @@ export function createCanonicalSessionPaneResolver(
   const resolve = createCanonicalSessionResolver(store)
   return (sessionId) => {
     const id = resolve(sessionId)
-    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+    return chatPaneKey(id)
   }
 }
 

@@ -160,7 +160,7 @@ it('keeps the release running chats use until Orca next starts', async () => {
 
 it('leaves sign-in files beside the releases untouched', async () => {
   await seedRelease(OLD)
-  const tokens = join(data, 'antigravity-chat', 'antigravity-acp')
+  const tokens = join(data, 'agent-chat', 'agent-auth')
   await mkdir(tokens, { recursive: true })
   const files = ['oauth_token.json', 'google_accounts.json']
   for (const name of files) {

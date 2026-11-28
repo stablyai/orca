@@ -22,8 +22,22 @@ const FILESYSTEM_READ_CHANNELS = [
   'fs:pathsExist',
   'fs:pathExists'
 ] as const
-const FILESYSTEM_WRITE_CHANNELS = ['fs:writeFile', 'fs:writeFileBytes', 'fs:deletePath'] as const
+const FILESYSTEM_WRITE_CHANNELS = [
+  'fs:writeFile',
+  'fs:writeFileBytes',
+  'fs:deletePath',
+  'fs:createFile',
+  'fs:createDir',
+  'fs:rename',
+  'fs:copy',
+  'fs:importExternalPaths',
+  'fs:stageExternalPathsForRuntimeUpload',
+  'fs:uploadExternalFileToRuntime',
+  'fs:resolveDroppedPathsForAgent',
+  'fs:uploadPathsToAgentSessionAttachments'
+] as const
 const FILESYSTEM_SEARCH_CHANNELS = ['fs:listFiles', 'fs:cancelListFiles'] as const
+const FILESYSTEM_CONTENT_SEARCH_CHANNELS = ['fs:search', 'fs:cancelSearch'] as const
 const FILESYSTEM_GIT_COMMIT_CHANNELS = [
   'git:createBranch',
   'git:sequencerAbort',
@@ -95,6 +109,13 @@ export function registerFilesystemHandlers(
   registerLazyIpcHandleGroup(FILESYSTEM_SEARCH_CHANNELS, async (ipc) => {
     const { registerFilesystemSearchHandlers } = await import('./search/filesystem-search-handlers')
     registerFilesystemSearchHandlers(context, ipc)
+  })
+
+  clearChannels(FILESYSTEM_CONTENT_SEARCH_CHANNELS)
+  registerLazyIpcHandleGroup(FILESYSTEM_CONTENT_SEARCH_CHANNELS, async (ipc) => {
+    const { registerFilesystemContentSearchHandler } =
+      await import('./search/filesystem-content-search-handler')
+    registerFilesystemContentSearchHandler(context, ipc)
   })
 
   clearChannels(FILESYSTEM_GIT_COMMIT_CHANNELS)

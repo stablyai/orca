@@ -59,7 +59,7 @@ import {
   TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE
 } from '../../../shared/remote-runtime/protocol/runtime-capability-degradation'
 import { MOBILE_WEB_BUNDLE_CAPABILITY } from '../../../shared/mobile-web-bundle/mobile-web-bundle-capability'
-import { getBundledMobileWebBundleRoot } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
+import { hasValidBundledMobileWebBundle } from '../rpc/methods/mobile-delivery/bundled-mobile-web-bundle'
 import { runtimeTerminalDegradation } from '../terminal/launch/native-terminal-availability'
 import { isWindowsProcessStartTimeAvailable } from '../../windows/windows-process-table'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-create-idempotency'
@@ -163,8 +163,8 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       capabilities.push(DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY)
     }
     capabilities.push(...darkSwitchRuntimeCapabilities())
-    // Dev/serve installs may lack out/mobile-web; advertise downloads only where the install ships it.
-    if (getBundledMobileWebBundleRoot()) {
+    // Dev/serve installs may lack or have a partial out/mobile-web; advertise only when manifest.json validates.
+    if (hasValidBundledMobileWebBundle()) {
       capabilities.push(MOBILE_WEB_BUNDLE_CAPABILITY)
     }
     // Report the actual failure so operators are not told to fix already-correct configuration.

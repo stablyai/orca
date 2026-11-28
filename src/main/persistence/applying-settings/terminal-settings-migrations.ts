@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { OrcaWorkspaceLayout } from '../../../shared/worktree/paths/orca-workspace-layout'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import { parseAgentCommand } from '../../../shared/agent-launch/startup/agent-command-plan'
 import {
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows
@@ -113,6 +114,33 @@ type RetiredGlobalSettings = {
   experimentalBrowserExtensions?: unknown
   // Gemini CLI support was removed along with its usage credentials switch.
   geminiCliOAuthEnabled?: unknown
+  // Orca no longer keeps its own agy, so its kill switch has nothing to turn off.
+  antigravityManagedAgyEnabled?: unknown
+}
+
+// Orca's own agy and its retired ACP server lived here; users install agy themselves now.
+const RETIRED_AGY_COPY = /[\\/]agent-runtimes[\\/](?:agy|antigravity)[\\/]/i
+
+/** Whether the program `command` runs (never an argument) is in Orca's retired agy folders. */
+function runsRetiredAgyCopy(command: string): boolean {
+  // PowerShell needs `&` before a quoted path; the path after it is the program.
+  const input = command.trim().replace(/^&\s*/, '')
+  const windowsPath = /^["']?(?:[A-Za-z]:[\\/]|\\\\)/.test(input)
+  const parsed = parseAgentCommand('', input, windowsPath ? 'literal' : 'escape')
+  return parsed.ok && RETIRED_AGY_COPY.test(parsed.binary)
+}
+
+/** An Antigravity Command naming Orca's deleted copy would leave terminals launching nothing. */
+function withoutRetiredAgyCommand(
+  overrides: GlobalSettings['agentCmdOverrides'] | undefined
+): GlobalSettings['agentCmdOverrides'] | undefined {
+  const command = overrides?.antigravity
+  if (typeof command !== 'string' || !runsRetiredAgyCopy(command)) {
+    return overrides
+  }
+  const { antigravity: _retiredCopy, ...rest } = overrides ?? {}
+  void _retiredCopy
+  return rest
 }
 
 export function stripRetiredGlobalSettings(
@@ -134,6 +162,7 @@ export function stripRetiredGlobalSettings(
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
     experimentalBrowserExtensions: _retiredBrowserExtensionsExperiment,
     geminiCliOAuthEnabled: _retiredGeminiCliOAuth,
+    antigravityManagedAgyEnabled: _retiredManagedAgySwitch,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -151,7 +180,9 @@ export function stripRetiredGlobalSettings(
   void _retiredPluginFullAccessSwitch
   void _retiredBrowserExtensionsExperiment
   void _retiredGeminiCliOAuth
-  return rest
+  void _retiredManagedAgySwitch
+  const agentCmdOverrides = withoutRetiredAgyCommand(rest.agentCmdOverrides)
+  return agentCmdOverrides === rest.agentCmdOverrides ? rest : { ...rest, agentCmdOverrides }
 }
 
 /** A profile saved before the default-view switch retired, with Chat UI on and new tabs opening in the terminal. */

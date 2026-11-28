@@ -6,6 +6,7 @@ import { removeTempDirs } from '../../../shared/testing/remove-temp-dirs.test-su
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import type { WslHostConnector } from './wsl-host-connector-contract'
 import { pinnedWslHostLinuxUser, pinWslHostLinuxUsers } from '../orcad/wsl-orcad-host-user'
+import { OrcadManagedIdentityError } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 const store = vi.hoisted((): { removed: string[]; pending: string[] } => ({
   removed: [],
@@ -100,6 +101,36 @@ describe('removing a WSL host whose server Orca cannot reach', () => {
     await removeWslHostServer(userDataPath, connector, { ...record, linuxUser: 'root' })
     expect(stoppedAs).toBe('root')
     expect(pinnedWslHostLinuxUser('Ubuntu-Renamed')).toBeUndefined()
+  })
+
+  // Its refusal tells the user to remove and re-add; a second Remove must not be needed for that.
+  it("removes it on the first Remove once its account's server holds another key", async () => {
+    const connector = unreachableConnector()
+    connector.stopServer = async () => {
+      throw OrcadManagedIdentityError.wslHostKeyChanged(record.distro, 'socket closed (1006)')
+    }
+    const removal = await removeWslHostServer(userDataPath, connector, {
+      ...record,
+      linuxUser: 'qauser'
+    })
+    expect(removal.removed).toBe(true)
+    // Removed: the toast must not repeat "remove the WSL host and add it again".
+    expect(removal.serverStop).toMatchObject({
+      stopped: false,
+      forgotten: true,
+      reasonCode: 'serverIdentityReset'
+    })
+    expect(store).toEqual({ removed: [record.environmentId], pending: [] })
+  })
+
+  it('keeps an older sealed port refusal pending, as any unproven stop', async () => {
+    const connector = unreachableConnector()
+    connector.stopServer = async () => {
+      throw OrcadManagedIdentityError.foreignPort(6800, 'socket closed (4003)', true)
+    }
+    const removal = await removeWslHostServer(userDataPath, connector, record)
+    expect(removal.removed).toBe(false)
+    expect(store.pending).toEqual([record.environmentId])
   })
 
   it('forgets it without contacting the distro', async () => {
