@@ -22,6 +22,7 @@ import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-sear
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
+import { TabSizingSettings } from './TabSizingSettings'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -183,6 +184,7 @@ function GeneralRootSettings({
             keywords={getTabOrderControlSearchKeywords(tabsEntries)}
             updateSettings={updateSettings}
           />
+          <TabSizingSettings settings={settings} updateSettings={updateSettings} />
           <SearchableSetting
             title={t('settings.general.previewTabs.title', 'Preview tabs')}
             description={t(
