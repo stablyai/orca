@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import type { RepoUpdate } from '@/store/repos/repo-state'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { Toaster } from '../../ui/sonner'
 import { RepoMark } from '../RepoMark'
 import { ProjectPeekPopover } from './ProjectPeekPopover'
 
@@ -166,6 +167,7 @@ function Peek({ repo: seeded }: { repo: Repo }): React.JSX.Element {
           <RepoMark repo={repo} />
         </button>
       </ProjectPeekPopover>
+      <Toaster />
     </div>
   )
 }
@@ -402,7 +404,11 @@ export const slowHostUpload = defineFixture({
   width: 380,
   store: SLOW_HOST_STORE,
   setup: () => {
-    window.api.gh.repoSlug = async () => ({ owner: 'stablyai', repo: 'orca' })
+    // Slow enough to press Reset or Undo before it resolves.
+    window.api.gh.repoSlug = async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      return { owner: 'stablyai', repo: 'orca' }
+    }
     window.api.gh.repoUpstream = async () => null
   },
   render: () => <Peek repo={uploadRepo} />,

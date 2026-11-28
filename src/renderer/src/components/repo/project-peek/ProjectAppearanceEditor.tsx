@@ -1,6 +1,7 @@
 import React from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { explicitRepoMarkColor } from '../../../../../shared/repository/appearance/repo-mark-appearance'
@@ -53,8 +54,13 @@ export function ProjectAppearanceEditor({
   const t = useTranslate()
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
   const previewedFromRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
-  // Any icon write from this editor, the GitHub action included, ends the preview.
+  const currentEpoch = useLatestHandler(() => appearanceEpoch)
+  // Any icon write from this editor, the GitHub action included, ends the preview. A write begun
+  // before a Reset or Undo (a GitHub lookup, upload or favicon still resolving) is dropped.
   const writeAppearance = (repoId: string, updates: RepoAppearanceUpdate): Promise<unknown> => {
+    if (appearanceEpoch !== currentEpoch()) {
+      return Promise.resolve(false)
+    }
     if ('repoIcon' in updates) {
       previewedFromRef.current = null
     }
