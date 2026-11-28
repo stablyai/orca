@@ -134,6 +134,11 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   codebuddy: {
     skillPrefix: '/',
     skillSourceOwner: 'codebuddy'
+  },
+  // Qoder reports skills only once a session starts, so resting chats rely on the scan.
+  qoder: {
+    skillPrefix: '/',
+    skillSourceOwner: 'qoder'
   }
 }
 

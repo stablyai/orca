@@ -158,7 +158,9 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     plan: () => ({ runnable: false, command: 'devin update' })
   },
   // `codebuddy update` follows how it was installed (npm, Homebrew or its native installer).
-  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') }
+  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') },
+  // `qodercli update` replaces its native install and re-links the launcher.
+  qoder: { latest: () => npm('@qoder-ai/qodercli'), plan: selfUpdate('update') }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

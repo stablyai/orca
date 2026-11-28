@@ -30897,6 +30897,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "qoderProduct": "Qoder CLI",
     "commandCopied": "命令已复制",
     "commandNotCopied": "无法复制命令",
     "copyCommand": "复制",

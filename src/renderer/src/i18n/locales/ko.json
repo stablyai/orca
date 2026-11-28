@@ -31235,6 +31235,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "qoderProduct": "Qoder CLI",
     "commandCopied": "명령이 복사됨",
     "commandNotCopied": "명령을 복사할 수 없습니다",
     "copyCommand": "복사",

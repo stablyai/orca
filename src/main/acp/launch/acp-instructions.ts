@@ -169,8 +169,9 @@ export const deliverKiroInstructions = keptWithSession(async ({ text }) => ({
   sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
 }))
 
-// Droid rebuilds its system prompt at every start from the file each launch passes.
-export const deliverDroidInstructions = givenEachStart(async ({ file }) => ({
+// Droid and Qoder rebuild their system prompt at every start from the file each launch passes
+// (Qoder checked live on 1.1.100, reopens included).
+export const deliverAppendSystemPromptFileInstructions = givenEachStart(async ({ file }) => ({
   args: ['--append-system-prompt-file', await file()]
 }))
 

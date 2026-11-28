@@ -38,6 +38,7 @@ describe('standing instructions on every start', () => {
       kilo: true,
       'mimo-code': true,
       droid: true,
+      qoder: true,
       'qwen-code': true,
       cline: true,
       devin: false,

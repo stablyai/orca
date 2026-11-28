@@ -31777,6 +31777,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "qoderProduct": "Qoder CLI",
     "commandCopied": "Команда скопирована",
     "commandNotCopied": "Не удалось скопировать команду",
     "copyCommand": "Копировать",

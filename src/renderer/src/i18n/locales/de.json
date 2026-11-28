@@ -28425,6 +28425,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "qoderProduct": "Qoder CLI",
     "commandCopied": "Befehl kopiert",
     "commandNotCopied": "Befehl konnte nicht kopiert werden",
     "copyCommand": "Kopieren",

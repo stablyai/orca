@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { DROID_ACP_DIALECT } from '../acp/acp-dialects/droid-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { deliverDroidInstructions } from '../acp/launch/acp-instructions'
+import { deliverAppendSystemPromptFileInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -45,7 +45,7 @@ export const DROID_LAUNCH_SPEC: AcpLaunchSpec = {
     kind: 'unavailable',
     reason: 'Droid lists its models only inside a session it cannot delete'
   },
-  instructions: deliverDroidInstructions,
+  instructions: deliverAppendSystemPromptFileInstructions,
   transcriptImport: DROID_TRANSCRIPT_IMPORT,
   sessionHistory: DROID_SESSION_HISTORY,
   // No session/delete: a naming task's session would land in the user's Droid history.
