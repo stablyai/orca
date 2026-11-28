@@ -29,8 +29,10 @@ export function registerRateLimitHandlers(
   ipc.handle('rateLimits:refreshClaudeForTarget', (_event, target: RateLimitRuntimeTarget) =>
     rateLimits.refreshClaudeForTarget(target)
   )
+  // Why manual: opening the switcher is the user asking for these rows now, so it may pass a
+  // 429's Retry-After once; the automated callers keep honoring it.
   ipc.handle('rateLimits:fetchInactiveClaudeAccounts', () =>
-    rateLimits.fetchInactiveClaudeAccountsOnOpen()
+    rateLimits.fetchInactiveClaudeAccountsOnOpen('manual')
   )
   ipc.handle('rateLimits:fetchInactiveCodexAccounts', () =>
     rateLimits.fetchInactiveCodexAccountsOnOpen()
