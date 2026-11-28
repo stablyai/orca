@@ -1,3 +1,4 @@
+import type { ProviderReceiptConfirmation } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { ClaudeSession } from '../claude-structured-session-state'
 
 export type ClaudeDispatchWaiter = {
@@ -17,7 +18,8 @@ export type ClaudeDispatchWaiter = {
   steers?: true
   /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
-  providerReceived?: (isPending: () => boolean) => void
+  providerReceived?: ProviderReceiptConfirmation
+  providerReceiptConfirmed?: true
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */
   commandLifecycle?: 'queued' | 'started'
   /** Sent as Claude's rename command; only its started window carries the user's new title. */
@@ -61,6 +63,9 @@ export function waitForReplay(
 }
 
 export function forgetWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
+  waiter.providerReceived?.cancel()
+  waiter.providerReceived = undefined
+  waiter.providerReceiptConfirmed = undefined
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)

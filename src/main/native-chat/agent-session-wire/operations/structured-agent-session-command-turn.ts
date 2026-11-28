@@ -175,8 +175,8 @@ export async function handOverStructuredAgentSessionCommand(
     )
     return
   }
-  const { turn, running, dispatchCursor } = await openCommandTurn(ctx, submission)
   const providerReceipt = localProviderReceipt(ctx, clientMessageId, isCurrent)
+  const { turn, running, dispatchCursor } = await openCommandTurn(ctx, submission)
   const beginProviderReceipt =
     dispatchCursor && providerReceipt ? () => providerReceipt(dispatchCursor) : undefined
   const instructions = body.command?.instructions

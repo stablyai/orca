@@ -14,6 +14,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'pairedDeviceId'
   | 'pairedDeviceParentId'
   | 'caller'
+  | 'localElectronIpc'
   | 'plugin'
   | 'clientKind'
   | 'clientCapabilities'
@@ -70,6 +71,7 @@ export function rpcContextFromTransport(
     pairedDeviceId: options?.pairedDeviceId,
     pairedDeviceParentId: options?.pairedDeviceParentId,
     caller: resolveRpcCallerIdentity(options),
+    localElectronIpc: options?.localElectronIpc,
     plugin: options?.plugin,
     clientKind: options?.clientKind,
     callerScope: options?.callerScope,

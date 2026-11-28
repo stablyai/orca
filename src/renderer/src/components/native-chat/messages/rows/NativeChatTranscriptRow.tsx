@@ -46,6 +46,8 @@ export type NativeChatTranscriptRowContext = {
   latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  providerReceived?: ReadonlyMap<string, number>
+  receivedNotice?: NativeChatDeliveryNotice
   /** Keyed by message id: rows from outside the conversation that came right after that message. */
   timedRows?: ReadonlyMap<string, readonly NativeChatTimedRow[]>
   structuredAttachments?: boolean
@@ -142,7 +144,11 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   }
   const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun, itemNotes } =
     slot
-  const deliveryNotice = context.deliveryNotices?.get(message.id)
+  const notice = context.deliveryNotices?.get(message.id)
+  const deliveryNotice =
+    notice?.sending && context.providerReceived?.has(message.id)
+      ? (context.receivedNotice ?? notice)
+      : notice
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (

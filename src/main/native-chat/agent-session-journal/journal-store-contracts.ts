@@ -68,6 +68,7 @@ export type JournalPromptMutationInput = {
 }
 
 export type AgentSessionJournalOptions = {
+  captureProviderReceipts?: true
   identity: AgentSessionJournalIdentity
   database: JournalSqlDatabase
   now?: () => number

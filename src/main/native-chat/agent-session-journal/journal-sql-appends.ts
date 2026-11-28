@@ -216,12 +216,12 @@ export abstract class SqlJournalAppends {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handover command returns its own placement and carried history.
     const { carried, firstHandover, dispatchSequence } = value as {
       carried: StoppedHistoryDelivery | null
-      firstHandover: boolean
+      firstHandover?: boolean
       dispatchSequence?: number
     }
     return {
       carried,
-      firstHandover,
+      firstHandover: firstHandover === true,
       dispatchCursor:
         dispatchSequence === undefined
           ? undefined

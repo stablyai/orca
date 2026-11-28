@@ -1,3 +1,4 @@
+import type { AgentSessionReceiptProvider } from '../../../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import type { StructuredAgentSessionReplyTextInterest } from './structured-agent-session-read-owner-contract'
 import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
@@ -55,9 +56,18 @@ export function startStructuredAgentSessionReadTransport(
     showsPromptSuggestions?: boolean
     /** Whether a reader draws reply text; only then does a shown window take live text. */
     replyText?: StructuredAgentSessionReplyTextInterest
+    receiptProvider?: AgentSessionReceiptProvider
+    pendingReceiptSequence?: (itemId: string) => number | undefined
   }
 ): ReturnType<typeof startStructuredAgentSessionLiveRead> {
-  const { target, showsPromptSuggestions, replyText, ...read } = args
+  const {
+    target,
+    showsPromptSuggestions,
+    replyText,
+    receiptProvider,
+    pendingReceiptSequence,
+    ...read
+  } = args
   const asks = target.kind === 'environment' ? environmentSubscribeAsks(target.environmentId) : null
   const viewer = asks?.liveTextViewer ?? true
   let sendsShownTail = viewer === true
@@ -67,9 +77,13 @@ export function startStructuredAgentSessionReadTransport(
     // A streaming reply goes out as its new text every window. The local host ships with this
     // renderer, so it is asked without a check and the read still opens in the same turn.
     textAppend: asks ? asks.textAppend : LOCAL_TEXT_APPEND,
-    providerReceived: target.kind === 'local',
+    providerReceived: target.kind === 'local' && !!receiptProvider,
     ...(showsPromptSuggestions ? { promptSuggestions: asks?.promptSuggestions ?? true } : {}),
-    coalesce: { visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail) },
+    coalesce: {
+      visibility: documentViewerVisibility(read.sessionId, () => sendsShownTail),
+      receiptProvider,
+      pendingReceiptSequence
+    },
     // Only a shown window takes live text; a hidden one gets saves, and the newest text on show.
     liveTextViewer: documentLiveTextViewer(
       viewer,

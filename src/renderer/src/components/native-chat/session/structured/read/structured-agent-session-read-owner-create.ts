@@ -8,7 +8,7 @@ import {
 } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
-import { withDocumentSavesOnly } from './document-viewer-visibility'
+import { createStructuredAgentSessionReadInterests } from './structured-agent-session-read-interests'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
@@ -142,15 +142,19 @@ export function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
+    const receiptProvider = interests.opened()
     const transport = startStructuredAgentSessionReadTransport({
+      receiptProvider,
+      pendingReceiptSequence: (itemId) =>
+        snapshot.state.pendingProviderAttempts?.byItem.get(itemId),
       showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
-      replyText,
+      replyText: interests.replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
         const lostCommands =
           snapshot.state.commands != null && 'commands' in event && event.commands === null
-        apply({ type: 'event', event, ...options })
+        apply({ type: 'event', event, ...options, receiptProvider })
         if (
           event.type !== 'end' &&
           (event.commandsChanged || options?.opensSubscription || lostCommands)
@@ -178,26 +182,17 @@ export function createReadOwner(
       captureActiveHistoryReadGuard = () => retiredHistoryRead
       transport.dispose()
       stopActiveRun = null
+      interests.closed()
       markStale()
     }
   }
 
-  // Tool-step and prompt readers share the read but draw no reply text, so they take no live text.
-  const replyTextListeners = new Set<() => void>()
-  const replyTextShown = (): boolean =>
-    [...activations.values()].some((effects) => effects.showsReplyText === true)
-  const replyText = withDocumentSavesOnly(sessionId, {
-    shown: replyTextShown,
-    subscribe: (changed: () => void) => {
-      replyTextListeners.add(changed)
-      return () => replyTextListeners.delete(changed)
-    }
-  })
-  const noteReaders = (before: boolean): void => {
-    if (replyTextShown() !== before) {
-      replyTextListeners.forEach((changed) => changed())
-    }
-  }
+  const interests = createStructuredAgentSessionReadInterests(
+    sessionId,
+    target?.kind === 'local',
+    activations,
+    () => owner.resync?.()
+  )
 
   let owner: StructuredAgentSessionReadOwner
   let retained = 0
@@ -245,16 +240,16 @@ export function createReadOwner(
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
       adoptStructuredReadOwner(key, owner)
       const token = Symbol(sessionId)
-      const before = replyTextShown()
+      const before = interests.replyTextShown()
       activations.set(token, effects)
       if (activations.size === 1) {
         start(effects)
       }
-      noteReaders(before)
+      interests.changed(before)
       return () => {
-        const wasShown = replyTextShown()
+        const wasShown = interests.replyTextShown()
         activations.delete(token)
-        noteReaders(wasShown)
+        interests.changed(wasShown)
         if (activations.size === 0) {
           stopActiveRun?.()
           deleteIfUnused()
@@ -274,6 +269,8 @@ export function createReadOwner(
       historyReaders.clear()
       activity.dispose()
       activations.clear()
+      interests.closed()
+      interests.dispose()
       listeners.clear()
       commandListeners.clear()
       stopActiveRun?.()

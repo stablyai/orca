@@ -66,13 +66,15 @@ import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/Nati
 import { NativeChatWorkerAutoCloseBanner } from '@/components/native-chat/worker-lifetime/NativeChatWorkerAutoCloseBanner'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
-import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { BotServerOutageCard } from '@/components/bots/BotServerOutageCard'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
-import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
+import {
+  useHasStructuredAgentSessionRejections,
+  useStructuredAgentSessionStartFailureFacts
+} from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
@@ -131,11 +133,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const submits = useSubmitReveal(controller, provisionalLaunch.retry, hostHeld, focusComposer)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
+  const hasRejectedSubmission = useHasStructuredAgentSessionRejections(controller.submissions)
   const needsFailureFacts =
-    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
-    controller.submissions.some(
-      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-    )
+    submits.queuedMessages.cards.some((card) => card.state === 'returned') || hasRejectedSubmission
   const startFailures = useStructuredAgentSessionStartFailureFacts(
     controller.journalItems,
     needsFailureFacts || props.agent === 'claude'
@@ -323,6 +323,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                                 structuredAttachments
                                 runtimeContext={imageRuntimeContext}
                                 deliveryNotices={deliveryNotices}
+                                providerReceived={controller.providerReceived}
                                 {...{ turnBot, botHome: bot.kickoff }}
                                 timedRows={timedRows}
                               />

@@ -89,7 +89,6 @@ it('asks for prompt suggestions locally and from a host that takes them, never a
       sessionId: 'session-a',
       capabilities: {
         promptSuggestions: 1,
-        providerReceived: 1,
         textAppend: 1,
         toolOutputAppend: 1,
         liveTextViewer: { id: expect.any(String), shown: true, seq: 1 }

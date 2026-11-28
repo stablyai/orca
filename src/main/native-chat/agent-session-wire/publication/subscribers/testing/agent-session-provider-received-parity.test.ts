@@ -50,13 +50,14 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
     id: string,
     caller: RpcContext['caller'],
     clientKind: RpcContext['clientKind'],
-    asks: boolean
+    asks: boolean,
+    localElectronIpc?: true
   ) => {
     const frames: string[] = []
     const { params, handler } = STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD
     await handler(
       params.parse({ sessionId: SESSION, capabilities: asks ? { providerReceived: 1 } : {} }),
-      { runtime, caller, clientKind, connectionId: id },
+      { runtime, caller, clientKind, connectionId: id, localElectronIpc },
       (frame) => frames.push(JSON.stringify(frame))
     )
     return frames
@@ -83,7 +84,8 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
       desktop.push(event)
     }
   })
-  const receiving = await open('desktop', { kind: 'desktop' }, 'runtime', true)
+  const desktopSocket = await open('desktop-socket', { kind: 'desktop' }, 'runtime', true)
+  const receiving = await open('desktop', { kind: 'desktop' }, 'runtime', true, true)
   await idle()
   const receipt = subscribers.providerReceipts.bind({
     journal,
@@ -105,6 +107,7 @@ it('keeps remote and paired phone frames byte-identical when they ask for local 
   subscribers.deliverFrames(SESSION, journal)
   await idle()
   expect(JSON.stringify(desktop.at(-1))).toContain('still connected')
+  expect(desktopSocket).toEqual(remoteBaseline)
   expect(remote).toEqual(remoteBaseline)
   expect(phone).toEqual(phoneBaseline)
   expect(relay).toEqual(phoneBaseline)

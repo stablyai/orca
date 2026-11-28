@@ -3,11 +3,13 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionCommandItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
-import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
+import {
+  useHasStructuredAgentSessionRejections,
+  useStructuredAgentSessionStartFailureFacts
+} from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { rowsBesideStreamedText } from '../../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
@@ -18,17 +20,14 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
     pending: readonly StructuredAgentSessionPendingSend[]
     submissions: readonly AgentJournalSubmission[]
     journalItems: readonly AgentJournalRenderItem[]
-    providerReceived?: ReadonlyMap<string, number>
   }
   agentName: string
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName } = args
-  const { pending, submissions, journalItems, providerReceived } = args.source
+  const { pending, submissions, journalItems } = args.source
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
-  const hasRejected = submissions.some(
-    (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-  )
+  const hasRejected = useHasStructuredAgentSessionRejections(submissions)
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     journalItems,
     hasRejected && args.startFailures === undefined
@@ -42,10 +41,9 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
         submissions,
         agentName,
         startFailures,
-        commandItemIds,
-        providerReceived
+        commandItemIds
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds, providerReceived]
+    [pending, submissions, agentName, startFailures, commandItemIds]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
@@ -99,7 +97,6 @@ function sameNoticesKept(
     const same =
       before !== undefined &&
       before.text === notice.text &&
-      before.receivedBy === notice.receivedBy &&
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&

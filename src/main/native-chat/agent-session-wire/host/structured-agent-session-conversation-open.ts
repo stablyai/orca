@@ -1,3 +1,4 @@
+import { localReceiptProvider } from '../journal-ingress/provider-receipt-publication'
 import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // Open and settle the crash boundary before any reader, command or child: damaged journals fail;
 // handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
@@ -108,6 +109,7 @@ export async function openStructuredAgentSessionConversationJournal(
   const journal = await openAgentSessionJournal({
     identity,
     database: deps.journalDatabase,
+    ...(localReceiptProvider(params) ? { captureProviderReceipts: true as const } : {}),
     ...(kept ? {} : { recover: { fence } }),
     ...(keptWriter ? { keptWriter: true as const } : {}),
     onRecoveryFailure: ({ step, failure }) => {

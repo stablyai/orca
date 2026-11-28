@@ -1,4 +1,9 @@
-import { AGENT_SESSION_DISPATCH_LIMITS } from '../../journal/agent-session-dispatch-limits'
+import { agentJournalSubmissionKey } from '../../journal/agent-session-journal-item-key'
+import { isProviderReceiptOnly } from './agent-session-provider-received'
+import {
+  AGENT_SESSION_DISPATCH_LIMITS,
+  type AgentSessionReceiptProvider
+} from '../../journal/agent-session-dispatch-limits'
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import {
   actionablePromptIdsAfterStructuredAgentSessionBatch,
@@ -48,20 +53,59 @@ function holdBatch(event: Batch): HeldBatches {
       event.batch.submissions.map((submission) => [submission.clientMessageId, submission])
     )
   }
-  holdProviderReceived(held, event)
   return held
 }
 
-function holdProviderReceived(held: HeldBatches, event: Batch): void {
-  if (!event.providerReceived?.length) {
+function holdProviderReceived(held: HeldBatches, event: Batch, limit: number): void {
+  if (!event.providerReceived?.length || limit === 0) {
     return
   }
   const received = (held.providerReceived ??= new Set())
-  for (const sequence of event.providerReceived) {
-    if (received.size >= AGENT_SESSION_DISPATCH_LIMITS.codex) {
+  for (let index = 0; index < Math.min(event.providerReceived.length, limit); index++) {
+    if (received.size >= limit) {
       break
     }
-    received.add(sequence)
+    received.add(event.providerReceived[index]!)
+  }
+}
+
+function pruneHeldReceipts(
+  held: HeldBatches,
+  event: Batch,
+  pendingSequence: ((id: string) => number | undefined) | undefined
+): void {
+  const received = held.providerReceived
+  if (!received?.size) {
+    return
+  }
+  const left = held.merged ?? held.first
+  if (
+    left.batch.cursor.epoch !== event.batch.cursor.epoch ||
+    (event.fence !== undefined && event.fence !== left.fence)
+  ) {
+    received.clear()
+    return
+  }
+  for (const submission of event.batch.submissions) {
+    if (submission.dispatchState !== 'pending') {
+      const id = agentJournalSubmissionKey(submission.clientMessageId)
+      const sequence = held.items.get(id)?.sequence ?? pendingSequence?.(id)
+      if (sequence !== undefined) {
+        received.delete(sequence)
+      }
+    }
+  }
+  for (const { itemId, sequence } of event.batch.items) {
+    const previous = held.items.get(itemId)?.sequence ?? pendingSequence?.(itemId)
+    if (previous !== undefined && previous !== sequence) {
+      received.delete(previous)
+    }
+  }
+  for (const itemId of event.batch.removedItemIds) {
+    const sequence = held.items.get(itemId)?.sequence ?? pendingSequence?.(itemId)
+    if (sequence !== undefined) {
+      received.delete(sequence)
+    }
   }
 }
 
@@ -76,14 +120,6 @@ function addToHeld(held: HeldBatches, right: Batch): void {
     held.submissions.set(submission.clientMessageId, submission)
   }
   const left = held.merged ?? held.first
-  if (
-    held.providerReceived &&
-    (left.batch.cursor.epoch !== right.batch.cursor.epoch ||
-      (right.fence !== undefined && right.fence !== left.fence))
-  ) {
-    held.providerReceived = undefined
-  }
-  holdProviderReceived(held, right)
   held.merged = mergeBatchHeader(left, right)
 }
 
@@ -173,13 +209,17 @@ export type StructuredAgentSessionCoalescing = {
   ms?: number
   /** While hidden, batches keep merging instead of applying, and apply at once when shown. */
   visibility?: StructuredAgentSessionViewerVisibility
+  receiptProvider?: AgentSessionReceiptProvider
+  pendingReceiptSequence?: (itemId: string) => number | undefined
 }
 
 export function createStructuredAgentSessionEventCoalescer(
   emit: (event: AgentSessionSubscribeEvent) => void,
   {
     ms: delayMs = STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS,
-    visibility
+    visibility,
+    receiptProvider,
+    pendingReceiptSequence
   }: StructuredAgentSessionCoalescing = {}
 ): {
   push: (event: AgentSessionSubscribeEvent) => void
@@ -187,6 +227,7 @@ export function createStructuredAgentSessionEventCoalescer(
   dispose: () => void
   clearProviderReceived: () => void
 } {
+  const receiptLimit = receiptProvider ? AGENT_SESSION_DISPATCH_LIMITS[receiptProvider] : 0
   let pending: HeldBatches | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let awaitingTail: ReturnType<typeof setTimeout> | null = null
@@ -221,6 +262,25 @@ export function createStructuredAgentSessionEventCoalescer(
   })
   return {
     push(event) {
+      if (event.type === 'batch' && isProviderReceiptOnly(event)) {
+        if (pending) {
+          const header = pending.merged ?? pending.first
+          const { cursor } = header.batch
+          if (
+            event.fence === header.fence &&
+            event.batch.cursor.epoch === cursor.epoch &&
+            event.batch.cursor.sequence <= cursor.sequence
+          ) {
+            holdProviderReceived(pending, event, receiptLimit)
+          }
+        } else {
+          emit(event)
+        }
+        return
+      }
+      if (pending && event.type === 'batch') {
+        pruneHeldReceipts(pending, event, pendingReceiptSequence)
+      }
       if (bypassCoalescing(event)) {
         if (awaitingTail && pending) {
           visibility?.heldDrawn?.()
@@ -237,6 +297,8 @@ export function createStructuredAgentSessionEventCoalescer(
       } else {
         pending = holdBatch(event)
       }
+      holdProviderReceived(pending, event, receiptLimit)
+      pruneHeldReceipts(pending, event, pendingReceiptSequence)
       // The host's newest text for a viewer that just showed: drawn at once, with what was held.
       if (awaitingTail) {
         drawHeld()

@@ -1,3 +1,4 @@
+import { isAgentSessionReceiptProvider } from '../../../../../../shared/agent-session/journal/agent-session-dispatch-limits'
 import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-message-edit-transport'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
@@ -76,7 +77,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     isVisible: args.isVisible,
     enabled: transportEnabled,
-    agentName: structuredAgentLabel(agent)
+    agentName: structuredAgentLabel(agent),
+    receiptProvider: isAgentSessionReceiptProvider(agent) ? agent : undefined
   })
   const commandMenu = useStructuredAgentSessionCommandMenu(
     target,

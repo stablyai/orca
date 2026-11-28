@@ -48,10 +48,11 @@ export function observeClaudeCommandLifecycle(
     received &&
     (state === 'queued' || state === 'started') &&
     !waiter.retired &&
+    !waiter.providerReceiptConfirmed &&
     readClaudeFrameString(message, 'session_id') === session.providerSessionId
   ) {
-    waiter.providerReceived = undefined
-    withProviderReceipt(() => received(() => session.dispatchWaiters.includes(waiter)))
+    waiter.providerReceiptConfirmed = true
+    withProviderReceipt(() => received(() => waiter.providerReceived === received))
   }
   if (state === 'started' || (state === 'queued' && waiter.commandLifecycle !== 'started')) {
     // Redelivery can emit queued again after started.

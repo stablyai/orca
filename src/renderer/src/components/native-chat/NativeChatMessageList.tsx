@@ -90,6 +90,7 @@ export function NativeChatMessageList({
   workingStartedAt,
   settledTurns,
   deliveryNotices,
+  providerReceived,
   timedRows,
   awaitingInput = null,
   turnActivity,
@@ -124,6 +125,7 @@ export function NativeChatMessageList({
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */
   settledTurns?: NativeChatSettledTurns
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  providerReceived?: ReadonlyMap<string, number>
   /** Rows that are not part of the conversation but happened during it, such as workers' approvals. */
   timedRows?: readonly NativeChatTimedRow[]
   /** Set while the turn waits on the reader; the live activity line yields to it. */
@@ -171,15 +173,14 @@ export function NativeChatMessageList({
   useRereadWorkersOnNewRows(journalItems?.length ?? 0)
   // Pending/failed reads cannot page; recovery remounts the sentinel to recheck its range.
   const showOlderHistory = hasMore && session.readPhase === 'ready' && scope.pagesHistory
-  // Ids never change with a reply's text, so the set holds while one streams.
-  const savedMessages = turnRows.structureMessages ?? messages
-  const loadedMessageIds = useMemo(
-    () => new Set(savedMessages.map(({ id }) => id)),
-    [savedMessages]
-  )
   const taskListPredecessors = useNativeChatTaskListPredecessors(messages)
   const { liveTurnKey } = turnRows
-  const { messages: rows, turnKeys, structureMessages } = useNativeChatShownRows(turnRows)
+  const {
+    messages: rows,
+    turnKeys,
+    structureMessages,
+    loadedMessageIds
+  } = useNativeChatShownRows(turnRows, messages)
   const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turns = scope.conversationTurns
@@ -207,7 +208,6 @@ export function NativeChatMessageList({
   })
   // Only unshown prompts need a waiting tail row; prompt cards explain their own wait.
   const tailRow = transcriptTailRow(turnWorking, awaitingInput)
-  const lifecycleWorking = subagentId === null && session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
   const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
   const transcript = useNativeChatTranscriptSlots({
@@ -223,7 +223,7 @@ export function NativeChatMessageList({
     openedPullRequests: openedPullRequests.byTurn,
     expandedTurnKeys: expandedTurnIds,
     isWorking: working,
-    lifecycleWorking,
+    lifecycleWorking: subagentId === null && session.transcriptLifecycle?.state === 'working',
     subagentHeads: scope.heads,
     forkOffer,
     line: {
@@ -355,6 +355,7 @@ export function NativeChatMessageList({
     expandedTurnIds,
     latestTurnKey,
     deliveryNotices,
+    providerReceived,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,
     onOpenSubagent: scope.open,

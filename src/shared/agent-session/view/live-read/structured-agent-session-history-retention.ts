@@ -1,3 +1,4 @@
+import { pruneProviderAttempts } from './agent-session-provider-received'
 import type {
   StructuredAgentSessionAction,
   StructuredAgentSessionState
@@ -25,11 +26,14 @@ export function trimStructuredAgentSessionHistory(
   ) {
     return state
   }
-  const lostTurnRow = state.items
-    .slice(0, state.items.length - items.length)
-    .some((item) => readAgentJournalTurn(item.body) !== null)
+  const lost = state.items.slice(0, state.items.length - items.length)
+  const lostTurnRow = lost.some((item) => readAgentJournalTurn(item.body) !== null)
   return {
     ...state,
+    ...pruneProviderAttempts(
+      state,
+      lost.map((item) => item.itemId)
+    ),
     items,
     retainedOwnItemLimit: MAX_RETAINED_OWN_ITEMS,
     retainedItemCap: MAX_RETAINED_ITEMS,

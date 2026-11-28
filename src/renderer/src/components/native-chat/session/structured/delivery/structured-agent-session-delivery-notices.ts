@@ -25,7 +25,6 @@ export function structuredAgentSessionDeliveryNotices(args: {
   agentName: string
   startFailures: readonly AgentSessionFailureFact[]
   commandItemIds?: ReadonlySet<string>
-  providerReceived?: ReadonlyMap<string, number>
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   const notices = new Map<string, NativeChatDeliveryNotice>()
@@ -46,12 +45,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
     if (submission.dispatchState === 'pending') {
-      notices.set(
-        id,
-        args.providerReceived?.has(id)
-          ? { sending: true, receivedBy: agentName }
-          : STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
-      )
+      notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
     } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
       const fact = readWholeAgentSessionFailureFact(submission.rejection)

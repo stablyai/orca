@@ -7,7 +7,10 @@ import { structuredAttentionReadObservation } from '../../attention/structured-a
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
-import type { StructuredAgentSessionReadSnapshot } from './structured-agent-session-read-owner-contract'
+import type {
+  StructuredAgentSessionReadEffects,
+  StructuredAgentSessionReadSnapshot
+} from './structured-agent-session-read-owner-contract'
 
 function useReadOwnerSnapshot(
   sessionId: string,
@@ -32,8 +35,9 @@ export function useStructuredAgentSessionRead(args: {
   isViewed?: boolean
   /** Draws reply and reasoning text (a transcript), so a shown window takes live text. */
   showsReplyText?: boolean
+  receiptProvider?: StructuredAgentSessionReadEffects['receiptProvider']
 }) {
-  const { sessionId, target, isVisible = true, showsReplyText = false } = args
+  const { sessionId, target, isVisible = true, showsReplyText = false, receiptProvider } = args
   const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
   const isViewed = args.isViewed ?? isVisible
   const environmentId = target.kind === 'environment' ? target.environmentId : null
@@ -49,12 +53,13 @@ export function useStructuredAgentSessionRead(args: {
       return owner.activate({
         getState: useAppStore.getState,
         showsReplyText,
+        receiptProvider,
         subscribeRetryNow: (retry) =>
           environmentId ? subscribeRuntimeHostContactRegained(environmentId, retry) : () => {}
       })
     }
     return undefined
-  }, [isVisible, owner, environmentId, showsPromptSuggestions, showsReplyText])
+  }, [isVisible, owner, environmentId, showsPromptSuggestions, showsReplyText, receiptProvider])
   useEffect(() => {
     const observedCursor = snapshot.state.cursor
     if (!isViewed) {

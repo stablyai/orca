@@ -122,17 +122,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   async subscribe(input: AgentSessionSubscribeInput): Promise<() => void> {
     const session = await this.conversation(input.sessionId)
-    const location = input.readsProviderReceived
-      ? this.deps.store.getRecord(input.sessionId)?.location
-      : undefined
     return this.subscribers.open({
       ...input,
-      ...(input.readsProviderReceived
-        ? {
-            readsProviderReceived:
-              location?.executionHostId === 'local' && location.wslDistro === null
-          }
-        : {}),
+      readsProviderReceived:
+        input.readsProviderReceived && session.journal.capturesProviderReceipts,
       journal: session.journal,
       fence: structuredAgentSessionConversationFence(this.deps.store, input.sessionId)
     })

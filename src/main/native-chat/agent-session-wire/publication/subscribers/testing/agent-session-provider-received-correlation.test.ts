@@ -27,6 +27,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
       agent: 'claude',
       providerHandle: claudeProviderHandle('provider-1', null)
     },
+    captureProviderReceipts: true,
     stateDirectory: join(fixture.root, SESSION)
   })
   const subscribers = new AgentSessionSubscribers({ now: () => 100 })
@@ -64,8 +65,18 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
       handoverRecorded: true
     })
   const prepare = (clientMessageId: string) =>
-    journal.prepareHandover({ clientMessageId, fence: 1, turnScope: { kind: 'thread' }, body })
+    journal.prepareHandover({
+      clientMessageId,
+      fence: 1,
+      turnScope: { kind: 'thread' },
+      body
+    })
+  const deliver = async () => {
+    subscribers.deliverFrames(SESSION, journal)
+    await idle()
+  }
   await append('A')
+  await deliver()
   const a = await journal.openCommand({
     clientMessageId: 'A',
     fence: 1,
@@ -84,6 +95,7 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   })
 
   await append('B')
+  await deliver()
   const b = await prepare('B')
   expect(b.firstHandover).toBe(true)
   expect(b.dispatchCursor?.sequence).toBe(6)
@@ -124,13 +136,13 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
     })
   lifecycle('foreign')
   lifecycle('provider-1', 'different-uuid')
-  pendingA?.(() => true)
   await journal.resolveDispatch({
     clientMessageId: 'A',
     fence: 1,
     state: 'unknown',
     reason: 'ended'
   })
+  pendingA?.(() => true)
   subscribers.deliverFrames(SESSION, journal)
   await idle()
   expect(receipts()).toEqual([])
@@ -149,11 +161,13 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   expect(receipts()).toEqual([6])
 
   await append('C')
+  await deliver()
   const c = await prepare('C')
   expect(c.dispatchCursor?.sequence).toBe(10)
   const codex = {
     threadId: 'thread',
     options: new Map<string, string>(),
+    activeTurnIds: new Set<string>(),
     dispatchEchoes: createCodexDispatchEchoes(),
     turnOpenWaits: { wait: async () => {} },
     connection: {
@@ -162,7 +176,8 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
         _params: unknown,
         options?: { onReply?: (value: unknown) => void }
       ) => {
-        const reply = { turn: { id: 'started-turn' } }
+        const reply =
+          _method === 'turn/steer' ? { turnId: 'started-turn' } : { turn: { id: 'started-turn' } }
         options?.onReply?.(reply)
         return reply
       }
@@ -185,4 +200,28 @@ it('correlates the committed attempt and lets A settle without taking B’s rece
   subscribers.deliverFrames(SESSION, journal)
   await idle()
   expect(receipts()).toEqual([6, 10])
+
+  codex.activeTurnIds.add('started-turn')
+  await append('D')
+  await deliver()
+  const d = await prepare('D')
+  expect(d.dispatchCursor?.sequence).toBe(12)
+  await expect(
+    startCodexTurn(codex, {
+      clientMessageId: 'D',
+      body,
+      requestedAt: 0,
+      beginProviderReceipt: () =>
+        providerReceipts.bind({
+          journal,
+          cursor: d.dispatchCursor!,
+          clientMessageId: 'D',
+          fence: 1,
+          provider: 'codex',
+          owns: () => true
+        })
+    })
+  ).resolves.toEqual({ turnId: 'started-turn', via: 'steer' })
+  await deliver()
+  expect(receipts()).toEqual([6, 10, 12])
 })

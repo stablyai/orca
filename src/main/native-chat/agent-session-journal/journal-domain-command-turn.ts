@@ -76,9 +76,11 @@ export function applyJournalDomainCommandTurn(
     )
     db.exec('RELEASE journal_command_dispatch')
     appendJournalDomainInputCommit(result, commit)
-    dispatchSequence = commit.items.find(
-      (item) => item.sequence === commit.cursor.sequence
-    )?.sequence
+    if (operation.kind === 'command-open' && target.captureProviderReceipts) {
+      dispatchSequence = commit.items.find(
+        (item) => item.sequence === commit.cursor.sequence
+      )?.sequence
+    }
   } catch (error) {
     db.exec('ROLLBACK TO journal_command_dispatch; RELEASE journal_command_dispatch')
     restoreDispatchEvents()

@@ -64,9 +64,13 @@ export function applyJournalDomainDispatchCommand(
     ...result,
     value: {
       carried,
-      firstHandover: submission?.handedOverAt === undefined,
-      dispatchSequence: result.items.find((item) => item.sequence === result.cursor.sequence)
-        ?.sequence
+      ...(target.captureProviderReceipts
+        ? {
+            firstHandover: submission?.handedOverAt === undefined,
+            dispatchSequence: result.items.find((item) => item.sequence === result.cursor.sequence)
+              ?.sequence
+          }
+        : {})
     }
   }
 }

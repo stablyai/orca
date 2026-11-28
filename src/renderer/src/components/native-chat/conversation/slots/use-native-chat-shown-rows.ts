@@ -7,10 +7,14 @@ import type { NativeChatTurnRows } from './use-native-chat-turn-membership'
 
 /** The rows the transcript draws (CI result lines leave it entirely unless shown), their turns,
  *  and the same rows as of their last change other than a streaming reply's text. */
-export function useNativeChatShownRows(turnRows: NativeChatTurnRows): {
+export function useNativeChatShownRows(
+  turnRows: NativeChatTurnRows,
+  loadedMessages: readonly NativeChatMessage[]
+): {
   messages: readonly NativeChatMessage[]
   turnKeys: readonly (string | undefined)[]
   structureMessages: readonly NativeChatMessage[] | undefined
+  loadedMessageIds: ReadonlySet<string>
 } {
   const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
   const shown = useMemo(
@@ -26,7 +30,13 @@ export function useNativeChatShownRows(turnRows: NativeChatTurnRows): {
         : withoutPullRequestEventRows({ messages: structureMessages, turnKeys }),
     [showCiResultLines, structureMessages, turnKeys]
   )
+  const savedMessages = structureMessages ?? loadedMessages
+  const loadedMessageIds = useMemo(
+    () => new Set(savedMessages.map(({ id }) => id)),
+    [savedMessages]
+  )
   return {
+    loadedMessageIds,
     messages: shown.messages,
     turnKeys: structure?.turnKeys ?? shown.turnKeys,
     structureMessages: structure?.messages

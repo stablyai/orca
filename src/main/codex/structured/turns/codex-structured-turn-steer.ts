@@ -2,6 +2,8 @@ import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
 } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import { armCodexProviderReceipt } from './codex-provider-received'
+import type { ProviderReceiptInput } from '../../../native-chat/agent-session-wire/journal-ingress/provider-receipt-publication'
 import type { CodexTurnHost } from './codex-structured-turn-contract'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
@@ -14,7 +16,7 @@ import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-ser
 export async function steerCodexTurn(
   host: CodexTurnHost,
   expectedTurnId: string,
-  input: {
+  input: ProviderReceiptInput & {
     clientMessageId: string
     body: AgentJournalMessageItem
     timeoutMs?: number
@@ -39,6 +41,7 @@ export async function steerCodexTurn(
         turnInputFor(host, input.body),
         expectedTurnId
       )
+      const received = armCodexProviderReceipt(host, input)
       return {
         kind: 'sent' as const,
         response: host.connection.request(
@@ -49,7 +52,15 @@ export async function steerCodexTurn(
             clientUserMessageId: input.clientMessageId,
             input: turnInputFor(host, input.body)
           },
-          { timeoutMs: input.timeoutMs, onReply: input.onReply }
+          {
+            timeoutMs: input.timeoutMs,
+            onReply: (reply) => {
+              input.onReply?.()
+              if (received && readCodexTurnId(reply) === expectedTurnId) {
+                received()
+              }
+            }
+          }
         )
       }
     }
