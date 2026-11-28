@@ -4,6 +4,11 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getCloneDestinationAutoFill } from '../create/clone-defaults'
+import {
+  cloneParentTargetKey,
+  readCloneParentFolder,
+  writeCloneParentFolder
+} from '../create/clone-parent-memory'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
@@ -75,6 +80,9 @@ export function useAddRepoCloneFlow({
   const cloneGenRef = useRef(0)
   // Allow late settings hydration to fill the default once per clone-step entry.
   const [cloneStepAutoFilled, setCloneStepAutoFilled] = useState(false)
+  const cloneParentKey = cloneParentTargetKey(activeRuntimeEnvironmentId)
+  // One seed per clone-step entry: the remembered folder wins over the workspace default below.
+  const cloneStepSeededRef = useRef(false)
 
   useEffect(() => {
     if (!isCloning) {
@@ -83,19 +91,35 @@ export function useAddRepoCloneFlow({
     return window.api.repos.onCloneProgress(setCloneProgress)
   }, [isCloning])
 
-  const cloneDestinationAutoFill = getCloneDestinationAutoFill({
-    step,
-    cloneDestination,
-    activeRuntimeEnvironmentId,
-    workspaceDir,
-    cloneStepAutoFilled
-  })
+  let seededFromMemory = false
   if (step !== 'clone') {
     if (cloneStepAutoFilled) {
       setCloneStepAutoFilled(false)
     }
-  } else if (cloneDestinationAutoFill) {
-    // Late defaults may seed local destinations; remote clone paths remain user-entered.
+    cloneStepSeededRef.current = false
+  } else if (!cloneStepSeededRef.current) {
+    cloneStepSeededRef.current = true
+    // Why: the dialog clears its state on close, so without this the parent folder is picked twice.
+    const rememberedParent = activeRuntimeEnvironmentId ? '' : readCloneParentFolder(cloneParentKey)
+    if (rememberedParent) {
+      seededFromMemory = true
+      setCloneDestination(rememberedParent)
+      // A remembered folder is a real destination, so the workspace default must not replace it.
+      setCloneStepAutoFilled(true)
+    }
+  }
+
+  // Late defaults may seed local destinations; remote clone paths remain user-entered.
+  const cloneDestinationAutoFill = seededFromMemory
+    ? null
+    : getCloneDestinationAutoFill({
+        step,
+        cloneDestination,
+        activeRuntimeEnvironmentId,
+        workspaceDir,
+        cloneStepAutoFilled
+      })
+  if (cloneDestinationAutoFill) {
     setCloneStepAutoFilled(true)
     setCloneDestination(cloneDestinationAutoFill.destination)
   }
@@ -139,12 +163,14 @@ export function useAddRepoCloneFlow({
       return
     }
     const gen = cloneGenRef.current
+    const targetKey = cloneParentKey
     const dir = await window.api.repos.pickDirectory()
     if (dir && gen === cloneGenRef.current) {
       setCloneDestination(dir)
       setCloneError(null)
+      writeCloneParentFolder(targetKey, dir)
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [activeRuntimeEnvironmentId, cloneParentKey])
 
   const handleClone = useCallback(async (): Promise<void> => {
     // Why: without a resolved host the clone below would land on this computer.
