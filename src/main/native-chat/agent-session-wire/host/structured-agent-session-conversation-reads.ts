@@ -222,20 +222,22 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     },
     /** Chats whose running agent an app quit would stop rather than hand to the terminal daemon. */
     agentsStoppedByQuit: (): RemoteServerUpdateStoppedChat[] => {
-      const { sessions, deps } = context()
-      return [...sessions].flatMap(([sessionId, { child }]) => {
-        if (!child || quitKeepsStructuredAgent(sessionId, child)) {
-          return []
-        }
+      const { sessions, deps, runtimeState } = context()
+      const running = [...sessions].flatMap(([sessionId, { child }]) =>
+        child && !quitKeepsStructuredAgent(sessionId, child) ? [sessionId] : []
+      )
+      // Quit aborts every start still acquiring its agent (abort-acquires), so those stop too.
+      const starting = runtimeState.startFlights
+        .startingSessionIds()
+        .filter((sessionId) => !sessions.get(sessionId)?.child)
+      return [...running, ...starting].map((sessionId) => {
         const record = deps.store.getConversation(sessionId)
-        return [
-          {
-            sessionId,
-            agent: record?.provider ?? null,
-            worktreeId: record?.location.workspaceId ?? null,
-            title: record ? agentSessionRecordShownName(deps.store, record) : null
-          }
-        ]
+        return {
+          sessionId,
+          agent: record?.provider ?? null,
+          worktreeId: record?.location.workspaceId ?? null,
+          title: record ? agentSessionRecordShownName(deps.store, record) : null
+        }
       })
     },
     /** A decided start's acquire is still out, and no later start's child is attached. */
