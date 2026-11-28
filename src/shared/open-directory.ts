@@ -32,6 +32,8 @@ export function openDirectorySync(path: string, options?: OpenDirectoryOptions):
   return opendirSync(path, options)
 }
 
+const LISTED_BATCH_SIZE = 32
+
 class ListedDirectory implements DirectoryHandle {
   private next = 0
 
@@ -45,6 +47,10 @@ class ListedDirectory implements DirectoryHandle {
   }
 
   async read(): Promise<Dirent | null> {
+    // Dir refills its 32-entry buffer with real I/O; yield as often so long walks don't starve the loop.
+    if (this.next > 0 && this.next % LISTED_BATCH_SIZE === 0) {
+      await new Promise<void>((resolve) => setImmediate(resolve))
+    }
     return this.readSync()
   }
 
@@ -59,7 +65,7 @@ class ListedDirectory implements DirectoryHandle {
 
   async *[Symbol.asyncIterator](): AsyncIterator<Dirent> {
     try {
-      for (let entry = this.readSync(); entry; entry = this.readSync()) {
+      for (let entry = await this.read(); entry; entry = await this.read()) {
         yield entry
       }
     } finally {
