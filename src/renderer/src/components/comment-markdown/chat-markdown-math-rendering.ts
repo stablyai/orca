@@ -102,17 +102,7 @@ function rehypeChatMath(
                     'Scroll display equation'
                   )
                 }
-              : {
-                  className: [
-                    'inline-flex',
-                    'min-w-0',
-                    'max-w-full',
-                    'overflow-x-auto',
-                    'overflow-y-clip',
-                    'px-[0.1em]',
-                    'py-px'
-                  ]
-                })
+              : {})
         },
         children:
           display && !invalid
