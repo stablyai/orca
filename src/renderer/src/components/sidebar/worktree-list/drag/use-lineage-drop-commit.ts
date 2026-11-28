@@ -35,14 +35,15 @@ export function useWorktreeLineageDropCommit(args: {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  worktreeDragGroups: readonly WorktreeDragGroup[]
+  getWorktreeDragGroups: () => readonly WorktreeDragGroup[]
   keepsFolderParent: (identity: string, point: WorktreeReorderDropPoint | undefined) => boolean
   captureFolderRetention: (
     point: WorktreeReorderDropPoint | undefined,
     folders: ReadonlySet<string>
   ) => WorktreeReorderDropPoint | undefined
 }) {
-  const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
+  const { repoMap, worktreeMap, worktreeLineageById, getWorktreeDragGroups, keepsFolderParent } =
+    args
   const worktrees = useAllWorktrees()
   const parentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const folderParentOf = useCallback(
@@ -70,7 +71,8 @@ export function useWorktreeLineageDropCommit(args: {
         if (parent) {
           if (members === undefined) {
             members =
-              worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds ?? []
+              getWorktreeDragGroups().find((group) => group.key === sourceGroupKey)?.worktreeIds ??
+              []
           }
           if (members.includes(identity)) {
             folders.add(parent)
@@ -79,7 +81,7 @@ export function useWorktreeLineageDropCommit(args: {
       }
       return captureGeometry(point, folders)
     },
-    [captureGeometry, folderParentOf, worktreeDragGroups]
+    [captureGeometry, folderParentOf, getWorktreeDragGroups]
   )
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
@@ -210,7 +212,7 @@ export function useWorktreeLineageDropCommit(args: {
       pickedCopies?: DraggedWorktreeCopies
       dropPoint?: WorktreeReorderDropPoint
     }) => {
-      const sourceGroup = worktreeDragGroups.find(
+      const sourceGroup = getWorktreeDragGroups().find(
         (group) => group.key === unnestArgs.sourceGroupKey
       )
       if (!sourceGroup) {
@@ -242,7 +244,7 @@ export function useWorktreeLineageDropCommit(args: {
       keepsFolderParent,
       folderParentOf,
       updateWorktreeLineage,
-      worktreeDragGroups,
+      getWorktreeDragGroups,
       worktreeLineageById,
       worktreeMap
     ]
