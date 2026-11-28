@@ -215,12 +215,12 @@ function pickOne(open: OpenItems): BotItemRecord {
   if (items.length === 0) {
     throw new OrchestrationError(
       'invalid_argument',
-      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send, so tell your owner that and don't make an item to hold it."
+      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send, so tell your owner that, and don't make an item to hold it or offer to send it as a message."
     )
   }
   throw new OrchestrationError(
     'invalid_argument',
-    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it.`
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it or offer to send it as a message.`
   )
 }
 
