@@ -144,6 +144,7 @@ export type AgentLaunchModeReason =
   | 'codex_on_windows'
   | 'chat_unavailable_on_windows'
   | 'structured_unsupported_on_host'
+  | 'agent_cli_too_old'
   | 'chat_runtime_not_installed'
   | 'chat_cannot_run_orca_commands'
 
