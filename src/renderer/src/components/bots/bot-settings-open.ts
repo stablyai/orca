@@ -8,6 +8,7 @@ import {
   type BotSettingsPlace as BotSettingsViewPlace,
   setBotSettingsPlace
 } from './settings-view/bot-settings-place'
+import { setBotAutomationPlace } from './bot-automation-place'
 
 /** A subpage of the bot's settings, or Memory on its History; absent opens the root. */
 export type BotSettingsPlace = BotSettingsPage | 'memory-history'
@@ -32,6 +33,7 @@ function openBotSettingsPanel(bot: Bot, place: BotSettingsPlace | undefined): bo
   if (!openBotHome(bot)) {
     return false
   }
+  setBotAutomationPlace(null)
   setBotSettingsPlace('panel', viewPlace(bot.id, place))
   const { setRightSidebarTab, setRightSidebarOpen } = useAppStore.getState()
   setRightSidebarTab('bot-activity')

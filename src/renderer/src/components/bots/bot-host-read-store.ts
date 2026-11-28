@@ -1,7 +1,6 @@
 // One host read about a bot (its Activity, its chats tree, its Items), shared by every surface showing
 // that bot: one read at a time per bot, asks during it shared by one more after it.
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
-import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import { BotReadMoreFailed } from '../../../../shared/bots/bot-read-more-failed'
 import {
@@ -10,7 +9,8 @@ import {
   type BotHostReadOptions,
   type BotReadAsk
 } from './bot-host-read-asks'
-import { callBotRpcWithAuthority, type BotReadAuthority } from './bot-read-authority'
+import type { BotReadAuthority } from './bot-read-authority'
+import { readBotHostDefault, type BotHostReadCapture } from './bot-host-read-default'
 import {
   BOT_READ_SETTLE_MS,
   finishBotSettledWaiter,
@@ -87,11 +87,13 @@ export function createBotHostRead<T>(
   /** Keep each bot's last value after its last surface closes, shown at once when one opens again while it re-reads.
    *  A number keeps only that many bots', the least recently read dropped first. */
   keepLast: boolean | number = false,
-  options?: BotHostReadOptions<T>
+  options?: BotHostReadOptions<T>,
+  /** Runs as each default read is sent (`readBotHostDefault`). */
+  capture?: BotHostReadCapture<T>
 ): BotHostRead<T> {
   const entries = new Map<string, BotReadEntry<T>>()
-  const readDefault = (bot: BotRef): Promise<{ result: never; authority: BotReadAuthority }> =>
-    callBotRpcWithAuthority<never>(bot, method, { botId: bot.id })
+  const readDefault = (bot: BotRef, previous: T | null, live: () => boolean): Promise<T | null> =>
+    readBotHostDefault(bot, method, previous, live, pick, capture)
   // One value per bot, replaced by each read that lands.
   const lastValues = new Map<string, T>()
 
@@ -188,10 +190,7 @@ export function createBotHostRead<T>(
     try {
       const value = options
         ? await options.load(entry.bot, previous, ask, show, live, () => entry.again)
-        : await readDefault(entry.bot).then(({ result, authority }) =>
-            // A reply no one shows any more is not compared.
-            live() ? reuseEqualJson(previous, pick(result, authority)) : previous
-          )
+        : await readDefault(entry.bot, previous, live)
       if (live()) {
         const changed = land(value)
         landed = value

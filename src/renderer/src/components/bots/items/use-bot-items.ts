@@ -1,3 +1,4 @@
+import { captureBotRecordOwner } from '../../automations/hosts/bot-automation-row-owner'
 // A bot's items as its Items tab shows them (every open one, closed ones by page), read from the bot's
 // host and re-read when its items or workers change; and the owner's writes to them.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -46,13 +47,18 @@ const SUMMARY = { summary: true }
 
 /** The list call for a bot (or some of its chats), every read a summary. */
 function listCall(bot: BotRef, chatIds: readonly string[] | null): BotItemsListCall {
-  return (params) =>
-    callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
+  return (params) => {
+    const qualify = captureBotRecordOwner(bot)
+    return callBotRpc<BotItemsRead>(bot, 'bots.items.owner.list', {
       botId: bot.id,
       ...chatScope(chatIds),
       ...SUMMARY,
       ...params
-    })
+    }).then((read) => ({
+      ...read,
+      items: read.items.map((item) => ({ ...item, links: item.links.map(qualify) }))
+    }))
+  }
 }
 
 const itemsRead: BotHostRead<BotItemsRead> = createBotHostRead<BotItemsRead>(
@@ -236,7 +242,10 @@ export function showBotItem(
   uid: string,
   page: { after: string } | { newest: true; before?: string }
 ): Promise<BotItemShow> {
-  return callBotRpc(bot, 'bots.items.owner.show', { item: uid, ...page })
+  const qualify = captureBotRecordOwner(bot)
+  return callBotRpc<BotItemShow>(bot, 'bots.items.owner.show', { item: uid, ...page }).then(
+    (read) => ({ ...read, item: { ...read.item, links: read.item.links.map(qualify) } })
+  )
 }
 
 /** `images`: chat-attachment paths on the bot's host; files ride in `text` as `@path`. `requestId`:

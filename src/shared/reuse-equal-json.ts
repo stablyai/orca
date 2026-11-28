@@ -1,12 +1,22 @@
 // Structural sharing for JSON-shaped answers: what an answer repeats keeps the identity it had, so a
 // reader comparing by identity re-renders only for what changed.
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+function isPlainObject(value: unknown): value is Record<PropertyKey, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
   const proto: unknown = Object.getPrototypeOf(value)
   return proto === Object.prototype || proto === null
+}
+
+function sharingKeys(value: Record<PropertyKey, unknown>): PropertyKey[] {
+  const keys: PropertyKey[] = Object.keys(value)
+  for (const key of Object.getOwnPropertySymbols(value)) {
+    if (Object.prototype.propertyIsEnumerable.call(value, key)) {
+      keys.push(key)
+    }
+  }
+  return keys
 }
 
 /** `next`, with every part equal to `previous`'s part at the same place replaced by that part; `previous`
@@ -26,9 +36,9 @@ export function reuseEqualJson<T>(previous: unknown, next: T): T {
     return (same ? previous : merged) as T
   }
   if (isPlainObject(previous) && isPlainObject(next)) {
-    const keys = Object.keys(next)
-    let same = keys.length === Object.keys(previous).length
-    const merged: Record<string, unknown> = {}
+    const keys = sharingKeys(next)
+    let same = keys.length === sharingKeys(previous).length
+    const merged: Record<PropertyKey, unknown> = {}
     for (const key of keys) {
       const kept = Object.hasOwn(previous, key)
         ? reuseEqualJson(previous[key], next[key])

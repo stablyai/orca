@@ -129,7 +129,11 @@ async function markSeen(bot: BotRef, sessionIds: string[]): Promise<void> {
 function shownChatTab(bot: BotHome, sessionId: string): { id: string } | null {
   const state = useAppStore.getState()
   const workspaceId = folderWorkspaceKey(bot.folderWorkspaceId)
-  if (state.activeView !== 'terminal' || state.activeWorktreeId !== workspaceId) {
+  if (
+    state.activeView !== 'terminal' ||
+    state.activeWorktreeId !== workspaceId ||
+    (state.activeWorkspaceExecutionHostId ?? 'local') !== bot.hostId
+  ) {
     return null
   }
   const tab = selectFocusedChatTab(state, workspaceId)

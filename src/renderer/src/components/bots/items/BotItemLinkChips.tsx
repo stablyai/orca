@@ -1,3 +1,4 @@
+import { inheritBotRecordOwner } from '../../automations/hosts/bot-automation-row-owner'
 // An item's links as one or two lines of chips under its frozen title, so they stay in view while the
 // owner reads and answers lower down. Each chip opens its link as its row in the full list would; the
 // chips with no room go behind "+N", whose popover lists every link as full rows.
@@ -198,7 +199,7 @@ function WorkerChip({
   link: Extract<BotItemLinkRow, { kind: 'worker' }>['link']
 }): React.JSX.Element {
   const t = useTranslate()
-  const worker = botItemWorkerRow(link)
+  const worker = inheritBotRecordOwner(link, botItemWorkerRow(link))
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
   const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')

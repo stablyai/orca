@@ -3,7 +3,7 @@
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
 import { memo, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
+import { botTarget, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { reviewAccessRequest } from '@/lib/bot-access-requests'
@@ -14,8 +14,8 @@ import type { BotSessionActivityRow } from '../../../../shared/bots/bot-activity
 import { CONNECTOR_SOURCE_NAMES } from '../../../../shared/connectors/external-conversation-link'
 import { approvalDetailPreview } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { manageConnectors } from './bot-connector-descriptions'
-import { openBotAutomation } from './bot-automation-open'
-import { botWorkerRowOpener } from './bot-worker-open'
+import { botAutomationReturnRevealsNeeds } from './bot-automation-place'
+import { botActivityNeedOpener } from './bot-activity-need-open'
 import { botActivityRowTitle } from './bot-activity-row-title'
 import { botErrorMessage } from './bot-presentation'
 import { botConnectorTitleText } from './bot-connector-titles'
@@ -25,7 +25,7 @@ import { useBotSessionPrompt } from './use-bot-session-prompt'
 import { useStructuredAgentSessionAsyncQuestionSkip } from '../native-chat/prompts/use-structured-agent-session-async-question-skip'
 import type { BotNeedView } from './use-bot-now'
 import { NEEDS_YOU_CAP, needsYouFold } from '../../../../shared/bots/needs-you-fold'
-import { useApprovalReports } from './use-approval-reports'
+import { knownApproval, useApprovalReports } from './use-approval-reports'
 import { NeedsYouRowCommit, useNeedsYouFocus, useNeedsYouRefocus } from './use-needs-you-focus'
 import { NeedRow, NeedRowBot, StoppedForSignInRow, type StoppedForSignIn } from './BotNeedRow'
 import { PairedAskNeedRow } from './BotPairedAskNeedRow'
@@ -41,6 +41,7 @@ export type BotNeedsYouAsks = {
   needs: readonly BotNeedView[]
   /** Runs a sign-in stopped: listed after the asks as context, never counted. */
   stoppedForSignIn: readonly StoppedForSignIn[]
+  stoppedBot?: (row: StoppedForSignIn) => BotRef | null
   /** The item a worker's Dispatch is linked to, whose title its ask takes. */
   itemOf: (dispatchId: string) => BotItem | null
 }
@@ -120,18 +121,6 @@ function permission(t: Translate, tool: string | null): string {
     : t('bots.needs.permission', 'Permission needed')
 }
 
-/** A worker's terminal or a terminal run asks in its own pane. */
-function paneOpener(row: BotSessionActivityRow, bot: BotOnHost): (() => void) | null {
-  switch (row.kind) {
-    case 'worker':
-      return botWorkerRowOpener(row, botTarget(bot))
-    case 'run':
-      return () => openBotAutomation(bot.hostId, row.automationId, row.runId)
-    case 'thread':
-      return null
-  }
-}
-
 function SessionRowNeed({
   bot,
   needKey,
@@ -161,7 +150,7 @@ function SessionRowNeed({
       />
     )
   }
-  const open = paneOpener(row, bot)
+  const open = botActivityNeedOpener(row, bot, needKey)
   // An item's worker asks under the item's title, its own name first so two of them read apart.
   const item = row.kind === 'worker' && row.dispatchId ? itemOf(row.dispatchId) : null
   const tool = row.kind === 'worker' ? (row.tool ?? null) : null
@@ -292,15 +281,6 @@ type GroupRow =
   | { key: string; approval: false; stopped: StoppedForSignIn }
   | { key: string; approval: false; item: BotItem }
 
-/** A worker's own dot says it waits on a permission; a chat's prompt says so once read; a paired
- *  server's card always asks for one. */
-function knownApproval(need: BotNeedView): boolean {
-  return (
-    need.kind === 'paired-ask' ||
-    (need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission')
-  )
-}
-
 const itemKey = (item: BotItem): string => `item:${item.uid}`
 const NO_ITEMS: readonly BotItem[] = []
 
@@ -332,6 +312,12 @@ export function BotNeedsYouSection({
   const t = useTranslate()
   const { needs, stoppedForSignIn, itemOf } = asks
   const [expanded, setExpanded] = useState(() => {
+    if (
+      typeof bot !== 'function' &&
+      botAutomationReturnRevealsNeeds(bot, needs, stoppedForSignIn)
+    ) {
+      return true
+    }
     const at = revealUid ? items.findIndex((item) => item.uid === revealUid) : -1
     return at >= 0 && needs.length + stoppedForSignIn.length + at >= NEEDS_YOU_CAP
   })
@@ -363,8 +349,6 @@ export function BotNeedsYouSection({
     focusFallback
   )
   if (!fold.folds && expanded && !offline) {
-    // Too few rows to fold: when they grow back, the group starts folded again. Offline shows
-    // every row for now, so an opened group stays open for when the host is back.
     setExpanded(false)
   }
   if (rows.length === 0) {
@@ -390,7 +374,10 @@ export function BotNeedsYouSection({
                   <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
                 )
               ) : 'stopped' in row ? (
-                <StoppedForSignInRow row={row.stopped} />
+                <StoppedForSignInRow
+                  bot={typeof bot === 'function' ? (asks.stoppedBot?.(row.stopped) ?? null) : bot}
+                  row={row.stopped}
+                />
               ) : (
                 renderItem?.(row.item)
               )
@@ -398,6 +385,7 @@ export function BotNeedsYouSection({
               <div
                 key={row.key}
                 data-need-key={row.key}
+                data-activity-row-key={row.key}
                 ref={'item' in row && row.item.uid === backRow?.uid ? backRow.ref : undefined}
                 // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
                 hidden={folded}

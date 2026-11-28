@@ -1,3 +1,4 @@
+import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type {
   AgentSubjectRead,
   AgentSubjectReadIntent
@@ -23,6 +24,7 @@ import type {
 
 /** Open an automation (runId null) or one of its runs once its host's list has loaded. */
 export type PendingAutomationRunNavigation = {
+  owner?: AutomationOwnerRef
   automationId: string
   runId: string | null
   hostId?: ExecutionHostId

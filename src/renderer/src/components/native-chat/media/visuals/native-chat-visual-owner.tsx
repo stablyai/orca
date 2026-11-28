@@ -1,3 +1,7 @@
+import { useAppStore } from '@/store'
+import { automationOwnerForHostId } from '@/components/automations/hosts/automation-host-owner'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { AutomationOwnerRef } from '../../../../../../shared/automations/ownership/automation-owner-ref'
 import { createContext, useContext, useMemo } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useNativeChatTabOwnerWorktreeId } from '../../pane/ownership/use-native-chat-tab-owner'
@@ -7,6 +11,25 @@ export type NativeChatVisualOwner = {
   sessionId: string
   worktreeId: string
   tabId?: string
+  automationOwner?: AutomationOwnerRef | null
+}
+
+export function captureNativeChatVisualOwner(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  worktreeId: string,
+  tabId?: string
+): NativeChatVisualOwner {
+  return {
+    target,
+    sessionId,
+    worktreeId,
+    tabId,
+    automationOwner: automationOwnerForHostId(
+      getRuntimeTargetHostId(target),
+      useAppStore.getState()
+    )
+  }
 }
 
 export const NativeChatVisualOwnerContext = createContext<NativeChatVisualOwner | null>(null)
@@ -17,26 +40,37 @@ export function useNativeChatVisualOwner(): NativeChatVisualOwner | null {
 }
 
 /** Null for a bridge chat (no target), which reads no visuals. */
-export function useNativeChatTabVisualOwner(
+export function useNativeChatTranscriptVisualOwner(
   target: RuntimeClientTarget | null,
   sessionId: string | null,
+  worktreeId: string | null,
   tabId: string
 ): NativeChatVisualOwner | null {
-  // Until the tab's workspace is known there is no workspace to open a visual's tab in.
-  const worktreeId = useNativeChatTabOwnerWorktreeId(tabId)
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const hasTarget = target !== null
   return useMemo<NativeChatVisualOwner | null>(
     () =>
       worktreeId && hasTarget && sessionId !== null
-        ? {
-            target:
-              environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
+        ? captureNativeChatVisualOwner(
+            environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId },
             sessionId,
-            tabId,
-            worktreeId
-          }
+            worktreeId,
+            tabId
+          )
         : null,
     [environmentId, hasTarget, sessionId, tabId, worktreeId]
+  )
+}
+
+export function useNativeChatTabVisualOwner(
+  target: RuntimeClientTarget | null,
+  sessionId: string | null,
+  tabId: string
+): NativeChatVisualOwner | null {
+  return useNativeChatTranscriptVisualOwner(
+    target,
+    sessionId,
+    useNativeChatTabOwnerWorktreeId(tabId),
+    tabId
   )
 }

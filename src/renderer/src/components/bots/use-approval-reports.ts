@@ -1,6 +1,16 @@
 // Reports which Needs you rows are approvals, so the group sorts them first (needsYouFold).
 import { useCallback, useLayoutEffect, useReducer, useRef } from 'react'
 
+import type { BotNeedView } from './use-bot-now'
+
+/** Whether this ask already has an approval to show. */
+export function knownApproval(need: BotNeedView): boolean {
+  return (
+    need.kind === 'paired-ask' ||
+    (need.kind === 'session' && need.row.kind === 'worker' && need.row.dot === 'permission')
+  )
+}
+
 const NO_APPROVALS: ReadonlySet<string> = new Set()
 
 /** Each reported approval key, copied once per commit into the state the card renders from. */

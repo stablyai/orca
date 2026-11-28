@@ -8,8 +8,11 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+  AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY
 } from '../../../../../shared/automations/automation-runtime-capabilities'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -129,14 +132,43 @@ function sharedCapabilityProbe(
   return started
 }
 
-export async function assertOwnerFencingSupported(
+async function assertReceiverCapability(
+  authority: AutomationAuthorityRef,
+  capability: RuntimeCapability,
+  message: string
+): Promise<string | undefined> {
+  if (authority.kind === 'desktop') {
+    return undefined
+  }
+  const status = await callRuntimeRpc<RuntimeStatus>(
+    { kind: 'environment', environmentId: authority.environmentId },
+    'status.get',
+    undefined,
+    { timeoutMs: REQUEST_TIMEOUT_MS, expectedEnvironmentPairingRevision: authority.pairingRevision }
+  )
+  if (!status.runtimeId || !status.capabilities?.includes(capability)) {
+    throw new AutomationHostScopeUnsupportedError(message)
+  }
+  return status.runtimeId
+}
+
+export function assertOwnerFencingSupported(
   authority: AutomationAuthorityRef
-): Promise<void> {
-  await assertAuthorityCapability(
+): Promise<string | undefined> {
+  return assertReceiverCapability(
     authority,
     AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
-    { cacheConfirmation: false }
+    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
+  )
+}
+
+export function assertAutomationHistorySupported(
+  authority: AutomationAuthorityRef
+): Promise<string | undefined> {
+  return assertReceiverCapability(
+    authority,
+    AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
+    'Update Orca on this computer to read automation history in the panel or Automations page.'
   )
 }
 

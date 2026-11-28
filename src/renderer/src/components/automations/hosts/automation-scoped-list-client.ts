@@ -22,9 +22,10 @@ import type {
 } from '../../../../../shared/automations/ownership/automation-owner-ref'
 /** The one classifier every client shares; re-exported so call sites keep importing it from here. */
 
-import type {
-  AutomationDestination,
-  AutomationOwnerPrecondition
+import {
+  toAutomationOwnerPrecondition,
+  type AutomationDestination,
+  type AutomationOwnerPrecondition
 } from '../../../../../shared/automations/ownership/automation-owner-precondition'
 import {
   toRuntimeAutomationCreateInput,
@@ -32,6 +33,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
+  assertAutomationHistorySupported,
   prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
@@ -79,25 +81,18 @@ export const ORPHAN_OWNER_PRECONDITION: AutomationOwnerPrecondition = {
 }
 
 export function ownerPrecondition(owner: AutomationOwnerRef): AutomationOwnerPrecondition {
-  return {
-    selector:
-      owner.selector.kind === 'ssh'
-        ? {
-            kind: 'ssh',
-            targetId: owner.selector.targetId,
-            targetGeneration: owner.selector.targetGeneration
-          }
-        : { kind: 'self' }
-  }
+  return toAutomationOwnerPrecondition(owner.selector)
 }
 
-async function callAuthority<TResult>(
+export async function callAuthority<TResult>(
   authority: AutomationAuthorityRef,
   method: string,
-  params: unknown
+  params: unknown,
+  expectedEnvironmentRuntimeId?: string
 ): Promise<TResult> {
   return await callRuntimeRpc<TResult>(runtimeTarget(authority), method, params, {
     timeoutMs: REQUEST_TIMEOUT_MS,
+    expectedEnvironmentRuntimeId,
     // Why: a same-id re-pair must invalidate this request instead of retargeting it.
     ...(authority.kind === 'runtime'
       ? { expectedEnvironmentPairingRevision: authority.pairingRevision }
@@ -151,22 +146,24 @@ export async function listAutomationsForOwner(
   return await listScopedAutomations(owner.authority, scopeSelector(owner))
 }
 
-/** Owned and orphan history reads do not probe. Old hosts may ignore preconditions and return their stored rows; read-only calls cannot mutate behind an unhonored fence. */
+/** Admission precedes transport: older hosts can ignore both the limit and the preview. */
 async function listRunsPageFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
   expectedOwner: AutomationOwnerPrecondition,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
+  const runtimeId = await assertAutomationHistorySupported(authority)
   const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
     authority,
     'automation.runs',
-    { automationId, expectedOwner, preview: true, ...options }
+    { automationId, expectedOwner, preview: true, ...options },
+    runtimeId
   )
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
-/** Every run as previews; old hosts ignore `preview` and answer once with full rows and no cursor. */
+/** Every run as bounded previews. */
 async function listRunsFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
@@ -193,13 +190,18 @@ export async function readFullAutomationRun(
   expectedOwner: AutomationOwnerPrecondition,
   run: Pick<AutomationRun, 'automationId' | 'id'>
 ): Promise<AutomationRun | null> {
-  const result = await callAuthority<{ run?: AutomationRun }>(authority, 'automation.runs', {
-    automationId: run.automationId,
-    expectedOwner,
-    runId: run.id,
-    // An old host ignores `runId` and lists; one row keeps that answer small.
-    limit: 1
-  })
+  const runtimeId = await assertAutomationHistorySupported(authority)
+  const result = await callAuthority<{ run?: AutomationRun }>(
+    authority,
+    'automation.runs',
+    {
+      automationId: run.automationId,
+      expectedOwner,
+      runId: run.id,
+      limit: 1
+    },
+    runtimeId
+  )
   return result.run?.id === run.id ? result.run : null
 }
 
@@ -226,14 +228,19 @@ async function updateFenced(
   expectedOwner: AutomationOwnerPrecondition,
   destination?: AutomationDestination
 ): Promise<Automation> {
-  await assertOwnerFencingSupported(authority)
+  const runtimeId = await assertOwnerFencingSupported(authority)
   const prepared = await prepareAutomationLaunchSetup(authority, updates)
-  const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
-    id,
-    updates: toRuntimeAutomationUpdateInput(prepared),
-    expectedOwner,
-    destination
-  })
+  const result = await callAuthority<{ automation: Automation }>(
+    authority,
+    'automation.update',
+    {
+      id,
+      updates: toRuntimeAutomationUpdateInput(prepared),
+      expectedOwner,
+      destination
+    },
+    runtimeId
+  )
   return result.automation
 }
 
@@ -242,8 +249,8 @@ async function deleteFenced(
   id: string,
   expectedOwner: AutomationOwnerPrecondition
 ): Promise<void> {
-  await assertOwnerFencingSupported(authority)
-  await callAuthority(authority, 'automation.delete', { id, expectedOwner })
+  const runtimeId = await assertOwnerFencingSupported(authority)
+  await callAuthority(authority, 'automation.delete', { id, expectedOwner }, runtimeId)
 }
 
 export async function updateAutomationForOwner(
@@ -299,12 +306,17 @@ export async function runAutomationNowForOwner(
   owner: AutomationOwnerRef,
   id: string
 ): Promise<AutomationRun> {
-  await assertOwnerFencingSupported(owner.authority)
+  const runtimeId = await assertOwnerFencingSupported(owner.authority)
   const expectedOwner = ownerPrecondition(owner)
-  const result = await callAuthority<{ run: AutomationRun }>(owner.authority, 'automation.runNow', {
-    id,
-    expectedOwner
-  })
+  const result = await callAuthority<{ run: AutomationRun }>(
+    owner.authority,
+    'automation.runNow',
+    {
+      id,
+      expectedOwner
+    },
+    runtimeId
+  )
   return result.run
 }
 
@@ -316,12 +328,17 @@ export async function createAutomationForDestination(
   if (input.creationKey) {
     await assertAutomationCreateIdempotencySupported(authority)
   }
-  await assertOwnerFencingSupported(authority)
+  const runtimeId = await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
   const prepared = await prepareAutomationLaunchSetup(authority, input)
-  const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...toRuntimeAutomationCreateInput(prepared),
-    destination
-  })
+  const result = await callAuthority<{ automation: Automation }>(
+    authority,
+    'automation.create',
+    {
+      ...toRuntimeAutomationCreateInput(prepared),
+      destination
+    },
+    runtimeId
+  )
   return result.automation
 }

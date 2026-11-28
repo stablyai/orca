@@ -1,13 +1,13 @@
+import { useTranscriptBot } from '@/components/bots/bot-transcript-bot'
 import { useMemo, useState } from 'react'
 import { useNow } from '@/lib/window-activity/use-now'
 import { toast } from 'sonner'
-import { botTarget } from '@/lib/bot-hosts'
-import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { useBotActivity, useBotActivityRead } from '@/components/bots/use-bot-activity'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { botAutomationWhen } from '@/components/bots/bot-automation-when'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { deleteAutomationForTarget } from '@/components/automations/hosts/automation-host-client'
+import { deleteAutomationForOwner } from '@/components/automations/hosts/automation-scoped-list-client'
+import { actOnBotAutomationRow } from '@/components/automations/hosts/bot-automation-row-owner'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationOnce, WaitEnding } from '../../../../../shared/automation-once'
 import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
@@ -39,7 +39,8 @@ function WaitActions({
 }): React.JSX.Element | null {
   const activity = useBotActivity(bot)
   const exists = activity.automations.some((row) => row.automation.id === automationId)
-  const waiting = activity.waits?.some((row) => row.automation.id === automationId)
+  const waiting = activity.waits?.find((row) => row.automation.id === automationId)
+  const owner = useNativeChatVisualOwner()?.automationOwner ?? null
   const [busy, setBusy] = useState(false)
   if (!exists && !waiting) {
     return null
@@ -50,7 +51,7 @@ function WaitActions({
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(bot.hostId, automationId, null)}
+          onClick={() => openBotAutomation({ bot, owner, automationId, runId: null })}
         >
           {label.open}
         </button>
@@ -62,7 +63,9 @@ function WaitActions({
           disabled={busy}
           onClick={() => {
             setBusy(true)
-            void deleteAutomationForTarget({ id: automationId, runContext: null }, botTarget(bot))
+            void actOnBotAutomationRow(owner, (captured) =>
+              deleteAutomationForOwner(captured, automationId)
+            )
               .catch((error: unknown) => toast.error(botErrorMessage(error)))
               .finally(() => setBusy(false))
           }}
@@ -151,7 +154,7 @@ export function NativeChatWaitRow({
   timestamp: number | null
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const bot = useTranscriptBot(owner)
   // A minute clock only while a deadline may still pass here, so the row turns Wait over then.
   const now = useNow(60_000, !ended && once.by !== undefined)
   // Its host's waits, so a wait that ran or went in another chat stops reading Waiting here.
@@ -195,7 +198,7 @@ export function NativeChatWaitEndedRow({
   timestamp: number | null
 }): React.JSX.Element {
   const owner = useNativeChatVisualOwner()
-  const bot = useBotForWorkspace(owner?.worktreeId ?? null)
+  const bot = useTranscriptBot(owner)
   return (
     <WaitRow
       messageId={messageId}

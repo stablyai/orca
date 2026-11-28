@@ -200,6 +200,7 @@ export function BotPanelRow({
       <BotRowHoverCard card={card ? <BotRowCardBody card={card} /> : null}>
         <button
           type="button"
+          data-activity-row-key={rowKey}
           aria-label={label === title ? undefined : label}
           aria-describedby={card ? descriptionId : undefined}
           aria-disabled={onOpen ? undefined : true}

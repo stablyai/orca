@@ -7,7 +7,19 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from '../automation-page-parts'
 
-export function AutomationPromptDisclosure({ prompt }: { prompt: string }): React.JSX.Element {
+export function AutomationPromptDisclosure({
+  prompt,
+  title,
+  copyNoun = 'prompt',
+  actions
+}: {
+  prompt: string
+  /** The section's name; the page calls it Prompt, a bot's panel Instructions. */
+  title?: string
+  copyNoun?: 'prompt' | 'instructions'
+  /** More title-row actions, before Copy (a bot's panel: Edit in chat). */
+  actions?: React.ReactNode
+}): React.JSX.Element {
   const t = useTranslate()
   const contentId = useId()
   const expandedRef = useRef(false)
@@ -21,7 +33,12 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
       ? t('auto.components.automations.AutomationPromptDisclosure.copied', 'Copied')
       : copyStatus === 'failed'
         ? t('auto.components.automations.AutomationPromptDisclosure.copyFailed', 'Copy failed')
-        : t('auto.components.automations.AutomationPromptDisclosure.copyPrompt', 'Copy prompt')
+        : copyNoun === 'instructions'
+          ? t(
+              'auto.components.automations.AutomationPromptDisclosure.copyInstructions',
+              'Copy instructions'
+            )
+          : t('auto.components.automations.AutomationPromptDisclosure.copyPrompt', 'Copy prompt')
 
   const measureOverflow = useCallback((element: HTMLParagraphElement) => {
     const nextOverflows = element.scrollHeight > element.clientHeight + 1
@@ -60,29 +77,32 @@ export function AutomationPromptDisclosure({ prompt }: { prompt: string }): Reac
 
   return (
     <section className="min-w-0 rounded-lg border border-border/60">
-      <div className="flex items-center justify-between gap-3 border-b border-border/60 py-1.5 pr-2 pl-4">
-        <h3 className={`text-muted-foreground ${AUTOMATION_EDITOR_SECTION_LABEL_CLASS}`}>
-          {t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-1.5 pr-2 pl-4 @max-[16rem]:pl-3">
+        <h3 className={`min-w-0 text-muted-foreground ${AUTOMATION_EDITOR_SECTION_LABEL_CLASS}`}>
+          {title ?? t('auto.components.automations.AutomationEditorDialog.058c23cb3f', 'Prompt')}
         </h3>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label={copyLabel}
-              disabled={!canCopy}
-              onClick={() => void copyText()}
-            >
-              {copyStatus === 'copied' ? <Check /> : <Copy />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {copyLabel}
-          </TooltipContent>
-        </Tooltip>
+        <div className="flex shrink-0 items-center gap-1">
+          {actions}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={copyLabel}
+                disabled={!canCopy}
+                onClick={() => void copyText()}
+              >
+                {copyStatus === 'copied' ? <Check /> : <Copy />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {copyLabel}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
-      <div className="relative min-w-0 px-4 py-3">
+      <div className="relative min-w-0 px-4 py-3 @max-[16rem]:px-3">
         <p
           ref={setPromptElement}
           id={contentId}
