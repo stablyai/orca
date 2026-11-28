@@ -318,19 +318,68 @@ describe('ThreadStatus', () => {
   })
 
   it('drops a saved line older than 10 minutes and decides afresh under the next id', async () => {
+    // Saved while the cloud had not said hello, so it never went out.
     const store = botHome()
-    const run = harness(store, { answers: [{ ok: false, status: 503, error: null }] })
+    const before = harness(store, { features: false })
+    await before.turnEnded()
+    await before.advance(30 * MIN)
+    expect(before.sent).toHaveLength(0)
+    const pending = before.fact()?.pending
+    expect(pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
+    await store.flushPendingOrThrowAsync()
+    await closeTestStores()
+
+    const after = harness(createStore())
+    after.clock.now = pending!.at + 11 * MIN
+    after.status.watched()
+    await after.polled()
+    expect(after.sent.map((body) => body.replyId)).toEqual([statusReplyId(THREAD, START, 2)])
+    expect(after.sent[0]?.text).toBe('Still working on this (41 min).')
+  })
+
+  it('counts a dropped line that went out with no answer, so none follows it too soon', async () => {
+    const store = botHome()
+    // The cloud may have taken the line before it failed; a turn then holds the retry for 15 min.
+    const run = harness(store, { answers: [{ ok: false, status: null, error: null }] })
     await run.turnEnded()
     await run.advance(30 * MIN)
-    expect(run.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
-    run.clock.now += 11 * MIN
-    run.status.watched()
-    await run.polled()
-    expect(run.sent.map((body) => body.replyId)).toEqual([
-      statusReplyId(THREAD, START, 1),
-      statusReplyId(THREAD, START, 2)
+    run.clock.running = run.clock.now
+    await run.advance(15 * MIN)
+    run.clock.running = null
+    await run.advance(MIN)
+    expect(run.fact()?.pending).toBeUndefined()
+    expect(run.fact()).toMatchObject({
+      seq: 1,
+      dayCount: 1,
+      armed: { lastLineAt: START + 30 * MIN, dueStep: 1, lines: 1 }
+    })
+    await run.advance(43 * MIN)
+    expect(run.sent).toHaveLength(1)
+    await run.advance(MIN)
+    expect(run.lines()).toEqual([
+      '02:39 Still working on this (30 min).',
+      '03:39 Still working on this (1 h 30 min).'
     ])
-    expect(run.sent[1]?.text).toBe('Still working on this (41 min).')
+    expect(run.sent[1]?.replyId).toBe(statusReplyId(THREAD, START, 2))
+  })
+
+  it('ends the run on a dropped stop line that went out with no answer', async () => {
+    const run = harness(botHome(), {
+      answers: [{ ok: true }, { ok: false, status: null, error: null }]
+    })
+    await run.turnEnded()
+    await run.advance(30 * MIN)
+    // The workers read cap closes them; the stop line gets no answer, and a turn holds its retry.
+    await run.polled(view({ activity: 'idle', open: false }))
+    expect(run.sent[1]?.text).toBe(THREAD_STATUS_STOP_LINE)
+    run.clock.running = run.clock.now
+    await run.advance(15 * MIN)
+    run.clock.running = null
+    await run.advance(MIN)
+    await run.polled(view({ activity: 'idle', open: false }))
+    await run.advance(30 * MIN)
+    expect(run.sent).toHaveLength(2)
+    expect(run.fact()).toEqual({ seq: 2, day: '2026-11-26', dayCount: 2 })
   })
 
   it('posts one line, not the missed ones, after the computer slept for 3 hours', async () => {

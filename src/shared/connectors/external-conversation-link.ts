@@ -73,8 +73,9 @@ export type ThreadStatusFact = {
     /** Orca's lines posted in this run; absent before the first. */
     lines?: number
   }
-  /** A line decided and saved before it is sent, so a retry or restart sends the same one. */
-  pending?: { replyId: string; text: string; at: number; stop: boolean }
+  /** A line decided and saved before it is sent, so a retry or restart sends the same one.
+   *  `triedAt` is its latest send: the cloud may have taken it even with no answer. */
+  pending?: { replyId: string; text: string; at: number; stop: boolean; triedAt?: number }
 }
 
 /** An outside thread's native chat, persisted on the workspace it runs in (system-owned). */

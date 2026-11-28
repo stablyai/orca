@@ -16,7 +16,13 @@ const fact: ThreadStatusFact = {
   day: '2026-11-26',
   dayCount: 3,
   armed: { at: 10, turnEndAt: 20, lastLineAt: 30, lastBotAt: 25, dueStep: 2 },
-  pending: { replyId: 'status-x', text: 'Still working on this (5 h 30 min).', at: 40, stop: false }
+  pending: {
+    replyId: 'status-x',
+    text: 'Still working on this (5 h 30 min).',
+    at: 40,
+    stop: false,
+    triedAt: 45
+  }
 }
 
 beforeEach(() => {

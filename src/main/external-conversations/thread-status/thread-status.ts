@@ -17,11 +17,13 @@ import {
   armedFact,
   armedLinks,
   disarmedFact,
+  mayHavePosted,
   statusReplyId,
   withArmed,
   withBotLine,
   withHostLine,
   withoutPending,
+  withoutSavedLine,
   withTurnEnd,
   writeThreadStatus
 } from './thread-status-fact'
@@ -87,11 +89,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     // A turn end's answer is still on its way to the thread: the next tick decides, never this read.
     if (fact?.armed) {
-      writeThreadStatus(
-        this.deps.store,
-        link,
-        withTurnEnd({ ...fact, armed: fact.armed }, this.now())
-      )
+      this.write(link, withTurnEnd({ ...fact, armed: fact.armed }, this.now()))
     } else if (view.open && threadStatusEligible(this.deps, link) && mayArm(fact, this.now())) {
       this.write(link, armedFact(fact, this.now()))
     }
@@ -235,7 +233,8 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return this.disarm(current.link, current.fact)
     }
     const saved = current.fact.pending ? this.settleSaved(current.link) : 'drop'
-    if (saved !== 'drop') {
+    // A dropped line that may have posted counts as one, so the next tick decides on the fact as is.
+    if (saved !== 'drop' || mayHavePosted(current.fact)) {
       return saved === 'send' ? await this.send(current.link) : undefined
     }
     const seq = current.fact.seq + 1
@@ -262,11 +261,17 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     // Asked again after the save, with nothing awaited between this and the post.
     const cloud = this.deps.cloud()
     const link = findLink(this.deps.store, given)?.link
-    const pending = link?.threadStatus?.pending
+    const fact = link?.threadStatus
+    const pending = fact?.pending
     const conversation = link && cloudConversation(link)
-    if (!cloud || !link || !pending || !conversation || this.settleSaved(link) !== 'send') {
+    if (!cloud || !link || !fact || !pending || !conversation) {
       return
     }
+    if (this.settleSaved(link) !== 'send') {
+      return
+    }
+    // Kept before it goes, with nothing awaited between: a line sent with no answer may have posted.
+    this.write(link, { ...fact, pending: { ...pending, triedAt: this.now() } })
     // One try: the next tick sends it again under the same id once every check passes again.
     const sent = await sendThreadStatusLine(cloud, conversation, pending, () => false)
     const id = idOf(link)
@@ -280,8 +285,8 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return
     }
     const current = findLink(this.deps.store, link)?.link
-    const fact = current?.threadStatus
-    if (!current || fact?.pending?.replyId !== pending.replyId) {
+    const after = current?.threadStatus
+    if (!current || after?.pending?.replyId !== pending.replyId) {
       return
     }
     if (sent.kind === 'later') {
@@ -289,10 +294,10 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     // A refusal stops the thread's lines; a conflict drops the line, and a second in a row stops them.
     if (sent.kind === 'never' || this.conflicted.has(id)) {
-      return this.disarm(current, fact)
+      return this.disarm(current, after)
     }
     this.conflicted.add(id)
-    this.write(current, withoutPending(fact))
+    this.write(current, withoutPending(after))
   }
 
   /** What the saved line comes to now, by all that is known without waiting; a line no longer
@@ -311,7 +316,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     if (fact && verdict === 'disarm') {
       this.disarm(link, fact)
     } else if (fact && verdict === 'drop') {
-      this.write(link, withoutPending(fact))
+      this.write(link, withoutSavedLine(fact))
     }
     return verdict
   }

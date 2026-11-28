@@ -62,6 +62,24 @@ export function stalePending(fact: ThreadStatusFact, now: number, maxMs: number)
   return !!pending && (now - pending.at > maxMs || (armed?.lastBotAt ?? 0) >= pending.at)
 }
 
+/** A saved line that was sent with no answer and no bot line since: the cloud may have taken it. */
+export function mayHavePosted(fact: ThreadStatusFact): boolean {
+  const triedAt = fact.pending?.triedAt
+  return triedAt !== undefined && !!fact.armed && fact.armed.lastBotAt < triedAt
+}
+
+/** A saved line dropped without being told it posted. One that may have posted counts as Orca's
+ *  line from its latest send: the next line keeps the backoff, none under a new id follows it too
+ *  soon, and a stop line ends the run. */
+export function withoutSavedLine(fact: ThreadStatusFact): ThreadStatusFact {
+  const { armed, pending } = fact
+  if (!armed || pending?.triedAt === undefined || !mayHavePosted(fact)) {
+    return withoutPending(fact)
+  }
+  const posted = withHostLine({ ...fact, armed }, pending.triedAt)
+  return pending.stop ? disarmedFact(posted) : posted
+}
+
 export function withoutPending(fact: ThreadStatusFact): ThreadStatusFact {
   const { seq, day, dayCount, armed } = fact
   return { seq, day, dayCount, ...(armed ? { armed } : {}) }
