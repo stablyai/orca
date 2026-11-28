@@ -7,7 +7,7 @@ import { Send } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
 import { openBotHomeTab, useBots } from '@/lib/bot-catalog'
-import { openBotSession } from '../bots/bot-session-open'
+import { openBotChatById } from '../bots/bot-chat-row-open'
 import { useWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { Bot } from '../../../../shared/bot-types'
@@ -132,10 +132,9 @@ function KnownBotRequestCard({
 }): React.JSX.Element {
   const status = useWorktreeActivityStatus(folderWorkspaceKey(bot.folderWorkspaceId))
   const reading = useOutcome(bot, card.messageId, status)
-  // The chat the request went to, unless that is Home now; Home until it's known.
+  // The chat the request went to, where it is listed; Home until it's known.
   const { chatId } = reading
-  const openChat = () =>
-    chatId && chatId !== bot.chatSessionId ? openBotSession(bot, chatId) : void openBotHomeTab(bot)
+  const openChat = () => void (chatId ? openBotChatById(bot, chatId) : openBotHomeTab(bot))
   const view = botRequestCardView(card, reading, status, say)
   const subject = view.sent ? card.subject : ''
   return (

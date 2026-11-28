@@ -292,3 +292,24 @@ export function useBotOwnChatTree(bot: Bot | null): BotChatTree {
   )
   return own.chats === tree.chats ? tree : { ...tree, ...own }
 }
+
+/** A chat's row by its session (its id, or the live session a /clear moved it to): whose it is, as
+ *  the host stamps it. The kept read first, else the host's read of that one chat; null when the
+ *  host lists no such chat. */
+export async function readBotChatRow(
+  bot: BotRef,
+  sessionId: string
+): Promise<BotChatTreeChat | null> {
+  const rowIn = (read: BotChatTreeRead | null): BotChatTreeChat | null =>
+    read?.chats.find((chat) => chat.chatId === sessionId || chat.liveSessionId === sessionId) ??
+    null
+  const kept = rowIn(chatTreeRead.snapshot(botRefKey(bot)))
+  if (kept) {
+    return kept
+  }
+  const read = await callBotRpc<BotChatTreeRead>(bot, 'bots.chatTree', {
+    botId: bot.id,
+    chatId: sessionId
+  }).catch(() => null)
+  return rowIn(read)
+}

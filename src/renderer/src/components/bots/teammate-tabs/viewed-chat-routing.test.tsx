@@ -8,7 +8,7 @@ import type { BotChatTreeChat } from '../../../../../shared/bots/bot-chat-tree'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { viewedChatTabId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
-import { openBotChatRow } from '../bot-chat-row-open'
+import { openBotChatById, openBotChatRow } from '../bot-chat-row-open'
 import { useBotChatOwner } from '../use-bot-chat-identity'
 import { useChatsPersonPick } from '../chats-person-pick'
 import { ViewedTabListOverlay } from './ViewedTabListOverlay'
@@ -23,7 +23,7 @@ import type * as FolderRecords from '../../../store/folder-workspaces/folder-wor
 const host = vi.hoisted(() => {
   const bots: Bot[] = []
   return {
-    rpc: vi.fn(async () => null),
+    rpc: vi.fn(async (_bot: unknown, _method: string, _params?: unknown): Promise<unknown> => null),
     activate: vi.fn(async () => true),
     openHomeTab: vi.fn(async () => true),
     bots,
@@ -213,4 +213,35 @@ it('goes back to this window’s own tabs when the agent is no longer shared wit
   host.bots = []
   render(<ViewedTabListOverlay worktreeId={HOME} />)
   expect(viewed()).toBeNull()
+})
+
+it('opens a chat named only by its session (an item’s link, Needs you) in the list the host says it is in', async () => {
+  // The host's read of that one chat, stamped with whose it is.
+  host.rpc.mockImplementation(async (_bot, method, params) =>
+    method !== 'bots.chatTree'
+      ? null
+      : {
+          chats:
+            typeof params === 'object' &&
+            params !== null &&
+            'chatId' in params &&
+            params.chatId === 'mate-side'
+              ? [chat({ chatId: 'mate-side', person: MATE })]
+              : [],
+          workspaceChats: {}
+        }
+  )
+  await openBotChatById(ownersCopy, 'mate-side')
+  expect(viewed()).toEqual({
+    person: { accountId: MATE.accountId },
+    picked: { sessionId: 'mate-side' }
+  })
+  expect(host.activate).not.toHaveBeenCalled()
+  expect(host.rpc).not.toHaveBeenCalledWith(ownersCopy, 'bots.chats.seen', expect.anything())
+  // One the host lists as no one's yet (just made here) is this viewer's own.
+  await openBotChatById(ownersCopy, 'just-made')
+  expect(viewed()).toBeNull()
+  expect(host.activate).toHaveBeenCalledWith({
+    structuredSession: { sessionId: 'just-made', workspaceId: HOME }
+  })
 })

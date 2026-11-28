@@ -7,6 +7,8 @@ import type { BotDeepLinkOutcome } from '../../../../shared/bot-deep-link'
 import { watchAccessRequests } from '@/lib/bot-access-requests'
 import { openAccessRequestLink, openBotLinkHome } from '@/lib/bot-link-open'
 import { openBotShareLink } from '@/components/bots/sharing/bot-share-receive-open'
+import { openBotChatById } from '@/components/bots/bot-chat-row-open'
+import { readBotForWorkspace } from '@/components/bots/bot-workspace'
 import {
   CONNECTOR_SETTINGS_PANE,
   connectorConnectedMessage,
@@ -19,10 +21,16 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 
 function openBotLink(outcome: BotDeepLinkOutcome): void {
   if (outcome.kind === 'chat') {
-    // The chat path every session list uses: it reveals a closed tab and explains its own failures.
     // Main found the link in this app's own store, so the chat is this app's, whatever is selected.
     const { workspaceId, sessionId } = outcome
     targetBotLinkItem(sessionId, outcome.itemId)
+    // A shared agent's chat opens in the list it is in, as from its row.
+    const bot = readBotForWorkspace(workspaceId)
+    if (bot) {
+      void openBotChatById(bot, sessionId)
+      return
+    }
+    // The chat path every session list uses: it reveals a closed tab and explains its own failures.
     void activateAiVaultStructuredSession(
       { structuredSession: { workspaceId, sessionId } },
       undefined,

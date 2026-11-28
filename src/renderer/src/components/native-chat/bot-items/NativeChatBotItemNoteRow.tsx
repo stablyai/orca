@@ -14,7 +14,7 @@ import { botItemStatusName } from '@/components/bots/items/bot-item-status-name'
 import { openBotItem } from '@/components/bots/items/bot-item-open'
 import { BotItemCommentImages } from '@/components/bots/items/BotItemCommentImages'
 import { findBotByWorkspace, useBotForWorkspace } from '@/components/bots/bot-workspace'
-import { openBotSession } from '@/components/bots/bot-session-open'
+import { openBotChatById } from '@/components/bots/bot-chat-row-open'
 import { readBots } from '@/lib/bot-catalog'
 import type { BotItemNoteItem, BotItemNoteView } from '../../../../../shared/bots/bot-item-note'
 import { stripSentImagePromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -106,8 +106,7 @@ function ChatChip({ chat }: { chat: BotItemNoteLineChat }): React.JSX.Element {
       onClick={() => {
         const bot = findBotByWorkspace(readBots(), useAppStore.getState().activeWorktreeId)
         if (bot) {
-          // Home Chat by its live session, which a /clear moved past the chat id.
-          openBotSession(bot, (chat.home && bot.chatSessionId) || chat.chatId)
+          void openBotChatById(bot, chat.chatId, { home: chat.home })
         }
       }}
     >
