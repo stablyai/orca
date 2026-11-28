@@ -1,4 +1,10 @@
 import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-session-journal-producer'
+import {
+  buildAgentSessionContinuationPrompt,
+  type AgentSessionContinuationSource
+} from '../../../agent-session/conversation-context/agent-session-continuation'
+import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
+import { buildAgentSessionHandoffContext } from '../agent-session-handoff-context'
 import type { NativeChatMessage } from '../../native-chat-types'
 
 /** A finished response of the chat's own agent, still in its current context, eligible for a
@@ -54,4 +60,34 @@ export function sliceNativeChatMessagesThrough(
     return true
   })
   return sliced.length > 0 ? sliced : null
+}
+
+/** Builds a truncated continuation source up to `throughMessageId`, omitting the full-session
+ *  `transcriptPath` so the new session cannot read turns after the selected response. */
+export function buildResponseHandOffSource(input: {
+  messages: readonly NativeChatMessage[]
+  throughMessageId: string
+  contextFloorSequence?: number
+  sourceAgent: TuiAgent
+  sourceTitle?: string | null
+  sourceWorkingDirectory?: string | null
+}): AgentSessionContinuationSource | null {
+  const sliced = sliceNativeChatMessagesThrough(
+    input.messages,
+    input.throughMessageId,
+    input.contextFloorSequence ?? 0
+  )
+  if (!sliced) {
+    return null
+  }
+  const source: AgentSessionContinuationSource = {
+    sourceKind: 'chat',
+    sourceAgent: input.sourceAgent,
+    sourceTitle: input.sourceTitle,
+    sourceWorkingDirectory: input.sourceWorkingDirectory,
+    transcriptPath: undefined,
+    capturedText: buildAgentSessionHandoffContext(sliced),
+    truncatedToResponse: true
+  }
+  return buildAgentSessionContinuationPrompt(source, 'focused') ? source : null
 }

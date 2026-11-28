@@ -14,7 +14,7 @@ import { callStructuredAgentSession } from '@/runtime/native-chat/requests/struc
 import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { buildAgentSessionHandoffContext } from '../../../../../../shared/native-chat/transcript/agent-session-handoff-context'
-import { sliceNativeChatMessagesThrough } from '../../../../../../shared/native-chat/transcript/turns/native-chat-hand-off-offer'
+import { buildResponseHandOffSource } from '../../../../../../shared/native-chat/transcript/turns/native-chat-hand-off-offer'
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
@@ -244,25 +244,18 @@ export function useNativeChatHandOff(
       ) {
         return
       }
-      const sliced = sliceNativeChatMessagesThrough(
-        currentEnv.messages,
-        messageId,
-        currentEnv.contextFloorSequence
-      )
-      // Omit the full-session transcriptPath so the new agent cannot read turns after `messageId`.
-      const source = {
-        sourceKind: 'chat' as const,
+      const source = buildResponseHandOffSource({
+        messages: currentEnv.messages,
+        throughMessageId: messageId,
+        contextFloorSequence: currentEnv.contextFloorSequence,
         sourceAgent: currentEnv.pane.agent,
         sourceTitle:
           currentEnv.chatTab?.customLabel?.trim() ||
           currentEnv.conversationName ||
           currentEnv.chatTab?.label,
-        sourceWorkingDirectory: currentEnv.directory.pathBase ?? currentEnv.directory.worktreePath,
-        transcriptPath: undefined,
-        capturedText: sliced ? buildAgentSessionHandoffContext(sliced) : '',
-        truncatedToResponse: true
-      }
-      if (buildAgentSessionContinuationPrompt(source, 'focused')) {
+        sourceWorkingDirectory: currentEnv.directory.pathBase ?? currentEnv.directory.worktreePath
+      })
+      if (source) {
         const prepared: Attempt = {
           key: currentEnv.intentKey,
           operation: ++operationSerial.current,
