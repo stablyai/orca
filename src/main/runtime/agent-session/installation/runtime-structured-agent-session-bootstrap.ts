@@ -30,6 +30,7 @@ import { workerDockSourceOfSession } from '../../orchestration/dock/worker-dock-
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { hostAntigravityChatCanSwitchAccount } from '../../../antigravity/antigravity-chat-can-switch-account'
 import type { StructuredAgentSessionStatusSink } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 
 type StructuredHostDeps = Exclude<
@@ -158,6 +159,11 @@ export async function ensureRuntimeStructuredAgentSessionHost(
       ...structuredAgentSettingGates(() => context.requireStore().getSettings()),
       launchAccountHome: (record, purpose) =>
         context.resolveStructuredAgentLaunchAccountHome(record, purpose),
+      canSwitchAntigravityAccount: (record) =>
+        hostAntigravityChatCanSwitchAccount(
+          record,
+          context.requireStore().getSettings().antigravityChatAuth
+        ),
       prepareLaunchAccountHome: (record, launchDirectory) =>
         context.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
       onRequestFailure: (failure) => context.onStructuredRequestFailureForErrorMail(failure),

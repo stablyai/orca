@@ -68,6 +68,8 @@ export type BotLookAroundRunnerDeps = {
   turnRunning: (sessionId: string) => boolean
   /** The usage limit that ended the session's last turn, or null when none did. */
   usageLimitOf: (sessionId: string) => Promise<LookUsageLimit | null>
+  /** The bot agent's selected saved account, which lifts a limit another account hit. */
+  selectedAccount?: (agent: string) => string | undefined
   /** Whether a usage-limited look finishes in its own chat (see `limitedLookContinuesInItsChat`),
    *  so its slot starts no other. */
   usageLimitContinues: (sessionId: string) => Promise<boolean>
@@ -140,7 +142,13 @@ export class BotLookAroundRunner {
           }
           continue
         }
-        const slot = lookAroundDueAt(setting, state, now)
+        const slot = lookAroundDueAt(
+          setting,
+          state,
+          now,
+          true,
+          this.deps.selectedAccount?.(bot.agent)
+        )
         const limited = state.runs.findLast((run) => run.endedAt !== undefined)
         // Only the slot the limited look took finishes in its chat; later slots are their own.
         if (
@@ -216,7 +224,15 @@ export class BotLookAroundRunner {
       return false
     }
     const state = withoutBackgroundRun(this.deps.store.get(botId), sessionId)
-    return lookAroundDueAt(botLookAround(bot), state, this.deps.now()) === slot
+    return (
+      lookAroundDueAt(
+        botLookAround(bot),
+        state,
+        this.deps.now(),
+        true,
+        this.deps.selectedAccount?.(bot.agent)
+      ) === slot
+    )
   }
 
   /** `slot` is the scheduled slot it takes; Look now has none and is never held back. */

@@ -1,4 +1,5 @@
 // A bot's Activity, built on its execution host from the host's own facts, so every client reads the same rows.
+import { selectedSavedAccount } from '../providers/accounts/selected-saved-account'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusOrchestrationContext } from '../../shared/agent-status/contracts/agent-status-types'
@@ -266,8 +267,9 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
       const now = Date.now()
       const setting = botLookAround(bot)
       const state = runtime.lookAround.get(bot.id)
-      const nextAt = lookAroundNextAt(setting, state, now)
-      const dueNow = !bot.paused && lookAroundDueAt(setting, state, now, false) !== null
+      const selected = selectedSavedAccount(bot.agent)
+      const nextAt = lookAroundNextAt(setting, state, now, selected)
+      const dueNow = !bot.paused && lookAroundDueAt(setting, state, now, false, selected) !== null
       return lookAroundUpNext(runtime.lookAround, bot, now, nextAt, dueNow)
     },
     automations: () => runtime.listAutomationsForScope().automations,

@@ -15,7 +15,8 @@ export type LookAroundRun = {
   usageLimited?: LookUsageLimit
 }
 
-export type LookUsageLimit = { resetsAt?: number }
+/** `accountId`: the saved account the limit hit, where one home holds several (agy's). */
+export type LookUsageLimit = { resetsAt?: number; accountId?: string }
 
 /** A background run's history: the newest runs in full, and every older run's session, so those
  *  sessions are still known as runs (never chats) after the history drops them. */

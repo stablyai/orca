@@ -13,7 +13,7 @@ type RecoverySession = {
 }
 type RecoveryDeps = Pick<
   StructuredAgentSessionHostDeps,
-  'resolveLaunchEnv' | 'resolveWorkspacePath'
+  'resolveLaunchEnv' | 'resolveWorkspacePath' | 'canSwitchAntigravityAccount'
 > & {
   store: Pick<StructuredAgentSessionHostDeps['store'], 'getRecord'>
 }
@@ -66,10 +66,20 @@ export async function readStructuredSessionRecovery(
         : process.env),
       ...overlay
     }
-    const result = await structuredSessionRecoveryOptions(record, launchEnv, {
-      cache,
-      resolveWorkspacePath: deps.resolveWorkspacePath
-    })
+    const [options, canSwitchAntigravityAccount] = await Promise.all([
+      structuredSessionRecoveryOptions(record, launchEnv, {
+        cache,
+        resolveWorkspacePath: deps.resolveWorkspacePath
+      }),
+      // Picking a saved account swaps the login a chat runs on; it needs no saved transcript.
+      deps.canSwitchAntigravityAccount?.(record).catch((error: unknown) => {
+        console.warn('Could not read whether the chat can switch accounts', error)
+        return false
+      })
+    ])
+    const result = canSwitchAntigravityAccount
+      ? { ...options, canSwitchAntigravityAccount }
+      : options
     const current = await context.conversation(sessionId)
     return current === session && key === (await recoveryIdentity(session, deps, sessionId))
       ? result
