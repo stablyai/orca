@@ -20,8 +20,8 @@ import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-a
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
 import {
-  antigravityAccountIdForEmail,
-  applyAntigravityStatusLineSetting
+  applyAntigravityStatusLineSetting,
+  reconcileAntigravityStatusLineAtStartup
 } from '../../antigravity/statusline-setting'
 import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
@@ -41,9 +41,10 @@ export function createProviderAccountServices(
   options: {
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
-    setAntigravityStatusLineListener: (
-      listener: (reading: AntigravityStatusLineReading) => void
-    ) => void
+    /** Only the desktop's own process on a non-WSL host passes this; headless hosts never read agy. */
+    antigravityStatusLine?: {
+      setListener: (listener: (reading: AntigravityStatusLineReading) => void) => void
+    }
   }
 ): ProviderAccountServices {
   const agentView = getClaudeAgentViewService()
@@ -78,7 +79,7 @@ export function createProviderAccountServices(
   )
   store.onSettingsChanged((updates, settings) => {
     void agentView.reconcile(settings)
-    if ('antigravityStatusLineUsageEnabled' in updates) {
+    if (options.antigravityStatusLine && 'antigravityStatusLineUsageEnabled' in updates) {
       const enabled = updates.antigravityStatusLineUsageEnabled === true
       void applyAntigravityStatusLineSetting(enabled)
       if (!enabled) {
@@ -144,7 +145,7 @@ export function createProviderAccountServices(
     rateLimits.ingestLiveClaudeRateLimits(event)
   })
   // agy's status line is the only Antigravity usage source; Orca never runs agy for it.
-  options.setAntigravityStatusLineListener((reading) => {
+  options.antigravityStatusLine?.setListener((reading) => {
     rateLimits.ingestAntigravityStatusLine(reading)
   })
   rateLimits.setOpenCodeGoConfigResolver(() => {
@@ -170,13 +171,11 @@ export function createProviderAccountServices(
     apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
-  rateLimits.setAntigravityLiveUsageResolver({
-    isEnabled: () => store.getSettings().antigravityStatusLineUsageEnabled === true,
-    accountIdForEmail: antigravityAccountIdForEmail
-  })
-  // Reinstalling is idempotent and refreshes the managed script after an Orca update.
-  if (store.getSettings().antigravityStatusLineUsageEnabled === true) {
-    void applyAntigravityStatusLineSetting(true)
+  if (options.antigravityStatusLine) {
+    const enabled = (): boolean => store.getSettings().antigravityStatusLineUsageEnabled === true
+    rateLimits.setAntigravityLiveUsageEnabledResolver(enabled)
+    // On refreshes the managed script after an update; off retries a removal that failed earlier.
+    void reconcileAntigravityStatusLineAtStartup(enabled())
   }
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))

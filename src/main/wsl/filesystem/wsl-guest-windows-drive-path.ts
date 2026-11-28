@@ -1,5 +1,6 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
@@ -16,15 +17,38 @@ const WINDOWS_COPY_VERDICT_LIMIT = 32
 type WindowsCopyVerdict = { windowsOnly: boolean; checkedAt: number }
 let windowsCopyVerdicts = new WeakMap<typeof resolveCliCommand, Map<string, WindowsCopyVerdict>>()
 
+const WSL_INTEROP_PATH = '/proc/sys/fs/binfmt_misc/WSLInterop'
+
+function wslGuestEnvMarked(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim())
+}
+
 export function isWslGuestProcess(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-  interopRegistered: () => boolean = () => existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')
+  interopRegistered: () => boolean = () => existsSync(WSL_INTEROP_PATH)
 ): boolean {
   if (platform !== 'linux') {
     return false
   }
-  return Boolean(env.WSL_DISTRO_NAME?.trim() || env.WSL_INTEROP?.trim()) || interopRegistered()
+  return wslGuestEnvMarked(env) || interopRegistered()
+}
+
+/** Startup-safe form of `isWslGuestProcess`: the interop probe is an async stat. */
+export async function isWslGuestProcessAsync(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): Promise<boolean> {
+  if (platform !== 'linux') {
+    return false
+  }
+  return (
+    wslGuestEnvMarked(env) ||
+    (await access(WSL_INTEROP_PATH).then(
+      () => true,
+      () => false
+    ))
+  )
 }
 
 export function isWslHostOrcadProcess(

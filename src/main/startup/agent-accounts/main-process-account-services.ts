@@ -7,6 +7,7 @@ import {
   readOpenCodeGoApiKey,
   saveOpenCodeGoApiKey
 } from '../../opencode/accounts/opencode-go-api-key-store'
+import { isWslGuestProcessAsync } from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import type { DesktopCore } from '../../core-desktop/desktop-core'
@@ -35,12 +36,19 @@ export async function initializeMainProcessAccountServices(
     () => core.codexRuntimeHome,
     isQuitting
   )
+  const wslGuest = await isWslGuestProcessAsync()
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: core.codexSessionMigration.requestRun },
     setClaudeStatusLineListener: (listener) =>
       agentHookServer.setClaudeStatusLineListener(listener),
-    setAntigravityStatusLineListener: (listener) =>
-      agentHookServer.setAntigravityStatusLineListener(listener)
+    // agy runs where the desktop does; a WSL guest's agy is a different host.
+    ...(wslGuest
+      ? {}
+      : {
+          antigravityStatusLine: {
+            setListener: (listener) => agentHookServer.setAntigravityStatusLineListener(listener)
+          }
+        })
   })
   core.rateLimits = services.rateLimits
   core.codexRuntimeHome = services.codexRuntimeHome

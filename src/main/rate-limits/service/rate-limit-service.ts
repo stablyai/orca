@@ -2,10 +2,7 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import {
-  AntigravityLiveUsage,
-  type AntigravityLiveUsageResolver
-} from './service-antigravity-live-usage'
+import { AntigravityLiveUsage } from './service-antigravity-live-usage'
 import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
 import {
@@ -111,12 +108,12 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
     }
   }
 
-  setAntigravityLiveUsageResolver(resolver: AntigravityLiveUsageResolver): void {
-    this.antigravityLiveUsage.setResolver(resolver)
+  setAntigravityLiveUsageEnabledResolver(isEnabled: () => boolean): void {
+    this.antigravityLiveUsage.setEnabledResolver(isEnabled)
   }
 
-  ingestAntigravityStatusLine(reading: AntigravityStatusLineReading): Promise<void> {
-    return this.antigravityLiveUsage.ingest(reading)
+  ingestAntigravityStatusLine(reading: AntigravityStatusLineReading): void {
+    this.antigravityLiveUsage.ingest(reading)
   }
 
   /** Drops the held reading when the opt-in turns off; agy's next post would not be ingested anyway. */
