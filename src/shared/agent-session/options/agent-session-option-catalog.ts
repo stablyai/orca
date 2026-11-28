@@ -8,6 +8,7 @@ import {
 } from './catalog-providers/agent-session-option-catalog-claude-codex'
 import { CURSOR_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-cursor'
 import { GROK_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-grok'
+import { MISTRAL_VIBE_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-mistral-vibe'
 import { MUSE_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-omp'
 import { PI_LAUNCH_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-pi'
@@ -92,5 +93,7 @@ export function getAgentSessionOptionLaunchCatalog(
     ? OPENCODE_LAUNCH_OPTION_CATALOG
     : agent === 'pi'
       ? PI_LAUNCH_OPTION_CATALOG
-      : getAgentSessionOptionCatalog(agent)
+      : agent === 'mistral-vibe'
+        ? MISTRAL_VIBE_LAUNCH_OPTION_CATALOG
+        : getAgentSessionOptionCatalog(agent)
 }
