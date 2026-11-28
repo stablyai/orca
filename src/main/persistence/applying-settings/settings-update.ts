@@ -102,6 +102,7 @@ export function updateSettings(
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+    sanitizedUpdates.disabledTuiAgentsCustomized = true
   }
   if ('agentDefaultSurface' in updates) {
     sanitizedUpdates.agentDefaultSurface = normalizeAgentDefaultSurface(updates.agentDefaultSurface)

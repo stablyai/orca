@@ -47,6 +47,7 @@ export type AgentLaunchSettingsSource = Partial<
     | 'defaultTuiAgent'
     | 'newWorkspaceSetupOnly'
     | 'disabledTuiAgents'
+    | 'disabledTuiAgentsCustomized'
     | 'agentCmdOverrides'
     | 'agentLaunchChoices'
     | 'agentDefaultArgs'
@@ -62,6 +63,8 @@ export type AgentLaunchSettings = {
   defaultTuiAgent: GlobalSettings['defaultTuiAgent']
   newWorkspaceSetupOnly?: boolean
   disabledTuiAgents: TuiAgent[]
+  /** Absent from older hosts. */
+  disabledTuiAgentsCustomized?: boolean
   agentCmdOverrides: NonNullable<GlobalSettings['agentCmdOverrides']>
   agentDefaultArgs: NonNullable<GlobalSettings['agentDefaultArgs']>
   environmentNames: Partial<Record<TuiAgent, string[]>>
@@ -108,6 +111,18 @@ export type AgentLaunchSettingsMutation =
   | { type: 'environment-set'; agent: TuiAgent; name: string; value: string }
   | { type: 'environment-remove'; agent: TuiAgent; name: string }
 
+/** The hidden-agents list with its marker; lists saved before the marker existed were set by the user. */
+export function projectDisabledTuiAgents(
+  settings: Pick<AgentLaunchSettingsSource, 'disabledTuiAgents' | 'disabledTuiAgentsCustomized'>
+): Pick<AgentLaunchSettings, 'disabledTuiAgents' | 'disabledTuiAgentsCustomized'> {
+  const disabledTuiAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  return {
+    disabledTuiAgents,
+    disabledTuiAgentsCustomized:
+      settings.disabledTuiAgentsCustomized ?? disabledTuiAgents.length > 0
+  }
+}
+
 export function projectAgentLaunchSettings(
   settings: AgentLaunchSettingsSource,
   platform?: NodeJS.Platform
@@ -126,7 +141,7 @@ export function projectAgentLaunchSettings(
   return {
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
-    disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
+    ...projectDisabledTuiAgents(settings),
     agentCmdOverrides: { ...settings.agentCmdOverrides },
     agentDefaultArgs: normalizeTuiAgentArgsRecord(composed.agentDefaultArgs),
     environmentNames: Object.fromEntries(

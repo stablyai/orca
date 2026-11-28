@@ -81,4 +81,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
   UiLanguageSettings &
-  ChatDeleteSettings
+  ChatDeleteSettings & {
+    /** True once the user wrote disabledTuiAgents here; paired clients use their own list until then. */
+    disabledTuiAgentsCustomized?: boolean
+  }
