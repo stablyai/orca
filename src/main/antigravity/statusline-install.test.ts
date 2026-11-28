@@ -71,10 +71,7 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line installer
     ['tab indent, no trailing newline', WITH_COMMAND.replaceAll('  ', '\t').trimEnd()],
     ['compact JSON', '{"theme":"dark","tools":[1,2]}'],
     ['an empty object with inner spaces', '{  }\n'],
-    [
-      'comments and a default type',
-      '{\n  // mine\n  "statusLine": {"command": "echo hi"} // keep\n}\n'
-    ],
+    ['a default type', '{\n  "statusLine": {"command": "echo hi"}\n}\n'],
     ['a blank command', '{"statusLine":{"type":"command","command":"  "}}'],
     [
       'escaped characters in the command',
@@ -155,11 +152,41 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line installer
     ],
     ['a non-command statusLine', '{"statusLine":{"type":"static","command":"echo hi"}}'],
     ['duplicate statusLine keys', '{"statusLine":{"command":"a"},"statusLine":{"command":"b"}}'],
-    ['duplicate command keys', '{"statusLine":{"command":"first","command":"last"}}']
+    ['duplicate command keys', '{"statusLine":{"command":"first","command":"last"}}'],
+    ['comments', '{\n  // mine\n  "statusLine": {"command": "echo hi"} // keep\n}\n'],
+    ['comments in an empty object', '{ /* nothing yet */ }']
   ])('refuses %s and leaves the file alone', async (_name, original) => {
     seed(original)
     expect((await installAntigravityStatusLine(options())).state).toBe('error')
     expect(read()).toBe(original)
+  })
+
+  it('will not splice a file that gained comments after install, but loses nothing', async () => {
+    seed(WITHOUT_STATUS_LINE)
+    await installAntigravityStatusLine(options())
+    const edited = read().replace('"theme"', '// mine\n  "theme"').replace('"dark"', '"light"')
+    writeFileSync(settingsPath, edited)
+    expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+    expect(read()).toBe(edited)
+    expect(existsSync(recordPath)).toBe(true)
+  })
+
+  it('restores the command while agy has the status line turned off, keeping that switch', async () => {
+    seed(WITH_COMMAND)
+    await installAntigravityStatusLine(options())
+    writeFileSync(settingsPath, read().replace('"padding": 1', '"padding": 1, "enabled": false'))
+    expect((await getAntigravityStatusLineStatus(options())).state).toBe('installed')
+    expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+    expect(read()).toBe(WITH_COMMAND.replace('"padding": 1', '"padding": 1, "enabled": false'))
+  })
+
+  it('reports an error, not "not installed", when a record exists but settings cannot be read', async () => {
+    seed(WITH_COMMAND)
+    await installAntigravityStatusLine(options())
+    writeFileSync(settingsPath, '{ "broken": ')
+    expect((await getAntigravityStatusLineStatus(options())).state).toBe('error')
+    expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+    expect(existsSync(recordPath)).toBe(true)
   })
 
   it('names a turned-off status line in the error', async () => {

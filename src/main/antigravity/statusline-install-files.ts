@@ -1,5 +1,15 @@
-import { createHash } from 'node:crypto'
-import { lstat, mkdir, readFile, realpath, stat } from 'node:fs/promises'
+import { createHash, randomUUID } from 'node:crypto'
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { quotePosixShellUnlessPlain } from '../../shared/shell/launch/shell-argument-quoting'
@@ -72,14 +82,58 @@ export async function readTextOrNull(path: string): Promise<string | null> {
   }
 }
 
-/** An existing settings file keeps its mode; one Orca creates is private. */
-export async function writeSettingsText(target: string, text: string): Promise<void> {
+/**
+ * Replaces (or, with `next` null, deletes) the settings file only if it still holds `expected`.
+ * The temp file is ready before the final read, so the unguarded window is that read plus the
+ * rename. Another writer that saves inside it is still overwritten; Orca cannot lock agy's file.
+ * An existing file keeps its mode; one Orca creates is private.
+ */
+export async function commitSettingsText(
+  target: string,
+  expected: string | null,
+  next: string | null
+): Promise<boolean> {
+  if (next === null) {
+    if ((await readTextOrNull(target)) !== expected) {
+      return false
+    }
+    await rm(target, { force: true })
+    return true
+  }
   const mode = await stat(target).then(
     (info) => info.mode & 0o777,
     () => 0o600
   )
   await mkdir(dirname(target), { recursive: true })
-  await writePluginFileAtomically(target, text, { mode })
+  const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    await writeFile(temporary, next, { encoding: 'utf8', mode })
+    await chmod(temporary, mode)
+    const current = await readTextOrNull(target)
+    if (current !== expected) {
+      await rm(temporary, { force: true })
+      return false
+    }
+    await rename(temporary, target)
+    return true
+  } catch (error) {
+    await rm(temporary, { force: true }).catch(() => undefined)
+    throw error
+  }
+}
+
+/** Puts a private file back to the bytes it held (null: it did not exist). */
+export async function restoreFileText(
+  path: string,
+  text: string | null,
+  mode: number
+): Promise<void> {
+  if (text === null) {
+    await rm(path, { force: true })
+  } else {
+    await mkdir(dirname(path), { recursive: true })
+    await writePluginFileAtomically(path, text, { mode })
+  }
 }
 
 export async function readRecord(path: string): Promise<InstallRecord | null> {

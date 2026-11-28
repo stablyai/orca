@@ -1,4 +1,4 @@
-import { parseTree, type Node, type ParseError } from 'jsonc-parser'
+import { parseTree, visit, type Node, type ParseError } from 'jsonc-parser'
 
 export type StatusLineEntry = { type: 'command'; command: string }
 
@@ -6,7 +6,8 @@ export type StatusLineEntry = { type: 'command'; command: string }
 
 export type StatusLineInspection =
   | { kind: 'empty' }
-  | { kind: 'command'; command: string }
+  /** `disabled`: agy has the line turned off; the command is still the slot's owner. */
+  | { kind: 'command'; command: string; disabled: boolean }
   | { kind: 'unsupported'; detail: string }
   | { kind: 'invalid' }
 
@@ -29,9 +30,6 @@ export function inspectStatusLine(text: string): StatusLineInspection {
   }
   const named = (name: string): Node[] =>
     (value.children ?? []).filter((member) => memberName(member) === name)
-  if (named('enabled').some((member) => member.children?.[1]?.value === false)) {
-    return unsupported("agy's status line is turned off")
-  }
   const commandNode = named('command')[0]?.children?.[1]
   const typeValue = named('type')[0]?.children?.[1]?.value
   if (
@@ -42,7 +40,15 @@ export function inspectStatusLine(text: string): StatusLineInspection {
   ) {
     return unsupported("agy's statusLine setting is not a single command object")
   }
-  return { kind: 'command', command: String(commandNode.value) }
+  const disabled = named('enabled').some((member) => member.children?.[1]?.value === false)
+  return { kind: 'command', command: String(commandNode.value), disabled }
+}
+
+/** True when the file holds a line or block comment outside any string. */
+export function hasJsonComments(text: string): boolean {
+  let found = false
+  visit(text, { onComment: () => (found = true) }, { allowTrailingComma: true })
+  return found
 }
 
 function rootMembers(text: string): { root: Node; members: Node[] } | null {
