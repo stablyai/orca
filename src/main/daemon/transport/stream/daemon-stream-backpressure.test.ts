@@ -274,6 +274,31 @@ describe('DaemonStreamBackpressure', () => {
     expect(pauseCalls).toBe(2)
   })
 
+  it('keep-tail and unpausable both clear once a stalled, then terminating, session drains', () => {
+    let pauseCalls = 0
+    let owner: StallHandler | undefined
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) => {
+        if (isPaused) {
+          pauseCalls += 1
+          owner = onStall
+          return true
+        }
+        return undefined
+      },
+      () => false
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    owner?.('timeout')
+    owner?.('terminating')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+
+    backpressure.setQueued('client', new Map())
+    expect(backpressure.isStallReleased('tui')).toBe(false)
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(2)
+  })
+
   it('clearing every client leaves no record that later output must look up', () => {
     let lookups = 0
     const { backpressure, stall } = recordingBackpressure({
