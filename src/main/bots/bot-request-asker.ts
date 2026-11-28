@@ -7,6 +7,7 @@ import type {
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { ConnectorSource } from '../../shared/connectors/external-conversation-link'
+import { chainRoleOf } from './bot-chain-messages'
 import {
   actsForOwner,
   distinctAskers,
@@ -51,6 +52,8 @@ export type BotActingTurn = {
   actingOnRequestId: string | null
   /** Every bot request the turn took, the first being actingOnRequestId. */
   requestIds: string[]
+  /** A person's own message joined the requests' turn: what it sends starts a new chain. */
+  personJoined?: true
   /** Where the message that opened the turn was asked; null for the owner's own or a bot request. */
   wokenAt: BotWakingPlace | null
   /** The owner typed every message this turn took at the host's own window: it acts for the owner,
@@ -285,6 +288,9 @@ export function readBotActingTurnWithin(
         request: null,
         actingOnRequestId: requestIds[0] ?? null,
         requestIds,
+        ...(window.some((item) => chainRoleOf(item.body) === 'person')
+          ? { personJoined: true as const }
+          : {}),
         wokenAt: null,
         ...(typedByAnother ? { typedByAnother: true as const } : {}),
         ...(origin ? { origin } : {}),

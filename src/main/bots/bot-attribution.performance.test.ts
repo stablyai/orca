@@ -150,6 +150,8 @@ describe('STA-18558: attribution reads each submission once per read', () => {
     const items = runningTurn(requestMail, true)
     const read = count(() => readBotActingTurn(items, lookups, unrelatedSends()))
     expect(read.result).toMatchObject({ askedBy: REQUESTER })
-    expect(read.typedByReads).toBe(126)
+    // Two per message for the paired-device check, and one more: the first message the owner typed
+    // into the request's turn, which starts the chain over (bot-chain-messages).
+    expect(read.typedByReads).toBe(127)
   })
 })

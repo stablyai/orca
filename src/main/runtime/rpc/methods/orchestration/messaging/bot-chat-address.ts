@@ -53,12 +53,20 @@ export async function routeBotMail(
   // Checked first so other mail keeps sending without a pause before it is stored.
   const toBot =
     mayReachBot(context.runtime, to, mail.sender) &&
-    (await sendToBot(context, { ...mail, to, newChat }))
+    (await sendToBot(context, { ...mail, to, newChat, withFiles: hasFiles(input) }))
   if (toBot) {
     return { receipt: toBot.receipt }
   }
   // Ordinary mail takes no image blocks: its admitted files all go in its body.
   return mail.images === input.images ? { to } : { to, body: itemMailFilesBody(mail) }
+}
+
+/** Item mail that brings files, which the request limits don't hold yet (bot-request-limits). */
+function hasFiles(input: {
+  params: { files?: string[] }
+  attachments?: readonly string[]
+}): boolean {
+  return (input.params.files?.length ?? 0) > 0 || (input.attachments?.length ?? 0) > 0
 }
 
 /** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone. */

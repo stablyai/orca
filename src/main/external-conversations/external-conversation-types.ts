@@ -89,7 +89,9 @@ export const CONNECTOR_REFUSALS = [
   // A resume whose chat's newest turn no longer failed (NOT_FAILED_REFUSAL).
   'not_failed',
   // A Slack thread's mute or unmute that could not be saved to disk.
-  'thread_mute_not_saved'
+  'thread_mute_not_saved',
+  // Another Orca bot's post past the hand-offs in a row a chain may take (BOT_CHAIN_LIMIT).
+  'bot_chain_limit'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 
