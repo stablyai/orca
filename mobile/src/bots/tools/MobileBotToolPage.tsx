@@ -10,10 +10,9 @@ import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
 import { botToolRemove, type PhoneOwnTool } from './bot-tool-operations'
@@ -46,7 +45,7 @@ export function MobileBotToolPage(props: {
   showToast: (message: string, durationMs?: number) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const { client, bot, tool, problem } = props
   const name = botToolAppName(tool.name)
   const [signingIn, setSigningIn] = useState(props.signInFirst)
@@ -257,7 +256,7 @@ export function MobileBotToolPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   detail: { marginTop: spacing.sm },
   detailText: {
     fontFamily: typography.monoFamily,

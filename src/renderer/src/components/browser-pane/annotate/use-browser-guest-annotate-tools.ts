@@ -59,6 +59,7 @@ export function useBrowserGuestAnnotateTools({
   isActive,
   toolsDisabled = false,
   markupIsActive,
+  paletteKeys = false,
   containerRef,
   guestSurfaceRef,
   trackingContainer,
@@ -75,6 +76,7 @@ export function useBrowserGuestAnnotateTools({
   isActive: boolean
   toolsDisabled?: boolean
   markupIsActive: boolean
+  paletteKeys?: boolean
   containerRef: MutableRefObject<HTMLDivElement | null>
   guestSurfaceRef: RefObject<OverlayRectSource | null>
   trackingContainer?: HTMLDivElement | null
@@ -83,7 +85,11 @@ export function useBrowserGuestAnnotateTools({
   currentDocumentUrl?: string
   transport?: BrowserGuestToolsTransport
   /** Wires the grab/annotate chords and C/S picks; doc previews leave the chords to the editor. */
-  shortcuts?: { workspaceId: string; chromeShortcutScope: BrowserChromeShortcutScope }
+  shortcuts?: {
+    workspaceId: string
+    chromeShortcutScope: BrowserChromeShortcutScope
+    bind?: boolean
+  }
 }): {
   grab: ReturnType<typeof useGrabMode>
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
@@ -99,7 +105,7 @@ export function useBrowserGuestAnnotateTools({
   )
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
-  const grab = useGrabMode(toolTargetId, transport)
+  const grab = useGrabMode(toolTargetId, transport, paletteKeys)
   const annotationSend = useBrowserPageAnnotationSend({ browserTabId: browserPageId, worktreeId })
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: browserPageId,
@@ -214,7 +220,7 @@ export function useBrowserGuestAnnotateTools({
 
   const hasShortcuts = shortcuts !== undefined
   useBrowserGrabShortcuts({
-    enabled: hasShortcuts && toolTargetId !== '',
+    enabled: isActive && hasShortcuts && shortcuts.bind !== false && toolTargetId !== '',
     transport,
     browserTabId: toolTargetId,
     workspaceId: shortcuts?.workspaceId ?? '',

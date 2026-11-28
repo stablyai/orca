@@ -15,12 +15,12 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileFaceSlot, MobilePersonFace, WHO_FACE_INSET } from '../MobileWhoCanAskRows'
 import { slackCall, slackSetPostAs } from './bot-slack-operations'
 import { useFollowHost } from './MobileConnectorAccountParts'
 import { slackErrorMessage } from './mobile-slack-copy'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 type Installed = Extract<ConnectorBotSlackState, { state: 'installed' }>
 
@@ -47,6 +47,7 @@ export function MobileSlackPostAsPage(props: {
   refresh: () => Promise<unknown>
   onBack: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { installed, refresh } = props
   // The pick before it is sent for approval.

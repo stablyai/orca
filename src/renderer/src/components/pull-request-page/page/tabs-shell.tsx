@@ -1,5 +1,5 @@
 import React from 'react'
-import { FileText, ListChecks, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react'
+import { FileText, ListChecks, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -24,9 +24,11 @@ import {
   patchCachedPRReviewRequests,
   patchCachedWorkItemBody
 } from '@/components/github-item-dialog/load-item-details/work-item-details-cache'
+import { ChecksPanelLoadingAnnouncement } from '@/components/right-sidebar/checks-panel/presentation/checks-panel-loading-announcement'
 import { ConversationTab } from '../conversation/tab'
 import { ChecksTab } from '../checks/tab'
 import { PRFilesCombinedDiffViewer } from '../files/combined-diff-viewer'
+import { PRFilesLoading } from '../files/files-loading'
 
 export function PullRequestPageTabs({
   tab,
@@ -91,6 +93,11 @@ export function PullRequestPageTabs({
       onValueChange={(value) => onTabChange(value as ItemDialogTab)}
       className="flex h-full min-h-0 flex-col gap-0"
     >
+      {/* Why: stays mounted across tabs so one polite status covers a sustained cold read. */}
+      <ChecksPanelLoadingAnnouncement
+        loading={loading && !detailsLoaded}
+        reviewKey={detailsCacheKey ?? ''}
+      />
       {/* Why: the line variant already underlines the active tab via ::after; a second border would box the trigger. */}
       <TabsList
         variant="line"
@@ -185,9 +192,7 @@ export function PullRequestPageTabs({
 
         <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
           {loading && files.length === 0 ? (
-            <div className="flex items-center justify-center py-10">
-              <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
-            </div>
+            <PRFilesLoading />
           ) : filesUnavailable && files.length === 0 ? (
             // Why: fetch failed (rate limit/auth/unresolved remote); offer retry instead of implying the PR is empty.
             <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
@@ -201,6 +206,14 @@ export function PullRequestPageTabs({
                 <RefreshCw className="size-3.5" />
                 {t('auto.components.PullRequestPage.filesRetry', 'Retry')}
               </Button>
+            </div>
+          ) : files.length === 0 && !detailsLoaded ? (
+            // Why: no read is running or owed (e.g. no repo route), so nothing confirms the PR changed no files.
+            <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">
+              {t(
+                'auto.components.sidebar.worktreeCardPrDisplay.prDetailsUnavailable',
+                'PR details unavailable'
+              )}
             </div>
           ) : files.length === 0 ? (
             <div className="px-4 py-10 text-center text-[12px] text-muted-foreground">

@@ -24,6 +24,7 @@ import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-o
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export type ChecksPanelPollingInput = Pick<
   ChecksPanelContextState,
@@ -106,65 +107,76 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         return
       }
       setChecksLoading(true)
-      try {
-        const requestKey = checksPanelAsyncResultKey(
-          prCacheKey,
-          branch,
-          targetPRNumber,
-          pr?.prRepo,
-          pr?.headSha
-        )
-        const result = await fetchPRChecks(
-          repo.path,
-          targetPRNumber,
-          branch,
-          pr?.headSha,
-          pr?.prRepo,
-          {
-            force,
-            throwOnError: true,
-            repoId: repo.id,
-            repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-            ...(wakeWslDistro ? { wakeWslDistro: true } : {}),
-            ...(background ? { background: true } : {})
-          }
-        )
-        if (!isCurrentAsyncResult(requestKey)) {
-          return
-        }
-        setChecks(result)
+      await runWithFinally(
+        async () => {
+          try {
+            const requestKey = checksPanelAsyncResultKey(
+              prCacheKey,
+              branch,
+              targetPRNumber,
+              pr?.prRepo,
+              pr?.headSha
+            )
+            const result = await fetchPRChecks(
+              repo.path,
+              targetPRNumber,
+              branch,
+              pr?.headSha,
+              pr?.prRepo,
+              {
+                force,
+                throwOnError: true,
+                repoId: repo.id,
+                repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+                ...(wakeWslDistro ? { wakeWslDistro: true } : {}),
+                ...(background ? { background: true } : {})
+              }
+            )
+            if (!isCurrentAsyncResult(requestKey)) {
+              return
+            }
+            setChecks(result)
 
-        // Unchanged details back off; a changed result restores the selected cadence.
-        const signature = policyRef.current.accept(result)
-        pollIntervalRef.current = nextChecksPollBackoffMs(
-          pollIntervalRef.current,
-          signature === prevChecksRef.current ? 'unchanged' : 'changed'
-        )
-        prevChecksRef.current = signature
-      } catch (err) {
-        if (
-          !isCurrentAsyncResult(
-            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, pr?.prRepo, pr?.headSha)
-          )
-        ) {
-          return
+            // Unchanged details back off; a changed result restores the selected cadence.
+            const signature = policyRef.current.accept(result)
+            pollIntervalRef.current = nextChecksPollBackoffMs(
+              pollIntervalRef.current,
+              signature === prevChecksRef.current ? 'unchanged' : 'changed'
+            )
+            prevChecksRef.current = signature
+          } catch (err) {
+            if (
+              !isCurrentAsyncResult(
+                checksPanelAsyncResultKey(
+                  prCacheKey,
+                  branch,
+                  targetPRNumber,
+                  pr?.prRepo,
+                  pr?.headSha
+                )
+              )
+            ) {
+              return
+            }
+            // A stopped WSL distro is refused, not failed: the shown checks stay, Refresh starts it.
+            if (!isWslDistroNotRunningRefusal(err)) {
+              console.warn('Failed to fetch PR checks:', err)
+            }
+            setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
+            policyRef.current.fail()
+            pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
+          }
+        },
+        () => {
+          if (
+            isCurrentAsyncResult(
+              checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, pr?.prRepo, pr?.headSha)
+            )
+          ) {
+            setChecksLoading(false)
+          }
         }
-        // A stopped WSL distro is refused, not failed: the shown checks stay, Refresh starts it.
-        if (!isWslDistroNotRunningRefusal(err)) {
-          console.warn('Failed to fetch PR checks:', err)
-        }
-        setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
-        policyRef.current.fail()
-        pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
-      } finally {
-        if (
-          isCurrentAsyncResult(
-            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, pr?.prRepo, pr?.headSha)
-          )
-        ) {
-          setChecksLoading(false)
-        }
-      }
+      )
     },
     []
   )
@@ -229,38 +241,7 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
       gitLabDetailsLoadingGenerationRef.current = loadingGeneration
       setChecksLoading(true)
       setCommentsLoading(true)
-      try {
-        const details = await fetchGitLabMRDetailsForChecks({
-          repoPath: repo.path,
-          repoId: repo.id,
-          iid: targetMRNumber,
-          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
-          background
-        })
-        if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
-          return
-        }
-        if (details === null) {
-          throw new Error('GitLab MR details are unavailable')
-        }
-        gitLabProjectRefRef.current = details.item.projectRef ?? null
-        const result = gitLabPipelineJobsToPRChecks(details.pipelineJobs ?? [])
-        const pipelineCheck = details.pipeline
-          ? gitLabPipelineToPRCheck(
-              details.pipeline,
-              translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline'),
-              details.headSha
-            )
-          : null
-        setChecks(result, pipelineCheck)
-        setComments(gitLabMRCommentsToPRComments(details?.comments))
-        const signature = policyRef.current.accept(result, pipelineCheck)
-        pollIntervalRef.current = nextChecksPollBackoffMs(
-          pollIntervalRef.current,
-          signature === prevChecksRef.current ? 'unchanged' : 'changed'
-        )
-        prevChecksRef.current = signature
-      } catch (err) {
+      const reportGitLabError = (err: unknown): void => {
         if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
           return
         }
@@ -273,15 +254,55 @@ export function useChecksPanelPolling(model: ChecksPanelPollingInput) {
         setCommentsError(message)
         policyRef.current.fail()
         pollIntervalRef.current = nextChecksPollBackoffMs(pollIntervalRef.current, 'failed')
-      } finally {
-        if (
-          gitLabDetailsLoadingGenerationRef.current === loadingGeneration &&
-          isCurrentAsyncResult(requestKey)
-        ) {
-          setChecksLoading(false)
-          setCommentsLoading(false)
-        }
       }
+      await runWithFinally(
+        async () => {
+          try {
+            const details = await fetchGitLabMRDetailsForChecks({
+              repoPath: repo.path,
+              repoId: repo.id,
+              iid: targetMRNumber,
+              repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+              background
+            })
+            if (isRequestCurrent?.() === false || !isCurrentAsyncResult(requestKey)) {
+              return
+            }
+            if (details === null) {
+              reportGitLabError(new Error('GitLab MR details are unavailable'))
+              return
+            }
+            gitLabProjectRefRef.current = details.item.projectRef ?? null
+            const result = gitLabPipelineJobsToPRChecks(details.pipelineJobs ?? [])
+            const pipelineCheck = details.pipeline
+              ? gitLabPipelineToPRCheck(
+                  details.pipeline,
+                  translate('auto.components.GitLabItemDialog.02cbe2de44', 'Pipeline'),
+                  details.headSha
+                )
+              : null
+            setChecks(result, pipelineCheck)
+            setComments(gitLabMRCommentsToPRComments(details?.comments))
+            const signature = policyRef.current.accept(result, pipelineCheck)
+            pollIntervalRef.current = nextChecksPollBackoffMs(
+              pollIntervalRef.current,
+              signature === prevChecksRef.current ? 'unchanged' : 'changed'
+            )
+            prevChecksRef.current = signature
+          } catch (err) {
+            reportGitLabError(err)
+          }
+        },
+        () => {
+          if (
+            gitLabDetailsLoadingGenerationRef.current === loadingGeneration &&
+            isCurrentAsyncResult(requestKey)
+          ) {
+            setChecksLoading(false)
+            setCommentsLoading(false)
+          }
+        }
+      )
     },
     []
   )

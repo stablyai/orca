@@ -1,3 +1,4 @@
+// @protected-copy scope=file
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
@@ -7,12 +8,35 @@ import type {
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatBrowserAnnotationsAsMarkdown } from '../../../../../../shared/browser/annotations/browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../../describe-page/browser-annotation-geometry'
-import {
-  holdNotesForSend,
-  isNoteInFlight,
-  useNotesInFlightVersion
-} from '@/components/notes/delivery/notes-send-in-flight'
+import { holdNotesForSend, isNoteInFlight } from '@/components/notes/delivery/notes-send-in-flight'
+import { useNotesInFlightVersion } from '@/components/notes/delivery/use-notes-in-flight-version'
 import { recomputeOn } from '@/lib/recompute-on'
+
+/** The annotations a prompt was built from can still go: unchanged, not already on their way, and their page still showing in this workspace. */
+export function browserAnnotationsStillSendable(
+  state: {
+    browserTabsByWorktree: Readonly<Record<string, readonly { activePageId?: string | null }[]>>
+    browserAnnotationsByPageId: Readonly<Record<string, readonly BrowserPageAnnotation[]>>
+  },
+  worktreeId: string,
+  pageId: string,
+  sendable: readonly BrowserPageAnnotation[]
+): boolean {
+  const pageActive = (state.browserTabsByWorktree[worktreeId] ?? []).some(
+    (workspace) => workspace.activePageId === pageId
+  )
+  const current = new Set(state.browserAnnotationsByPageId[pageId])
+  return (
+    pageActive &&
+    sendable.length > 0 &&
+    sendable.every((annotation) => current.has(annotation) && !isNoteInFlight(annotation))
+  )
+}
+
+export type BrowserAnnotationsClearRequest = {
+  description: string
+  clear: () => Promise<boolean>
+}
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
@@ -32,6 +56,9 @@ export function useBrowserPageAnnotationSend({
   handleAnnotationTraySendOpenChange: (open: boolean) => void
   handleCopyBrowserAnnotations: () => void
   handleClearBrowserAnnotations: () => void
+  /** Clear for the annotations on the page right now; ones added before the confirm stay. */
+  createBrowserAnnotationsClearRequest: () => BrowserAnnotationsClearRequest
+  sendableAnnotationCount: number
   handleDeleteBrowserAnnotation: (annotationId: string) => void
   handleUpdateBrowserAnnotation: (
     annotationId: string,
@@ -41,6 +68,7 @@ export function useBrowserPageAnnotationSend({
   ) => void
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
+  canSendBrowserAnnotations: () => boolean
   activeGroupId: string | undefined
 } {
   const browserAnnotations = useAppStore(
@@ -136,6 +164,39 @@ export function useBrowserPageAnnotationSend({
     clearBrowserPageAnnotations(browserTabId)
   }, [browserTabId, clearBrowserPageAnnotations, recordFeatureInteraction])
 
+  const createBrowserAnnotationsClearRequest = useCallback((): BrowserAnnotationsClearRequest => {
+    const ids = new Set(browserAnnotationsRef.current.map((annotation) => annotation.id))
+    return {
+      description: translate(
+        'components.notes.sendButton.clearPageNotes',
+        'Clear {{count}} notes from this page?',
+        { count: ids.size, defaultValue_one: 'Clear {{count}} note from this page?' }
+      ),
+      clear: async () => {
+        // Match by id on the current list, so an annotation edited since is still cleared.
+        removeDeliveredBrowserPageAnnotations(
+          browserTabId,
+          browserAnnotationsRef.current.filter((annotation) => ids.has(annotation.id))
+        )
+        recordFeatureInteraction('browser-annotations')
+        return true
+      }
+    }
+  }, [browserTabId, recordFeatureInteraction, removeDeliveredBrowserPageAnnotations])
+
+  // Why one check for every route: the inline menu and the sidebar picker both dispatch a prompt built
+  // earlier; refuse it once an annotation changed, is already on its way, or the page left this workspace.
+  const canSendBrowserAnnotations = useCallback(
+    (): boolean =>
+      browserAnnotationsStillSendable(
+        useAppStore.getState(),
+        worktreeId,
+        browserTabId,
+        sendableAnnotations
+      ),
+    [browserTabId, sendableAnnotations, worktreeId]
+  )
+
   const openAnnotationSendTargetMode = useCallback(
     (modeId: string, prompt: string): void => {
       openAgentSendPopoverTargetMode({
@@ -148,11 +209,13 @@ export function useBrowserPageAnnotationSend({
           'Browser annotations'
         ),
         launchSource: 'notes_send',
+        canSendPrompt: canSendBrowserAnnotations,
         onPromptDelivered: handleBrowserAnnotationsSentToAgent,
         onPromptHandedOff: handleBrowserAnnotationsHandedOff
       })
     },
     [
+      canSendBrowserAnnotations,
       handleBrowserAnnotationsSentToAgent,
       handleBrowserAnnotationsHandedOff,
       openAgentSendPopoverTargetMode,
@@ -252,10 +315,13 @@ export function useBrowserPageAnnotationSend({
     handleAnnotationTraySendOpenChange,
     handleCopyBrowserAnnotations,
     handleClearBrowserAnnotations,
+    createBrowserAnnotationsClearRequest,
+    sendableAnnotationCount: sendableAnnotations.length,
     handleDeleteBrowserAnnotation,
     handleUpdateBrowserAnnotation,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
+    canSendBrowserAnnotations,
     activeGroupId
   }
 }

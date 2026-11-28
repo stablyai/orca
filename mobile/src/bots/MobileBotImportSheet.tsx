@@ -17,9 +17,9 @@ import { useBackClaim } from '../navigation/use-back-claim'
 import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { triggerError } from '../platform/haptics/haptics'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { BOT_NAME_MAX_LENGTH } from '../../../src/shared/bot-types'
 import { botInitial } from '../../../src/shared/bots/bot-avatar-fallback'
@@ -39,7 +39,7 @@ import { MobileBotAvatar } from './MobileBotAvatar'
 import { MobileBotImportHero } from './MobileBotImportHero'
 import { MobileBotExportFolderPage, type ExportFolder } from './MobileBotExportFolderPage'
 import { MobileBotImportExportSteps } from './MobileBotImportExportSteps'
-import { groupFieldStyles } from './MobileNewBotPickers'
+import { groupFieldStylesSheet } from '../components/composer-input/composer-input-styles'
 
 export type BotImportFrom = NonNullable<BotCreateParams['importFrom']>
 
@@ -47,9 +47,7 @@ type ImportPick = { source: BotImportSource; bot: BotImportCandidate }
 
 const TILE = 28
 
-function pickKey(pick: ImportPick): string {
-  return `${pick.source.app}:${pick.bot.agent}`
-}
+const pickKey = (pick: ImportPick): string => `${pick.source.app}:${pick.bot.agent}`
 
 export function MobileBotImportSheet(props: {
   visible: boolean
@@ -75,7 +73,9 @@ export function MobileBotImportSheet(props: {
   onAfterClose?: () => void
   onCreate: (name: string, importFrom: BotImportFrom) => void
 }) {
-  useMobileColorScheme()
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const pager = useOptionPager<'folder'>()
@@ -411,7 +411,7 @@ export function MobileBotImportSheet(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   page: { flex: 1 },
   tile: {
     width: TILE,

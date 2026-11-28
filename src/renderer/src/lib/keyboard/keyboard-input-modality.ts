@@ -2,6 +2,7 @@
 type FocusModality = 'keyboard' | 'pointer' | 'virtual'
 
 let modality: FocusModality | null = null
+let lastPointerWasTouch = false
 let inputSinceLastFocus = false
 let windowBlurredSinceLastFocus = false
 let scriptFocusDepth = 0
@@ -9,15 +10,20 @@ let stopTracking: (() => void) | null = null
 
 function onKeyDown(event: KeyboardEvent): void {
   inputSinceLastFocus = true
+  lastPointerWasTouch = false
   // Shortcuts like Cmd+, are commands, not keyboard navigation.
   if (!event.metaKey && !event.ctrlKey && !event.altKey) {
     modality = 'keyboard'
   }
 }
 
-function onPointerDown(): void {
+function onPointerDown(event: MouseEvent): void {
   inputSinceLastFocus = true
   modality = 'pointer'
+  // The mousedown a tap emulates after its pointerdown carries no pointer type; keep the tap's.
+  if ('pointerType' in event) {
+    lastPointerWasTouch = event.pointerType === 'touch'
+  }
 }
 
 // A press has moved focus once its release task ends (a <label> click focuses its control after
@@ -93,6 +99,11 @@ if (
 
 if (import.meta.hot) {
   import.meta.hot.dispose(stopFocusModalityTracking)
+}
+
+/** Whether the latest press was a touch (e.g. the tap that just opened a menu), not a click or key. */
+export function lastPressWasTouch(): boolean {
+  return modality === 'pointer' && lastPointerWasTouch
 }
 
 /** Whether the latest focus came from keyboard navigation or assistive tech, not a pointer. */

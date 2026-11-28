@@ -39,6 +39,7 @@ export default function NativeVoiceSettingsRoute() {
     <VoiceSettingsScreen
       key={screenHostId}
       operations={operations}
+      hostName={hosts?.find((host) => host.id === screenHostId)?.name}
       connecting={connecting}
       focused={focused}
       onBack={() => router.back()}

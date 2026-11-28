@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import {
   buildDocPreviewUrl,
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
@@ -46,8 +47,8 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
 }
 
 /** Grants read through the owning server's worktree-scoped files.read or its file grants. */
-export function registerDocPreviewGrantHandlers(): void {
-  ipcMain.handle(
+export function registerDocPreviewGrantHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     DOC_PREVIEW_MINT_GRANT_CHANNEL,
     (event, request: DocPreviewGrantRequest): DocPreviewGrantResult => {
       // Granting filesystem-read authority requires a trusted renderer even if guests cannot currently invoke IPC.
@@ -75,11 +76,11 @@ export function registerDocPreviewGrantHandlers(): void {
     }
   )
 
-  ipcMain.handle(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, (event, grantId: string): boolean =>
+  ipc.handle(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, (event, grantId: string): boolean =>
     isTrustedBrowserRenderer(event.sender) ? revokeDocPreviewGrant(grantId) : false
   )
 
-  ipcMain.handle(
+  ipc.handle(
     DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
     (event, grantId: unknown, relativePath: unknown): boolean =>
       isTrustedBrowserRenderer(event.sender) &&
@@ -88,10 +89,12 @@ export function registerDocPreviewGrantHandlers(): void {
       authorizeDocPreviewDirectory(grantId, relativePath)
   )
 
-  // Guest senders are untrusted; the policy checks a live bound grant and web URL.
-  ipcMain.on(DOC_PREVIEW_LINK_CLICK_CHANNEL, (event, url: unknown, modifiers?: unknown) => {
-    if (typeof url === 'string') {
-      reportDocPreviewLinkClick(event.sender, url, modifiers)
-    }
-  })
+  if (ipc === ipcMain) {
+    // Guest senders are untrusted; the policy checks a live bound grant and web URL.
+    ipcMain.on(DOC_PREVIEW_LINK_CLICK_CHANNEL, (event, url: unknown, modifiers?: unknown) => {
+      if (typeof url === 'string') {
+        reportDocPreviewLinkClick(event.sender, url, modifiers)
+      }
+    })
+  }
 }

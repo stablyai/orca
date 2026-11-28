@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react'
 import { Settings } from 'lucide-react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -22,8 +23,15 @@ import {
 } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
 import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
 import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
-import { TabBarCreateRowCustomizer } from './TabBarCreateRowCustomizer'
 import { CREATE_ROW_HIGHLIGHT_CLASS, TabBarCreateRowIcons } from './TabBarCreateRowIcons'
+
+const LazyTabBarCreateRowCustomizer = lazyWithRetry(
+  () =>
+    import('./TabBarCreateRowCustomizer').then((module) => ({
+      default: module.TabBarCreateRowCustomizer
+    })),
+  { reloadKey: 'tab-bar-create-row-customizer' }
+)
 import { useCreateRowScroller } from './use-create-row-scroller'
 import { isPressedPointer, useCreateRowHoverTooltip } from './use-create-row-hover-tooltip'
 import type { IntroArrowAnchor } from '../../emulator-pane/tab-intro/use-intro-arrow'
@@ -233,34 +241,36 @@ export function TabBarCreateRow({
             }
           }}
         >
-          <TabBarCreateRowCustomizer
-            visible={visible}
-            hidden={hidden}
-            recordingActionId={recordingActionId}
-            onRecordingChange={setRecordingActionId}
-            onArrange={(visibleIds, hiddenIds) => {
-              const next = buildNewTabMenuLayout(visibleIds, hiddenIds, layout)
-              // A turned-off item sits under Hidden only while off; don't save that as a user choice.
-              const offIds = new Set(hidden.filter((item) => item.enable).map((item) => item.id))
-              const keptHidden = new Set(layout?.hidden)
-              saveLayout({
-                ...next,
-                hidden: next.hidden.filter((id) => !offIds.has(id) || keptHidden.has(id))
-              })
-              for (const item of hidden) {
-                if (item.enable && visibleIds.includes(item.id)) {
-                  void item.enable()
+          <React.Suspense fallback={null}>
+            <LazyTabBarCreateRowCustomizer
+              visible={visible}
+              hidden={hidden}
+              recordingActionId={recordingActionId}
+              onRecordingChange={setRecordingActionId}
+              onArrange={(visibleIds, hiddenIds) => {
+                const next = buildNewTabMenuLayout(visibleIds, hiddenIds, layout)
+                // A turned-off item sits under Hidden only while off; don't save that as a user choice.
+                const offIds = new Set(hidden.filter((item) => item.enable).map((item) => item.id))
+                const keptHidden = new Set(layout?.hidden)
+                saveLayout({
+                  ...next,
+                  hidden: next.hidden.filter((id) => !offIds.has(id) || keptHidden.has(id))
+                })
+                for (const item of hidden) {
+                  if (item.enable && visibleIds.includes(item.id)) {
+                    void item.enable()
+                  }
                 }
-              }
-            }}
-            onReset={() => saveLayout(EMPTY_LAYOUT)}
-            onOpenShortcutSettings={() => {
-              closeMenu()
-              const store = useAppStore.getState()
-              store.openSettingsTarget({ pane: 'shortcuts', repoId: null })
-              store.openSettingsPage()
-            }}
-          />
+              }}
+              onReset={() => saveLayout(EMPTY_LAYOUT)}
+              onOpenShortcutSettings={() => {
+                closeMenu()
+                const store = useAppStore.getState()
+                store.openSettingsTarget({ pane: 'shortcuts', repoId: null })
+                store.openSettingsPage()
+              }}
+            />
+          </React.Suspense>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
       {/* The row is one menu item; announce which icon ←/→ landed on. */}

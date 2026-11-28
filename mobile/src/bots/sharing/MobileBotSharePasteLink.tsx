@@ -6,8 +6,8 @@ import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useClipboardReader } from '../../platform/clipboard/clipboard'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 
 export function MobileBotSharePasteLink(props: {
@@ -19,6 +19,7 @@ export function MobileBotSharePasteLink(props: {
   onBack: () => void
   onLink: (shareId: string) => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardReader()
   const { value, setValue } = props
@@ -68,7 +69,7 @@ export function MobileBotSharePasteLink(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   description: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.sm },
   error: { fontSize: 13, color: colors.statusRed, marginTop: spacing.sm }
 }))

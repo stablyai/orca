@@ -1,7 +1,6 @@
 import { Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { MobileWebShellSessionState } from '../session/mobile-web-shell-session-contract'
 import {
   formatMobileWebShellDevFacts,
@@ -15,7 +14,7 @@ export function ShellDevFacts({
   state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
   droppedBinaryFrames: number
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   if (!isDevelopmentBuild()) {
     return null
   }
@@ -33,7 +32,7 @@ export function ShellDevFacts({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   devFacts: {
     position: 'absolute',
     left: spacing.sm,

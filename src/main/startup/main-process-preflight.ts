@@ -27,13 +27,7 @@ import {
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
 import { configureRemoteServerUpdater } from '../runtime/hosts/management/remote-server-updater'
-import {
-  getRemoteServerUpdaterSnapshot,
-  checkForRemoteServerUpdate,
-  downloadRemoteServerUpdate,
-  installRemoteServerUpdate,
-  isQuittingForUpdate
-} from '../updater/updater-service'
+import { isQuittingForUpdate, loadUpdaterService } from '../updater/updater-service-slot'
 import {
   getDevInstanceIdentity,
   shouldApplyPreReadyAppName
@@ -172,10 +166,13 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
   process.env.ORCA_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
-    getSnapshot: getRemoteServerUpdaterSnapshot,
-    check: checkForRemoteServerUpdate,
-    download: downloadRemoteServerUpdate,
-    install: installRemoteServerUpdate
+    getSnapshot: async (runtimeId) =>
+      (await loadUpdaterService()).getRemoteServerUpdaterSnapshot(runtimeId),
+    check: async (runtimeId, options) =>
+      (await loadUpdaterService()).checkForRemoteServerUpdate(runtimeId, options),
+    download: async (runtimeId) =>
+      (await loadUpdaterService()).downloadRemoteServerUpdate(runtimeId),
+    install: async (runtimeId) => (await loadUpdaterService()).installRemoteServerUpdate(runtimeId)
   })
   patchPackagedProcessPath()
   // The synchronous seed covers early IPC; packaged login-shell hydration adds rc PATH later.

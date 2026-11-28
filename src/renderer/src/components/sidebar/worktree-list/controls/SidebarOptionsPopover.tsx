@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverAnchor } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 
 /** A one-off note anchored to the options button; opening the menu dismisses it. */
@@ -36,6 +37,7 @@ export function SidebarOptionsPopover({
   children: React.ReactNode
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const hasOpened = useLatchedOpen(open)
   const hintOpen = hint?.open === true
   const dismissHint = hint?.onDismiss
   const handleOpenChange = useCallback(
@@ -81,15 +83,17 @@ export function SidebarOptionsPopover({
             {tooltip}
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="w-72 pb-2"
-          data-workspace-board-preserve-open={preserveOpen}
-        >
-          {children}
-        </DropdownMenuContent>
+        {hasOpened ? (
+          <DropdownMenuContent
+            side="right"
+            align="start"
+            sideOffset={8}
+            className="w-72 pb-2"
+            data-workspace-board-preserve-open={preserveOpen}
+          >
+            {children}
+          </DropdownMenuContent>
+        ) : null}
       </DropdownMenu>
       {hintOpen ? hint?.content : null}
     </Popover>

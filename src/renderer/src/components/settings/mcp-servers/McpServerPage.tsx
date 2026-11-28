@@ -25,7 +25,12 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useMcpServers, useStableMcpTarget } from './use-mcp-servers'
 import { useMcpHostPlatform, useMcpServerAgents } from './mcp-server-agents'
 import { useMcpHostWorkspaces } from './use-mcp-host-workspaces'
-import { mcpServerLine, mcpServerNeedsSignIn, mcpServerTitle } from './mcp-server-words'
+import {
+  mcpServerLine,
+  mcpServerNeedsSignIn,
+  mcpServerTitle,
+  mcpServerUnreadable
+} from './mcp-server-words'
 import { McpStatusLine } from './McpServerRows'
 import { McpServerLaunchGroup } from './McpServerLaunchGroup'
 import { McpServerAgentsGroup } from './McpServerAgentsGroup'
@@ -44,15 +49,25 @@ function SignInRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const needs = mcpServerNeedsSignIn(server)
+  const unreadable = mcpServerUnreadable(server)
   return (
     <SettingsGroup>
       <div data-settings-row="" className="flex min-h-12 items-center gap-3 py-2">
         <span className="min-w-0 flex-1 text-sm">
           {needs ? (
             <McpStatusLine
-              line={null}
+              line={
+                unreadable
+                  ? t(
+                      'settings.mcpServers.unreadable',
+                      'Saved sign-in or key can’t be opened on this computer'
+                    )
+                  : null
+              }
               status={{
-                label: t('settings.mcpServers.status.needsSignIn', 'Needs sign-in'),
+                label: unreadable
+                  ? t('settings.mcpServers.signInAgain', 'Sign in again')
+                  : t('settings.mcpServers.status.needsSignIn', 'Needs sign-in'),
                 tone: 'attention',
                 replacesLine: false
               }}
@@ -153,7 +168,8 @@ export function McpServerPage({
     )
   }
   const plugin = server.plugin !== undefined
-  const editable = !server.signIn
+  // An entry that doesn't open may have been a key: its details stay editable to enter it again.
+  const editable = !server.signIn || mcpServerUnreadable(server)
   const remove = async (): Promise<void> => {
     const name = mcpServerTitle(server.name)
     const ok = await confirm({

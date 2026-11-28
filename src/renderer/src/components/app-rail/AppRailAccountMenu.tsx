@@ -1,29 +1,36 @@
 import React, { useId, useMemo, useRef, useState } from 'react'
-import { Loader2, LogIn, LogOut, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import type { OrcaProfileCloudSummary } from '../../../../shared/orca-profiles/orca-profiles'
 import { useTranslate } from '@/i18n/use-translate'
-import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { SettingsTooltipLabel } from '@/components/sidebar/chrome/SidebarSettingsHelpMenu'
-import {
-  MilestonesMenuItem,
-  type HelpMenuController,
-  type SetupMilestones
+import type {
+  HelpMenuController,
+  SetupMilestones
 } from '@/components/sidebar/chrome/help-menu-controller'
-import { OrcaProfileSignOutConfirmDialog } from '@/components/orca-profiles/OrcaProfileSignOutConfirmDialog'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { getTitlebarSidebarToggle } from '@/app-shell/chrome/titlebar-sidebar-toggle-ref'
-import { refocusTriggerIfFocusLost } from './AppRailCustomizeMenu'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
+
+const LazyAppRailAccountMenuContent = lazyWithRetry(
+  () =>
+    import('./AppRailAccountMenuContent').then((module) => ({
+      default: module.AppRailAccountMenuContent
+    })),
+  { reloadKey: 'app-rail-account-menu-content' }
+)
+
+const LazyOrcaProfileSignOutConfirmDialog = lazyWithRetry(
+  () =>
+    import('@/components/orca-profiles/OrcaProfileSignOutConfirmDialog').then((module) => ({
+      default: module.OrcaProfileSignOutConfirmDialog
+    })),
+  { reloadKey: 'orca-profile-sign-out-confirm-dialog' }
+)
 
 export type AppRailAccount = { name: string; email: string | undefined; initial: string }
 
@@ -37,26 +44,6 @@ export function appRailAccount(
   // Array.from so an initial outside the BMP (an emoji, CJK extension) stays one whole character.
   const initial = (Array.from(name)[0] ?? '?').toLocaleUpperCase()
   return { name, email, initial }
-}
-
-function AccountInitial({
-  initial,
-  className
-}: {
-  initial: string
-  className: string
-}): React.JSX.Element {
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full bg-foreground/15 font-semibold text-foreground',
-        className
-      )}
-    >
-      {initial}
-    </span>
-  )
 }
 
 /**
@@ -88,10 +75,6 @@ export function AppRailAccountMenu({
     () => (signedIn ? appRailAccount(cloud, fallbackName) : null),
     [signedIn, cloud, fallbackName]
   )
-  const canSignIn = useAppStore((s) => s.orcaProfileAuthStatus?.configured === true)
-  const reconnect = useAppStore((s) => s.orcaProfileAuthStatus?.state === 'reconnect-required')
-  const signingIn = useAppStore((s) => Boolean(s.orcaProfileSignInProgress))
-  const settingsShortcut = useOptionalShortcutLabel('app.settings')
   const setupDescriptionId = useId()
   // The sign-out dialog opens from a menu row, so it has no trigger of its own to hand focus back to.
   const triggerRef = useRef<HTMLButtonElement | null>(null)
@@ -100,7 +83,10 @@ export function AppRailAccountMenu({
   // fallback the rail uses when it unmounts with focus).
   const signOutReturnTarget = (): HTMLElement | null =>
     triggerRef.current?.isConnected ? triggerRef.current : getTitlebarSidebarToggle()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
   const [signOutOpen, setSignOutOpen] = useState(false)
+  const hasOpenedSignOut = useLatchedOpen(signOutOpen)
   const [signingOut, setSigningOut] = useState(false)
 
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
@@ -118,8 +104,19 @@ export function AppRailAccountMenu({
     }
   }
 
+  // The avatar has no tile behind it: its fill strengthens on hover, and open/active add a ring.
   const face = account ? (
-    <AccountInitial initial={account.initial} className="size-5 text-[10px]" />
+    <span
+      aria-hidden
+      className={cn(
+        'flex size-5 shrink-0 items-center justify-center rounded-full bg-foreground/15 text-[10px] font-semibold text-foreground transition-[background-color,box-shadow]',
+        'group-hover:bg-foreground/25 group-aria-expanded:bg-foreground/25 group-aria-expanded:ring-1 group-aria-expanded:ring-foreground/50 group-aria-[current=page]:bg-foreground/25 group-aria-[current=page]:ring-1 group-aria-[current=page]:ring-foreground/50',
+        // Forced colors drop the fill, so outline the circle and mark open/active with the system highlight.
+        'forced-colors:border forced-colors:border-[CanvasText] forced-colors:group-aria-expanded:border-2 forced-colors:group-aria-expanded:border-[Highlight] forced-colors:group-aria-[current=page]:border-2 forced-colors:group-aria-[current=page]:border-[Highlight]'
+      )}
+    >
+      {account.initial}
+    </span>
   ) : (
     <Settings size={APP_RAIL_ICON_SIZE} strokeWidth={APP_RAIL_ICON_STROKE_WIDTH} aria-hidden />
   )
@@ -128,10 +125,12 @@ export function AppRailAccountMenu({
     <>
       <DropdownMenu
         modal={false}
+        open={menuOpen}
         onOpenChange={(open) => {
           if (open) {
             viewAtOpenRef.current = useAppStore.getState().activeView
           }
+          setMenuOpen(open)
           help.handleMenuOpenChange(open)
         }}
       >
@@ -145,6 +144,8 @@ export function AppRailAccountMenu({
                 // Setup progress shows as the menu's Milestones row; screen readers also hear it on the button.
                 aria-describedby={milestones ? setupDescriptionId : undefined}
                 active={settingsActive}
+                tile={!account}
+                className={account ? 'group' : undefined}
                 tabStop={tabStop}
                 icon={face}
               />
@@ -160,81 +161,21 @@ export function AppRailAccountMenu({
             </span>
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent
-          side="right"
-          align="end"
-          sideOffset={8}
-          className="w-52"
-          onCloseAutoFocus={(event) => {
-            // Why: Settings and Keyboard Shortcuts open the settings page, which focuses its search (or the deep-linked
-            // pane). Radix refocuses the trigger in a timeout after closing, which could land after the page's own
-            // focus; yielding lets the page keep it.
-            if (
-              useAppStore.getState().activeView === 'settings' &&
-              viewAtOpenRef.current !== 'settings'
-            ) {
-              event.preventDefault()
-            }
-            // If nothing took focus a frame later, hand it back to the button: a deep link (Keyboard Shortcuts) turns
-            // off the page's search autofocus and its pane takes none, and a click on blank space leaves the body.
-            refocusTriggerIfFocusLost(triggerRef.current)
-          }}
-        >
-          {account ? (
-            <div className="flex min-w-0 items-center gap-2 px-1.5 py-1.5">
-              <AccountInitial initial={account.initial} className="size-5 text-[10px]" />
-              <div className="min-w-0">
-                <div className="truncate text-[13px] font-medium" title={account.name}>
-                  {account.name}
-                </div>
-                {account.email && account.email !== account.name ? (
-                  <div className="truncate text-[11px] text-muted-foreground" title={account.email}>
-                    {account.email}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          ) : canSignIn ? (
-            <DropdownMenuItem
-              disabled={signingIn}
-              onSelect={() => void useAppStore.getState().connectCurrentOrcaProfile()}
-            >
-              {signingIn ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <LogIn className="size-3.5" />
-              )}
-              {signingIn
-                ? t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')
-                : reconnect
-                  ? t('auto.components.settings.orcaAccount.signInAgain', 'Sign in again')
-                  : t('appRail.signIn', 'Sign in')}
-            </DropdownMenuItem>
-          ) : null}
-          {account || canSignIn ? <DropdownMenuSeparator /> : null}
-          {milestones ? <MilestonesMenuItem milestones={milestones} progress="badge" /> : null}
-          <DropdownMenuItem
-            onSelect={onOpenSettings}
-            aria-current={settingsActive ? 'page' : undefined}
-          >
-            <Settings className="size-3.5" />
-            {settingsLabel}
-            {settingsShortcut ? (
-              <DropdownMenuShortcut>{settingsShortcut}</DropdownMenuShortcut>
-            ) : null}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {help.items}
-          {account ? (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => setSignOutOpen(true)}>
-                <LogOut className="size-3.5" />
-                {t('auto.components.settings.orcaAccount.signOut', 'Sign out')}
-              </DropdownMenuItem>
-            </>
-          ) : null}
-        </DropdownMenuContent>
+        {hasOpenedMenu ? (
+          <React.Suspense fallback={null}>
+            <LazyAppRailAccountMenuContent
+              account={account}
+              help={help}
+              milestones={milestones}
+              settingsActive={settingsActive}
+              settingsLabel={settingsLabel}
+              onOpenSettings={onOpenSettings}
+              onRequestSignOut={() => setSignOutOpen(true)}
+              triggerRef={triggerRef}
+              viewAtOpenRef={viewAtOpenRef}
+            />
+          </React.Suspense>
+        ) : null}
       </DropdownMenu>
       {milestones ? (
         <span id={setupDescriptionId} className="sr-only">
@@ -245,13 +186,17 @@ export function AppRailAccountMenu({
           )}
         </span>
       ) : null}
-      <OrcaProfileSignOutConfirmDialog
-        open={signOutOpen}
-        onOpenChange={setSignOutOpen}
-        onConfirm={() => void confirmSignOut()}
-        signingOut={signingOut}
-        returnFocusTo={signOutReturnTarget}
-      />
+      {hasOpenedSignOut ? (
+        <React.Suspense fallback={null}>
+          <LazyOrcaProfileSignOutConfirmDialog
+            open={signOutOpen}
+            onOpenChange={setSignOutOpen}
+            onConfirm={() => void confirmSignOut()}
+            signingOut={signingOut}
+            returnFocusTo={signOutReturnTarget}
+          />
+        </React.Suspense>
+      ) : null}
     </>
   )
 }

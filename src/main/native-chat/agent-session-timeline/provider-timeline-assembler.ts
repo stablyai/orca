@@ -55,6 +55,8 @@ export type ProviderTimelineAssemblerDeps = {
   agent: AgentType
   /** Minted keys and request IDs are generation-scoped. */
   generation: string
+  /** Request IDs' scope instead, for requests of a process that outlives the acquisition. */
+  requestGeneration?: string
   namespace: string
   /** Distinguish session work from subagent threads. */
   ownThread?: () => string | null
@@ -71,12 +73,14 @@ export function createProviderTimelineAssembler(
     sessionId: deps.sessionId,
     agent: deps.agent,
     generation: deps.generation,
+    ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
     rows: new ProviderTimelineRows({
       scheme: createLegacyProviderTimelineIdentityScheme({
         agent: deps.agent,
         sessionId: deps.sessionId
       }),
       generation: deps.generation,
+      ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
       namespace: deps.namespace
     }),
     ...(deps.ownThread ? { ownThread: deps.ownThread } : {})

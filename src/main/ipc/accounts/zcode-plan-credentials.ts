@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   clearZcodePlanApiKeyCredential,
   getZcodePlanCredentialsStatus,
@@ -6,12 +7,13 @@ import {
 } from '../../zcode/zcode-plan-credential-commands'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 
-export function registerZcodePlanCredentialsHandlers(rateLimits: RateLimitService | null): void {
-  ipcMain.handle('zcodePlanCredentials:getStatus', () => getZcodePlanCredentialsStatus())
-  ipcMain.handle('zcodePlanCredentials:saveApiKey', (_event, key: unknown) =>
+export function registerZcodePlanCredentialsHandlers(
+  rateLimits: RateLimitService | null,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('zcodePlanCredentials:getStatus', () => getZcodePlanCredentialsStatus())
+  ipc.handle('zcodePlanCredentials:saveApiKey', (_event, key: unknown) =>
     saveZcodePlanApiKeyCredential(rateLimits, key)
   )
-  ipcMain.handle('zcodePlanCredentials:clearApiKey', () =>
-    clearZcodePlanApiKeyCredential(rateLimits)
-  )
+  ipc.handle('zcodePlanCredentials:clearApiKey', () => clearZcodePlanApiKeyCredential(rateLimits))
 }

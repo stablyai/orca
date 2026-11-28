@@ -1,5 +1,5 @@
 import type { AgentSessionAcquisition } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { openClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
+import { claudeChatConnectionOpener } from '../../relay/claude-kept-agent-connection'
 import { claudeLaunchPermissions } from '../permissions/claude-structured-inbound-control'
 import * as replay from '../turns/claude-replay-turn-resolution'
 import { claudeFrameSendFacts } from '../turns/claude-command-lifecycle'
@@ -12,11 +12,8 @@ import { ClaudePromptRegistry } from '../permissions/claude-prompt-registry'
 import { adoptClaudeStructuredSpawnOptions } from '../launch/claude-structured-spawn-options'
 import { observeClaudeFrameModels } from '../turns/claude-structured-execution-observations'
 import { observeClaudeFastModeFacts } from '../launch/claude-structured-session-options'
-import {
-  createClaudeSessionPublication,
-  reportClaudeOptions,
-  publishClaudeSessionAttempt
-} from '../startup/claude-structured-session-publication'
+import { reportClaudeOptions } from '../startup/claude-structured-session-publication'
+import * as publication from '../startup/claude-structured-session-publication'
 import type * as sessionState from '../claude-structured-session-state'
 import { resolveClaudeAcquisitionError } from './claude-structured-session-close'
 import * as startupExit from '../startup/claude-structured-session-startup-exit'
@@ -189,8 +186,9 @@ export async function acquireClaudeSession({
     naming?.launch(launch)
     attempt.launch = launch
     observedLeafUuid = launch.resumeLeafUuid
+    const openChat = claudeChatConnectionOpener(sessionId, deps.openConnection, launch)
     const connection = await withAgentSessionCreatePhase('spawn', input.recordPhase, () =>
-      (deps.openConnection ?? openClaudeStreamJsonConnection)(
+      openChat(
         {
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
@@ -251,7 +249,7 @@ export async function acquireClaudeSession({
         new Error(`claude stream-json for session ${sessionId} exited while being acquired`)
       )
     }
-    const { session, acquisition } = createClaudeSessionPublication({
+    const { session, acquisition } = publication.createClaudeSessionPublication({
       connection,
       launch,
       request: input,
@@ -275,12 +273,13 @@ export async function acquireClaudeSession({
     liveSession = session
     session.firstRootInit = firstRootInit
     session.orderedPermissionMode = permissions.orderedMode
+    session.liveFullAccess = permissions.liveFullAccess
     adoptClaudeStructuredSpawnOptions(session, {
       ...launch.savedOptions,
       sdkOptions: launch.options
     })
     acquisitions.deleteIfCurrent(sessionId, attempt)
-    await publishClaudeSessionAttempt({
+    await publication.publishClaudeSessionAttempt({
       sessionId,
       session,
       attempt,

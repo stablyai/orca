@@ -10,6 +10,7 @@ import type { GitUpstreamStatus } from '../../../../../../shared/git/status/git-
 import { shouldClearBranchCompareForMissingBase } from '../../../../../../shared/source-control/decisions/source-control-base-ref-resolution'
 import { slowTaskRequiredIdleMs } from '../../../../lib/source-control/refresh/coalesced-poll-runner'
 import { useBranchCompareRefreshTriggers } from './use-branch-compare-refresh-triggers'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 // Slow polls idle for their own duration; explicit mutation/base/manual refreshes remain immediate.
 export const BRANCH_REFRESH_INTERVAL_MS = 30_000
@@ -154,11 +155,10 @@ export function useSourceControlBranchCompare({
       clearBranchComparePollTimer()
       branchCompareInFlightRef.current = true
       const startedAt = Date.now()
-      const runPromise = (async (): Promise<void> => {
+      const runPromise = runWithFinally(
         // Serialize comparisons and collapse skipped ticks into one trailing refresh to bound Git subprocesses.
-        try {
-          await runBranchCompare(kind)
-        } finally {
+        () => runBranchCompare(kind),
+        async () => {
           const endedAt = Date.now()
           branchCompareLastRunEndedAtRef.current = endedAt
           branchCompareLastRunDurationRef.current = endedAt - startedAt
@@ -175,7 +175,7 @@ export function useSourceControlBranchCompare({
             scheduleBranchComparePoll()
           }
         }
-      })()
+      )
       branchCompareRunPromiseRef.current = runPromise
       await runPromise.finally(() => {
         if (branchCompareRunPromiseRef.current === runPromise) {

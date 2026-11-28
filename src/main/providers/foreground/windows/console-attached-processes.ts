@@ -1,5 +1,6 @@
 import { forkProcess } from '@orca/process-host/fork-process'
 import type { ChildProcess } from 'node:child_process'
+import type { WindowsPaneProcessInventory } from './process-rows'
 
 const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
@@ -27,17 +28,17 @@ function resolveNodePtyConsoleListAgent(): string {
 /** GetConsoleProcessList needs an attached helper because one process can own only one console.
  * Use for agent filtering/adoption that excludes detached members; job polling cannot distinguish those (#10857). */
 export function readWindowsConsoleAttachedProcessIds(
-  rootPid: number,
+  memberPid: number,
   deps: WindowsConsoleAttachedProcessDeps = {}
 ): Promise<ReadonlySet<number> | null> {
-  if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
+  if (!Number.isSafeInteger(memberPid) || memberPid <= 0) {
     return Promise.resolve(null)
   }
   let child: ChildProcess
   try {
     child = (deps.forkProcess ?? forkConsoleListAgent)(
       (deps.resolveAgentPath ?? resolveNodePtyConsoleListAgent)(),
-      [String(rootPid)],
+      [String(memberPid)],
       { silent: true }
     )
   } catch {
@@ -67,7 +68,7 @@ export function readWindowsConsoleAttachedProcessIds(
       if (
         !Array.isArray(value) ||
         helperPid === undefined ||
-        !value.includes(rootPid) ||
+        !value.includes(memberPid) ||
         !value.includes(helperPid) ||
         value.some((pid) => !Number.isSafeInteger(pid) || pid <= 0)
       ) {
@@ -87,4 +88,24 @@ export function readWindowsConsoleAttachedProcessIds(
     child.once('error', onFailure)
     child.once('exit', onExit)
   })
+}
+
+/** An exited root can no longer be attached through; its direct orphans inherited the pane console from it,
+ * so one that is missing from the read opened its own and the console read is not proven to be the pane's. */
+export async function readPaneConsoleProcessIds(
+  rootPid: number,
+  inventory: WindowsPaneProcessInventory,
+  readConsoleProcessIds: (memberPid: number) => Promise<ReadonlySet<number> | null>
+): Promise<ReadonlySet<number> | null> {
+  if (!inventory.rootExited) {
+    return readConsoleProcessIds(rootPid)
+  }
+  const directOrphans = inventory.candidates.filter((candidate) => candidate.depth === 1)
+  if (directOrphans.length === 0) {
+    return null
+  }
+  const consoleProcessIds = await readConsoleProcessIds(directOrphans[0].pid)
+  return consoleProcessIds && directOrphans.every((orphan) => consoleProcessIds.has(orphan.pid))
+    ? consoleProcessIds
+    : null
 }

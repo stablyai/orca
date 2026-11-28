@@ -9,9 +9,8 @@ import {
   pullRequestEventShortSha
 } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
-import { colors } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {
   MobileNativeChatEventName,
@@ -34,7 +33,8 @@ export function MobileNativeChatPullRequestEventLine({
   fontScale: number
   onLongPress?: () => void
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const openLink = useContext(MarkdownLinkHandlerContext)
   const event = parsePullRequestEventItemId(messageId)
@@ -82,7 +82,7 @@ export function MobileNativeChatPullRequestEventLine({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   at: { color: colors.textMuted },
   link: { textDecorationLine: 'underline' }
 }))

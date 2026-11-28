@@ -2,7 +2,7 @@ import {
   DICTATION_SESSION_LOST_MESSAGE,
   hostDictationErrorMessage
 } from '../../../src/shared/speech/dictation/host-dictation-error-messages'
-import { translate } from '../i18n/mobile-i18n'
+import { translate, type Translate } from '../i18n/mobile-i18n'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
@@ -37,8 +37,8 @@ function isLegacyDesktopSpeechSetupReply(reply: RpcResponse): boolean {
 }
 
 // Headless servers lacked speech from 1.4.229 until #31174; name the required fix.
-function speechlessServerMessage(): string {
-  return translate(
+function speechlessServerMessage(t: Translate): string {
+  return t(
     'dictation.setup.serverUpdateRequired',
     'Update Orca on this server to use voice dictation.'
   )
@@ -48,9 +48,9 @@ export function isSpeechlessServerError(message: string): boolean {
   return message.startsWith('speech_unavailable')
 }
 
-export function dictationFailureMessage(message: string): string {
+export function dictationFailureMessage(message: string, t: Translate): string {
   if (isSpeechlessServerError(message)) {
-    return speechlessServerMessage()
+    return speechlessServerMessage(t)
   }
   const fallback = hostDictationErrorMessage(message)
   if (fallback === undefined) {
@@ -58,24 +58,24 @@ export function dictationFailureMessage(message: string): string {
   }
   switch (message) {
     case 'dictation_already_active':
-      return translate('dictation.setup.alreadyActive', fallback)
+      return t('dictation.setup.alreadyActive', fallback)
     case 'dictation_session_limit':
-      return translate('dictation.setup.sessionLimit', fallback)
+      return t('dictation.setup.sessionLimit', fallback)
     case 'dictation_model_busy':
-      return translate('dictation.setup.modelBusy', fallback)
+      return t('dictation.setup.modelBusy', fallback)
     case 'dictation_requires_mobile_client':
-      return translate('dictation.setup.repairRequired', fallback)
+      return t('dictation.setup.repairRequired', fallback)
     case 'dictation_owner_mismatch':
     case 'dictation_stream_not_started':
     case 'dictation_stream_closing':
-      return dictationSessionLostMessage()
+      return dictationSessionLostMessage(t)
     default:
       return fallback
   }
 }
 
-export function dictationSessionLostMessage(): string {
-  return translate('dictation.setup.sessionLost', DICTATION_SESSION_LOST_MESSAGE)
+export function dictationSessionLostMessage(t: Translate): string {
+  return t('dictation.setup.sessionLost', DICTATION_SESSION_LOST_MESSAGE)
 }
 
 export function dictationSessionErrorMessage(
@@ -141,7 +141,7 @@ export async function fetchDictationSetup(
     )
   }
   if (isSpeechlessServerReply(reply)) {
-    throw new Error(speechlessServerMessage())
+    throw new Error(speechlessServerMessage(translate))
   }
   return interpretOrThrowRefusalMessage(
     () => dictationSetupRead.interpret(reply),
@@ -221,8 +221,8 @@ export function dictationNeedsSetup(setup: MobileSpeechSetup): boolean {
 }
 
 // Keep copy short and host-neutral: the paired computer may be a headless server.
-export function cloudModelNeedsKey(): string {
-  return translate('dictation.setup.cloudModelNeedsKey', 'Needs an OpenAI key')
+export function cloudModelNeedsKey(t: Translate): string {
+  return t('dictation.setup.cloudModelNeedsKey', 'Needs an OpenAI key')
 }
 
 export type DictationModelRowAction =

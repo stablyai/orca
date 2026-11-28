@@ -6,9 +6,8 @@ import { firstParam } from '../../navigation/route-param-reader'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { useHostStatusGates } from '../../transport/connection/host-status-gates'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { HostStatusGatesContext } from './host-protocol-gates-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
@@ -31,7 +30,8 @@ export function HostProtocolGate({
   transparentWhilePending = false,
   blocked: blockedView
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
@@ -121,7 +121,7 @@ export function HostProtocolGate({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pending: {
     flex: 1,
     alignItems: 'center',

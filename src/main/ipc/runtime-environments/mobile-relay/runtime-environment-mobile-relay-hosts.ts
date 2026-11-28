@@ -2,7 +2,7 @@ import { describePairedServerHosts } from '../../../../shared/remote-runtime/hos
 import {
   pairedRuntimeBrowserClientHostId,
   pairedRuntimeBrowserClientHostsPage
-} from '../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+} from '../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareRuntimeEnvironmentBrowserPlacement } from '../browser-hosting/runtime-environment-browser-placement'
 import {
@@ -134,6 +134,8 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
         statusByEnvironmentId
       }
     },
+    configuredIds: async () =>
+      (await listEnvironments(userDataPath)).map((environment) => environment.id),
     resolve: async (environmentId, openingMethod, signal) => {
       if (
         !(await listRelayableEnvironments(userDataPath)).some(

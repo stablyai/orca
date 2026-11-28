@@ -9,9 +9,9 @@ import {
 } from '../../../../../../src/shared/bots/bot-memory-updated-note'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { useMobileNativeChatDisclosure } from '../viewport/mobile-native-chat-disclosure-store'
 import { useBotPanelOpener } from '../../../../bots/bot-item-open'
@@ -38,7 +38,8 @@ export function MobileBotMemoryUpdatedRow({
   cardId: string
   fontScale: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useMobileNativeChatDisclosure(`bot-memory:${cardId}`, false)
   const panel = useBotPanelOpener(note.botId)
@@ -99,7 +100,7 @@ export function MobileBotMemoryUpdatedRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   line: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, alignSelf: 'flex-start' },
   summary: { color: colors.textMuted, flexShrink: 1 },
   changes: {

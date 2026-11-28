@@ -92,13 +92,16 @@ export async function listIssueWorkItemPage(args: {
           continue
         }
         items.push(
-          mapIssueWorkItem({
-            ...node,
-            state: node.state.toLowerCase(),
-            user: restIssueActor(node.author),
-            labels: node.labels.nodes,
-            assignees: node.assignees.nodes.map(restIssueActor)
-          })
+          mapIssueWorkItem(
+            {
+              ...node,
+              state: node.state.toLowerCase(),
+              user: restIssueActor(node.author),
+              labels: node.labels.nodes,
+              assignees: node.assignees.nodes.map(restIssueActor)
+            },
+            args.ownerRepo
+          )
         )
       }
       return items
@@ -119,5 +122,5 @@ export async function listIssueWorkItemPage(args: {
     .array(z.record(z.string(), z.unknown()))
     .parse(JSON.parse(stdout))
     .filter((item) => !('pull_request' in item))
-    .map(mapIssueWorkItem)
+    .map((item) => mapIssueWorkItem(item, args.ownerRepo))
 }

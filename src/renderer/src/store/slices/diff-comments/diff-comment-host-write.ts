@@ -1,4 +1,5 @@
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { DiffCommentBaseMutation } from '../../../../../shared/file-review/diff-comment-mutation'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { DiffCommentOwner } from './diff-comment-owner'
@@ -7,19 +8,15 @@ import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
-/** Writes a workspace's whole review-note list to the host that owns it; the base is the list it was edited from. */
+/** Persist a review-note change on its owning host and return the authoritative notes. */
 export async function writeDiffCommentsToHost(
   owner: DiffCommentOwner,
-  diffComments: DiffComment[],
-  diffCommentsBase: DiffComment[] | undefined
-): Promise<void> {
+  updates: { diffComments?: DiffComment[] } & DiffCommentBaseMutation
+): Promise<DiffComment[] | undefined> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
-  // Why base: the host applies only this edit, so notes another device added meanwhile survive.
-  const baseUpdate = diffCommentsBase ? { diffCommentsBase } : {}
   if (scope?.type === 'folder' && owner.kind === 'folder') {
     const runtimeEnvironmentId = owner.runtimeEnvironmentId
-    const updates = { diffComments, ...baseUpdate }
     const updated = runtimeEnvironmentId
       ? (
           await callHostRoute<{ folderWorkspace: FolderWorkspace | null }>(
@@ -37,10 +34,10 @@ export async function writeDiffCommentsToHost(
           folderWorkspaceId: scope.folderWorkspaceId,
           updates
         })
-    if (!updated?.diffComments) {
+    if (!updated || (updates.diffComments !== undefined && !updated.diffComments)) {
       throw new Error('Failed to persist folder workspace review notes')
     }
-    return
+    return updated.diffComments ?? []
   }
   if (owner.kind !== 'worktree') {
     throw new Error('The workspace host is unresolved; review notes were not saved.')
@@ -51,24 +48,24 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       executionHostId: at,
-      updates: { diffComments, ...baseUpdate }
+      updates
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
       throw new Error('This computer did not save the review notes.')
     }
-    return
+    return meta.diffComments ?? []
   }
-  await callRuntimeRpc(
+  const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
     { kind: 'environment', environmentId: endpoint.environmentId },
     'worktree.set',
     {
       worktree: toRuntimeWorktreeSelector(worktreeId),
-      diffComments,
-      ...baseUpdate
+      ...updates
     },
     { timeoutMs: 15_000 }
   )
+  return worktree && (worktree.diffComments ?? [])
 }
 
 /** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */

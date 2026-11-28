@@ -16,7 +16,11 @@ import { browserSessionRegistry } from '../sessions/profiles/browser-session-reg
 import { detachBrowserExtensionsFromAllProfileSessions } from './profile-sessions/browser-extension-session-loader'
 import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
-import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
+import {
+  setBrowserExtensionGrantedPermissionsLookup,
+  setBrowserExtensionNamespaceLoader
+} from './api-runtime/browser-extension-namespace-registry'
+import { readBrowserExtensionProfileGrants } from './permissions/browser-extension-session-permissions'
 import { setBrowserExtensionProfilePresence } from './profile-sessions/browser-extension-profile-presence'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
@@ -116,7 +120,17 @@ function installBrowserExtensionSupport(): void {
     (profileId) =>
       browserSessionRegistry.getProfile(browserExtensionSourceProfileId(profileId)) !== null
   )
-  registerBrowserExtensionNamespaces()
+  setBrowserExtensionGrantedPermissionsLookup((extension, session) => {
+    const profileId = getBrowserExtensionProfileIdForSession(session)
+    return profileId
+      ? readBrowserExtensionProfileGrants(profileId, extension.id).grantedPermissions
+      : []
+  })
+  setBrowserExtensionNamespaceLoader(async () => {
+    const { registerBrowserExtensionNamespaces } =
+      await import('./register-browser-extension-namespaces')
+    registerBrowserExtensionNamespaces()
+  })
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()
   installBrowserExtensionToolbarNotifications()

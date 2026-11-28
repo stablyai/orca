@@ -1,86 +1,93 @@
-import { useRef, useState, useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { StyleSheet, View, type HostInstance } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ChevronLeft, ListChecks, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
+import { GestureDetector } from 'react-native-gesture-handler'
+import { ChevronLeft, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
 import { MobileBotAvatar } from '../bots/MobileBotAvatar'
 import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
 import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
-import { MobileSourceControlButton } from './MobileSourceControlButton'
-import { MobileSessionTabBar } from './tabs/MobileSessionTabBar'
 import { MobileSessionTitleBlock } from './MobileSessionTitleBlock'
-import type { SessionTitleCard } from './tabs/use-session-title-card'
-import { styles } from './mobile-session-styles'
-import { colors, spacing } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { MobileSessionTabMark } from './tabs/MobileSessionTabMark'
+import { MobileSessionTabsButton } from './tabs/MobileSessionTabsButton'
+import { isForkedChatTab } from './tabs/mobile-session-tab-rows'
+import {
+  useMobileSessionTabSummaries,
+  usePublishTabSummaries,
+  type MobileSessionTabSummaryChannel
+} from './tabs/use-mobile-session-tab-summaries'
+import { useNow } from '../hooks/use-now'
+import type { MobileSessionSidebar } from './tabs/use-mobile-session-sidebar'
+import { mobileForkAccessibleName } from './fork/mobile-fork-marked-name'
+import { stylesSheet } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
-import { useResponsiveLayout } from '../layout/responsive-layout'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
-import { useShellSideRail } from '../layout/use-shell-side-rail'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
+/** One 52 pt bar: back, the open tab (the workspace under it), ⋯, and the tab count that opens the sidebar. */
 export function MobileSessionHeader({
   controller,
-  details
+  homeChatId,
+  summaries,
+  sidebar,
+  connectionIssue
 }: {
   controller: MobileSessionController
-  details: SessionTitleCard
+  homeChatId: string | null
+  summaries: MobileSessionTabSummaryChannel
+  sidebar: MobileSessionSidebar
+  /** Something is wrong with the connection, so the subtitle says what instead of the workspace. */
+  connectionIssue: boolean
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     hostId,
-    worktreeId,
-    isFloatingWorkspaceRoute,
-    presentedConnState,
     forceReconnectHost,
     worktreeName,
-    activePanel,
     setShowHeaderMoreActions,
     requestLeaveSession,
-    visibleTabs,
     showConnectionRetry,
-    connectionEscalated,
     terminalSummary,
-    handlePanelTap,
     routeBot,
     botStatus,
     itemsOnPhone,
-    botPanel,
-    openBotPanel,
     terminalResume,
     connState,
-    statusDot
+    statusDot,
+    nativeChatController,
+    activeSessionTabId,
+    openSessionTabActionSheetAfterKeyboardDismiss
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
   // While offline the header already says so; a resume queued for the reconnect isn't a refresh.
   const showRefreshLine = useRefreshHint(catchingUp && connState === 'connected')
-  const layout = useResponsiveLayout()
-  const [headerWidth, setHeaderWidth] = useState<number | null>(null)
   const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
-  const sideRail = useShellSideRail()
-  // Why: a sideways phone is ~390pt tall, so the tabs share the top bar instead of taking a second row.
-  const hasTabs = visibleTabs.length > 0
-  const tabsInTopBar = (layout.isLandscapePhone || sideRail) && hasTabs
-  // Bar buttons otherwise leave the tab bar too narrow to read on a narrow header.
-  const actionsCollapsed = tabsInTopBar && (headerWidth ?? layout.width) < 600
-  // A bot's screen has no source control (its home isn't a repository): Items takes its place.
-  const itemsInBar = itemsOnPhone && routeBot !== null
-  const homeChatId = routeBot?.bot.chatSessionId
-  const sourceControlInBar = !isFloatingWorkspaceRoute && !actionsCollapsed && !itemsInBar
-  const tabStrip = hasTabs ? (
-    <MobileSessionTabBar
-      controller={controller}
-      inTopBar={tabsInTopBar}
-      actionsCollapsed={actionsCollapsed}
-      homeChatId={homeChatId ?? null}
-    />
-  ) : null
+  // Why: the first tap must reach the bar with the keyboard open instead of only dismissing it (#5106).
+  const keepsKeyboard = useKeyboardPersistingTaps('handled')
+  // The clock only re-reads agent states; with no tabs there is nothing to age.
+  const now = useNow(60_000, controller.visibleTabs.length > 0)
+  const tabs = useMobileSessionTabSummaries(controller, homeChatId, now)
+  usePublishTabSummaries(summaries, tabs)
+  const active = tabs.find((row) => row.tab.id === activeSessionTabId)
+  // On the web a drag's release also clicks the bar control it ended over; that click is the drag's.
+  const press = (action: () => void) => () => {
+    if (!sidebar.tapIsDragEnd()) {
+      action()
+    }
+  }
+  const workspace = routeBot
+    ? routeBot.bot.name
+    : worktreeName || t('session.header.terminalTitle', 'Terminal')
+  // A bot's place line says how it's doing (Paused, Working…), as its header always has.
+  const place = routeBot && botStatus ? `${routeBot.bot.name} · ${botStatus.line}` : workspace
   const leading = (
     <>
       {revealSidebar ? (
@@ -93,136 +100,94 @@ export function MobileSessionHeader({
       <NavBarButton
         accessibilityLabel={t('session.header.backToWorktrees', 'Back to worktrees')}
         icon={ChevronLeft}
-        ref={details.backRef}
-        onPress={() => {
-          if (!details.closeFirst()) {
-            requestLeaveSession()
-          }
-        }}
+        onPress={press(requestLeaveSession)}
       />
     </>
   )
-  const titleBlock =
-    !sideRail || !hasTabs || showConnectionRetry || connectionEscalated ? (
-      <MobileSessionTitleBlock
-        title={
-          routeBot
-            ? routeBot.bot.name
-            : worktreeName || t('session.header.terminalTitle', 'Terminal')
-        }
-        leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
-        connState={statusDot.state}
-        verdict={statusDot.verdict}
-        details={details}
-        meta={
-          botStatus && presentedConnState === 'connected' && !connectionEscalated
-            ? botStatus.line
-            : terminalSummary
-        }
-        centered={!tabsInTopBar}
-        showConnectionRetry={showConnectionRetry}
-        onRetry={() => {
-          if (hostId && forceReconnectHost) {
-            void forceReconnectHost(hostId)
-          }
-        }}
-      />
-    ) : null
+  // The tab is the title; with none open, the workspace is.
+  const title = active ? (
+    <MobileSessionTitleBlock
+      title={active.title}
+      forked={isForkedChatTab(active.tab)}
+      leading={<MobileSessionTabMark row={active} size={16} />}
+      subtitle={connectionIssue ? terminalSummary : place}
+      status={connectionIssue ? statusDot : null}
+      accessibilityLabel={
+        isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title, t) : active.title
+      }
+      onPress={press(() => openSessionTabActionSheetAfterKeyboardDismiss(active.tab))}
+      showConnectionRetry={showConnectionRetry}
+      onRetry={retry}
+    />
+  ) : (
+    <MobileSessionTitleBlock
+      title={workspace}
+      leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
+      subtitle={routeBot && botStatus && !connectionIssue ? botStatus.line : terminalSummary}
+      status={connectionIssue ? statusDot : null}
+      accessibilityLabel={workspace}
+      showConnectionRetry={showConnectionRetry}
+      onRetry={retry}
+    />
+  )
+  function retry() {
+    if (hostId && forceReconnectHost) {
+      void forceReconnectHost(hostId)
+    }
+  }
   const trailing = (
     <>
-      {itemsInBar ? (
-        <NavBarButton
-          active={botPanel !== null}
-          accessibilityLabel={
-            routeBot.needsYou > 0
-              ? t('session.header.itemsNeedYou', 'Items, {{count}} need you', {
-                  count: routeBot.needsYou
-                })
-              : t('session.header.items', 'Items')
-          }
-          icon={ListChecks}
-          badge={{ count: routeBot.needsYou, color: colors.agentQuestion }}
-          onPress={() => openBotPanel({ tab: 'items' })}
-        />
-      ) : null}
-      {sourceControlInBar ? (
-        <MobileSourceControlButton
-          hostId={hostId}
-          worktreeId={worktreeId}
-          active={activePanel === 'sourceControl'}
-          onPress={() => handlePanelTap('sourceControl')}
-        />
-      ) : null}
       <NavBarButton
         ref={moreRef}
-        active={activePanel !== null && !(sourceControlInBar && activePanel === 'sourceControl')}
         accessibilityLabel={t('session.header.moreActions', 'More session actions')}
         icon={MoreHorizontal}
-        onPress={() => setShowHeaderMoreActions(true)}
+        onPress={press(() => setShowHeaderMoreActions(true))}
+      />
+      <MobileSessionTabsButton
+        tabs={tabs}
+        activeTabId={activeSessionTabId}
+        // A bot's Items live in the sidebar; what needs you there rings here too.
+        alsoNeedYou={itemsOnPhone && routeBot ? routeBot.needsYou : 0}
+        active={sidebar.docked && sidebar.open}
+        onPress={press(sidebar.toggle)}
       />
     </>
   )
   return (
     <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
-      <SafeAreaView
-        style={[
-          styles.sessionChrome,
-          topChrome.space && {
-            paddingLeft: topChrome.space.left,
-            paddingRight: topChrome.space.right,
-            minHeight: topChrome.space.minHeight
-          }
-        ]}
-        edges={topChrome.space ? [] : ['top']}
-      >
-        <View
-          // Sideways the row is a different bar, so rotating measures a fresh one.
-          key={tabsInTopBar ? 'tab-row' : 'nav-bar'}
-          ref={details.barRef}
-          style={tabsInTopBar ? styles.sessionTopBar : undefined}
-          onLayout={(event) => {
-            details.onAnchorLayout()
-            const width = event.nativeEvent.layout.width
-            setHeaderWidth((previous) => (previous === width ? previous : width))
-          }}
-        >
-          {tabsInTopBar ? (
-            // NavBar centres its title; sideways, the tabs take the row's spare width instead.
-            <>
-              <View style={barStyles.group}>{leading}</View>
-              {titleBlock}
-              {tabStrip}
-              <View style={barStyles.group}>{trailing}</View>
-            </>
-          ) : (
+      {/* Dragging the bar left opens the sidebar; nothing else in it moves sideways. */}
+      <GestureDetector gesture={sidebar.barDrag} touchAction="pan-y">
+        <View ref={keepsKeyboard}>
+          <SafeAreaView
+            style={[
+              styles.sessionChrome,
+              // A chat is one ground from the top: its header sits on the canvas, with no line under it.
+              nativeChatController.showNativeChat && styles.sessionChromeOnChat,
+              topChrome.space && {
+                paddingLeft: topChrome.space.left,
+                paddingRight: topChrome.space.right,
+                minHeight: topChrome.space.minHeight
+              }
+            ]}
+            edges={topChrome.space ? [] : ['top']}
+          >
             <NavBar
               leading={leading}
-              center={titleBlock}
+              center={title}
               trailing={trailing}
               style={barStyles.inChrome}
             />
-          )}
+            {showRefreshLine ? <NavBarRefreshLine /> : null}
+          </SafeAreaView>
         </View>
-        {tabsInTopBar ? null : tabStrip}
-        {showRefreshLine ? <NavBarRefreshLine /> : null}
-      </SafeAreaView>
-      <MobileSessionHeaderMoreMenu
-        controller={controller}
-        anchorRef={moreRef}
-        actionsCollapsed={actionsCollapsed}
-      />
+      </GestureDetector>
+      <MobileSessionHeaderMoreMenu controller={controller} anchorRef={moreRef} />
     </View>
   )
 }
 
 const barStyles = StyleSheet.create({
-  group: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginHorizontal: spacing.xs
-  },
-  // The session chrome already draws the background and the line under the tabs.
+  // The session chrome already draws the background and the line under the bar.
   inChrome: {
     backgroundColor: 'transparent',
     borderBottomWidth: 0

@@ -17,6 +17,7 @@ import {
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-input/terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-focus/pane-dom-focus-class-sync'
 import { attachDomBlockFill } from './terminal-rendering/terminal-dom-block-fill'
+import { detachHiddenDomRenderer } from './terminal-rendering/terminal-hidden-dom-renderer'
 import {
   attachWebgl,
   cancelPendingWebglRefresh,
@@ -24,7 +25,12 @@ import {
 } from './terminal-rendering/pane-webgl-renderer'
 import { rebuildAttachedWebgl } from './terminal-rendering/pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-rendering/terminal-arabic-shaping-joiner'
-import { TerminalLigaturesAddon } from './terminal-rendering/terminal-ligatures-addon'
+import {
+  getTerminalLigaturesAddonConstructor,
+  primeTerminalLigaturesAddon,
+  rearmTerminalLigaturesAddonLoad,
+  setTerminalLigaturesAddonLoadHandlers
+} from './terminal-rendering/terminal-ligatures-addon-loader'
 import { attachInlineImages, detachInlineImages } from './terminal-rendering/pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-input/terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './terminal-rendering/pane-viewport-present'
@@ -104,6 +110,8 @@ export function openTerminal(
   }
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
+  } else if (pane.webglAttachmentDeferred) {
+    detachHiddenDomRenderer(pane.terminal)
   }
 
   attachPaneFitResizeObserver(pane)
@@ -117,7 +125,23 @@ export function openTerminal(
   })
 }
 
+const panesAwaitingLigaturesAddon = new Set<ManagedPaneInternal>()
+
+setTerminalLigaturesAddonLoadHandlers({
+  onLoaded: () => {
+    for (const pane of panesAwaitingLigaturesAddon) {
+      try {
+        attachLigatures(pane)
+      } catch (err) {
+        panesAwaitingLigaturesAddon.delete(pane)
+        console.warn('[terminal] deferred ligatures attach failed for pane', pane.id, err)
+      }
+    }
+  }
+})
+
 export function disposeLigatures(pane: ManagedPaneInternal): void {
+  panesAwaitingLigaturesAddon.delete(pane)
   if (pane.ligaturesAddon) {
     try {
       pane.ligaturesAddon.dispose()
@@ -130,8 +154,15 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
   if (pane.ligaturesAddon) {
     return
   }
+  const LigaturesAddonConstructor = getTerminalLigaturesAddonConstructor()
+  if (!LigaturesAddonConstructor) {
+    panesAwaitingLigaturesAddon.add(pane)
+    void primeTerminalLigaturesAddon()
+    return
+  }
+  panesAwaitingLigaturesAddon.delete(pane)
   try {
-    const ligaturesAddon = new TerminalLigaturesAddon()
+    const ligaturesAddon = new LigaturesAddonConstructor()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
     // Recompute existing glyph runs when ligatures are enabled after rendering, including Settings toggles.
@@ -148,11 +179,15 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
 
 export function setLigaturesEnabled(pane: ManagedPaneInternal, enabled: boolean): void {
   if (enabled) {
+    rearmTerminalLigaturesAddonLoad()
     attachLigatures(pane)
-  } else if (pane.ligaturesAddon) {
+  } else {
+    const hadLigatures = pane.ligaturesAddon !== null
     disposeLigatures(pane)
-    // Disposed ligatures remain baked into the WebGL atlas; rebuild for immediate non-ligated rendering.
-    rebuildAttachedWebgl(pane)
+    if (hadLigatures) {
+      // Disposed ligatures remain baked into the WebGL atlas; rebuild for immediate non-ligated rendering.
+      rebuildAttachedWebgl(pane)
+    }
   }
 }
 
@@ -205,9 +240,7 @@ export function disposePane(
     // Fit retries own markers/frames independently of split restoration; release both before terminal disposal.
     cancelDeferredScrollRestore(pane.terminal)
   } catch {}
-  try {
-    pane.ligaturesAddon?.dispose()
-  } catch {}
+  disposeLigatures(pane)
   // Detach pending and live image addons before terminal teardown, including their canvases/parser handlers.
   detachInlineImages(pane)
   disposeWebgl(pane)

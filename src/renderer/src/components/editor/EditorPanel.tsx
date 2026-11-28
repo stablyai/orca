@@ -36,6 +36,7 @@ import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { editorPanelFileActions } from './panel/editor-panel-file-actions'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
+import { useEditorPanelReloadFromDisk } from './external-changes/reload-from-disk/useEditorPanelReloadFromDisk'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -130,6 +131,12 @@ function EditorPanelInner({
     openFiles,
     gitStatusEntries,
     editorViewMode,
+    isVisible
+  })
+  const { reloadFromDisk } = useEditorPanelReloadFromDisk({
+    activeFile,
+    fileContents,
+    reloadContent,
     isVisible
   })
   const isChangesMode =
@@ -380,6 +387,7 @@ function EditorPanelInner({
           onSave={handleSave}
           onSaveForFile={handleSaveForFile}
           onReloadContent={reloadContent}
+          onReloadFromDisk={reloadFromDisk}
           onCloseMarkdownTableOfContents={() =>
             setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
           }

@@ -73,7 +73,8 @@ export function fakePorts(overrides: Partial<WslMoveOrchestratorPorts> = {}): Fa
       repoIds: ['r1'],
       folderWorkspaceIds: []
     })),
-    load: () => new Map(),
+    load: () => ({ kind: 'missing' }),
+    listKnownDistros: async () => [],
     save: (records) => {
       saved.clear()
       for (const [key, value] of records) {

@@ -1,5 +1,6 @@
 import { usesLegacyE2EE } from '../runtime/rpc/server/pairing/device-sighting'
 import { app, ipcMain, shell, type IpcMainInvokeEvent } from 'electron'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 import type { RuntimeAccessGrant } from '../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/remote-runtime/pairing/runtime-pairing-reach'
@@ -57,7 +58,8 @@ export type MobileHandlerDependencies = {
 
 export function registerMobileHandlers(
   rpcServer: OrcaRuntimeRpcServer,
-  dependencies: MobileHandlerDependencies = {}
+  dependencies: MobileHandlerDependencies = {},
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const firewallEnvironment = dependencies.firewallEnvironment ?? {
     platform: process.platform,
@@ -67,7 +69,7 @@ export function registerMobileHandlers(
   }
   const getDefaultRouteInterfaceNames =
     dependencies.getDefaultRouteInterfaceNames ?? getWindowsDefaultRouteInterfaceNames
-  ipcMain.handle(
+  ipc.handle(
     'mobile:listNetworkInterfaces',
     async (): Promise<{ interfaces: NetworkInterface[] }> => ({
       interfaces: await getPairingNetworkInterfaces(
@@ -77,7 +79,7 @@ export function registerMobileHandlers(
     })
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'mobile:getPairingQR',
     async (
       _event,
@@ -123,7 +125,7 @@ export function registerMobileHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'mobile:getRuntimePairingUrl',
     async (_event, args?: { address?: string; rotate?: boolean; reach?: RuntimePairingReach }) => {
       const offer = await requestRuntimePairingOffer(
@@ -154,7 +156,7 @@ export function registerMobileHandlers(
     }
   )
 
-  ipcMain.handle('mobile:listDevices', () => {
+  ipc.handle('mobile:listDevices', () => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { devices: [] }
@@ -172,7 +174,7 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:listRuntimeAccessGrants', () => {
+  ipc.handle('mobile:listRuntimeAccessGrants', () => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { grants: [] }
@@ -187,7 +189,7 @@ export function registerMobileHandlers(
     }
   })
 
-  ipcMain.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
+  ipc.handle('mobile:revokeDevice', async (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
@@ -195,7 +197,7 @@ export function registerMobileHandlers(
     return { revoked: await rpcServer.revokeMobileDevice(args.deviceId) }
   })
 
-  ipcMain.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
+  ipc.handle('mobile:revokeRuntimeAccess', (_event, args: { deviceId: string }) => {
     const registry = rpcServer.getDeviceRegistry()
     if (!registry) {
       return { revoked: false }
@@ -203,12 +205,12 @@ export function registerMobileHandlers(
     return { revoked: rpcServer.revokeRuntimeAccess(args.deviceId) }
   })
 
-  ipcMain.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
+  ipc.handle('mobile:getWindowsFirewallStatus', (_event, args?: { address?: string }) => {
     const port = getWebSocketPort(rpcServer.getWebSocketEndpoint())
     return inspectWindowsMobileFirewall(port, args?.address, firewallEnvironment)
   })
 
-  ipcMain.handle('mobile:repairWindowsFirewall', (event: IpcMainInvokeEvent) => {
+  ipc.handle('mobile:repairWindowsFirewall', (event: IpcMainInvokeEvent) => {
     if (!isWindowRenderer(event)) {
       return { ok: false as const, reason: 'unsupported' as const }
     }
@@ -217,7 +219,7 @@ export function registerMobileHandlers(
     return repairWindowsMobileFirewall(port, firewallEnvironment)
   })
 
-  ipcMain.handle('mobile:openWindowsNetworkSettings', async (event: IpcMainInvokeEvent) => {
+  ipc.handle('mobile:openWindowsNetworkSettings', async (event: IpcMainInvokeEvent) => {
     if (!isWindowRenderer(event) || firewallEnvironment.platform !== 'win32') {
       return false
     }
@@ -228,17 +230,19 @@ export function registerMobileHandlers(
     return true
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'mobile:getRelayStatus',
     (): MobileRelayStatusDetail => dependencies.getRelayStatus?.() ?? { status: 'offline' }
   )
 
-  ipcMain.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
-    if (!isWindowRenderer(event)) {
-      return false
-    }
-    return dependencies.consumePendingUnpairedDeviceAuthFailure?.(event.sender.id) ?? false
-  })
+  if (ipc === ipcMain) {
+    ipc.handle('mobile:consumePendingUnpairedDeviceAuthFailure', (event) => {
+      if (!isWindowRenderer(event)) {
+        return false
+      }
+      return dependencies.consumePendingUnpairedDeviceAuthFailure?.(event.sender.id) ?? false
+    })
+  }
 }
 
 function isWindowRenderer(event: IpcMainInvokeEvent): boolean {

@@ -16,7 +16,8 @@ const OPEN_PAGE: Record<(typeof APP_RAIL_DESTINATION_IDS)[number], (s: AppState)
   automations: (s) => s.openAutomationsPage(),
   artifacts: (s) => s.openArtifactsPage(),
   skills: (s) => s.openSkillsPage(),
-  mobile: (s) => s.openMobilePage()
+  mobile: (s) => s.openMobilePage(),
+  plugins: (s) => s.openPluginsPage()
 }
 
 const initial = useAppStore.getState()

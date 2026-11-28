@@ -17,14 +17,11 @@ import { registeredPtyCount } from '../memory/pty-registry'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-realtime-scheduling-guard'
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
-import { handleGpuChildCrash } from './gpu-recovery/gpu-lifecycle'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { mainProcessState as state } from './main-process-state'
-import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
+import { isNativeUpdateInstallUnderWay } from '../updater/updater-service-slot'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
-import { startSpeechModelWarmup } from '../speech/speech-model-warmup'
-import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'
 import {
   composeDesktopCore,
   type DesktopCoreNative
@@ -68,25 +65,61 @@ function startProcessCrashObservers(): void {
     ) {
       const crashedAt = performance.now()
       void state.gpuCrashDiagnostics?.record()
-      void handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
+      void import('./gpu-recovery/gpu-lifecycle')
+        .then(({ handleGpuChildCrash }) =>
+          handleGpuChildCrash(details.reason, details.exitCode ?? null, crashedAt)
+        )
+        .catch((error: unknown) =>
+          console.warn('[gpu] Could not load GPU child crash handler:', error)
+        )
     }
   })
 }
 
 function startThemeAndSpeech(store: Store, fallbackMs: number): void {
-  // Load the dictation model after first paint; coming back to Orca re-warms one the idle timer unloaded.
+  // Load the dictation model after first paint only when voice dictation is enabled.
   runAfterFirstWindowShown(() => {
-    app.on('browser-window-focus', startSpeechModelWarmup(store))
+    let warmupStarted = false
+    const startWarmupOnce = (): void => {
+      if (warmupStarted) {
+        return
+      }
+      const voice = store.getSettings().voice
+      if (!voice?.enabled || !voice.sttModel) {
+        return
+      }
+      warmupStarted = true
+      void import('../speech/speech-model-warmup')
+        .then(({ startSpeechModelWarmup }) => {
+          app.on('browser-window-focus', startSpeechModelWarmup(store))
+        })
+        .catch((error: unknown) => {
+          warmupStarted = false
+          console.warn('[speech] Could not load speech model warmup:', error)
+        })
+    }
+    store.onSettingsChanged((updates) => {
+      if ('voice' in updates) {
+        startWarmupOnce()
+      }
+    })
+    startWarmupOnce()
   }, fallbackMs)
   runAfterFirstWindowShown(() => {
-    startClaudeCodeThemeSync({
-      getSettings: () => store.getSettings(),
-      onSettingsChanged: (listener) => store.onSettingsChanged(listener),
-      systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
-      onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
-      onAppFocused: (listener) => app.on('browser-window-focus', listener),
-      userDataPath: app.getPath('userData')
-    })
+    void import('../claude/theme-sync/claude-code-theme-sync-schedule')
+      .then(({ startClaudeCodeThemeSync }) => {
+        startClaudeCodeThemeSync({
+          getSettings: () => store.getSettings(),
+          onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+          systemPrefersDark: () => nativeTheme.shouldUseDarkColors,
+          onSystemThemeChanged: (listener) => nativeTheme.on('updated', listener),
+          onAppFocused: (listener) => app.on('browser-window-focus', listener),
+          userDataPath: app.getPath('userData')
+        })
+      })
+      .catch((error: unknown) =>
+        console.warn('[claude] Could not load Claude Code theme sync:', error)
+      )
   }, fallbackMs)
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
 }

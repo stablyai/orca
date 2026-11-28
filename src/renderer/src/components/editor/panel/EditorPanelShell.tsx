@@ -13,6 +13,7 @@ import { getUntitledFileRoot } from './untitled-rename/untitled-file-rename-path
 import { useTranslate } from '@/i18n/use-translate'
 import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { EditorReloadUi } from '../external-changes/reload-from-disk/editor-reload-from-disk-feedback'
 import { installMonacoDiffChangeNavigationShortcut } from '../commands/editor-shortcuts'
 import { useDiffNavigation } from '../diff/review/diff-navigation-context'
 
@@ -62,6 +63,7 @@ type EditorPanelShellProps = {
   onSave: (content: string) => Promise<boolean>
   onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   onReloadContent: (file: OpenFile) => void
+  onReloadFromDisk: (ui?: EditorReloadUi) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
@@ -102,6 +104,7 @@ export function EditorPanelShell({
   onSave,
   onSaveForFile,
   onReloadContent,
+  onReloadFromDisk,
   onCloseMarkdownTableOfContents,
   onCloseRenameDialog,
   onRenameConfirm,
@@ -179,6 +182,7 @@ export function EditorPanelShell({
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
           createArtifactRequest={createArtifactRequest}
+          onReloadFromDisk={onReloadFromDisk}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>
