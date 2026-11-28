@@ -213,6 +213,7 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
     }
     ctx.paneSpawnOperation = operation
     ctx.args.paneSpawnOperation = operation
+    ctx.replacedPaneOwner ??= operation.replacedOwner ?? null
     prepared = true
     await adapter.prepare()
     const latePane =

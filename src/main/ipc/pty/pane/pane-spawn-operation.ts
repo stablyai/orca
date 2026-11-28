@@ -4,6 +4,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
 import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PaneSpawnReservation } from './spawn-reservation'
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
 export class PaneOwnerContentionError extends Error {
   constructor() {
@@ -18,6 +19,8 @@ export type AbsentPaneBinding = { ptyId: string; incarnationIds: readonly string
 export type PaneSpawnOperation = {
   mustExist: boolean
   absentOwner?: AbsentPaneBinding
+  /** The dead binding the fresh bind swaps out in one write (layout-owner build). */
+  replacedOwner?: ReplacedPaneOwner
   acquisition?: {
     key: string
     reservation: PaneSpawnReservation

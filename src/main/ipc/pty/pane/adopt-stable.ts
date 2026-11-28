@@ -27,6 +27,7 @@ import {
   type PaneSpawnOperation
 } from './pane-spawn-operation'
 import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
+import type { ReplacedPaneOwner } from './replaced-pane-owner'
 
 /** Owns attachment through publication, including the lazy fresh path, under one reservation. */
 export async function adoptStablePane(
@@ -142,6 +143,14 @@ export async function adoptStablePane(
   }
   let mustExist = false
   let absentOwner: AbsentPaneBinding | undefined
+  // A dead binding kept for swap rides on the fresh operation, whichever spawn takes it.
+  let keptOwner: ReplacedPaneOwner | undefined
+  const keepAbsentBinding = args.keepAbsentBinding
+    ? (dead: ReplacedPaneOwner) => {
+        keptOwner = dead
+        args.keepAbsentBinding?.(dead)
+      }
+    : undefined
   try {
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
@@ -169,7 +178,7 @@ export async function adoptStablePane(
           spawnOptions: { cols: args.cols, rows: args.rows, cwd: args.cwd, signal: args.signal },
           resolveOwner,
           preAllocatedHandle: args.preAllocatedHandle,
-          keepAbsentBinding: args.keepAbsentBinding,
+          keepAbsentBinding,
           attachOnlyView: args.attachOnlyView
         })
         if (adopted) {
@@ -205,6 +214,7 @@ export async function adoptStablePane(
         const operation: PaneSpawnOperation = {
           mustExist,
           ...(absentOwner ? { absentOwner } : {}),
+          ...(keptOwner ? { replacedOwner: keptOwner } : {}),
           acquisition: { key, reservation, settle: (outcome) => settle(outcome, operation) }
         }
         const result = await args.spawnFresh(operation)

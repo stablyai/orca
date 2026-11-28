@@ -1,3 +1,4 @@
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
@@ -100,6 +101,8 @@ export type RuntimePtySpawnState = {
     agentSessionEnsure?: unknown
   }
   stablePaneOwner: StablePaneOwner | null
+  /** A dead pane binding kept for the fresh bind to swap (layout-owner build). */
+  replacedPaneOwner?: ReplacedPaneOwner | null
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null

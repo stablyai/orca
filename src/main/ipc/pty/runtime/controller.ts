@@ -49,11 +49,17 @@ import {
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
 import { observeInProcessWorkerExits } from './in-process-exit-observer'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { keepAbsentBindingForSwap } from '../ipc/spawn-absent-binding-swap'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps
 
   observeInProcessWorkerExits(runtime)
+  // As pty:spawn does: a local start waits out startup and any daemon restart, so it reaches the new daemon.
+  const awaitLocalPtyStartup = async (connectionId: string | null | undefined): Promise<void> => {
+    await deps.getLocalPtyStartupPromise(getConnectionExecutionHostId(connectionId))
+  }
   runtime?.setPtyController({
     claimStablePaneCreate: (args) => {
       const paneKey = makePaneKey(args.tabId, args.leafId)
@@ -61,7 +67,11 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       return ownerKey ? claimRuntimePaneCreate(ownerKey) : () => {}
     },
     adoptStablePane: async (args) => {
-      const adopted = await adoptStablePane(args)
+      await awaitLocalPtyStartup(args.connectionId)
+      const adopted = await adoptStablePane({
+        ...args,
+        keepAbsentBinding: keepAbsentBindingForSwap({ args })
+      })
       if (adopted) {
         await adoptMaterializedRuntimePtySpawn(
           createRuntimePtySpawnState(deps, { ...args, adoptedStablePane: adopted })
@@ -69,7 +79,10 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
       }
       return adopted
     },
-    spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
+    spawn: async (args) => {
+      await awaitLocalPtyStartup(args.connectionId)
+      return spawnPtyFromRuntimeController(deps, args)
+    },
     // Local owner only: an SSH host's gate belongs to that host's own runtime.
     terminalLimit: (update) => localTerminalLimit(localProvider, update),
     getAutomaticWorkStatus: () => getLocalAutomaticWorkStatus(localProvider),
