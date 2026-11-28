@@ -1,7 +1,7 @@
-import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
-import type { NativeChatTurnFoldRow } from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
-import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
+import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatTurnStatus } from './native-chat-turn-status'
+import type { NativeChatTurnFoldRow } from '../folding/native-chat-turn-fold'
+import { nativeChatTurnBarRows } from './native-chat-turn-grouping'
 
 /** A turn bar's status; `continued` marks the bar of a stretch after the person's message mid-turn. */
 export type NativeChatBarStatus = NativeChatTurnStatus & { continued?: true }
