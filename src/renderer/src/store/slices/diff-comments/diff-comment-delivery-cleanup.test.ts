@@ -230,4 +230,55 @@ describe('removing delivered review notes', () => {
     expect(shown(store).map((n) => n.body)).toEqual(['Later sample edit'])
     expect(host.notes.map((n) => n.body)).toEqual(['Later sample edit'])
   })
+
+  // Why: snapshots count their id reads, so a per-note scan of every snapshot (STA-19463) fails the bound.
+  function countedSnapshots(notes: DiffComment[]): {
+    snapshots: DiffComment[]
+    idReads: () => number
+  } {
+    let reads = 0
+    const snapshots = notes.map((n) => {
+      const copy = { ...n }
+      const { id } = copy
+      Object.defineProperty(copy, 'id', {
+        enumerable: true,
+        get: () => {
+          reads += 1
+          return id
+        }
+      })
+      return copy
+    })
+    return { snapshots, idReads: () => reads }
+  }
+
+  it.each([
+    ['the host removes them', false],
+    ['the host keeps them', true]
+  ])(
+    'checks a large send in linear time when %s, sparing a note edited mid-send',
+    async (_, keeps) => {
+      const count = 3000
+      const notes = Array.from({ length: count }, (_, i) => note(`n${i}`))
+      const store = createStore(notes)
+      host.ignoresCleanup = keeps
+      const { snapshots, idReads } = countedSnapshots(notes)
+      // Edited after the send captured its snapshots, before the success report.
+      expect(await store.getState().updateDiffComment(OWNER, 'n1500', 'Edited mid-send')).toBe(true)
+
+      expect(await store.getState().clearDeliveredDiffComments(OWNER, snapshots)).toBe(!keeps)
+
+      expect(idReads()).toBeLessThan(count * 20)
+      const edited = shown(store).find((n) => n.id === 'n1500')
+      expect(edited?.body).toBe('Edited mid-send')
+      expect(edited?.sentAt).toBeUndefined()
+      if (keeps) {
+        expect(shown(store)).toHaveLength(count)
+        expect(shown(store).filter((n) => n.sentAt)).toHaveLength(count - 1)
+      } else {
+        expect(shown(store).map((n) => n.id)).toEqual(['n1500'])
+        expect(host.notes.map((n) => n.body)).toEqual(['Edited mid-send'])
+      }
+    }
+  )
 })

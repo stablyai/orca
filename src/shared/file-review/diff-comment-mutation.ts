@@ -12,7 +12,7 @@ export type DiffCommentBaseMutation = {
 }
 
 export function matchesDeliveredDiffComment(
-  comment: DiffComment,
+  comment: DiffCommentDeliverySnapshot,
   snapshot: DiffCommentDeliverySnapshot
 ): boolean {
   return (
@@ -25,6 +25,23 @@ export function matchesDeliveredDiffComment(
     comment.source === snapshot.source &&
     comment.updatedAt === snapshot.updatedAt
   )
+}
+
+/** Same answer as `revisions.some(r => matchesDeliveredDiffComment(note, r))`, by id lookup so whole-list scans stay linear. */
+export function createDeliveredDiffCommentMatcher(
+  revisions: readonly DiffCommentDeliverySnapshot[]
+): (note: DiffCommentDeliverySnapshot) => boolean {
+  const byId = new Map<string, DiffCommentDeliverySnapshot[]>()
+  for (const revision of revisions) {
+    const bucket = byId.get(revision.id)
+    if (bucket) {
+      bucket.push(revision)
+    } else {
+      byId.set(revision.id, [revision])
+    }
+  }
+  return (note) =>
+    byId.get(note.id)?.some((revision) => matchesDeliveredDiffComment(note, revision)) ?? false
 }
 
 // Why: a writer's list can predate another device's edits, so apply only what it changed since its base.

@@ -4,7 +4,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import {
-  matchesDeliveredDiffComment,
+  createDeliveredDiffCommentMatcher,
   type DiffCommentDeliverySnapshot
 } from '../../../../../shared/file-review/diff-comment-mutation'
 import {
@@ -62,14 +62,12 @@ function markDeliveredDiffCommentsSent(
   snapshots: readonly DiffCommentDeliverySnapshot[]
 ): void {
   const sentAt = Date.now()
+  const isDelivered = createDeliveredDiffCommentMatcher(snapshots)
   const mutation = mutateDiffComments(set, owner, (existing) => {
     let changed = false
     const next = existing.map((note) => {
       // Only the delivered revision: a note edited since keeps its new text sendable.
-      if (
-        note.sentAt ||
-        !snapshots.some((snapshot) => matchesDeliveredDiffComment(note, snapshot))
-      ) {
+      if (note.sentAt || !isDelivered(note)) {
         return note
       }
       changed = true
@@ -189,10 +187,10 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     // Why: some launch paths report one success twice; only unchanged notes not already being removed need the host.
+    const isShownUnchanged = createDeliveredDiffCommentMatcher(shown)
     const pending = comments.filter(
       (snapshot) =>
-        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) &&
-        shown.some((note) => matchesDeliveredDiffComment(note, snapshot))
+        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) && isShownUnchanged(snapshot)
     )
     if (pending.length === 0) {
       return true
