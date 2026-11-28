@@ -71,6 +71,10 @@ export class TerminalShellLifecycleScanner {
     return this.promptPhase.atPrompt && !this.altActive
   }
 
+  get commandActivity(): 'running' | 'idle' | 'unknown' {
+    return this.promptPhase.inCommand ? 'running' : this.isIdleAtPrompt ? 'idle' : 'unknown'
+  }
+
   /** Input was just submitted: no prompt is idle until the next clean cycle. */
   forgetIdlePrompt(): void {
     this.promptPhase.reset()

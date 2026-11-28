@@ -47,6 +47,8 @@ export function useResourceSessionInventory(ready: boolean, active = false, loca
     refreshSessions: cache.refresh,
     clearSessionsError: cache.clearError,
     invalidate: cache.invalidate,
+    hasSession: cache.hasSession,
+    subscribeRemoval: cache.subscribeRemoval,
     removeSession,
     removeSessions
   }

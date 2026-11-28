@@ -24,7 +24,7 @@ export async function terminateResolvedDaemonSession(
   if (resolution.kind !== 'owner') {
     return { outcome: 'refused', reason: 'unverifiable' }
   }
-  if (!resolution.provider.supportsFencedTermination?.(request.id)) {
+  if (!resolution.provider.supportsFencedTermination?.(request.id, request.requireIdle)) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
   return resolution.provider.killFenced?.(request) ?? { outcome: 'refused', reason: 'unsupported' }
@@ -36,6 +36,8 @@ export async function handleDaemonFencedTermination(
     expectedIncarnationId?: string
     requireNoAgentOwner?: boolean
     requireUnattached?: boolean
+    requireIdle?: true
+    idleCheckSinceMs?: number
   },
   deps: {
     host: TerminalHost
@@ -46,16 +48,64 @@ export async function handleDaemonFencedTermination(
   if (!payload.expectedIncarnationId) {
     return { outcome: 'refused', reason: 'unsupported' }
   }
-  const termination = deps.host.beginFencedTermination({
+  const idleGuardStartedAt = payload.requireIdle ? Date.now() : undefined
+  let idleShellPids: ReadonlySet<number> | undefined
+  if (idleGuardStartedAt !== undefined) {
+    try {
+      const boundary = Number.isSafeInteger(payload.idleCheckSinceMs)
+        ? payload.idleCheckSinceMs!
+        : idleGuardStartedAt
+      const inspection = await deps.host.inspectProcess(payload.sessionId, {
+        expectedIncarnationId: payload.expectedIncarnationId,
+        runningWorkSinceMs: boundary,
+        onIdleShellChain: (pids) => {
+          idleShellPids = pids
+        }
+      })
+      const runningWork = inspection.runningWork
+      if (runningWork !== 'idle') {
+        return {
+          outcome: 'refused',
+          reason: runningWork === 'running' ? 'running_work' : 'unverifiable'
+        }
+      }
+      const evidence = inspection.foregroundProcessEvidence
+      if (evidence?.verdict === 'exited') {
+        return { outcome: 'already_exited' }
+      }
+      if (process.platform !== 'win32') {
+        if (evidence?.verdict !== 'live' || evidence.fence.platform !== 'posix' || !idleShellPids) {
+          return { outcome: 'refused', reason: 'unverifiable' }
+        }
+      }
+    } catch {
+      return { outcome: 'refused', reason: 'unverifiable' }
+    }
+  }
+  const request: PtyFencedTerminationRequest = {
     id: payload.sessionId,
     expectedIncarnationId: payload.expectedIncarnationId,
-    requireNoAgentOwner: payload.requireNoAgentOwner === true,
-    requireUnattached: payload.requireUnattached === true
-  })
+    requireNoAgentOwner: payload.requireIdle === true || payload.requireNoAgentOwner === true,
+    requireUnattached: payload.requireUnattached === true,
+    ...(idleGuardStartedAt === undefined
+      ? {}
+      : { requireIdle: true, idleCheckSinceMs: idleGuardStartedAt })
+  }
+  const clearPendingInput = (): void => {
+    deps.preparations.cancel(payload.sessionId)
+    deps.attachments.clearInput(payload.sessionId)
+  }
+  const termination = idleShellPids
+    ? deps.host.beginFencedTermination(request, {
+        shellPids: idleShellPids,
+        onCommitting: clearPendingInput
+      })
+    : deps.host.beginFencedTermination(request)
   if (!termination.accepted) {
     return termination.result
   }
-  deps.preparations.cancel(payload.sessionId)
-  deps.attachments.clearInput(payload.sessionId)
+  if (!idleShellPids) {
+    clearPendingInput()
+  }
   return termination.completion
 }

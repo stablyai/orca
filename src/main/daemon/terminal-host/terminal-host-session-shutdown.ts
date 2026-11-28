@@ -89,7 +89,7 @@ async function disposeTerminalHostSessions(
 }
 
 export async function shutdownTerminalHostSessions(
-  sessions: Map<string, Session>,
+  sessions: ReadonlyMap<string, Session>,
   onFinalCheckpoint?: (
     sessionId: string,
     snapshot: TerminalSnapshot,
@@ -99,5 +99,4 @@ export async function shutdownTerminalHostSessions(
 ): Promise<void> {
   checkpointTerminalHostSessions(sessions, onFinalCheckpoint)
   await disposeTerminalHostSessions(sessions.values(), isAlreadyTracked)
-  sessions.clear()
 }

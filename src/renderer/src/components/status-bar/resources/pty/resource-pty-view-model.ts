@@ -12,8 +12,11 @@ import {
 import { projectGroupIdFromRepoId } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makePaneKey,
-  isTerminalLeafId
+  isTerminalLeafId,
+  parsePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { findRegisteredTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { getTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { recentStamp } from '../../../../../../shared/sidebar-list/sorting/stamp-order'
 import {
   buildResourceSessionBindingIndex,
@@ -28,29 +31,61 @@ export type ResourcePtyRow = {
   session: PtyListedSession
   identity: string
   label: string
+  usesRuntimeTitle: boolean
   sortName: string
   lastActivityAt: number
   workspace: string | null
-  projectId: string
   project: string | null
   workspaceId: string | null
+  workspacePath: string | null
   tabId: string | null
   paneKey: string | null
   binding: 'bound' | 'unbound' | 'pending'
 }
 
+/** One line in the PTYs tab: every PTY without a tab, or one workspace's PTYs. */
 export type ResourcePtyGroup = {
-  id: string
+  key: string
+  kind: 'unbound' | 'workspace'
   name: string | null
-  sortName: string
-  lastActivityAt: number
-  workspaces: {
-    id: string
-    name: string | null
-    sortName: string
-    lastActivityAt: number
-    rows: ResourcePtyRow[]
-  }[]
+  rows: ResourcePtyRow[]
+}
+
+export function resourcePtyProcessBaseName(process: string | undefined): string {
+  return (
+    process
+      ?.trim()
+      .split(/[\\/]/)
+      .pop()
+      ?.toLowerCase()
+      .replace(/\.exe$/, '') ?? ''
+  )
+}
+
+export function resourcePtyRowLabel(
+  row: ResourcePtyRow,
+  runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
+  liveTabs: ResourceSessionBindingInputs['tabsByWorktree'],
+  layouts: ResourceSessionBindingInputs['terminalLayoutsByTabId']
+): string {
+  if (!row.usesRuntimeTitle || !row.tabId) {
+    return row.label
+  }
+  const leafId = row.paneKey ? parsePaneKey(row.paneKey)?.leafId : undefined
+  if (leafId) {
+    const mounted = findRegisteredTerminalTab(row.tabId, row.workspaceId ?? undefined)?.tab
+    const paneId = mounted?.getManager()?.getNumericIdForLeaf(leafId)
+    const title =
+      paneId != null && mounted?.getPtyIdForPane(paneId) === row.session.id
+        ? runtimePaneTitlesByTabId[row.tabId]?.[paneId]
+        : undefined
+    const paneTitle = title?.trim() || layouts?.[row.tabId]?.titlesByLeafId?.[leafId]?.trim()
+    if (paneTitle) {
+      return paneTitle
+    }
+  }
+  const tab = getTerminalTab(liveTabs, row.tabId)
+  return tab?.defaultTitle?.trim() || tab?.title?.trim() || row.label
 }
 
 export function buildResourcePtyRows(args: {
@@ -59,7 +94,6 @@ export function buildResourcePtyRows(args: {
   worktrees: readonly Worktree[]
   repos: readonly Repo[]
   projectGroups: readonly ProjectGroup[]
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>
 }): ResourcePtyRow[] {
   const repoById = new Map(args.repos.map((repo) => [repo.id, repo]))
   const localRepos = new Map(
@@ -162,16 +196,17 @@ export function buildResourcePtyRows(args: {
     const label =
       !tabId && session.title.trim()
         ? session.title.trim()
-        : resolveDaemonSessionLabel(session, workspaceId, tabId, args, bindings)
+        : resolveDaemonSessionLabel(session, workspaceId, tabId, NO_RUNTIME_TITLES, bindings)
     return {
       session,
       identity: ptySessionIdentity(session),
       label,
+      usesRuntimeTitle: !!tab && !tab.customTitle?.trim(),
       sortName: tab?.customTitle?.trim() || tab?.defaultTitle?.trim() || session.id,
       lastActivityAt: recentStamp(workspace ?? {}),
       workspace: workspaceName,
       workspaceId: workspace?.id ?? null,
-      projectId: project ? (workspace?.repoId ?? '') : '',
+      workspacePath: workspace?.path ?? null,
       project: project ?? null,
       tabId,
       paneKey: tabId ? (paneKeys.get(session.id) ?? null) : null,
@@ -185,61 +220,84 @@ export function buildResourcePtyRows(args: {
   })
 }
 
+const NO_RUNTIME_TITLES = { runtimePaneTitlesByTabId: {} }
+
+export const UNBOUND_RESOURCE_PTY_GROUP_KEY = 'unbound'
+
 export function groupResourcePtyRows(rows: readonly ResourcePtyRow[]): ResourcePtyGroup[] {
-  const projects = new Map<
+  const unbound: ResourcePtyGroup = {
+    key: UNBOUND_RESOURCE_PTY_GROUP_KEY,
+    kind: 'unbound',
+    name: null,
+    rows: []
+  }
+  const workspaces = new Map<
     string,
-    { group: ResourcePtyGroup; workspaces: Map<string, ResourcePtyGroup['workspaces'][number]> }
+    ResourcePtyGroup & { sortName: string; lastActivityAt: number; id: string }
   >()
   for (const row of rows) {
-    let project = projects.get(row.projectId)
-    if (!project) {
-      project = {
-        group: {
-          id: row.projectId,
-          name: row.project,
-          sortName: row.project?.trim().toLocaleLowerCase() ?? '\uffff',
-          lastActivityAt: 0,
-          workspaces: []
-        },
-        workspaces: new Map()
-      }
-      projects.set(row.projectId, project)
+    if (row.binding === 'unbound') {
+      unbound.rows.push(row)
+      continue
     }
-    const workspaceId = row.workspaceId ?? ''
-    let workspace = project.workspaces.get(workspaceId)
+    const id = row.workspaceId ?? ''
+    let workspace = workspaces.get(id)
     if (!workspace) {
       workspace = {
-        id: workspaceId,
+        key: `workspace:${id}`,
+        kind: 'workspace',
+        id,
         name: row.workspace,
         sortName: row.workspace?.trim().toLocaleLowerCase() ?? '\uffff',
         lastActivityAt: 0,
         rows: []
       }
-      project.workspaces.set(workspaceId, workspace)
-      project.group.workspaces.push(workspace)
+      workspaces.set(id, workspace)
     }
     workspace.rows.push(row)
     workspace.lastActivityAt = Math.max(workspace.lastActivityAt, row.lastActivityAt)
-    project.group.lastActivityAt = Math.max(project.group.lastActivityAt, row.lastActivityAt)
   }
-  const groups = [...projects.values()].map(({ group }) => group)
-  for (const group of groups) {
-    group.workspaces.sort(
-      (a, b) =>
-        b.lastActivityAt - a.lastActivityAt ||
-        a.sortName.localeCompare(b.sortName) ||
-        a.id.localeCompare(b.id)
-    )
-    for (const workspace of group.workspaces) {
-      workspace.rows.sort(
-        (a, b) => a.sortName.localeCompare(b.sortName) || a.session.id.localeCompare(b.session.id)
-      )
-    }
-  }
-  return groups.sort(
+  const byName = (a: ResourcePtyRow, b: ResourcePtyRow): number =>
+    a.sortName.localeCompare(b.sortName) || a.session.id.localeCompare(b.session.id)
+  const groups: ResourcePtyGroup[] = [...workspaces.values()].sort(
     (a, b) =>
       b.lastActivityAt - a.lastActivityAt ||
       a.sortName.localeCompare(b.sortName) ||
       a.id.localeCompare(b.id)
   )
+  for (const group of groups) {
+    group.rows.sort(byName)
+  }
+  const nameCounts = new Map<string, number>()
+  const projectNameCounts = new Map<string, number>()
+  for (const group of groups) {
+    if (group.name) {
+      nameCounts.set(group.name, (nameCounts.get(group.name) ?? 0) + 1)
+      const projectName = workspaceProjectName(group)
+      if (projectName) {
+        projectNameCounts.set(projectName, (projectNameCounts.get(projectName) ?? 0) + 1)
+      }
+    }
+  }
+  for (const group of groups) {
+    if (group.name && (nameCounts.get(group.name) ?? 0) > 1) {
+      const projectName = workspaceProjectName(group)
+      if (projectName && projectNameCounts.get(projectName) === 1) {
+        group.name = projectName
+      } else if (group.rows[0]?.workspacePath) {
+        group.name = `${group.name} · ${group.rows[0].workspacePath}`
+      }
+    }
+  }
+  if (unbound.rows.length > 0) {
+    unbound.rows.sort(byName)
+    // Why first: PTYs no tab owns are the cleanup target, so they stay one click away.
+    groups.unshift(unbound)
+  }
+  return groups
+}
+
+function workspaceProjectName(group: ResourcePtyGroup): string | null {
+  const project = group.rows[0]?.project
+  return project ? `${group.name} · ${project}` : null
 }

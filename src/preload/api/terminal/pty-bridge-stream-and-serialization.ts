@@ -16,12 +16,16 @@ export const ptyStreamAndSerializationApi = {
     options?: {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
+      runningWorkSinceMs?: number
+      runningWorkCheckId?: string
       steadyState?: boolean
       jobMembershipOnly?: boolean
       foregroundOnly?: boolean
     }
   ): Promise<TerminalProcessInspection> =>
     ipcRenderer.invoke('pty:inspectProcess', { id, ...options }),
+  cancelRunningWorkCheck: (checkId: string): void =>
+    ipcRenderer.send('pty:cancelRunningWorkCheck', checkId),
   confirmForegroundProcess: (id: string): Promise<string | null> =>
     ipcRenderer.invoke('pty:confirmForegroundProcess', { id }),
   isCodexOnSharedServer: (id: string): Promise<CodexSharedServerStatus> =>

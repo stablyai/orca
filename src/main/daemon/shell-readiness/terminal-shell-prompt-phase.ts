@@ -11,6 +11,10 @@ export class TerminalShellPromptPhase {
     return this.phase === 'prompt'
   }
 
+  get inCommand(): boolean {
+    return this.phase === 'command'
+  }
+
   reset(): void {
     this.phase = 'unknown'
     this.nestedZones = 0

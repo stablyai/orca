@@ -1,8 +1,10 @@
 import { win32 as pathWin32 } from 'node:path'
-import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type {
+  HostProcessInspection,
+  PtyChildProcessVerdict
+} from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-observation/tables/process-table-snapshot-reader'
 import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
@@ -20,7 +22,10 @@ import {
   readProvenIdleShell,
   rememberIdleShellProof
 } from './terminal-host-idle-shell-proof'
-import { steadyPollJudgesByJobMembership } from '../../providers/pty/process-inspection'
+import {
+  steadyPollJudgesByJobMembership,
+  type PtyProcessInspectionOptions
+} from '../../providers/pty/process-inspection'
 
 const WINDOWS_FOREGROUND_REFRESH_SETTLE_MS = 1_000
 /** Longer than a cached census can lag: its 500 ms reuse window plus a slow scan. */
@@ -32,15 +37,10 @@ function mayBeGitBashLauncher(session: Session): boolean {
   return MAY_BE_GIT_BASH_LAUNCHER.test(pathWin32.normalize(session.shellPath ?? ''))
 }
 
-export type TerminalHostProcessInspection = {
-  foregroundObservation?: TerminalForegroundObservation
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  childProcessEvidence?: PtyChildProcessVerdict
-  foregroundProcessEvidence?: RemoteForegroundEvidence
-  foregroundExitWatched?: true
-  /** This read proved the shell alone in front with nothing running; only then may the pane stop re-checking. */
-  idleShellProven?: true
+export type TerminalHostProcessInspection = HostProcessInspection
+export type TerminalHostProcessInspectionOptions = PtyProcessInspectionOptions & {
+  /** Retain the inspected launch chain for an automatic teardown's final fence. */
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
 }
 
 export type RetiredIncarnation = { incarnationId: string; code: number; expiresAt: number }
@@ -54,6 +54,9 @@ export async function inspectTerminalHostProcess(args: {
   currentSession?: () => Session | undefined
   expectedIncarnationId?: string
   foregroundOnly?: boolean
+  runningWorkSinceMs?: number
+  signal?: AbortSignal
+  onIdleShellChain?: (pids: ReadonlySet<number>) => void
   /** The caller is a self-correcting poll that only reads the process name, never evidence. */
   steadyState?: boolean
   /** A steady poll from a pane tracking no agent; a proven idle macOS shell answers from its group. */
@@ -64,6 +67,7 @@ export async function inspectTerminalHostProcess(args: {
   nextObservationEpoch: () => number
   onTier?: (tier: TerminalHostInspectionTier) => void
 }): Promise<TerminalHostProcessInspection> {
+  args.signal?.throwIfAborted()
   const { sessionId, session, expectedIncarnationId, retiredIncarnation } = args
   if (!session || !session.isAlive) {
     if (
@@ -144,7 +148,9 @@ export async function inspectTerminalHostProcess(args: {
 
   const windowsDecision = process.platform === 'win32' && args.steadyState !== true
   let foregroundProcess = windowsDecision ? null : session.getForegroundProcess()
-  let childProcessEvidence: PtyChildProcessVerdict | undefined = session.processNameIsSpawnFile
+  const decidingRunningWork = args.runningWorkSinceMs !== undefined
+  const scanChildProcesses = session.processNameIsSpawnFile || decidingRunningWork
+  let childProcessEvidence: PtyChildProcessVerdict | undefined = scanChildProcesses
     ? 'unverifiable'
     : undefined
   let evidence: RemoteForegroundEvidence
@@ -152,58 +158,75 @@ export async function inspectTerminalHostProcess(args: {
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else if (process.platform === 'win32') {
-    const activity = paneActivity(session)
-    const readStartedAt = Date.now()
-    if (windowsDecision || session.processNameIsSpawnFile) {
-      foregroundProcess = await session.confirmForegroundProcess(
-        windowsDecision ? { decision: true } : undefined
-      )
+    if (decidingRunningWork) {
+      // A job can miss guest work and the children of packaged shells.
+      if (!session.wslDistro && !/(?:^|[\\/])WindowsApps[\\/]/i.test(session.shellPath ?? '')) {
+        childProcessEvidence = await session.inspectChildProcesses(
+          true,
+          args.ignoreDetached === true,
+          false,
+          args.runningWorkSinceMs,
+          args.signal
+        )
+      }
     } else {
-      // The name lookup runs after the shell name is returned; an event read must carry its result,
-      // because nothing re-reads once it lands.
-      await session.settleForegroundRefresh(WINDOWS_FOREGROUND_REFRESH_SETTLE_MS)
-      foregroundProcess = session.getForegroundProcess()
+      const activity = paneActivity(session)
+      const readStartedAt = Date.now()
+      if (windowsDecision || session.processNameIsSpawnFile) {
+        foregroundProcess = await session.confirmForegroundProcess(
+          windowsDecision ? { decision: true } : undefined
+        )
+      } else {
+        // The name lookup runs after the shell name is returned; an event read must carry its result,
+        // because nothing re-reads once it lands.
+        await session.settleForegroundRefresh(WINDOWS_FOREGROUND_REFRESH_SETTLE_MS)
+        foregroundProcess = session.getForegroundProcess()
+      }
+      // Recent input, output or queued startup input already rules the proof out, so a census could not change the answer.
+      const proofEligible =
+        !session.startupInputQueued() &&
+        readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
+      // A steady-state poll never decides adoption or close, so it may read the cached process table.
+      childProcessEvidence = await session.inspectChildProcesses(
+        args.steadyState !== true,
+        args.ignoreDetached === true,
+        // A pane the proof refuses (wsl.exe, a command, Git Bash, a busy shell) keeps main's job-only read.
+        steadyPollJudgesByJobMembership(args, foregroundProcess) ||
+          (args.jobMembershipOnly === true &&
+            !(
+              foregroundProcess !== null &&
+              isShellProcess(foregroundProcess) &&
+              !mayBeGitBashLauncher(session) &&
+              proofEligible
+            ))
+      )
+      // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
+      // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.
+      idleShellProven =
+        childProcessEvidence === 'no-children' &&
+        foregroundProcess !== null &&
+        isShellProcess(foregroundProcess) &&
+        // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
+        !mayBeGitBashLauncher(session) &&
+        proofEligible &&
+        !session.startupInputQueued() &&
+        paneActivity(session) === activity
     }
-    // Recent input, output or queued startup input already rules the proof out, so a census could not change the answer.
-    const proofEligible =
-      !session.startupInputQueued() &&
-      readStartedAt - session.lastActivityAt > WINDOWS_IDLE_PROOF_QUIET_MS
-    // A steady-state poll never decides adoption or close, so it may read the cached process table.
-    childProcessEvidence = await session.inspectChildProcesses(
-      args.steadyState !== true,
-      args.ignoreDetached === true,
-      // A pane the proof refuses (wsl.exe, a command, Git Bash, a busy shell) keeps main's job-only read.
-      steadyPollJudgesByJobMembership(args, foregroundProcess) ||
-        (args.jobMembershipOnly === true &&
-          !(
-            foregroundProcess !== null &&
-            isShellProcess(foregroundProcess) &&
-            !mayBeGitBashLauncher(session) &&
-            proofEligible
-          ))
-    )
-    // A full census (escaped children included) is the only Windows proof; wsl.exe cannot prove its guest idle.
-    // A cached census may predate recent input or output, so prove only a pane quiet since before it could start.
-    idleShellProven =
-      childProcessEvidence === 'no-children' &&
-      foregroundProcess !== null &&
-      isShellProcess(foregroundProcess) &&
-      // The Git Bash launcher's census accepts any bash chain, so a nested bash at work reads as idle there.
-      !mayBeGitBashLauncher(session) &&
-      proofEligible &&
-      !session.startupInputQueued() &&
-      paneActivity(session) === activity
     // Windows cannot provide this POSIX evidence; avoid spawning an MSYS ps.exe console.
     evidence = unverifiableEvidence(args, session, 'windows_ssh_foreground_unavailable')
   } else {
     try {
       const activity = paneActivity(session)
-      const snapshot = await getStrictProcessTableSnapshotWithAge()
+      const snapshot = await getStrictProcessTableSnapshotWithAge(
+        args.runningWorkSinceMs,
+        args.signal
+      )
       // A shared capture that started before the pane's latest input or output may predate a child it started.
       const capturedAfterActivity =
         Date.now() - snapshot.capturedAgeMs > session.lastActivityAt &&
         !session.startupInputQueued()
       idleShellProven =
+        !decidingRunningWork &&
         !session.processNameIsSpawnFile &&
         rememberIdleShellProof(
           session,
@@ -212,13 +235,19 @@ export async function inspectTerminalHostProcess(args: {
           activity,
           capturedAfterActivity
         )
-      if (session.processNameIsSpawnFile) {
+      if (scanChildProcesses) {
         const observed = resolveSpawnFileForegroundFromRows(snapshot.rows, session.pid)
         foregroundProcess = observed.available ? observed.processName : foregroundProcess
         childProcessEvidence = inspectSpawnFileChildProcessesFromRows(
           snapshot.rows,
           session.pid,
-          session.getForegroundProcess({ rawFallback: true })
+          session.getForegroundProcess({ rawFallback: true }),
+          decidingRunningWork
+            ? {
+                shellIsRootChild: session.shellIsRootChild,
+                onIdleShellChain: args.onIdleShellChain
+              }
+            : undefined
         )
         if (observed.available && observed.processName && !isShellProcess(observed.processName)) {
           childProcessEvidence = 'children'
@@ -236,10 +265,12 @@ export async function inspectTerminalHostProcess(args: {
         },
         snapshot.rows
       )
-      await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
-      // Output or input after the capture may be a command the capture predates.
+      if (!args.signal?.aborted) {
+        await rememberSteadyStateAnchor(session, evidence, snapshot.rows)
+      }
       idleShellProven &&= paneActivity(session) === activity
     } catch {
+      args.signal?.throwIfAborted()
       idleShellProven = false
       evidence = unverifiableEvidence(args, session, 'process_table_unreadable')
       clearSteadyStateAnchor(session)

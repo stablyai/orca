@@ -26,6 +26,7 @@ export type PtyListedSession = {
   /** Whether this candidate is the established route for its id; absent on older publishers. */
   routed?: boolean
   fencedTermination?: boolean
+  idleFencedTermination?: boolean
   rootProcessId?: number
   /** Recently observed process name; inventory reads never initiate process inspection. */
   foregroundProcess?: string

@@ -73,6 +73,16 @@ export class TerminalShellRecoveryBarrier {
     return this.scanner.owner
   }
 
+  get commandActivity(): TerminalShellLifecycleScanner['commandActivity'] {
+    return this.pending ? 'unknown' : this.scanner.commandActivity
+  }
+
+  forgetIdlePromptOnInput(): void {
+    if (this.scanner.isIdleAtPrompt) {
+      this.scanner.forgetIdlePrompt()
+    }
+  }
+
   /** Return a local ground without broadcasting; relay credit and snapshot dedup drop zero-raw resets. */
   groundInputModes(): string {
     return this.scanner.groundProcessBoundary()

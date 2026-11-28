@@ -20,4 +20,24 @@ describe('SessionTerminationController producer pause', () => {
     expect(controller.isTerminating).toBe(true)
     expect(controller.streamPauseAnswer(true)).toBe(true)
   })
+  it('lets the producer pause again when a guarded teardown is cancelled before force-kill', () => {
+    const reasons: string[] = []
+    const controller = new SessionTerminationController({
+      sessionId: 'shell',
+      subprocess: {
+        kill: () => {},
+        forceKill: () => Promise.resolve(),
+        signal: () => {},
+        dispose: () => {}
+      },
+      isExited: () => false,
+      releaseProducerPause: ({ reason }) => reasons.push(reason)
+    })
+    expect(controller.beginTermination()).toBe(true)
+    expect(controller.streamPauseAnswer(true)).toBe('terminating')
+    controller.cancelTermination()
+    expect(reasons).toEqual(['terminating', 'released'])
+    expect(controller.isTerminating).toBe(false)
+    expect(controller.streamPauseAnswer(true)).toBe(true)
+  })
 })

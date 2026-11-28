@@ -32,7 +32,11 @@ export async function isWindowsShellAloneInJob(
   if (!isLauncher && !readConsoleAttachedProcessIds) {
     return false
   }
-  const rows = (await readIdentityTable()).filter((row) => jobProcessIds.has(row.pid))
+  const index = getProcessTableIndex(await readIdentityTable())
+  const rows = [...jobProcessIds].flatMap((pid) => {
+    const row = index.byPid.get(pid)
+    return row ? [row] : []
+  })
   // A member missing from the table exited or was never readable: no proof either way.
   if (rows.length !== jobProcessIds.size) {
     return false
@@ -44,16 +48,18 @@ export async function isWindowsShellAloneInJob(
   if (!isLauncher) {
     return false
   }
-  const startMsByPid = new Map(members.map((row) => [row.pid, row.creationTimeMs]))
+  const memberIndex = buildProcessTableIndex(members)
   const visited = new Set([shellPid])
   let parentPid = shellPid
   while (visited.size < members.length) {
-    const children = members.filter((row) => row.ppid === parentPid && !visited.has(row.pid))
+    const children = (memberIndex.childrenByPpid.get(parentPid) ?? []).filter(
+      (row) => !visited.has(row.pid)
+    )
     const child = children[0]
     if (
       children.length !== 1 ||
       child.name.toLowerCase() !== MSYS_BASH_IMAGE ||
-      startedBefore(child.creationTimeMs, startMsByPid.get(parentPid))
+      startedBefore(child.creationTimeMs, memberIndex.byPid.get(parentPid)?.creationTimeMs)
     ) {
       return false
     }

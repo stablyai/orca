@@ -25,24 +25,35 @@ export function assertWholeCapture(stdout: string): string {
  * `onArgvReadAt` learns when the oldest recovered argv in it was read. */
 export async function captureProcessTable(
   args: readonly string[],
-  timeout = PS_TIMEOUT_MS,
-  ps = false,
-  background = false,
-  onArgvReadAt?: (monotonicMs: number) => void
+  {
+    timeoutMs = PS_TIMEOUT_MS,
+    subprocess = false,
+    background = false,
+    onArgvReadAt,
+    freshArgv
+  }: {
+    timeoutMs?: number
+    subprocess?: boolean
+    background?: boolean
+    onArgvReadAt?: (monotonicMs: number) => void
+    freshArgv?: boolean
+  } = {}
 ) {
   const env = psLocaleEnvironment()
-  const options = { timeoutMs: timeout, maxOutputBytes: PS_MAX_BUFFER_BYTES, background }
-  let stdout = ps ? null : await readPsStdoutInProcess(args, { env, ...options, onArgvReadAt })
+  const options = { timeoutMs, maxOutputBytes: PS_MAX_BUFFER_BYTES, background }
+  let stdout = subprocess
+    ? null
+    : await readPsStdoutInProcess(args, { env, ...options, onArgvReadAt, freshArgv })
   try {
     // A forced subprocess capture (held naming pass) shares the fork budget; elsewhere ps is the only reader.
     stdout ??=
-      ps && process.platform === 'darwin'
+      subprocess && process.platform === 'darwin'
         ? await readPsStdoutBudgeted(args, { env: env ?? process.env, ...options })
         : (
             await execFile('ps', [...args], {
               encoding: 'utf-8',
               env,
-              timeout,
+              timeout: timeoutMs,
               maxBuffer: PS_MAX_BUFFER_BYTES
             })
           ).stdout

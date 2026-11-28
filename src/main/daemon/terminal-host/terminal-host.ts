@@ -1,20 +1,25 @@
 import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
-import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
+import {
+  beginTerminalHostFencedTermination,
+  type FencedPosixIdleEvidence
+} from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot, TerminalSnapshotReadOptions } from '../protocol/terminal-snapshot'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
 import type { TerminalHostOptions } from './terminal-host-options'
 import { recordTerminalHostSessionExit } from './terminal-host-session-exit'
-import { disposeTerminalHostSessions, killLiveSessionGroupsSync } from './terminal-host-disposal'
+import {
+  createRetryableTerminalHostDisposal,
+  killLiveSessionGroupsSync
+} from './terminal-host-disposal'
 import { getAliveTerminalHostSession } from './terminal-host-session-access'
 import { writeSessionInput } from '../sessions/session-input-path'
-import { TerminalSessionTeardown } from './terminal-session-teardown'
+import { TerminalSessionTeardown, type TerminalKillOptions } from './terminal-session-teardown'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
 import {
   createOrAttachClaimedAgentSession,
@@ -31,7 +36,10 @@ import {
 import { createOrAttachTerminalSession } from './terminal-host-session-create'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
 import { randomUUID } from 'node:crypto'
-import type { TerminalHostProcessInspection } from './terminal-host-process-inspection'
+import type {
+  TerminalHostProcessInspection,
+  TerminalHostProcessInspectionOptions
+} from './terminal-host-process-inspection'
 import { inspectTerminalHostSession } from './terminal-host-session-inspection'
 import { createForegroundExitWatches } from './foreground-agent-identity-check'
 
@@ -66,7 +74,13 @@ export class TerminalHost {
   private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private creationFenced = false
-  private disposePromise: Promise<void> | null = null
+  private readonly disposeSessions = createRetryableTerminalHostDisposal(() => ({
+    pendingCreations: this.pendingCreations,
+    sessionTeardown: this.sessionTeardown,
+    sessions: this.sessions,
+    onFinalCheckpoint: this.onFinalCheckpoint,
+    killedTombstones: this.killedTombstones
+  }))
   private readonly agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
   private readonly agentSessionGenerations = new TerminalHostAgentSessionGenerations()
   private readonly authorityGeneration = randomUUID()
@@ -177,18 +191,20 @@ export class TerminalHost {
     resumeSessionProducer(this.sessions, sessionId, source)
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
-    return this.sessionTeardown.kill(sessionId, opts.immediate === true, () =>
-      this.killedTombstones.record(sessionId)
-    )
+  kill(sessionId: string, opts: TerminalKillOptions = {}): Promise<void> {
+    return this.sessionTeardown.kill(sessionId, opts, this.killedTombstones)
   }
 
-  beginFencedTermination(request: PtyFencedTerminationRequest) {
+  beginFencedTermination(
+    request: PtyFencedTerminationRequest,
+    idleEvidence?: FencedPosixIdleEvidence
+  ) {
     return beginTerminalHostFencedTermination(request, {
       sessions: this.sessions,
       pendingCreations: this.pendingCreations,
       owners: this.agentSessionOwners,
-      kill: (id, options) => this.kill(id, options)
+      kill: (id, options) => this.kill(id, options),
+      idleEvidence
     })
   }
 
@@ -236,15 +252,12 @@ export class TerminalHost {
   // A vanished pane has no agent icon to display.
   getForegroundProcess(sessionId: string): string | null {
     const session = this.sessions.get(sessionId)
-    if (!session || !session.isAlive) {
-      return null
-    }
-    return session.getForegroundProcess()
+    return session?.isAlive ? session.getForegroundProcess() : null
   }
 
   inspectProcess(
     sessionId: string,
-    options?: PtyProcessInspectionOptions
+    options?: TerminalHostProcessInspectionOptions
   ): Promise<TerminalHostProcessInspection> {
     return inspectTerminalHostSession(
       this.sessions,
@@ -253,7 +266,8 @@ export class TerminalHost {
       options,
       this.authorityGeneration,
       () => ++this.observationEpoch,
-      this.foregroundExitWatches
+      this.foregroundExitWatches,
+      this.agentSessionOwners
     )
   }
 
@@ -328,23 +342,6 @@ export class TerminalHost {
   dispose(): Promise<void> {
     this.creationFenced = true
     this.foregroundExitWatches.dispose()
-    if (this.disposePromise) {
-      return this.disposePromise
-    }
-    const disposePromise = disposeTerminalHostSessions({
-      pendingCreations: this.pendingCreations,
-      sessionTeardown: this.sessionTeardown,
-      sessions: this.sessions,
-      onFinalCheckpoint: this.onFinalCheckpoint,
-      killedTombstones: this.killedTombstones
-    })
-    this.disposePromise = disposePromise
-    void disposePromise.catch(() => {
-      // Keep failed native owners retryable on the next shutdown request.
-      if (this.disposePromise === disposePromise) {
-        this.disposePromise = null
-      }
-    })
-    return disposePromise
+    return this.disposeSessions()
   }
 }

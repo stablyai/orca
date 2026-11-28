@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import type { WindowsJobObjectApi } from './windows-job-object'
-import { createProcessTableSnapshotReader } from '../../shared/process-observation/tables/process-table-snapshot-reader'
+import {
+  createProcessTableSnapshotReader,
+  readProcessSnapshot
+} from '../../shared/process-observation/tables/process-snapshot-cache'
 import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { reportWindowsCommandLineRecoveryHealth } from './windows-command-line-recovery-health'
 import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
@@ -272,40 +275,37 @@ const detailedReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
 })
 
 /** Without a binding, project identity from the shared CIM scan and strip command lines to preserve the row contract. */
-async function readIdentityRows(fresh: boolean): Promise<WindowsProcessIdentityRow[]> {
-  // Reuse a cached or in-flight detailed scan (a foreground lookup's): it already holds identity.
+async function readIdentityRows(
+  fresh: boolean,
+  afterMs?: number,
+  signal?: AbortSignal
+): Promise<WindowsProcessIdentityRow[]> {
   const detailed =
     moduleLoader() === null
-      ? fresh
-        ? detailedReader.getFreshSnapshot()
-        : detailedReader.getSnapshot()
+      ? readProcessSnapshot(detailedReader, fresh, afterMs, signal)
       : fresh
         ? null
         : detailedReader.peekSnapshot()
-  if (!detailed) {
-    return fresh ? identityReader.getFreshSnapshot() : identityReader.getSnapshot()
-  }
-  return projectIdentityRows(await detailed)
+  return detailed
+    ? projectIdentityRows(await detailed)
+    : readProcessSnapshot(identityReader, fresh, afterMs, signal)
 }
 
 /** Cached command-line snapshot, refreshed on the shared TTL. */
-export function readWindowsProcessTable(): Promise<WindowsProcessRow[]> {
-  return detailedReader.getSnapshot()
-}
+export const readWindowsProcessTable = detailedReader.getSnapshot
 
 /** Fresh teardown evidence must start after this call; cached rows may predate exit. */
-export function readWindowsProcessTableFresh(): Promise<WindowsProcessRow[]> {
-  return detailedReader.getFreshSnapshot()
-}
+export const readWindowsProcessTableFresh = detailedReader.getFreshSnapshot
 
 /** Cached identity; prefer it when no command line is needed. */
-export function readWindowsProcessIdentityTable(): Promise<WindowsProcessIdentityRow[]> {
-  return readIdentityRows(false)
-}
+export const readWindowsProcessIdentityTable = () => readIdentityRows(false)
 
 /** The identity snapshot, from a scan that starts after this call. */
-export function readWindowsProcessIdentityTableFresh(): Promise<WindowsProcessIdentityRow[]> {
-  return readIdentityRows(true)
+export function readWindowsProcessIdentityTableFresh(
+  afterMs?: number,
+  signal?: AbortSignal
+): Promise<WindowsProcessIdentityRow[]> {
+  return readIdentityRows(true, afterMs, signal)
 }
 
 /** Whether the native table can be read at all on this host. */

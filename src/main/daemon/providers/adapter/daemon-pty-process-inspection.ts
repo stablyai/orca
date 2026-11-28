@@ -2,6 +2,7 @@ import type { DaemonLaunchNoteChange } from '../../protocol/daemon-launch-note-p
 import {
   PTY_FOREGROUND_OBSERVATION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  IDLE_FENCED_TERMINATION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION
 } from '../../protocol/daemon-protocol-version'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
@@ -39,7 +40,11 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     id: string,
     options?: PtyProcessInspectionOptions
   ): Promise<PtyProcessInspection> {
-    if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
+    if (
+      this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION ||
+      (options?.runningWorkSinceMs !== undefined &&
+        this.protocolVersion < IDLE_FENCED_TERMINATION_PROTOCOL_VERSION)
+    ) {
       return clientOnlyUnverifiableInspection('old_host')
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
@@ -52,17 +57,25 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
-    return this.client.request<PtyProcessInspection>('inspectProcess', {
-      sessionId: id,
-      ...(options?.expectedIncarnationId
-        ? { expectedIncarnationId: options.expectedIncarnationId }
-        : {}),
-      ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
-      // Additive: an older daemon ignores it and pays for the full capture.
-      ...(options?.steadyState === true ? { steadyState: true } : {}),
-      ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
-      ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
-    })
+    return this.client.request<PtyProcessInspection>(
+      'inspectProcess',
+      {
+        sessionId: id,
+        ...(options?.expectedIncarnationId
+          ? { expectedIncarnationId: options.expectedIncarnationId }
+          : {}),
+        ...(options?.foregroundOnly === true ? { foregroundOnly: true } : {}),
+        ...(options?.runningWorkSinceMs !== undefined && options.expectedIncarnationId
+          ? { runningWorkSinceMs: options.runningWorkSinceMs }
+          : {}),
+        // Additive: an older daemon ignores it and pays for the full capture.
+        ...(options?.steadyState === true ? { steadyState: true } : {}),
+        ...(options?.jobMembershipOnly === true ? { jobMembershipOnly: true } : {}),
+        ...(options?.ignoreDetached === true ? { ignoreDetached: true } : {})
+      },
+      options?.runningWorkSinceMs === undefined ? undefined : 1_500,
+      options?.signal
+    )
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {

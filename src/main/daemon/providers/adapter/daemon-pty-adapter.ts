@@ -3,10 +3,11 @@ import {
   type PtyFencedTerminationRequest,
   type PtyFencedTerminationOutcome
 } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
+import { supportsMode2031UnsubscribeFact } from '../../protocol/daemon-protocol-version'
 import {
-  FENCED_TERMINATION_PROTOCOL_VERSION,
-  supportsMode2031UnsubscribeFact
-} from '../../protocol/daemon-protocol-version'
+  daemonFencedKillPayload,
+  supportsDaemonFencedTermination
+} from '../../protocol/daemon-fenced-kill-request'
 import { emitPtyListeners, createPtyExitPayload } from './daemon-pty-listener-emission'
 import type { DaemonPtyRouterExitEvent } from '../../protocol/daemon-pty-router-events'
 import { logWslPaneDiagnostic } from '../wsl/daemon-wsl-diagnostic-log'
@@ -41,27 +42,22 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
     this.client.onDisconnected(() => this.recoverAfterEndpointLoss())
   }
 
-  supportsFencedTermination(_id: string): boolean {
-    return this.protocolVersion >= FENCED_TERMINATION_PROTOCOL_VERSION
+  supportsFencedTermination(_id: string, requireIdle?: true): boolean {
+    return supportsDaemonFencedTermination(this.protocolVersion, requireIdle)
   }
 
   async killFenced(request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> {
-    if (!this.supportsFencedTermination(request.id)) {
+    const payload = daemonFencedKillPayload(request, this.protocolVersion)
+    if (!payload) {
       return { outcome: 'refused', reason: 'unsupported' }
     }
     // Capture the checked identity before waiting on connection or lifecycle locks.
-    const { id, expectedIncarnationId, requireNoAgentOwner, requireUnattached } = request
+    const { id, expectedIncarnationId } = request
     try {
       return await this.withHistorySpawnLock(id, async () => {
         const incarnationBeforeKill = this.sessionIncarnations.get(id)
         await this.ensureConnected()
-        const result = await this.client.request<unknown>('kill', {
-          sessionId: id,
-          immediate: true,
-          expectedIncarnationId,
-          requireNoAgentOwner,
-          requireUnattached
-        })
+        const result = await this.client.request<unknown>('kill', payload)
         if (!isPtyFencedTerminationOutcome(result)) {
           return { outcome: 'refused', reason: 'unverifiable' }
         }

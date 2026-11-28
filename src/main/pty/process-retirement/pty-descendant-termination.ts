@@ -185,6 +185,7 @@ type KillSweepDeps = SnapshotDeps &
     terminateOwnedTree?: () => JobTerminationOutcome
     killWindowsTree?: WindowsTreeKiller
     verifyTreeKillTarget?: (rootPid: number) => Promise<WindowsTreeKillTarget>
+    verifySnapshot?: (snapshot: DescendantSnapshot | null) => void
   }
 
 /** Call before killing the root: POSIX needs live ancestry; Windows prefers an owned job, then an identity-gated PID walk. */
@@ -220,6 +221,7 @@ export async function killWithDescendantSweep(
   }
 
   const snapshot = await captureDescendantSnapshot(rootPid, deps)
+  deps.verifySnapshot?.(snapshot)
   let descendants: void | Promise<unknown> = undefined
   const awaitEscalation =
     typeof deps.awaitEscalation === 'function' ? deps.awaitEscalation() : deps.awaitEscalation

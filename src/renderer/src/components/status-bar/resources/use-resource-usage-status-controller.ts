@@ -35,6 +35,7 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
+import { createPtyTabBindingSelector, withPtyTabBindings } from './pty/resource-pty-tab-bindings'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
 import { useStatusBarAppMemory } from './use-status-bar-app-memory'
 import { isStatusBarMemoryShown } from '../../../../../shared/diagnostics/status-bar-memory-settings'
@@ -117,6 +118,10 @@ export function useResourceUsageStatusController() {
     [gitWorktrees, folders]
   )
   const tabsByWorktree = useAppStore((s) => getResourceUsageTabsByWorktree(s, viewActive))
+  const [selectPtyTabBindings] = useState(createPtyTabBindingSelector)
+  const ptyTabsByWorktree = useAppStore((s) =>
+    selectPtyTabBindings(getResourceUsageTabsByWorktree(s, ptyViewActive))
+  )
   const browserTabsByWorktree = useAppStore((s) =>
     getResourceUsageBrowserTabsByWorktree(s, viewActive)
   )
@@ -169,6 +174,15 @@ export function useResourceUsageStatusController() {
       deferredSshSessionIdsByTabId,
       workspaceSessionReady
     ]
+  )
+  const ptySessionBindings = useMemo(
+    () =>
+      withPtyTabBindings(ptyTabsByWorktree, {
+        ptyIdsByTabId,
+        terminalLayoutsByTabId,
+        workspaceSessionReady
+      }),
+    [ptyTabsByWorktree, ptyIdsByTabId, terminalLayoutsByTabId, workspaceSessionReady]
   )
 
   // Why: after a kill unmounts the session, focus would fall to <body>; park a ref on the popover body to restore it stably for keyboard users.
@@ -272,6 +286,7 @@ export function useResourceUsageStatusController() {
     resourceViewActive,
     localPtyInventory,
     ptyActions,
+    ptySessionBindings,
     resourceSessionBindings,
     runtimePaneTitlesByTabId,
     repos,

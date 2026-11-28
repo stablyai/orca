@@ -10,6 +10,7 @@ import {
 import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
 import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { getPaneOccupancy } from '../../providers/foreground/agent-process-batch'
 import { readWindowsPtyJobProcessIds } from '../../providers/foreground/windows/pty-job-membership'
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/foreground/windows/console-attached-processes'
 import { isWindowsShellAloneInJob } from '../../providers/foreground/windows/shell-alone-in-job'
@@ -26,7 +27,11 @@ export function executableName(command: string): string {
 export function inspectSpawnFileChildProcessesFromRows(
   rows: readonly ProcessTableRow[],
   rootPid: number,
-  shellName: string | null
+  shellName: string | null,
+  teardown?: {
+    shellIsRootChild: boolean
+    onIdleShellChain?: (pids: ReadonlySet<number>) => void
+  }
 ): PtyChildProcessVerdict {
   const index = getProcessTableIndex(rows)
   const root = index.byPid.get(rootPid)
@@ -47,9 +52,37 @@ export function inspectSpawnFileChildProcessesFromRows(
     launchChain.add(ancestor.pid)
     ancestor = index.byPid.get(ancestor.ppid)
   }
-  return tree.some((row) => !launchChain.has(row.pid) && !row.stat.includes('Z'))
-    ? 'children'
-    : 'no-children'
+  if (tree.some((row) => !launchChain.has(row.pid) && !row.stat.includes('Z'))) {
+    return 'children'
+  }
+  if (!teardown) {
+    return 'no-children'
+  }
+  // Only the shell and its optional login root are known launch plumbing.
+  if (launchChain.size > (teardown.shellIsRootChild ? 2 : 1)) {
+    return 'unverifiable'
+  }
+
+  // Teardown reaches every group on this terminal, including reparented and group-only members.
+  const occupancy = getPaneOccupancy(rows)
+  const terminalGroups = occupancy.processGroupsByTty.get(shell.tpgid ?? 0)
+  if (!terminalGroups || occupancy.processGroupsIncomplete) {
+    return 'unverifiable'
+  }
+  const launchGroupSizes = new Map<number, number>()
+  for (const pid of launchChain) {
+    const pgid = index.byPid.get(pid)?.pgid
+    if (pgid !== undefined) {
+      launchGroupSizes.set(pgid, (launchGroupSizes.get(pgid) ?? 0) + 1)
+    }
+  }
+  for (const pgid of terminalGroups) {
+    if ((occupancy.rowsByProcessGroup.get(pgid) ?? 0) > (launchGroupSizes.get(pgid) ?? 0)) {
+      return 'children'
+    }
+  }
+  teardown.onIdleShellChain?.(launchChain)
+  return 'no-children'
 }
 
 export async function inspectSpawnFileWindowsChildProcesses(
@@ -58,7 +91,9 @@ export async function inspectSpawnFileWindowsChildProcesses(
   fresh = true,
   /** Adoption only: may fork the console-list helper to set aside detached daemons. */
   ignoreDetached = false,
-  jobMembershipOnly = false
+  jobMembershipOnly = false,
+  afterMs?: number,
+  signal?: AbortSignal
 ): Promise<PtyChildProcessVerdict> {
   try {
     const members = readWindowsPtyJobProcessIds(proc)
@@ -71,8 +106,8 @@ export async function inspectSpawnFileWindowsChildProcesses(
       shellPath,
       members,
       async () => {
-        const rows = await (fresh
-          ? readWindowsProcessIdentityTableFresh()
+        const rows = await (fresh || afterMs !== undefined
+          ? readWindowsProcessIdentityTableFresh(afterMs, signal)
           : readWindowsProcessIdentityTable())
         // Panes polling one shared snapshot share its index instead of each rescanning the table.
         const byPid = getProcessTableIndex(rows).byPid
@@ -84,8 +119,23 @@ export async function inspectSpawnFileWindowsChildProcesses(
       ignoreDetached ? () => readWindowsConsoleAttachedProcessIds(shellPid) : undefined,
       jobMembershipOnly
     )
-    return alone ? 'no-children' : 'children'
+    if (!alone) {
+      return 'children'
+    }
+    if (afterMs !== undefined) {
+      // A child can join the job while the identity table is being captured.
+      const current = readWindowsPtyJobProcessIds(proc)
+      if (
+        !current ||
+        current.size !== members.size ||
+        [...members].some((pid) => !current.has(pid))
+      ) {
+        return 'unverifiable'
+      }
+    }
+    return 'no-children'
   } catch {
+    signal?.throwIfAborted()
     return 'unverifiable'
   }
 }

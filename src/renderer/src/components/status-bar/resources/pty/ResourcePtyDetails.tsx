@@ -1,6 +1,8 @@
 import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import type { ResourcePtyRow } from './resource-pty-view-model'
@@ -43,33 +45,70 @@ export function ResourcePtyDetails({
       : row.session.agentOwnership === 'absent'
         ? t('resourceManager.pty.ownerAbsent', 'Absent')
         : t('resourceManager.pty.ownerUnknown', 'Unknown')
-  const fields = [
-    [t('resourceManager.pty.sessionId', 'Orca session ID'), row.session.id],
-    [t('resourceManager.pty.incarnation', 'Incarnation'), row.session.incarnationId || unavailable],
-    [t('resourceManager.pty.workspace', 'Workspace'), row.workspace || unavailable],
-    [t('resourceManager.pty.cwd', 'Last-reported cwd'), row.session.cwd || unavailable],
-    [t('resourceManager.pty.binding', 'Tab'), resourcePtyBindingLabel(row.binding, t)],
-    [t('resourceManager.pty.agentOwnership', 'Agent ownership evidence'), ownership],
+  const copyLabel = t('resourceManager.pty.copyId', 'Copy Orca session ID')
+  const fields: [label: string, value: string, mono: boolean][] = [
+    [t('resourceManager.pty.workspace', 'Workspace'), row.workspace || unavailable, false],
+    [t('resourceManager.pty.project', 'Project'), row.project || unavailable, false],
+    [
+      t('resourceManager.pty.process', 'Last seen process'),
+      row.session.foregroundProcess?.trim() || unavailable,
+      true
+    ],
+    [t('resourceManager.pty.binding', 'Tab'), resourcePtyBindingLabel(row.binding, t), false],
+    [t('resourceManager.pty.cwd', 'Last-reported cwd'), row.session.cwd || unavailable, true],
+    [
+      t('resourceManager.pty.pid', 'PID'),
+      row.session.rootProcessId?.toString() || unavailable,
+      true
+    ],
+    [t('resourceManager.pty.agentOwnership', 'Agent ownership evidence'), ownership, false]
+  ]
+  const trailingFields: [label: string, value: string, mono: boolean][] = [
+    [
+      t('resourceManager.pty.incarnation', 'Incarnation'),
+      row.session.incarnationId || unavailable,
+      true
+    ],
     [
       t('resourceManager.pty.observationTime', 'Observation time'),
-      observedAt === null ? unavailable : new Date(observedAt).toLocaleString(intlLocale)
-    ],
-    [t('resourceManager.pty.pid', 'PID'), row.session.rootProcessId?.toString() || unavailable]
+      observedAt === null ? unavailable : new Date(observedAt).toLocaleString(intlLocale),
+      false
+    ]
   ]
+  const renderField = ([label, value, mono]: [string, string, boolean]): React.JSX.Element => (
+    <div key={label} className="contents">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className={cn('break-all select-text', mono && 'font-mono')}>{value}</dd>
+    </div>
+  )
   return (
-    <div className="px-2.5 py-2">
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-        {fields.map(([label, value]) => (
-          <div key={label} className="contents">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="break-all select-text">{value}</dd>
-          </div>
-        ))}
+    <div className="pt-1 pr-3 pb-2 pl-[26px]">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-2xs">
+        {fields.map(renderField)}
+        <dt className="text-muted-foreground">
+          {t('resourceManager.pty.sessionId', 'Orca session ID')}
+        </dt>
+        <dd className="flex min-w-0 items-center gap-1">
+          <span className="min-w-0 font-mono break-all select-text">{row.session.id}</span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                className="size-4 shrink-0"
+                aria-label={copyLabel}
+                onClick={() => void copySessionId()}
+              >
+                <Copy className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {copyLabel}
+            </TooltipContent>
+          </Tooltip>
+        </dd>
+        {trailingFields.map(renderField)}
       </dl>
-      <Button variant="ghost" size="xs" className="mt-2" onClick={() => void copySessionId()}>
-        <Copy className="size-3.5" />
-        {t('resourceManager.pty.copyId', 'Copy Orca session ID')}
-      </Button>
     </div>
   )
 }

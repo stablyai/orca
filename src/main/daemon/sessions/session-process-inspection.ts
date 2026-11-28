@@ -7,6 +7,7 @@ import type {
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { SessionLaunchNote } from './session-launch-note'
 import { SessionRepaintNudge } from './session-repaint-nudge'
+import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import type { JobTerminationOutcome } from '../../windows/windows-pty-job'
 
 export abstract class SessionProcessInspection {
@@ -17,10 +18,12 @@ export abstract class SessionProcessInspection {
   readonly shellIsRootChild: boolean
 
   protected readonly repaintNudge = new SessionRepaintNudge()
+  protected abstract readonly recoveryBarrier: TerminalShellRecoveryBarrier
   /** PTY output chunks seen, so idle-shell proofs can tell whether the pane printed since. */
   protected _outputChunks = 0
   /** Input writes accepted, so a proof taken before a keystroke cannot vouch for what it started. */
   protected _inputWrites = 0
+  private lastInputAt = 0
   /** Wall-clock time of the latest output or input, so a capture older than it cannot vouch for the pane. */
   protected _lastActivityAt = 0
 
@@ -52,11 +55,18 @@ export abstract class SessionProcessInspection {
   inspectChildProcesses(
     fresh?: boolean,
     ignoreDetached?: boolean,
-    jobMembershipOnly?: boolean
+    jobMembershipOnly?: boolean,
+    afterMs?: number,
+    signal?: AbortSignal
   ): ChildProcessVerdictRead {
     return (
-      this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached, jobMembershipOnly) ??
-      'unverifiable'
+      this.subprocess.inspectChildProcesses?.(
+        fresh,
+        ignoreDetached,
+        jobMembershipOnly,
+        afterMs,
+        signal
+      ) ?? 'unverifiable'
     )
   }
 
@@ -66,6 +76,19 @@ export abstract class SessionProcessInspection {
 
   get shellPath(): string | undefined {
     return this.subprocess.shellPath
+  }
+
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  getCommandActivity(
+    afterMs: number
+  ): TerminalShellRecoveryBarrier['commandActivity'] | 'input_since_capture' {
+    const phase = this.recoveryBarrier.commandActivity
+    return phase !== 'running' && (this.lastInputAt >= afterMs || this.startupInputQueued())
+      ? 'input_since_capture'
+      : phase
   }
 
   get inputWrites(): number {
@@ -91,7 +114,7 @@ export abstract class SessionProcessInspection {
 
   noteInputWritten(): void {
     this._inputWrites += 1
-    this._lastActivityAt = Date.now()
+    this.lastInputAt = this._lastActivityAt = Date.now()
   }
 
   /** The PTY's foreground process group (tcgetpgrp); undefined where the master cannot say. */
