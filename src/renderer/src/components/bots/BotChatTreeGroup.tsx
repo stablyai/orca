@@ -36,6 +36,7 @@ import { parseExecutionHostId } from '../../../../shared/execution-host/executio
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatContextMenu, BotChatMoreButton, botChatHasMenu } from './BotChatRowMenu'
 import { openBotSession } from './bot-session-open'
+import { showChatInViewedTabList } from './teammate-tabs/viewed-tab-list'
 
 function openChat(bot: Bot, chat: BotChatTreeChat): void {
   const { run } = chat
@@ -55,6 +56,8 @@ function openChat(bot: Bot, chat: BotChatTreeChat): void {
       initialQuery: '',
       alongside: true
     })
+  } else if (showChatInViewedTabList(folderWorkspaceKey(bot.folderWorkspaceId), chat)) {
+    // Shown in the strip of the person whose tabs this window shows.
   } else if (chat.origin === 'home') {
     void openBotHomeTab(bot)
   } else {

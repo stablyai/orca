@@ -50,7 +50,8 @@ export function AgentTerminalPreview({
   className,
   onRequestClose,
   linkSource,
-  onBrowserForeground
+  onBrowserForeground,
+  claimsGridOnTyping = false
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
@@ -59,6 +60,9 @@ export function AgentTerminalPreview({
   onRequestClose?: () => void
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
+  /** Another person's terminal: opening or resizing never takes its size; typing does, as on a
+   *  paired server's terminal. */
+  claimsGridOnTyping?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -114,7 +118,10 @@ export function AgentTerminalPreview({
     const previewApi = terminalPreviewApiFor(ptyId)
     let linkDefaults: PreviewTerminalLinkHandler | undefined
     let linkInteraction: ReturnType<typeof installDashboardPreviewLinkInteraction> | null = null
-    const sendInput = (data: string): boolean | Promise<boolean> => previewApi.input(ptyId, data)
+    const sendInput = (data: string): boolean | Promise<boolean> => {
+      gridClaim.claimForInput(data)
+      return previewApi.input(ptyId, data)
+    }
     const installLinks = (): void => {
       if (!terminal || !linkSourceRef.current) {
         return
@@ -152,7 +159,8 @@ export function AgentTerminalPreview({
     const gridClaim = createPreviewGridClaim({
       ptyId,
       container,
-      getTerminal: () => terminal
+      getTerminal: () => terminal,
+      onTyping: claimsGridOnTyping
     })
     // Box growth/shrink (window resize) changes the reachable grid.
     const boxResizeObserver =
@@ -335,6 +343,7 @@ export function AgentTerminalPreview({
     }
   }, [
     ptyId,
+    claimsGridOnTyping,
     terminalTheme,
     terminalMode,
     terminalMinimumContrastRatio,

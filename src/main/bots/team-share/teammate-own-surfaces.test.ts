@@ -533,7 +533,10 @@ it('saves a teammate’s file edit only over the text it started from', async ()
   const r = await rig()
   const path = join(root, 'plan.md')
   await writeFile(path, 'first')
-  await openFile(r, 'mate-desk', 'plan.md')
+  await r.reveal('owner-desk', O)
+  const fileTab = await openFile(r, 'mate-desk', 'plan.md')
+  await ownersSide(r)
+  const owners = await ownersSide(r)
   // Read when Mate started editing, then someone else saved over it.
   const startedFrom = z.object({ content: z.string() }).parse(
     await r.call('mate-desk', 'files.read', {
@@ -556,6 +559,9 @@ it('saves a teammate’s file edit only over the text it started from', async ()
   // Keeping theirs as the base, the save lands.
   expect(await save('mine', 'theirs')).toMatchObject({ ok: true })
   expect(await readFile(path, 'utf8')).toBe('mine')
+  // Both people's tabs are as they were: Mate's file tab, and all of the owner's side.
+  expect((await r.list('mate-desk')).activeTabId).toBe(fileTab)
+  expect(await ownersSide(r)).toBe(owners)
 })
 
 it('ends a teammate’s terminal that exits on its own in their list alone', async () => {

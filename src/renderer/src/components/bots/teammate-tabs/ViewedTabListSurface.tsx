@@ -1,7 +1,9 @@
 // Another person's tabs in a shared agent's Home, over this window's own (which stay as they were):
 // their strip, live from the host, on a tinted row, and the tab picked here. Picking one only shows
 // it here; closing one closes it in their list, the one act on it.
-import { FileText, Globe, MessageSquare, SquareTerminal, X } from 'lucide-react'
+import { Eye, FileText, GitCompareArrows, Globe, SquareTerminal, X } from 'lucide-react'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,44 +19,62 @@ import { TabListPersonControl } from './TabListPersonControl'
 import type { TabListPeople } from './tab-list-people'
 import { usePersonTabList } from './use-person-tab-list'
 import { ViewedTabBody } from './ViewedTabBody'
-import { pickViewedTab, sameTabListPerson, type ViewedTabList } from './viewed-tab-list'
+import { pickViewedTab, type ViewedTabList } from './viewed-tab-list'
 
+/** Each kind's icon as their own strip draws it: the agent a chat or terminal runs, a file's mode. */
 function TabIcon({ tab }: { tab: RuntimeMobileSessionClientTab }): React.JSX.Element {
   const className = 'mr-1 size-3 shrink-0 text-muted-foreground'
   switch (tab.type) {
     case 'agent-session':
-      return <MessageSquare className={className} />
+      return (
+        <span className="mr-1 inline-flex shrink-0">
+          <AgentIcon agent={agentTypeToIconAgent(tab.agent)} size={12} />
+        </span>
+      )
     case 'terminal':
-      return <SquareTerminal className={className} />
+      return tab.launchAgent ? (
+        <span className="mr-1 inline-flex shrink-0">
+          <AgentIcon agent={tab.launchAgent} size={12} />
+        </span>
+      ) : (
+        <SquareTerminal className={className} />
+      )
     case 'browser':
       return <Globe className={className} />
     case 'file':
-    case 'markdown':
-      return <FileText className={className} />
+    case 'markdown': {
+      const ModeIcon =
+        tab.mode === 'diff' ? GitCompareArrows : tab.mode === 'markdown-preview' ? Eye : FileText
+      return <ModeIcon className={className} />
+    }
   }
 }
 
 function ViewedTab({
   tab,
+  title,
   active,
   onPick,
   onClose
 }: {
   tab: RuntimeMobileSessionClientTab
+  title: string
   active: boolean
   onPick: () => void
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  // A pinned tab (their Home chat) stays in their list, as it does in their own strip.
+  const closeable = tab.isPinned !== true
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
+      <ContextMenuTrigger asChild disabled={!closeable}>
         <div
           role="tab"
           aria-selected={active}
           onMouseDown={(event) => event.button === 0 && onPick()}
           className={cn(
-            'group relative flex h-full w-[140px] min-w-0 shrink cursor-pointer items-center border-r border-border px-1.5 text-xs select-none',
+            'group relative flex h-full w-[140px] shrink-0 cursor-pointer items-center border-r border-border px-1.5 text-xs select-none',
             active
               ? 'bg-tab-active text-tab-active-foreground'
               : 'bg-tab-inactive text-tab-inactive-foreground hover:text-tab-active-foreground'
@@ -64,21 +84,23 @@ function ViewedTab({
             <span className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-[2px] bg-tab-active-indicator" />
           ) : null}
           <TabIcon tab={tab} />
-          <span className="mr-1 min-w-0 flex-1 truncate">{tab.title}</span>
-          <button
-            type="button"
-            aria-label={t('bots.teammateTabs.closeTab', 'Close {{title}}', { title: tab.title })}
-            onMouseDown={(event) => event.stopPropagation()}
-            onClick={onClose}
-            className={cn(
-              'relative z-10 flex size-4 shrink-0 items-center justify-center rounded-sm',
-              active
-                ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                : 'text-transparent group-hover:text-muted-foreground'
-            )}
-          >
-            <X className="size-3" />
-          </button>
+          <span className="mr-1 min-w-0 flex-1 truncate">{title}</span>
+          {closeable ? (
+            <button
+              type="button"
+              aria-label={t('bots.teammateTabs.closeTab', 'Close {{title}}', { title })}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={onClose}
+              className={cn(
+                'relative z-10 flex size-4 shrink-0 items-center justify-center rounded-sm',
+                active
+                  ? 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  : 'text-transparent group-hover:text-muted-foreground'
+              )}
+            >
+              <X className="size-3" />
+            </button>
+          ) : null}
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent className="min-w-52">
@@ -95,20 +117,28 @@ export function ViewedTabListSurface({
   bot,
   homeKey,
   view,
-  people
+  people,
+  holderName
 }: {
   bot: Bot
   homeKey: string
   view: ViewedTabList
   people: TabListPeople
+  /** Whose list it is, as the person control names them. */
+  holderName: string
 }): React.JSX.Element {
   const t = useTranslate()
   const read = usePersonTabList(bot, homeKey, view.person)
-  const holder = people.others.find((entry) => sameTabListPerson(entry.person, view.person))
-  const holderName = holder?.name ?? t('bots.items.filter.owner', 'Owner')
   const tabs = read.state === 'ready' ? read.list.tabs : []
+  const picked = view.picked
   const shown =
-    tabs.find((tab) => tab.id === view.pickedTabId) ??
+    tabs.find((tab) =>
+      picked === null
+        ? false
+        : 'tabId' in picked
+          ? tab.id === picked.tabId
+          : tab.type === 'agent-session' && tab.sessionId === picked.sessionId
+    ) ??
     tabs.find((tab) => read.state === 'ready' && tab.id === read.list.activeTabId) ??
     tabs[0] ??
     null
@@ -130,14 +160,20 @@ export function ViewedTabListSurface({
         <TabListPersonControl homeKey={homeKey} people={people} />
         <div
           role="tablist"
-          className="relative flex h-full min-w-0 shrink items-stretch overflow-hidden"
+          className="terminal-tab-strip relative flex h-full min-w-0 shrink items-stretch overflow-x-auto overflow-y-hidden"
         >
           {tabs.map((tab) => (
             <ViewedTab
               key={tab.id}
               tab={tab}
+              // Their Home chat, named as whose it is, since this window's own Home is "Home".
+              title={
+                tab.type === 'agent-session' && tab.isPinned
+                  ? t('bots.teammateTabs.home', '{{name}}’s Home', { name: holderName })
+                  : tab.title
+              }
               active={tab.id === shown?.id}
-              onPick={() => pickViewedTab(homeKey, tab.id)}
+              onPick={() => pickViewedTab(homeKey, { tabId: tab.id })}
               onClose={() => close(tab)}
             />
           ))}

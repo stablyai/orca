@@ -67,7 +67,12 @@ export function usePersonTabList(
       {
         onEvent: (result) => {
           const decoded = delta.decode(result)
-          const list = decoded.ok ? frameOf(decoded.result) : null
+          if (!decoded.ok) {
+            // A delta with no frame before it: this read can't follow the list any more.
+            settle({ state: 'failed' })
+            return
+          }
+          const list = frameOf(decoded.result)
           if (list) {
             settle({ state: 'ready', list })
           }

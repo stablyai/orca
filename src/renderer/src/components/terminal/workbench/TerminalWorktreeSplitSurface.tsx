@@ -16,6 +16,7 @@ import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
 import type { TerminalPrewarmStage } from '../worktree-prewarm/terminal-worktree-prewarm'
 import { ViewedTabListOverlay } from '../../bots/teammate-tabs/ViewedTabListOverlay'
+import { useViewedTabList } from '../../bots/teammate-tabs/viewed-tab-list'
 
 export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   worktreeId,
@@ -49,6 +50,8 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
+  // Another person's tabs drawn over this window's own: its own panes act as hidden underneath.
+  const showsOwnTabs = useViewedTabList(worktreeId) === null
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
   // Keyed on membership, not the tab array: title updates replace the array but never a tab's content type.
@@ -89,7 +92,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
           layout={layout}
           worktreeId={worktreeId}
           focusedGroupId={focusedGroupId}
-          isWorktreeActive={isVisible}
+          isWorktreeActive={isVisible && showsOwnTabs}
         />
       )}
       <WorkspacePaneOverlayLayers

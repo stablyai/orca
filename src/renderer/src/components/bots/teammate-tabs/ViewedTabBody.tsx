@@ -10,6 +10,9 @@ import { botTarget } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import { viewedChatTabId } from '@/components/native-chat/pane/ownership/native-chat-tab-owner'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { ViewedFileDiff } from './ViewedFileDiff'
 import { ViewedFileEditor } from './ViewedFileEditor'
 
 function Notice({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -21,7 +24,7 @@ function Notice({ children }: { children: React.ReactNode }): React.JSX.Element 
 }
 
 /** The holder's terminal by its handle on the agent's host. Its size follows the paired-terminal
- *  rule: whoever types last holds it, and leaving gives it back. */
+ *  rule: only typing takes it, whoever types last holds it, and leaving gives it back. */
 function ViewedTerminal({
   bot,
   tab
@@ -42,7 +45,12 @@ function ViewedTerminal({
   }
   return (
     <div className="relative min-h-0 flex-1 bg-background">
-      <AgentTerminalPreview key={ptyId} ptyId={ptyId} className="absolute inset-0" />
+      <AgentTerminalPreview
+        key={ptyId}
+        ptyId={ptyId}
+        className="absolute inset-0"
+        claimsGridOnTyping
+      />
     </div>
   )
 }
@@ -64,7 +72,7 @@ export function ViewedTabBody({
         <div className="flex min-h-0 flex-1 flex-col">
           <NativeChatView
             mode="structured"
-            tabId={`viewed:${tab.id}`}
+            tabId={viewedChatTabId(folderWorkspaceKey(bot.folderWorkspaceId), tab.id)}
             sessionId={tab.sessionId}
             target={botTarget(bot)}
             agent={tab.agent}
@@ -90,7 +98,16 @@ export function ViewedTabBody({
         </Notice>
       )
     case 'file':
+      return tab.mode === 'diff' ? (
+        <ViewedFileDiff bot={bot} tab={tab} />
+      ) : (
+        <ViewedFileEditor bot={bot} relativePath={tab.relativePath} />
+      )
     case 'markdown':
-      return <ViewedFileEditor bot={bot} relativePath={tab.relativePath} />
+      return tab.isUntitled ? (
+        <Notice>{t('bots.teammateTabs.untitled', 'This document isn’t saved yet.')}</Notice>
+      ) : (
+        <ViewedFileEditor bot={bot} relativePath={tab.relativePath} />
+      )
   }
 }

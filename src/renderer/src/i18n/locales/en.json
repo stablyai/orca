@@ -31042,7 +31042,11 @@
       "unavailable": "Their tabs can’t be read right now.",
       "empty": "{{name}} has no tabs open here.",
       "teammate": "Teammate",
-      "save": "Save"
+      "save": "Save",
+      "diffUnreadable": "Could not read the changes to {{path}}.",
+      "diffBinary": "Binary file changed",
+      "untitled": "This document isn’t saved yet.",
+      "home": "{{name}}’s Home"
     }
   },
   "plugins": {

@@ -46,7 +46,7 @@ import {
   botPickedOther,
   type BotChatPersonPick
 } from '../../../../shared/bots/bot-chat-people'
-import { useBotItemsPeople } from './BotPersonPickItems'
+import { useBotPersonPicks } from './BotPersonPickItems'
 import { BotItemsSection } from './items/BotItemsSection'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
@@ -157,7 +157,7 @@ function BotActivityTab({
     setFilterState(next)
   }
   // Whose items, per screen: a shared bot opens on the viewer's own, the owner's or a teammate's.
-  const entries = useBotItemsPeople(bot)
+  const entries = useBotPersonPicks(bot)
   const [picked, setPicked] = useState<BotChatPersonPick | null>(null)
   const pick = botItemsPersonPick(entries, picked)
   const personPick: BotItemsPeople | null = entries

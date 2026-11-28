@@ -36,9 +36,10 @@ import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
 import { BotChatsSkeleton } from './BotChatsSkeleton'
 import { BotChatsPersonFilter } from './BotChatsPersonFilter'
-import { useViewedTabList, viewTabList } from './teammate-tabs/viewed-tab-list'
-import { pickOfViewedList, viewedListOfPick } from './teammate-tabs/tab-list-people'
-import { botChatPeople, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
+import { sameTabListPerson, useViewedTabList, viewTabList } from './teammate-tabs/viewed-tab-list'
+import { tabListPersonOf, viewedListOfPick } from './teammate-tabs/tab-list-people'
+import { botPersonPickName, useBotPersonPicks } from './BotPersonPickItems'
+import { sameBotPersonPick, type BotChatPersonPick } from '../../../../shared/bots/bot-chat-people'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
@@ -80,19 +81,23 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
-  const people = useMemo(() => botChatPeople(bot), [bot])
-  const [pickState, setPick] = useState<BotChatPersonPick>(EVERYONE)
+  const entries = useBotPersonPicks(bot)
   const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
-  // Showing someone's tabs in the Home shows their chats here: one view, either way in.
+  // Another person's pick is the Home showing their tabs (one view, either way in), so leaving it
+  // there leaves it here; this panel keeps only everyone or the viewer's own.
   const viewed = useViewedTabList(homeKey)
-  const viewedPick = viewed ? pickOfViewedList(viewed.person, people) : null
-  // A teammate no longer shared with drops the pick back to everyone.
-  const pick =
-    viewedPick ??
-    (pickState.kind === 'person' &&
-    !people.some((person) => person.accountId === pickState.person.accountId)
-      ? EVERYONE
-      : pickState)
+  const [ownPicked, setOwnPicked] = useState(false)
+  const viewedPick =
+    viewed && entries
+      ? (entries.find((entry) => {
+          const person = tabListPersonOf(entry.pick)
+          return person !== null && sameTabListPerson(person, viewed.person)
+        })?.pick ?? null)
+      : null
+  const own = entries?.[0]?.pick ?? null
+  const pick = viewedPick ?? (ownPicked && own ? own : EVERYONE)
+  const isOwnPick = own !== null && sameBotPersonPick(pick, own)
+  const pickName = entries ? botPersonPickName(pick, entries) : null
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
   // Its home's chats and runs, and each listed worker's own workspace.
   const stopWorkspaces = useMemo(
@@ -140,11 +145,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const { found, older, onlyHome, noMatch, searchFailed, moreMatches, noneFromPick } =
     botChatListView(chats, { steps, query, search, pick })
   const searchLabel =
-    pick.kind === 'person'
-      ? t('bots.chats.searchPerson', "Search {{name}}'s chats", { name: pick.person.name })
-      : pick.kind === 'owner'
+    pick.kind === 'everyone'
+      ? t('bots.chats.search', 'Search chats and workers')
+      : isOwnPick
         ? t('bots.chats.searchOwn', 'Search your chats')
-        : t('bots.chats.search', 'Search chats and workers')
+        : t('bots.chats.searchPerson', "Search {{name}}'s chats", { name: pickName ?? '' })
 
   const searching = query.trim() !== ''
   // A search lists the chats it found by their own words, then the workers it found by title.
@@ -174,18 +179,20 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
               aria-label={searchLabel}
               density="compact"
               inset="leadingIcon"
-              adornment={people.length > 0 ? 'trailing' : 'none'}
+              adornment={entries ? 'trailing' : 'none'}
               disabled={offline}
             />
-            {people.length > 0 ? (
+            {entries ? (
               <BotChatsPersonFilter
-                bot={bot}
-                people={people}
+                entries={entries}
                 pick={pick}
                 onPick={(next) => {
-                  setPick(next)
+                  const list = viewedListOfPick(bot, next)
+                  if (list === null) {
+                    setOwnPicked(next.kind !== 'everyone')
+                  }
                   setSteps(0)
-                  viewTabList(homeKey, viewedListOfPick(bot, next))
+                  viewTabList(homeKey, list)
                 }}
               />
             ) : null}
@@ -204,11 +211,11 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
           ) : null}
           {noneFromPick && tree.state === 'ready' ? (
             <p className={NOTE}>
-              {pick.kind === 'person'
-                ? t('bots.chats.noneFromPerson', 'No chats from {{name}}.', {
-                    name: pick.person.name
-                  })
-                : t('bots.chats.noneFromYou', 'No chats from you.')}
+              {isOwnPick
+                ? t('bots.chats.noneFromYou', 'No chats from you.')
+                : t('bots.chats.noneFromPerson', 'No chats from {{name}}.', {
+                    name: pickName ?? ''
+                  })}
             </p>
           ) : null}
           {chatHits.map(({ chat }) => (

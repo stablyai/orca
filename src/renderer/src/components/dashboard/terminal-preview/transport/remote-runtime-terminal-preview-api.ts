@@ -6,11 +6,7 @@ import type {
   RemoteRuntimeMultiplexedTerminalCallbacks
 } from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import {
-  claimPreviewViewport,
-  sendPreviewInput,
-  type PreviewViewportHold
-} from './preview-viewport-hold'
+import type { FitHoldMode } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,
@@ -44,7 +40,8 @@ type PreviewSession = {
   /** Transport credit per emitted chunk, returned in order as the preview parses them. */
   credits: (() => void)[]
   grid: { cols: number; rows: number } | null
-  hold: PreviewViewportHold
+  /** Who holds the grid, as the host last said: this preview (`desktop-fit`) or a peer. */
+  holdMode: FitHoldMode | undefined
 }
 
 const sessions = new Map<string, PreviewSession>()
@@ -150,7 +147,7 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
     snapshotSeq: undefined,
     credits: [],
     grid: null,
-    hold: { mode: undefined, claimed: null }
+    holdMode: undefined
   }
   sessions.set(ptyId, session)
   let initialized = false
@@ -211,7 +208,7 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
             }
           },
           onFitOverrideChanged: (event) => {
-            session.hold.mode = event.mode
+            session.holdMode = event.mode
             if (event.cols !== session.grid?.cols || event.rows !== session.grid?.rows) {
               emit({ type: 'resync', ptyId })
             }
@@ -306,10 +303,10 @@ export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
     }
     return openSession(ptyId, parts.environmentId, parts.handle)
   },
-  input: (ptyId, data) => Promise.resolve(sendPreviewInput(sessions.get(ptyId), data)),
+  input: (ptyId, data) => Promise.resolve(sessions.get(ptyId)?.stream?.sendInput(data) ?? false),
   fit: (ptyId, cols, rows) => {
     // Why: the host answers the claim with a fit-override event, which triggers the resync repaint.
-    const claimed = claimPreviewViewport(sessions.get(ptyId), cols, rows)
+    const claimed = sessions.get(ptyId)?.stream?.claimViewport(cols, rows) ?? false
     return Promise.resolve(claimed ? { cols, rows } : null)
   },
   // Why in order: the preview acknowledges chunks as xterm parses them, which is emit order.
@@ -328,4 +325,9 @@ export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
     listeners.add(callback)
     return () => listeners.delete(callback)
   }
+}
+
+/** Who holds a previewed paired-host terminal's grid, as its host last said. */
+export function remotePreviewHoldMode(ptyId: string): FitHoldMode | undefined {
+  return sessions.get(ptyId)?.holdMode
 }

@@ -109,7 +109,8 @@ export function TabListPersonControl({
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 // The menu's typeahead would take the letters otherwise.
-                onKeyDown={(event) => event.stopPropagation()}
+                // Typing stays in the field; Escape still closes the menu.
+                onKeyDown={(event) => event.key !== 'Escape' && event.stopPropagation()}
                 placeholder={t('bots.teammateTabs.search', 'Search people')}
                 density="compact"
                 inset="leadingIcon"

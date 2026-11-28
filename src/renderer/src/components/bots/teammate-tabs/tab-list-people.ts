@@ -4,7 +4,6 @@ import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botPeoplePicker, type BotChatPersonPick } from '../../../../../shared/bots/bot-chat-people'
 import { sameTabListPerson, type TabListPerson } from './viewed-tab-list'
-import type { BotChatPerson } from '../../../../../shared/bots/bot-chat-tree'
 
 export type TabListPersonEntry = { person: TabListPerson; name: string }
 
@@ -27,18 +26,6 @@ export function viewedListOfPick(
   const person = tabListPersonOf(pick)
   const own: TabListPerson = bot.shareViewer ? { accountId: bot.shareViewer.accountId } : 'owner'
   return person && !sameTabListPerson(person, own) ? person : null
-}
-
-/** The pick that names a viewed list, among the people a filter offers. */
-export function pickOfViewedList(
-  person: TabListPerson,
-  people: readonly BotChatPerson[]
-): BotChatPersonPick | null {
-  if (person === 'owner') {
-    return { kind: 'owner' }
-  }
-  const named = people.find((entry) => entry.accountId === person.accountId)
-  return named ? { kind: 'person', person: named } : null
 }
 
 /** Null for an agent shared with no one: there is no one else's list to show. */
