@@ -45,4 +45,39 @@ describe('nativeChatTurnFold', () => {
       ])
     ).toEqual([1, 2, 3, 5, 6, 7])
   })
+
+  it('keeps pre-tool headings and links visible when a turn settles', () => {
+    expect(
+      foldedRows([
+        ['user', [text('Check the connection.')]],
+        ['assistant', [text('Sign in at _https://example.invalid/device_'), call, result]],
+        ['reasoning', [text('## Internal notes')]],
+        ['assistant', [text('## Verification\nThe command checks the connection.'), call, result]],
+        [
+          'assistant',
+          [
+            text('Checking trace_https://status.'),
+            call,
+            { type: 'tool-result', output: 'https://example.invalid/log' }
+          ]
+        ],
+        ['assistant', [text('The connection is ready.')]]
+      ])
+    ).toEqual([2, 4])
+  })
+
+  it('keeps the whole pre-tool reply when reasoning splits its heading from the other prose', () => {
+    expect(
+      foldedRows([
+        ['user', [text('Check the connection.')]],
+        ['assistant', [text('Here is what to expect.')]],
+        ['reasoning', [text('Review the steps.')]],
+        ['assistant', [text('## Verification')]],
+        ['reasoning', [text('Check the details.')]],
+        ['assistant', [text('The command checks the connection.')]],
+        ['tool', [call, result]],
+        ['assistant', [text('The connection is ready.')]]
+      ])
+    ).toEqual([2, 4, 6])
+  })
 })
