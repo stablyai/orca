@@ -14,7 +14,7 @@ const LOW_WATER_BYTES = 1024 * 1024
 const PRESSURED_SESSION_HIGH_WATER_BYTES = 64 * 1024
 const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
 
-type StallReason = 'input' | 'timeout' | 'released' | 'exited'
+type StallReason = 'input' | 'timeout' | 'released' | 'terminating' | 'exited'
 
 type ClientBacklog = {
   queuedChars: Map<string, number>
@@ -39,7 +39,7 @@ export class DaemonStreamBackpressure {
   // Cleared on resume, so a delivery credit never outlives its pause.
   private readonly deliveries = new PausedSessionDeliveries()
   // Exited producers can't pause again; skipped until their final output drains.
-  private readonly exitedSessions = new Set<string>()
+  private readonly unpausableSessions = new Set<string>()
   // The producer incarnation each pause or exited record belongs to; a respawn under the same id starts clean.
   private readonly recordIncarnation = new Map<string, string | undefined>()
   private readonly longPauseLog = new LongPauseLogLimiter()
@@ -49,7 +49,7 @@ export class DaemonStreamBackpressure {
       sessionId: string,
       paused: boolean,
       onStallTimeout?: (reason: StallReason) => void
-    ) => boolean | 'exited' | void,
+    ) => boolean | 'terminating' | 'exited' | void,
     private readonly isDroppable: (sessionId: string) => boolean,
     // Stall release must reconcile cached droppability for already-queued data.
     private readonly onDroppabilityChanged: (sessionId: string) => void = () => {},
@@ -172,9 +172,8 @@ export class DaemonStreamBackpressure {
     }
     for (const sessionId of pauseCandidates) {
       if (
-        this.dropStaleRecords(sessionId) ||
         this.pausedAtBySession.has(sessionId) ||
-        this.exitedSessions.has(sessionId) ||
+        this.unpausableSessions.has(sessionId) ||
         (bytesBySession.get(sessionId) ?? 0) < pauseAt ||
         this.stallReleasedSessions.has(sessionId) ||
         // Background output has its own keep-tail budget; pause it only as the last resort.
@@ -187,50 +186,58 @@ export class DaemonStreamBackpressure {
       const paused = this.setPaused(sessionId, true, (reason) =>
         this.onStall(sessionId, reason, incarnation)
       )
-      if (paused === 'exited') {
-        this.markExited(sessionId, incarnation)
+      if (paused === 'exited' || paused === 'terminating') {
+        this.markUnpausable(sessionId, incarnation)
       } else if (paused !== false) {
         this.pausedAtBySession.set(sessionId, Date.now())
         this.recordIncarnation.set(sessionId, incarnation)
       }
     }
     // Resume ordinary pausing only after the session has no remaining backlog.
-    for (const sessions of [this.stallReleasedSessions, this.exitedSessions]) {
+    for (const sessions of [this.stallReleasedSessions, this.unpausableSessions]) {
       for (const sessionId of sessions) {
         if (!accountedSessions.has(sessionId)) {
           sessions.delete(sessionId)
-          if (!this.pausedAtBySession.has(sessionId) && !this.exitedSessions.has(sessionId)) {
-            this.recordIncarnation.delete(sessionId)
-          }
+          this.dropRecordIfUnused(sessionId)
         }
       }
     }
   }
 
-  /** An exited producer can't pause again: forget its pause and skip it until its final output drains. */
-  private markExited(sessionId: string, incarnation: string | undefined): void {
-    this.exitedSessions.add(sessionId)
+  /** Called before a session's PTY output is queued: only a live producer enqueues, so this is when a respawn shows. */
+  noteSessionOutput(sessionId: string): void {
+    if (
+      this.recordIncarnation.has(sessionId) &&
+      this.recordIncarnation.get(sessionId) !== this.incarnationOf(sessionId)
+    ) {
+      // Every record belonged to an earlier incarnation: the new producer starts clean.
+      this.stallReleasedSessions.delete(sessionId)
+      this.unpausableSessions.delete(sessionId)
+      this.forgetPause(sessionId)
+      this.onDroppabilityChanged(sessionId)
+    }
+  }
+
+  /** A terminating or exited producer is never asked to pause; it is skipped until 'released' or its output drains. */
+  private markUnpausable(sessionId: string, incarnation: string | undefined): void {
+    this.unpausableSessions.add(sessionId)
     this.recordIncarnation.set(sessionId, incarnation)
     this.pausedAtBySession.delete(sessionId)
     this.deliveries.forget(sessionId)
   }
 
-  /** Drops pause and exited records left by an earlier incarnation of this id; always false so it can lead a skip test. */
-  private dropStaleRecords(sessionId: string): false {
-    if (
-      this.recordIncarnation.has(sessionId) &&
-      this.recordIncarnation.get(sessionId) !== this.incarnationOf(sessionId)
-    ) {
-      this.exitedSessions.delete(sessionId)
-      this.forgetPause(sessionId)
-    }
-    return false
-  }
-
   private forgetPause(sessionId: string): void {
     this.pausedAtBySession.delete(sessionId)
     this.deliveries.forget(sessionId)
-    if (!this.exitedSessions.has(sessionId)) {
+    this.dropRecordIfUnused(sessionId)
+  }
+
+  private dropRecordIfUnused(sessionId: string): void {
+    if (
+      !this.pausedAtBySession.has(sessionId) &&
+      !this.unpausableSessions.has(sessionId) &&
+      !this.stallReleasedSessions.has(sessionId)
+    ) {
       this.recordIncarnation.delete(sessionId)
     }
   }
@@ -243,12 +250,13 @@ export class DaemonStreamBackpressure {
     ) {
       return
     }
-    if (reason === 'exited') {
-      this.markExited(sessionId, incarnation)
+    if (reason === 'exited' || reason === 'terminating') {
+      this.markUnpausable(sessionId, incarnation)
       return
     }
     if (reason === 'released') {
-      // The producer already runs again; forget the pause so the next refresh pauses afresh.
+      // The producer runs again (detach, or a termination that failed); the next refresh may pause it afresh.
+      this.unpausableSessions.delete(sessionId)
       this.forgetPause(sessionId)
       return
     }

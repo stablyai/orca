@@ -86,6 +86,7 @@ export class DaemonStreamDataBatcher {
       return
     }
 
+    this.backpressure?.noteSessionOutput(sessionId)
     const batch = this.getOrCreateBatch(clientId)
     const queuedAfter = appendDaemonStreamData(batch, sessionId, data, options)
     const queuedBefore = queuedAfter - data.length

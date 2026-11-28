@@ -166,10 +166,10 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
-  pauseProducer(source?: 'stream', onStreamStall?: StreamStallHandler): boolean | 'exited' {
-    const canPause = this.hasAttachedClients && !this.isTerminating
+  pauseProducer(source?: 'stream', onStall?: StreamStallHandler) {
     const exited = this._state === 'exited' || this._disposed
-    return exited ? 'exited' : this.producerPause.pause(source, canPause, onStreamStall)
+    const canPause = this.isTerminating ? 'terminating' : this.hasAttachedClients
+    return exited ? 'exited' : this.producerPause.pause(source, canPause, onStall)
   }
 
   resumeProducer(source?: 'stream'): void {
@@ -202,14 +202,14 @@ export class Session extends SessionProcessInspection {
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
-      this.producerPause.release({ resume: true, reason: 'detached' })
+      this.producerPause.release({ resume: true, reason: 'released' })
       this.reportFocusLost()
     }
   }
 
   detachAllClients(): void {
     this.output.clearClients()
-    this.producerPause.release({ resume: true, reason: 'detached' })
+    this.producerPause.release({ resume: true, reason: 'released' })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {

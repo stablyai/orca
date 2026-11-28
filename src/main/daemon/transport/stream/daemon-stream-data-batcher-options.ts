@@ -4,8 +4,8 @@ export type DaemonStreamDataBatcherOptions = {
   onProducerBackpressureChanged?: (
     sessionId: string,
     paused: boolean,
-    onStallTimeout?: (reason: 'input' | 'timeout' | 'released' | 'exited') => void
-  ) => boolean | 'exited' | void
+    onStallTimeout?: (reason: 'input' | 'timeout' | 'released' | 'terminating' | 'exited') => void
+  ) => boolean | 'terminating' | 'exited' | void
   isSessionAttachedToClient?: (clientId: string, sessionId: string) => boolean
   isSessionDroppable?: (sessionId: string) => boolean
   /** Preserve terminal queries in dropped output: the hidden program may be waiting for their replies. */

@@ -5,7 +5,7 @@ import { SessionProducerPause } from '../../sessions/session-producer-pause'
 
 type StallHandler = (reason: 'input' | 'timeout' | 'released' | 'exited') => void
 
-function recordingBackpressure(): {
+function recordingBackpressure(options: { incarnationOf?: () => string } = {}): {
   backpressure: DaemonStreamBackpressure
   paused: Map<string, boolean>
   stall: () => StallHandler | undefined
@@ -17,7 +17,9 @@ function recordingBackpressure(): {
       paused.set(sessionId, isPaused)
       stall = onStall ?? stall
     },
-    () => false
+    () => false,
+    undefined,
+    options
   )
   return { backpressure, paused, stall: () => stall }
 }
@@ -113,7 +115,7 @@ describe('DaemonStreamBackpressure', () => {
       () => false
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
-    producer.release({ resume: true, reason: 'detached' })
+    producer.release({ resume: true, reason: 'released' })
     expect(subprocess.resume).toHaveBeenCalledTimes(1)
 
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
@@ -153,6 +155,7 @@ describe('DaemonStreamBackpressure', () => {
     producer().release({ resume: false, reason: 'exited' })
 
     incarnation = 'second'
+    backpressure.noteSessionOutput('tui')
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
     expect(pauseCalls).toBe(2)
     vi.advanceTimersByTime(60_500)
@@ -179,6 +182,44 @@ describe('DaemonStreamBackpressure', () => {
     expect(pauseCalls).toBe(1)
 
     incarnation = 'respawned'
+    backpressure.noteSessionOutput('tui')
+    backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
+    expect(pauseCalls).toBe(2)
+  })
+
+  it('a respawn does not inherit keep-tail dropping from its stalled predecessor', () => {
+    let incarnation = 'first'
+    const { backpressure, stall } = recordingBackpressure({ incarnationOf: () => incarnation })
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    stall()?.('timeout')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+
+    incarnation = 'second'
+    backpressure.noteSessionOutput('tui')
+    expect(backpressure.isStallReleased('tui')).toBe(false)
+  })
+
+  it('a termination that fails leaves the session pausable again', () => {
+    let terminating = true
+    let pauseCalls = 0
+    let owner: StallHandler | undefined
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) => {
+        if (!isPaused) {
+          return
+        }
+        pauseCalls += 1
+        owner = onStall
+        return terminating ? 'terminating' : true
+      },
+      () => false
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(pauseCalls).toBe(1)
+
+    terminating = false
+    owner?.('released')
     backpressure.setQueued('client', new Map([['tui', 202 * 1024]]))
     expect(pauseCalls).toBe(2)
   })

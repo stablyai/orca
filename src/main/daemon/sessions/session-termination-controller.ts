@@ -12,7 +12,7 @@ export type SessionTerminationControllerDeps = {
   sessionId: string
   subprocess: Pick<SubprocessHandle, 'kill' | 'forceKill' | 'signal' | 'dispose'>
   isExited(): boolean
-  releaseProducerPause(opts: { resume: boolean; reason: 'exited' }): void
+  releaseProducerPause(opts: { resume: boolean; reason: 'released' | 'terminating' }): void
 }
 
 export class SessionTerminationController {
@@ -47,7 +47,7 @@ export class SessionTerminationController {
     }
     this._isTerminating = true
     // Resume a child blocked on write before snapshotting so it can process termination.
-    this.deps.releaseProducerPause({ resume: true, reason: 'exited' })
+    this.deps.releaseProducerPause({ resume: true, reason: 'terminating' })
     return true
   }
 
@@ -87,7 +87,7 @@ export class SessionTerminationController {
     }
     if (!this._isTerminating) {
       this._isTerminating = true
-      this.deps.releaseProducerPause({ resume: true, reason: 'exited' })
+      this.deps.releaseProducerPause({ resume: true, reason: 'terminating' })
     }
     // Escalate now rather than spend the physical-exit budget waiting for graceful shutdown.
     await this.requestForceKillWithRetry()
@@ -128,6 +128,8 @@ export class SessionTerminationController {
   private resetTerminationAfterSignalFailure(): void {
     this._isTerminating = false
     this.cancelForceKillFallback()
+    // The producer lives on; let its stream owner pause it again.
+    this.deps.releaseProducerPause({ resume: false, reason: 'released' })
   }
 
   private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {

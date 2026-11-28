@@ -5,9 +5,13 @@ import {
 } from '../../../shared/terminal/input/terminal-untyped-input'
 
 /** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed;
- *  'released': a detach dropped the pause, so the owner pauses afresh after a reattach;
+ *  'released': a detach or a failed termination dropped the pause, so the owner may pause afresh;
+ *  'terminating': termination began, so the owner stops asking until 'released' or 'exited';
  *  'exited': exit or teardown dropped it, and this incarnation will never produce again. */
-export type StreamStallReason = 'input' | 'timeout' | 'released' | 'exited'
+export type StreamStallReason = 'input' | 'timeout' | 'released' | 'terminating' | 'exited'
+export type ProducerLifecycleReason = 'released' | 'terminating' | 'exited'
+/** Why a stream pause was not taken: the producer is gone or going away. */
+export type ProducerAnswer = 'terminating' | 'exited'
 export type StreamStallHandler = (reason: StreamStallReason) => void
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
@@ -25,16 +29,22 @@ export class SessionProducerPause {
   private streamStallTimer: ReturnType<typeof setTimeout> | null = null
   private inputStallTimer: ReturnType<typeof setTimeout> | null = null
   private onStreamStall: ((reason: StreamStallReason) => void) | null = null
+  // The last stream owner's handler, kept past release so lifecycle changes always reach it.
+  private streamOwner: StreamStallHandler | null = null
 
   constructor(private readonly subprocess: Pick<SubprocessHandle, 'pause' | 'resume'>) {}
 
   /** Client pauses refresh the lost-resume failsafe; stream pauses use their own stall watchdog. False when a stream pause was declined. */
   pause(
     source?: 'stream',
-    canPauseStream = true,
+    canPauseStream: boolean | 'terminating' = true,
     onStreamStall?: (reason: StreamStallReason) => void
-  ): boolean {
+  ): boolean | 'terminating' {
     if (source === 'stream') {
+      this.streamOwner = onStreamStall ?? this.streamOwner
+      if (canPauseStream === 'terminating') {
+        return 'terminating'
+      }
       if (canPauseStream) {
         this.onStreamStall = onStreamStall ?? null
         this.setStreamBackpressured(true)
@@ -95,23 +105,26 @@ export class SessionProducerPause {
     }
   }
 
-  /** A reason tells the stream owner its pause is gone: a detach may be reattached, an exit never produces again. */
-  release(opts: { resume: boolean; reason?: 'detached' | 'exited' }): void {
+  /** A reason tells the stream owner about the producer's lifecycle, whether or not a pause was held. */
+  release(opts: { resume: boolean; reason?: ProducerLifecycleReason }): void {
     if (this.failsafeTimer) {
       clearTimeout(this.failsafeTimer)
       this.failsafeTimer = null
     }
-    const onStreamStall = opts.reason && this.streamBackpressured ? this.onStreamStall : null
     this.clearStreamStallWatchdog()
-    if (!this.paused && !this.streamBackpressured) {
-      return
+    if (this.paused || this.streamBackpressured) {
+      this.paused = false
+      this.streamBackpressured = false
+      if (opts.resume) {
+        this.subprocess.resume?.()
+      }
     }
-    this.paused = false
-    this.streamBackpressured = false
-    if (opts.resume) {
-      this.subprocess.resume?.()
+    if (opts.reason) {
+      this.streamOwner?.(opts.reason)
     }
-    onStreamStall?.(opts.reason === 'detached' ? 'released' : 'exited')
+    if (opts.reason === 'exited') {
+      this.streamOwner = null
+    }
   }
 
   /** Typed input while stream-paused asks the stall owner to resume in 2 s; replies and pointer reports don't. */

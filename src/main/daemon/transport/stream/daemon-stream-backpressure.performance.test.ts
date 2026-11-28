@@ -75,4 +75,61 @@ describe('DaemonStreamBackpressure pause calls', () => {
       expect(pauseCalls).toBe(exitedCount)
     }
   )
+
+  it.each([10, 100])(
+    'terminating sessions get no pause calls across refreshes (%i terminating)',
+    (terminatingCount) => {
+      let pauseCalls = 0
+      const backpressure = new DaemonStreamBackpressure(
+        (_sessionId, isPaused) => {
+          if (isPaused) {
+            pauseCalls += 1
+            return 'terminating'
+          }
+          return undefined
+        },
+        () => false
+      )
+      const queued = new Map<string, number>([['echo', 10]])
+      for (let i = 0; i < terminatingCount; i++) {
+        queued.set(`ending-${i}`, 200 * 1024)
+      }
+      for (let refresh = 0; refresh < 100; refresh++) {
+        queued.set('echo', 10 + (refresh % 2))
+        backpressure.setQueued('client', queued)
+      }
+      expect(pauseCalls).toBe(terminatingCount)
+    }
+  )
+
+  it.each([10, 100])(
+    'unrelated output makes no incarnation lookups with %i paused producers',
+    (pausedCount) => {
+      let lookups = 0
+      const backpressure = new DaemonStreamBackpressure(
+        () => true,
+        () => false,
+        undefined,
+        {
+          incarnationOf: () => {
+            lookups += 1
+            return 'live'
+          }
+        }
+      )
+      const queued = new Map<string, number>([['echo', 10]])
+      for (let i = 0; i < pausedCount; i++) {
+        queued.set(`flood-${i}`, 200 * 1024)
+      }
+      backpressure.setQueued('client', queued)
+      const afterPausing = lookups
+
+      for (let echo = 0; echo < 100; echo++) {
+        backpressure.noteSessionOutput('echo')
+        queued.set('echo', 10 + (echo % 2))
+        backpressure.setQueued('client', queued)
+      }
+      expect(lookups).toBe(afterPausing)
+    }
+  )
 })

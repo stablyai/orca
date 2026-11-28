@@ -1,5 +1,5 @@
 import type { Session } from '../sessions/session'
-import type { StreamStallHandler } from '../sessions/session-producer-pause'
+import type { ProducerAnswer, StreamStallHandler } from '../sessions/session-producer-pause'
 
 // Producer flow-control hints tolerate sessions that have already exited.
 export function pauseSessionProducer(
@@ -7,7 +7,7 @@ export function pauseSessionProducer(
   sessionId: string,
   source?: 'stream',
   onStreamStall?: StreamStallHandler
-): boolean | 'exited' {
+): boolean | ProducerAnswer {
   const session = sessions.get(sessionId)
   if (!session || !session.isAlive) {
     return 'exited'
