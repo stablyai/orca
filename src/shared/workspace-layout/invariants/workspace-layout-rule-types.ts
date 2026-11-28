@@ -1,5 +1,5 @@
 import type { TerminalLeafOwner } from '../terminal-topology/terminal-owner-invariants'
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 
 export type PaneOwner = Pick<
@@ -7,7 +7,10 @@ export type PaneOwner = Pick<
   'hostId' | 'worktreeId' | 'leafId' | 'ptyId' | 'incarnationId'
 > & { tab: { id: string } }
 
-export type WorkspaceLayoutPartition = { hostId: ExecutionHostId; session: WorkspaceSessionState }
+export type WorkspaceLayoutPartition = {
+  hostId: WorkspaceSessionPartitionId
+  session: WorkspaceSessionState
+}
 
 export type WorkspaceLayoutRule =
   | 'terminal_in_two_panes'
@@ -33,7 +36,7 @@ export type WorkspaceLayoutRule =
 
 export type WorkspaceLayoutViolation = {
   rule: WorkspaceLayoutRule
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
   worktreeId?: string
   ids: string[]
   detail: string

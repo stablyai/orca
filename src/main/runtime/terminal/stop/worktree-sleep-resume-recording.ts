@@ -1,4 +1,5 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import { launchStatement } from '../launch/launch-evidence'
@@ -24,10 +25,7 @@ import type {
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
-import {
-  type ExecutionHostId,
-  parseExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -239,7 +237,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     if (!tabId || !worktreeId || !this.store?.getWorkspaceSession) {
       return
     }
-    const hostIdsFor = (workspace: string): ExecutionHostId[] =>
+    const hostIdsFor = (workspace: string): WorkspaceSessionPartitionId[] =>
       this.getWorkspaceSessionHostIdsForTab(workspace, tabId)
     // Why: a paired server's panes are that server's; its own main records them.
     const hostId = hostIdsFor(worktreeId)[0]

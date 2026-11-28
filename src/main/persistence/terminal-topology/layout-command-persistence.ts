@@ -1,4 +1,5 @@
 import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
+import type { WorkspaceSessionPartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
@@ -16,7 +17,6 @@ import type {
   DurableProfileStateMutation,
   StoreRuntimeState
 } from '../loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   applyLayout,
   applyEditorFileRenamesInPartitions,
@@ -44,7 +44,7 @@ import {
 
 /** Scope publication so readers reload only changed partitions. */
 function writingOnly<T>(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   mutate: () => DurableProfileStateMutation<T>
 ): () => DurableProfileStateMutation<T> {
   return () => {

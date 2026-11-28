@@ -1,6 +1,9 @@
 // Load one session partition after Store pane-identity normalization. Reapply fixed precedence on every load because older builds may rewrite the documents; do not merge disagreements.
 
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../workspace-session/teammate-homes-session-partition'
 import type { TerminalLayoutSnapshot } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import {
@@ -160,7 +163,7 @@ function followSubsumedTabSelections(
 
 /** Report every stored-to-next-save field difference after resolving fixed precedence. */
 export function loadWorkspaceLayout(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): WorkspaceLayoutLoadResult {
@@ -170,7 +173,7 @@ export function loadWorkspaceLayout(
 
 /** The same load without the save and diff, for a reader that never writes the result back. */
 export function loadWorkspaceLayoutWithoutReport(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): LoadedWorkspaceLayout {
@@ -185,11 +188,12 @@ export type LoadedWorkspaceLayoutParts = {
 
 /** `subsumedElsewhere` holds the dropped rows of workspaces a partial session leaves out, so selections still follow them. */
 export function loadWorkspaceLayoutParts(
-  hostId: ExecutionHostId,
+  partition: WorkspaceSessionPartitionId,
   stored: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext,
   subsumedElsewhere?: ReadonlyMap<string, string>
 ): LoadedWorkspaceLayoutParts {
+  const hostId = executionHostOfPartition(partition)
   // The Loader edits its own copy; the Store's object stays untouched.
   const session = structuredClone(stored)
   const desktopView: DesktopLayoutView = {

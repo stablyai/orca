@@ -1,4 +1,5 @@
 import type { OrchestrationCompatibilityTerminalAuthority } from '../terminal-authority/orchestration-compatibility-authority'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { mainTerminalSourceInputs } from '../../terminal/surface/pty-pane-query'
 import { runtimeLayoutLoadContext } from '../../terminal/surface/workspace-layout-projection'
@@ -54,8 +55,8 @@ export function watchCrewRuntimeSources(
   relevance: () => CrewRelevance | null = () => null,
   idle: () => boolean = () => false
 ): (() => void) & { resume: () => void } {
-  const hostIds = () => deps.store?.getWorkspaceSessionHostIds?.() ?? (['local'] as const)
-  type HostId = ReturnType<typeof hostIds>[number]
+  type HostId = WorkspaceSessionPartitionId
+  const hostIds = (): readonly HostId[] => deps.store?.getWorkspaceSessionHostIds?.() ?? ['local']
   // Per scope and host, where the scope's tabs live.
   const locations = new WeakMap<CrewRelevance, Map<HostId, CrewWorktreeLocations>>()
   const locatedFor = (id: HostId, scope: CrewRelevance | null) => {

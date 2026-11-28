@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   CommandOf,
   LayoutRefusalCode
@@ -12,7 +12,10 @@ import { assignWorkspaceSessionPartition } from '../pane-ownership/terminal-topo
 
 /** Publish routed tab renames in one frame and return per-tab refusals. */
 export function applyLayoutRenames(
-  batches: readonly { hostId: ExecutionHostId; renames: readonly CommandOf<'renameTab'>[] }[],
+  batches: readonly {
+    hostId: WorkspaceSessionPartitionId
+    renames: readonly CommandOf<'renameTab'>[]
+  }[],
   context: TerminalTopologyCommitContext
 ): () => DurableProfileStateMutation<
   { rename: CommandOf<'renameTab'>; code: LayoutRefusalCode }[]

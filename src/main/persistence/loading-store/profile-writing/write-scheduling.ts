@@ -1,4 +1,5 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -128,11 +129,11 @@ export class WriteSchedulingOperations {
     }
   }
 
-  getPtyBindingGeneration(hostId: ExecutionHostId, leafId: string): number | undefined {
+  getPtyBindingGeneration(hostId: WorkspaceSessionPartitionId, leafId: string): number | undefined {
     return ptyBindingGenerationOf(this[writeSchedulingOperationsContext].runtime, hostId, leafId)
   }
 
-  getLayoutEditorViews(hostId: ExecutionHostId): PartitionEditorViews | undefined {
+  getLayoutEditorViews(hostId: WorkspaceSessionPartitionId): PartitionEditorViews | undefined {
     return this[writeSchedulingOperationsContext].runtime.layoutEditorViews.get(hostId)
   }
 
@@ -172,7 +173,7 @@ export class WriteSchedulingOperations {
 export function scheduleSave(
   owner: WriteSchedulingOperations,
   domains: ProfileSaveDomains,
-  writtenHostId?: ExecutionHostId,
+  writtenHostId?: WorkspaceSessionPartitionId,
   written?: WrittenWorkspaceScope,
   options?: StateWriteOptions
 ): void {
@@ -187,7 +188,7 @@ export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void 
 function scheduleDomainSave(
   owner: WriteSchedulingOperations,
   dirtyDomains: readonly string[] | undefined,
-  writtenHostId?: ExecutionHostId,
+  writtenHostId?: WorkspaceSessionPartitionId,
   written?: WrittenWorkspaceScope,
   options?: StateWriteOptions
 ): void {

@@ -1,8 +1,11 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import {
+  executionHostOfPartition,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -53,19 +56,19 @@ export function hasHostAuthoritativeTerminalMembership(
 }
 
 export type TerminalSessionPartition = {
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
   session: WorkspaceSessionState
 }
 
-/** Runtime partitions mirror another host; local and SSH own their panes. */
-export function isTerminalOwnerPartition(hostId: ExecutionHostId): boolean {
-  const kind = parseExecutionHostId(hostId)?.kind
+/** Runtime partitions mirror another host; local and SSH ones, and the teammates' local one, own their panes. */
+export function isTerminalOwnerPartition(hostId: WorkspaceSessionPartitionId): boolean {
+  const kind = parseExecutionHostId(executionHostOfPartition(hostId))?.kind
   return kind === 'local' || kind === 'ssh'
 }
 
 export function assignWorkspaceSessionPartition(
   state: Pick<PersistedState, 'workspaceSession' | 'workspaceSessionsByHostId'>,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState
 ): 'workspaceSession' | 'workspaceSessionsByHostId' {
   // Local belongs only in workspaceSession, never the host-partition map.

@@ -1,4 +1,5 @@
 import { startSpan } from '../../../observability/tracer'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PtyBindingFastLaneMiss } from './pty-binding-fast-lane'
 import {
   terminalPanePlacementAgreement,
@@ -8,7 +9,6 @@ import {
   findTerminalBindingConflict,
   type TerminalOwnerConflictReason
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-owner-invariants'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
@@ -134,7 +134,7 @@ export function reportPtyBindingPlacement(
 export function reportPtyBindingOwnerConflict(
   span: PtyBindingSpan,
   binding: Parameters<typeof findTerminalBindingConflict>[0],
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   partitions: Parameters<typeof findTerminalBindingConflict>[2]
 ): void {
   try {

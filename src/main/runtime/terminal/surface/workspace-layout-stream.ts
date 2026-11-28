@@ -2,7 +2,7 @@
 // Main-owned layouts emit one records frame per operation, coalescing unscoped writes per task; window-owned layouts emit whole workspaces.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
@@ -35,7 +35,7 @@ import {
 type LayoutListener = (event: WorkspaceLayoutStreamEvent) => void
 
 /** Partitions written by an operation or task; null when unscoped. */
-export type LayoutOperationCommit = { hostIds: readonly ExecutionHostId[] | null }
+export type LayoutOperationCommit = { hostIds: readonly WorkspaceSessionPartitionId[] | null }
 
 export type WorkspaceLayoutReads = Pick<
   WorkspaceLayoutStream,
@@ -45,7 +45,10 @@ export type WorkspaceLayoutReads = Pick<
 type StreamStore = ProjectionStore &
   Pick<RuntimeStore, 'onWorkspaceSessionWritten' | 'onWorkspaceSessionOperationEnded'>
 
-function addDirty(dirty: DirtyPartitions | null, hostId: ExecutionHostId | null): DirtyPartitions {
+function addDirty(
+  dirty: DirtyPartitions | null,
+  hostId: WorkspaceSessionPartitionId | null
+): DirtyPartitions {
   if (hostId === null || dirty === 'all') {
     return 'all'
   }
@@ -75,7 +78,7 @@ export class WorkspaceLayoutStream {
   constructor(
     private readonly deps: PaneStartStatuses.PaneFactSources & {
       store: () => StreamStore | null
-      homeHostId: (key: string) => ExecutionHostId | null
+      homeHostId: (key: string) => WorkspaceSessionPartitionId | null
       liveTitle: (ptyId: string) => string | null
     }
   ) {
@@ -130,7 +133,7 @@ export class WorkspaceLayoutStream {
   }
 
   /** Shared read-only partition while subscribed, otherwise loaded per call; tests freeze it. Null without a Store. */
-  readPartition(hostId: ExecutionHostId): LoadedWorkspaceLayoutRead | null {
+  readPartition(hostId: WorkspaceSessionPartitionId): LoadedWorkspaceLayoutRead | null {
     const loaded = this.projection.loaded(hostId, this.stopWatching !== null)
     if (loaded) {
       workspaceLayoutPartitionReadObserver()?.(loaded)
@@ -190,7 +193,7 @@ export class WorkspaceLayoutStream {
   }
 
   private markDirty(
-    hostId: ExecutionHostId | null,
+    hostId: WorkspaceSessionPartitionId | null,
     workspaces?: ReadonlySet<string>,
     refs?: ReadonlySet<string>
   ): void {

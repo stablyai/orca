@@ -1,4 +1,5 @@
 import type { OrcaRuntimeWithResolveExitWaiters as ResolveExitWaitersMethods } from '../terminal/wait/terminal-wait-settlements'
+import type { WorkspaceSessionPartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import type { OrcaRuntimeWithHasTerminalsForWorktree as HasTerminalsForWorktreeMethods } from './session-graph-reload-lifecycle'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
 import type { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as CollectMobileVisibleGraphChangedWorktreesMethods } from '../session-tabs/inventory/session-tabs-inventory'
@@ -13,7 +14,6 @@ import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMetho
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
-import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { SessionTitleAuthority } from '../session-tabs/publication/session-title-publisher'
@@ -185,7 +185,7 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
       return
     }
     const partitions = new Map<
-      ExecutionHostId,
+      WorkspaceSessionPartitionId,
       {
         session: WorkspaceSessionState
         ptys: { pty: RuntimePtyWorktreeRecord; tabId: string }[]

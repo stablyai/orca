@@ -1,7 +1,7 @@
 // Persist windowless chat tabs too, so the host layout remains complete.
 
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
@@ -112,7 +112,7 @@ export function chatTabLayoutCommand(
 }
 
 export function loadChatTabLayout(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   worktreeId: string
 ) {
@@ -121,7 +121,7 @@ export function loadChatTabLayout(
 }
 
 export function withChatTabChanges(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   worktreeId: string,
   changes: readonly ChatTabChange[]

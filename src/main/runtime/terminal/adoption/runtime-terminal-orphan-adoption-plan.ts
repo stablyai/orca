@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { RuntimeTerminalOrphanAdoptionRequest } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -36,7 +36,7 @@ export type RuntimeTerminalOrphanAdoptionPlanPorts = {
 
 export type RuntimeTerminalOrphanAdoptionPlanArgs = {
   /** The partition the session is read from and written to. */
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
   request: RuntimeTerminalOrphanAdoptionRequest
   workspace: TerminalWorkspaceLaunchScope
   inventory: PtyControllerInventory

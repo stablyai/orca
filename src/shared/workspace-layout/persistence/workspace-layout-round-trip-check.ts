@@ -1,6 +1,6 @@
 // Check load/save idempotence: a second load must change nothing. Known first-load kinds are broad; return per-kind counts for logging so new normalizations remain visible.
 
-import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
@@ -93,7 +93,7 @@ export type LayoutRoundTripResult = {
 
 /** Loader then Serializer, twice: names and kinds only, never values. */
 export function checkLayoutRoundTrip(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState
 ): LayoutRoundTripResult {
   const firstLoadChanges: Record<string, number> = {}

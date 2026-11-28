@@ -1,8 +1,8 @@
 // Main moves editor tabs across partitions and writes only changed records, retaining in-memory views.
 
 import type { LayoutClientVisibility } from '../../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   CommandOf,
@@ -25,7 +25,7 @@ import {
 } from '../../loading-store/workspace-sessions/layout-editor-views'
 
 type PartitionSession = {
-  hostId: ExecutionHostId
+  hostId: WorkspaceSessionPartitionId
   session: WorkspaceSessionState
   /** In-memory views may be absent for this partition. */
   views?: PartitionEditorViews

@@ -5,6 +5,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
@@ -61,7 +62,7 @@ export class TerminalSurfaceIndex {
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
   /** Workspace key → its home partition, as of the last projection. */
-  private routes = new Map<string, ExecutionHostId | null>()
+  private routes = new Map<string, WorkspaceSessionPartitionId | null>()
   /** Worktree id → the first workspace its home partition holds for it in the last projection. */
   private projectedWorkspaces = new Map<string, ProjectedWorkspace>()
   private routesStale = true
@@ -71,10 +72,10 @@ export class TerminalSurfaceIndex {
       /** Main's one layout projection, which the layout stream publishes from. */
       reads: () => WorkspaceLayoutReads | null
       /** Every session partition the Store holds. */
-      hostIds: () => readonly ExecutionHostId[]
+      hostIds: () => readonly WorkspaceSessionPartitionId[]
       /** The partition that owns a workspace key; null when none does. */
-      homeHostId: (key: string) => ExecutionHostId | null
-      savedSession?: (hostId: ExecutionHostId) => WorkspaceSessionState | null
+      homeHostId: (key: string) => WorkspaceSessionPartitionId | null
+      savedSession?: (hostId: WorkspaceSessionPartitionId) => WorkspaceSessionState | null
       generatedTitlesEnabled: () => boolean
       /** A layout operation ended, so main's surfaces may have changed. */
       onChanged: () => void
@@ -151,7 +152,7 @@ export class TerminalSurfaceIndex {
   }
 
   private project(
-    hostIds: readonly ExecutionHostId[],
+    hostIds: readonly WorkspaceSessionPartitionId[],
     loaded: readonly (LoadedWorkspaceLayoutRead | null)[]
   ): MainTerminalSurfaces {
     const partitions: LoadedPartition[] = []
@@ -258,7 +259,7 @@ export class TerminalSurfaceIndex {
       : null
   }
 
-  private homeOf(key: string): ExecutionHostId | null {
+  private homeOf(key: string): WorkspaceSessionPartitionId | null {
     try {
       return this.deps.homeHostId(key)
     } catch {

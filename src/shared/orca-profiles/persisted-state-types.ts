@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../workspace-session/teammate-homes-session-partition'
 import type {
   RemovedSshTargetTombstone,
   SshPtyConsumerRecovery,
@@ -105,7 +105,7 @@ export type PersistedState = {
   /** Legacy single-blob session, kept as the canonical 'local' host partition so an app downgrade still reads its workspace. */
   workspaceSession: WorkspaceSessionState
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
-  workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
+  workspaceSessionsByHostId?: Partial<Record<WorkspaceSessionPartitionId, WorkspaceSessionState>>
   /** Paired server’s last display layout, keyed by environment and written only by the snapshot recorder;
    * separate from runtime:<env> partitions that older builds overwrite. */
   remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>

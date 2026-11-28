@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   CommandOf,
   LayoutRefusalCode
@@ -10,7 +10,7 @@ export type UnstartedPaneKept = 'bound' | 'starting'
 
 /** Recheck inside the write queue; bindings or starts that arrived meanwhile preserve the pane. */
 export function withdrawUnstartedPane(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   pane: CommandOf<'closePane'>,
   context: TerminalTopologyCommitContext,
   stillStarting: () => boolean

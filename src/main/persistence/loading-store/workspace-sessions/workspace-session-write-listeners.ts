@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import { refileEditorViews } from './layout-editor-views'
@@ -9,7 +9,7 @@ import { rowShareRef } from '../../../../shared/workspace-layout/persistence/wor
 
 /** Null means any partition may have changed; absent workspaces mean any workspace of that partition. `refs`: Loader share refs (rows, panes, worktrees) naming more written workspaces. */
 export type WorkspaceSessionWriteListener = (
-  hostId: ExecutionHostId | null,
+  hostId: WorkspaceSessionPartitionId | null,
   workspaces?: ReadonlySet<string>,
   refs?: ReadonlySet<string>
 ) => void
@@ -47,7 +47,9 @@ export function withStoreRewrites(
 }
 
 /** Null means any partition may have changed. */
-export type WorkspaceSessionOperationListener = (hostIds: readonly ExecutionHostId[] | null) => void
+export type WorkspaceSessionOperationListener = (
+  hostIds: readonly WorkspaceSessionPartitionId[] | null
+) => void
 
 /** Full saves may contain untracked session edits; an absent host makes all partitions candidates. */
 export function notifyWorkspaceSessionWritten(
@@ -56,7 +58,7 @@ export function notifyWorkspaceSessionWritten(
     'workspaceSessionWriteListeners' | 'layoutEditorViews' | 'state'
   >,
   dirtyDomains?: readonly string[],
-  hostId?: ExecutionHostId,
+  hostId?: WorkspaceSessionPartitionId,
   workspaces?: ReadonlySet<string>,
   refs?: ReadonlySet<string>
 ): void {
@@ -95,8 +97,8 @@ export function notifyWorkspaceSessionOperationEnded(
     | 'layoutEditorViews'
     | 'state'
   >,
-  hostIds: readonly ExecutionHostId[] | null,
-  workspaces?: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
+  hostIds: readonly WorkspaceSessionPartitionId[] | null,
+  workspaces?: ReadonlyMap<WorkspaceSessionPartitionId, ReadonlySet<string>>
 ): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
     notifyWorkspaceSessionWritten(runtime)

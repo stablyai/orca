@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PtyBindingFastLaneVerdict } from './pty-binding-fast-lane'
 
 // No-op rollback still triggers writer-owned failure publication for a matching binding.
@@ -8,11 +8,11 @@ export function isDurabilityOnlyMatch(verdict: PtyBindingFastLaneVerdict): boole
   return verdict.misses.length === 1 && verdict.misses[0] === 'not_durable'
 }
 
-export function durabilityOnlyBindingResult(hostId: ExecutionHostId): {
+export function durabilityOnlyBindingResult(hostId: WorkspaceSessionPartitionId): {
   value: true
   rollback: () => void
-  writtenHostIds: ExecutionHostId[]
-  writtenWorkspaces: ReadonlyMap<ExecutionHostId, ReadonlySet<string>>
+  writtenHostIds: WorkspaceSessionPartitionId[]
+  writtenWorkspaces: ReadonlyMap<WorkspaceSessionPartitionId, ReadonlySet<string>>
 } {
   // Memory already holds the binding: only the disk write is pending, so no workspace changed.
   return {

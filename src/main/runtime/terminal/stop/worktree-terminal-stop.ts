@@ -1,4 +1,5 @@
 import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { teardownRpcDeadline } from '../../workspaces/removal/worktree-teardown-deadline'
@@ -15,8 +16,7 @@ import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessi
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import {
   getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
+  parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
 
   private async clearWorktreeTerminalResumeRecords(
     worktreeId: string,
-    hostId: ExecutionHostId,
+    hostId: WorkspaceSessionPartitionId,
     closedTabIds: readonly string[]
   ): Promise<void> {
     await this.commitWorkspaceSessionEdit(hostId, (session) =>
@@ -117,7 +117,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
 
   /** Durably replaces a host partition's session with `edit`'s result: null skips, an Error refuses. */
   protected async commitWorkspaceSessionEdit(
-    hostId: ExecutionHostId,
+    hostId: WorkspaceSessionPartitionId,
     edit: (session: WorkspaceSessionState) => WorkspaceSessionState | Error | null
   ): Promise<void> {
     if (

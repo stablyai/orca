@@ -1,7 +1,7 @@
 // List saved headless browser tabs immediately; start pages lazily on first use, never merely on host restart.
 
 import type { BrowserBackend } from '../../../browser/browser-backend'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -23,7 +23,10 @@ import {
   type ServeBrowserPageState
 } from './serve-browser-tab-layout'
 
-type LayoutApply = (command: LayoutCommand, hostId: ExecutionHostId) => Promise<LayoutApplyOutcome>
+type LayoutApply = (
+  command: LayoutCommand,
+  hostId: WorkspaceSessionPartitionId
+) => Promise<LayoutApplyOutcome>
 
 type RestorableBrowserPage = {
   /** The saved tab; a host's own tab is named by its page, a window's by its own id. */
@@ -44,7 +47,7 @@ export class ServeBrowserTabs {
       /** Every workspace that holds a saved browser tab, whatever else it holds. */
       savedWorktreeIds: () => Iterable<string>
       session: (worktreeId: string) => WorkspaceSessionState | null
-      hostId: (worktreeId: string) => ExecutionHostId
+      hostId: (worktreeId: string) => WorkspaceSessionPartitionId
       save: (worktreeId: string, session: WorkspaceSessionState) => void
       /** `layout.apply` on one partition; set only in a layout-owner build. */
       applyLayout?: LayoutApply
@@ -327,7 +330,7 @@ export class ServeBrowserTabs {
   private write(
     worktreeId: string,
     change: (
-      hostId: ExecutionHostId,
+      hostId: WorkspaceSessionPartitionId,
       session: WorkspaceSessionState
     ) => WorkspaceSessionState | null
   ): boolean {

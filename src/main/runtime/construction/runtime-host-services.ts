@@ -1,4 +1,5 @@
 import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+import type { WorkspaceSessionPartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import type { ClaudeAccountSelectedHandler } from '../../../shared/agent-accounts/managed-account-types'
 
 import type * as Calls from './runtime-host-service-calls'
@@ -14,10 +15,7 @@ import {
   confirmRunTerminalShellAlone,
   readRunTerminalClientUse
 } from '../terminal/lifecycle/run-terminal-client-use'
-import {
-  ALL_EXECUTION_HOSTS_SCOPE,
-  type ExecutionHostId
-} from '../../../shared/execution-host/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host/execution-host'
 import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
 import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
 import type * as CompatibilityAuthority from '../orchestration/terminal-authority/orchestration-compatibility-authority'
@@ -52,7 +50,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
   declare acquireFileWatcherRemoval: Calls.AcquireFileWatcherRemoval
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
     worktreeId: string
-  ): ExecutionHostId | null
+  ): WorkspaceSessionPartitionId | null
   protected abstract getLegacyWorkerRecoveryActivation(
     ...args: Calls.GetLegacyWorkerRecoveryActivationArgs
   ): Calls.GetLegacyWorkerRecoveryActivationResult

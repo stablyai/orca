@@ -1,7 +1,7 @@
 // Persist headless browser tabs/pages like window-owned tabs; restart lists saved tabs but restores pages only on first use.
 
 import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import { applyLayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { BLANK_BROWSER_TAB_STATE } from '../../../../shared/workspace-layout/persistence/workspace-layout-beside'
 import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
@@ -35,7 +35,7 @@ export function findSavedBrowserPage(
 
 /** The partition with a just-created page's tab, or null when it is saved already or refused. */
 export function withOpenedServeBrowserTab(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   page: ServeBrowserPageState & { profileId?: string; groupId?: string }
 ): WorkspaceSessionState | null {
@@ -194,7 +194,7 @@ export function serveBrowserTabProfileCommand(
 
 /** The partition with the saved tab in its page's new profile, or null when no saved tab shows it. */
 export function withServeBrowserTabProfile(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   page: ServeBrowserPageProfile
 ): WorkspaceSessionState | null {
@@ -213,7 +213,7 @@ export function withServeBrowserTabProfile(
 
 /** The partition without the tab showing the page, or null when no saved tab shows it. */
 export function withClosedServeBrowserTab(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   worktreeId: string,
   pageId: string

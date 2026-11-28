@@ -17,6 +17,11 @@ import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspa
 import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { resolveTwinRepoSessionHostId, type CachedWorktreeHost } from './twin-repo-session-host'
+import { isPersonWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
+import {
+  TEAMMATE_HOMES_SESSION_PARTITION,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 
 /** Match window save routing without repo lookup; mixed-host folders may route here but still refuse terminal starts. */
 function layoutOwnerFolderHostId(workspace: FolderWorkspace, store: RuntimeStore): ExecutionHostId {
@@ -37,7 +42,14 @@ type RuntimeWorkspaceSessionDependencies = {
 export class RuntimeWorkspaceSessionController {
   constructor(private readonly deps: RuntimeWorkspaceSessionDependencies) {}
 
-  private getPreferredHostId(worktreeId: string, store: RuntimeStore): ExecutionHostId | null {
+  private getPreferredHostId(
+    worktreeId: string,
+    store: RuntimeStore
+  ): WorkspaceSessionPartitionId | null {
+    // A teammate's own workspace in a shared agent's Home is saved in the one partition for them.
+    if (isPersonWorkspaceKey(worktreeId)) {
+      return TEAMMATE_HOMES_SESSION_PARTITION
+    }
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
       const workspace = store.getFolderWorkspace?.(scope.folderWorkspaceId)
@@ -113,14 +125,14 @@ export class RuntimeWorkspaceSessionController {
     return persistedOwners.length === 1 ? persistedOwners[0]! : preferredHostId
   }
 
-  tryGetHostId(worktreeId: string): ExecutionHostId | null {
+  tryGetHostId(worktreeId: string): WorkspaceSessionPartitionId | null {
     const store = this.deps.getStore()
     if (!store) {
       return null
     }
     const preferredHostId = this.getPreferredHostId(worktreeId, store)
-    if (!preferredHostId) {
-      return null
+    if (!preferredHostId || preferredHostId === TEAMMATE_HOMES_SESSION_PARTITION) {
+      return preferredHostId
     }
     const persistedHostIds = store?.getWorkspaceSessionHostIds?.()
     if (!store.getWorkspaceSession || !persistedHostIds) {
@@ -131,7 +143,7 @@ export class RuntimeWorkspaceSessionController {
     )
   }
 
-  getHostId(worktreeId: string): ExecutionHostId {
+  getHostId(worktreeId: string): WorkspaceSessionPartitionId {
     const hostId = this.tryGetHostId(worktreeId)
     if (!hostId) {
       throw new Error('folder_workspace_not_found')
@@ -140,7 +152,7 @@ export class RuntimeWorkspaceSessionController {
   }
 
   /** Find partitions owning this exact tab, routed first; fall back to the route only when none owns it. Worktree ids repeat across hosts. */
-  getHostIdsForTab(worktreeId: string, tabId: string): ExecutionHostId[] {
+  getHostIdsForTab(worktreeId: string, tabId: string): WorkspaceSessionPartitionId[] {
     const routedHostId = this.tryGetHostId(worktreeId)
     if (!routedHostId) {
       return []

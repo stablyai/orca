@@ -2,12 +2,13 @@ import type {
   LegacyPaneKeyAliasEntry,
   PersistedState
 } from '../../../shared/orca-profiles/persisted-state-types'
+import type { WorkspaceSessionPartitionId as PartitionId } from '../../../shared/workspace-session/teammate-homes-session-partition'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 // oxfmt-ignore
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { isTerminalLeafId, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
@@ -120,8 +121,8 @@ export type WorkspaceSessionPaneIdentityRemap = {
 
 export function remapSshRemotePtyLeaseLeafIds(
   leases: SshRemotePtyLease[],
-  remapsByHostId: ReadonlyMap<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>,
-  hostIdsWithWorkspaceSessions: ReadonlySet<ExecutionHostId> = new Set(remapsByHostId.keys())
+  remapsByHostId: ReadonlyMap<PartitionId, WorkspaceSessionPaneIdentityRemap>,
+  hostIdsWithWorkspaceSessions: ReadonlySet<PartitionId> = new Set(remapsByHostId.keys())
 ): { leases: SshRemotePtyLease[]; changed: boolean } {
   let changed = false
   const nextLeases = leases.map((lease) => {
@@ -193,7 +194,7 @@ export function normalizePersistedPaneIdentityState(
     }
   )
   let acknowledgementLeafIdByInputLeafIdByTabId = normalizedSession.leafIdByInputLeafIdByTabId
-  const remapsByHostId = new Map<ExecutionHostId, WorkspaceSessionPaneIdentityRemap>([
+  const remapsByHostId = new Map<PartitionId, WorkspaceSessionPaneIdentityRemap>([
     [LOCAL_EXECUTION_HOST_ID, normalizedSession]
   ])
   const hostSessionLegacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []

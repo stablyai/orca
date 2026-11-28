@@ -1,9 +1,7 @@
 // Apply routed-partition commands first while carrying in-memory editor views through saved-session loads.
 
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   LayoutApplyOutcome,
@@ -39,7 +37,7 @@ export type LayoutCommandRun = {
 
 // Preserve quiesced WSL rows.
 export function keepFrozen(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   context: TerminalTopologyCommitContext
 ): WorkspaceSessionState {
@@ -50,7 +48,7 @@ export function keepFrozen(
 
 /** Validate all partition holders before one atomic detach write. */
 export function commitWindowPaneDetach(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   command: WindowPaneDetachCommand,
   context: TerminalTopologyCommitContext,
   run: LayoutCommandRun = {}
@@ -87,7 +85,7 @@ export function commitWindowPaneDetach(
 }
 
 export function commitLayoutCommand(
-  hostIds: readonly ExecutionHostId[],
+  hostIds: readonly WorkspaceSessionPartitionId[],
   command: LayoutCommand,
   context: TerminalTopologyCommitContext,
   run: LayoutCommandRun = {}
@@ -110,7 +108,7 @@ export function commitLayoutCommand(
 
 /** Any partition refusal prevents the whole write. */
 export function commitLayoutCommandsAcrossPartitions(
-  batches: readonly { hostId: ExecutionHostId; command: LayoutCommand }[],
+  batches: readonly { hostId: WorkspaceSessionPartitionId; command: LayoutCommand }[],
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const changes = batches.map(({ hostId, command }) => changeIn(hostId, command, context))
@@ -122,10 +120,13 @@ export function commitLayoutCommandsAcrossPartitions(
   return written(first, changes, context)
 }
 
-type PartitionChange = { hostId: ExecutionHostId; change: PaneLayoutChange<LayoutApplyOutcome> }
+type PartitionChange = {
+  hostId: WorkspaceSessionPartitionId
+  change: PaneLayoutChange<LayoutApplyOutcome>
+}
 
 function changeIn(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   command: LayoutCommand,
   context: TerminalTopologyCommitContext,
   live?: LayoutLiveContext

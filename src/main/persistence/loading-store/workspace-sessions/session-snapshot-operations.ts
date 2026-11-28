@@ -1,12 +1,10 @@
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 
@@ -23,9 +21,9 @@ import {
 import {
   type SessionHostPartitionOperations,
   resolveHostId,
-  setHostWorkspaceSession,
-  withRequiredWorkspaceSessionMaps
+  setHostWorkspaceSession
 } from './session-host-partitions'
+import { withRequiredWorkspaceSessionMaps } from './workspace-session-required-maps'
 import { dropClosedTerminalTabs } from '../../closed-terminal-tab-write-fence'
 import { keepWslMoveFrozenSessionsForStore } from '../../moving-wsl-projects/terminal-state/wsl-move-session-freeze'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
@@ -171,7 +169,7 @@ export class SessionSnapshotOperations {
   /** `rewrites` collects what the Store's own normalization changed for a scoped write. */
   private publishSession(
     session: WorkspaceSessionState,
-    hostId: ExecutionHostId,
+    hostId: WorkspaceSessionPartitionId,
     written?: WrittenWorkspaceScope,
     rewrites = membershipRewritesFor(written),
     topologyChanged = true

@@ -1,11 +1,11 @@
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session/workspace-session-salvage'
 import { withoutRedundantGlobalFields } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
+import {
+  normalizeWorkspaceSessionPartitionId,
+  type WorkspaceSessionPartitionId
+} from '../../../../shared/workspace-session/teammate-homes-session-partition'
 
 export function workspaceSessionSalvageLogDetails(result: {
   droppedCount: number
@@ -23,14 +23,17 @@ export function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState,
   localSession?: WorkspaceSessionState
-): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
+): {
+  partitions: Partial<Record<WorkspaceSessionPartitionId, WorkspaceSessionState>>
+  repaired: boolean
+} {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { partitions: {}, repaired: raw !== undefined }
   }
   let repaired = false
-  const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
+  const partitions: Partial<Record<WorkspaceSessionPartitionId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const hostId = normalizeExecutionHostId(key)
+    const hostId = normalizeWorkspaceSessionPartitionId(key)
     // Reject local/invalid aliases so they cannot shadow the canonical local partition.
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue

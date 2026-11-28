@@ -1,9 +1,7 @@
 // Runtime partitions mirror a paired server, so main's per-repo topology fence must not outlive the
 // race it guards: the window never echoes revisions, and a permanent fence froze its membership.
-import {
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { StoreRuntimeState } from '../store-runtime-state'
@@ -17,11 +15,11 @@ type FenceOwner = Pick<StoreRuntimeState, 'state'>
 /** Per store and runtime host: repo id -> when main last changed its terminal membership. */
 const fencedAtByStore = new WeakMap<FenceOwner, Map<string, Map<string, number>>>()
 
-function isRuntimePartition(hostId: ExecutionHostId): boolean {
+function isRuntimePartition(hostId: WorkspaceSessionPartitionId): boolean {
   return parseExecutionHostId(hostId)?.kind === 'runtime'
 }
 
-function fencedRepos(owner: FenceOwner, hostId: ExecutionHostId): Map<string, number> {
+function fencedRepos(owner: FenceOwner, hostId: WorkspaceSessionPartitionId): Map<string, number> {
   const byHost = fencedAtByStore.get(owner) ?? new Map<string, Map<string, number>>()
   const repos = byHost.get(hostId) ?? new Map<string, number>()
   byHost.set(hostId, repos)
@@ -32,7 +30,7 @@ function fencedRepos(owner: FenceOwner, hostId: ExecutionHostId): Map<string, nu
 /** Main changed a runtime worktree's terminal membership itself (a removal, a recorded close). */
 export function noteRuntimeTopologyChange(
   owner: FenceOwner,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   worktreeId: string,
   now = performance.now()
 ): void {
@@ -45,7 +43,7 @@ export function noteRuntimeTopologyChange(
  *  sanitizer is about to retire. Either opens the fence for that repo. */
 export function noteRuntimeRevisionRaises(
   owner: FenceOwner,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined,
   now = performance.now()
@@ -71,7 +69,7 @@ export function noteRuntimeRevisionRaises(
 /** The prior a write rebases against: on a runtime partition, only repos main changed recently stay fenced. */
 export function runtimePartitionFencePrior(
   owner: FenceOwner,
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   incoming: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined,
   now = performance.now()
@@ -97,7 +95,7 @@ export function runtimePartitionFencePrior(
 
 /** Window saves omit revisions; keep the highest so later main writes still order after earlier ones. */
 export function keepRuntimePartitionRevisions(
-  hostId: ExecutionHostId,
+  hostId: WorkspaceSessionPartitionId,
   session: WorkspaceSessionState,
   prior: WorkspaceSessionState | undefined
 ): WorkspaceSessionState {

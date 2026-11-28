@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSessionPartitionId } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type {
   RuntimeTerminalOrphanAdoptionRequest,
@@ -20,7 +20,9 @@ import { OrcaRuntimeWithRestoredTerminalPlacement } from '../../workspaces/persi
 export abstract class LegacyWorkerTerminalSurface extends OrcaRuntimeWithRestoredTerminalPlacement {
   protected abstract rebuildLeafPtyIndex(): void
 
-  protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
+  protected abstract getWorkspaceSessionHostIdForWorktree(
+    worktreeId: string
+  ): WorkspaceSessionPartitionId
 
   protected abstract getTerminalTopologyRevision(worktreeId: string): number
 
