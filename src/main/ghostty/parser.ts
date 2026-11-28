@@ -1,20 +1,3 @@
-function stripInlineComment(value: string): string {
-  let inSingle = false
-  let inDouble = false
-  for (let i = 0; i < value.length; i++) {
-    const ch = value[i]
-    const prev = i > 0 ? value[i - 1] : ''
-    if (ch === "'" && !inDouble) {
-      inSingle = !inSingle
-    } else if (ch === '"' && !inSingle) {
-      inDouble = !inDouble
-    } else if (ch === '#' && !inSingle && !inDouble && (prev === ' ' || prev === '\t')) {
-      return value.slice(0, i).trim()
-    }
-  }
-  return value.trim()
-}
-
 export function parseGhosttyConfig(content: string): Record<string, string | string[]> {
   const result: Record<string, string | string[]> = {}
 
@@ -32,8 +15,7 @@ export function parseGhosttyConfig(content: string): Record<string, string | str
     const key = line.slice(0, eqIndex).trim()
     let value = line.slice(eqIndex + 1).trim()
 
-    // Require whitespace before inline # comments so leading hexadecimal colors remain intact.
-    value = stripInlineComment(value)
+    // Ghostty only supports whole-line comments; a # inside a value belongs to that value.
 
     if (
       (value.startsWith('"') && value.endsWith('"')) ||
