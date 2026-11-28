@@ -18,11 +18,13 @@ import { DetachedHeadIcon } from './worktree-card-glyphs'
 export function WorktreeCardRepoChip({
   repo,
   card,
-  hasHoverDetails = false
+  hasHoverDetails = false,
+  showName = false
 }: {
   repo: Repo
   card?: IdentityBadgeProps['card']
   hasHoverDetails?: boolean
+  showName?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const hover = card ? identityIndicatorHoverHandlers({ card, hasHoverDetails }) : null
@@ -58,9 +60,19 @@ export function WorktreeCardRepoChip({
           }
         }}
         onFocus={hover?.onFocus}
-        className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={
+          showName
+            ? // Why: an inset ring sits under the mark, so the mark meets the chip edge with no gap.
+              'inline-flex h-4 max-w-24 shrink-0 items-center gap-1 rounded-[4px] bg-worktree-sidebar-accent/55 pr-1 ring-1 ring-inset ring-worktree-sidebar-border outline-none focus-visible:ring-2 focus-visible:ring-ring'
+            : 'inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        }
       >
         <RepoMark repo={repo} />
+        {showName && (
+          <span className="min-w-0 truncate text-3xs leading-3.5 text-muted-foreground">
+            {repo.displayName}
+          </span>
+        )}
       </button>
     </ProjectPeekPopover>
   )

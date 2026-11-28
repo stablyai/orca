@@ -57,6 +57,7 @@ export const WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES = [
 
 /** "Show properties": one card property per row. */
 export const WORKSPACE_CARD_PROPERTY_CHOICES = [
+  { id: 'project-name', label: 'Project name' },
   { id: 'issue', label: 'GitHub ticket' },
   { id: 'linear-issue', label: 'Linear issue' },
   { id: 'jira-issue', label: 'Jira issue' },
@@ -70,6 +71,7 @@ export const WORKSPACE_CARD_PROPERTY_CHOICES = [
 
 /** "Card display" (the experimental card style). */
 export const WORKSPACE_CARD_DISPLAY_CHOICES = [
+  { id: 'project-name', label: 'Project name' },
   { id: 'issue', label: 'GitHub issues' },
   { id: 'linear-issue', label: 'Linear issues' },
   { id: 'jira-issue', label: 'Jira issues' },

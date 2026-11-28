@@ -202,7 +202,12 @@ export function HostWorkspaceList({
             status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
             repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
             repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-            hideRepo={groupBy === 'repo' && !view.showProjectName}
+            hideRepo={
+              groupBy === 'repo' &&
+              !view.showProjectName &&
+              // Why: a pinned row sits under the Pinned header, which does not name its project.
+              !(cardDetails.projectName && isWorktreePinned(item, pinnedIds))
+            }
             cardDetails={cardDetails}
             agentActivityDisplayMode={agentActivityDisplayMode}
             onPress={openWorktreeSession}

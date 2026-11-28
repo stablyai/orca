@@ -123,12 +123,13 @@ export const CARD_IDENTITY_PARTS = {
     <CardTitle props={props} card={card} />
   )),
   TitleStatus: part([], () => <WorktreeCardTitleStatus />),
-  RepoChip: part(['hasHoverDetails'], (props, _children, card) =>
+  RepoChip: part(['hasHoverDetails', 'showName'], (props, _children, card) =>
     card.repo ? (
       <WorktreeCardRepoChip
         repo={card.repo}
         card={card}
         hasHoverDetails={props.hasHoverDetails === true}
+        showName={props.showName === true}
       />
     ) : null
   ),

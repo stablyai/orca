@@ -29,7 +29,8 @@ function showOptions(cardProps: readonly WorktreeCardProperty[]): WorkspaceCardS
     comment: has('comment'),
     ports: has('ports'),
     inlineAgents: has('inline-agents'),
-    host: has('host')
+    host: has('host'),
+    projectName: has('project-name')
   }
   showOptionsCache.set(cardProps, show)
   return show

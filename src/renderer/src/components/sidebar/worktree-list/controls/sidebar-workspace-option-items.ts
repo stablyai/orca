@@ -137,7 +137,9 @@ export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_P
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports'),
     'inline-agents': () =>
       translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.d7084e8bc8', 'Agent activity'),
-    host: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host')
+    host: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host'),
+    'project-name': () =>
+      translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectName', 'Project name')
   }
 )
 
@@ -160,6 +162,8 @@ const CARD_DISPLAY_LABELS: Record<
   'inline-agents': () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.65a9820bd1', 'Agent statuses'),
   host: () => translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.host', 'Host'),
+  'project-name': () =>
+    translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectName', 'Project name'),
   branch: (hasProjectGroups) =>
     hasProjectGroups
       ? translate(

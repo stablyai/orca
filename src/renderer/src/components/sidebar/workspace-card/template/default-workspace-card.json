@@ -55,7 +55,10 @@
                 {
                   "el": "RepoChip",
                   "when": "vars.pinnedRepo || vars.inlineRepo",
-                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                  "props": {
+                    "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming",
+                    "showName": "=options.show.projectName"
+                  }
                 },
                 {
                   "el": "SshControl",
@@ -125,7 +128,10 @@
                       "children": [
                         {
                           "el": "RepoChip",
-                          "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                          "props": {
+                            "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming",
+                            "showName": "=options.show.projectName"
+                          }
                         }
                       ]
                     },

@@ -7937,6 +7937,7 @@
           "44713a5d04": "Linear issues",
           "jiraIssues": "Jira issues",
           "host": "Host",
+          "projectName": "Project name",
           "cc17bd443b": "Detailed",
           "0f9b959b31": "PR",
           "e029a2d775": "Status",
