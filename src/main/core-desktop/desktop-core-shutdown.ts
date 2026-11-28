@@ -10,7 +10,6 @@ import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { botToolRelay } from '../bots/tool-relay/bot-tool-relay'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/installation/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/installation/structured-agent-session-runtime-teardown'
 import {
@@ -108,7 +107,9 @@ function cleanUpGrokHooksOnWindows(): Promise<void> {
     return Promise.resolve()
   }
   return settleWithinMs(
-    removeManagedAgentHooksAsync({ agents: ['grok'] }),
+    import('../agent-hooks/installation/managed-agent-hook-controls').then(
+      ({ removeManagedAgentHooksAsync }) => removeManagedAgentHooksAsync({ agents: ['grok'] })
+    ),
     GROK_HOOK_CLEANUP_DEADLINE_MS
   ).then((settled) => {
     if (settled.outcome === 'timed-out') {

@@ -2,10 +2,9 @@ import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/
 import React, { Suspense, useCallback } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useAppStore } from '@/store/index'
-import {
-  getOverlayFocusOwners,
-  overlayFocusContains
-} from '@/lib/overlay-interaction/overlay-focus-ownership'
+import { restoreAgentSettingsInvoker } from './restore-agent-settings-invoker'
+
+export { restoreAgentSettingsInvoker }
 import {
   Dialog,
   DialogContent,
@@ -114,27 +113,4 @@ export default function AgentSettingsDialog({
       </DialogContent>
     </Dialog>
   )
-}
-
-export function restoreAgentSettingsInvoker(event: Event, invoker: HTMLButtonElement | null): void {
-  if (event.defaultPrevented) {
-    return
-  }
-  event.preventDefault()
-  const active = document.activeElement
-  const dialog = event.target
-  if (
-    invoker?.isConnected &&
-    !invoker.disabled &&
-    !invoker.closest('[inert]') &&
-    (active === document.body ||
-      active === invoker ||
-      (dialog instanceof HTMLElement && active && overlayFocusContains(dialog, active))) &&
-    !getOverlayFocusOwners(invoker).some(
-      (owner) =>
-        owner !== dialog && !(dialog instanceof HTMLElement && overlayFocusContains(dialog, owner))
-    )
-  ) {
-    invoker.focus({ preventScroll: true })
-  }
 }

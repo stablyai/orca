@@ -170,7 +170,8 @@ export function monitorWorkerSetup(args: {
           effect.kind === 'setup' ? { ...effect, state: setupState } : effect
         )
       })
-      if (!evidence.changed) {
+      // Why: success needs no action and worker-show already reads setup_state; only failure wakes.
+      if (!evidence.changed || setupState === 'succeeded') {
         return
       }
       const dispatch = args.db.getDispatchContextById(args.dispatchId)
@@ -178,9 +179,9 @@ export function monitorWorkerSetup(args: {
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
         to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
-        subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+        subject: `Setup failed for worker ${args.dispatchId}`,
         type: 'status',
-        priority: setupState === 'failed' ? 'high' : 'normal',
+        priority: 'high',
         payload: JSON.stringify({
           dispatchId: args.dispatchId,
           setupState,

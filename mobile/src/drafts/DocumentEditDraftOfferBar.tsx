@@ -3,7 +3,7 @@ import { intlLocaleFor } from '../i18n/ui-intl-locale'
 import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import type { Translate } from '../i18n/mobile-i18n'
 import { mobileSessionReviewCommentStylesSheet } from '../source-control/review/review-notes/mobile-session-review-comment-styles'
-import { pressedStyle } from '../theme/mobile-theme'
+import { feedback, pressedStyle } from '../theme/mobile-theme'
 import { useThemedStyles } from '../theme/themed-styles'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { DocumentEditDraftOffer } from './use-document-edit-draft'
@@ -49,44 +49,77 @@ export function DocumentEditDraftOfferBar({
   onCopy: () => void
 }) {
   const colors = useMobileColors()
-  const styles = useThemedStyles(mobileSessionReviewCommentStylesSheet)
   const t = useMobileTranslation()
   const intlLocale = intlLocaleFor(useMobileUiLocale())
   return (
+    <DocumentFloatingBar
+      bottom={bottom}
+      status={documentEditDraftOfferText(offer, t, intlLocale)}
+      statusColor={offer.baseMatches ? undefined : colors.statusAmber}
+      quiet={{ label: t('files.unsavedEditsOffer.discard', 'Discard'), onPress: onDiscard }}
+      primary={
+        offer.baseMatches
+          ? { label: t('files.unsavedEditsOffer.restore', 'Restore'), onPress: onRestore }
+          : { label: t('files.unsavedEditsOffer.copyMyEdits', 'Copy My Edits'), onPress: onCopy }
+      }
+    />
+  )
+}
+
+const DISABLED = { opacity: feedback.disabledOpacity }
+
+type DocumentFloatingBarAction = { label: string; onPress: () => void; disabled?: boolean }
+
+/** A floating status line over an open editor with a quiet and a primary action. */
+export function DocumentFloatingBar({
+  bottom,
+  status,
+  statusColor,
+  quiet,
+  primary
+}: {
+  bottom: number
+  status: string
+  statusColor?: string
+  quiet: DocumentFloatingBarAction
+  primary: DocumentFloatingBarAction
+}) {
+  const styles = useThemedStyles(mobileSessionReviewCommentStylesSheet)
+  return (
     <View pointerEvents="box-none" style={[styles.markdownFloatingBar, { bottom }]}>
       <Text
-        style={[
-          styles.markdownFloatingStatus,
-          offer.baseMatches ? null : { color: colors.statusAmber }
-        ]}
+        style={[styles.markdownFloatingStatus, statusColor ? { color: statusColor } : null]}
         numberOfLines={2}
       >
-        {documentEditDraftOfferText(offer, t, intlLocale)}
+        {status}
       </Text>
       <View style={styles.markdownFloatingActions}>
         <Pressable
-          style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
-          onPress={onDiscard}
+          style={({ pressed }) => [
+            styles.markdownFloatingButton,
+            pressed && pressedStyle,
+            quiet.disabled && DISABLED
+          ]}
+          onPress={quiet.onPress}
+          disabled={quiet.disabled}
           accessibilityRole="button"
+          accessibilityState={{ disabled: quiet.disabled === true }}
         >
-          <Text style={styles.markdownFloatingButtonText}>
-            {t('files.unsavedEditsOffer.discard', 'Discard')}
-          </Text>
+          <Text style={styles.markdownFloatingButtonText}>{quiet.label}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [
             styles.markdownFloatingButton,
             styles.markdownSaveButton,
-            pressed && pressedStyle
+            pressed && pressedStyle,
+            primary.disabled && DISABLED
           ]}
-          onPress={offer.baseMatches ? onRestore : onCopy}
+          onPress={primary.onPress}
+          disabled={primary.disabled}
           accessibilityRole="button"
+          accessibilityState={{ disabled: primary.disabled === true }}
         >
-          <Text style={styles.markdownFloatingButtonText}>
-            {offer.baseMatches
-              ? t('files.unsavedEditsOffer.restore', 'Restore')
-              : t('files.unsavedEditsOffer.copyMyEdits', 'Copy My Edits')}
-          </Text>
+          <Text style={styles.markdownFloatingButtonText}>{primary.label}</Text>
         </Pressable>
       </View>
     </View>

@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
@@ -125,7 +126,7 @@ export function updateAgentHookSettingsFromProfileState(
     const migrated = migrateProfileStateToSqlite({
       ...location,
       expectedLegacyJson: rawJson,
-      serializedState: rawJson ?? JSON.stringify(getDefaultPersistedState(homedir()))
+      serializedState: rawJson ?? JSON.stringify(newOfflineProfileState())
     })
     migrated.authority.close()
   }
@@ -200,4 +201,10 @@ function readAgentHookSettingsFromSettingsValue(value: unknown): AgentHookSettin
     agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
     disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents)
   }
+}
+
+/** Seeds what the first load would for a new profile; once saved, a missing key reads as existing. */
+function newOfflineProfileState(): PersistedState {
+  const defaults = getDefaultPersistedState(homedir())
+  return { ...defaults, settings: { ...defaults.settings, nativeChatMarkNewMessages: false } }
 }

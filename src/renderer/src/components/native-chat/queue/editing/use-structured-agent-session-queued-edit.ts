@@ -2,7 +2,7 @@ import type { QueuedEditLeaseLoss } from '../../../../../../shared/native-chat/i
 import { queuedEditPublicationKey } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-publication'
 // Edit inside the card while prompts own the composer; host owns durable content, this pane owns typing, a delivery hold lease and compare-and-set Save.
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { AgentSessionQueuedMessageUpdateResult } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -28,6 +28,7 @@ import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-d
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
 import {
+  useKeptNativeChatQueuedEdit,
   useNativeChatQueuedEditLifetime,
   nativeChatQueuedEditSaving,
   nativeChatQueuedEditEditor,
@@ -40,35 +41,36 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
   const { target, sessionId, capable, write } = transport
   const imagesCapable = transport.imagesCapable === true
   const scope = `${structuredAgentSessionHostKey(target)}:${sessionId}:${composerScopeKey ?? ''}`
-  const active = useRef<Edit | null>(null)
-  const [shown, setShown] = useState<Edit | null>(null)
-  /** Save answered `changed`: the editor reopens on the newer text once this pane shows it. */
-  const reopen = useRef<{ scope: string; messageId: string; stale: string } | null>(null)
+  const { activeRef, shown, setShown, reopenRef } = useKeptNativeChatQueuedEdit()
   const latest = useRef({ messages, cards, submissions, promptOpen })
   useEffect(() => {
     latest.current = { messages, cards, submissions, promptOpen }
-    if (active.current?.scope === scope) {
-      active.current.view = latest.current
+    const edit = activeRef.current
+    if (edit?.scope === scope) {
+      edit.view = latest.current
     }
-  }, [messages, cards, submissions, promptOpen, scope])
+  }, [activeRef, messages, cards, submissions, promptOpen, scope])
 
-  const render = useCallback((edit: Edit | null) => {
-    active.current = edit
-    setShown(edit ? { ...edit } : null)
-  }, [])
+  const render = useCallback(
+    (edit: Edit | null) => {
+      activeRef.current = edit
+      setShown(edit ? { ...edit } : null)
+    },
+    [activeRef, setShown]
+  )
   const close = useCallback(
-    (edit = active.current) => {
+    (edit = activeRef.current) => {
       if (!edit || edit.closed) {
         return
       }
       edit.closed = true
-      if (active.current === edit) {
+      if (activeRef.current === edit) {
         render(null)
       }
       edit.lease.end()
       discardNativeChatQueuedEdit(edit)
     },
-    [render]
+    [activeRef, render]
   )
   /** Return dirty text to its conversation’s composer after existing draft content when the card leaves the queue. */
   const gone = useCallback(
@@ -146,7 +148,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
           )
         )
         if (!edit.pendingClose) {
-          reopen.current = {
+          reopenRef.current = {
             scope: edit.scope,
             messageId: edit.messageId,
             stale: edit.baseFingerprint
@@ -155,21 +157,21 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
         close(edit)
       } else if (edit.pendingClose) {
         gone(edit)
-      } else if (active.current === edit && result) {
+      } else if (activeRef.current === edit && result) {
         if (outcome === 'refused' && result.kind !== 'dropped') {
           toast.error(result.kind === 'not-done' ? result.notice : queuedEditNotice('editFailed'))
         }
         render(edit)
       }
     },
-    [close, gone, reacquire, render]
+    [activeRef, close, gone, reacquire, render, reopenRef]
   )
 
   useNativeChatQueuedEditLifetime({
     scope,
     shownScope: shown?.scopeKey,
-    active,
-    reopen,
+    active: activeRef,
+    reopen: reopenRef,
     close,
     render
   })
@@ -177,8 +179,8 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
   const begin = useCallback(
     async (messageId: string): Promise<void> => {
       // One editor per pane: another card's Edit waits for this one's Save or Cancel.
-      reopen.current = null
-      if (active.current || !capable || !composerScopeKey) {
+      reopenRef.current = null
+      if (activeRef.current || !capable || !composerScopeKey) {
         return
       }
       const message = messages?.find((entry) => entry.messageId === messageId)
@@ -211,18 +213,30 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       }
       render(edit)
       await lease.acquired.catch(() => null)
-      if (!isOpen(active, edit) || edit.lease !== lease) {
+      if (!isOpen(activeRef, edit) || edit.lease !== lease) {
         return
       }
       // An unanswered lease never gates typing: the lease keeps trying, and Save checks the text.
       edit.acquiring = false
       render(edit)
     },
-    [capable, composerScopeKey, messages, render, scope, sessionId, target, receiveLoss, settle]
+    [
+      activeRef,
+      capable,
+      composerScopeKey,
+      messages,
+      render,
+      reopenRef,
+      scope,
+      sessionId,
+      target,
+      receiveLoss,
+      settle
+    ]
   )
 
   const save = useCallback(async () => {
-    const edit = active.current
+    const edit = activeRef.current
     if (!edit || edit.acquiring || nativeChatQueuedEditSaving(edit)) {
       return
     }
@@ -252,14 +266,14 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       { messageId: edit.messageId, expectedBodyFingerprint: attempt.expected, ...input }
     )
     settle(edit, attempt, result)
-  }, [close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
+  }, [activeRef, close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
 
   const publication = useMemo(
     () => queuedEditPublicationKey({ messages, cards, submissions }, sessionId, shown?.messageId),
     [messages, cards, submissions, sessionId, shown?.messageId]
   )
   const reconcile = useEffectEvent(() => {
-    const edit = active.current
+    const edit = activeRef.current
     if (edit && !nativeChatQueuedEditSaving(edit) && messages !== null) {
       settle(edit)
     }
@@ -272,18 +286,18 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
   }, [publication, scope])
 
   useEffect(() => {
-    const edit = active.current
-    const pending = reopen.current
+    const edit = activeRef.current
+    const pending = reopenRef.current
     if (!pending || edit || messages === null) {
       return
     }
     const listed = messages.find((entry) => entry.messageId === pending.messageId)
     if (pending.scope !== scope || !listed || !queuedCardOnScreen(cards, pending.messageId)) {
-      reopen.current = null
+      reopenRef.current = null
     } else if (agentSessionSendBodyFingerprint(sessionId, listed.body) !== pending.stale) {
       reopenLatest(pending.messageId)
     }
-  }, [cards, messages, scope, sessionId, submissions])
+  }, [activeRef, cards, messages, reopenRef, scope, sessionId, submissions])
 
   const editor = nativeChatQueuedEditEditor(
     shown,
@@ -297,6 +311,6 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
 }
 
 /** A read of the ref, not a narrowing: an await may have closed or replaced the edit. */
-function isOpen(active: { current: Edit | null }, edit: Edit): boolean {
-  return active.current === edit
+function isOpen(activeRef: { current: Edit | null }, edit: Edit): boolean {
+  return activeRef.current === edit
 }

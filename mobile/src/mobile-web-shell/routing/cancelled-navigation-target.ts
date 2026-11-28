@@ -1,9 +1,14 @@
-import { readBridgeExternalLinkUrl } from '../bridge/protocol/bridge-caps'
+import {
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
+  readBridgeExternalLinkUrl
+} from '../bridge/protocol/bridge-caps'
 
 // Offer cancelled top-frame HTML-preview links through the shared scheme/normalization rule; native only caps the URL and identifies its frame.
 // Open normalized hrefs, never raw spellings with stripped controls; changed native payload shapes fail closed without throwing from frame callbacks.
 export function cancelledShellNavigationTarget(url: unknown): string | null {
-  return typeof url === 'string' ? readBridgeExternalLinkUrl(url) : null
+  return typeof url === 'string'
+    ? readBridgeExternalLinkUrl(url, BRIDGE_MAX_EXTERNAL_LINK_CHARS)
+    : null
 }
 
 // Negotiate externalNavigation so previews hide links on older shells that cancel them silently. This is a capability token, not a verb/notify; the browser initiates navigation.

@@ -57,9 +57,16 @@ async function fork(input: ClaudeConversationForkWork) {
     sessionStore: {
       load: async () => entries,
       append: async (key, entries) => {
-        coverage = entries
-          .filter((entry) => isClaudeConversationEntry(entry))
-          .map((entry) => entry.uuid)
+        // Forked compaction boundaries get new uuids too; covered, catch-up does not redraw them.
+        coverage = entries.flatMap((entry) =>
+          isClaudeConversationEntry(entry)
+            ? [entry.uuid]
+            : entry.type === 'system' &&
+                entry.subtype === 'compact_boundary' &&
+                typeof entry.uuid === 'string'
+              ? [entry.uuid]
+              : []
+        )
 
         resumeCursor = entries.findLast(
           (entry) => entry.type === 'assistant' || entry.type === 'user'

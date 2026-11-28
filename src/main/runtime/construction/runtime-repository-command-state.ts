@@ -1,18 +1,26 @@
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { runtimeVisibleRepos } from '../workspaces/catalog/runtime-visible-catalog'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { HostPRCache } from '../../github/pull-requests/refresh/host-pr-cache-backfill'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
-import { RuntimeHostedReviewCommands } from '../integrations/reviews/runtime-hosted-review-commands'
-import { RuntimeGitHubRepositoryQueryCommands } from '../integrations/github/runtime-github-repository-query-commands'
+import {
+  LazyRuntimeGitHubRepositoryQueryCommands,
+  LazyRuntimeHostedReviewCommands,
+  LazyRuntimeRepositoryHooksCommands,
+  LazyRuntimeRepositoryIssueCommand
+} from '../repositories/lazy-runtime-repository-review-commands'
 import {
   LazyRuntimeGitLabMutationCommands,
   LazyRuntimeGitLabQueryCommands
 } from '../integrations/gitlab/lazy-runtime-gitlab-commands'
 import { recordGitLabProjectRecent } from '../../gitlab/projects/gitlab-project-recents'
-import { RuntimeGitHubReviewQueryCommands } from '../integrations/github/runtime-github-review-query-commands'
-import { RuntimeGitHubReviewMutationCommands } from '../integrations/github/runtime-github-review-mutation-commands'
-import { RuntimeGitHubIssueCommentCommands } from '../integrations/github/runtime-github-issue-comment-commands'
-import { RuntimeGitHubProjectCommands } from '../integrations/github/runtime-github-project-commands'
-import { RuntimeRepositoryHooksCommands } from '../repositories/runtime-repository-hooks-commands'
-import { RuntimeRepositoryIssueCommand } from '../repositories/runtime-repository-issue-command'
+import {
+  LazyRuntimeGitHubIssueCommentCommands,
+  LazyRuntimeGitHubProjectCommands,
+  LazyRuntimeGitHubReviewMutationCommands,
+  LazyRuntimeGitHubReviewQueryCommands
+} from '../integrations/github/lazy-runtime-github-review-commands'
 import { ClientHostedBrowserRowPublisher } from '../browser/client-pages/client-hosted-browser-row-publication'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../browser-host/leases/browser-host-lease-registry-instance'
@@ -23,7 +31,6 @@ import {
   storeBackedBranchSwitchSources
 } from '../integrations/git/runtime-branch-switch-host'
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
-import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
@@ -94,7 +101,7 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly leafPtyAbsenceProbes = new Map<string, Promise<boolean>>()
 
-  protected readonly hostedReviews = new RuntimeHostedReviewCommands({
+  protected readonly hostedReviews = new LazyRuntimeHostedReviewCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     getExecutionOptions: (repo, admissionTier) =>
@@ -109,10 +116,19 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
         repoId,
         meta: { prNumber: number, prUrl: url }
       })
-    }
+    },
+    recordPROutcome: (...args) => this.hostPRCache?.record(...args)
   })
 
-  protected readonly gitHubRepositoryQueries = new RuntimeGitHubRepositoryQueryCommands({
+  /** Set only on a renderer-less host (orcad), whose served PR reads must fill its own cache. */
+  hostPRCache: HostPRCache | null = null
+
+  /** The rows orcad's PR cache backfill reads; the resolved snapshot is shared with worktree.ps. */
+  async listHostPRCacheWorktrees(): Promise<{ worktrees: readonly Worktree[]; repos: Repo[] }> {
+    return { worktrees: await this.listResolvedWorktrees(), repos: runtimeVisibleRepos(this.store) }
+  }
+
+  protected readonly gitHubRepositoryQueries = new LazyRuntimeGitHubRepositoryQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
@@ -141,36 +157,39 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewQueries = new RuntimeGitHubReviewQueryCommands({
+  protected readonly gitHubReviewQueries = new LazyRuntimeGitHubReviewQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubReviewMutations = new RuntimeGitHubReviewMutationCommands({
+  protected readonly gitHubReviewMutations = new LazyRuntimeGitHubReviewMutationCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubIssueComments = new RuntimeGitHubIssueCommentCommands({
+  protected readonly gitHubIssueComments = new LazyRuntimeGitHubIssueCommentCommands({
     resolveTarget: (args) => this.resolveHostedReviewTarget(args),
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo)
   })
 
-  protected readonly gitHubProjectCommands = new RuntimeGitHubProjectCommands()
+  protected readonly gitHubProjectCommands = new LazyRuntimeGitHubProjectCommands()
 
-  protected readonly repositoryHooks = new RuntimeRepositoryHooksCommands({
+  protected readonly repositoryHooks = new LazyRuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
-    readCreateSourceHooks: (repo, source) =>
-      readCreateSourceSetupHooks({
+    readCreateSourceHooks: async (repo, source) => {
+      const { readCreateSourceSetupHooks } =
+        await import('../../workspace-hooks/create-source-setup-hooks')
+      return readCreateSourceSetupHooks({
         repo,
         source,
         runtime: this.remoteFetches,
         gitOptions: getWorktreeCreatePrefetchGitOptions(this.requireStore(), repo)
       })
+    }
   })
 
-  protected readonly repositoryIssueCommand = new RuntimeRepositoryIssueCommand({
+  protected readonly repositoryIssueCommand = new LazyRuntimeRepositoryIssueCommand({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     getLocalGitArgs: (repo) => this.getLocalGitExecutionOptionArgs(repo),
     getStore: () => this.store

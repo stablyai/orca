@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/host-connections/runtime-environment-explicit-connect'
-import { useNativeChatPaneMountedRef } from '../pane/ownership/native-chat-pane-lifetime'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { useTranslate } from '@/i18n/use-translate'
 import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'
 import type { NativeChatComposerNotice } from '../composer/controls/native-chat-composer-notice'
@@ -10,19 +9,15 @@ export function useNativeChatHostOutageNotice(
   outage: NativeChatHostOutage | null
 ): NativeChatComposerNotice | null {
   const t = useTranslate()
-  const [connecting, setConnecting] = useState(false)
-  const mountedRef = useNativeChatPaneMountedRef()
+  // Kept with the chat tab: a view released mid-reconnect returns still connecting.
+  const [connecting, setConnecting] = useNativeChatViewGuard('host-reconnect', false)
   const reconnect = (environmentId: string, start: boolean): void => {
     setConnecting(true)
     void (
       start
         ? startWslHostAndReloadProjects(environmentId)
         : connectRuntimeHostAndReloadProjects(environmentId)
-    ).finally(() => {
-      if (mountedRef.current) {
-        setConnecting(false)
-      }
-    })
+    ).finally(() => setConnecting(false))
   }
   if (!outage) {
     return null

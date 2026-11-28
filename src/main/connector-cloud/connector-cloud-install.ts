@@ -19,7 +19,6 @@ import { eventRun, takingAutomation } from '../automations/automation-trigger-ru
 import { BotPrWaker } from '../bots/bot-pr-events'
 import { cancelConnectorConnectsForAccountChange } from './connector-connect'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
 import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
@@ -83,6 +82,8 @@ export function createConnectorCloud({
     // A chat worker's newest journal write, else when its Dispatch settled. Only this host's workers
     // match a PR today, so a paired server's never reach here.
     workerActivity: async (dispatchId) => {
+      const { readDispatchWorkers } =
+        await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
       const [worker] = await readDispatchWorkers(runtime, [dispatchId])
       if (!worker) {
         return null

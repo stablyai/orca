@@ -1,5 +1,5 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
+import { GitCommitHorizontal } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
@@ -11,14 +11,28 @@ export function HeadIdentity({
 }): React.JSX.Element {
   const t = useTranslate()
   if (display.kind === 'detached') {
+    // Today's look without the badge box, so its icon sits on the header's 12px column like the
+    // rows below instead of 7px in (border + padding).
     return (
-      <DetachedHeadBadge
-        display={display}
-        side="bottom"
-        // Why: tooltip carries the full detached explanation; keep it keyboard-reachable.
-        tabIndex={0}
-        className="min-w-0 max-w-full shrink"
-      />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className="flex min-w-0 max-w-full items-center gap-1 rounded-sm text-3xs leading-none font-medium text-[color:var(--git-decoration-modified)] outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            // Why: the tooltip carries the full detached explanation; keep it keyboard-reachable.
+            tabIndex={0}
+            data-testid="source-control-head-identity"
+          >
+            <GitCommitHorizontal className="size-2.5 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 truncate" aria-hidden="true">
+              {display.sourceControlLabel}
+            </span>
+            <span className="sr-only">{display.tooltip}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
+          {display.tooltip}
+        </TooltipContent>
+      </Tooltip>
     )
   }
 
