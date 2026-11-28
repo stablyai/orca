@@ -204,6 +204,19 @@ function createRichMarkdownLowlightPlugin({
 }
 
 export const RichMarkdownCodeBlockLowlight = CodeBlock.extend<CodeBlockLowlightOptions>({
+  renderMarkdown(node, helpers, context) {
+    if (node.attrs?.language !== 'carousel') {
+      return CodeBlock.config.renderMarkdown?.(node, helpers, context) ?? ''
+    }
+
+    const text = node.content ? helpers.renderChildren(node.content) : ''
+    let length = 4
+    for (const match of text.matchAll(/^ {0,3}(`{4,})[ \t]*$/gm)) {
+      length = Math.max(length, match[1].length + 1)
+    }
+    const fence = '`'.repeat(length)
+    return [`${fence}carousel`, text, fence].join('\n')
+  },
   addOptions() {
     return { ...CodeBlockLowlight.options }
   },

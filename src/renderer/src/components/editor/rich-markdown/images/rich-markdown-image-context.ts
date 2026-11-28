@@ -45,6 +45,33 @@ type RichMarkdownImageStorage = {
 
 export type RichMarkdownImageNodeStorage = { runtimeContext?: unknown }
 
+function getRichMarkdownImageStorage(editor: Editor): RichMarkdownImageStorage {
+  // SAFETY: the rich Markdown image extension owns and initializes this storage.
+  return editor.storage as unknown as RichMarkdownImageStorage
+}
+
+export function readRichMarkdownImageResolverContext(
+  editor: Editor
+): RichMarkdownImageResolverContext {
+  const image = getRichMarkdownImageStorage(editor).image
+  return {
+    filePath: image?.filePath ?? '',
+    imageUrls: image?.imageUrls,
+    runtimeContext: image?.runtimeContext
+  }
+}
+
+export function subscribeRichMarkdownImageResolverContext(
+  editor: Editor,
+  listener: () => void
+): () => void {
+  const listeners = getRichMarkdownImageStorage(editor).image?.reloadListeners
+  listeners?.add(listener)
+  return () => {
+    listeners?.delete(listener)
+  }
+}
+
 /** The stored image context; `null` (unresolved owner) is kept so readers refuse instead of going local. */
 export function readRichMarkdownImageRuntimeContext(
   storage: RichMarkdownImageNodeStorage
@@ -105,15 +132,11 @@ export function setRichMarkdownImageResolverContext(
   editor: Editor,
   context: RichMarkdownImageResolverContext
 ): boolean {
-  const storage = editor.storage as unknown as RichMarkdownImageStorage
+  const storage = getRichMarkdownImageStorage(editor)
   const imageStorage = storage.image ?? {
     filePath: ''
   }
-  const previousSignature = getRichMarkdownImageContextSignature({
-    filePath: imageStorage.filePath,
-    imageUrls: imageStorage.imageUrls,
-    runtimeContext: imageStorage.runtimeContext
-  })
+  const previousSignature = getRichMarkdownImageContextSignature(imageStorage)
   const nextSignature = getRichMarkdownImageContextSignature(context)
   if (previousSignature === nextSignature) {
     return false

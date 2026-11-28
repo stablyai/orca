@@ -17269,6 +17269,9 @@
           "invalidNotebook": "无效的笔记本",
           "cellCount_other": "{{count}} 个单元格"
         },
+        "MarkdownImageCarousel": {
+          "label": "图集"
+        },
         "MarkdownPreview": {
           "e4683f70c4": "取消",
           "d737791433": "为AI添加注释",

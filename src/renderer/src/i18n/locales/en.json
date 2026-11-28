@@ -18223,6 +18223,9 @@
           "cellCount_one": "{{count}} cell",
           "cellCount_other": "{{count}} cells"
         },
+        "MarkdownImageCarousel": {
+          "label": "Image carousel"
+        },
         "MarkdownPreview": {
           "e4683f70c4": "Cancel",
           "d737791433": "Add note for the AI",

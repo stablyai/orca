@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
@@ -9,6 +9,8 @@ import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expa
 import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
 import { useTranslate } from '@/i18n/use-translate'
 import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
+import { RichMarkdownImageCarousel } from '../images/RichMarkdownImageCarousel'
+import { parseMarkdownImageCarousel } from '../../document-images/markdown-image-carousel'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,
@@ -16,6 +18,7 @@ import {
 } from './rich-markdown-code-block-languages'
 
 export function RichMarkdownCodeBlock({
+  editor,
   node,
   updateAttributes
 }: NodeViewProps): React.JSX.Element {
@@ -32,6 +35,11 @@ export function RichMarkdownCodeBlock({
   const expandMermaidDiagram = useMermaidDiagramExpand()
 
   const isMermaid = language === 'mermaid'
+  const carouselSource = language === 'carousel' ? node.textContent : ''
+  const carouselImages = useMemo(
+    () => (carouselSource ? parseMarkdownImageCarousel(carouselSource) : null),
+    [carouselSource]
+  )
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -90,6 +98,7 @@ export function RichMarkdownCodeBlock({
 
   return (
     <NodeViewWrapper className="rich-markdown-code-block-wrapper">
+      {carouselImages && <RichMarkdownImageCarousel editor={editor} images={carouselImages} />}
       <select
         className="rich-markdown-code-block-lang"
         contentEditable={false}

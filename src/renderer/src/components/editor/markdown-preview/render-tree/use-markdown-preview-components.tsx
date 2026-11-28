@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import type { Components } from 'react-markdown'
+import type { Components, ExtraProps } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from '../../diagrams/MermaidBlock'
@@ -27,6 +27,9 @@ import { useMarkdownPreviewAnnotations } from '../review/markdown-preview-annota
 import type { MarkdownPreviewFoundation } from '../surface/use-markdown-preview-foundation'
 import type { MarkdownPreviewViewport } from '../viewport/use-markdown-preview-viewport'
 import { useLocalImageSrc } from '../../document-images/useLocalImageSrc'
+import { MarkdownImageCarousel } from '../../document-images/MarkdownImageCarousel'
+import { parseMarkdownImageCarousel } from '../../document-images/markdown-image-carousel'
+import { getMarkdownPreviewTreeText } from './markdown-preview-tree-content'
 import { documentResourceAccess } from '@/lib/files/access/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useLatestHandler } from '@/lib/use-latest-handler'
@@ -43,6 +46,42 @@ function mermaidLinkHref(event: React.MouseEvent): string | undefined {
     return undefined
   }
   return link.getAttribute('href') ?? link.getAttribute('xlink:href') ?? undefined
+}
+
+function MarkdownPreviewPre({
+  node,
+  children,
+  renderImage,
+  imageContext,
+  ...props
+}: React.ComponentPropsWithoutRef<'pre'> &
+  ExtraProps &
+  Pick<React.ComponentProps<typeof MarkdownImageCarousel>, 'renderImage' | 'imageContext'>) {
+  const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
+  const code = node?.children.find((child) => child.type === 'element' && child.tagName === 'code')
+  const classes =
+    code?.type === 'element' && Array.isArray(code.properties.className)
+      ? code.properties.className
+      : []
+  const images =
+    code && classes.includes('language-carousel')
+      ? parseMarkdownImageCarousel(getMarkdownPreviewTreeText(code))
+      : null
+  return wrapAnnotatedBlock(
+    'pre',
+    node,
+    images ? (
+      <MarkdownImageCarousel
+        images={images}
+        imageContext={imageContext}
+        renderImage={renderImage}
+      />
+    ) : (
+      <CodeBlockCopyButton {...props} wrapInPre={!classes.some(hasMermaidCodeClass)}>
+        {children}
+      </CodeBlockCopyButton>
+    )
+  )
 }
 
 function annotatedHeading(
@@ -63,23 +102,6 @@ function annotatedHeading(
 // Why: review-note state reaches blocks through context; new component types would remount the
 // whole document and reset its scroll position.
 const annotatedBlockComponents = {
-  pre: function MarkdownPreviewPre({ node, children, ...props }) {
-    const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
-    const isMermaid = node?.children.some(
-      (child) =>
-        child.type === 'element' &&
-        child.tagName === 'code' &&
-        Array.isArray(child.properties.className) &&
-        child.properties.className.some(hasMermaidCodeClass)
-    )
-    return wrapAnnotatedBlock(
-      'pre',
-      node,
-      <CodeBlockCopyButton {...props} wrapInPre={!isMermaid}>
-        {children}
-      </CodeBlockCopyButton>
-    )
-  },
   p: function MarkdownPreviewParagraph({ node, children, ...props }) {
     const { wrapAnnotatedBlock } = useMarkdownPreviewAnnotations()
     return wrapAnnotatedBlock(
@@ -204,6 +226,7 @@ export function useMarkdownPreviewComponents({
   return useMemo(() => {
     // Why: preview images come from document text, so main limits them to the document's roots.
     const imageAccess = documentResourceAccess(filePath)
+    const imageContext = { filePath, runtimeContext: imageRuntimeContext }
     const linkContext = {
       isMac,
       sourceOwner,
@@ -231,8 +254,50 @@ export function useMarkdownPreviewComponents({
       }
     }
 
+    const MarkdownImg: NonNullable<Components['img']> = function MarkdownImg({
+      src,
+      alt,
+      ...props
+    }) {
+      const resolvedSrc = useLocalImageSrc(
+        src,
+        filePath,
+        undefined,
+        imageRuntimeContext,
+        imageAccess
+      )
+      const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
+        if (!isMarkdownPreviewOpenModifier(event, isMac)) {
+          return
+        }
+
+        if (!src || !sourceRoutingWorktreeId || !worktreeRoot) {
+          return
+        }
+
+        event.preventDefault()
+        event.stopPropagation()
+        void activateMarkdownLink(src, {
+          sourceFilePath: filePath,
+          worktreeId: sourceRoutingWorktreeId,
+          worktreeRoot,
+          runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
+          sourceOwner
+        })
+      }
+
+      return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
+    }
+
     return {
       ...annotatedBlockComponents,
+      pre: (props) => (
+        <MarkdownPreviewPre
+          {...props}
+          imageContext={imageContext}
+          renderImage={(image, className) => <MarkdownImg {...image} className={className} />}
+        />
+      ),
       a: ({ href, children, className, ...props }) => {
         const docLinkTarget = parseMarkdownDocLinkHref(href)
         if (docLinkTarget !== null) {
@@ -291,36 +356,7 @@ export function useMarkdownPreviewComponents({
           </a>
         )
       },
-      img: function MarkdownImg({ src, alt, ...props }) {
-        const resolvedSrc = useLocalImageSrc(
-          src,
-          filePath,
-          undefined,
-          imageRuntimeContext,
-          imageAccess
-        )
-        const handleImageClick = (event: React.MouseEvent<HTMLImageElement>): void => {
-          if (!isMarkdownPreviewOpenModifier(event, isMac)) {
-            return
-          }
-
-          if (!src || !sourceRoutingWorktreeId || !worktreeRoot) {
-            return
-          }
-
-          event.preventDefault()
-          event.stopPropagation()
-          void activateMarkdownLink(src, {
-            sourceFilePath: filePath,
-            worktreeId: sourceRoutingWorktreeId,
-            worktreeRoot,
-            runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
-            sourceOwner
-          })
-        }
-
-        return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
-      },
+      img: MarkdownImg,
       code: ({ className, children, ...props }) => {
         if (hasMermaidCodeClass(className)) {
           return (
