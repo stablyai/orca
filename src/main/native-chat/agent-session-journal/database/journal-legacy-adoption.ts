@@ -1,11 +1,19 @@
 import type Database from '../../../sqlite/sync-database'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { insertJournalLegacyClaims, missingJournalLegacyClaims } from './journal-legacy-claims'
+import {
+  insertJournalLegacyClaims,
+  journalLegacyClaimsFingerprint,
+  missingJournalLegacyClaims
+} from './journal-legacy-claims'
 import { runJournalTransaction } from './journal-database'
 import { readMeta, writeMeta } from './journal-legacy-reconcile-marks'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
-import { journalLegacyChatRevision, journalLegacyChatRevisionKey } from './journal-legacy-source'
+import {
+  journalLegacyChatRevision,
+  journalLegacyChatRevisionKey,
+  readJournalLegacyFailure
+} from './journal-legacy-source'
 
 export type Claim = SqliteRow
 
@@ -20,6 +28,34 @@ export function missingBaselines(
   return journalLegacyOriginalChatIds(source, 'any')
     .filter((id) => readMeta(db, journalLegacyChatRevisionKey(id)) === undefined)
     .map((id): [string, string] => [id, journalLegacyChatRevision(source, id) ?? 'null'])
+}
+
+/**
+ * Keeps a pass's claims before any chat is adopted, so a later tab, catalog or chat failure can't
+ * drop them. A set this file already refused as it stands is left to its chat's own retry. Returns
+ * each chat's claims missing beforehand; `retained` is false when any stayed out.
+ */
+export function retainReadClaims(
+  db: Database.Database,
+  claims: ReadonlyMap<string, readonly Claim[]>
+): { missing: Map<string, Claim[]>; retained: boolean } {
+  const missing = new Map<string, Claim[]>()
+  const retainable = new Map<string, Claim[]>()
+  let refused = false
+  for (const [id, list] of claims) {
+    const absent = missingJournalLegacyClaims(db, id, list)
+    missing.set(id, absent)
+    if (absent.length === 0) {
+      continue
+    }
+    if (readJournalLegacyFailure(db, id)?.claims === journalLegacyClaimsFingerprint(absent)) {
+      refused = true
+    } else {
+      retainable.set(id, absent)
+    }
+  }
+  const retained = retainable.size === 0 || retainEnumeratedClaims(db, retainable)
+  return { missing, retained: retained && !refused }
 }
 
 /** Keeps every claim a pass read, before and after any chat; false leaves upload custody unknown. */

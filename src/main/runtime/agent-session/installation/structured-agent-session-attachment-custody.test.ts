@@ -48,10 +48,7 @@ import {
   agentSessionAttachmentStoreRoot
 } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
-import {
-  sweepAgentSessionAttachments,
-  UNCLAIMED_ATTACHMENT_MAX_AGE_MS
-} from '../../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
+import { sweepAgentSessionAttachments } from '../../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
 import { structuredAgentSessionAttachmentSweepFacts } from './structured-agent-session-attachment-sweep'
 
 const OWNED = '0b6f8a52-4a3e-4c4e-9a59-1d5d1f2b8c01'
@@ -101,8 +98,8 @@ function upload(root: string, uploadId: string, file = 'shot.png'): void {
   const dir = join(agentSessionAttachmentStoreRoot(root), uploadId)
   mkdirSync(dir, { recursive: true })
   writeFileSync(join(dir, file), 'bytes')
-  const aged = new Date(Date.now() - UNCLAIMED_ATTACHMENT_MAX_AGE_MS - 60_000)
-  utimesSync(dir, aged, aged)
+  // Far past every sweep age.
+  utimesSync(dir, new Date(0), new Date(0))
 }
 
 function stored(root: string, uploadId: string): boolean {

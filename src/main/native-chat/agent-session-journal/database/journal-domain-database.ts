@@ -26,14 +26,16 @@ import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
-import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import {
+  JOURNAL_LEGACY_SOURCE_RECEIPT,
+  sameJournalLegacySource
+} from './journal-legacy-source-receipt'
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import {
   JOURNAL_LEGACY_CUSTODY_UNKNOWN,
   journalLegacyCustodyFrom,
   type JournalLegacyCustodyStart
 } from './journal-legacy-custody'
-import { sameJournalLegacySource } from './journal-legacy-source-receipt'
 
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
   return (await initializeJournalDomainDatabaseCustody(stateDirectory)).destination
@@ -114,9 +116,10 @@ function absorbOlderOrcaWrites(
   try {
     const { db, readOnly } = openJournalDomainDatabase(destination)
     try {
-      return readOnly
-        ? JOURNAL_LEGACY_CUSTODY_UNKNOWN
-        : reconcileJournalLegacySource(stateDirectory, db)
+      const held = readOnly ? undefined : reconcileJournalLegacySource(stateDirectory, db)
+      return held
+        ? journalLegacyCustodyFrom(journalDatabasePath(stateDirectory), held)
+        : JOURNAL_LEGACY_CUSTODY_UNKNOWN
     } finally {
       db.close()
     }

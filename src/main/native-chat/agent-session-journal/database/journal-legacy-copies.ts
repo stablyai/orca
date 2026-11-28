@@ -9,7 +9,9 @@ import {
   continuedCopyId,
   deleteMeta,
   JOURNAL_LEGACY_COPY_DUE,
+  metaKeys,
   revisionHoldsHistory,
+  strandedCopies,
   writeMeta,
   recordJournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
@@ -19,6 +21,19 @@ import {
  * build without the original's history.
  */
 export type JournalLegacyForcedCopy = { stranded?: string }
+
+/** Chats that get a copy whatever their revision shows: due a copy, or stranded. */
+export function journalLegacyForcedCopies(
+  db: Database.Database
+): Map<string, JournalLegacyForcedCopy> {
+  const forced = new Map<string, JournalLegacyForcedCopy>(
+    metaKeys(db, JOURNAL_LEGACY_COPY_DUE).map((id) => [id, {}])
+  )
+  for (const [id, copy] of strandedCopies(db)) {
+    forced.set(id, { stranded: copy })
+  }
+  return forced
+}
 
 /** Adds the original's record as this id, with its tab, catalog row and claims. */
 type Adopt = (as: string) => void
