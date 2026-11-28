@@ -39,6 +39,7 @@ import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/termin
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { layoutOwnerPaneGestures } from '../layout/ownership/terminal-pane-layout-owner-gestures'
 
+/** Build pane terminal options and retain link activation ownership across native and fallback paths. */
 export function createTerminalPaneManagerOptions(
   context: TerminalPaneManagerOptionsContext
 ): PaneManagerOptions {
@@ -191,13 +192,14 @@ export function createTerminalPaneManagerOptions(
       handleTerminalWebLinkClick(url, event, {
         ...context.linkDeps,
         terminal: activePane?.terminal ?? null,
+        terminalHandle: context.linkDeps.getRuntimeTerminalHandleForPane?.(paneId) ?? null,
         startupCwd: activePane ? context.getPaneLinkCwd(paneId) : context.startupCwd,
         runtimeEnvironmentId: activePane
           ? (context.linkDeps.getRuntimeEnvironmentIdForPane?.(paneId) ?? null)
           : null,
         sourceOwner: activePane ? context.getHttpLinkSourceOwnerForPane(paneId) : { kind: 'local' },
         requestOpenLinksInAppPreference,
-        linkActionContext: context.getLinkActionContext(paneId),
+        linkActionContext: context.getLinkActionContext(paneId, event),
         getActionDestinations: (linkUrl) => context.getHttpLinkActionDestinations(paneId, linkUrl)
       })
     },

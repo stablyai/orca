@@ -35,7 +35,7 @@ export type TerminalPaneMountContext = {
     paneId: number,
     url?: string
   ) => TerminalHttpLinkActionDestinations
-  getLinkActionContext: (paneId: number) => TerminalLinkActionContext | null
+  getLinkActionContext: (paneId: number, event?: MouseEvent) => TerminalLinkActionContext | null
   canOpenOwnedBrowserForPane: (paneId: number) => boolean
   requestOpenLinksInAppPreference: TerminalLinkRoutingPreferenceRequester
   onShowSessionRestoredBanner: (paneId: number, reason?: SessionRestoredBannerReason) => void

@@ -44,6 +44,36 @@ type ClickedFileLink = FileLinkTarget & {
   guess: boolean
 }
 
+/** Return the longest host-cached file target without probing; OSC8 cells belong to their own link handler. */
+export function findVerifiedFilePathLinkAtBufferPosition(
+  buffer: { getLine(y: number): IBufferLine | undefined },
+  position: { x: number; y: number },
+  terminalColumns: number,
+  deps: FileLinkHitTestDeps
+): FileLinkTarget | null {
+  const readings = findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)
+  const host: FileLinkHost = {
+    ...deps,
+    cwd: deps.startupCwd,
+    homePath: deps.terminalHomePath,
+    homeOnHost: true
+  }
+  const verified = [...readings.links, ...readings.guesses].flatMap((parsed) => {
+    if (
+      terminalLogicalLinkHasOscLink(buffer, parsed.logicalLine, parsed.startIndex, parsed.endIndex)
+    ) {
+      return []
+    }
+    const target = resolveFileLinkTarget(parsed, host)
+    return target &&
+      deps.pathExistsCache &&
+      readTerminalPathExistence(deps.pathExistsCache, target.cacheKey) === true
+      ? [{ ...target, pathText: parsed.pathText }]
+      : []
+  })
+  return verified.sort((a, b) => b.pathText.length - a.pathText.length)[0] ?? null
+}
+
 // Why: a slow probe from an earlier click must not open its file after a later click.
 let latestClickGesture = 0
 

@@ -7,6 +7,7 @@ import type {
   RemoteBrowserPageHandle
 } from '../browser-slice-contract'
 import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { workspaceBrowserTabs } from '../tabs/workspace-browser-tabs'
 import { findWorkspace } from '../pages/browser-page-records'
 import { pickNeighbor } from '../../tabs/tab-selection-history'
 import { getRecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
@@ -25,6 +26,7 @@ import {
   type DrawnBrowserTab
 } from '../tabs/browser-tab-close-through-layout-owner'
 
+/** Close browser resources on their owning host and select surviving views in their placement workspace. */
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -60,6 +62,11 @@ export function createBrowserCloseActions(
             return current
           }
 
+          owningWorktreeId =
+            Object.values(s.unifiedTabsByWorktree)
+              .flat()
+              .find((tab) => tab.contentType === 'browser' && tab.entityId === tabId)?.worktreeId ??
+            owningWorktreeId
           const closedPages = s.browserPagesByWorkspace[tabId] ?? []
           for (const page of closedPages) {
             discardKagiPrivateInitialNavigation(page.id)
@@ -93,7 +100,11 @@ export function createBrowserCloseActions(
             delete nextRemoteBrowserPageHandlesByPageId[page.id]
           }
 
-          const remainingBrowserTabs = nextBrowserTabsByWorktree[owningWorktreeId] ?? []
+          const remainingBrowserTabs = workspaceBrowserTabs(
+            nextBrowserTabsByWorktree,
+            owningWorktreeId,
+            s.unifiedTabsByWorktree[owningWorktreeId]?.filter((tab) => tab.entityId !== tabId)
+          )
           const nextActiveBrowserTabIdByWorktree = { ...s.activeBrowserTabIdByWorktree }
           if (nextActiveBrowserTabIdByWorktree[owningWorktreeId] === tabId) {
             const neighborId = pickNeighbor(s.tabBarOrderByWorktree[owningWorktreeId] ?? [], tabId)

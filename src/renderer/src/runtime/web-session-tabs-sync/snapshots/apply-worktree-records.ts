@@ -1,6 +1,10 @@
 import type { applyBrowserRecordUpdates } from './apply-browser-records'
 import { withWorktreeEntry } from './state-equality-core'
-import { withWorktreeTabEntry } from './presentation-record-drafts'
+import {
+  finishPresentationRecord,
+  presentationRecordDraft,
+  withWorktreeTabEntry
+} from './presentation-record-drafts'
 import { sameGroups, sameUnifiedTabs } from './state-equality-files'
 import { sameBrowserTabs as sameBrowserWorkspaces, sameTerminalTabs } from './state-equality-tabs'
 
@@ -60,12 +64,29 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     })
     return changed ? placed : nextUnifiedTabs
   })()
-  const nextUnifiedTabsByWorktree = withWorktreeTabEntry(
+  const unifiedTabsKey = 'unifiedTabsByWorktree'
+  const unifiedTabsDraft = presentationRecordDraft(state, unifiedTabsKey, batchContext)
+  if (!sameUnifiedTabs(unifiedTabsDraft.get(worktreeId), placedUnifiedTabs)) {
+    if (placedUnifiedTabs === null) {
+      unifiedTabsDraft.delete(worktreeId)
+    } else {
+      unifiedTabsDraft.set(worktreeId, placedUnifiedTabs)
+    }
+  }
+  for (const { unifiedTab } of context.mirroredBrowserTabs) {
+    if (unifiedTab.worktreeId === worktreeId) {
+      continue
+    }
+    const tabs = unifiedTabsDraft.get(unifiedTab.worktreeId)
+    const nextTabs = tabs?.map((tab) => (tab.id === unifiedTab.id ? unifiedTab : tab))
+    if (nextTabs && !sameUnifiedTabs(tabs, nextTabs)) {
+      unifiedTabsDraft.set(unifiedTab.worktreeId, nextTabs)
+    }
+  }
+  const nextUnifiedTabsByWorktree = finishPresentationRecord(
     state,
-    'unifiedTabsByWorktree',
-    worktreeId,
-    placedUnifiedTabs,
-    sameUnifiedTabs,
+    unifiedTabsKey,
+    unifiedTabsDraft,
     batchContext
   )
   const nextGroupsByWorktree = withWorktreeEntry(

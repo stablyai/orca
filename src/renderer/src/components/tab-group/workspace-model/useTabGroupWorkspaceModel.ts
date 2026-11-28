@@ -1,5 +1,7 @@
+import { useMemo } from 'react'
+import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
+import type { AppState } from '@/store/types'
 import { useShallow } from 'zustand/react/shallow'
-import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
@@ -11,12 +13,27 @@ import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
-const EMPTY_BROWSER_TABS: readonly BrowserWorkspace[] = []
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
   ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
 > = {}
 
+function createWorkspaceBrowserTabsSelector(worktreeId: string) {
+  let records: AppState['browserTabsByWorktree'] | undefined
+  let tabs: readonly Tab[] | undefined
+  let browserTabs: ReturnType<typeof workspaceBrowserTabs> = []
+  return (state: AppState) => {
+    const nextTabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
+    if (records !== state.browserTabsByWorktree || tabs !== nextTabs) {
+      records = state.browserTabsByWorktree
+      tabs = nextTabs
+      browserTabs = workspaceBrowserTabs(records, worktreeId, tabs)
+    }
+    return browserTabs
+  }
+}
+
+/** Resolve the tabs drawn in a group independently of their backing records’ workspace ownership. */
 export function useTabGroupWorkspaceModel({
   groupId,
   worktreeId
@@ -24,20 +41,26 @@ export function useTabGroupWorkspaceModel({
   groupId: string
   worktreeId: string
 }) {
-  const worktreeState = useAppStore(
+  const selectedState = useAppStore(
     useShallow((state) => ({
       // Why: reuse stable EMPTY_* fallbacks; fresh `?? []` arrays break Zustand v5 snapshot identity and cause an infinite render loop.
       groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
       unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
-      browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
       terminalLayoutsByTabId: state.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID,
       generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
       mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
     }))
   )
+
+  const selectBrowserTabs = useMemo(
+    () => createWorkspaceBrowserTabsSelector(worktreeId),
+    [worktreeId]
+  )
+  const browserTabs = useAppStore(useShallow(selectBrowserTabs))
+  const worktreeState = { ...selectedState, browserTabs }
 
   const focusGroup = useAppStore((state) => state.focusGroup)
   const makePreviewFilePermanent = useAppStore((state) => state.makePreviewFilePermanent)

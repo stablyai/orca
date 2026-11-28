@@ -1,7 +1,9 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   isRemoteLoopbackHttpLink,
   openOwnedSystemHttpLink,
   localhostLabelRouteForHttpLink,
+  resolveLabeledLocalhostDisplayUrl,
   openLabeledLocalhostLink
 } from './http-link-localhost-route'
 import type {
@@ -172,6 +174,7 @@ export function openOwnedHttpLink(
   return executeHttpLink(url, opts, false)
 }
 
+/** Resolve destination policy and source host before opening, revealing, or refusing an HTTP link. */
 function executeHttpLink(
   url: string,
   opts: OpenHttpLinkOptions,
@@ -180,21 +183,27 @@ function executeHttpLink(
   if (opts.linkContext?.isCurrentRequest?.() === false) {
     return 'none'
   }
-  const { worktreeId, allowRemoteInApp, forceSystemBrowser, forceInApp, sourceOwner } = opts
+  const {
+    worktreeId: sourceWorktreeId,
+    allowRemoteInApp,
+    forceSystemBrowser,
+    forceInApp,
+    sourceOwner
+  } = opts
+  const placementWorkspaceId = opts.floatingWorkspace ? FLOATING_TERMINAL_WORKTREE_ID : undefined
+  const worktreeId =
+    sourceOwner?.kind === 'local' ? (placementWorkspaceId ?? sourceWorktreeId) : sourceWorktreeId
   if (sourceOwner?.kind === 'unknown') {
     return 'none'
   }
   const state = storeAccessor?.()
-  const effectiveSourceOwner = sourceOwner
-  const sourceIsLocal = effectiveSourceOwner
-    ? effectiveSourceOwner.kind === 'local'
-    : !remoteRuntimeActive
+  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   // A client fallback tab browses from this desktop, so it cannot reach the owner's loopback either.
   const prefersOrca =
     openLinksInApp ||
     (!opts.allowClientBrowserFallback &&
-      isRemoteLoopbackHttpLink(url, effectiveSourceOwner, worktreeId))
+      isRemoteLoopbackHttpLink(url, sourceOwner, sourceWorktreeId))
   const modifier = resolveModifierRouting(
     Boolean(opts.modifierHeld),
     prefersOrca,
@@ -206,16 +215,9 @@ function executeHttpLink(
     Boolean(worktreeId) &&
     (forceInApp || prefersOrca || modifier.wantsOrca)
 
-  if (
-    wantsOrca &&
-    allowRemoteInApp &&
-    worktreeId &&
-    (effectiveSourceOwner?.kind === 'runtime' ||
-      effectiveSourceOwner?.kind === 'ssh' ||
-      (!effectiveSourceOwner && remoteRuntimeActive))
-  ) {
+  if (wantsOrca && allowRemoteInApp && worktreeId && !sourceIsLocal) {
     if (workspaceHttpLinkBrowserOpener && state) {
-      const fields = prepareRemoteHttpLinkTab(state, worktreeId)
+      const fields = prepareRemoteHttpLinkTab(state, placementWorkspaceId ?? worktreeId)
       const reveal = captureBrowserLinkReveal(
         () => storeAccessor?.() ?? state,
         storeSubscriber,
@@ -223,17 +225,22 @@ function executeHttpLink(
       )
       const opening = workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
+        placementWorkspaceId,
         url,
         intent: { kind: 'url' },
         ...fields,
-        linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+        linkContext: {
+          ...opts.linkContext,
+          linkIntent: opts.floatingWorkspace ? null : (opts.linkContext?.linkIntent ?? null),
+          canReveal: reveal.canReveal
+        },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
         // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
         ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
-        ...(effectiveSourceOwner?.kind === 'runtime'
-          ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
-          : effectiveSourceOwner?.kind === 'ssh'
-            ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
+        ...(sourceOwner?.kind === 'runtime'
+          ? { expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId }
+          : sourceOwner?.kind === 'ssh'
+            ? { expectedSshConnectionId: sourceOwner.connectionId }
             : {})
       })
       settleHttpLinkBrowserOpen(
@@ -257,10 +264,15 @@ function executeHttpLink(
       }
       if (workspaceHttpLinkBrowserOpener) {
         const opening = workspaceHttpLinkBrowserOpener({
-          workspaceId: worktreeId,
+          workspaceId: sourceWorktreeId ?? worktreeId,
+          placementWorkspaceId,
           url: chosenUrl,
           intent: { kind: 'url' },
-          linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
+          linkContext: {
+            ...opts.linkContext,
+            linkIntent: opts.floatingWorkspace ? null : (opts.linkContext?.linkIntent ?? null),
+            canReveal: reveal.canReveal
+          },
           ...(isHttpLinkBackgroundOpen(state)
             ? { focusOnCreate: false, selectWorktree: false }
             : {})
@@ -291,7 +303,7 @@ function executeHttpLink(
 
   const localhostRoute = state ? localhostLabelRouteForHttpLink(url, state, sourceOwner) : null
   if (!localhostRoute) {
-    openOwnedSystemHttpLink(url, effectiveSourceOwner, worktreeId, openSystemHttpLink)
+    openOwnedSystemHttpLink(url, sourceOwner, sourceWorktreeId, openSystemHttpLink)
     return 'system-browser'
   }
   void openLabeledLocalhostLink(url, localhostRoute, (labeledUrl) => {
@@ -303,23 +315,10 @@ function executeHttpLink(
   return 'system-browser'
 }
 
-export async function resolveLocalhostHttpLinkDisplayUrl(
+/** Return the source-owned localhost display URL, or null when labeling is unavailable. */
+export function resolveLocalhostHttpLinkDisplayUrl(
   url: string,
   sourceOwner?: HttpLinkSourceOwner
 ): Promise<string | null> {
-  const state = storeAccessor?.()
-  if (!state) {
-    return null
-  }
-  // Resolve hover and click through the same route so remote loopback cannot borrow a local workspace label.
-  const localhostRoute = localhostLabelRouteForHttpLink(url, state, sourceOwner)
-  if (!localhostRoute) {
-    return null
-  }
-  try {
-    const result = await window.api.localhostWorktreeLabels.register(localhostRoute)
-    return result.url
-  } catch {
-    return null
-  }
+  return resolveLabeledLocalhostDisplayUrl(url, storeAccessor?.(), sourceOwner)
 }

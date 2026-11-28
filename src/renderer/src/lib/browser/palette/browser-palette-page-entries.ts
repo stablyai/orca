@@ -1,3 +1,6 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { floatingWorkspaceToWorktree } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
 import type {
   BrowserPage,
   BrowserWorkspace
@@ -41,6 +44,7 @@ export type BuildSearchableBrowserPagesOptions = {
   activeTabType: WorkspaceVisibleTabType
 }
 
+/** Index browser pages by their visible workspace placement while retaining source-owned records. */
 export function buildSearchableBrowserPages({
   worktrees,
   ownershipWorktrees,
@@ -67,7 +71,13 @@ export function buildSearchableBrowserPages({
   const duplicateStoredWorkspaceIds = findDuplicateIds(
     Object.values(browserTabsByWorktree).flatMap((workspaces) => workspaces ?? [])
   )
-  for (const worktree of worktrees) {
+  const floatingTabs = unifiedTabsByWorktree?.[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+  const placementWorktrees =
+    floatingTabs.some((tab) => tab.contentType === 'browser') &&
+    !worktrees.some((worktree) => worktree.id === FLOATING_TERMINAL_WORKTREE_ID)
+      ? [...worktrees, floatingWorkspaceToWorktree('')]
+      : worktrees
+  for (const worktree of placementWorktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
     const worktreeSortIndex =
@@ -76,8 +86,8 @@ export function buildSearchableBrowserPages({
       Number.MAX_SAFE_INTEGER
     const unifiedBrowserTabsByWorkspaceId = new Map<string, Tab>()
     const focusedAtByWorkspaceId = new Map<string, number>()
-    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id] ?? []
-    for (const tab of unifiedTabs) {
+    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id]
+    for (const tab of unifiedTabs ?? []) {
       if (tab.contentType === 'browser' && !unifiedBrowserTabsByWorkspaceId.has(tab.entityId)) {
         unifiedBrowserTabsByWorkspaceId.set(tab.entityId, tab)
       }
@@ -89,7 +99,7 @@ export function buildSearchableBrowserPages({
         focusedAtByWorkspaceId.set(tab.entityId, tab.lastFocusedAt)
       }
     }
-    for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
+    for (const workspace of workspaceBrowserTabs(browserTabsByWorktree, worktree.id, unifiedTabs)) {
       if (
         duplicateWorkspaceIds.has(workspace.id) ||
         duplicateStoredWorkspaceIds.has(workspace.id)
@@ -97,6 +107,17 @@ export function buildSearchableBrowserPages({
         continue
       }
       const candidate = unifiedBrowserTabsByWorkspaceId.get(workspace.id)
+      if (
+        !candidate &&
+        allUnifiedTabs.some(
+          (tab) =>
+            tab.contentType === 'browser' &&
+            tab.entityId === workspace.id &&
+            tab.worktreeId !== worktree.id
+        )
+      ) {
+        continue
+      }
       const unifiedTab =
         candidate && isUnifiedTabOwnedByWorktree(candidate, worktree, ambiguousWorktreeIds)
           ? candidate
@@ -114,7 +135,7 @@ export function buildSearchableBrowserPages({
         if (
           duplicatePageIds.has(page.id) ||
           page.workspaceId !== workspace.id ||
-          page.worktreeId !== worktree.id
+          page.worktreeId !== workspace.worktreeId
         ) {
           continue
         }
