@@ -2,7 +2,7 @@
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
-import { decodeWindowsShellOutputAsync } from '../../windows/windows-shell-output-decoding'
+import { decodeWindowsRegistryOutputAsync } from '../../windows/windows-shell-output-decoding'
 
 const LXSS_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'
 const REG_QUERY_TIMEOUT_MS = 5_000
@@ -67,7 +67,7 @@ async function runRegQuery(spec: ProcessSpec): Promise<{ code: number | null; st
   const result = await runProcess({ ...spec, captureStdoutAsBytes: true })
   return {
     code: result.code,
-    stdout: await decodeWindowsShellOutputAsync(result.stdoutBytes ?? Buffer.alloc(0))
+    stdout: await decodeWindowsRegistryOutputAsync(result.stdoutBytes ?? Buffer.alloc(0))
   }
 }
 

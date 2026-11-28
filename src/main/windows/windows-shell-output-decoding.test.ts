@@ -68,7 +68,10 @@ it.each([
       '\r\nHKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Nls\\CodePage\r\n    OEMCP    REG_SZ    936\r\n\r\n'
   })
   vi.resetModules()
-  const { decodeWindowsShellOutputAsync } = await import('./windows-shell-output-decoding')
+  const { decodeWindowsRegistryOutputAsync, decodeWindowsShellOutputAsync } =
+    await import('./windows-shell-output-decoding')
 
   expect(await decodeWindowsShellOutputAsync(Buffer.from(gbkCmdMessage))).toBe("'x' 中文\r\n")
+  // Valid UTF-8 as well as GBK: registry output is not guessed line by line.
+  expect(await decodeWindowsRegistryOutputAsync(Buffer.from([0xd1, 0xa7, 0xcf, 0xb0]))).toBe('学习')
 })

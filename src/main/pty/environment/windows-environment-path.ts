@@ -1,7 +1,7 @@
 import type { execFile, execFileSync } from 'node:child_process'
 import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { getRegExePath } from '../../windows/windows-command-paths'
-import { decodeWindowsShellOutputAsync } from '../../windows/windows-shell-output-decoding'
+import { decodeWindowsRegistryOutputAsync } from '../../windows/windows-shell-output-decoding'
 import { runProcess } from '@orca/process-host'
 import { mergeWindowsPathSegments } from './windows-path-segment-merge'
 import {
@@ -143,7 +143,7 @@ async function runProcessRegQuery(executable: string, args: string[]): Promise<s
       captureStdoutAsBytes: true
     })
     return result.code === 0 && !result.timedOut
-      ? await decodeWindowsShellOutputAsync(result.stdoutBytes ?? Buffer.alloc(0))
+      ? await decodeWindowsRegistryOutputAsync(result.stdoutBytes ?? Buffer.alloc(0))
       : null
   } catch {
     return null

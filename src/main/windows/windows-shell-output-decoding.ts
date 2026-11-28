@@ -108,9 +108,21 @@ export async function decodeWindowsShellOutputAsync(bytes: Buffer): Promise<stri
   if (!needsOemDecoder(bytes)) {
     return bytes.toString('utf8')
   }
+  return decodeWith(await resolveWindowsOemDecoder(), bytes)
+}
+
+/**
+ * `reg.exe` output never mixes encodings, so all of it goes through the console code page: guessing per
+ * line would misread GBK bytes that are also valid UTF-8 (`d1 a7 cf b0`). UTF-8 only where the page is unknown.
+ */
+export async function decodeWindowsRegistryOutputAsync(bytes: Buffer): Promise<string> {
+  if (process.platform !== 'win32') {
+    return bytes.toString('utf8')
+  }
+  return (await resolveWindowsOemDecoder())?.decode(bytes) ?? bytes.toString('utf8')
+}
+
+async function resolveWindowsOemDecoder(): Promise<TextDecoder | null> {
   const oemDecoder = readWindowsOemDecoder()
-  return decodeWith(
-    oemDecoder ?? (windowsOemPageKnown ? null : await readWindowsOemDecoderWithoutAddon()),
-    bytes
-  )
+  return oemDecoder ?? (windowsOemPageKnown ? null : readWindowsOemDecoderWithoutAddon())
 }

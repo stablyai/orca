@@ -17,7 +17,7 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
 })
 
-// `reg query <Lxss> /s` on a cp936 Windows: ASCII except the name, which is GBK (bf aa b7 a2 bb b7 be b3).
+// `reg query <Lxss> /s` on a cp936 Windows: ASCII except the name, whose GBK bytes are also valid UTF-8.
 const lxssDump = Buffer.concat([
   Buffer.from(
     '\r\nHKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\r\n' +
@@ -27,7 +27,7 @@ const lxssDump = Buffer.concat([
     'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss\\{11111111-2222-3333-4444-555555555555}\r\n' +
       '    DistributionName    REG_SZ    '
   ),
-  Buffer.from([0xbf, 0xaa, 0xb7, 0xa2, 0xbb, 0xb7, 0xbe, 0xb3]),
+  Buffer.from([0xd1, 0xa7, 0xcf, 0xb0]),
   Buffer.from('\r\n    Version    REG_DWORD    0x2\r\n\r\n')
 ])
 
@@ -42,6 +42,6 @@ it('reads a distro name that reg.exe printed in the console code page', async ()
   })
 
   expect(await readWslDistroRegistrations()).toEqual([
-    { id: '11111111-2222-3333-4444-555555555555', distro: '开发环境', version: 2 }
+    { id: '11111111-2222-3333-4444-555555555555', distro: '学习', version: 2 }
   ])
 })
