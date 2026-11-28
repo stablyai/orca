@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NativeChatTextSettings from './native-chat-text-settings'
 
 vi.mock('react-native', () => ({
@@ -18,11 +18,16 @@ vi.mock('@react-native-async-storage/async-storage', async () => {
 
 const KEY = 'orca:nativeChatText'
 
+beforeEach(async () => {
+  const { default: storage } = await import('@react-native-async-storage/async-storage')
+  await storage.removeItem(KEY)
+})
+
 type Settings = typeof NativeChatTextSettings
 /** What a build of any age can leave under the key; `v` and `font` are absent on some. */
 type SavedText = { size: number; font?: string; lineSpacing: string; v?: number }
 
-// Each case is a fresh app or page: module state and storage both start empty.
+// Reopening resets module state while retaining storage within the same case.
 async function open(saved?: SavedText) {
   vi.resetModules()
   const { default: storage } = await import('@react-native-async-storage/async-storage')
