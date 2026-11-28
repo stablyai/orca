@@ -181,7 +181,7 @@ export class DaemonRouterLegacyIdleRetirement {
 
   noteAll(): void {
     // A copy: an adapter already retired is removed from the list while this walks it.
-    for (const adapter of [...this.options.legacy()]) {
+    for (const adapter of this.options.legacy().slice()) {
       this.noteActivity(adapter)
     }
   }
