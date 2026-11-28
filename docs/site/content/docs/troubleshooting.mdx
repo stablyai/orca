@@ -8,6 +8,10 @@ title: Troubleshooting & FAQ
 - Make sure the CLI is on the `PATH` Orca sees (check [Settings → Agents](/docs/settings)).
 - Try the **Restart** chip on the tab.
 
+## Windows hooks return empty or invalid JSON
+
+PowerShell fallback launchers use `-NonInteractive` so Windows PowerShell 5.1 does not consume hook JSON as interactive console input. Direct `.cmd` hooks do not need that launcher. If antivirus blocks a fallback command, include its exact command shape and security-product logs in the report: the added flag has not been measured on the Kaspersky host from #16003, and passing launcher tests does not establish Windows or antivirus compatibility.
+
 ## Diff view looks wrong / stuck
 
 - Click the refresh icon on the diff toolbar — Orca re-reads the worktree.
