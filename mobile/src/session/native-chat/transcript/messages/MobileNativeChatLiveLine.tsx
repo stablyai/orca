@@ -32,7 +32,7 @@ export function MobileNativeChatLiveLine({
   // Android has no inline selection; the finished row's long-press sheet copies the live text too.
   const { openActions } = useContext(MobileNativeChatRowOverlaysContext)
   return (
-    <View>
+    <View style={line.underTurnBar ? styles.underTurnBar : undefined}>
       {/* One element for every state of the line, so TalkBack hears each new label; the body
           sits outside it. */}
       <Pressable
@@ -78,6 +78,10 @@ export function MobileNativeChatLiveLine({
 
 // Match the finished reasoning row’s geometry so its takeover cannot shift the text.
 const stylesSheet = themedStyleSheet((colors) => ({
+  // The other half of the 20 pt gap the turn bar's line sits in.
+  underTurnBar: {
+    marginTop: 10
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

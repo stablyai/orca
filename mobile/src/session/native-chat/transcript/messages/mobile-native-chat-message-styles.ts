@@ -19,6 +19,10 @@ export const stylesSheet = themedStyleSheet((colors) => ({
   rowUser: {
     alignItems: 'flex-end'
   },
+  // 16 pt under the row before it, which already pads 8.
+  turnStatus: {
+    marginTop: spacing.sm
+  },
   content: {
     maxWidth: '100%',
     gap: spacing.sm

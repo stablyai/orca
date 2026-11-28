@@ -8,10 +8,7 @@ import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scop
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
-import {
-  nativeChatLiveLine,
-  type NativeChatLiveLine
-} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-live-line'
+import { nativeChatLiveLine } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-live-line'
 import type {
   NativeChatSettledTurns,
   NativeChatTurnStatus
@@ -32,11 +29,15 @@ import {
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
+import {
+  useMobileNativeChatLiveLine,
+  type MobileNativeChatLiveLine
+} from './mobile-native-chat-live-line-placement'
 import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 const NO_TURN_KEYS: readonly undefined[] = []
 
-export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
+export type { MobileNativeChatLiveLine }
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
@@ -188,15 +189,10 @@ export function useMobileNativeChatTurnDisclosure({
     [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
   )
   const liveReasoningId = line?.reasoning?.message.id
-  const liveLine = useMemo<MobileNativeChatLiveLine | null>(
-    () =>
-      line && {
-        ...line,
-        reasoningExpanded:
-          line.reasoning !== null &&
-          expandedReasoning.has(nativeChatReasoningDisclosureKey(line.reasoning.message.id))
-      },
-    [expandedReasoning, line]
+  const { liveLine, placement: linePlacement } = useMobileNativeChatLiveLine(
+    line,
+    expandedReasoning,
+    { active, activeTurnKey, bars, quiet, rows, listMessages: waiting.listMessages }
   )
   const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
     enabled,
@@ -232,6 +228,9 @@ export function useMobileNativeChatTurnDisclosure({
         turnDiff: summaries.get(message.id),
         turnStatus,
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
+        ...(linePlacement === 'merged' && turnStatus !== null && turnKey === activeTurnKey
+          ? { turnStatusLive: true as const }
+          : {}),
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
@@ -276,6 +275,7 @@ export function useMobileNativeChatTurnDisclosure({
       enabled,
       activeTurnKey,
       active,
+      linePlacement,
       completedByTurn,
       expandedTurnIds,
       inLiveWorkingTurn,
