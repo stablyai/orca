@@ -39,7 +39,7 @@ import {
   initializeBrowserSessionsForApp,
   whenBrowserSessionsReadyForRestoredTabs
 } from '../browser/sessions/browser-session-startup'
-import { initializeBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
+import { initializeBrowserExtensionSupportIfEnabled } from '../browser/extensions/browser-extension-support'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
@@ -298,7 +298,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   installPreviewProtocolHandlers()
   registerLazyDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
-  initializeBrowserExtensionSupport({
+  await initializeBrowserExtensionSupportIfEnabled({
     enabled: nativeSettings.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
