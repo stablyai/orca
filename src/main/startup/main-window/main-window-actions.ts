@@ -5,7 +5,6 @@ import {
   type BrowserWindow,
   type MessageBoxOptions,
   type MessageBoxReturnValue,
-  type Tray,
   type WebContents
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
@@ -20,6 +19,7 @@ import {
   setMacMenuBarIconVisible,
   type SystemTrayOptions
 } from '../../tray/system-tray'
+import { loadCachedRolloutConfig } from '../../updater/rollout/rollout-flags'
 import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import {
   focusExistingMainWindow,
@@ -230,6 +230,7 @@ export function getSystemTrayOptions(): SystemTrayOptions | null {
     appIcon: store.getSettings().appIcon,
     isDevInstance: state.devInstanceIdentity?.isDev ?? false,
     devInstanceLabel: state.devInstanceIdentity?.devLabel ?? null,
+    installId: store.getSettings().telemetry?.installId ?? null,
     onOpen: showMainWindowFromTray,
     onOpenSettings: openSettingsFromSystemMenu,
     onCheckForUpdates: () => {
@@ -249,12 +250,14 @@ export function getAppMenuQuitHandlers(): AppMenuQuitHandlers {
     : { onQuitAndStopAllSessions: quitAndStopAllSessionsFromUserCommand }
 }
 
-export function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
-  if (process.platform !== 'darwin' || state.isServeMode) {
-    return null
-  }
-  const options = getSystemTrayOptions()
-  return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
+// Every caller waits for the saved rollout block so the launch's icon owner is decided once, correctly.
+export function syncMacMenuBarIcon(showMenuBarIcon: boolean, onCreated?: () => void): void {
+  void loadCachedRolloutConfig().then(() => {
+    const options = process.platform === 'darwin' && !state.isServeMode && getSystemTrayOptions()
+    if (options && !state.isQuitting) {
+      setMacMenuBarIconVisible(showMenuBarIcon, { ...options, onCreated })
+    }
+  })
 }
 
 export function createSystemTrayDeferred(
@@ -268,9 +271,7 @@ export function createSystemTrayDeferred(
     }
     trayCreated = true
     if (process.platform === 'darwin') {
-      if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
-        onCreated?.()
-      }
+      syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false, onCreated)
       return
     }
     const options = getSystemTrayOptions()

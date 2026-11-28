@@ -19,7 +19,11 @@ import { handleAppQuitRequest } from './renderer-requests/app-quit-request'
 import { quitProcess } from '../startup/quit/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
-import { destroySystemTray, rebuildSystemTrayMenu } from '../tray/system-tray'
+import {
+  destroySystemTray,
+  inspectSystemTrayForQA,
+  rebuildSystemTrayMenu
+} from '../tray/system-tray'
 import { registerMacSymbolicHotkeysProbeHandler } from './keyboard/macos-symbolic-hotkeys-probe'
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
 import type { RendererShutdownCheckpointService } from '../core-desktop/renderer-shutdown-checkpoint-service'
@@ -117,6 +121,33 @@ function resolveDevFeatureWallAssetDir(): string {
 }
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions): void {
+  if (process.env.ORCA_E2E_MENU_BAR === '1' && process.env.ORCA_E2E_USER_DATA_DIR) {
+    ipcMain.handle('e2e:menuBar', (event, command: unknown) => {
+      if (
+        !isTrustedUIRenderer(event.sender) ||
+        !command ||
+        typeof command !== 'object' ||
+        !('operation' in command)
+      ) {
+        throw new Error('Menu bar QA request unavailable')
+      }
+      if (command.operation === 'inspect' || command.operation === 'tracking') {
+        return inspectSystemTrayForQA({ operation: command.operation })
+      }
+      if (
+        command.operation === 'invoke' &&
+        'action' in command &&
+        (command.action === 'open' ||
+          command.action === 'settings' ||
+          command.action === 'updates' ||
+          command.action === 'quit-completely' ||
+          command.action === 'quit')
+      ) {
+        return inspectSystemTrayForQA({ operation: 'invoke', action: command.action })
+      }
+      throw new Error('Invalid menu bar QA request')
+    })
+  }
   registerRendererShutdownCheckpointHandler(options.rendererCheckpoint)
   registerMacKeyboardLayoutChangeNotifications()
   ipcMain.handle('app:isProfileStateSaveDelayed', isProfileStateSaveDelayed)

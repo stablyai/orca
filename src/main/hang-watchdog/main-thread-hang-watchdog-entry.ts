@@ -12,7 +12,7 @@ import {
   type HangPowerReceipt
 } from './hang-observations'
 import { captureHangSnapshot } from './hang-snapshot'
-import { createWatchdogHangCapture } from './watchdog-hang-capture'
+import { createWatchdogHangCapture, type MenuBarCaptureState } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
 import { sleepAssociation, type SleepPeriod } from './hang-sleep-association'
 import {
@@ -48,7 +48,7 @@ export function runWatchdog(
   let sequence = 0
   let activeStallId: string | null = null
   let stopped = false
-  let showMenuBarIcon: boolean | null = null
+  const menuBar: MenuBarCaptureState = { showMenuBarIcon: null, menuBarHost: null }
   let collector: AbortController | null = null
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
@@ -171,7 +171,7 @@ export function runWatchdog(
     openReceiptWindow(record.id)
     // Spawn sample before the marker write: a disk stall that froze main can block the sync write too.
     if (!isMainThread && live && record.tier === 'hang' && find(record.id)) {
-      captures.capture(record, showMenuBarIcon)
+      captures.capture(record, { ...menuBar })
     }
     save()
     enrich(record)
@@ -200,7 +200,7 @@ export function runWatchdog(
         return
       }
       if (!isMainThread) {
-        captures.capture(stall, showMenuBarIcon)
+        captures.capture(stall, { ...menuBar })
       }
       // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
       update(stall.id, escalationFields(stall, durationMs))
@@ -266,7 +266,7 @@ export function runWatchdog(
     if (message.type === 'heartbeat') {
       loop.recordHeartbeat()
     } else if (message.type === 'menu-bar-setting') {
-      showMenuBarIcon = message.enabled
+      Object.assign(menuBar, message.state)
     } else if (message.type === 'power-event') {
       const receipt = parsePowerReceipt({ ...message, receivedAt: Date.now() })
       if (!receipt) {

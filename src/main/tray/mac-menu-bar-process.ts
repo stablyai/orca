@@ -1,0 +1,322 @@
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+
+import { killMenuBarChild, spawnMenuBarChild } from './mac-menu-bar-child'
+import {
+  FRAME_LIMIT,
+  MenuBarOutput,
+  MenuBarQARequest,
+  type MenuBarProcessOptions,
+  type MenuBarQACommand,
+  type MenuBarSnapshot
+} from './mac-menu-bar-protocol'
+import { MenuBarReplyDeadline } from './mac-menu-bar-reply-deadline'
+import { MenuBarRestartPolicy } from './mac-menu-bar-restart-policy'
+// The first launch after an update can include a Gatekeeper check of the new nested app.
+const STARTUP_TIMEOUT = 60_000
+type Generation = {
+  child: ChildProcessWithoutNullStreams
+  exited: Promise<void>
+  retired: boolean
+  ready: boolean
+  output: MenuBarOutput
+  sentRevision: number
+  appliedRevision: number
+  sequence: number
+  probe: number | null
+  /** The open menu holds the outstanding update; its UI thread still answers probes. */
+  deferred: boolean
+  hung: boolean
+  started: number
+}
+
+/** One disposable native owner; no operation waits for its UI thread. */
+export class MacMenuBarProcess {
+  private current: Generation | null = null
+  private desired: MenuBarSnapshot | null = null
+  private revision = 0
+  private created = false
+  private probeId = 0
+  private readonly restarts = new MenuBarRestartPolicy()
+  private timer: ReturnType<typeof setTimeout> | null = null
+  /** Paused across system sleep (the tray wires powerMonitor) so a sleeping helper isn't killed. */
+  readonly deadline = new MenuBarReplyDeadline()
+  private stopped = false
+  private readonly qa = new MenuBarQARequest()
+
+  constructor(private readonly options: MenuBarProcessOptions) {}
+
+  update(snapshot: MenuBarSnapshot): void {
+    if (this.stopped) {
+      return
+    }
+    this.desired = snapshot
+    this.revision++
+    if (!this.current && !this.timer) {
+      this.start()
+    }
+    this.flush()
+  }
+
+  /** Called on user-visible events (window focus, app activation) to replace a hung helper without polling. */
+  probe(): void {
+    const generation = this.current
+    // A focus/activation means the system is awake, so a missed resume can't disable checks.
+    this.deadline.resume()
+    // An outstanding (or menu-deferred) update already proves or tests liveness.
+    const idle =
+      generation && (generation.sentRevision === generation.appliedRevision || generation.deferred)
+    if (!idle || !generation.ready || generation.retired || this.deadline.armed) {
+      return
+    }
+    generation.probe = ++this.probeId
+    this.write(generation, { type: 'ping', id: generation.probe })
+    this.arm(generation)
+  }
+
+  destroy(): Promise<void> {
+    this.stopped = true
+    this.desired = null
+    this.clearTimer()
+    return this.current ? this.retire(this.current) : Promise.resolve()
+  }
+
+  inspectForQA(command: MenuBarQACommand): Promise<unknown> {
+    const generation = this.current
+    if (!this.options.qa || !generation?.ready || generation.retired) {
+      return Promise.reject(new Error('Menu bar QA capability unavailable'))
+    }
+    return this.qa.request(
+      () => this.write(generation, { ...command, type: 'qa' }),
+      () => void this.retire(generation)
+    )
+  }
+
+  private start(): void {
+    if (this.stopped || this.current || !this.desired) {
+      return
+    }
+    let child: ChildProcessWithoutNullStreams
+    try {
+      child = spawnMenuBarChild(this.options.spawn, this.options.qa, this.options.executable)
+    } catch (error) {
+      console.warn('[menu-bar] helper could not start', error)
+      this.afterFailedGeneration(null)
+      return
+    }
+    let observeExit!: () => void
+    const generation: Generation = {
+      child,
+      exited: new Promise<void>((resolve) => {
+        observeExit = resolve
+      }),
+      retired: false,
+      ready: false,
+      output: new MenuBarOutput(),
+      sentRevision: 0,
+      appliedRevision: 0,
+      sequence: 0,
+      probe: null,
+      deferred: false,
+      hung: false,
+      started: performance.now()
+    }
+    this.current = generation
+    const force = (): void => killMenuBarChild(generation.child)
+    process.on('exit', force)
+    let finished = false
+    const finish = (): void => {
+      if (finished) {
+        return
+      }
+      finished = true
+      generation.retired = true
+      process.off('exit', force)
+      child.stdin.destroy()
+      child.stdout.destroy()
+      child.stderr.destroy()
+      observeExit()
+      if (generation.appliedRevision > 0) {
+        this.options.onOwnerChange?.(false)
+      }
+      if (this.current !== generation) {
+        return
+      }
+      this.current = null
+      this.clearTimer()
+      this.qa.reject()
+      if (!this.stopped) {
+        this.afterFailedGeneration(generation)
+      }
+    }
+    child.once('exit', finish)
+    const fault = (): void => void this.retire(generation)
+    // Failed spawn has no process and emits no exit; a live child still needs observed exit.
+    child.on('error', () => (child.pid ? fault() : finish()))
+    for (const stream of [child.stdin, child.stdout, child.stderr]) {
+      stream.on('error', fault)
+    }
+    child.stderr.on('data', () => {})
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => this.read(generation, chunk))
+    child.stdin.on('drain', () => this.flush())
+    this.arm(generation, STARTUP_TIMEOUT)
+  }
+
+  private read(generation: Generation, chunk: string): void {
+    if (this.current !== generation || generation.retired) {
+      return
+    }
+    try {
+      for (const message of generation.output.read(chunk)) {
+        if (this.current !== generation || generation.retired) {
+          return
+        }
+        if (message.type === 'ready' && !generation.ready) {
+          generation.ready = true
+          this.deadline.disarm()
+          this.flush()
+        } else if (message.type === 'pong' && message.id === generation.probe) {
+          generation.probe = null
+          if (generation.sentRevision === generation.appliedRevision || generation.deferred) {
+            this.deadline.disarm()
+          }
+        } else if (message.type === 'deferred' && message.id === generation.sentRevision) {
+          // The menu is open and its UI thread answered; the helper applies on close.
+          generation.deferred = true
+          if (generation.probe === null) {
+            this.deadline.disarm()
+          }
+        } else if (message.type === 'applying' && message.id === generation.sentRevision) {
+          // The menu closed and the deferred update is about to touch the status item: watch it again.
+          if (generation.deferred && !this.deadline.armed) {
+            this.arm(generation)
+          }
+          generation.deferred = false
+        } else if (message.type === 'applied' && message.id === generation.sentRevision) {
+          const first = generation.appliedRevision === 0
+          generation.appliedRevision = message.id
+          generation.deferred = false
+          if (generation.probe === null) {
+            this.deadline.disarm()
+          }
+          if (first) {
+            this.options.onOwnerChange?.(true)
+            if (!this.created) {
+              this.created = true
+              this.options.onCreated?.()
+            }
+          }
+          this.flush()
+        } else if (
+          message.type === 'action' &&
+          generation.ready &&
+          generation.appliedRevision > 0
+        ) {
+          if (message.sequence <= generation.sequence) {
+            continue
+          }
+          generation.sequence = message.sequence
+          if (
+            this.desired?.menu.some((item) => item.id === message.action && item.enabled !== false)
+          ) {
+            this.options.onAction(message.action)
+          }
+        } else if (message.type === 'qa' && this.options.qa) {
+          this.qa.resolve(message)
+        } else {
+          throw new Error('Invalid menu bar protocol message')
+        }
+      }
+    } catch {
+      void this.retire(generation)
+    }
+  }
+
+  private flush(): void {
+    const generation = this.current
+    if (
+      !generation?.ready ||
+      generation.retired ||
+      !this.desired ||
+      generation.child.stdin.writableNeedDrain ||
+      generation.sentRevision !== generation.appliedRevision ||
+      generation.sentRevision === this.revision
+    ) {
+      return
+    }
+    generation.sentRevision = this.revision
+    generation.deferred = false
+    this.write(generation, { type: 'state', id: this.revision, snapshot: this.desired })
+    this.arm(generation)
+  }
+
+  private write(generation: Generation, message: unknown): void {
+    if (generation.retired) {
+      return
+    }
+    const frame = `${JSON.stringify(message)}\n`
+    if (Buffer.byteLength(frame) > FRAME_LIMIT || generation.child.stdin.writableNeedDrain) {
+      void this.retire(generation)
+      return
+    }
+    try {
+      generation.child.stdin.write(frame, (error) => {
+        if (error) {
+          void this.retire(generation)
+        }
+      })
+    } catch {
+      void this.retire(generation)
+    }
+  }
+
+  // retire() ignores a generation that already ended.
+  private arm(generation: Generation, timeoutMs?: number): void {
+    this.deadline.arm(() => void this.retire(generation, true), timeoutMs)
+  }
+
+  private schedule(delay: number): void {
+    this.clearTimer()
+    if (this.stopped) {
+      return
+    }
+    this.timer = setTimeout(() => {
+      this.timer = null
+      if (!this.current) {
+        this.start()
+      }
+    }, delay)
+    this.timer.unref()
+  }
+
+  private afterFailedGeneration(generation: Generation | null): void {
+    const lived = generation ? performance.now() - generation.started : 0
+    const next = this.restarts.next(!!generation?.ready, lived, !!generation?.hung)
+    if (typeof next === 'number') {
+      this.schedule(next)
+      return
+    }
+    console.warn(`[menu-bar] helper keeps failing (${next})`)
+    this.stopped = true
+    this.options.onUnavailable?.(next)
+  }
+
+  private retire(generation: Generation, hung = false): Promise<void> {
+    if (generation.retired) {
+      return generation.exited
+    }
+    generation.hung = hung
+    generation.retired = true
+    this.qa.reject()
+    generation.child.stdin.destroy()
+    killMenuBarChild(generation.child)
+    return generation.exited
+  }
+
+  // Restart timer and any reply deadline; called when the generation ends or the owner stops.
+  private clearTimer(): void {
+    clearTimeout(this.timer ?? undefined)
+    this.timer = null
+    this.deadline.disarm()
+  }
+}

@@ -1,3 +1,4 @@
+import type { MenuBarHost } from '../tray/mac-menu-bar-host'
 import type { Worker } from 'node:worker_threads'
 import os from 'node:os'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
@@ -21,6 +22,7 @@ export type MainThreadHangWatchdogHandle = {
   stop: () => void
   worker: Worker
   setMenuBarIconSetting: (enabled: boolean) => void
+  setMenuBarHost: (host: MenuBarHost | null) => void
 }
 
 function positiveTiming(value: string | undefined, fallback: number): number {
@@ -136,6 +138,9 @@ export function installMainThreadHangWatchdog(options: {
   return {
     stop,
     worker,
-    setMenuBarIconSetting: (enabled) => postMessage({ type: 'menu-bar-setting', enabled })
+    setMenuBarIconSetting: (enabled) =>
+      postMessage({ type: 'menu-bar-setting', state: { showMenuBarIcon: enabled } }),
+    setMenuBarHost: (host) =>
+      postMessage({ type: 'menu-bar-setting', state: { menuBarHost: host } })
   }
 }

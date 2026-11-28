@@ -46,6 +46,8 @@ import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-l
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import { prepareStandaloneDevMenuBar } from './dev-menu-bar.mjs'
+import * as menuBar from '../../native-build/macos/build-menu-bar-macos.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -207,7 +209,7 @@ function prepareMacDevElectronApp() {
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
   const hash = createHash('sha1')
     .update(
-      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}`
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${process.env.ORCA_DEV_MENU_BAR_HELPER === '1' ? menuBar.menuBarBuildIdentity(repoRoot) : ''}`
     )
     .digest('hex')
     .slice(0, 12)
@@ -343,6 +345,17 @@ function prepareMacDevElectronApp() {
   }
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
+  let menuBarReady = true
+  try {
+    // Opt-in: dev versions use the in-process icon unless a rollout file turns the helper on.
+    if (process.env.ORCA_DEV_MENU_BAR_HELPER === '1') {
+      menuBar.buildDevMenuBarApp(appPath, bundleId)
+    }
+  } catch (error) {
+    // The app falls back to its in-process icon when the helper can't start; no marker, so the next launch retries.
+    menuBarReady = false
+    console.warn('[dev] menu-bar helper build failed; continuing without it', error)
+  }
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.
   let signed = true
@@ -355,7 +368,7 @@ function prepareMacDevElectronApp() {
     )
   }
   // Write reuse marker only after signing: otherwise unsigned cache permanently loses notifications/stable Keychain identity; retry copying next launch instead.
-  if (signed) {
+  if (signed && menuBarReady) {
     writeFileSync(markerPath, expectedMarker, 'utf8')
   }
   touchDevBundle(distDir)
@@ -465,6 +478,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper(devProfile.userDataPath)
 }
 
+prepareStandaloneDevMenuBar(useStableElectronName && !isHelpOrVersion)
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }
