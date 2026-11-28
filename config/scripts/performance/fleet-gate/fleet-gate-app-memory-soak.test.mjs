@@ -84,6 +84,23 @@ describe('LinuxOrcaCensus', () => {
     expect(discovered(new LinuxOrcaCensus(proc))).toEqual([20, 30, 50])
   })
 
+  it('is unsure, not quietly smaller, when a never-counted process fails to read with anything but EACCES', () => {
+    for (const fault of ['50:exe', '50:stat']) {
+      const proc = fakeProc()
+      proc.faults.set(fault, 'EIO')
+      expect(() => discovered(new LinuxOrcaCensus(proc))).toThrow(CensusUnsure)
+    }
+  })
+
+  it('treats a counted pid reused by an unreadable process as a new process, not a counted one', () => {
+    const proc = fakeProc()
+    const census = new LinuxOrcaCensus(proc)
+    discovered(census)
+    proc.table.set(30, { ppid: 1, exe: '/usr/bin/ssh-agent', start: 'reused' })
+    proc.faults.set('30:exe', 'EACCES')
+    expect(discovered(census)).toEqual([20, 50])
+  })
+
   it('is unsure when a counted process becomes unreadable', () => {
     for (const fault of ['30:exe', '30:stat']) {
       const proc = fakeProc()
@@ -163,7 +180,7 @@ describe('stableLowest', () => {
 })
 
 /** A page whose store reports the chat selected; the DOM holds whatever the test mounts. */
-function fakePage(elements) {
+function fakePage(elements, covers = []) {
   const store = {
     activeView: 'terminal',
     activeWorktreeId: 'wt',
@@ -176,7 +193,15 @@ function fakePage(elements) {
   return {
     evaluate: async (fn, arg) => {
       globalThis.window = { __store: { getState: () => store }, innerWidth: 1200, innerHeight: 800 }
-      globalThis.document = { querySelectorAll: () => elements }
+      globalThis.document = {
+        querySelectorAll: () => elements,
+        // The topmost element at a point: a cover over the composer wins, else the composer whose box holds it.
+        elementFromPoint: (x, y) =>
+          [...covers, ...elements].find(({ getBoundingClientRect: rect }) => {
+            const { left, top, right, bottom } = rect()
+            return x >= left && x < right && y >= top && y < bottom
+          }) ?? null
+      }
       globalThis.getComputedStyle = (element) => element.style
       try {
         return await fn(arg)
@@ -197,16 +222,20 @@ const shown = {
   overflowX: 'visible',
   overflowY: 'visible'
 }
-const element = (rect, { scope = 'structured:s1', style = shown, parent = null } = {}) => ({
-  getAttribute: () => scope,
-  getBoundingClientRect: () => rect,
-  style,
-  parentElement: parent
-})
+const element = (rect, { scope = 'structured:s1', style = shown, parent = null } = {}) => {
+  const node = {
+    getAttribute: () => scope,
+    getBoundingClientRect: () => rect,
+    style,
+    parentElement: parent,
+    contains: (other) => other === node
+  }
+  return node
+}
 
 describe('showChat', () => {
   const chat = { sessionId: 's1', worktreeId: 'wt' }
-  const show = (elements) => showChat(fakePage(elements), chat, 0)
+  const show = (elements, covers) => showChat(fakePage(elements, covers), chat, 0)
   const onScreen = box(100, 100, 500, 300)
 
   it('is not a show when the store says selected but no chat pane is mounted', async () => {
@@ -226,6 +255,13 @@ describe('showChat', () => {
     expect(await show([element(onScreen, { style: { ...shown, opacity: '0' } })])).toBe(false)
     const transparent = element(box(0, 0, 1200, 800), { style: { ...shown, opacity: '0' } })
     expect(await show([element(onScreen, { parent: transparent })])).toBe(false)
+  })
+
+  it('is not a show when another opaque pane or dialog covers the composer', async () => {
+    const dialog = element(box(0, 0, 1200, 800), { scope: 'dialog' })
+    expect(await show([element(onScreen)], [dialog])).toBe(false)
+    const corner = element(box(0, 0, 50, 50), { scope: 'tooltip' })
+    expect(await show([element(onScreen)], [corner])).toBe(true)
   })
 
   it("is a show once part of that chat's composer is visible", async () => {

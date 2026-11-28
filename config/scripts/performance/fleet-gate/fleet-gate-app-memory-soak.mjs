@@ -105,7 +105,7 @@ async function sampleAppMb(electronApp, page, census) {
 
 /**
  * Shows the chat's workspace and its tab, as a click in the sidebar and tab strip does. True only once at least
- * 1 px of that chat's composer is visible on screen (a 0x0, fully clipped or transparent pane doesn't count): store state alone would still read shown after the workbench crashed into its
+ * 1 px of that chat's composer is visible on screen (a 0x0, fully clipped, transparent or covered pane doesn't count): store state alone would still read shown after the workbench crashed into its
  * error fallback, which unmounts every chat and frees what they hold.
  */
 export async function showChat(page, { sessionId, worktreeId }, waitMs = SHOW_WAIT_MS) {
@@ -171,7 +171,15 @@ export async function showChat(page, { sessionId, worktreeId }, waitMs = SHOW_WA
             }
           }
         }
-        return box.right - box.left >= 1 && box.bottom - box.top >= 1
+        if (box.right - box.left < 1 || box.bottom - box.top < 1) {
+          return false
+        }
+        // Not covered: the topmost element at the centre of its visible part is the composer or inside it.
+        const hit = document.elementFromPoint(
+          (box.left + box.right) / 2,
+          (box.top + box.bottom) / 2
+        )
+        return hit !== null && (hit === element || element.contains(hit))
       }
       return [...document.querySelectorAll('[data-native-chat-composer-scope]')].some(
         (element) =>

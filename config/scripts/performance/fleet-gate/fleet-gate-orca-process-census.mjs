@@ -62,9 +62,10 @@ export class CensusUnsure extends Error {}
  * (`orca-provider-exec` from its app folder: supervisor and watcher). A process with one of those executables is
  * this copy's when its parent chain reaches main, or, when its parent exited or its parent pid was reused
  * mid-scan, when it carries the copy's own HOME; another copy of the same build fails both and is skipped.
- * Orca never makes its processes undumpable, so an unreadable process that was never counted isn't Orca's
- * (e.g. a same-user ssh-agent) and is skipped. A read error on a counted process, or a counted process still
- * running but no longer matched, makes the census unsure (CensusUnsure).
+ * Orca never makes its processes undumpable, so a process never counted that answers EACCES isn't Orca's
+ * (e.g. a same-user ssh-agent) and is skipped; any other read error leaves the census unsure. So does a read
+ * error on a counted process (same pid and start time), or a counted process still running but no longer
+ * matched (CensusUnsure).
  */
 export class LinuxOrcaCensus {
   constructor(proc = linuxProc) {
@@ -77,17 +78,32 @@ export class LinuxOrcaCensus {
     return stat !== null && stat.state !== 'Z' ? stat : null
   }
 
-  /** One /proc read: an error on a counted process makes the census unsure; on any other, the process is skipped. */
+  /** One /proc read: an error on a counted process, or any error but EACCES, makes the census unsure. */
   read(pid, read) {
     try {
       return read()
     } catch (error) {
-      if (this.known.has(pid)) {
-        throw new CensusUnsure(
-          `counted process ${String(pid)} unreadable: ${String(error?.code ?? error)}`
-        )
+      // Counted means the same process as before: a pid reused by another process is judged as a new one.
+      const knownStart = this.known.get(pid)
+      if (knownStart !== undefined) {
+        let current
+        try {
+          current = this.proc.stat(pid)
+        } catch {
+          current = undefined
+        }
+        if (current === undefined || current?.start === knownStart) {
+          throw new CensusUnsure(
+            `counted process ${String(pid)} unreadable: ${String(error?.code ?? error)}`
+          )
+        }
       }
-      return null
+      // Permission denied is how Linux answers for an undumpable process, which Orca never is; any other error
+      // could hide one of Orca's own, so it leaves the census unsure.
+      if (error?.code === 'EACCES') {
+        return null
+      }
+      throw new CensusUnsure(`process ${String(pid)} unreadable: ${String(error?.code ?? error)}`)
     }
   }
 
