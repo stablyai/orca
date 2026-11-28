@@ -25,7 +25,7 @@ describe('paused relay ack nudges', () => {
         }
         return socket
       },
-      off: (event, listener) => {
+      off: (_event, listener) => {
         drains.delete(listener)
         return socket
       },
@@ -42,10 +42,9 @@ describe('paused relay ack nudges', () => {
     expect(vi.getTimerCount()).toBe(0)
     expect(drains.size).toBe(1)
     backedUp = false
-    for (const drain of [...drains]) {
-      drains.delete(drain)
-      drain()
-    }
+    const [drain] = drains
+    drains.clear()
+    drain?.()
     expect(writes).toBe(1)
     attachment.release()
     expect(vi.getTimerCount()).toBe(0)
