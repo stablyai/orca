@@ -10,6 +10,7 @@ export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-la
 export const TERMINAL_RAIL_KEY_IDS: ReadonlySet<string> = new Set([
   'escape',
   'tab',
+  'enter',
   'arrowUp',
   'arrowDown',
   'arrowLeft',

@@ -4,9 +4,9 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 
 const KEY_HEIGHT = 32
 const KEY_ROW_HEIGHT = 46
-const KEY_GAP = spacing.sm
-// One key holds all four arrows, so they fit on screen next to Esc, Tab, Ctrl and Alt.
-const ARROW_SEGMENT_WIDTH = 28
+// Sized so Esc, Tab, Ctrl, Alt, the four arrows, Paste, Enter and ⋯ fit on one 390 pt phone row.
+const KEY_GAP = 5
+const ARROW_SEGMENT_WIDTH = 25
 const KEY_RADIUS = radii.control
 // The smart group wraps its keys with this much room on each side, inside the same row.
 const SMART_GROUP_INSET = spacing.xs
@@ -27,8 +27,8 @@ export const TERMINAL_KEY_HIT_SLOP = {
 
 const key = {
   height: KEY_HEIGHT,
-  minWidth: 34,
-  paddingHorizontal: 9,
+  minWidth: 32,
+  paddingHorizontal: 5,
   borderRadius: KEY_RADIUS,
   flexDirection: 'row',
   alignItems: 'center',
@@ -102,7 +102,7 @@ export const terminalDockStylesSheet = themedStyleSheet((colors) => ({
   },
   keyText: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     fontFamily: typography.monoFamily
   },
@@ -175,7 +175,8 @@ export const terminalDockStylesSheet = themedStyleSheet((colors) => ({
     paddingBottom: spacing.lg
   },
   sheetKey: {
-    backgroundColor: colors.sheetGroup
+    backgroundColor: colors.sheetGroup,
+    paddingHorizontal: 9
   },
   sheetGrid: {
     flexDirection: 'row',
