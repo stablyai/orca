@@ -43,14 +43,15 @@ export async function probeLocalGitAvailability(): Promise<boolean> {
 export function registerRepoCreationHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata'],
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
-  ipcMain.handle('repos:getDefaultCreateProjectParent', () =>
+  ipc.handle('repos:isGitAvailable', () => probeLocalGitAvailability())
+  ipc.handle('repos:getDefaultCreateProjectParent', () =>
     getDefaultCreateProjectParent(store.getSettings())
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'repos:add',
     async (
       _event,
@@ -72,7 +73,7 @@ export function registerRepoCreationHandlers(
   )
 
   // An initial commit gives Git projects the HEAD ref needed for worktrees.
-  ipcMain.handle(
+  ipc.handle(
     'repos:create',
     async (
       _event,
