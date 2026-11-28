@@ -56,6 +56,8 @@ export async function spawnCommandCapture(
       child.stdout?.off('data', onStdoutData)
       child.stderr?.off('data', onStderrData)
       child.off('error', onError)
+      // Abort can settle before Node delivers a queued spawn error; it still needs an owner.
+      child.on('error', () => {})
       child.off('close', onClose)
     }
     const finish = (error: Error | null): void => {
