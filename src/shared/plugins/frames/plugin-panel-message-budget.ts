@@ -64,20 +64,48 @@ function utf8Bytes(value: string, stopAfter: number): number {
 /** Bound cloneable-message size by UTF-8 strings/backing bytes, handling cycles and stopping once the cap is exceeded. */
 /** Caps on the size walk itself; a lane whose payloads are legitimately deep or wide raises them. */
 export type StructuredCloneWalkLimits = { maxObjects?: number; maxDepth?: number }
+export const STRUCTURED_CLONE_WALK_MAX_OBJECTS = 10_000
+export const STRUCTURED_CLONE_WALK_MAX_DEPTH = 100
+/** Why a walk went past `stopAfter`: the bytes, one of the walk caps, or a value it cannot copy. */
+export type StructuredCloneRefusal = 'size' | 'objects' | 'depth' | 'uncloneable'
 
 export function structuredCloneMessageBytes(
   data: unknown,
   stopAfter = PANEL_MESSAGE_MAX_BYTES,
   walk: StructuredCloneWalkLimits = {}
 ): number {
-  const maxObjects = walk.maxObjects ?? 10_000
-  const maxDepth = walk.maxDepth ?? 100
+  return measureStructuredClone(data, stopAfter, walk).bytes
+}
+
+/** Null when `data` fits; otherwise the first limit it broke. */
+export function structuredCloneMessageRefusal(
+  data: unknown,
+  stopAfter = PANEL_MESSAGE_MAX_BYTES,
+  walk: StructuredCloneWalkLimits = {}
+): StructuredCloneRefusal | null {
+  return measureStructuredClone(data, stopAfter, walk).refusal
+}
+
+function measureStructuredClone(
+  data: unknown,
+  stopAfter: number,
+  walk: StructuredCloneWalkLimits
+): { bytes: number; refusal: StructuredCloneRefusal | null } {
+  const maxObjects = walk.maxObjects ?? STRUCTURED_CLONE_WALK_MAX_OBJECTS
+  const maxDepth = walk.maxDepth ?? STRUCTURED_CLONE_WALK_MAX_DEPTH
   const seen = new WeakSet<object>()
   let total = 0
   let visitedNodes = 0
+  let refusal: StructuredCloneRefusal = 'size'
 
   const add = (bytes: number): void => {
     total = Math.min(stopAfter + 1, total + bytes)
+  }
+  const refuse = (reason: StructuredCloneRefusal): void => {
+    if (total <= stopAfter) {
+      refusal = reason
+    }
+    total = stopAfter + 1
   }
 
   const visit = (value: unknown, depth: number): void => {
@@ -104,7 +132,7 @@ export function structuredCloneMessageBytes(
         return
       case 'symbol':
       case 'function':
-        total = stopAfter + 1
+        refuse('uncloneable')
         return
       case 'object':
         break
@@ -117,7 +145,7 @@ export function structuredCloneMessageBytes(
     seen.add(object)
     visitedNodes += 1
     if (visitedNodes > maxObjects || depth > maxDepth) {
-      total = stopAfter + 1
+      refuse(visitedNodes > maxObjects ? 'objects' : 'depth')
       return
     }
 
@@ -184,7 +212,7 @@ export function structuredCloneMessageBytes(
     try {
       const prototype = Object.getPrototypeOf(object)
       if (prototype !== Object.prototype && prototype !== null) {
-        total = stopAfter + 1
+        refuse('uncloneable')
         return
       }
       for (const key of Object.keys(object)) {
@@ -196,10 +224,10 @@ export function structuredCloneMessageBytes(
         }
       }
     } catch {
-      total = stopAfter + 1
+      refuse('uncloneable')
     }
   }
 
   visit(data, 0)
-  return total
+  return { bytes: total, refusal: total > stopAfter ? refusal : null }
 }

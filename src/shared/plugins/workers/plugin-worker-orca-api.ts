@@ -6,11 +6,18 @@ import type { PluginHookHandler } from './plugin-worker-hooks'
 import { PLUGIN_HOST_API_MINOR, pluginHostMethodsFor } from './plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
 import {
+  PLUGIN_PANEL_POST_MAX_BYTES,
   pluginBridgeNameSchema,
   type PluginDataChanged,
   type PluginPanelCaller,
   type PluginWorkerPanelPost
 } from './plugin-panel-bridge-protocol'
+import { pluginError } from '../frames/plugin-protocol'
+import {
+  STRUCTURED_CLONE_WALK_MAX_DEPTH,
+  STRUCTURED_CLONE_WALK_MAX_OBJECTS,
+  structuredCloneMessageRefusal
+} from '../frames/plugin-panel-message-budget'
 
 export type PluginDisposable = { dispose(): void }
 
@@ -94,6 +101,26 @@ function field(result: unknown, name: string): unknown {
 function addTo<T>(set: Set<T>, entry: T): PluginDisposable {
   set.add(entry)
   return { dispose: () => void set.delete(entry) }
+}
+
+const PANEL_POST_TOO_LARGE = {
+  size: `is over ${PLUGIN_PANEL_POST_MAX_BYTES / 1024} KiB`,
+  objects: `holds more than ${STRUCTURED_CLONE_WALK_MAX_OBJECTS.toLocaleString('en-US')} objects and arrays`,
+  depth: `nests deeper than ${STRUCTURED_CLONE_WALK_MAX_DEPTH} levels`
+} as const
+
+// Why: main drops a post past these limits with only a log line; throw while the plugin can react.
+function assertPanelPostFits(event: string, payload: unknown): void {
+  const refusal = structuredCloneMessageRefusal(payload ?? null, PLUGIN_PANEL_POST_MAX_BYTES)
+  // A function or class instance is the fork channel's to refuse or copy, as before.
+  if (refusal === null || refusal === 'uncloneable') {
+    return
+  }
+  const { code, message, retryable } = pluginError(
+    'too_large',
+    `orca.panels.post("${event}"): the payload ${PANEL_POST_TOO_LARGE[refusal]}`
+  )
+  throw Object.assign(new Error(message), { code, retryable })
 }
 
 const WORKER_METHOD_NAMES: ReadonlySet<string> = new Set(pluginHostMethodsFor('worker'))
@@ -212,6 +239,7 @@ export function createPluginWorkerOrcaApi(input: {
       },
       post(event: string, payload?: unknown, options?: { panel?: string }) {
         pluginBridgeNameSchema.parse(event)
+        assertPanelPostFits(event, payload)
         input.postToPanels({ event, payload, ...(options?.panel ? { panel: options.panel } : {}) })
       }
     }),
