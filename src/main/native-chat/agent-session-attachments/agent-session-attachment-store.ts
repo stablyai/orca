@@ -303,15 +303,21 @@ async function writeContent(uploadDir: string, path: string, bytes: Buffer): Pro
     return
   }
   const partPath = join(uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  let created: string | undefined
+  let wrote = false
   try {
-    await mkdir(uploadDir, { recursive: true })
+    created = await mkdir(uploadDir, { recursive: true })
     await writeFile(partPath, bytes)
+    wrote = true
     await renameFileWithWindowsRetryAsync(partPath, path)
   } catch (error) {
-    // Leave no part-only folder for a later write of the same bytes to reuse while the sweep removes it.
-    // Only this write's part file goes; a folder still holding anything, or unreadable, stays.
-    await rm(partPath, { force: true }).catch(() => {})
-    await rmdir(uploadDir).catch(() => {})
+    // Undo only what this write made: a reused folder's other files, listed or not, stay for the sweep.
+    if (wrote) {
+      await rm(partPath, { force: true }).catch(() => {})
+    }
+    if (created !== undefined) {
+      await rmdir(uploadDir).catch(() => {})
+    }
     throw error
   }
 }

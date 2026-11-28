@@ -62,16 +62,17 @@ export async function sweepAgentSessionAttachments(
     if (stopped()) {
       return { removed }
     }
-    // A claim that landed after the mark, such as one an older Orca's journal carried in, wins.
-    if (!(await facts.isUnclaimed(uploadId))) {
-      await facts.finishSweep(uploadId)
-      continue
-    }
     const kept = await retainedUploads()
     if (kept === null) {
       continue
     }
     if (kept.has(uploadId)) {
+      await facts.finishSweep(uploadId)
+      continue
+    }
+    // Last before removal, after every await: a claim that landed after the mark, such as one an
+    // older Orca's journal carried in, wins.
+    if (!(await facts.isUnclaimed(uploadId))) {
       await facts.finishSweep(uploadId)
       continue
     }
