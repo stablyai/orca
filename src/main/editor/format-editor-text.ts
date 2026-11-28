@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { basename, dirname, join, matchesGlob, relative } from 'node:path'
+import { basename, dirname, join, matchesGlob, relative, resolve } from 'node:path'
 import { lstat, realpath } from 'node:fs/promises'
 import {
   editorFormatterArgv,
@@ -8,9 +8,49 @@ import {
 } from '../../shared/editor/formatting/editor-formatter'
 import { getRepoExecutionHostId } from '../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
+import { homedir } from 'node:os'
+import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import {
+  isSpawnableCommand,
+  pathEnvRelativeTo
+} from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  listLocalCommandPaths,
+  resolveCommandOnLocalPath
+} from '../ipc/command-path/command-path-resolver'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { RuntimeFileExplorerPath } from '../runtime/files/file-target'
 import { isENOENT } from '../filesystem/local-file-io/filesystem-path-containment'
+
+async function resolveWindowsFormatterProgram(program: string, cwd: string): Promise<string> {
+  if (/[\\/]/.test(program)) {
+    if (/[\\/]\.{0,2}$/.test(program)) {
+      return program
+    }
+    // Resolve relative paths like `./node_modules/.bin/prettier` against the worktree cwd and look up
+    // only the basename in that directory so a dot in `.bin` does not match an extensionless POSIX shim.
+    const target = resolve(cwd, program)
+    const candidates = await listLocalCommandPaths(basename(target), {
+      cwd: dirname(target),
+      env: { PATHEXT: process.env.PATHEXT }
+    })
+    // An extensionless sibling never spawns on Windows; a dotted basename still takes its .cmd/.exe.
+    return (
+      candidates.find((candidate) => isSpawnableCommand('win32', candidate)) ??
+      candidates[0] ??
+      program
+    )
+  }
+  // Windows searches cwd before PATH, then the CLI install dirs the user's terminal also gets.
+  // A relative PATH entry (`node_modules\.bin`) resolves against the worktree, as it would in a shell.
+  const pathEnv = pathEnvRelativeTo(process.env.PATH, cwd, 'win32')
+  const env = { ...process.env, ...(pathEnv === undefined ? {} : { PATH: pathEnv }) }
+  const local = await resolveCommandOnLocalPath(program, { cwd, env })
+  return (
+    local ??
+    (await resolveCliCommandAsync(program, { pathEnv: pathEnv ?? null, homePath: homedir() }))
+  )
+}
 
 async function formatterFilePath(filePath: string): Promise<string> {
   try {
@@ -73,8 +113,13 @@ export async function formatEditorText(
     relativePath,
     process.platform
   )
+  // Windows npm shims are .cmd files that a bare or extensionless path cannot spawn with shell: false.
+  const resolvedProgram =
+    process.platform === 'win32'
+      ? await resolveWindowsFormatterProgram(program, target.worktree.path)
+      : program
   const result = await runProcess({
-    program,
+    program: resolvedProgram,
     args,
     cwd: target.worktree.path,
     input: text,
