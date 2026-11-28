@@ -7,7 +7,8 @@ import {
 } from './window/activation/foreground-activation-policy'
 import {
   createDesktopHandoff,
-  desktopHandoffArguments
+  desktopHandoffArguments,
+  shouldHandOffServeDesktopActivation
 } from './window/activation/macos-desktop-handoff'
 import {
   focusExistingWindow as focusExistingWindowAction,
@@ -23,6 +24,7 @@ import { ensureWindowsRendererRuntimeFiles } from './startup/windows-startup/win
 import { registerMainProcessIpcHandlers } from './startup/main-process-ipc-bootstrap'
 import { initializeMainProcessReady } from './startup/main-process-ready'
 import { installMainProcessQuitHandlers } from './startup/quit/main-process-quit'
+import { isQuittingForUpdate } from './updater/updater-service'
 import { shouldActivateDesktopForSecondInstance } from './startup/profile-startup/single-instance-lock'
 import type { DeepLink } from './startup/deep-link-state'
 import { resolveOsOpenedDocuments } from './startup/open-routing/os-opened-documents'
@@ -82,6 +84,7 @@ function focusExistingWindow(request: DesktopActivationRequest = {}): void {
 }
 
 const requestDesktopHandoff = createDesktopHandoff({
+  canHandOff: () => !state.isQuitting && !isQuittingForUpdate(),
   drainArguments: () => desktopHandoffArguments(state)
 })
 
@@ -98,7 +101,8 @@ function publishDeepLink(link: DeepLink): void {
   }
 }
 
-function requestDesktopActivation(argv: readonly string[] = []): void {
+type ActivationOrigin = 'os-open' | 'os-activation'
+function requestDesktopActivation(argv: readonly string[] = [], origin?: ActivationOrigin): void {
   state.deepLinks.capture(argv, publishDeepLink)
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
@@ -111,6 +115,31 @@ function requestDesktopActivation(argv: readonly string[] = []): void {
   // The sidecar’s throwaway profile must never become the user’s window.
   if (isOrcadSidecarLaunch()) {
     requestDesktopHandoff()
+    return
+  }
+  if (origin && process.platform === 'darwin' && app.isPackaged && state.isServeMode) {
+    const initializing = state.desktopActivationGate?.getState() === 'initializing'
+    void shouldHandOffServeDesktopActivation({
+      isServeMode: state.isServeMode,
+      isPackaged: app.isPackaged,
+      userDataPath: app.getPath('userData')
+    })
+      .then((handOff) => {
+        if (state.isQuitting || isQuittingForUpdate()) {
+          return
+        }
+        if (handOff) {
+          // Initial AppKit activation belongs to server startup, not a desktop request.
+          if (origin === 'os-open' || !initializing) {
+            requestDesktopHandoff({ userRequested: true })
+          }
+        } else {
+          state.desktopActivationGate?.requestActivation({ background: false })
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('[window] Failed to resolve the desktop activation profile', error)
+      })
     return
   }
   state.desktopActivationGate?.requestActivation({
@@ -147,7 +176,7 @@ function publishOsOpenedDocuments(): void {
 
 const handleMacAppActivation = createMacAppActivationHandler({
   getWindow: () => state.mainWindow,
-  requestActivation: requestDesktopActivation
+  requestActivation: () => requestDesktopActivation([], 'os-activation')
 })
 
 // Before anything spawns: no child may inherit Orca's std handles.
@@ -187,7 +216,7 @@ if (preflightReady) {
       return
     }
     event.preventDefault()
-    requestDesktopActivation([url])
+    requestDesktopActivation([url], 'os-open')
   })
   // macOS can deliver Open With before ready; claim only supported paths.
   app.on('open-file', (event, filePath) => {
@@ -196,9 +225,11 @@ if (preflightReady) {
     }
     event.preventDefault()
     // Cold-start activation must wait for Electron readiness; sidecars have no pending window.
-    if (app.isReady() || isOrcadSidecarLaunch()) {
-      requestDesktopActivation()
+    if (!app.isReady() && !isOrcadSidecarLaunch()) {
+      void app.whenReady().then(() => requestDesktopActivation([], 'os-open'))
+      return
     }
+    requestDesktopActivation([], 'os-open')
   })
   registerOrcaProtocolClient(app, {
     platform: process.platform,
