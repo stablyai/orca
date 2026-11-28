@@ -95,9 +95,7 @@ function AttachmentButton({
         title={name}
         onClick={() => visible && (opener ? opener(path) : setOpen(true))}
       >
-        <span className="truncate">
-          {name}
-        </span>
+        <span className="truncate">{name}</span>
       </Button>
       {open && visible ? (
         <NativeChatTextAttachmentPreview

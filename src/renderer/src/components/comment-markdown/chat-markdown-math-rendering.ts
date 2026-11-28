@@ -107,8 +107,8 @@ function rehypeChatMath(
                   tabIndex: 0,
                   role: 'group',
                   ariaLabel: translate(
-                    'nativeChat.math.scrollInlineEquation',
-                    'Scroll inline equation'
+                    'nativeChat.math.scrollDisplayEquation',
+                    'Scroll display equation'
                   )
                 })
         },
