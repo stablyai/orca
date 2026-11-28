@@ -175,7 +175,9 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           'pointer-events-none absolute inset-y-[2px] right-[2px] flex items-center gap-1 rounded-r-[4px] bg-accent pr-1.5 pl-1.5 [&:not(:has(button,svg))]:hidden',
           pending
             ? 'opacity-100 [&>*]:pointer-events-auto'
-            : 'opacity-0 group-hover/worker:opacity-100 group-hover/worker:[&>*:not(svg)]:pointer-events-auto group-focus-within/worker:opacity-100 [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:[&>*:not(svg)]:pointer-events-auto'
+            : // Takes presses whenever it shows. Hover is not gated on (hover: hover): Linux can report
+              // hover: none with a mouse attached, and the action would then be focus-only.
+              'opacity-0 group-[:hover]/worker:opacity-100 group-[:hover]/worker:[&>*:not(svg)]:pointer-events-auto group-focus-within/worker:opacity-100 group-focus-within/worker:[&>*:not(svg)]:pointer-events-auto [@media(pointer:coarse)]:opacity-100 [@media(pointer:coarse)]:[&>*:not(svg)]:pointer-events-auto'
         )}
       >
         {row ? <WorkerDockRowAction row={row} pending={pending} onAction={onAction} /> : null}
