@@ -209,14 +209,17 @@ export class PersonChatTabs {
     if (live?.type === 'agent-session') {
       return live
     }
+    // A saved row keeps its saved id; the list addresses it by the live row's.
     const saved = this.hydrated.has(list)
       ? undefined
       : this.host
           .savedLists()
           ?.unifiedTabs?.[list]?.find(
-            (tab) => tab.contentType === 'agent-session' && tab.id === tabId
+            (tab) =>
+              tab.contentType === 'agent-session' &&
+              (tab.id === tabId || personChatTabId(tab.entityId) === tabId)
           )
-    return saved ? { id: saved.id, sessionId: saved.entityId } : null
+    return saved ? { id: personChatTabId(saved.entityId), sessionId: saved.entityId } : null
   }
 
   private readonly selections = {

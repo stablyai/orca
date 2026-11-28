@@ -15,7 +15,8 @@ import { activeProviderContext } from '../../../shared/agent-session/conversatio
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { openStructuredAgentSessionConversationJournal } from '../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
-import { ownerWindowProbe } from './owner-window-probe.test-support'
+import { ownerUntouchedBy } from './owner-untouched-by.test-support'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   B,
   C,
@@ -29,36 +30,6 @@ import {
 afterEach(settleTeammateRig)
 
 type Rig = Awaited<ReturnType<typeof rig>>
-
-const HOST_WIDE = new Set(['sleepingMailChanged', 'botsChanged'])
-
-/** One teammate act, watched: the owner gets nothing and sees nothing new, and no chat stops. */
-async function ownerUntouchedBy(
-  r: Rig,
-  act: () => Promise<unknown>,
-  /** The act ends a chat by design (a delete, a Home Chat replaced). */
-  { ends = false }: { ends?: boolean } = {}
-): Promise<void> {
-  const view = await r.ownerView()
-  const probe = ownerWindowProbe(r.runtime, r.profile, r.workspace)
-  const stops = vi.spyOn(r.host, 'close')
-  try {
-    const owner = await probe.ownerState()
-    await act()
-    await chatTabCommandsSettled()
-    // The held-mail set is host-wide, so a newly attached window (the probe's) is sent it whole,
-    // and the agents list is too (a share's Home Chat pointer).
-    expect(probe.relays.filter((relay) => !HOST_WIDE.has(relay.name))).toEqual([])
-    expect(await probe.ownerState()).toBe(owner)
-    if (!ends) {
-      expect(stops).not.toHaveBeenCalled()
-    }
-  } finally {
-    probe.close()
-    stops.mockRestore()
-  }
-  expect(await r.ownerView()).toBe(view)
-}
 
 const closes = {
   'session.tabs.close': (r: Rig, sessionId: string) => r.closeMine(sessionId),
@@ -455,4 +426,30 @@ it('places a teammate’s create where asked while its save has not landed', asy
 
   expect(r.mine().order).toEqual([C, created, B])
   expect(r.mineSaved()).toEqual([C, created, B])
+})
+
+it('keeps a teammate’s chat closed when the close comes before the chat host is up', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  await r.reveal('mate-desk', B)
+  const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
+  const save = fresh.runtime['changeWindowlessChatTabs'].bind(fresh.runtime)
+  const held: (() => Promise<void>)[] = []
+  fresh.runtime['changeWindowlessChatTabs'] = (...args) =>
+    new Promise<void>((resolve) => held.push(() => save(...args).then(resolve)))
+
+  setStructuredAgentSessionHost(null)
+  const closing = fresh.closeMine(C)
+  setStructuredAgentSessionHost(fresh.host)
+  await vi.waitFor(() => expect(held).toHaveLength(1))
+  // The close's save has not landed: the list goes live without the closed chat.
+  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  expect(fresh.mine().chats).toEqual([B])
+  for (const land of held.splice(0)) {
+    await land()
+  }
+  await closing
+
+  expect(fresh.mine().chats).toEqual([B])
+  expect(fresh.mineSaved()).toEqual([B])
 })
