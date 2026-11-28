@@ -97,6 +97,7 @@ export async function readHostBotListing(
     worktreeLineage: links.lineage,
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
+    takesPin: bots.takesPin,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
     ...(groups ? { groups } : {})
   }

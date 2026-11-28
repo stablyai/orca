@@ -8,6 +8,7 @@ import {
 } from '../../../src/shared/execution-host/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
+import { botPinOffered } from './bot-pin-offered'
 import { botUpdate } from './bot-sheet-operations'
 import type { MobileBotRowFacts } from './host-bot-row-facts'
 
@@ -31,8 +32,9 @@ export function useMobileBotPinSheet(args: {
   const t = useMobileTranslation()
   const [pinBot, setPinBot] = useState<PinTarget | null>(null)
   const open = useCallback((facts: MobileBotRowFacts, name: string, readOnly: boolean) => {
-    // A down computer cannot take the pin; the row already says so.
-    if (readOnly || facts.host?.word !== undefined) {
+    // A down computer cannot take the pin; the row already says so. Nor can an older host, whose strict
+    // bots.update refuses `pinned`: it offers no long-press pin at all.
+    if (!botPinOffered(facts, readOnly)) {
       return
     }
     setPinBot({

@@ -102,6 +102,10 @@ export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-s
 // steering its running turn. An older host only takes them typed.
 export const BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY = 'bots.offer-answer.v1' as const
 
+// Host stores `pinned` on a bot (bots.update), keeping it at the top of a client's list; an older host's
+// strict update refuses the field, so clients offer Pin only where this is advertised.
+export const BOTS_PIN_RUNTIME_CAPABILITY = 'bots.pin.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -129,5 +133,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
   BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
   BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY,
-  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY
+  BOTS_OFFER_ANSWER_RUNTIME_CAPABILITY,
+  BOTS_PIN_RUNTIME_CAPABILITY
 ] as const

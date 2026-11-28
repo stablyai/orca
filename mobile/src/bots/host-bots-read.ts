@@ -4,6 +4,7 @@ import type { ConnectorCloudStatus } from '../../../src/shared/bots/connector-cl
 import {
   BOTS_CREATE_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
+  BOTS_PIN_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
   BOTS_TEMPLATES_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
@@ -43,6 +44,8 @@ export type HostBotsRead =
       enabled: boolean
       /** The host is new enough to take bots.create from a phone. */
       takesCreate: boolean
+      /** The host takes `pinned` on bots.update; an older one refuses the field. */
+      takesPin: boolean
       sessionItemLinks?: true
       /** The host makes bots from template packages; older ones take only the five seed-only templates. */
       takesTemplates: boolean
@@ -115,6 +118,7 @@ export async function readHostBots(
         ? { sessionItemLinks: true as const }
         : {}),
       takesCreate: capabilities.includes(BOTS_CREATE_RUNTIME_CAPABILITY),
+      takesPin: capabilities.includes(BOTS_PIN_RUNTIME_CAPABILITY),
       takesTemplates: capabilities.includes(BOTS_TEMPLATES_RUNTIME_CAPABILITY)
     }
     if (options?.signal?.aborted) {

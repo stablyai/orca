@@ -55,6 +55,8 @@ export type MobileBotRowFacts = {
   paused: boolean
   /** Kept at the top of the list. */
   pinned?: boolean
+  /** Its host takes a pin (`bots.pin.v1`); absent, the phone offers no Pin for it. */
+  takesPin?: true
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }
 }

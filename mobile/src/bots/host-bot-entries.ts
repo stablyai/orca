@@ -277,6 +277,7 @@ export function drawHostBotEntries(
       ...(purposeMatch ? { searchPurpose: purposeMatch } : {}),
       paused: bot.paused,
       ...(bot.pinned ? { pinned: true as const } : {}),
+      ...(listing.takesPin ? { takesPin: true as const } : {}),
       ...(host ? { host } : {})
     }
     const botRow: WorkspaceListItem = {
