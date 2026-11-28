@@ -81,7 +81,7 @@ function refusedCredentialDetail(
     ? t('connection.connectionHealth.rePairDetail', 'Re-pair with your desktop')
     : t(
         'connection.connectionHealth.relayAccessRefreshDetail',
-        "Connect once on {{host}}'s network to refresh Relay access, or re-pair",
+        'Connect once on {{host}}’s network to refresh Relay access, or re-pair',
         { host }
       )
 }
