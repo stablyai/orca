@@ -1,3 +1,4 @@
+import { recordSubmissionExport } from './journal-submission-export'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
@@ -264,6 +265,17 @@ export function applyJournalDomainSubmission(
       cards: result.cards.map((card) => card.messageId)
     },
     { fence: input.fence, observedAt: savedAt }
+  )
+  recordSubmissionExport(
+    db,
+    stateDirectory,
+    target,
+    facts,
+    input,
+    sequence,
+    savedAt,
+    familyId,
+    claims.referenced
   )
   result.cursor = cursor
   result.value = cursor

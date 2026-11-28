@@ -477,3 +477,27 @@ it('makes an uncertain command turn unverifiable without manufacturing a failure
   expect(f.item('orca:command-turn%3Acommand')?.body).toMatchObject({ state: 'unverifiable' })
   expect(f.item('orca:command-result%3Acommand')).toBeUndefined()
 })
+
+it('retains one immutable export for each enrolled committed admission, across restart', () => {
+  const f = fixture()
+  f.db
+    .prepare(
+      'INSERT INTO journal_export_enrollment (singleton,bot_id,workspace_id,writer_epoch) VALUES (1,?,?,?)'
+    )
+    .run('bot-a', 'workspace', 'grant-a')
+  const text = 'Meeting notes: “edit”\n$(not-a-command)\n'
+  f.admit('one', { body: message(text) })
+  expect(() => f.admit('one', { body: message('conflicting duplicate') })).toThrow()
+  f.restart()
+  const rows = f.db.prepare('SELECT * FROM journal_submission_export ORDER BY cursor').all()
+  expect(rows).toHaveLength(1)
+  expect(rows[0]).toMatchObject({
+    cursor: 1,
+    bot_id: 'bot-a',
+    session_id: 'chat',
+    source_id: 'one',
+    writer_epoch: 'grant-a',
+    journal_sequence: 11
+  })
+  expect(JSON.parse(String(rows[0].original_json))).toEqual([{ type: 'text', text }])
+})
