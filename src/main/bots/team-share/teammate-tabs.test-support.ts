@@ -166,10 +166,18 @@ export async function rig(
     deviceId: string,
     method: string,
     params: unknown,
-    clientKind?: 'runtime' | 'mobile'
+    clientKind?: 'runtime' | 'mobile',
+    /** As an orchestration CLI's envelope carries it. */
+    orchestrationContractVersion?: number
   ) =>
     dispatcher.dispatch(
-      { id: `${method}-${randomUUID()}`, authToken: '', method, params },
+      {
+        id: `${method}-${randomUUID()}`,
+        authToken: '',
+        method,
+        params,
+        ...(orchestrationContractVersion ? { orchestrationContractVersion } : {})
+      },
       context(deviceId, clientKind)
     )
   const call = async (

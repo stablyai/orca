@@ -167,6 +167,8 @@ export type RuntimeAgentSessionRpcCaller = {
   clientId?: string
   clientKind?: 'mobile' | 'runtime'
   signal?: AbortSignal
+  /** A teammate's own tab list in their agent's Home: the terminal is listed there. */
+  holder?: `teammate:${string}`
 }
 
 export function isAgentSessionExecutionClaim(value: unknown): value is AgentSessionExecutionClaim {

@@ -135,7 +135,7 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
     if (
       options.onlyRuntimeOwnedTerminals === true &&
       !this.offscreenBrowserBackend &&
-      getRuntimeBrowserPageRegistry(this).pagesOf('host', worktreeId ?? '').length === 0 &&
+      getRuntimeBrowserPageRegistry(this).pagesOfList(worktreeId ?? '').length === 0 &&
       options.runtimeOwnedTerminalCandidateKnown !== true &&
       !(worktreeId
         ? this.workspaceSessionWorktreeHasRuntimeOwnedPtyCandidate(

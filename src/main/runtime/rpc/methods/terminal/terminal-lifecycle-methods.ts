@@ -81,6 +81,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           )
         }
       }
+      // A teammate's create in their own Home runs there, in their own workspace.
+      const holder = await runtime.tabListHolderOf(params.worktree, context.callerScope)
       const terminal = await runtime.dedupeTerminalCreate(
         pairedDeviceId ?? clientId ?? 'local',
         params.worktree,
@@ -122,7 +124,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
             // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
             ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
-            ...(preAllocatedHandle ? { preAllocatedHandle } : {})
+            ...(preAllocatedHandle ? { preAllocatedHandle } : {}),
+            ...(holder ? { holder } : {})
           }),
         { wslUserAct: true }
       )

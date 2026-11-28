@@ -107,6 +107,9 @@ export type RuntimePtyController = {
     /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
     initiallyHidden?: boolean
     persistHostSessionBinding?: boolean
+    /** The workspace whose layout holds the pane, when not `worktreeId`: a teammate's own (`person:`)
+     *  for their terminal, which runs in their agent's Home. */
+    paneWorkspaceId?: string
     expectedSourceBinding?: PtyBindingSourceExpectation
     placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean

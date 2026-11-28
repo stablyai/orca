@@ -32,6 +32,7 @@ import type {
 } from './markdown-tab-disk-documents'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
+import { holderOfTabList } from '../../session-tabs/person/person-workspace-target'
 
 type EnvironmentCall = (
   environmentId: string,
@@ -54,6 +55,7 @@ type MarkdownFileRoute =
   | { environmentId: string; pairingRevision: number | undefined }
   | { environmentId: null; target: ResolvedRuntimeFileTarget }
 
+/** `worktreeId` names the tab's list; its file lives in that list's workspace. */
 export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): MarkdownTabDiskHost {
   const routeOf = async (
     worktreeId: string,
@@ -62,7 +64,7 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
     if (file.externalSshTargetId) {
       throw new SshHostNotServedError(file.externalSshTargetId)
     }
-    const target = await runtime.resolveRuntimeFileTarget(`id:${worktreeId}`)
+    const target = await runtime.resolveRuntimeFileTarget(`id:${holderOfTabList(worktreeId).home}`)
     const host = parseExecutionHostId(target.executionHostId)
     if (host?.kind === 'runtime') {
       return { environmentId: host.environmentId, pairingRevision: undefined }
@@ -79,7 +81,7 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
         return readFileOnEnvironment(
           runtime.callEnvironment,
           route.environmentId,
-          worktreeId,
+          holderOfTabList(worktreeId).home,
           file,
           route.pairingRevision
         )
@@ -101,7 +103,7 @@ export function createMarkdownTabDiskHost(runtime: MarkdownTabDiskRuntime): Mark
           runtime.callEnvironment,
           route.environmentId,
           route.pairingRevision,
-          worktreeId,
+          holderOfTabList(worktreeId).home,
           file,
           content,
           precondition

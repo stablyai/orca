@@ -28,7 +28,12 @@ function sameContent(
  *  when what clients read changes, so every delivery can say "unchanged" without the rows; the
  *  epoch is new for each runtime, so a replaced runtime is never mistaken for an older one. */
 export class AgentSenderPublisher {
-  constructor(private readonly ownsScope: (worktreeId: string) => boolean = () => false) {}
+  constructor(
+    private readonly ownsScope: (worktreeId: string) => boolean = () => false,
+    /** The worktree scope whose frames carry a row. */
+    private readonly scopeOfRow: (row: { paneKey: string; worktreeId: string }) => string = (row) =>
+      row.worktreeId
+  ) {}
   readonly epoch = randomUUID()
   private revision = 0
   private publication: AgentSenderPublication = this.stamp({
@@ -120,10 +125,10 @@ export class AgentSenderPublisher {
       return scope
     }
     for (const row of next.associations) {
-      scopeOf(row.worktreeId).associations.push(row)
+      scopeOf(this.scopeOfRow(row)).associations.push(row)
     }
     for (const row of next.attachments) {
-      scopeOf(row.worktreeId).attachments.push(row)
+      scopeOf(this.scopeOfRow(row)).attachments.push(row)
     }
     this.contents = new Map(scopes)
     for (const id of this.scoped.keys()) {

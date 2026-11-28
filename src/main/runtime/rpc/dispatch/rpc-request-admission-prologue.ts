@@ -108,7 +108,10 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     if (
       reachesHostWindow(method.name, admitted.params, {
         pairedDeviceId: options?.pairedDeviceId,
-        pageDeviceOf: (page) => getRuntimeBrowserPageRegistry(runtime).getPage(page)?.pairedDeviceId
+        pageDeviceOf: (page) =>
+          getRuntimeBrowserPageRegistry(runtime).getPage(page)?.pairedDeviceId,
+        teammate: callerScope,
+        terminalHolderOf: (handle) => runtime.terminalHolderOfHandle(handle)
       })
     ) {
       reportAgentShareFailure({ stage: 'admission_refused', reason: 'host_window' })

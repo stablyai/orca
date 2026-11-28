@@ -120,7 +120,7 @@ export async function prepareRuntimePtySpawn(
     }
     ctx.hostSessionBinding = {
       store: ctx.deps.store,
-      worktreeId: args.worktreeId,
+      worktreeId: args.paneWorkspaceId ?? args.worktreeId,
       tabId: args.tabId,
       leafId: args.leafId,
       ...(args.expectedSourceBinding ? { expectedSourceBinding: args.expectedSourceBinding } : {}),

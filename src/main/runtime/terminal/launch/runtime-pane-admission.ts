@@ -1,3 +1,4 @@
+import { personWorkspacePartition } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { TerminalCreateOptions } from './terminal-create-options'
 import { PaneOwnerContentionError } from '../../../ipc/pty/pane/pane-spawn-operation'
 import {
@@ -43,7 +44,8 @@ type AdmittedSpawnArgs = Parameters<Spawn>[0] & {
 
 /** The pane its placement names: a new tab, or a split beside its parent pane. */
 function admissionFor(args: AdmittedSpawnArgs): TerminalPaneAdmission {
-  const { worktreeId: workspace, tabId, leafId, placement } = args
+  const { tabId, leafId, placement } = args
+  const workspace = args.paneWorkspaceId ?? args.worktreeId
   if (placement?.kind === 'split') {
     const { parentLeafId, direction } = placement
     return {
@@ -87,8 +89,12 @@ function paneStillWritten(
   return collectLeafIds(layout?.root).includes(args.leafId)
 }
 
+/** The saved partition the pane's layout is in: the teammates' for their own workspace. */
 function hostIdOf(args: AdmittedSpawnArgs): string | undefined {
-  return args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+  return (
+    personWorkspacePartition(args.paneWorkspaceId ?? '') ??
+    (args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined)
+  )
 }
 
 /** Takes back a pane the runtime wrote for a start that then failed, so it leaves no tab. */
@@ -191,7 +197,7 @@ export async function spawnInAdmittedPane(
   }
   try {
     // A reconnect into its own pane skips admission: the pane is already written. A spawn bound to
-    // no host pane (a teammate's own terminal) has none to write.
+    // no pane has none to write.
     run = args.paneSpawnOperation?.mustExist
       ? { outcome: undefined, result: await start('exists') }
       : args.persistHostSessionBinding === false

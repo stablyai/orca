@@ -24,6 +24,11 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { resolveWorktreeLaunchHost } from '../../workspaces/catalog/worktree-launch-host-repo'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  paneSize,
+  resolvePtyFirstSize,
+  type PtyGridSize
+} from '../../../ipc/pty/delivery/pty-first-size'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
@@ -40,6 +45,25 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       resolvedWorktree,
       resolvedFolder
     )
+  }
+
+  /** The grid a new terminal starts at, from what its own tab list last measured. */
+  protected terminalCreateFirstSize(
+    list: string,
+    pane: { tabId?: string; leafId?: string; initialSize?: PtyGridSize },
+    targetGroupId: string | undefined
+  ): PtyGridSize {
+    const session = this.getWorkspaceSessionForWorktree(list)
+    // The window's latest published active group is where its reveal places the tab.
+    const groupId =
+      targetGroupId ??
+      this.mobileSessionTabsByWorktree.get(list)?.activeGroupId ??
+      session?.activeGroupIdByWorktree?.[list]
+    // Unshown workspaces have no measured group; a single group can use the common workspace geometry.
+    const singleGroup =
+      (session?.tabGroups?.[list]?.length ?? 0) <= 1 ? this.singleGroupWorkspaceGridSize : undefined
+    const group = groupId ? this.terminalGroupGridSizes?.[groupId] : undefined
+    return resolvePtyFirstSize({ pane: paneSize(session, pane), group, singleGroup })
   }
 
   async dedupeTerminalCreate(
