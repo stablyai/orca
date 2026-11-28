@@ -22726,7 +22726,14 @@
         "workersKeepRunning": "工作者會繼續執行",
         "clearFailedWorkers": "清除失敗的工作者",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}，{{commands}}"
+        "mixedCountSpoken": "{{workers}}，{{commands}}",
+        "elsewhereChip_other": "其他聊天 {{count}} 個",
+        "elsewhereSpoken_other": "其他聊天中有 {{count}} 個工作者正在執行",
+        "elsewhereMoreSpoken_other": "其他聊天中還有 {{count}} 個正在執行",
+        "elsewhereRow_other": "{{chat}}，{{count}} 個執行中，開啟聊天",
+        "moreChats_other": "還有 {{count}} 個聊天",
+        "otherChats": "其他聊天",
+        "untitledChat": "未命名聊天"
       },
       "webhookSetup": {
         "heading": "設定 Webhook",

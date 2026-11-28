@@ -22611,7 +22611,19 @@
         "workersKeepRunning": "Worker laufen weiter",
         "clearFailedWorkers": "Fehlgeschlagene Worker entfernen",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}"
+        "mixedCountSpoken": "{{workers}}, {{commands}}",
+        "elsewhereChip_one": "{{count}} anderswo",
+        "elsewhereChip_other": "{{count}} anderswo",
+        "elsewhereSpoken_one": "{{count}} Worker läuft in anderen Chats",
+        "elsewhereSpoken_other": "{{count}} Worker laufen in anderen Chats",
+        "elsewhereMoreSpoken_one": "{{count}} weiterer läuft in anderen Chats",
+        "elsewhereMoreSpoken_other": "{{count}} weitere laufen in anderen Chats",
+        "elsewhereRow_one": "{{chat}}, {{count}} laufend, öffnet den Chat",
+        "elsewhereRow_other": "{{chat}}, {{count}} laufend, öffnet den Chat",
+        "moreChats_one": "+{{count}} weiterer Chat",
+        "moreChats_other": "+{{count}} weitere Chats",
+        "otherChats": "Andere Chats",
+        "untitledChat": "Unbenannter Chat"
       },
       "webhookSetup": {
         "heading": "Webhook einrichten",

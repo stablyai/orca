@@ -13,9 +13,12 @@ import { ORCHESTRATION_UNBOUND_RUN_ID as UNBOUND_RUN_ID } from '../../../../../s
 import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
 import { callerMailProvenance, type OrcaAuthoredMail } from './message-orca-provenance'
 import { recordMessageSenderDispatch } from './message-sender-dispatch'
+import { recordWorkerDockDelegation } from '../../dock/worker-dock-delegations'
+import { workerDockDelegationWake } from '../../dock/worker-dock-delegation-wake'
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
+const HANDOFF_INSERT_SAVEPOINT = 'handoff_message_insert'
 
 export type MessageInsert = {
   id?: string
@@ -37,6 +40,10 @@ export type MessageInsert = {
   senderDispatchId?: string
   /** Orca wrote this mail itself, so its payload (and for item mail its sender) stands. */
   orcaAuthored?: OrcaAuthoredMail
+  /** The chat the sender addressed (bare session id), before routing rewrote `to` to its mailbox. */
+  addressedSession?: string
+  /** False for a group send's fan-out: it never records a handoff to one chat. */
+  delegation?: boolean
 }
 
 export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
@@ -69,24 +76,47 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? = 1 THEN datetime('now') END)
   `)
-  stmt.run(
-    id,
-    runId,
-    deliveryContract,
-    msg.from,
-    msg.to,
-    msg.subject,
-    msg.body ?? '',
-    type,
-    msg.priority ?? 'normal',
-    msg.threadId ?? null,
-    payload ?? null,
-    msg.senderPaneKey ?? null,
-    msg.answerSenderSnapshot ?? null,
-    msg.replyTo ?? null,
-    handled,
-    handled
-  )
+  // A handoff and the relation it records commit together: one savepoint around both.
+  const handoff = type === 'handoff'
+  if (handoff) {
+    this.db.exec(`SAVEPOINT ${HANDOFF_INSERT_SAVEPOINT}`)
+  }
+  let delegated: string | null = null
+  try {
+    stmt.run(
+      id,
+      runId,
+      deliveryContract,
+      msg.from,
+      msg.to,
+      msg.subject,
+      msg.body ?? '',
+      type,
+      msg.priority ?? 'normal',
+      msg.threadId ?? null,
+      payload ?? null,
+      msg.senderPaneKey ?? null,
+      msg.answerSenderSnapshot ?? null,
+      msg.replyTo ?? null,
+      handled,
+      handled
+    )
+    // A handoff to another chat is remembered with the mail, so the sender's island can show its work.
+    delegated = recordWorkerDockDelegation(this, { ...msg, type }, id)
+    if (handoff) {
+      this.db.exec(`RELEASE ${HANDOFF_INSERT_SAVEPOINT}`)
+    }
+  } catch (error) {
+    // An I/O error can end the whole transaction first; rolling back then would hide it.
+    if (handoff && this.db.isTransaction) {
+      this.db.exec(`ROLLBACK TO ${HANDOFF_INSERT_SAVEPOINT}`)
+      this.db.exec(`RELEASE ${HANDOFF_INSERT_SAVEPOINT}`)
+    }
+    throw error
+  }
+  if (delegated) {
+    workerDockDelegationWake(this).queue(delegated, id)
+  }
   // Mail filed in a peer Run is queued home by trigger in this statement.
   notifyPeerMailQueued(this.db)
   return exposeMessageTimestamps(

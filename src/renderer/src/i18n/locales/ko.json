@@ -22288,7 +22288,14 @@
         "workersKeepRunning": "워커는 계속 실행됩니다",
         "clearFailedWorkers": "실패한 워커 지우기",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}"
+        "mixedCountSpoken": "{{workers}}, {{commands}}",
+        "elsewhereChip_other": "다른 곳 {{count}}개",
+        "elsewhereSpoken_other": "다른 채팅에서 워커 {{count}}개 실행 중",
+        "elsewhereMoreSpoken_other": "다른 채팅에서 {{count}}개 더 실행 중",
+        "elsewhereRow_other": "{{chat}}, {{count}}개 실행 중, 채팅 열기",
+        "moreChats_other": "채팅 {{count}}개 더",
+        "otherChats": "다른 채팅",
+        "untitledChat": "제목 없는 채팅"
       },
       "webhookSetup": {
         "heading": "웹훅 설정",

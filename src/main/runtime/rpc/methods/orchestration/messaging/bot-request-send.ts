@@ -46,6 +46,7 @@ import { answersRequest, askedInConversation, botRequestSender } from './bot-req
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { handoffMailbox } from '../../../../orchestration/dock/worker-dock-delegations'
 
 type SendParamsInput = Pick<
   z.infer<typeof SendParams>,
@@ -267,7 +268,7 @@ async function admitBotRequestMail(
     const mail = {
       id: messageId,
       from: args.from,
-      to: recipient.to,
+      ...handoffMailbox(recipient, address),
       subject: params.subject,
       body: params.body,
       type: purpose,
@@ -276,7 +277,6 @@ async function admitBotRequestMail(
       payload,
       orcaAuthored: 'bot-request' as const,
       senderPaneKey: args.senderPaneKey,
-      runId: recipient.runId,
       answerSenderSnapshot: args.senderSnapshot
     }
     const admission: BotRequestAdmission = reserved

@@ -66,6 +66,13 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
     );
     CREATE INDEX IF NOT EXISTS worker_dock_provider_failure_source ON worker_dock_provider_failures(source);
     CREATE TABLE IF NOT EXISTS worker_dock_backfill (id INTEGER PRIMARY KEY CHECK(id = 1));
+    -- A chat's handoff mail to another chat (both /clear roots): the newest such mail, so its island can
+    -- show the work running there. Mail-derived; cleared with mail.
+    CREATE TABLE IF NOT EXISTS worker_dock_delegations (
+      source TEXT NOT NULL, target TEXT NOT NULL, last_at INTEGER NOT NULL, message_id TEXT NOT NULL,
+      PRIMARY KEY(source, target)
+    );
+    CREATE TABLE IF NOT EXISTS worker_dock_delegations_backfill (id INTEGER PRIMARY KEY CHECK(id = 1));
   `)
   if (!this.hasColumn('worker_dock_facts', 'result_lost_at')) {
     this.db.exec('ALTER TABLE worker_dock_facts ADD COLUMN result_lost_at INTEGER')
@@ -101,7 +108,8 @@ export function installWorkerDockSchema(this: OrchestrationDb): void {
   for (const table of [
     'worker_dock_facts',
     'worker_dock_acknowledgments',
-    'worker_dock_provider_failures'
+    'worker_dock_provider_failures',
+    'worker_dock_delegations'
   ]) {
     for (const event of ['INSERT', 'UPDATE', 'DELETE']) {
       this.db.exec(`CREATE TRIGGER IF NOT EXISTS worker_dock_revision_${table}_${event}

@@ -2,9 +2,13 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { focusWorkerDockPaneEditor } from './worker-dock-focus-return'
 
-/** Moves focus between the card's rows, and hands it on when the focused row leaves. */
+const NONE: readonly { id: string }[] = []
+
+/** Moves focus between the card's rows, and hands it on when the focused row leaves. `trailing` rows
+ *  (Other chats) come after the workers, outside the virtual list, and are always drawn. */
 export function useWorkerDockCardFocus({
   items,
+  trailing = NONE,
   rows,
   loadRow,
   small,
@@ -14,6 +18,7 @@ export function useWorkerDockCardFocus({
   hold
 }: {
   items: readonly { id: string }[]
+  trailing?: readonly { id: string }[]
   rows: ReadonlyMap<string, unknown>
   loadRow: (id: string) => void
   small: boolean
@@ -29,13 +34,16 @@ export function useWorkerDockCardFocus({
     },
     []
   )
+  const all = trailing.length ? [...items, ...trailing] : items
   const focusRow = (index: number) => {
-    const target = items[Math.max(0, Math.min(index, items.length - 1))]
+    const at = Math.max(0, Math.min(index, all.length - 1))
+    const target = all[at]
     if (!target) {
       return
     }
     hold()
-    if (!rows.has(target.id)) {
+    const own = at < items.length
+    if (own && !rows.has(target.id)) {
       loadRow(target.id)
     }
     // A newer move, or focus the user put elsewhere meanwhile, cancels this one.
@@ -51,7 +59,7 @@ export function useWorkerDockCardFocus({
       element?.focus()
       return Boolean(element)
     }
-    if (small) {
+    if (small || !own) {
       focusTarget()
       return
     }
@@ -67,7 +75,9 @@ export function useWorkerDockCardFocus({
   // A row that leaves while it holds focus (Clear, say) hands focus to the row that takes its
   // place, to the pill, or to the message box once the pill is gone, never to the page.
   const lastFocus = useRef<{ id: string; index: number; pane: Element | null } | null>(null)
+  const allKey = all.map((row) => row.id).join('\0')
   useLayoutEffect(() => {
+    const items = allKey ? allKey.split('\0').map((id) => ({ id })) : []
     const saved = lastFocus.current
     if (!saved || items.some((row) => row.id === saved.id)) {
       return
@@ -89,7 +99,7 @@ export function useWorkerDockCardFocus({
     } else {
       focusWorkerDockPaneEditor(saved.pane)
     }
-  }, [items, viewport, pill])
+  }, [allKey, viewport, pill])
   // The whole card leaving (its chat's last work gone) while it held focus hands it to that
   // pane's message box, unless the user already put focus somewhere on purpose.
   useLayoutEffect(
@@ -114,7 +124,7 @@ export function useWorkerDockCardFocus({
   return {
     focusRow,
     rememberFocus: (id: string, pane: Element | null) => {
-      lastFocus.current = { id, index: items.findIndex((item) => item.id === id), pane }
+      lastFocus.current = { id, index: all.findIndex((item) => item.id === id), pane }
     },
     forgetFocus: () => {
       lastFocus.current = null

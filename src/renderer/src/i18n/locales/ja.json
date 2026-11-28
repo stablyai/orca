@@ -21770,7 +21770,14 @@
         "workersKeepRunning": "ワーカーは実行を続けます",
         "clearFailedWorkers": "失敗したワーカーをクリア",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}、{{commands}}"
+        "mixedCountSpoken": "{{workers}}、{{commands}}",
+        "elsewhereChip_other": "他で {{count}} 件",
+        "elsewhereSpoken_other": "他のチャットで {{count}} 件のワーカーが実行中",
+        "elsewhereMoreSpoken_other": "他のチャットでさらに {{count}} 件が実行中",
+        "elsewhereRow_other": "{{chat}}、実行中 {{count}} 件、チャットを開く",
+        "moreChats_other": "他 {{count}} 件のチャット",
+        "otherChats": "他のチャット",
+        "untitledChat": "無題のチャット"
       },
       "webhookSetup": {
         "heading": "Webhook を設定",

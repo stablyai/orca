@@ -1,3 +1,4 @@
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type {
   MessagePriority,
   MessageType
@@ -93,9 +94,12 @@ export function sendPointToPointMessage(args: {
         ? { ...sent, warnings: [...(sent.warnings ?? []), staleTaskWarning] }
         : sent
     }
+    // The chat the sender addressed, before routing rewrote `to` to its Run or Dispatch mailbox.
+    const addressedSession = parseOrcaSessionAddress(params.to)
     const msg = db.insertMessage({
       from,
       to,
+      ...(addressedSession ? { addressedSession } : {}),
       subject: params.subject,
       body: params.body,
       type: messageType,

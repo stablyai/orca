@@ -23060,7 +23060,19 @@
         "workersKeepRunning": "Çalışanlar çalışmaya devam eder",
         "clearFailedWorkers": "Başarısız çalışanları temizle",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}"
+        "mixedCountSpoken": "{{workers}}, {{commands}}",
+        "elsewhereChip_one": "{{count}} başka sohbette",
+        "elsewhereChip_other": "{{count}} başka sohbette",
+        "elsewhereSpoken_one": "Başka sohbetlerde {{count}} çalışan çalışıyor",
+        "elsewhereSpoken_other": "Başka sohbetlerde {{count}} çalışan çalışıyor",
+        "elsewhereMoreSpoken_one": "Başka sohbetlerde {{count}} tane daha çalışıyor",
+        "elsewhereMoreSpoken_other": "Başka sohbetlerde {{count}} tane daha çalışıyor",
+        "elsewhereRow_one": "{{chat}}, {{count}} çalışıyor, sohbeti açar",
+        "elsewhereRow_other": "{{chat}}, {{count}} çalışıyor, sohbeti açar",
+        "moreChats_one": "+{{count}} sohbet daha",
+        "moreChats_other": "+{{count}} sohbet daha",
+        "otherChats": "Diğer sohbetler",
+        "untitledChat": "Adsız sohbet"
       },
       "webhookSetup": {
         "heading": "Webhook kur",

@@ -69,12 +69,30 @@ export const WorkerDockIdentity = lazyZodSchema(() =>
     settlement: true
   }).extend({ kind: WorkerDockEntry.shape.kind.optional(), hasModel: z.boolean().default(false) })
 )
+/** Work running in a chat this chat handed work to by mail: a read-only count per owning chat. */
+export const WorkerDockElsewhereEntry = lazyZodSchema(() =>
+  z.object({
+    /** The owning chat's dock source (its /clear root). */
+    source: z.string(),
+    /** The chat to open: the live session of that lineage. */
+    sessionId: z.string(),
+    workspaceId: z.string().optional(),
+    title: z.string().optional(),
+    running: z.number()
+  })
+)
+export type WorkerDockElsewhereEntry = z.infer<typeof WorkerDockElsewhereEntry>
 export const WorkerDockSnapshot = lazyZodSchema(() =>
   z.object({
     revision: z.number(),
     currentOnly: z.literal(true).optional(),
     nextExpiry: z.number().optional(),
     hasUnverifiedWorkers: z.boolean().optional(),
+    /** Current reads only: Other chats rows, and whether the island keeps watching for them. Older
+     *  hosts send none, and older clients drop them. */
+    elsewhere: z.array(WorkerDockElsewhereEntry).optional(),
+    relations: z.literal(true).optional(),
+    hasUnverifiedElsewhere: z.literal(true).optional(),
     unavailable: z.boolean().optional(),
     expired: z.boolean(),
     identities: z.array(WorkerDockIdentity),

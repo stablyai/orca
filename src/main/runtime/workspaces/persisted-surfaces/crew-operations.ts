@@ -18,6 +18,7 @@ import {
 } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { watchWorkerDockBackfillHost } from '../../orchestration/dock/worker-dock-delegation-wake'
 import {
   workerDockSourceOfSession,
   workerDockSourceSessions
@@ -57,6 +58,8 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
       })
     }
     const unwatchSources = db.workerDockSources.watch(publishSources)
+    // Earlier bot handoffs are backfilled once the chats' lineage is loaded, then their islands look again.
+    const unwatchBackfill = watchWorkerDockBackfillHost(db)
     const unwatchDb = db.crewChanges.subscribe((facets) => {
       publishSources()
       this.orchestrationDbChanges.notify(facets)
@@ -65,6 +68,7 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
     this.unwatchCrewDb = () => {
       unwatchSources()
       unwatchDb()
+      unwatchBackfill()
     }
     this.orchestrationDbChanges.notify()
     this.crewChanges.notify()

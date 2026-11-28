@@ -73,6 +73,7 @@ export function WorkerDockPill({
   glyph,
   label,
   spokenLabel = label,
+  ariaLabel,
   titled = false,
   commandsOnly = false,
   latest,
@@ -89,6 +90,8 @@ export function WorkerDockPill({
   label: string
   /** The chip's count for assistive technology, both groups in full. */
   spokenLabel?: string
+  /** The chip's whole accessible name, when it lists no worker of this chat (Other chats only). */
+  ariaLabel?: string
   /** The label is a worker's own title: drawn whole (truncated), never split at a " · ". */
   titled?: boolean
   /** Only background commands are listed: the running chip draws a terminal, not the worker grid. */
@@ -126,12 +129,13 @@ export function WorkerDockPill({
         aria-controls={expanded ? listId : undefined}
         // A lone worker's chip is its title, which already names it.
         aria-label={
-          total === 0 || label === latest
+          ariaLabel ??
+          (total === 0 || label === latest
             ? undefined
             : t('components.native-chat.workerDock.chipLabel', '{{label}}, latest: {{title}}', {
                 label: spokenLabel,
                 title: latest
-              })
+              }))
         }
         className={cn(
           'flex min-w-0 items-center self-stretch rounded-[inherit] text-xs whitespace-nowrap hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',

@@ -18,7 +18,7 @@ import { mintFleetAgentStatusEvidence } from '../../../../shared/orchestration/f
 import type { WorkerDockEntry } from '../../../../shared/orchestration/dock/worker-dock'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
-type WorkerDockActivity = {
+export type WorkerDockActivity = {
   episode: string
   state: WorkerDockEntry['state']
   changedAt: number
@@ -26,15 +26,18 @@ type WorkerDockActivity = {
 type WorkerDockActivityStore = {
   revision: number
   bySource: Map<string, Map<string, WorkerDockActivity>>
+  /** Other chats' candidate workers by reading chat, then owning chat: each chat whose Other chats
+   *  rows count them keeps its own, so two chats reading the same owner never evict each other. */
+  elsewhere: Map<string, Map<string, Map<string, WorkerDockActivity>>>
 }
 
 // Agent status already lives in memory, so the running/idle look it derives does too: no DB write per status change.
 const stores = new WeakMap<OrchestrationDb, WorkerDockActivityStore>()
 
-function activityStore(db: OrchestrationDb): WorkerDockActivityStore {
+export function activityStore(db: OrchestrationDb): WorkerDockActivityStore {
   let store = stores.get(db)
   if (!store) {
-    store = { revision: 0, bySource: new Map() }
+    store = { revision: 0, bySource: new Map(), elsewhere: new Map() }
     stores.set(db, store)
   }
   return store
@@ -53,7 +56,7 @@ export function workerDockActivityRevision(db: OrchestrationDb): number {
   return stores.get(db)?.revision ?? 0
 }
 
-type ActivityRuntime = Pick<
+export type ActivityRuntime = Pick<
   OrcaRuntimeService,
   | 'readAgentStatusOfPanes'
   | 'readObservedAgentStatusPaneIdentityFn'
@@ -76,12 +79,12 @@ function statusFresh(status: AgentStatusIpcPayload, now: number): boolean {
   )
 }
 
-function paneStatuses(runtime: ActivityRuntime, pane: string): AgentStatusIpcPayload[] {
+export function paneStatuses(runtime: ActivityRuntime, pane: string): AgentStatusIpcPayload[] {
   return runtime.readAgentStatusOfPanes([pane]).filter((row) => row.paneKey === pane)
 }
 
 /** What one pane's status adds to the dock's look; a heartbeat leaves it the same. */
-function paneSignature(rows: readonly AgentStatusIpcPayload[], now: number): string {
+export function paneSignature(rows: readonly AgentStatusIpcPayload[], now: number): string {
   return JSON.stringify(
     rows.map((row) => [row.state, row.stateStartedAt, row.structuredHost, statusFresh(row, now)])
   )
@@ -125,33 +128,20 @@ export function workerDockActivitySource(
   }
 }
 
-/** The host normalizes each represented status episode once; replay and heartbeats keep its time. */
-export function refreshWorkerDockActivity(
+/** A ready worker's dispatch row: id, assignee_pane_key, assignee_handle, process_incarnation. */
+type ActivityCandidate = Readonly<Record<string, unknown>>
+
+/** One pass over some ready workers: each worker's look from its pane's status, the earliest time a
+ *  fresh status goes stale, and the panes worth watching. Reads panes only, never SQL. */
+export function deriveActivity(
   db: OrchestrationDb,
-  party: string,
   runtime: ActivityRuntime,
-  panes?: Set<string>
-): number | null {
-  const source = workerDockSession(party)
-  const now = Date.now()
+  candidates: readonly ActivityCandidate[],
+  previous: ReadonlyMap<string, WorkerDockActivity> | undefined,
+  panes: Set<string> | undefined,
+  now: number
+): { next: Map<string, WorkerDockActivity>; changed: boolean; expiresAt: number | null } {
   let expiresAt: number | null = null
-  const candidates = db.db
-    .prepare(
-      `SELECT d.id, d.assignee_pane_key, d.assignee_handle, d.process_incarnation
-    FROM worker_dock_facts f INDEXED BY worker_dock_source_state
-    JOIN dispatch_contexts d ON d.id = f.dispatch_id WHERE f.source = ? AND f.state = 'ready'`
-    )
-    .all(source)
-  panes?.clear()
-  for (const row of candidates) {
-    if (typeof row.assignee_pane_key === 'string') {
-      panes?.add(row.assignee_pane_key)
-    }
-  }
-  if (!candidates.length) {
-    stores.get(db)?.bySource.delete(source)
-    return null
-  }
   // Only the panes these workers run in are read, never every pane's status.
   const byPane = new Map<string, AgentStatusIpcPayload | undefined>()
   const statusOf = (pane: string) => {
@@ -168,9 +158,7 @@ export function refreshWorkerDockActivity(
       ? mintFleetAgentStatusEvidence(status, { kind: 'unresolved', reason: 'pane_not_bound' })
       : undefined
   })
-  const store = activityStore(db)
-  const previous = store.bySource.get(source)
-  // Only the source's ready workers are kept, so a settled or deleted worker's entry goes with it.
+  // Only the given ready workers are kept, so a settled or deleted worker's entry goes with it.
   const next = new Map<string, WorkerDockActivity>()
   let changed = previous !== undefined && previous.size !== candidates.length
   for (const row of candidates) {
@@ -237,6 +225,50 @@ export function refreshWorkerDockActivity(
       changed = true
     }
   }
+  return { next, changed, expiresAt }
+}
+
+export function collectAssigneePanes(
+  candidates: readonly ActivityCandidate[],
+  panes?: Set<string>
+) {
+  panes?.clear()
+  for (const row of candidates) {
+    if (typeof row.assignee_pane_key === 'string') {
+      panes?.add(row.assignee_pane_key)
+    }
+  }
+}
+
+/** The host normalizes each represented status episode once; replay and heartbeats keep its time. */
+export function refreshWorkerDockActivity(
+  db: OrchestrationDb,
+  party: string,
+  runtime: ActivityRuntime,
+  panes?: Set<string>
+): number | null {
+  const source = workerDockSession(party)
+  const candidates = db.db
+    .prepare(
+      `SELECT d.id, d.assignee_pane_key, d.assignee_handle, d.process_incarnation
+    FROM worker_dock_facts f INDEXED BY worker_dock_source_state
+    JOIN dispatch_contexts d ON d.id = f.dispatch_id WHERE f.source = ? AND f.state = 'ready'`
+    )
+    .all(source)
+  collectAssigneePanes(candidates, panes)
+  if (!candidates.length) {
+    stores.get(db)?.bySource.delete(source)
+    return null
+  }
+  const store = activityStore(db)
+  const { next, changed, expiresAt } = deriveActivity(
+    db,
+    runtime,
+    candidates,
+    store.bySource.get(source),
+    panes,
+    Date.now()
+  )
   store.bySource.set(source, next)
   if (changed) {
     store.revision += 1

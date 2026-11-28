@@ -286,7 +286,9 @@ export async function sendGroupMessage(args: {
         runtime,
         resolution.runId ?? legacyCoordinatorRunId,
         resolution.to
-      )
+      ),
+      // A group send reaches many mailboxes at once; it hands work to no one chat.
+      delegation: false
     }))
   )
   groupWarnings.push(

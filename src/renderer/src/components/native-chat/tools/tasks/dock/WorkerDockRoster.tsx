@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import { useNativeChatToolRunWindow } from '../../runs/use-native-chat-tool-run-window'
 import { workerDockClearable } from '../../../../../../../shared/orchestration/dock/worker-dock'
@@ -24,7 +24,6 @@ import {
 } from './worker-dock-groups'
 import { useWorkerDockFooterFocus } from './use-worker-dock-footer-focus'
 import {
-  workerDockAnchorIndex,
   workerDockListKeyTarget,
   workerDockScrollAnchorAt,
   workerDockScrollFade,
@@ -32,6 +31,7 @@ import {
 } from './worker-dock-scroll-anchor'
 import { WorkerDockHeadActions } from './WorkerDockHeadActions'
 import { useWorkerDockCardFocus } from './use-worker-dock-card-focus'
+import { useWorkerDockViewportReads } from './use-worker-dock-viewport-reads'
 import { useWorkerDockCardBudget, WORKER_DOCK_ROW } from './use-worker-dock-card-budget'
 import { useWorkerDockDetailReads } from './use-worker-dock-detail-reads'
 import {
@@ -44,6 +44,12 @@ import {
 import { useWorkerDockHover, useWorkerDockMorph } from './use-worker-dock-morph'
 import { useWorkerChipPlacement } from './worker-chip-slot'
 import './worker-dock-morph.css'
+import type { WorkerDockElsewhereEntry } from '../../../../../../../shared/orchestration/dock/worker-dock'
+import {
+  WorkerDockElsewhereRows,
+  useWorkerDockElsewhere,
+  workerDockElsewhereChip
+} from './WorkerDockElsewhereRows'
 
 type Identity = WorkerDockIdentity
 
@@ -66,6 +72,9 @@ export function WorkerDockRoster(props: {
   onAction: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
   onClearAll: () => void
   loadWindow?: (anchor: string) => Promise<void>
+  /** Work running in chats this chat handed work to: read-only rows after its own workers. */
+  elsewhere?: readonly WorkerDockElsewhereEntry[]
+  onOpenElsewhere?: (entry: WorkerDockElsewhereEntry, opener: HTMLElement) => void
 }) {
   const t = useTranslate()
   const onOpen = useLatestHandler(props.onOpen)
@@ -97,12 +106,16 @@ export function WorkerDockRoster(props: {
   // or the worker read failed (which claims nothing about whether anything runs).
   const unlisted = items.length === 0 && Boolean(props.incomplete)
   const unread = items.length === 0 && !unlisted && Boolean(props.unavailable)
-  const shown = items.length > 0 || unlisted || unread
+  const ownShown = items.length > 0 || unlisted || unread
+  const elsewhere = useWorkerDockElsewhere(props.elsewhere)
+  // The list's rows: this chat's workers, then the Other chats lines.
+  const listRows = items.length + elsewhere.lines
+  const shown = ownShown || elsewhere.ids.length > 0
   const morph = useWorkerDockMorph({
     card,
     shown,
     expanded: props.expanded,
-    counts: [count, needsYou],
+    counts: [count, needsYou, elsewhere.running],
     workers: sorted,
     rows: props.rows
   })
@@ -141,12 +154,12 @@ export function WorkerDockRoster(props: {
     // Until the fold ends: Jump to latest stays lifted (or set aside) while the card still covers it.
     open: shown && morph.mounted,
     dropped: props.expanded,
-    rows: items.length,
+    rows: listRows,
     placement
   })
   // Re-read after the list's size changes and once the rising rows land (they overflow it while they
   // rise); scrolling re-reads it from onScroll.
-  useLayoutEffect(() => refade(), [refade, props.expanded, items.length, budget, morph.entering])
+  useLayoutEffect(() => refade(), [refade, props.expanded, listRows, budget, morph.entering])
   // The folding rows keep their order until they are gone.
   if (holding && !morph.mounted) {
     setHeld(null)
@@ -161,47 +174,18 @@ export function WorkerDockRoster(props: {
   useWorkerDockJumpLift({ root, card, content, shown, open: morph.mounted, placement })
   const loadWindow = useWorkerDockDetailReads(props.identities, props.loadWindow)
   const { top, topRow } = useWorkerDockTop(props.identities, props.rows, loadWindow)
-  // Ask for the details of the first row in view that has none. Not the first drawn row: a focused
-  // row stays drawn after End, and the card's order (needs-you first) is not the host's.
-  const loadVisibleWindow = useLatestHandler(() => {
-    const element = viewport.current
-    if (!element || !props.expanded) {
-      return
-    }
-    const top = element.scrollTop
-    const bottom = top + element.clientHeight
-    const missing = visibleItems.find(
-      (item) =>
-        item.end > top &&
-        item.start < bottom &&
-        items[item.index] &&
-        !props.rows.has(items[item.index].id)
-    )
-    if (missing) {
-      loadWindow(items[missing.index].id)
-    }
+  const { loadVisibleWindow, navIds } = useWorkerDockViewportReads({
+    viewport,
+    anchor,
+    expanded: props.expanded,
+    items,
+    trailing: elsewhere.ids,
+    rows: props.rows,
+    drawn: visibleItems,
+    small,
+    virtual,
+    loadWindow
   })
-  const drawnKey = visibleItems.map((item) => item.index).join(',')
-  useEffect(loadVisibleWindow, [drawnKey, props.rows, props.expanded, loadVisibleWindow])
-  const preserveAnchor = useLatestHandler(() => {
-    if (!anchor.current || !viewport.current) {
-      return
-    }
-    const saved = anchor.current
-    const target = workerDockAnchorIndex(saved, items)
-    if (target < 0) {
-      return
-    }
-    const offset = small
-      ? viewport.current.querySelector<HTMLElement>(`[data-index="${target}"]`)?.offsetTop
-      : virtual.getOffsetForIndex(target, 'start')?.[0]
-    if (offset !== undefined) {
-      viewport.current.scrollTop = offset + saved.offset
-    }
-  })
-  const itemIds = useMemo(() => items.map((row) => row.id), [items])
-  const identityOrder = itemIds.join('|')
-  useLayoutEffect(preserveAnchor, [identityOrder, props.rows, preserveAnchor])
   const hold = () => setHeld((previous) => previous ?? sorted)
   const release = () => {
     if (!root.current?.contains(document.activeElement) && !root.current?.matches(':hover')) {
@@ -212,6 +196,7 @@ export function WorkerDockRoster(props: {
   useWorkerDockFooterFocus(root, pill, shown, drawnActions)
   const { focusRow, rememberFocus, forgetFocus } = useWorkerDockCardFocus({
     items,
+    trailing: elsewhere.ids,
     rows: props.rows,
     loadRow: loadWindow,
     small,
@@ -236,13 +221,20 @@ export function WorkerDockRoster(props: {
   if (!shown) {
     return null
   }
-  const chip = workerDockChip(t, {
+  const own = workerDockChip(t, {
     summary,
     rows: itemCounts,
     empty: top ? null : workerDockEmptyCopy(t, unlisted).title,
-    single: topRow && workerDockIsAgentKind(topRow.kind) ? workerDockRowTitle(topRow) : null,
+    // With other chats' work too, the chip counts rather than naming one worker.
+    single:
+      !elsewhere.running && topRow && workerDockIsAgentKind(topRow.kind)
+        ? workerDockRowTitle(topRow)
+        : null,
     open: props.expanded
   })
+  // No worker of this chat to list: the chip says only that work runs elsewhere ("25 elsewhere").
+  const chip = workerDockElsewhereChip(t, own, ownShown, elsewhere.running)
+  const elsewhereSpoken = chip.elsewhereSpoken
   const named = chip.named
   return (
     <div
@@ -309,11 +301,14 @@ export function WorkerDockRoster(props: {
         <WorkerDockPill
           pill={pill}
           glyph={
-            top ? workerDockGlyph({ ...top, retired: topRow?.retired }) : unlisted && 'running'
+            top
+              ? workerDockGlyph({ ...top, retired: topRow?.retired })
+              : (unlisted || !ownShown) && 'running'
           }
           label={chip.label}
           titled={chip.titled}
           spokenLabel={chip.spoken}
+          ariaLabel={ownShown ? undefined : chip.spoken}
           commandsOnly={named.commands > 0 && named.workers === 0}
           latest={topRow ? workerDockSpokenTitle(topRow.kind, workerDockRowTitle(topRow)) : count}
           total={named.total}
@@ -344,7 +339,7 @@ export function WorkerDockRoster(props: {
             }
             props.onExpandedChange(!props.expanded)
           }}
-          onEnterList={() => items.length > 0 && focusRow(0)}
+          onEnterList={() => navIds.length > 0 && focusRow(0)}
         />
         <div data-worker-dock-clip="">
           {/* Folding, the rows still draw but take no focus or presses. */}
@@ -370,7 +365,7 @@ export function WorkerDockRoster(props: {
                     refade()
                   }}
                   onKeyDown={(event) => {
-                    const next = workerDockListKeyTarget(event, itemIds)
+                    const next = workerDockListKeyTarget(event, navIds)
                     if (next !== null) {
                       event.preventDefault()
                       if (next === 'chip') {
@@ -405,6 +400,10 @@ export function WorkerDockRoster(props: {
                       {workerDockEmptyCopy(t, unlisted).note}
                     </p>
                   ) : null}
+                  <WorkerDockElsewhereRows
+                    entries={elsewhere.entries}
+                    onOpen={(entry, opener) => props.onOpenElsewhere?.(entry, opener)}
+                  />
                 </div>
               </div>
             ) : null}
@@ -412,7 +411,7 @@ export function WorkerDockRoster(props: {
         </div>
       </div>
       <span className="sr-only" role="status" aria-live="polite">
-        {count || chip.spoken}
+        {[count, count ? elsewhereSpoken : ''].filter(Boolean).join(', ') || chip.spoken}
       </span>
     </div>
   )

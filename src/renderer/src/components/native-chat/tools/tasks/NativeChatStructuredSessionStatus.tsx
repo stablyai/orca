@@ -3,8 +3,11 @@ import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtim
 import { useNativeChatPinnedWorkerApprovals } from '../../worker-approvals/native-chat-worker-approval-feed'
 import { useWorkerDockFeed } from './dock/worker-dock-feed'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
-import type { WorkerDockSnapshot } from '../../../../../../shared/orchestration/dock/worker-dock'
-import { openWorkerDockRow } from './dock/worker-dock-open'
+import type {
+  WorkerDockElsewhereEntry,
+  WorkerDockSnapshot
+} from '../../../../../../shared/orchestration/dock/worker-dock'
+import { openWorkerDockElsewhere, openWorkerDockRow } from './dock/worker-dock-open'
 import { useWorkerDockOwnerActions } from './dock/use-worker-dock-owner-actions'
 import { WorkerDockFeedLossesContext, workerDockStopBlock } from './dock/worker-dock-stop-check'
 import {
@@ -166,6 +169,12 @@ export function NativeChatStructuredSessionStatus(props: {
     (row: WorkerDockRowView) => openWorkerDockRow(row, target),
     [target]
   )
+  // Other chats rows are read-only counts; with the feed lost they could be stale, so none show.
+  const elsewhere = feed.available ? feed.snapshot?.elsewhere : undefined
+  const elsewhereOpen = useCallback(
+    (entry: WorkerDockElsewhereEntry) => openWorkerDockElsewhere(entry, target),
+    [target]
+  )
   // Read live when a Stop or its Retry is sent, never from rows a held press kept on screen.
   const stopBlock = useLatestHandler((row: WorkerDockRowView, party: string) =>
     workerDockStopBlock(row, party, {
@@ -224,6 +233,8 @@ export function NativeChatStructuredSessionStatus(props: {
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
+        elsewhere={elsewhere}
+        onOpenElsewhere={elsewhereOpen}
         incomplete={backgroundTasks.incomplete}
         unavailable={!feed.available}
         tasks={backgroundTasks.tasks}

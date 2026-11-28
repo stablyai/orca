@@ -23207,7 +23207,19 @@
         "workersKeepRunning": "Workers keep running",
         "clearFailedWorkers": "Clear failed workers",
         "mixedCount": "{{workers}} · {{commands}}",
-        "mixedCountSpoken": "{{workers}}, {{commands}}"
+        "mixedCountSpoken": "{{workers}}, {{commands}}",
+        "elsewhereChip_one": "{{count}} elsewhere",
+        "elsewhereChip_other": "{{count}} elsewhere",
+        "elsewhereSpoken_one": "{{count}} worker running in other chats",
+        "elsewhereSpoken_other": "{{count}} workers running in other chats",
+        "elsewhereMoreSpoken_one": "{{count}} more running in other chats",
+        "elsewhereMoreSpoken_other": "{{count}} more running in other chats",
+        "elsewhereRow_one": "{{chat}}, {{count}} running, opens chat",
+        "elsewhereRow_other": "{{chat}}, {{count}} running, opens chat",
+        "moreChats_one": "+{{count}} more chat",
+        "moreChats_other": "+{{count}} more chats",
+        "otherChats": "Other chats",
+        "untitledChat": "Untitled chat"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",

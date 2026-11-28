@@ -42,6 +42,7 @@ export function resetAll(this: OrchestrationDb): void {
     `
     ${OWE_REMOTE_RUN_CANCELS_SQL}
     DELETE FROM coordinator_runs;
+    DELETE FROM worker_dock_delegations;
     DELETE FROM decision_gates;
     DELETE FROM remote_questions;
     DELETE FROM question_threads;
@@ -116,6 +117,7 @@ export function resetMessages(this: OrchestrationDb): void {
     DELETE FROM messages;
     DELETE FROM message_dispatch_provenance;
     DELETE FROM structured_pointer_operations;
+    DELETE FROM worker_dock_delegations;
   `)
 }
 

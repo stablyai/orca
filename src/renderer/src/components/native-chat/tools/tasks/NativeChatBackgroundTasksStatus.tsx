@@ -16,6 +16,7 @@ import { backgroundTaskRowStopId } from '../../../../../../shared/agent-status/p
 import { structuredSessionBackgroundTaskGroups } from './background-task-roster'
 import { useWorkerDockStructuralValue } from './dock/NativeChatWorkerDockFrame'
 import { WorkerDockRoster } from './dock/WorkerDockRoster'
+import type { WorkerDockElsewhereEntry } from '../../../../../../shared/orchestration/dock/worker-dock'
 import type { WorkerDockRowView } from './dock/WorkerDockRow'
 
 /** A provider row's dock state, one projection for its row and the chip's count alike. */
@@ -86,6 +87,9 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   onWorkerAction?: (row: WorkerDockRowView, action: 'stop' | 'clear') => void
   onClearAll?: () => void
   loadWindow?: (anchor: string) => Promise<void>
+  /** Work running in chats this chat handed work to (read-only rows). */
+  elsewhere?: readonly WorkerDockElsewhereEntry[]
+  onOpenElsewhere?: (entry: WorkerDockElsewhereEntry, opener: HTMLElement) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const props = useWorkerDockStructuralValue(liveProps)
@@ -228,6 +232,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
       }}
       onClearAll={() => props.onClearAll?.()}
       loadWindow={props.loadWindow}
+      elsewhere={props.elsewhere}
+      onOpenElsewhere={props.onOpenElsewhere}
     />
   )
 }

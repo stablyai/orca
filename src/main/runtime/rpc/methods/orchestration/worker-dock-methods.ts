@@ -19,6 +19,10 @@ import {
   refreshWorkerDockActivity,
   workerDockActivitySource
 } from '../../../orchestration/dock/worker-dock-activity'
+import {
+  refreshWorkerDockElsewhereActivity,
+  workerDockElsewhereActivitySource
+} from '../../../orchestration/dock/worker-dock-elsewhere-activity'
 import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-stream'
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
@@ -52,8 +56,12 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
       if (!request.seed) {
         refreshWorkerDockActivity(db, request.party, runtime)
       }
-      const result = readWorkerDock(db, request)
-      return result
+      // Other chats' counted ready workers are refreshed on every read, seeds included.
+      return readWorkerDock(db, request, {
+        refreshElsewhere: (ready) => {
+          refreshWorkerDockElsewhereActivity(db, source, ready, runtime)
+        }
+      })
     }
   }),
   defineOrchestrationMethod({
@@ -129,7 +137,8 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           emit,
           workerDockActivitySource(db, party, runtime),
           includeRows !== false,
-          currentOnly
+          currentOnly,
+          workerDockElsewhereActivitySource(db, workerDockSession(party), runtime)
         )
         runtime.registerSubscriptionCleanup(
           key,

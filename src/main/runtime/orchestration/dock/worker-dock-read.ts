@@ -1,7 +1,9 @@
 export { workerDockSession } from './worker-dock-source'
 import { workerDockSession } from './worker-dock-source'
 export { acknowledgeWorkerDock } from './worker-dock-acknowledgment'
+export { readWorkerDockReasons, readWorkerDockResult } from './worker-dock-result'
 import { readWorkerDockSnapshot } from './worker-dock-read-snapshot'
+import { epoch, launchOptions } from './worker-dock-row-values'
 import {
   workerLaunchModel,
   workerStartOptionsAgentValue
@@ -12,21 +14,29 @@ import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   type WorkerDockRead,
   WorkerDockEntry,
-  WorkerDockResult,
   compareWorkerDockEntries,
   WORKER_DOCK_FAILURE_MS,
   WORKER_DOCK_UNKNOWN_MS,
   WORKER_DOCK_UNVERIFIED_READY_MS,
   type WorkerDockSnapshot
 } from '../../../../shared/orchestration/dock/worker-dock'
-import { exposeUtcTimestamp } from '../db/utc-timestamp'
-import { OrchestrationError } from '../orchestration-error'
 import {
   readProviderFailureIdentities,
   readProviderFailureRows
 } from './worker-dock-provider-failures'
 import { workerDockCurrentRowsSql, workerDockEligibleSql } from '../db/worker-dock-eligibility'
 import { readWorkerDockActivity, workerDockActivityRevision } from './worker-dock-activity'
+import {
+  readWorkerDockElsewhere,
+  workerDockElsewhereReadyCandidates,
+  workerDockReadyUnverified,
+  type WorkerDockElsewhereRead
+} from './worker-dock-elsewhere'
+import {
+  backfillWorkerDockDelegations,
+  workerDockDelegationsBackfilled
+} from './worker-dock-delegations'
+import { workerDockDelegationWake } from './worker-dock-delegation-wake'
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
@@ -46,35 +56,66 @@ const Metadata = lazyZodSchema(() =>
   })
 )
 
-function epoch(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
-  }
-  if (typeof value !== 'string') {
-    return null
-  }
-  const ms = Date.parse(exposeUtcTimestamp(value) ?? '')
-  return Number.isFinite(ms) ? ms : null
+export type WorkerDockReadOptions = {
+  /** Refreshes other chats' counted ready workers' activity (pane reads) before counting them. */
+  refreshElsewhere?: (ready: ReadonlyMap<string, readonly string[]>) => void
+  /** Receives what the Other chats rows were read from, for a stream to watch. */
+  onElsewhere?: (read: WorkerDockElsewhereRead) => void
 }
-const Launch = lazyZodSchema(() =>
-  z.object({
-    name: z.string().nullable().optional(),
-    launch: z.unknown().optional(),
-    agent: z.string().nullable().optional()
+
+function unrefreshed(
+  ready: ReadonlyMap<string, readonly string[]>,
+  refreshed: ReadonlyMap<string, readonly string[]>
+): boolean {
+  return [...ready].some(([owner, ids]) => {
+    const done = refreshed.get(owner)
+    return !done || ids.some((id) => !done.includes(id))
   })
-)
-function launchOptions(value: unknown): z.infer<typeof Launch> {
-  try {
-    return Launch.parse(JSON.parse(typeof value === 'string' ? value : '{}'))
-  } catch {
-    return {}
-  }
 }
 
 export function readWorkerDock(
   db: OrchestrationDb,
-  request: z.infer<typeof WorkerDockRead>
+  request: z.infer<typeof WorkerDockRead>,
+  options: WorkerDockReadOptions = {}
 ): WorkerDockSnapshot {
+  if (request.currentOnly !== true) {
+    return readWorkerDockOnce(db, request).snapshot
+  }
+  const source = workerDockSession(request.party)
+  // The one-time backfill commits on its own, never inside this read's snapshot transaction.
+  if (!workerDockDelegationsBackfilled(db)) {
+    if (db.db.isTransaction) {
+      workerDockDelegationWake(db).requestBackfill()
+    } else {
+      const sources = backfillWorkerDockDelegations(db)
+      for (const other of sources ?? []) {
+        db.workerDockSources.invalidate(other)
+      }
+      if (sources?.length) {
+        db.crewChanges.notify(new Set(['topology']))
+      }
+    }
+  }
+  // Phase one: other chats' counted ready workers get their activity before they are counted.
+  const refresh = db.db.isTransaction ? undefined : options.refreshElsewhere
+  const refreshed = refresh ? workerDockElsewhereReadyCandidates(db, source) : new Map()
+  refresh?.(refreshed)
+  let read = readWorkerDockOnce(db, request)
+  // A worker became ready in between: refresh it and read once more.
+  if (refresh && read.elsewhere && unrefreshed(read.elsewhere.ready, refreshed)) {
+    refresh(read.elsewhere.ready)
+    read = readWorkerDockOnce(db, request)
+  }
+  if (read.elsewhere) {
+    options.onElsewhere?.(read.elsewhere)
+  }
+  return read.snapshot
+}
+
+function readWorkerDockOnce(
+  db: OrchestrationDb,
+  request: z.infer<typeof WorkerDockRead>
+): { snapshot: WorkerDockSnapshot; elsewhere?: WorkerDockElsewhereRead } {
   return readWorkerDockSnapshot(db.db, () => {
     const source = workerDockSession(request.party)
     // The source version also advances when time alone changes roster membership.
@@ -95,7 +136,7 @@ export function readWorkerDock(
     let hasUnverifiedWorkers = false
     // Unsettled workers the roster omits can still change state, so their source must stay routable.
     const omitted: string[] =
-      current && db.workerDockSources.needsSeed(source)
+      current && db.workerDockSources.needsDispatchSeed(source)
         ? db.db
             .prepare(
               `SELECT dispatch_id FROM worker_dock_facts INDEXED BY worker_dock_source_state_time
@@ -121,10 +162,7 @@ export function readWorkerDock(
         const live = ready ? activity?.get(identity.dispatchId) : undefined
         if (current) {
           // An exited worker's dispatch is still open, so it ages out like an unverifiable one.
-          const unverified =
-            ready &&
-            activity !== undefined &&
-            (!live || live.state === 'unavailable' || live.state === 'unexpected')
+          const unverified = ready && workerDockReadyUnverified(activity, live)
           const window = unverified
             ? WORKER_DOCK_UNVERIFIED_READY_MS
             : row.lifecycleState === 'start_unknown' || row.lifecycleState === 'stop_unknown'
@@ -206,104 +244,43 @@ export function readWorkerDock(
         )
       )
     }
+    // Other chats rows: current reads only, so an older client's full read neither sees nor clears them.
+    const elsewhere = current ? readWorkerDockElsewhere(db, source, now) : undefined
+    const expiry =
+      elsewhere?.nextExpiry === undefined
+        ? nextExpiry
+        : Math.min(nextExpiry ?? elsewhere.nextExpiry, elsewhere.nextExpiry)
     const snapshot: WorkerDockSnapshot = {
       revision,
       currentOnly: current ? true : undefined,
-      nextExpiry,
+      nextExpiry: expiry,
       hasUnverifiedWorkers: hasUnverifiedWorkers || undefined,
+      ...(elsewhere?.elsewhere.length ? { elsewhere: elsewhere.elsewhere } : {}),
+      ...(elsewhere?.relations ? { relations: true as const } : {}),
+      ...(elsewhere?.hasUnverifiedElsewhere ? { hasUnverifiedElsewhere: true as const } : {}),
       expired: request.revision !== undefined && request.revision !== revision,
       identities,
       rows,
       anchor: identities[center]?.id ?? null
     }
-    db.workerDockSources.rememberSnapshot(source, snapshot, omitted)
-    return snapshot
-  })
-}
-
-/** Each worker's end reason as the strip shows it, for readers outside the strip. */
-export function readWorkerDockReasons(
-  db: OrchestrationDb,
-  dispatchIds: readonly string[]
-): Map<string, string> {
-  const rows = dispatchIds.length
-    ? db.db
-        .prepare(`SELECT f.dispatch_id, f.reason FROM json_each(?) selected
-      CROSS JOIN worker_dock_facts f ON f.dispatch_id = selected.value WHERE f.reason IS NOT NULL`)
-        .all(JSON.stringify(dispatchIds))
-    : []
-  return new Map(rows.map((row) => [String(row.dispatch_id), String(row.reason)]))
-}
-
-export function readWorkerDockResult(
-  db: OrchestrationDb,
-  party: string,
-  dispatchId: string
-): WorkerDockResult | null {
-  const row = db.db
-    .prepare(`SELECT f.dispatch_id, f.report_id, f.settlement, f.changed_at, f.state, w.last_error, d.last_failure,
-    NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS owner_actions_available,
-    COALESCE(t.task_title, t.spec) AS title, t.display_name,
-    COALESCE(w.worktree_id, (SELECT r.worktree_id FROM worker_terminal_resources r WHERE r.owner_dispatch_id = f.dispatch_id LIMIT 1)) AS workspace_id, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload,
-    EXISTS(SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
-      AND a.dispatch_id = f.dispatch_id AND a.settlement = f.settlement) AS acknowledged
-    FROM worker_dock_facts f JOIN dispatch_contexts d ON d.id = f.dispatch_id
-    JOIN tasks t ON t.id = d.task_id JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
-    LEFT JOIN messages m ON m.id = f.report_id
-    LEFT JOIN attempt_observation_facts accepted ON accepted.id = 'worker_report:' || f.report_id
-    WHERE f.source = ? AND f.dispatch_id = ?`)
-    .get(workerDockSession(party), dispatchId)
-  if (!row) {
-    throw new OrchestrationError(
-      'dispatch_not_found',
-      'This worker is not part of this source session.'
+    db.workerDockSources.rememberSnapshot(
+      source,
+      snapshot,
+      omitted,
+      elsewhere
+        ? {
+            elsewhereOpen:
+              elsewhere.elsewhere.length > 0 ||
+              elsewhere.relations ||
+              elsewhere.hasUnverifiedElsewhere,
+            // Not while earlier handoffs are still to be backfilled: a later seed reads again.
+            seeded: workerDockDelegationsBackfilled(db)
+          }
+        : undefined
     )
-  }
-  const failureReason =
-    typeof row.last_error === 'string'
-      ? row.last_error
-      : typeof row.last_failure === 'string'
-        ? row.last_failure
-        : null
-  // Only a requested stop reaches 'stopped'; a crash or lost terminal settles failed or abandoned.
-  const stopped = row.state === 'stopped'
-  const failure = row.state === 'failed' || row.state === 'abandoned'
-  if (typeof row.body !== 'string' && !stopped && !(failure && failureReason)) {
-    return null
-  }
-  const outcome =
-    reportOutcome(row.accepted_payload) ??
-    reportOutcome(row.payload) ??
-    (stopped ? 'stopped' : failure ? (row.state === 'failed' ? 'failed' : 'unexpected') : null)
-  if (!outcome) {
-    return null
-  }
-  return WorkerDockResult.parse({
-    id: row.report_id ?? `settlement:${String(row.settlement)}`,
-    dispatchId,
-    name:
-      row.display_name ??
-      launchOptions(row.start_options).name ??
-      launchOptions(row.start_options).agent ??
-      'Worker',
-    title: row.title,
-    outcome,
-    body: row.body ?? (stopped ? '' : failureReason),
-    report: typeof row.body === 'string',
-    at: epoch(row.changed_at),
-    settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
-    acknowledged: row.acknowledged === 1,
-    ownerActionsAvailable: row.owner_actions_available === 1,
-    ...(typeof row.workspace_id === 'string' ? { workspaceId: row.workspace_id } : {})
+    if (elsewhere) {
+      db.workerDockSources.rememberElsewhereDispatches(elsewhere.counted)
+    }
+    return { snapshot, ...(elsewhere ? { elsewhere } : {}) }
   })
-}
-function reportOutcome(payload: unknown): 'succeeded' | 'failed' | null {
-  try {
-    const parsed = z
-      .object({ outcome: z.enum(['succeeded', 'failed']) })
-      .safeParse(JSON.parse(String(payload)))
-    return parsed.success ? parsed.data.outcome : null
-  } catch {
-    return null
-  }
 }

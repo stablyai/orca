@@ -17,6 +17,11 @@ export class WorkerDockSourcePresence {
   private readonly versions = new Map<string, number>()
   private readonly values = new Map<string, WorkerDockPresence>()
   private readonly seeded = new Set<string>()
+  /** Sources a current read has seeded; a seed request for one answers without reading. */
+  private readonly currentSeeded = new Set<string>()
+  /** Whether the last current read showed Other chats rows or kept watching for them. Only current
+   *  reads set it, so an older client's full read never closes an island it does not draw. */
+  private readonly elsewhereOpen = new Map<string, boolean>()
   private readonly sourcesWithoutProviderFailures = new Set<string>()
   private listener: (() => void) | undefined
   private readonly dispatchSources = new Map<string, string>()
@@ -37,6 +42,11 @@ export class WorkerDockSourcePresence {
   }
 
   needsSeed(source: string): boolean {
+    return !this.currentSeeded.has(source)
+  }
+
+  /** Whether any read has mapped this source's workers yet. */
+  needsDispatchSeed(source: string): boolean {
     return !this.seeded.has(source)
   }
 
@@ -106,6 +116,7 @@ export class WorkerDockSourcePresence {
     this.changedHistory()
     this.dispatchSources.clear()
     this.fallbackByRun.clear()
+    this.elsewhereOpen.clear()
   }
 
   changedHistory(): void {
@@ -130,13 +141,24 @@ export class WorkerDockSourcePresence {
   rememberSnapshot(
     source: string,
     snapshot: WorkerDockSnapshot,
-    omitted: readonly string[] = []
+    omitted: readonly string[] = [],
+    current?: { elsewhereOpen: boolean; seeded: boolean }
   ): void {
     const first = !this.seeded.has(source)
     if (first) {
       this.seeded.add(source)
     }
-    const open = snapshot.identities.length > 0 || snapshot.hasUnverifiedWorkers === true
+    if (current) {
+      this.elsewhereOpen.set(source, current.elsewhereOpen)
+      // Not while the backfill of earlier handoffs is pending, so a later seed reads again.
+      if (current.seeded) {
+        this.currentSeeded.add(source)
+      }
+    }
+    const open =
+      snapshot.identities.length > 0 ||
+      snapshot.hasUnverifiedWorkers === true ||
+      this.elsewhereOpen.get(source) === true
     const previous = this.values.get(source)
     if (open || previous) {
       const next =
@@ -156,6 +178,14 @@ export class WorkerDockSourcePresence {
       for (const id of omitted) {
         this.dispatchSources.set(id, source)
       }
+    }
+  }
+
+  /** Maps other chats' counted workers to their own sources, so a settle path that never re-reads
+   *  the Dispatch row still invalidates that source (and the stream watching it re-reads). */
+  rememberElsewhereDispatches(rows: Iterable<{ source: string; dispatchId: string }>): void {
+    for (const row of rows) {
+      this.dispatchSources.set(row.dispatchId, row.source)
     }
   }
 
