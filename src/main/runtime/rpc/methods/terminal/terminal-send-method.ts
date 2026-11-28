@@ -16,6 +16,7 @@ import {
   terminalInputSourceForClient,
   isTerminalSendGuardNotWritable,
   resolveMobileFloorClientId,
+  reserveTerminalSendInput,
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
@@ -27,6 +28,7 @@ import {
   ensureUnsupportedTerminalPromptReceipt,
   observeReplayedTerminalPrompt
 } from './terminal-prompt-receipt'
+import { reserveEmptyTerminalDraft } from './terminal-empty-draft-reservation'
 import { observeQuestionAnswerSend } from './terminal-send-question-answered'
 import {
   TERMINAL_INPUT_SESSION_METHOD,
@@ -187,6 +189,9 @@ export const TERMINAL_SEND_METHODS = [
                 }
               }
             : undefined
+        const reserveReply = params.requireEmptyDraft
+          ? await reserveEmptyTerminalDraft(runtime, params.terminal)
+          : undefined
         const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
         const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
         const beforeWrite =
@@ -205,6 +210,7 @@ export const TERMINAL_SEND_METHODS = [
               }
             : undefined
         const useSettledAgentPrompt =
+          !reserveReply &&
           params.agentPrompt === true &&
           typeof params.text === 'string' &&
           params.text.length > 0 &&
@@ -212,16 +218,12 @@ export const TERMINAL_SEND_METHODS = [
           params.interrupt !== true &&
           params.client?.type === 'desktop' &&
           (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
-        const reserveWrite =
-          params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
-            ? (ptyId: string): void => {
-                const claim = runtime.beginMobileInputFloor(ptyId, mobileFloorClientId)
-                if (!claim) {
-                  throw new Error('mobile_input_floor_unavailable')
-                }
-                mobileFloorClaim.current = claim
-              }
-            : undefined
+        const reserveWrite = reserveTerminalSendInput(
+          runtime,
+          mobileFloorClaim,
+          params.inputKind !== 'query-reply' && leaf?.ptyId ? mobileFloorClientId : null,
+          reserveReply
+        )
         const answered = observeQuestionAnswerSend(params, runtime)
         let result
         let acceptedPromptCheckpoint: { send: RuntimeTerminalSend } | undefined

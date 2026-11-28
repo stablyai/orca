@@ -12,13 +12,13 @@ final class NotificationReplyBackgroundExecution: NSObject, NotificationDelegate
       let reply = response as? UNTextInputNotificationResponse else { return false }
     let request = response.notification.request
     let retainResponse = {
-      let id = request.identifier
-      self.finish(id)
+      let id = UUID().uuidString
       self.pending[id] = [
+        "nativeReplyId": id,
         "actionIdentifier": response.actionIdentifier,
         "userText": reply.userText,
         "notification": ["request": [
-          "identifier": id,
+          "identifier": request.identifier,
           "content": ["data": request.content.userInfo]
         ]]
       ]

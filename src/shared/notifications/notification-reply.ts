@@ -35,7 +35,9 @@ export function notificationReplyFields(
     replyTarget,
     ...(notification.category ? {} : { category: NOTIFICATION_REPLY_CATEGORY })
   }
-  return new TextEncoder().encode(JSON.stringify({ ...notification, ...fields })).byteLength <= 3000
+  return new TextEncoder().encode(
+    JSON.stringify({ ...notification, ...fields, sound: notification.sound ?? false })
+  ).byteLength <= 3000
     ? fields
     : {}
 }

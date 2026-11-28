@@ -8,12 +8,10 @@ import { buildNativeChatPasteBytes } from '../../../../src/shared/native-chat/in
 import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { itemComment } from '../../bots/items/bot-item-operations'
-import { nativeChatTerminalDraftRead } from '../../terminal/session/mobile-session-terminal-operations'
-import {
-  notificationReplyInputIsEmpty,
-  notificationReplyTerminalClient
-} from './notification-reply-terminal-input'
+import { notificationReplyTerminalClient } from './notification-reply-terminal-input'
 import { groupRead, groupSend } from '../../bots/bot-group-operations'
+import type { AgentSessionHistoryResult } from '../../../../src/shared/agent-session/agent-session-wire'
+import { callAgentSession } from '../../session/native-chat/agent-session/mobile-structured-agent-session-rpc'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 
 export async function sendNotificationReply(
@@ -76,29 +74,26 @@ export async function sendNotificationReply(
       )
       return
     }
-    if (target.type === 'terminal') {
-      const read = nativeChatTerminalDraftRead.interpret(
-        await nativeChatTerminalDraftRead.request(
-          client,
-          {
-            terminal: target.terminal,
-            expectedIncarnationId: target.expectedIncarnationId,
-            screen: true,
-            limit: 1
-          },
-          { timeoutMs: deadline - Date.now(), budgetSpansConnect: true }
-        )
+    let fence = 1
+    if (target.type === 'chat') {
+      const history = await callAgentSession<AgentSessionHistoryResult>(
+        client,
+        'agentSession.history',
+        { sessionId: target.sessionId, direction: 'tail', limit: 1 },
+        deadline - Date.now()
       )
-      if (!read.accepted || !notificationReplyInputIsEmpty(read.value.terminal)) {
-        throw new Error('The chat has an existing draft or its input could not be checked')
+      const current = history.page.fence
+      if (!Number.isSafeInteger(current) || current === undefined || current <= 0) {
+        throw new Error('The chat runtime could not be checked')
       }
+      fence = current
     }
     const outcome =
       target.type === 'chat'
         ? await sendMobileStructuredAgentSessionMessage({
             client,
             sessionId: target.sessionId,
-            expectedRuntimeFence: 0,
+            expectedRuntimeFence: fence,
             text,
             attachments: [],
             clientMessageId: operationId,
@@ -111,7 +106,8 @@ export async function sendNotificationReply(
             client,
             terminal: target.terminal,
             text: buildNativeChatPasteBytes(text),
-            enter: false,
+            enter: true,
+            requireEmptyDraft: true,
             requireAgentStatus: 'sendable',
             expectedIncarnationId: target.expectedIncarnationId,
             inputClient: notificationReplyTerminalClient(),
@@ -123,26 +119,6 @@ export async function sendNotificationReply(
     }
     if (outcome !== 'accepted' && outcome !== 'queued') {
       throw new Error(reason)
-    }
-    if (target.type === 'terminal') {
-      const submitted = await sendMobileNativeChatMessageWithOutcome({
-        client,
-        terminal: target.terminal,
-        text: '',
-        enter: true,
-        expectedIncarnationId: target.expectedIncarnationId,
-        requireAgentStatus: 'sendable',
-        inputClient: notificationReplyTerminalClient(),
-        deadline,
-        requireWriteSettlement: true
-      })
-      if (submitted !== 'accepted') {
-        throw new Error(
-          submitted === 'unknown'
-            ? 'Delivery unconfirmed; check the chat before sending again'
-            : 'The agent could not accept the reply'
-        )
-      }
     }
   } finally {
     pairedClient.close()

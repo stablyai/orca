@@ -30,6 +30,7 @@ type MobileNativeChatSendArgs = {
   terminal: string
   expectedIncarnationId?: string
   requireAgentStatus?: 'sendable'
+  requireEmptyDraft?: true
   text: string
   enter?: boolean
   resolvedLaunchDraft?: { text: string; createdAt: number }
@@ -134,6 +135,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
       args.client,
       {
         terminal: args.terminal,
+        ...(args.requireEmptyDraft ? { requireEmptyDraft: true as const } : {}),
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
           : {}),

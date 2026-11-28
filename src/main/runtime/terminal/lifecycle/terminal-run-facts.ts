@@ -47,6 +47,7 @@ function startedNewProcess(commit: TerminalSpawnCommit): boolean {
 export class TerminalRunFactsRegister {
   private readonly runsByPtyId = new Map<string, TerminalRunRecord>()
   // Why apart from the run record: input must count on a PTY main adopted without a commit.
+  private readonly inputRevisionByPtyId = new Map<string, number>()
   private readonly lastInputAtByPtyId = new Map<string, number>()
   private readonly lastDrivingInputAtByPtyId = new Map<string, number>()
   private readonly heldMailNoticeAtByPtyId = new Map<string, number>()
@@ -98,6 +99,7 @@ export class TerminalRunFactsRegister {
     const sameProcess =
       origin === 'reattach' && (incarnationId === null || !previous?.incarnationId)
     if (!sameProcess) {
+      this.inputRevisionByPtyId.delete(commit.id)
       this.lastInputAtByPtyId.delete(commit.id)
       this.lastDrivingInputAtByPtyId.delete(commit.id)
       this.heldMailNoticeAtByPtyId.delete(commit.id)
@@ -126,6 +128,7 @@ export class TerminalRunFactsRegister {
     if (inputKind === 'query-reply' || isUntypedTerminalInput(data)) {
       return
     }
+    this.inputRevisionByPtyId.set(ptyId, this.readInputRevision(ptyId) + 1)
     this.lastInputAtByPtyId.set(ptyId, now)
     const run = this.runsByPtyId.get(ptyId)
     if (isDrivingInputKind(inputKind)) {
@@ -161,6 +164,10 @@ export class TerminalRunFactsRegister {
 
   /** When input other than a terminal reply last reached the PTY's current process, launch writes
    *  included; null if none has. */
+  readInputRevision(ptyId: string): number {
+    return this.inputRevisionByPtyId.get(ptyId) ?? 0
+  }
+
   readLastInputAt(ptyId: string): number | null {
     return this.lastInputAtByPtyId.get(ptyId) ?? null
   }
@@ -222,6 +229,7 @@ export class TerminalRunFactsRegister {
 
   delete(ptyId: string): void {
     this.runsByPtyId.delete(ptyId)
+    this.inputRevisionByPtyId.delete(ptyId)
     this.lastInputAtByPtyId.delete(ptyId)
     this.lastDrivingInputAtByPtyId.delete(ptyId)
     this.heldMailNoticeAtByPtyId.delete(ptyId)
