@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Host Sleep answers and the unidentified-owner awake fallback, by chat pane key.
  *  Written only by the status bridge, dropped with its projection, never saved. */
@@ -31,9 +31,7 @@ function createStructuredChatPresenceSelector(
       return cached
     }
     const result = tabs.some(
-      (tab) =>
-        isStructuredTab(tab) &&
-        matches(sleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)])
+      (tab) => isStructuredTab(tab) && matches(sleptAtByPaneKey[chatPaneKey(tab.entityId)])
     )
     // Store selectors run on every write; immutable snapshots reuse scans without retaining closed tabs.
     bySleptAt ??= new WeakMap()

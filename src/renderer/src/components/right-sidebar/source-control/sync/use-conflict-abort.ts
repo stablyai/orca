@@ -8,13 +8,22 @@ import {
   abortRuntimeGitMerge,
   abortRuntimeGitRebase
 } from '@/runtime/source-control/git/runtime-git-sync-client'
-import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  GitConflictOperation
+} from '../../../../../../shared/git/status/git-status-types'
 import type { AbortConflictOperation } from '../listing/operation-target'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
 import { refreshSourceControlAfterRemoteAction } from './remote-refresh'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { toastIfOperationRunChanged } from './operation-run-changed-toast'
 import type { SourceControlStatusRefresh } from './use-status-refresh'
 import { runWithFinally } from '@/lib/run-with-finally'
+
+/** `confirmed`: the caller already confirmed in place, so skip the dialog. `expectedRunIdentity`:
+ *  the run that confirmation was for; the abort refuses if a different run is paused now. */
+type ConflictAbortOptions = { confirmed?: boolean } & GitAbortOperationRequest
 
 export function useSourceControlConflictAbort({
   activeRepoTarget,
@@ -42,7 +51,7 @@ export function useSourceControlConflictAbort({
     async (
       requestedOperation: AbortConflictOperation,
       // The operation bar confirms in place, so it skips the dialog.
-      { confirmed = false }: { confirmed?: boolean } = {}
+      { confirmed = false, expectedRunIdentity }: ConflictAbortOptions = {}
     ): Promise<void> => {
       if (
         !activeWorktreeId ||
@@ -99,20 +108,24 @@ export function useSourceControlConflictAbort({
               connectionId
             }
             const abortGitOperation = isRebase ? abortRuntimeGitRebase : abortRuntimeGitMerge
-            await abortGitOperation(context)
+            await abortGitOperation(context, { expectedRunIdentity })
           } catch (error) {
-            const message =
-              error instanceof Error
-                ? error.message
-                : isRebase
-                  ? translate(
-                      'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
-                      'Failed to abort rebase'
-                    )
-                  : translate(
-                      'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
-                      'Failed to abort merge'
-                    )
+            // A refused abort left the new run alone; it is not a failed action to record.
+            if (toastIfOperationRunChanged(error)) {
+              return
+            }
+            const message = extractIpcErrorMessage(
+              error,
+              isRebase
+                ? translate(
+                    'auto.components.right.sidebar.SourceControl.abortRebaseFailedFallback',
+                    'Failed to abort rebase'
+                  )
+                : translate(
+                    'auto.components.right.sidebar.SourceControl.abortMergeFailedFallback',
+                    'Failed to abort merge'
+                  )
+            )
             toast.error(
               isRebase
                 ? translate(
@@ -160,14 +173,14 @@ export function useSourceControlConflictAbort({
   )
 
   const handleAbortMerge = useCallback(
-    async (options?: { confirmed?: boolean }): Promise<void> => {
+    async (options?: ConflictAbortOptions): Promise<void> => {
       await handleAbortOperation('merge', options)
     },
     [handleAbortOperation]
   )
 
   const handleAbortRebase = useCallback(
-    async (options?: { confirmed?: boolean }): Promise<void> => {
+    async (options?: ConflictAbortOptions): Promise<void> => {
       await handleAbortOperation('rebase', options)
     },
     [handleAbortOperation]

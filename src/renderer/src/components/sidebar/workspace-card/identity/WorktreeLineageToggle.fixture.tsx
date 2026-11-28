@@ -6,8 +6,8 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import WorktreeCard from '../surface/WorktreeCard'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const repo: Repo = {
   id: 'lineage-preview',
@@ -59,7 +59,7 @@ const tabs: Tab[] = children.slice(0, 3).map((child, index) => ({
   createdAt: Date.now()
 }))
 const entries: AgentStatusEntry[] = tabs.map((tab, index) => ({
-  paneKey: structuredAgentSessionPaneKey(tab.id, tab.entityId),
+  paneKey: chatPaneKey(tab.entityId),
   worktreeId: tab.worktreeId,
   agentType: 'codex',
   prompt: '',
@@ -149,7 +149,7 @@ export const manyNarrow = defineFixture({
     unifiedTabsByWorktree: Object.fromEntries(manyTabs.map((tab) => [tab.worktreeId, [tab]])),
     agentStatusByPaneKey: acceptedAgentStatuses(
       manyTabs.map((tab, index) => {
-        const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+        const paneKey = chatPaneKey(tab.entityId)
         return [
           paneKey,
           { ...entries[index % entries.length], paneKey, worktreeId: tab.worktreeId }

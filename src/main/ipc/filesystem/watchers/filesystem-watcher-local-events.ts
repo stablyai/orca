@@ -14,10 +14,17 @@ import {
 import { buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
 import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
-import { subscribeViaWatcherProcess } from '../watcher-process/parcel-watcher-process'
+import {
+  setSharedWatcherDeliveryStallListener,
+  subscribeViaWatcherProcess
+} from '../watcher-process/parcel-watcher-process'
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { isWatcherCrashFuseFailure } from '../watcher-process/parcel-watcher-process-failure'
+import {
+  noteLocalWatchErrored,
+  setLocalWatcherDeliveryStalled
+} from './filesystem-watcher-pause-state'
 import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
@@ -29,6 +36,10 @@ import {
   notifyLocalWatcherEvents,
   notifyLocalWatcherInterrupted
 } from './local-watcher-event-observers'
+
+// Why at load: this module is the only path that subscribes local roots on the shared watcher child,
+// and the handlers import it lazily, so the stall listener is in place before any stall can occur.
+setSharedWatcherDeliveryStallListener(setLocalWatcherDeliveryStalled)
 
 // All local and WSL roots in main share this budget; watcher children have separate pools.
 const DIRECTORY_STAT_CONCURRENCY = 8
@@ -307,6 +318,8 @@ export async function createLocalWatcher(
           // Why installed only: an error during subscribe rejects the install, which owns its retry.
           if (wasInstalled && isWatcherCrashFuseFailure(err)) {
             onCrashFuseFailure?.(root.listeners)
+          } else if (wasInstalled) {
+            noteLocalWatchErrored(rootKey, root.rootPath, root.listeners)
           }
           return
         }

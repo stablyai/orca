@@ -38,13 +38,17 @@ export const BRIDGE_MAX_ROUTE_HREF_CHARS = 2048
 // Allow only http/https provider links and mailto review links; arbitrary hosts remain valid, but other schemes exceed the external-link grant.
 export const BRIDGE_EXTERNAL_LINK_SCHEMES: readonly string[] = ['https:', 'http:', 'mailto:']
 
-export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
+// A sign-in's OAuth URL can run to several KiB (PostHog's lists every scope it has); the frame cap is 640 KiB.
+export const BRIDGE_MAX_EXTERNAL_LINK_CHARS = 16_384
+// Shells built before the externalLinkLong grant refuse longer links at the frame.
+export const BRIDGE_LEGACY_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
 
 // Parse absolute URLs without a base; relative targets belong to navigate. Forward the normalized href so device handling sees the same URL that passed the scheme check.
 // Normalize rather than rejecting changed spellings: bare origins gain a slash, while WHATWG strips controls/space before interpreting schemes.
-export function readBridgeExternalLinkUrl(url: string): string | null {
+// maxChars is the receiving shell's: a page passes its shell's, the shell its own BRIDGE_MAX_EXTERNAL_LINK_CHARS.
+export function readBridgeExternalLinkUrl(url: string, maxChars: number): string | null {
   // Bound before parsing, then bound normalized output too because percent-encoding can expand it.
-  if (url.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS) {
+  if (url.length > maxChars) {
     return null
   }
   let parsed: URL
@@ -56,11 +60,11 @@ export function readBridgeExternalLinkUrl(url: string): string | null {
   if (!BRIDGE_EXTERNAL_LINK_SCHEMES.includes(parsed.protocol)) {
     return null
   }
-  return parsed.href.length > BRIDGE_MAX_EXTERNAL_LINK_CHARS ? null : parsed.href
+  return parsed.href.length > maxChars ? null : parsed.href
 }
 
 export function isBridgeExternalLinkUrl(url: string): boolean {
-  return readBridgeExternalLinkUrl(url) !== null
+  return readBridgeExternalLinkUrl(url, BRIDGE_MAX_EXTERNAL_LINK_CHARS) !== null
 }
 export const BRIDGE_MAX_PAGE_ROUTES = 64
 

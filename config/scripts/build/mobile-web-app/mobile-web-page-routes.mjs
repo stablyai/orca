@@ -40,10 +40,11 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   // MCP servers needs navigate/storage for Back and the shared layout wall, externalLink for a server's sign-in page.
+  // A sign-in link too long for an older shell is copied instead; without the clipboard the page says it couldn't.
   {
     pathname: '/h/[hostId]/mcp',
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
-    optionalGrants: [DEVICE_STORE_GRANT]
+    optionalGrants: [DEVICE_STORE_GRANT, 'native.clipboard.write']
   },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {

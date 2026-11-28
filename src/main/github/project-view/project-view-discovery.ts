@@ -8,7 +8,8 @@ import type {
   GitHubProjectSummary
 } from '../../../shared/github/projects/project-types'
 import { githubProjectHost } from '../../../shared/github/projects/project-identity'
-import { projectGhExecOptions } from './project-host-execution'
+import { noteRepositoryRateLimitSpend } from '../api/rate-limit'
+import { projectGhExecOptions, type ProjectGhExecOptions } from './project-host-execution'
 import { runGraphql, type GraphqlVars } from './project-graphql'
 import { driftError, projectAuthErrorMessage } from './project-error-classification'
 import { rememberOwnerType } from './project-view-cache'
@@ -51,7 +52,9 @@ export async function listAccessibleProjects(
 ): Promise<ListAccessibleProjectsResult> {
   const pinnedHost = args?.host?.trim()
   // Unpinned, gh picks its own default host (GH_HOST, its only login, else github.com); viewer.url names it.
-  const exec = pinnedHost ? projectGhExecOptions(pinnedHost) : {}
+  let exec: ProjectGhExecOptions = pinnedHost
+    ? projectGhExecOptions(pinnedHost)
+    : { unpinnedDefaultHost: true }
   let host = githubProjectHost(pinnedHost)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
@@ -94,6 +97,9 @@ export async function listAccessibleProjects(
       viewerLogin = res.data.viewer.login ?? null
       if (!pinnedHost) {
         host = URL.parse(res.data.viewer.url ?? '')?.host || host
+        // Account for page 1 now that viewer.url named the host, and scope later pages to it.
+        noteRepositoryRateLimitSpend({ host }, 'graphql')
+        exec = { unpinnedDefaultHost: true, quotaHost: host }
       }
     }
     const nodes = res.data.viewer.projectsV2?.nodes ?? []

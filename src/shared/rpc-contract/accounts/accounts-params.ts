@@ -59,7 +59,9 @@ export const SelectClaudeAccountParams = lazyZodSchema(() =>
     // The switching client's own choice for the host's running terminals; older hosts strip this.
     runningSessions: z.enum(['ask', 'restart', 'keep']).optional(),
     // Answers the Ask an earlier switch to this account left open; never switches accounts itself.
-    answersAsk: z.literal(true).optional()
+    answersAsk: z.literal(true).optional(),
+    // Identifies the Ask being answered so an older toast cannot stop a later switch's sessions.
+    answersAskId: z.string().min(1).optional()
   })
 )
 

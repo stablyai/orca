@@ -15,7 +15,7 @@ import {
   CodexAppServerUnsupportedError
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
-import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { createCodexRecordReader } from './codex-agent-message-delta-merging'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
@@ -127,7 +127,7 @@ async function connectCodexAppServer(
     void managed.close()
   })
 
-  const recordReader = createProviderRecordReader({
+  const recordReader = createCodexRecordReader({
     stdout: child.stdout,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {

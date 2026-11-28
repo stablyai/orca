@@ -1,5 +1,16 @@
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
-import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import {
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useSyncExternalStore
+} from 'react'
+import {
+  isNativeChatViewTabOpenAnywhere,
+  NativeChatViewTabContext
+} from '../pane/ownership/native-chat-view-memory'
 import {
   aggregateAsyncQuestions,
   newestShownAsyncQuestionRow,
@@ -10,6 +21,31 @@ import { nativeChatPromptDismissals as dismissals } from './native-chat-prompt-d
 import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { StructuredAgentSessionAsyncQuestionSkip } from './use-structured-agent-session-async-question-skip'
 import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+
+// Skips a released view left behind, by tab, so closing the tab sweeps them; a rewind leaves old scopes, so few are kept.
+const KEPT_ASYNC_SCOPES_PER_TAB = 8
+const keptAsyncScopesByTab = new Map<string, Set<string>>()
+
+function keepAsyncScopeForTab(tabId: string, scopeKey: string): void {
+  if (dismissals.readAsync(scopeKey).size === 0) {
+    return
+  }
+  const scopes = keptAsyncScopesByTab.get(tabId) ?? new Set<string>()
+  scopes.delete(scopeKey)
+  scopes.add(scopeKey)
+  for (const stale of [...scopes].slice(0, Math.max(0, scopes.size - KEPT_ASYNC_SCOPES_PER_TAB))) {
+    scopes.delete(stale)
+    dismissals.forgetAsync(stale)
+  }
+  keptAsyncScopesByTab.set(tabId, scopes)
+}
+
+export function forgetNativeChatAsyncSkipsForTabs(tabIds: Iterable<string>): void {
+  for (const tabId of tabIds) {
+    keptAsyncScopesByTab.get(tabId)?.forEach((scopeKey) => dismissals.forgetAsync(scopeKey))
+    keptAsyncScopesByTab.delete(tabId)
+  }
+}
 
 export function useNativeChatAsyncQuestions({
   paneKey,
@@ -32,7 +68,10 @@ export function useNativeChatAsyncQuestions({
   /** The host's saved Skip, on a host that keeps one for every device. */
   skip?: StructuredAgentSessionAsyncQuestionSkip
 }) {
-  const scopeKey = `${paneKey}:async:${sourceKey}`
+  const viewTab = useContext(NativeChatViewTabContext)
+  const scopeKey = viewTab
+    ? JSON.stringify([viewTab.tabId, paneKey, sourceKey])
+    : `${paneKey}:async:${sourceKey}`
   const owner = useMemo(() => ({ scopeKey, viewKey }), [scopeKey, viewKey])
   const active = useRef<object | null>(null)
   useLayoutEffect(() => {
@@ -41,8 +80,18 @@ export function useNativeChatAsyncQuestions({
       active.current = null
     }
   }, [owner])
+  // A released view of an open tab keeps its skips, a tab moved to another workspace included; closing the tab sweeps them with the tab's other dismissals.
   useNativeChatPaneLifetimeEffect(
-    useCallback(() => () => dismissals.forgetAsync(scopeKey), [scopeKey])
+    useCallback(
+      () => () => {
+        if (viewTab && isNativeChatViewTabOpenAnywhere(viewTab)) {
+          keepAsyncScopeForTab(viewTab.tabId, scopeKey)
+        } else {
+          dismissals.forgetAsync(scopeKey)
+        }
+      },
+      [scopeKey, viewTab]
+    )
   )
   const hidden = useSyncExternalStore(dismissals.subscribe, () => dismissals.readAsync(scopeKey))
   // Asks are tool calls and answers are sends, so a streamed reply's text revision keeps the scan.

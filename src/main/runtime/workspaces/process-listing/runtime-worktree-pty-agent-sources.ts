@@ -11,10 +11,10 @@ import {
 import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionIdFromTabId } from '../../../../shared/agent-session/view/structured-agent-session-tab-id'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 import { createChatOrcaSessionIdResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type ConnectedPtyEvidence = {
   tabIds: ReadonlySet<string>
@@ -35,7 +35,7 @@ function publishedStructuredChildren(
   if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId || !sessionId) {
     return undefined
   }
-  if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
+  if (entry.paneKey !== chatPaneKey(sessionId)) {
     return undefined
   }
   const summary = read(sessionId)

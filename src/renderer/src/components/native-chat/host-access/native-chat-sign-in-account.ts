@@ -21,10 +21,16 @@ function currentFailure(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly Submission[]
 ): AgentSessionFailureFact | undefined {
-  const { line, resolvedAt } = agentSessionLatestFailureLine(items)
   const latest = submissions.at(-1)
   // Older hosts don't say where a send sits; it is then taken as the newest thing that happened.
   const sentAt = latest ? (latest.submittedSequence ?? Number.POSITIVE_INFINITY) : null
+  const lastItemSequence = items.at(-1)?.sequence ?? Number.NEGATIVE_INFINITY
+  if (latest && sentAt !== null && sentAt > lastItemSequence) {
+    return latest.dispatchState === 'rejected'
+      ? readAgentSessionFailureFact(latest.rejection)
+      : undefined
+  }
+  const { line, resolvedAt } = agentSessionLatestFailureLine(items)
   if (
     latest &&
     sentAt !== null &&
@@ -47,16 +53,19 @@ export function nativeChatSignInAccount(input: {
   submissions: readonly Submission[] | undefined
   kickoff?: { account?: AgentSessionAccountKind } | null
 }): AgentSessionAccountKind | undefined {
+  if (input.unavailable?.reason === 'notSignedIn' && input.unavailable.account !== undefined) {
+    return input.unavailable.account
+  }
   const details = input.launchDetails
-  const current = currentFailure(input.items, input.submissions ?? [])
-  return (
-    (input.unavailable?.reason === 'notSignedIn' ? input.unavailable.account : undefined) ??
-    (typeof details === 'object' && details !== null && 'account' in details
+  const launchAccount =
+    typeof details === 'object' && details !== null && 'account' in details
       ? accountKind(details.account)
-      : undefined) ??
-    (current?.kind === 'notSignedIn' ? current.account : undefined) ??
-    input.kickoff?.account
-  )
+      : undefined
+  if (launchAccount !== undefined) {
+    return launchAccount
+  }
+  const current = currentFailure(input.items, input.submissions ?? [])
+  return (current?.kind === 'notSignedIn' ? current.account : undefined) ?? input.kickoff?.account
 }
 
 function accountKind(value: unknown): AgentSessionAccountKind | undefined {

@@ -36,7 +36,10 @@ export type PairingOfferServer = Pick<
     rotate?: boolean
     offerTtlMs?: number
     createdByDeviceId?: string
+    reach?: RuntimePairingReach
+    exposure?: 'widen' | 'as-bound'
   }): Promise<MobilePairingOffer>
+  getBoundWebSocketHost(): string | null
 }
 
 const NO_PAIRING_ADDRESS_GUIDANCE =

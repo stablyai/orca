@@ -10,3 +10,8 @@ export function isClaudeUsageWaitingForClaude(p: UsageFailureSource): boolean {
 export function isCodexUsageWaitingForCodex(p: UsageFailureSource): boolean {
   return p.provider === 'codex' && p.usageMetadata?.failureKind === 'delegated-refresh-required'
 }
+
+/** The CLI renews its own login on its next run, so the status bar shows calm text, not an alert. */
+export function isUsageWaitingForCli(p: UsageFailureSource): boolean {
+  return isClaudeUsageWaitingForClaude(p) || isCodexUsageWaitingForCodex(p)
+}

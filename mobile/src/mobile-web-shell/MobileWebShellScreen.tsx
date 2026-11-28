@@ -21,6 +21,7 @@ import { playPageHaptic } from './native-capabilities/page-haptics'
 import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
+import { keepPairConfirmServerName } from '../pairing/pair-confirm-server-name'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
@@ -299,7 +300,7 @@ export function MobileWebShellScreen({
         documentFailed: () => reportShellFailure('document-load-failed')
       })
     },
-    onNavigate: openPageRoute,
+    onNavigate: (href, replace) => openPageRoute(keepPairConfirmServerName(href), replace),
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.

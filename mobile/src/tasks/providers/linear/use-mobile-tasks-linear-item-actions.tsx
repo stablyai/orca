@@ -168,7 +168,7 @@ export function useMobileTasksLinearItemActions<
     },
     [client, linearSubIssueTitle, tryBeginMutation]
   )
-  return Object.assign(model, { addLinearComment, openLinearSubIssue, createLinearSubIssue })
+  return { ...model, addLinearComment, openLinearSubIssue, createLinearSubIssue }
 }
 
 export type LinearItemActionsModel = GithubReplyMergeActionsModel &

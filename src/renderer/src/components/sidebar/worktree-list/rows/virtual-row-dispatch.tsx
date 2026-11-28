@@ -16,7 +16,7 @@ import {
   shouldUseHeaderTopSpacing
 } from '../viewport/virtual-rows'
 import type { LineageRowProjection } from '../listing/lineage-row-projection'
-import type { RenderRow } from '../listing/render-row'
+import { getRenderRowKey, type RenderRow } from '../listing/render-row'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { useHostHeaderDrag } from '../drag/host-header-drag'
@@ -197,19 +197,9 @@ export function renderWorktreeVirtualRow(
         )
       : 0) ?? 0
   const activeFamily = ctx.activeFamilyRoots.has(frame.root)
-  const rootFrame = ctx.projection.frames[frame.root]
-  const rootRow = ctx.renderRows[frame.root]
   const familyHidden = ctx.hiddenDragRanges.some(
     ({ start, end }) => frame.root >= start && frame.root <= end
   )
-  const familyVariant =
-    rootRow.type === 'item' &&
-    isActiveSidebarWorkspace(rootRow.worktree, {
-      worktreeId: ctx.item.activeWorktreeId,
-      hostId: ctx.item.activeWorkspaceExecutionHostId
-    })
-      ? ctx.item.getActiveSurfaceVariant(rootRow)
-      : 'primary'
 
   return (
     <div
@@ -248,29 +238,11 @@ export function renderWorktreeVirtualRow(
         data-worktree-lineage-row={frame.guides ? '' : undefined}
         style={{ paddingTop: frame.before, paddingBottom: frame.closing + frame.after }}
       >
-        {activeFamily && (
-          <div
-            aria-hidden="true"
-            data-worktree-family-segment={familyVariant}
-            data-worktree-family-closed={frame.end === frame.root ? '' : undefined}
-            className={cn(
-              'pointer-events-none absolute border-x',
-              familyHidden && 'opacity-0',
-              frame.root === vItem.index && 'rounded-t-lg border-t',
-              frame.end === vItem.index && vItem.index === rootFrame.end && 'rounded-b-lg border-b'
-            )}
-            style={{
-              left: rootFrame.left + 4,
-              right: rootFrame.right,
-              top: 0,
-              bottom: frame.after
-            }}
-          />
-        )}
         {frame.guides && (
           <LineageGuides
             guides={frame.guides}
             before={frame.before}
+            height={vItem.size}
             hidden={guidesInDraggedRange || familyHidden}
           />
         )}
@@ -291,5 +263,101 @@ export function renderWorktreeVirtualRow(
         </div>
       </div>
     </div>
+  )
+}
+
+/** Paint one continuous backdrop per visible active family so virtual row boundaries never show seams. */
+export function renderActiveFamilyBackdrops(
+  ctx: WorktreeVirtualRowContext,
+  virtualItems: readonly VirtualItem[]
+): React.JSX.Element[] | null {
+  if (ctx.activeFamilyRoots.size === 0 || virtualItems.length === 0) {
+    return null
+  }
+  const backdrops: React.JSX.Element[] = []
+  for (const root of ctx.activeFamilyRoots) {
+    const rootFrame = ctx.projection.frames[root]
+    const rootRow = ctx.renderRows[root]
+    if (!rootFrame || !rootRow) {
+      continue
+    }
+    let first: VirtualItem | null = null
+    let last: VirtualItem | null = null
+    for (const vItem of virtualItems) {
+      if (vItem.index < root) {
+        continue
+      }
+      if (vItem.index > rootFrame.end) {
+        break
+      }
+      if (!first) {
+        first = vItem
+      }
+      last = vItem
+    }
+    if (!first || !last) {
+      continue
+    }
+    const isClosed = rootFrame.end === root
+    const includesTop = first.index === root
+    const includesBottom = last.index === rootFrame.end
+    const lastFrame = ctx.projection.frames[last.index]
+    const top = first.start
+    const height = Math.max(0, last.end - top - (includesBottom ? lastFrame.after : 0))
+    const familyHidden = ctx.hiddenDragRanges.some(({ start, end }) => root >= start && root <= end)
+    const rootKey = rootRow.type === 'item' ? getWorktreeHostIdentity(rootRow.worktree) : null
+    const rootPreviewOffset =
+      (rootKey
+        ? ctx.worktreeDragState.previewOffsetsByWorktreeId.get(
+            ctx.dragUnitsByRow.get(root)?.identity ?? rootKey
+          )
+        : 0) ?? 0
+    const familyVariant =
+      rootRow.type === 'item' &&
+      isActiveSidebarWorkspace(rootRow.worktree, {
+        worktreeId: ctx.item.activeWorktreeId,
+        hostId: ctx.item.activeWorkspaceExecutionHostId
+      })
+        ? ctx.item.getActiveSurfaceVariant(rootRow)
+        : 'primary'
+    backdrops.push(
+      <div
+        key={`family-backdrop:${getRenderRowKey(rootRow)}`}
+        aria-hidden="true"
+        data-worktree-family-segment={familyVariant}
+        data-worktree-family-closed={isClosed ? '' : undefined}
+        className={cn(
+          'pointer-events-none absolute top-0 border-x',
+          familyHidden && 'opacity-0',
+          includesTop && 'rounded-t-lg border-t',
+          includesBottom && 'rounded-b-lg border-b',
+          ctx.worktreeDragState.draggingWorktreeId !== null &&
+            'transition-transform duration-150 ease-out will-change-transform'
+        )}
+        style={{
+          left: rootFrame.left + 4,
+          right: rootFrame.right,
+          height,
+          transform: getWorktreeVirtualRowTransform(top, rootPreviewOffset)
+        }}
+      />
+    )
+  }
+  return backdrops.length > 0 ? backdrops : null
+}
+
+export function renderWorktreeVirtualRows(
+  ctx: WorktreeVirtualRowContext,
+  virtualItems: readonly VirtualItem[],
+  t?: Translate
+): React.JSX.Element {
+  return (
+    <>
+      {renderActiveFamilyBackdrops(ctx, virtualItems)}
+      {virtualItems.map((vItem) => {
+        const row = ctx.renderRows[vItem.index]
+        return row ? renderWorktreeVirtualRow(ctx, row, vItem, t) : null
+      })}
+    </>
   )
 }

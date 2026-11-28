@@ -70,7 +70,6 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
         actions={botCreateMenuActions({
           t,
           botCount: newBot?.botCount ?? 0,
-          hostLabel: controller.state.hostName,
           onNewBot: () => newBot?.open(),
           onNewGroup: () => edit('new'),
           onReorder: canReorder ? () => setReordering(true) : null
@@ -132,7 +131,9 @@ export function useMobileBotGroupEditor(controller: HostScreenController): Mobil
   )
   return {
     supported,
-    chooseNew: (next, botCount) => (supported ? setNewBot({ open: next, botCount }) : next()),
+    // With New bot the only choice, + opens it straight away instead of a one-row menu.
+    chooseNew: (next, botCount) =>
+      supported && (botCount >= 2 || canReorder) ? setNewBot({ open: next, botCount }) : next(),
     showActions: setActions,
     open,
     sheets

@@ -94,7 +94,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const recall = useNativeChatComposerRecall({
       draft,
       source: recallSource,
-      inputRef: textareaRef
+      inputRef: textareaRef,
+      scopeKey: draftScopeKey
     })
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,
@@ -192,7 +193,6 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       agent,
       disabled,
       resolveAttachmentOwner: fileDrops.resolveAttachmentOwner,
-      attachResolvedPaths,
       attachCopiedFiles: fileDrops.attachExternalPaths,
       captureCopiedFiles: fileDrops.captureCopiedFiles,
       captureExternalPaths: fileDrops.captureExternalPaths,

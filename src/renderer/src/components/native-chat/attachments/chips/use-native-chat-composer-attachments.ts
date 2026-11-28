@@ -98,8 +98,8 @@ export function useNativeChatComposerAttachments({
 
   // Uploads outlive conversation switches; target only this scope’s editor or stored draft.
   const scopeEditor = useCallback(
-    () =>
-      mountedRef.current && destinationScope() === currentDraftScope(attachmentScopeKey)
+    (scopeKey = destinationScope()) =>
+      mountedRef.current && scopeKey === currentDraftScope(attachmentScopeKey)
         ? textareaRef.current
         : null,
     [attachmentScopeKey, destinationScope, mountedRef, textareaRef]
@@ -107,7 +107,7 @@ export function useNativeChatComposerAttachments({
   useLayoutEffect(() => {
     if (disabled && !attachmentScopeKey.startsWith('queued-edit:')) {
       settlePendingImageReferences(destinationScope(), scopeEditor(), () =>
-        clearNativeChatPendingAttachments(attachmentScopeKey)
+        clearNativeChatPendingAttachments(attachmentScopeKey, true)
       )
     }
   }, [attachmentScopeKey, destinationScope, disabled, scopeEditor])
@@ -207,25 +207,23 @@ export function useNativeChatComposerAttachments({
         (any, { id }) => serverOwnedPendingIds.delete(id) || any,
         serverOwned
       )
-      return settlePendingImageReferences(
-        nativeChatPendingAttachmentScope(destinationScope(), references[0]?.id ?? ''),
-        scopeEditor(),
-        () =>
-          settleNativeChatPendingAttachmentReferences(
-            attachmentScopeKey,
-            references,
-            options?.insertReferences !== undefined
-              ? (options.insertReferences ?? undefined)
-              : mountedRef.current && !disabledRef.current && !isComposing()
-                ? (paths) =>
-                    // The paste re-checked the owner just before settling a server-owned image.
-                    attachResolvedPaths(
-                      paths,
-                      null,
-                      owned ? { ...options, targetOwnerIsCurrent: () => true } : options
-                    )
-                : undefined
-          )
+      const scope = nativeChatPendingAttachmentScope(destinationScope(), references[0]?.id ?? '')
+      return settlePendingImageReferences(scope, scopeEditor(scope), () =>
+        settleNativeChatPendingAttachmentReferences(
+          attachmentScopeKey,
+          references,
+          options?.insertReferences !== undefined
+            ? (options.insertReferences ?? undefined)
+            : mountedRef.current && !disabledRef.current && !isComposing()
+              ? (paths) =>
+                  // The paste re-checked the owner just before settling a server-owned image.
+                  attachResolvedPaths(
+                    paths,
+                    null,
+                    owned ? { ...options, targetOwnerIsCurrent: () => true } : options
+                  )
+              : undefined
+        )
       )
     },
     [
@@ -248,11 +246,10 @@ export function useNativeChatComposerAttachments({
       options?: NativeChatPendingAttachmentOptions
     ) => {
       const serverOwned = serverOwnedPendingIds.delete(id)
+      const scope = nativeChatPendingAttachmentScope(destinationScope(), id)
       return mountedRef.acceptsImages
-        ? settlePendingImageReferences(
-            nativeChatPendingAttachmentScope(destinationScope(), id),
-            scopeEditor(),
-            () => settleNativeChatPendingAttachment(destinationScope(), id, path, connectionId)
+        ? settlePendingImageReferences(scope, scopeEditor(scope), () =>
+            settleNativeChatPendingAttachment(scope, id, path, connectionId)
           )
         : attachPendingReferences([{ id, path }], options, serverOwned)
     },
@@ -273,7 +270,8 @@ export function useNativeChatComposerAttachments({
     (id: string): boolean => {
       releasePreview(id)
       serverOwnedPendingIds.delete(id)
-      return takePendingImageWithReferences(destinationScope(), scopeEditor(), id) !== undefined
+      const scope = nativeChatPendingAttachmentScope(destinationScope(), id)
+      return takePendingImageWithReferences(scope, scopeEditor(scope), id) !== undefined
     },
     [destinationScope, releasePreview, scopeEditor, serverOwnedPendingIds]
   )
@@ -310,7 +308,7 @@ export function useNativeChatComposerAttachments({
     flushPendingAttachments,
     removeImageAttachment: (id) => {
       releasePreview(id)
-      removeImageWithReferences(attachmentScopeKey, scopeEditor(), id)
+      removeImageWithReferences(destinationScope(), scopeEditor(), id)
     },
     beginPendingImageAttachment,
     resolvePendingImageAttachment,

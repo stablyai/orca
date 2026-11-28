@@ -22,7 +22,6 @@ import {
 import { agentBrowserCookieSetArguments } from './protocol/agent-browser-cookie-set-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
-import { deleteCookieByName } from '../cookies/browser-cookie-delete-by-name'
 import {
   toBrowserConsoleResult,
   toBrowserNetworkLogResult,
@@ -66,6 +65,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.requireTargetWebContents(target)
       // agent-browser's `cookies clear` ignores filters and wipes the profile's whole cookie jar.
+      const { deleteCookieByName } = await import('../cookies/browser-cookie-delete-by-name')
       return deleteCookieByName((method, params) => sendGuestCdpCommand(wc, method, params), name, {
         domain,
         url,
