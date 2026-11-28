@@ -206,7 +206,7 @@ export function useMobileTasksGitlabGithubStatusActions<
     },
     [claimPublication, client, detailPayload, captureTaskListRefresh, tryBeginMutation]
   )
-  return Object.assign(model, { toggleGitLabStatus, updateGitHubIssueMetadata })
+  return { ...model, toggleGitLabStatus, updateGitHubIssueMetadata }
 }
 
 export type GitlabGithubStatusActionsModel = ProjectFileMergeActionsModel &

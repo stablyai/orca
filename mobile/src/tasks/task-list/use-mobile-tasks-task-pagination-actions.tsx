@@ -269,14 +269,15 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       tasksSupported
     ]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     connectLinearAccount,
     retryGitHubIssueSourceFetch,
     githubTotalPages,
     githubCanLoadUncountedNextPage,
     githubCanShowPagination,
     handleGitHubPageChange
-  })
+  }
 }
 
 export type TaskPaginationActionsModel = ReturnType<typeof useMobileTasksTaskPaginationActions>
