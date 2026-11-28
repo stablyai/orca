@@ -189,27 +189,30 @@ export class HistoryManager {
     seq: number,
     records: PendingOutputRecord[]
   ): Promise<'ok' | 'needs-checkpoint'> {
-    return this.mutations.track(sessionId, this.appendIncrementsUntracked(sessionId, seq, records))
+    const writer =
+      !this.disabledSessions.has(sessionId) && records.length > 0
+        ? this.writers.get(sessionId)
+        : null
+    if (!writer) {
+      return Promise.resolve('ok')
+    }
+    return this.mutations.track(
+      sessionId,
+      writer.appendIncrements(seq, records).catch((err) => {
+        this.handleWriteError(sessionId, err)
+        return 'ok'
+      })
+    )
   }
 
-  private async appendIncrementsUntracked(
-    sessionId: string,
-    seq: number,
-    records: PendingOutputRecord[]
-  ): Promise<'ok' | 'needs-checkpoint'> {
-    if (this.disabledSessions.has(sessionId) || records.length === 0) {
-      return 'ok'
-    }
-    const writer = this.writers.get(sessionId)
-    if (!writer) {
-      return 'ok'
-    }
-    try {
-      return await writer.appendIncrements(seq, records)
-    } catch (err) {
-      this.handleWriteError(sessionId, err)
-      return 'ok'
-    }
+  recordProbedCwd(sessionId: string, cwd: string): Promise<void> {
+    const writer = !this.disabledSessions.has(sessionId) && cwd ? this.writers.get(sessionId) : null
+    return writer
+      ? this.mutations.track(
+          sessionId,
+          writer.recordProbedCwd(cwd).catch((err) => this.handleWriteError(sessionId, err))
+        )
+      : Promise.resolve()
   }
 
   checkpoint(
