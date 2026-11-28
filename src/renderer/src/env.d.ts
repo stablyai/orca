@@ -8,6 +8,18 @@ import type { TerminalWorktreeParkingDebugVerdict } from './components/terminal-
 import type { TerminalPtyPreSpawnE2EBarrier } from './components/terminal-pane/pty-transport/ipc/terminal-pty-pre-spawn-e2e-barrier'
 import type { LocalLayoutStreamE2EEnd } from './runtime/workspace-layout/testing/local-layout-stream-e2e-end'
 
+declare module 'monaco-editor/esm/vs/language/typescript/languageFeatures.js' {
+  import type { Uri, typescript } from 'monaco-editor'
+  type WorkerAccessor = (...uris: Uri[]) => Promise<typescript.TypeScriptWorker>
+  export class LibFiles {
+    constructor(worker: WorkerAccessor)
+  }
+  export class DefinitionAdapter implements languages.DefinitionProvider {
+    constructor(libFiles: LibFiles, worker: WorkerAccessor)
+    provideDefinition: languages.DefinitionProvider['provideDefinition']
+  }
+}
+
 declare module 'monaco-editor/esm/vs/basic-languages/python/python.js' {
   export const conf: languages.LanguageConfiguration
   export const language: languages.IMonarchLanguage
