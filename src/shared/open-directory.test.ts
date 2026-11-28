@@ -88,10 +88,14 @@ describe('openDirectory on Windows', () => {
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..')
 const SCAN_ROOTS = ['src/main', 'src/shared'].map((dir) => path.join(REPO_ROOT, dir))
-const DIRECT_OPENDIR = /(?<![\w$])opendir(Sync)?\s*\(|\{[^}]*\bopendir(Sync)?\b[^}]*\}\s*from/
+// fs.cp walks folders with opendir; cpSync does only when given a filter (its default path is native).
+const DIRECT_OPENDIR =
+  /(?<![\w$])(opendir(Sync)?|cp)\s*\(|\{[^}]*\b(opendir(Sync)?|cp)\b[^}]*\}\s*from\s*'(node:)?fs|\.cp\(/
 // The helper itself, plus script text that runs in child processes.
 const ALLOWED = new Set([
   'src/shared/open-directory.ts',
+  'src/shared/copy-path.ts',
+  'src/main/managed-server/host-state/orcad-windows-host-state-ops.ts',
   'src/main/daemon/permissions/daemon-folder-access-probe.ts',
   'src/main/codex/history/shared-store/codex-thread-lock-probe-scripts.ts'
 ])
@@ -107,7 +111,7 @@ function sourceFiles(dir: string): string[] {
 }
 
 describe('direct opendir use', () => {
-  it('goes through openDirectory so Windows never opens a folder with opendir', () => {
+  it('goes through openDirectory or copyPath so Windows never opens a folder with opendir', () => {
     const offenders = SCAN_ROOTS.flatMap(sourceFiles)
       .map((file) => path.relative(REPO_ROOT, file).split(path.sep).join('/'))
       .filter((file) => !ALLOWED.has(file))
