@@ -55,8 +55,13 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
   ): Promise<boolean> => {
     // Cleanup never copies a chat an older Orca saved: it waits until idle conversion has copied it,
     // so nothing here waits for idle, holds a lane meanwhile, or writes during a low-disk backoff.
-    if ((await this.journalDatabase.conversions.copiedEpoch(forget.sessionId)) === null) {
-      return false
+    // A chat never opened in this store has nothing to copy and is deleted as before.
+    const { conversions, readers } = this.journalDatabase
+    if ((await conversions.copiedEpoch(forget.sessionId)) === null) {
+      const listed = await readers.database({ kind: 'chat-exists', sessionId: forget.sessionId })
+      if (listed.kind !== 'chat-exists' || listed.exists) {
+        return false
+      }
     }
     return this.journalDatabase.forgetChat(
       forget.sessionId,

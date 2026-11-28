@@ -13,8 +13,8 @@ import {
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
 
-// A positive check covers the next few chats of the same folder: each check re-reads the whole
-// catalog and lists the parent folder, which a large purge would otherwise repeat per chat.
+// A positive check covers the next 32 checks (about 16 chats, each asks twice) of the same folder:
+// each re-reads the whole catalog and lists the parent folder, which a large purge repeats per chat.
 const GONE_CHECK_BATCH = 32
 const GONE_CHECK_BATCH_MS = 250
 
