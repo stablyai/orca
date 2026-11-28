@@ -7,6 +7,7 @@ import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session
 import { withBrowserPaneUiRuntimeRpcSource } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-feature-interaction-source'
 import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call'
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
+import { withRuntimeRpcDeadline } from './runtime-rpc-deadline'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-background-read'
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
@@ -86,7 +87,11 @@ export async function callRuntimeRpcResponse<TResult>(
   options.beforeSend?.()
   const response =
     target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
+      ? await withRuntimeRpcDeadline(window.api.runtime.call({ method, params: nextParams }), {
+          method,
+          timeoutMs: options.timeoutMs,
+          signal: options.signal
+        })
       : await callRuntimeEnvironmentWithRevision({
           environmentId: target.environmentId,
           method,
