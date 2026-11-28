@@ -65,7 +65,10 @@ export class AgentSessionProviderReceipts {
       return undefined
     }
     const attempts = this.attempts.get(sessionId) ?? new Map<string, Attempt>()
-    if (attempts.size >= AGENT_SESSION_DISPATCH_LIMITS[dispatch.provider] && !attempts.has(clientMessageId)) {
+    if (
+      attempts.size >= AGENT_SESSION_DISPATCH_LIMITS[dispatch.provider] &&
+      !attempts.has(clientMessageId)
+    ) {
       return undefined
     }
     const readers = new Set(
@@ -174,9 +177,7 @@ export class AgentSessionProviderReceipts {
       event.type === 'batch' && !event.providerReceived
         ? this.take(subscriber, event.batch.cursor, event.fence)
         : undefined
-    post(
-      providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event
-    )
+    post(providerReceived && event.type === 'batch' ? { ...event, providerReceived } : event)
     if (event.type === 'batch') {
       this.emitted.set(subscriber, event.batch.cursor)
     } else if (event.type !== 'end') {

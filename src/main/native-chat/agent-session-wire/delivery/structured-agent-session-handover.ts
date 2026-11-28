@@ -95,7 +95,12 @@ export async function beginSubmissionHandover(
   const queued = submission.queuedMessageId !== undefined
   const receipt = providerHandoverReceipt(ctx, clientMessageId, () => ownsChild(), attempt?.signal)
   const prepare = async (fence: number, scope: typeof turnScope) => {
-    const prepared = await ctx.journal.prepareHandover({ clientMessageId, fence, turnScope: scope, body })
+    const prepared = await ctx.journal.prepareHandover({
+      clientMessageId,
+      fence,
+      turnScope: scope,
+      body
+    })
     carried = prepared.carried
     receipt?.committed(prepared)
     await rideAlong.claim(fence, scope)

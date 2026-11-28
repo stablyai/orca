@@ -1,4 +1,7 @@
-import type { StructuredAgentSessionAction, StructuredAgentSessionState } from './structured-agent-session-reducer'
+import type {
+  StructuredAgentSessionAction,
+  StructuredAgentSessionState
+} from './structured-agent-session-reducer'
 import {
   MAX_RETAINED_ITEMS,
   MAX_RETAINED_OWN_ITEMS,

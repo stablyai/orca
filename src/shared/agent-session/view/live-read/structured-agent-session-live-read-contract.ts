@@ -2,7 +2,10 @@ import type { AgentJournalCursor } from '../../journal/agent-session-journal-ide
 import type { AgentSessionSubscribeEvent } from '../../agent-session-wire'
 import type { AgentSessionTextAppendCapabilities } from './agent-session-text-append'
 import type { AgentSessionRefusalReference } from '../../failures/agent-session-wire-refusals'
-import type { AgentSessionCurrentRequestsPiece, AgentSessionCurrentRequestsRead } from '../../requests/agent-session-current-requests-wire'
+import type {
+  AgentSessionCurrentRequestsPiece,
+  AgentSessionCurrentRequestsRead
+} from '../../requests/agent-session-current-requests-wire'
 import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
 import type { StructuredAgentSessionCoalescing } from './structured-agent-session-coalescer'
 import type {

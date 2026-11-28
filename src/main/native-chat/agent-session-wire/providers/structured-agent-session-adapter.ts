@@ -201,26 +201,28 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
   releaseAcquisition?(input: { sessionId: string }): Promise<boolean>
   hasOwnedAcquisition?(sessionId: string): boolean
   stoppedAcquisition?(sessionId: string): AcquisitionReceipt | undefined
-  dispatch(input: {
-    sessionId: string
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    /** Apply immutable submission choices only to this dispatch. */
-    executionOptions?: AgentSessionExecutionOptions
-    /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
-    signal?: AbortSignal
-    fence: number
-    /** Preserve submission time as the opened turn’s requestedAt. */
-    requestedAt?: number
-    beforeDispatch?: () => Promise<void>
-    /** Whether the host still owns this exact child after asynchronous preparation. */
-    isCurrent?: () => boolean
-    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
-    /** Mark preparation before choices mutate the provider. */
-    onInputPreparation?: () => void
-    /** Checkpoint between choice application and execution-evidence capture. */
-    onExecutionSnapshot?: () => void
-  } & ProviderReceiptInput): Promise<AgentSessionDispatchOutcome>
+  dispatch(
+    input: {
+      sessionId: string
+      clientMessageId: string
+      body: AgentJournalMessageItem
+      /** Apply immutable submission choices only to this dispatch. */
+      executionOptions?: AgentSessionExecutionOptions
+      /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
+      signal?: AbortSignal
+      fence: number
+      /** Preserve submission time as the opened turn’s requestedAt. */
+      requestedAt?: number
+      beforeDispatch?: () => Promise<void>
+      /** Whether the host still owns this exact child after asynchronous preparation. */
+      isCurrent?: () => boolean
+      admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+      /** Mark preparation before choices mutate the provider. */
+      onInputPreparation?: () => void
+      /** Checkpoint between choice application and execution-evidence capture. */
+      onExecutionSnapshot?: () => void
+    } & ProviderReceiptInput
+  ): Promise<AgentSessionDispatchOutcome>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   prepareRewind?: PrepareStructuredRewind
