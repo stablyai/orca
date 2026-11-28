@@ -1,0 +1,38 @@
+name: Main push lint
+# PR checks lint against an older main, so lint what each push changed and name the PRs that changed a failing file.
+# No concurrency group: one would let a newer push replace a pending run, and that run's files would never be linted.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Read the merged PRs behind a lint failure so the summary can name them.
+      pull-requests: read
+    steps:
+      # Keep the fetch credentials: the plan fetches the push's old tip into this shallow checkout.
+      - uses: actions/checkout@v6
+      # Built-ins and Git only, on the runner's own Node: a push with no lintable file and no lint
+      # policy change stops here, before dependency setup. An unusable range fails here.
+      - name: Plan what this push lints
+        id: plan
+        timeout-minutes: 2
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          MAIN_PUSH_LINT_PLAN: ${{ runner.temp }}/main-push-lint-plan.json
+        run: node config/scripts/ci/main-push-lint/plan-main-push-lint.mjs
+      - if: steps.plan.outputs.lint == 'true'
+        uses: ./.github/actions/install-node-dependencies
+      - name: Lint files this push changed
+        if: steps.plan.outputs.lint == 'true'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_PUSH_LINT_PLAN: ${{ runner.temp }}/main-push-lint-plan.json
+        run: node config/scripts/ci/main-push-lint/ci-main-push-changed-lint.mjs
