@@ -296,6 +296,20 @@ export async function executeManifest(
     dirs.filter((dir) => code.isCode(dir.destRel)),
     [...files, ...dirs]
   )
+  // An optional code root (chunks) that an update creates mid-copy would leave the copy without it.
+  const absentCode = ops.filter((op, index) => !exists[index] && code.isCode(op.destRel))
+  if (
+    (
+      await mapWithConcurrencyUntilFailure(absentCode, DAEMON_HOST_FS_CONCURRENCY, (op) =>
+        access(op.sourcePath).then(
+          () => true,
+          () => false
+        )
+      )
+    ).some(Boolean)
+  ) {
+    throw new Error('daemon-host relocation: code changed while copying')
+  }
   // A source replaced after it was read (an update mid-copy) would mix revisions in one build.
   await mapWithConcurrencyUntilFailure(
     [...signatures],

@@ -246,6 +246,34 @@ describe('executeManifest added files', () => {
   })
 })
 
+describe('executeManifest optional code roots', () => {
+  it('rejects a fresh copy when an absent optional code folder appears mid-copy', async () => {
+    const entry = join(tempDir, 'entry.js')
+    writeFileSync(entry, 'entry')
+    const chunks = join(tempDir, 'chunks')
+    let calls = 0
+    const isCode = (): boolean => {
+      calls += 1
+      // Call 2 copies entry.js, after chunks/ was found absent.
+      if (calls === 2) {
+        mkdirSync(chunks)
+        writeFileSync(join(chunks, 'b.js'), 'chunk')
+      }
+      return true
+    }
+    await expect(
+      executeManifest(
+        [
+          { sourcePath: entry, destRel: 'entry.js', kind: 'file' },
+          { sourcePath: chunks, destRel: 'chunks', kind: 'dir', optional: true }
+        ],
+        join(tempDir, 'optional'),
+        { isCode }
+      )
+    ).rejects.toThrow('code changed while copying')
+  })
+})
+
 describe('executeManifest missing sources', () => {
   // Electron's Windows Node can turn a failed opendir into a null handle (#50997); missing folders must reject.
   it('rejects a missing required folder and skips a missing optional one', async () => {
