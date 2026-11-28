@@ -76,7 +76,7 @@ export function getWorkspaceSeedName(args: {
   if (linkedIssueNumber !== null) {
     return `issue-${linkedIssueNumber}`
   }
-  // Bound free-form prompts to usable branch seeds; emoji/CJK/punctuation may sanitize away entirely, requiring stable fallback.
+  // Bound free-form prompts to usable branch seeds; emoji/punctuation may sanitize away entirely, requiring stable fallback.
   if (prompt.trim()) {
     const slug = slugifyForWorkspaceName(prompt)
     if (slug) {

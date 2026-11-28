@@ -67,7 +67,7 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
       const submitLinkedPR =
         smartGitHubResolution.kind === 'none' ? effectiveLinkedPR : smartGitHubResolution.linkedPR
 
-      // Why: must match the seed shown in the name field, or an auto-managed Jira name reverts to lowercase on submit.
+      // Why: an auto-managed Jira name submits this seed, so it must honor the key-casing setting.
       const submitTitleName = submitLinkedWorkItem
         ? getLinkedWorkItemWorkspaceName(submitLinkedWorkItem, getJiraIssueKeyCasingSeedOptions())
         : null

@@ -26,16 +26,18 @@ export function slugifyForWorkspaceName(input: string): string {
     .trim()
     .toLowerCase()
     .replace(/[\\/]+/g, '-')
-  return (
-    foldWorkspaceNameWhitespaceToHyphen(normalized)
-      .replace(/[^a-z0-9._-]+/g, '-')
-      .replace(/-+/g, '-')
-      // Match main’s sanitizer: git check-ref-format rejects repeated dots.
-      .replace(/\.{2,}/g, '.')
-      .replace(/^[.-]+|[.-]+$/g, '')
-      .slice(0, 48)
-      .replace(/[-._]+$/g, '')
-  )
+  const slug = foldWorkspaceNameWhitespaceToHyphen(normalized)
+    // Keep non-Latin letters like main’s sanitizer so localized titles survive.
+    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
+    .replace(/-+/g, '-')
+    // Match main’s sanitizer: git check-ref-format rejects repeated dots.
+    .replace(/\.{2,}/g, '.')
+    .replace(/^[.-]+|[.-]+$/g, '')
+  // Cut by code point so astral letters are never split into lone surrogates.
+  return Array.from(slug)
+    .slice(0, 48)
+    .join('')
+    .replace(/[-._]+$/g, '')
 }
 
 export function getLinkedWorkItemSuggestedName(item: { title: string }): string {

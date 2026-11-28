@@ -102,17 +102,18 @@ export function resolveSmartGitHubCreateNames({
   return { workspaceName: smartWorkspaceName, displayName: smartDisplayName }
 }
 
-function getLinkedWorkItemSeedName(
+function getLinkedWorkItemGeneratedNames(
   item: LinkedWorkItemSummary | null | undefined,
   jiraIssueKeyCasing: JiraIssueKeyCasing | undefined
-): string {
+): string[] {
   if (!item) {
-    return ''
+    return []
   }
-  return (
-    getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing })?.seedName ??
-    getLinkedWorkItemSuggestedName(item)
-  )
+  const resolved = getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing })
+  // Jira prefills show the display name, other sources show the seed.
+  return resolved
+    ? [resolved.seedName, resolved.displayName]
+    : [getLinkedWorkItemSuggestedName(item)]
 }
 
 export function getInitialAutoManagedWorkspaceName({
@@ -128,13 +129,13 @@ export function getInitialAutoManagedWorkspaceName({
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   jiraIssueKeyCasing?: JiraIssueKeyCasing
 }): string {
-  // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed Orca generated.
+  // Why: a prefilled name counts as user input unless it exactly matches a linked-item name Orca generated.
   const candidateName = draftName ?? initialName
-  const seedName = getLinkedWorkItemSeedName(
+  const generatedNames = getLinkedWorkItemGeneratedNames(
     draftLinkedWorkItem ?? initialLinkedWorkItem,
     jiraIssueKeyCasing
   )
-  return candidateName && seedName && candidateName === seedName ? candidateName : ''
+  return candidateName && generatedNames.includes(candidateName) ? candidateName : ''
 }
 
 export type InitialWorkspaceRunSeedInput = {
