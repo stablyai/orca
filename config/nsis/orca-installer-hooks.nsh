@@ -29,14 +29,13 @@
 
 ; keepShortcuts leaves the first install's .lnk untouched on update. If the shell resolved it while the
 ; old uninstaller had moved Orca.exe to $PLUGINSDIR\old-install, link tracking retargeted it there.
-; Rewrite only shortcuts that still exist (a deleted one stays deleted), with the same args and AUMI
-; as electron-builder's addStartMenuLink/addDesktopLink, so pins and taskbar grouping are kept.
+; Rewrite only a shortcut whose stored target is that moved copy, with the same args and AUMI as
+; electron-builder's addStartMenuLink/addDesktopLink, so pins, taskbar grouping and any user
+; customization (args, icon, hotkey, working dir) on a healthy shortcut are kept.
 !macro ORCA_REWRITE_SHORTCUT LINK
-  ${if} ${FileExists} "${LINK}"
-    CreateShortCut "${LINK}" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
-    ClearErrors
-    WinShell::SetLnkAUMI "${LINK}" "${APP_ID}"
-  ${endIf}
+  CreateShortCut "${LINK}" "$appExe" "" "$appExe" 0 "" "" "${APP_DESCRIPTION}"
+  ClearErrors
+  WinShell::SetLnkAUMI "${LINK}" "${APP_ID}"
 !macroend
 
 !define ORCA_CLSID_SHELL_LINK "{00021401-0000-0000-C000-000000000046}"
@@ -64,24 +63,23 @@
   ${endIf}
 !macroend
 
-; The taskbar pin is shared by every Orca install for this user (per-user and per-machine use the
-; same name). Retarget it only if it starts this install or a moved old-install copy of it.
-!macro ORCA_REWRITE_TASKBAR_PIN
+; A shortcut that starts another install (the taskbar pin is shared by per-user and per-machine
+; installs), this install, or an unreadable target is left alone.
+!macro ORCA_REPAIR_MOVED_SHORTCUT LINK
   Push $R0
   Push $R1
   Push $R2
   Push $R3
   Push $R4
   Push $R5
-  StrCpy $R5 "$QUICKLAUNCH\User Pinned\TaskBar\${SHORTCUT_NAME}.lnk"
+  StrCpy $R5 "${LINK}"
   ${if} ${FileExists} $R5
     !insertmacro ORCA_READ_SHORTCUT_TARGET $R5 $R4
     StrCpy $R1 "\old-install\${APP_EXECUTABLE_FILENAME}"
     StrLen $R2 $R1
     IntOp $R2 0 - $R2
     StrCpy $R0 $R4 "" $R2
-    ${if} $R4 == $appExe
-    ${orIf} $R0 == $R1
+    ${if} $R0 == $R1
       !insertmacro ORCA_REWRITE_SHORTCUT $R5
     ${endIf}
   ${endIf}
@@ -101,9 +99,9 @@
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".mdx" "${MARKDOWN_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".csv" "${TABULAR_PROGID}"
   !insertmacro ORCA_REGISTER_DOCUMENT_OPEN_WITH ".tsv" "${TABULAR_PROGID}"
-  !insertmacro ORCA_REWRITE_SHORTCUT "$newStartMenuLink"
-  !insertmacro ORCA_REWRITE_SHORTCUT "$newDesktopLink"
-  !insertmacro ORCA_REWRITE_TASKBAR_PIN
+  !insertmacro ORCA_REPAIR_MOVED_SHORTCUT "$newStartMenuLink"
+  !insertmacro ORCA_REPAIR_MOVED_SHORTCUT "$newDesktopLink"
+  !insertmacro ORCA_REPAIR_MOVED_SHORTCUT "$QUICKLAUNCH\User Pinned\TaskBar\${SHORTCUT_NAME}.lnk"
   ; Why: Explorer caches the association list until told otherwise.
   System::Call "shell32::SHChangeNotify(i,i,i,i) (0x08000000, 0x1000, 0, 0)"
 !macroend

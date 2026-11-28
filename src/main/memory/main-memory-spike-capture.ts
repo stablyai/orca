@@ -2,6 +2,7 @@ import { getHeapSpaceStatistics, getHeapStatistics } from 'node:v8'
 import type { CrashReportDetailValue } from '../../shared/crash-reporting/crash-reporting'
 import { hasActiveTraceSink, startSpan } from '../observability/tracer'
 import { readWorkerThreadMemoryData } from '../worker-threads/worker-thread-diagnostics'
+import { MAIN_ALLOCATION_SAMPLING_ENV, sampleMainAllocations } from './main-allocation-sampler'
 
 /**
  * Main's footprint jumping by hundreds of MB names no owner after the fact, so a rise this large
@@ -143,6 +144,17 @@ async function captureMainMemorySpike(trigger: {
   record(allocator.status === 'fulfilled' ? allocator.value : { chromiumError: true })
   record(workers.status === 'fulfilled' ? workers.value : { workersError: true })
   span.end()
+  if (process.env[MAIN_ALLOCATION_SAMPLING_ENV] !== '1') {
+    return
+  }
+  // A separate record, so a crash during the sampling window still leaves the spike breakdown.
+  const allocations = startSpan('memory.main-spike.allocations', {
+    attributes: { spikeSpanId: span.spanId }
+  })
+  for (const [key, value] of Object.entries(await sampleMainAllocations())) {
+    allocations.setAttribute(key, value)
+  }
+  allocations.end()
 }
 
 function toMB(bytes: number): number {

@@ -1,5 +1,5 @@
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
-import { structuredAgentSessionAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
@@ -110,14 +110,10 @@ export function expandWorkspaceUnreadTargets(
       state.unifiedTabsByWorktree[target.worktreeId]
     )
     const structuredKeysByTabId = new Map([...representedTabs].map(([key, tab]) => [tab.id, key]))
-    // Completion keys group by the tab id a pane key names: a minted chat's session address.
+    // Completion keys group by the tab part of a pane key: a chat's conversation address.
     const completionsOf = (tabId: string): readonly string[] => {
       const tab = representedTabs.get(structuredKeysByTabId.get(tabId) ?? '')
-      return (
-        completionKeysByTab.get(
-          tab ? structuredAgentSessionAddressTabId(tab.id, tab.entityId) : tabId
-        ) ?? []
-      )
+      return completionKeysByTab.get(tab ? chatPaneAddressTabId(tab.entityId) : tabId) ?? []
     }
     const ownedPanes = workspaceMarkerPaneKeysForHost(
       state,

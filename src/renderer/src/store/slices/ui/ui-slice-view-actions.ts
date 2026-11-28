@@ -145,6 +145,16 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       set((state) => ({
         activeView: state.previousViewBeforeMobile
       })),
+    openPluginsPage: () =>
+      set((state) => ({
+        activeView: 'plugins',
+        previousViewBeforePlugins:
+          state.activeView === 'plugins' ? state.previousViewBeforePlugins : state.activeView
+      })),
+    closePluginsPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforePlugins
+      })),
     setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
     clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null })
   }

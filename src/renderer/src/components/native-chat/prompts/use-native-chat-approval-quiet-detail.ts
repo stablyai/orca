@@ -1,12 +1,19 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
+import type { ChatApproval } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { readShellApprovalDetail } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-shell-detail'
 
 /** A quiet approval's clamped detail: a shell call's command, its other arguments, and whether Details shows. */
 export function useNativeChatApprovalQuietDetail(
-  detail: string | null,
-  toolName: string | undefined,
-  description: string | undefined
+  approval: ChatApproval,
+  /** A quiet card clamps its detail; a full card shows none here. */
+  quiet: boolean,
+  /** Names the prompt within its chat tab, so a released chat returns with its detail as the reader left it. */
+  memoryKey?: string
 ): {
   text: string | null
   otherArguments: string | null
@@ -16,8 +23,14 @@ export function useNativeChatApprovalQuietDetail(
   setOpen: (open: boolean) => void
   showsToggle: boolean
 } {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useNativeChatViewState(
+    memoryKey === undefined ? undefined : `approval-detail:${memoryKey}`,
+    false,
+    KEPT_PROMPT_VIEWS
+  )
   const [clamped, setClamped] = useState(false)
+  const detail = quiet ? (approval.detail ?? null) : null
+  const { toolName, description } = approval
   const textRef = useRef<HTMLDivElement>(null)
   const otherArgumentsRef = useRef<HTMLDivElement>(null)
   const shellDetail = useMemo(

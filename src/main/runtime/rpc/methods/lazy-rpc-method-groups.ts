@@ -1,4 +1,9 @@
+import { ORCAD_TERMINAL_CENSUS_METHOD } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import { AUTO_NAME_RPC_METHODS } from '../../../../shared/worktree/branch-auto-rename-attempt'
+import { AGENT_SESSION_AGENTS_METHOD } from '../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
+import { AGENT_SESSION_AVAILABILITY_METHOD } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { prefixRpcMethodGroup, type LazyRpcMethodGroup } from '../lazy-rpc-method-group'
+import { LAZY_BROWSER_RPC_METHOD_GROUPS } from './lazy-browser-rpc-method-groups'
 import { LAZY_INTEGRATION_RPC_METHOD_GROUPS } from './lazy-integration-rpc-method-groups'
 
 export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
@@ -101,54 +106,7 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
       ]
     }
   ),
-  prefixRpcMethodGroup(
-    ['browser.', 'desktopBrowserBridge.'],
-    async () => {
-      const [
-        { BROWSER_CORE_METHODS },
-        { BROWSER_IDENTITY_METHODS },
-        { BROWSER_SCREENCAST_METHODS },
-        { BROWSER_GRAB_METHODS },
-        { BROWSER_EXTRA_METHODS },
-        { BROWSER_CLIENT_HOST_METHODS },
-        { DESKTOP_BROWSER_BRIDGE_RPC_METHODS },
-        { BROWSER_CLIENT_FILE_CHANNEL_METHODS },
-        { BROWSER_NETWORK_TUNNEL_METHODS }
-      ] = await Promise.all([
-        import('./browser/browser-core'),
-        import('./browser/browser-identity-rpc'),
-        import('./browser/browser-screencast'),
-        import('./browser/browser-grab'),
-        import('./browser/browser-extras'),
-        import('./browser/browser-client-host'),
-        import('./browser/desktop-browser-bridge'),
-        import('./browser/browser-client-file-channel'),
-        import('./browser/browser-network-tunnel')
-      ])
-      return [
-        ...BROWSER_CORE_METHODS,
-        ...BROWSER_IDENTITY_METHODS,
-        ...BROWSER_SCREENCAST_METHODS,
-        ...BROWSER_GRAB_METHODS,
-        ...BROWSER_EXTRA_METHODS,
-        ...BROWSER_CLIENT_HOST_METHODS,
-        ...DESKTOP_BROWSER_BRIDGE_RPC_METHODS,
-        ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
-        ...BROWSER_NETWORK_TUNNEL_METHODS
-      ]
-    },
-    {
-      exactNames: ['network.browserTunnel'],
-      streamingNames: [
-        'browser.screencast',
-        'browser.downloadCopyStream',
-        'browser.grab.watch',
-        'browser.clientHost.attach',
-        'desktopBrowserBridge.attach',
-        'network.browserTunnel'
-      ]
-    }
-  ),
+  ...LAZY_BROWSER_RPC_METHOD_GROUPS,
   prefixRpcMethodGroup(
     ['accounts.'],
     async () => {
@@ -220,8 +178,93 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     { streamingNames: ['notifications.subscribe'] }
   ),
   prefixRpcMethodGroup(
+    [],
+    async () => (await import('./agent-launch/agent-launch')).AGENT_LAUNCH_METHODS,
+    { exactNames: ['agent.launch', 'agent.launchReplay'] }
+  ),
+  prefixRpcMethodGroup(
     ['agent.'],
     async () =>
       (await import('./agent-conversations/agent-conversation-methods')).AGENT_CONVERSATION_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['nativeChat.'],
+    async () => (await import('./native-chat/native-chat')).NATIVE_CHAT_METHODS,
+    { streamingNames: ['nativeChat.subscribe'] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./structured-sessions/catalog/structured-agent-session-agents'))
+        .STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
+    {
+      exactNames: [AGENT_SESSION_AGENTS_METHOD, AGENT_SESSION_AVAILABILITY_METHOD],
+      streamingNames: [AGENT_SESSION_AVAILABILITY_METHOD]
+    }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./orcad/orcad-terminal-census')).ORCAD_TERMINAL_CENSUS_METHODS,
+    { exactNames: [ORCAD_TERMINAL_CENSUS_METHOD] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./terminal/session-terminal-scrollback')).SESSION_TERMINAL_SCROLLBACK_METHODS,
+    { exactNames: ['session.readTerminalScrollback'] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./workspaces/worktree-auto-name-methods')).WORKTREE_AUTO_NAME_METHODS,
+    { exactNames: Object.values(AUTO_NAME_RPC_METHODS) }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./terminal/terminal-orphan')).TERMINAL_ORPHAN_METHODS,
+    { exactNames: ['terminal.adoptOrphans'] }
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () => (await import('./terminal/agent-session')).AGENT_SESSION_METHODS,
+    { exactNames: ['terminal.ensureAgentSession', 'terminal.createAgentSession'] }
+  ),
+  prefixRpcMethodGroup(
+    ['agentSessionAttachment.'],
+    async () =>
+      (await import('./structured-sessions/attachments/structured-agent-session-attachments'))
+        .STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS
+  ),
+  prefixRpcMethodGroup(
+    [],
+    async () =>
+      (await import('./structured-sessions/attachments/structured-agent-session-visual'))
+        .STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
+    { exactNames: ['agentSession.readVisual'] }
+  ),
+  prefixRpcMethodGroup(
+    ['agentSession.'],
+    async () =>
+      (await import('./structured-sessions/structured-agent-session'))
+        .STRUCTURED_AGENT_SESSION_METHODS,
+    {
+      streamingNames: [
+        'agentSession.subscribe',
+        'agentSession.subscribeStatus',
+        'agentSession.subscribeTurnCompletions'
+      ]
+    }
+  ),
+  prefixRpcMethodGroup(
+    ['terminalDaemon.'],
+    async () => (await import('./terminal/terminal-daemon')).TERMINAL_DAEMON_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['agentActivity.'],
+    async () => (await import('./workspaces/agent-activity-methods')).AGENT_ACTIVITY_METHODS
+  ),
+  prefixRpcMethodGroup(
+    ['ui.', 'settings.'],
+    async () => (await import('./client-state/client-ui')).CLIENT_UI_METHODS
   )
 ]

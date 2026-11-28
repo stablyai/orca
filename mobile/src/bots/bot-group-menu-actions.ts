@@ -7,13 +7,11 @@ type Translate = ReturnType<typeof useMobileTranslation>
 
 // Each choice opens another sheet or alert, so it runs once this menu's native modal has unmounted.
 
-/** The Bots "+" menu, as the desktop's: New bot, and New group once this computer has two bots. */
+/** The Bots "+" menu, as the desktop's: New bot, and New group once this computer has two bots (hidden, not dimmed). */
 export function botCreateMenuActions(input: {
   t: Translate
   /** The host's whole roster, not the search-filtered rows: search never changes who can join. */
   botCount: number
-  /** The paired computer: groups are its bots' alone. */
-  hostLabel: string
   onNewBot: () => void
   onNewGroup: () => void
   /** Only while the computer sorts its bots Manual, as the desktop drags only then. */
@@ -27,21 +25,17 @@ export function botCreateMenuActions(input: {
       closeBeforePress: true,
       onPress: input.onNewBot
     },
-    {
-      label: t('bots.groups.newGroup', 'New group'),
-      icon: Users,
-      // A group needs two bots to talk to each other.
-      disabled: input.botCount < 2,
-      ...(input.botCount < 2
-        ? {
-            hint: t('bots.groups.needsTwoBots', 'Needs 2 bots on {{host}}', {
-              host: input.hostLabel
-            })
+    // Hidden until a group can form: it needs two bots to talk to each other.
+    ...(input.botCount >= 2
+      ? [
+          {
+            label: t('bots.groups.newGroup', 'New group'),
+            icon: Users,
+            closeBeforePress: true,
+            onPress: input.onNewGroup
           }
-        : {}),
-      closeBeforePress: true,
-      onPress: input.onNewGroup
-    },
+        ]
+      : []),
     ...(input.onReorder
       ? [
           {

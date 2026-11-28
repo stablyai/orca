@@ -18,7 +18,6 @@ import {
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { isWorkspaceDocPageId } from '../../browser/document-preview/doc-preview-guest-policy'
-import { whenBrowserPartitionReadyForPage } from '../../browser/extensions/profile-sessions/browser-extension-page-readiness'
 import {
   freeBrowserClientPageGuest,
   wakeBrowserClientPage
@@ -91,6 +90,8 @@ export function registerBrowserGuestDiscardHandlers(): void {
       )
       // The guest is created only once the profile's extensions have started (see the readiness).
       if (args.waited !== true) {
+        const { whenBrowserPartitionReadyForPage } =
+          await import('../../browser/extensions/profile-sessions/browser-extension-page-readiness')
         await whenBrowserPartitionReadyForPage(args.partition)
       }
       return marker

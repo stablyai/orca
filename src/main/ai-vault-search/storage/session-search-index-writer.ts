@@ -17,7 +17,10 @@ import {
   type SessionSearchFileIdentity,
   type SessionSearchIndexedFile
 } from './session-search-file-cursor'
-import { SessionSearchFileRecords } from './session-search-file-records'
+import {
+  SessionSearchFileRecords,
+  type SessionSearchFileCursor
+} from './session-search-file-records'
 import {
   deleteSearchMessages,
   insertSearchMessage,
@@ -27,17 +30,6 @@ import { recordSessionSearchDeletedRows } from './session-search-index-compactio
 
 /** Chunk named reads at this decoded-text threshold; anonymous reads spill before atomic publication. */
 export const SESSION_SEARCH_COMMIT_CHARS = 32 * 1024 * 1024
-
-type FileRow = {
-  dev: number | null
-  ino: number | null
-  byte_offset: number
-  mtime_ms: number
-  size_bytes: number | null
-  session_row_id: number | null
-}
-
-type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 
 export type SessionSearchFileWrite = {
   /** Commit named chunks at the ceiling; spill anonymous reads privately until atomic publication. */
@@ -71,28 +63,7 @@ export class SessionSearchIndexWriter {
 
   /** Return null for unknown/replaced files; retain partial files with null byteOffset to force a whole read. */
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The files schema defines FileRow; REAL casts return numeric IDs or null.
-    const row = this.db
-      .prepare(
-        // REAL recovers the original numeric stat IDs, including existing oversized INTEGER rows.
-        `SELECT CAST(dev AS REAL) AS dev, CAST(ino AS REAL) AS ino,
-                byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?`
-      )
-      .get(path) as FileRow | undefined
-    if (!row) {
-      return null
-    }
-    // Older indexes can carry half-pairs; only a complete identity can prove replacement.
-    if (identity && row.dev !== null && row.ino !== null) {
-      if (row.dev !== identity.dev || row.ino !== identity.ino) {
-        return null
-      }
-    }
-    return {
-      byteOffset: row.byte_offset === PARTIAL_FILE_CURSOR ? null : row.byte_offset,
-      mtimeMs: row.mtime_ms,
-      sizeBytes: row.size_bytes
-    }
+    return this.records.indexedFile(path, identity)
   }
 
   /** Accept append writes only when their starting offset matches this index’s own cursor. */
@@ -108,7 +79,7 @@ export class SessionSearchIndexWriter {
       return null
     }
     const path = candidate.file.path
-    const cursor = this.cursor(path)
+    const cursor = this.records.cursor(path)
     if (mode === 'append') {
       if (cursor === undefined || cursor.byte_offset === PARTIAL_FILE_CURSOR) {
         return null
@@ -128,11 +99,11 @@ export class SessionSearchIndexWriter {
       active.removed = true
       this.activeWrites.delete(path)
     }
-    const cursor = this.cursor(path)
+    const cursor = this.records.cursor(path)
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const removed = this.dropSession(cursor?.session_row_id ?? null)
-      this.db.prepare('DELETE FROM files WHERE path = ?').run(path)
+      this.records.deleteFile(path)
       this.db.exec('COMMIT')
       this.onMessagesChanged(-removed)
     } catch (error) {
@@ -143,6 +114,7 @@ export class SessionSearchIndexWriter {
 
   close(): void {
     this.closed = true
+    this.records.close()
     for (const buffer of this.pendingBuffers) {
       buffer.release()
     }
@@ -153,15 +125,9 @@ export class SessionSearchIndexWriter {
     this.activeWrites.clear()
   }
 
-  private cursor(path: string): FileCursor | undefined {
-    return this.db
-      .prepare('SELECT session_row_id,byte_offset FROM files WHERE path = ?')
-      .get(path) as FileCursor | undefined
-  }
-
   private buffered(
     candidate: SessionFileCandidate,
-    opened: FileCursor | undefined,
+    opened: SessionSearchFileCursor | undefined,
     append: boolean,
     identity?: () => TranscriptSessionIdentity | null
   ): SessionSearchFileWrite {
@@ -200,7 +166,7 @@ export class SessionSearchIndexWriter {
       if (lifetime.removed) {
         return false
       }
-      const row = this.cursor(path)
+      const row = this.records.cursor(path)
       return (
         row?.session_row_id === expected?.session_row_id &&
         row?.byte_offset === expected?.byte_offset
@@ -234,7 +200,7 @@ export class SessionSearchIndexWriter {
                 const previous = session
                 session = this.records.createSessionRow(candidate)
                 if (previous !== null) {
-                  db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
+                  this.records.deleteSession(previous)
                   orphaned = previous
                 }
                 replaced = true
@@ -324,7 +290,7 @@ export class SessionSearchIndexWriter {
     }
     const removed = deleteSearchMessages(this.db, sessionRowId)
     recordSessionSearchDeletedRows(this.db, removed)
-    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionRowId)
+    this.records.deleteSession(sessionRowId)
     return removed
   }
 }

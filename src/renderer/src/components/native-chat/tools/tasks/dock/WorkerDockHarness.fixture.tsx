@@ -304,6 +304,14 @@ export const threeFolded720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={3} failed={0} variety />)
 })
+export const hostedTwentyFolded720 = defineFixture({
+  width: 720,
+  render: () =>
+    workerDockFixturePane(<Harness count={20} failed={3} />, undefined, {
+      hosted: true,
+      tasks: true
+    })
+})
 export const threeOpen720 = defineFixture({
   width: 720,
   render: () => workerDockFixturePane(<Harness count={3} failed={1} variety open />)

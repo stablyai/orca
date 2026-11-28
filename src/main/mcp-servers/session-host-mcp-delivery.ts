@@ -5,6 +5,7 @@ import { BoundedMap } from '../../shared/collections/bounded-map'
 import { ORCA_MCP_SOURCE } from '../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { SessionMcpTools } from './session-mcp-tools'
 import { agentOwnMcpServerNames } from './agent-own-mcp-server-names'
+import { SIGN_IN_NEEDED } from '../bots/tool-relay/bot-tool-relay-sign-in-answer'
 
 const delivered = new BoundedMap<string, ReadonlySet<string>>({ maxEntries: 2_000 })
 /** Chats whose agent ignores a session's servers: no host-list edit is theirs. */
@@ -68,10 +69,53 @@ export function withOrcaMcpSource(
   }
   return {
     ...result,
-    servers: result.servers.map((server) =>
-      names.has(server.name) ? { ...server, source: ORCA_MCP_SOURCE } : server
-    )
+    servers: result.servers.map((server) => {
+      if (!names.has(server.name)) {
+        return server
+      }
+      // Agents report the relay's "sign in" answer as a failed connect; Orca signs in, not the agent.
+      return server.status === 'failed' && server.error?.includes(SIGN_IN_NEEDED)
+        ? {
+            ...server,
+            status: 'needs-auth',
+            error: null,
+            canSignIn: false,
+            source: ORCA_MCP_SOURCE
+          }
+        : { ...server, source: ORCA_MCP_SOURCE }
+    })
   }
+}
+
+/** Orca's rows, the agent's or the ones Orca lists for it, marked when Orca removed or changed them since launch. */
+export function withOrcaMcpChanges(
+  result: AgentSessionMcpResult,
+  changes: ReadonlyMap<string, 'removed' | 'changed'> | undefined
+): AgentSessionMcpResult {
+  if (result.status !== 'ok' || !changes || changes.size === 0) {
+    return result
+  }
+  return {
+    ...result,
+    servers: result.servers.map((server) => {
+      const change = server.source === ORCA_MCP_SOURCE ? changes.get(server.name) : undefined
+      return change ? { ...server, orcaChange: change } : server
+    })
+  }
+}
+
+/** A reconnect to an Orca server the list no longer has would only fail again: say why instead. */
+export function refuseRemovedOrcaReconnect(
+  sessionId: string,
+  server: string,
+  changes: ReadonlyMap<string, 'removed' | 'changed'>
+): AgentSessionMcpResult | null {
+  return changes.get(server) === 'removed' && delivered.peek(sessionId)?.has(server)
+    ? {
+        status: 'failed',
+        message: 'Orca removed this server. Your next message restarts the chat without it.'
+      }
+    : null
 }
 
 /**

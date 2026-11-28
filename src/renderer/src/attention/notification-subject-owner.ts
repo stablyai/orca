@@ -110,11 +110,18 @@ function remoteWorkspaceNotificationOwner(
     : null
 }
 
+export type TerminalNotificationOwnerOptions = {
+  /** Allow unbound/foreign remote terminals to fall back to the workspace's remote host for notification muting. */
+  allowRemoteWorkspaceFallback?: boolean
+}
+
 export function resolveTerminalNotificationOwner(
   state: SubjectOwnerState,
   workspaceId: string,
-  subject: TerminalNotificationBinding
+  subject: TerminalNotificationBinding,
+  options: TerminalNotificationOwnerOptions = {}
 ): NotificationWorkspaceOwner | null {
+  const allowRemoteWorkspaceFallback = options.allowRemoteWorkspaceFallback ?? true
   if (subject.workspaceOwner) {
     return subject.workspaceOwner
   }
@@ -150,10 +157,15 @@ export function resolveTerminalNotificationOwner(
     if (tabOwner) {
       return tabOwner
     }
+    if (!allowRemoteWorkspaceFallback && binding.kind !== 'owned') {
+      return null
+    }
     // A null owner bypasses machine mute, so a prefixed id names its machine even when unbound.
     const transportHost = getPtyExecutionHost(ptyId)
     if (transportHost === 'foreign') {
-      return remoteWorkspaceNotificationOwner(state, workspaceId)
+      return allowRemoteWorkspaceFallback
+        ? remoteWorkspaceNotificationOwner(state, workspaceId)
+        : null
     }
     if (!transportHost && binding.kind !== 'owned') {
       return null
@@ -174,5 +186,8 @@ export function resolveTerminalNotificationOwner(
       : transportOwner
   }
   const tabOwner = notificationTab ? resolveNotificationTabOwner(state, notificationTab) : null
-  return tabOwner ?? remoteWorkspaceNotificationOwner(state, workspaceId)
+  return (
+    tabOwner ??
+    (allowRemoteWorkspaceFallback ? remoteWorkspaceNotificationOwner(state, workspaceId) : null)
+  )
 }

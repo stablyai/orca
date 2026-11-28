@@ -10,6 +10,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   announceHostMove,
   announceRestart,
+  dismissHostAskToast,
   warnSharedSessions,
   warnStrandedSessions,
   warnUncheckedSessions
@@ -43,8 +44,24 @@ export type ClaudeAccountSwitchPrompt = {
 }
 
 let switchGeneration = 0
+const hostAskGenerationByOwner = new Map<string, number>()
 let prompt: ClaudeAccountSwitchPrompt | null = null
 const promptListeners = new Set<() => void>()
+
+function hostOwnerKey(owner: RuntimeClientTarget): string {
+  return owner.kind === 'local' ? 'local' : `environment:${owner.environmentId}`
+}
+
+function hostAskToastId(ownerKey: string): string {
+  return `claude-account-switch-host-ask:${ownerKey}`
+}
+
+function nextHostAskGeneration(ownerKey: string): number {
+  const next = (hostAskGenerationByOwner.get(ownerKey) ?? 0) + 1
+  hostAskGenerationByOwner.set(ownerKey, next)
+  dismissHostAskToast(hostAskToastId(ownerKey))
+  return next
+}
 
 function setPrompt(next: ClaudeAccountSwitchPrompt | null): void {
   prompt = next
@@ -117,19 +134,36 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   /** What a server did with its own running sessions; absent from older servers. */
   hostMove?: ClaudeHostRunningSessionsMove
 }): Promise<'show-confirmation' | 'handled'> {
+  const ownerKey = hostOwnerKey(args.owner)
+  const toastId = hostAskToastId(ownerKey)
   // Why: a server moves its own sessions and reports them; nothing here runs on it.
   if (args.owner.kind !== 'local') {
-    const { owner, after } = args
-    return announceHostMove(args.hostMove, args.before, after, async () => {
-      // Answers the Ask the server left open; it does nothing once a later switch has replaced it.
-      const reply = await callRuntimeRpc<ClaudeAccountSelectResult>(
-        owner,
-        'accounts.selectClaude',
-        { accountId: after.accountId, runningSessions: 'restart', answersAsk: true },
-        { timeoutMs: 30_000 }
-      )
-      return reply.runningSessions
-    })
+    const ownerGeneration = nextHostAskGeneration(ownerKey)
+    const { owner, after, hostMove } = args
+    return announceHostMove(
+      hostMove,
+      args.before,
+      after,
+      async () => {
+        if (hostAskGenerationByOwner.get(ownerKey) !== ownerGeneration) {
+          return undefined
+        }
+        // Answers the Ask the server left open; it does nothing once a later switch has replaced it.
+        const reply = await callRuntimeRpc<ClaudeAccountSelectResult>(
+          owner,
+          'accounts.selectClaude',
+          {
+            accountId: after.accountId,
+            runningSessions: 'restart',
+            answersAsk: true,
+            ...(hostMove?.askId ? { answersAskId: hostMove.askId } : {})
+          },
+          { timeoutMs: 30_000 }
+        )
+        return reply.runningSessions
+      },
+      toastId
+    )
   }
   const fromAccountId = claudeLaunchAccountId(args.before.state, args.before.accountId)
   const toAccountId = claudeLaunchAccountId(args.after.state, args.after.accountId)
@@ -137,6 +171,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'show-confirmation'
   }
   const generation = ++switchGeneration
+  const ownerGeneration = nextHostAskGeneration(ownerKey)
   setPrompt(null)
   // Why the new list: main read its folders and logins as it applied the switch.
   const host = args.after.state
@@ -161,14 +196,6 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     after,
     runningSessions: readClaudeRunningSessionsPolicy(args.madeElsewhere)
   })
-  const restartUnheld = () =>
-    moveUnheldClaudeSessions({
-      target,
-      before,
-      after,
-      runningSessions: 'restart',
-      answersAskFor: after.accountId
-    })
   let uncheckedCount = 0
   let sharedCount = 0
   let strandedPtyIds: ReadonlySet<string> = new Set()
@@ -198,6 +225,19 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   const hostMove = await unheld
   if (generation !== switchGeneration) {
     return 'handled'
+  }
+  const restartUnheld = () => {
+    if (hostAskGenerationByOwner.get(ownerKey) !== ownerGeneration) {
+      return Promise.resolve(undefined)
+    }
+    return moveUnheldClaudeSessions({
+      target,
+      before,
+      after,
+      runningSessions: 'restart',
+      answersAskFor: after.accountId,
+      ...(hostMove?.askId ? { answersAskId: hostMove.askId } : {})
+    })
   }
   // Why re-read: the setting may change while the scan runs.
   const policy = readClaudeRunningSessionsPolicy(args.madeElsewhere)
@@ -247,7 +287,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
         })
       )
     }
-    return announceHostMove(hostMove, before, after, restartUnheld)
+    return announceHostMove(hostMove, before, after, restartUnheld, toastId)
   }
   if (policy === 'restart') {
     queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
@@ -259,7 +299,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
-  announceHostMove(hostMove, before, after, restartUnheld)
+  announceHostMove(hostMove, before, after, restartUnheld, toastId)
   return 'handled'
 }
 

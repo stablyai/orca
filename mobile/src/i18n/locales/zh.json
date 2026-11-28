@@ -866,7 +866,9 @@
         "tools_one": "{{count}} 个工具",
         "tools_other": "{{count}} 个工具",
         "disabled": "已禁用",
-        "notStarted": "尚未启动"
+        "notStarted": "尚未启动",
+        "orcaRemoved": "已移除：下一条消息时重新启动",
+        "orcaChanged": "已更改：下一条消息时重新启动"
       },
       "title": "MCP 服务器",
       "notRunning": "MCP 服务器会在你发送下一条消息时连接",
@@ -891,7 +893,8 @@
         "failed": "{{count}} 个失败"
       },
       "pasteHint": "当浏览器跳转到一个无法加载的页面时，复制它的地址并粘贴到这里",
-      "manage": "管理 MCP 服务器"
+      "manage": "管理 MCP 服务器",
+      "stillFailing": "重新连接后仍然失败。"
     },
     "fork": {
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支",
@@ -1801,7 +1804,9 @@
         "permissionAcceptEditsDescription": "批准文件编辑和文件命令，其余操作会询问",
         "permissionAutoDescription": "代你审核批准请求",
         "permissionFullAccessCodexDescription": "从不询问，可以编辑任何文件并使用网络",
-        "permissionFullAccessDescription": "编辑或运行命令前从不询问"
+        "permissionFullAccessDescription": "编辑或运行命令前从不询问",
+        "permissionAgentSettings": "{{agent}} 设置",
+        "permissionFromAgentSettings": "{{mode}}，来自 {{agent}} 设置"
       },
       "goal": {
         "sentAsGoal": "作为目标发送"
@@ -3255,7 +3260,7 @@
       "collapse": "收起"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "在新 CLI 中恢复"
+      "continueInTerminal": "在终端中继续"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "滚动到最新消息"
@@ -3847,6 +3852,18 @@
       "needsYou": "需要你处理",
       "files": "文件",
       "otherWorkspaces": "其他工作区"
+    },
+    "terminalChatContinuation": {
+      "busy": "另一个聊天或终端正在打开。请稍候再试。",
+      "continueInChat": "在聊天中继续",
+      "failed": "无法在聊天中继续。{{detail}}",
+      "failedAfterClose": "无法在聊天中继续。{{detail}} 对话在智能体历史记录中。",
+      "otherJob": "此终端中正在运行 {{process}}。请先退出它，然后在聊天中继续。",
+      "terminalChanged": "Orca 检查时此终端已更改。请重试。",
+      "tryAgain": "请重试。",
+      "unavailable": "此电脑上无法使用 {{agent}} 聊天。",
+      "uncheckable": "Orca 无法检查此终端中正在运行的内容。请重试。",
+      "unconfirmed": "Orca 无法确认聊天已打开。重试前请检查你的标签页。"
     }
   },
   "settings": {
@@ -4006,9 +4023,6 @@
       "title": "语音",
       "toggleMode": "切换",
       "updateFailed": "无法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各智能体自己的设置"
     },
     "voiceTranscribeOn": {
       "heading": "转写位置",
@@ -4441,6 +4455,9 @@
       "agentCouldNotStart": "无法启动 {{label}}。请在设置中检查智能体命令后重试",
       "agentFailedToStart": "{{label}} 启动失败。请在设置中检查智能体命令后重试",
       "agentReportedError": "{{label}} 报告了错误",
+      "antigravityInvalidEvents": "Antigravity 返回了无效的 JSON 事件",
+      "antigravityInvalidResult": "Antigravity 返回了无效的结果",
+      "antigravityNoFinalResult": "Antigravity 未返回最终结果",
       "chatNameAgentUnsupported": "请在设置 -> 聊天 -> 聊天名称中为此操作选择支持的聊天命名智能体。支持的智能体：{{agents}}，或选择“自定义命令”",
       "chatNameCustomCommandEmpty": "自定义命令为空。请在设置 -> 聊天 -> 聊天名称中添加",
       "cliFailed": "{{label}} CLI 命令执行失败，退出码为 {{exitCode}}",
@@ -5985,7 +6002,6 @@
       "suggestThree": "{{a}}、{{b}} 和 {{c}}",
       "suggestMore": "{{a}}、{{b}} 及另外 {{count}} 个",
       "pickOne": "请选择一个 bot",
-      "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "notStarted": "尚未启动",
       "workingCount_one": "{{count}} 个工作中",
@@ -8371,7 +8387,8 @@
     "workspacesCount": "{{count}} 个工作区",
     "workspacesAllButCount": "除 {{count}} 个外的全部",
     "headerMissing": "填写 {{header}} 后才能添加此服务器",
-    "servers": "服务器"
+    "servers": "服务器",
+    "unreadable": "无法打开已保存的登录或密钥。请重新登录。"
   },
   "chats": {
     "delete": {

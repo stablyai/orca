@@ -1,8 +1,4 @@
 import { humanizeBranchSlug } from '../../../shared/source-control/ai/naming/branch-name-from-work'
-import {
-  generateBranchNameFromContext,
-  resolveCommitMessageSettings as resolveTextGenerationParams
-} from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
 import {
@@ -35,6 +31,10 @@ export async function runFolderWorkspaceTitleAutoRename(
 
   const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
+  const {
+    generateBranchNameFromContext,
+    resolveCommitMessageSettings: resolveTextGenerationParams
+  } = await import('../../text-generation/commit-message-text-generation')
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)

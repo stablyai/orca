@@ -13,6 +13,7 @@ const APP_RAIL_ITEM_IDS = [
   'automations',
   'artifacts',
   'skills',
+  'plugins',
   'mobile',
   'customize',
   'more',
@@ -29,6 +30,8 @@ type AppRailButtonProps = Omit<React.ComponentProps<'button'>, 'id'> & {
   icon: React.ReactNode
   label: string
   active?: boolean
+  /** False drops the tile's fill so the icon carries its own hover/active feedback (the account avatar). */
+  tile?: boolean
   tabStop: boolean
 }
 
@@ -37,6 +40,7 @@ export function AppRailButton({
   icon,
   label,
   active = false,
+  tile = true,
   tabStop,
   className,
   ...props
@@ -53,8 +57,12 @@ export function AppRailButton({
         'flex size-7 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-muted-foreground focus-visible:ring-offset-1 focus-visible:ring-offset-worktree-sidebar [&>svg]:transition-opacity',
         // Why svg opacity, not an alpha color: per-stroke alpha brightens where strokes overlap.
         active
-          ? 'bg-worktree-sidebar-foreground/10 text-foreground'
-          : 'text-muted-foreground hover:bg-worktree-sidebar-foreground/6 data-[state=open]:bg-worktree-sidebar-foreground/10 data-[state=open]:text-foreground [&>svg]:opacity-70 hover:[&>svg]:opacity-100 data-[state=open]:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100',
+          ? 'text-foreground'
+          : 'text-muted-foreground data-[state=open]:text-foreground [&>svg]:opacity-70 hover:[&>svg]:opacity-100 data-[state=open]:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100',
+        tile &&
+          (active
+            ? 'bg-worktree-sidebar-foreground/10'
+            : 'hover:bg-worktree-sidebar-foreground/6 data-[state=open]:bg-worktree-sidebar-foreground/10'),
         className
       )}
     >

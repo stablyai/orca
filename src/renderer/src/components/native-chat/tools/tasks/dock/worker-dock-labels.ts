@@ -125,7 +125,7 @@ export function workerDockEmptyCopy(
       }
 }
 
-// A command line read aloud stops here; the tooltip and the details dialog keep all of it.
+// A command line read aloud stops here; the details dialog keeps all of it.
 const SPOKEN_COMMAND_MAX = 60
 
 /** A row's title as assistive technology hears it, wherever it is spoken (the row, its Stop, the

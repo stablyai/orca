@@ -1,6 +1,9 @@
 import { dirname } from 'node:path'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
-import { PROVIDER_RELAY_PROTOCOL_VERSION } from '../protocol/daemon-provider-relay-protocol'
+import {
+  providerRelayCapabilities,
+  type ProviderRelayCapability
+} from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayHost } from './provider-relay-host'
 import type { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 
@@ -16,36 +19,35 @@ type DaemonProviderRelayOptions = {
   log: DaemonFileLog
 }
 
+/** `toolRelayFront` is the front itself, which the connections layer splices into. */
+type DaemonProviderRelayIdentity = Partial<
+  Record<Exclude<ProviderRelayCapability, 'toolRelayFront'>, true>
+> & { toolRelayFront?: DaemonToolRelayFront }
+
 /** The daemon's chat-agent host and the hello capability that tells an app it may use it. */
 export function createDaemonProviderRelays(options: DaemonProviderRelayOptions): {
   relays: ProviderRelayHost
-  identity: {
-    providerRelay?: true
-    providerRelayKeep?: true
-    providerRelayAcks?: true
-    toolRelayFront?: DaemonToolRelayFront
-  }
+  identity: DaemonProviderRelayIdentity
 } {
+  const advertised = providerRelayCapabilities(options.protocolVersion)
   const relays = new ProviderRelayHost({
     runtimeDir: dirname(options.tokenPath),
     appVersion: options.appVersion ?? null,
     entryPath: options.entryPath ?? null,
     daemonInstance: options.daemonInstance,
-    toolRelayFront: options.protocolVersion >= PROVIDER_RELAY_PROTOCOL_VERSION,
+    toolRelayFront: advertised.includes('toolRelayFront'),
     acceptsWork: options.acceptsWork,
     onLiveCountChanged: options.onLiveCountChanged,
     log: (event, details) => options.log.log(event, details)
   })
-  const advertised = relays.supported && options.protocolVersion >= PROVIDER_RELAY_PROTOCOL_VERSION
-  return {
-    relays,
-    identity: advertised
-      ? {
-          providerRelay: true,
-          providerRelayKeep: true,
-          providerRelayAcks: true,
-          ...(relays.toolRelayFront ? { toolRelayFront: relays.toolRelayFront } : {})
-        }
-      : {}
+  const identity: DaemonProviderRelayIdentity = {}
+  for (const capability of relays.supported ? advertised : []) {
+    if (capability !== 'toolRelayFront') {
+      identity[capability] = true
+    }
   }
+  if (relays.toolRelayFront) {
+    identity.toolRelayFront = relays.toolRelayFront
+  }
+  return { relays, identity }
 }

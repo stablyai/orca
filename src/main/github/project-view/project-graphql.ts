@@ -25,10 +25,15 @@ export async function runGraphql<T>(
   if (authError) {
     return { ok: false, error: authError, raw: { stderr: '', stdout: '' } }
   }
-  // Enterprise traffic has separate quota from the shared github.com snapshot.
-  const guard = repositoryRateLimitGuard({ host: exec?.host }, 'graphql')
-  if (guard.blocked) {
-    return { ok: false, error: rateLimitedError(guard), raw: { stderr: '', stdout: '' } }
+  // Enterprise traffic has separate quota from the shared github.com snapshot; unpinned default-host
+  // discovery may target GHE until viewer.url names the host.
+  const quotaHost = exec?.quotaHost ?? exec?.host
+  const skipSharedQuota = exec?.unpinnedDefaultHost === true && !quotaHost
+  if (!skipSharedQuota) {
+    const guard = repositoryRateLimitGuard({ host: quotaHost }, 'graphql')
+    if (guard.blocked) {
+      return { ok: false, error: rateLimitedError(guard), raw: { stderr: '', stdout: '' } }
+    }
   }
   // Use typed -F for numbers/booleans and literal -f for strings, including empty strings.
   const args: string[] = ['api', 'graphql', '-f', `query=${query}`]
@@ -40,7 +45,9 @@ export async function runGraphql<T>(
     }
   }
   await acquire()
-  noteRepositoryRateLimitSpend({ host: exec?.host }, 'graphql')
+  if (!skipSharedQuota) {
+    noteRepositoryRateLimitSpend({ host: quotaHost }, 'graphql')
+  }
   try {
     const { stdout, stderr } = await ghExecFileAsync(args, {
       encoding: 'utf-8',

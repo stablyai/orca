@@ -1,5 +1,5 @@
 import type { Stats } from 'node:fs'
-import { lstat } from 'node:fs/promises'
+import { lstat, open } from 'node:fs/promises'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter,
@@ -7,9 +7,12 @@ import {
   createCodexSessionBackfillFileEventId,
   readCodexSessionBackfillAuditCoverage,
   recordExistingCodexSessionForHeal,
+  type CodexSessionBackfillAuditCoverage,
   type CodexSessionBackfillAuditWriter
 } from './codex-session-backfill-audit'
 import type { CodexSessionBackfillSummary } from './codex-session-backfill-types'
+
+const RUN_SUMMARY_TAIL_PROBE_BYTES = 16 * 1024
 
 export type CodexSessionBackfillAuditPass = {
   appendRecord: CodexSessionBackfillAuditWriter
@@ -43,7 +46,11 @@ export type CodexSessionBackfillAuditPass = {
 export async function createCodexSessionBackfillAuditPass(
   auditLogPath: string
 ): Promise<CodexSessionBackfillAuditPass> {
-  const coverage = await readCodexSessionBackfillAuditCoverage(auditLogPath)
+  let coveragePromise: Promise<CodexSessionBackfillAuditCoverage> | null = null
+  const getCoverage = (): Promise<CodexSessionBackfillAuditCoverage> => {
+    coveragePromise ??= readCodexSessionBackfillAuditCoverage(auditLogPath)
+    return coveragePromise
+  }
   const writeAuditRecord = createCodexSessionBackfillAuditWriter(auditLogPath)
   let auditChanged = false
   const appendRecord: CodexSessionBackfillAuditWriter = async (record) => {
@@ -55,6 +62,7 @@ export async function createCodexSessionBackfillAuditPass(
   return {
     appendRecord,
     async recordExisting(summary, source, target, targetStat): Promise<void> {
+      const coverage = await getCoverage()
       const fileEventId = targetStat
         ? createCodexSessionBackfillFileEventId(target, targetStat)
         : undefined
@@ -83,12 +91,13 @@ export async function createCodexSessionBackfillAuditPass(
           ...(fileEventId ? { fileEventId } : {})
         })
       ) {
-        if (fileEventId) {
-          coverage.fileEventIds.add(fileEventId)
+        if (fileEventId && coveragePromise) {
+          ;(await coveragePromise).fileEventIds.add(fileEventId)
         }
       }
     },
     async recordDiagnostic(record, sourceStat): Promise<void> {
+      const coverage = await getCoverage()
       const diagnosticEventId = createCodexSessionBackfillDiagnosticEventId({
         ...record,
         sourceStat
@@ -101,10 +110,62 @@ export async function createCodexSessionBackfillAuditPass(
       }
     },
     async finish(summary): Promise<void> {
-      if (auditChanged || !coverage.hasRunSummary) {
+      if (auditChanged) {
+        await appendRecord({ action: 'run-summary', ...summary })
+        return
+      }
+      if (!coveragePromise && (await tailHasRunSummaryRecord(auditLogPath))) {
+        return
+      }
+      const coverage = await getCoverage()
+      if (!coverage.hasRunSummary) {
         await appendRecord({ action: 'run-summary', ...summary })
       }
     }
+  }
+}
+
+async function tailHasRunSummaryRecord(auditLogPath: string): Promise<boolean> {
+  let handle: Awaited<ReturnType<typeof open>> | null = null
+  try {
+    handle = await open(auditLogPath, 'r')
+    const { size } = await handle.stat()
+    if (size <= 0) {
+      return false
+    }
+    const readLength = Math.min(size, RUN_SUMMARY_TAIL_PROBE_BYTES)
+    const offset = size - readLength
+    const buf = Buffer.allocUnsafe(readLength)
+    const { bytesRead } = await handle.read(buf, 0, readLength, offset)
+    const text = buf.toString('utf-8', 0, bytesRead)
+    // Skip the first line if we started mid-file so we only parse complete JSON records.
+    const startIndex = offset > 0 ? text.indexOf('\n') + 1 : 0
+    if (offset > 0 && startIndex === 0) {
+      return false
+    }
+    for (const line of text.slice(startIndex).split('\n')) {
+      if (!line.includes('run-summary') && !line.includes('\\u')) {
+        continue
+      }
+      try {
+        const parsed: unknown = JSON.parse(line)
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          !Array.isArray(parsed) &&
+          (parsed as Record<string, unknown>).action === 'run-summary'
+        ) {
+          return true
+        }
+      } catch {
+        // Ignore torn or non-JSON lines in tail probe; caller falls back to full scan.
+      }
+    }
+    return false
+  } catch {
+    return false
+  } finally {
+    await handle?.close().catch(() => {})
   }
 }
 

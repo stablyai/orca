@@ -1,38 +1,17 @@
-import type { RuntimeFileSearch } from '../files/search/file-search'
+import type {
+  RuntimeFileAccessSurface,
+  RuntimeFileMutationsSurface,
+  RuntimeFileReadsSurface,
+  RuntimeFileSearchSurface
+} from '../files/lazy-runtime-file-commands'
 import type { RuntimeTerminalArtifacts } from '../terminal/artifacts/terminal-artifacts'
-import type { RuntimeFileAccess } from '../files/file-access'
-import type { RuntimeFileReads } from '../files/file-reads'
-import type { RuntimeFileMutations } from '../files/file-mutations'
 import type { RuntimeStagedFileSaves } from '../files/staged-file-save-commands'
 import type { RuntimeFileWatches } from '../files/watch/file-watches'
 import type { RuntimeTerminalPathResolver } from '../terminal/terminal-path-resolver'
 
-export type RuntimeFileCommandSurface = Pick<
-  RuntimeFileSearch,
-  | 'listMobileFiles'
-  | 'searchMobileFilePaths'
-  | 'searchQuickOpenFilePaths'
-  | 'searchRuntimeFiles'
-  | 'listRuntimeFiles'
-> &
-  Pick<
-    RuntimeFileAccess,
-    | 'openMobileFile'
-    | 'openMobileDiff'
-    | 'listRuntimeMarkdownDocuments'
-    | 'pathsExistRuntimeFiles'
-    | 'statRuntimeFile'
-  > &
-  Pick<
-    RuntimeFileReads,
-    | 'readMobileFile'
-    | 'readFileExplorerPreview'
-    | 'readChatImagePreview'
-    | 'readFileExplorerChunk'
-    | 'readHostFileChunk'
-    | 'readDocPreviewFile'
-    | 'readDocPreviewChunk'
-  > &
+export type RuntimeFileCommandSurface = RuntimeFileSearchSurface &
+  RuntimeFileAccessSurface &
+  RuntimeFileReadsSurface &
   Pick<RuntimeTerminalPathResolver, 'resolveTerminalPath'> &
   Pick<
     RuntimeTerminalArtifacts,
@@ -44,29 +23,15 @@ export type RuntimeFileCommandSurface = Pick<
     | 'revokeTerminalFileGrantsForClient'
   > &
   Pick<RuntimeFileWatches, 'readFileExplorerDir' | 'watchFileExplorer'> &
-  Pick<
-    RuntimeFileMutations,
-    | 'writeFileExplorerFile'
-    | 'formatFileExplorerText'
-    | 'writeFileExplorerFileBase64'
-    | 'writeFileExplorerFileBase64Chunk'
-    | 'createFileExplorerFile'
-    | 'createFileExplorerDir'
-    | 'createFileExplorerDirNoClobber'
-    | 'commitFileExplorerUpload'
-    | 'replaceFileExplorerFileWithUpload'
-    | 'renameFileExplorerPath'
-    | 'copyFileExplorerPath'
-    | 'deleteFileExplorerPath'
-  > & { readonly stagedFileSaves: RuntimeStagedFileSaves }
+  RuntimeFileMutationsSurface & { readonly stagedFileSaves: RuntimeStagedFileSaves }
 
 export function installRuntimeFileCommandSurface(
   target: RuntimeFileCommandSurface,
-  fileSearch: RuntimeFileSearch,
+  fileSearch: RuntimeFileSearchSurface,
   terminalArtifacts: RuntimeTerminalArtifacts,
-  fileAccess: RuntimeFileAccess,
-  fileReads: RuntimeFileReads,
-  fileMutations: RuntimeFileMutations,
+  fileAccess: RuntimeFileAccessSurface,
+  fileReads: RuntimeFileReadsSurface,
+  fileMutations: RuntimeFileMutationsSurface,
   stagedFileSaveCommands: RuntimeStagedFileSaves,
   fileWatches: RuntimeFileWatches,
   terminalPaths: RuntimeTerminalPathResolver

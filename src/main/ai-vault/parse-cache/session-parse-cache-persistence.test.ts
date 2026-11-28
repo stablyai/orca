@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -19,6 +19,7 @@ import { resetSessionParseCacheForTests } from './session-parse-cache-store'
 import { parseSessionCandidate } from '../parsing/session-scanner-candidate-parse'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
+import { sessionParseCacheDatabasePath } from './session-parse-cache-version-files'
 
 const APP_VERSION = '1.2.3-test'
 
@@ -99,6 +100,50 @@ function simulateRestart(cacheFile: string): void {
 }
 
 describe('session parse cache persistence', () => {
+  it('keeps its rows while builds on other schema versions share the folder, and prunes all but one of theirs not in use', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const transcript = await writeTranscript(root)
+    await parse(transcript)
+    await flushSessionParseCachePersist()
+    resetSessionParseCachePersistenceForTests()
+    // A pre-versioning build replaces its file with its own schema on start; two older ones were used before it.
+    const otherBuild = (name: string, version: number, usedAt: number) => {
+      const db = new SyncDatabase(join(root, name))
+      db.exec('CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+      db.prepare("INSERT INTO meta VALUES ('schema_version', ?)").run(String(version))
+      db.close()
+      return utimes(join(root, name), usedAt, usedAt)
+    }
+    await rm(join(root, 'session-parse-cache.sqlite'), { force: true })
+    await otherBuild('session-parse-cache.sqlite', 8, 3_000)
+    await otherBuild('session-parse-cache.v7.sqlite', 7, 2_000)
+    await otherBuild('session-parse-cache.v6.sqlite', 6, 1_000)
+    await otherBuild('session-parse-cache.v5.sqlite', 5, 500)
+    const running = new SyncDatabase(join(root, 'session-parse-cache.v5.sqlite'))
+    running.pragma('journal_mode = WAL')
+    running.prepare('SELECT * FROM meta').all()
+    // Still open, yet the least recently written: only the open check keeps it.
+    for (const suffix of ['', '-wal']) {
+      await utimes(join(root, `session-parse-cache.v5.sqlite${suffix}`), 500, 500)
+    }
+
+    try {
+      simulateRestart(cacheFile)
+      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
+      expect((await readdir(root)).filter((name) => name.endsWith('.sqlite')).sort()).toEqual(
+        [
+          'session-parse-cache.sqlite',
+          'session-parse-cache.v5.sqlite',
+          `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`
+        ].sort()
+      )
+    } finally {
+      running.close()
+    }
+  })
+
   it('reconstructs unreadable diagnostics from a version 8 row before reusing it', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
@@ -109,7 +154,7 @@ describe('session parse cache persistence', () => {
     )
     const candidate = await claudeCandidate(transcript)
     const session = await parseAgentSessionFileCached(candidate, process.platform)
-    const oldDatabase = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+    const oldDatabase = new SyncDatabase(sessionParseCacheDatabasePath(root))
     oldDatabase.exec(`
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       INSERT INTO meta VALUES ('schema_version', '8');

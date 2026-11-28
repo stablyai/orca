@@ -292,7 +292,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       model.detailPayload.targetKey !== githubTaskKey(actionItem.source))
       ? null
       : model.detailPayload
-  return Object.assign(model, { detailPayload, refreshGitHubProject, setTaskCopyFeedbackRootRef })
+  return { ...model, detailPayload, refreshGitHubProject, setTaskCopyFeedbackRootRef }
 }
 
 export type ListAndDetailEffectsModel = ReturnType<typeof useMobileTasksListAndDetailEffects>

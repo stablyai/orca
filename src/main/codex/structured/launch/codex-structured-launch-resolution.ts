@@ -1,8 +1,3 @@
-import {
-  codexBotToolsThreadConfig,
-  readCodexInheritedToolNames,
-  readCodexStdioToolNames
-} from '../../../bots/bot-tools-codex'
 import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
 import { agentOwnMcpServerNames } from '../../../mcp-servers/agent-own-mcp-server-names'
 import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
@@ -188,7 +183,9 @@ export function codexStructuredLaunchPart(
         !configuredProgram && process.platform !== 'win32' && deps.sharedServers?.() !== true
       ),
       async () => [
-        ...(await readCodexInheritedToolNames(codexHome)),
+        ...(await (
+          await import('../../../bots/bot-tools-codex')
+        ).readCodexInheritedToolNames(codexHome)),
         ...(await agentOwnMcpServerNames('codex', environment, launchDirectory)),
         ...codexArgsMcpServerNames(args)
       ]
@@ -196,7 +193,10 @@ export function codexStructuredLaunchPart(
     const threadConfig = basis.readOnly
       ? codexReadOnlyThreadConfig(basis.readOnly)
       : tools.servers.length > 0
-        ? codexBotToolsThreadConfig(tools, await readCodexStdioToolNames(codexHome))
+        ? await import('../../../bots/bot-tools-codex').then(
+            async ({ codexBotToolsThreadConfig, readCodexStdioToolNames }) =>
+              codexBotToolsThreadConfig(tools, await readCodexStdioToolNames(codexHome))
+          )
         : null
     // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
     // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.

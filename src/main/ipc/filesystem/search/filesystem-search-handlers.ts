@@ -7,13 +7,11 @@ import {
   splitFileNameFilterTokens
 } from '../../../../shared/file-listing/file-name-filter-tokens'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
-import { registerFilesystemContentSearchHandler } from './filesystem-content-search-handler'
 
 export function registerFilesystemSearchHandlers(
   context: FilesystemHandlerContext,
   ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  registerFilesystemContentSearchHandler(context)
   const { store } = context
   const { listFilesCancellations } = context
   ipc.handle(

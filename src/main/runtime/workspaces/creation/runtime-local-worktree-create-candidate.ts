@@ -4,6 +4,7 @@ import type { getPRForBranch } from '../../../github/client/lookup/get-pr-for-br
 import {
   computeWorktreePath,
   ensurePathWithinWorkspace,
+  getWorktreeNameGitPlatform,
   sanitizeWorktreeName,
   sanitizeWorktreeBranchName,
   type getWorktreePathSettings
@@ -68,8 +69,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   hostedReviewExecutionContext?: HostedReviewExecutionOptions
   pathClaim: WorktreeCreatePathClaim
 }): Promise<RuntimeLocalWorktreeCreateCandidate> {
-  const sanitizedName = sanitizeWorktreeName(args.request.name)
-  const branchSafeName = sanitizeWorktreeBranchName(args.request.name)
+  const gitPlatform = getWorktreeNameGitPlatform(args.repo.path, args.localWorktreeGitOptions)
+  const sanitizedName = sanitizeWorktreeName(args.request.name, gitPlatform)
+  const branchSafeName = sanitizeWorktreeBranchName(args.request.name, gitPlatform)
   let effectiveRequestedName = args.request.name
   let effectiveSanitizedName = sanitizedName
   let branchName = ''
