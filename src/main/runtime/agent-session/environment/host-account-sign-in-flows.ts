@@ -11,6 +11,8 @@ import {
 import { CallerOwnedSignInFlows } from '../../caller-owned-sign-in-flows'
 
 const MAX_ERROR_CHARS = 600
+// Claude and Codex print their link within seconds; silence past this means the link went unrecognized or the login hung.
+const PROMPT_DEADLINE_MS = 60_000
 const LOGIN_CANCELLED_MESSAGES = new Set([
   'Claude sign-in was cancelled.',
   CODEX_LOGIN_CANCELLED_MESSAGE
@@ -45,6 +47,7 @@ export class HostAccountSignInFlows extends CallerOwnedSignInFlows<
       acceptsPrompt: (provider, prompt) => isHostAccountSignInPage(provider, prompt.url),
       acceptsCode: (prompt) => prompt?.needsCode === true,
       describeFailure,
+      promptDeadlineMs: PROMPT_DEADLINE_MS,
       busyMessage:
         'Another account sign-in is already running on this host. Finish or cancel it first.'
     })

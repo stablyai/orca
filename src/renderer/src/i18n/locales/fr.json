@@ -1598,7 +1598,8 @@
         "add": "Ajouter un serveur pour ce dépôt",
         "files": "Issus des fichiers de ce dépôt",
         "open": "Ouvrir {{file}}"
-      }
+      },
+      "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte sur cet ordinateur"
     }
   },
   "menu": {
@@ -12996,8 +12997,11 @@
           "restarting": "Redémarrage…",
           "updated": "Mis à jour",
           "failed": "Échec de la mise à jour",
-          "serviceManagerHelp": "Mettez à jour Orca via le gestionnaire de services qui démarre ce serveur.",
-          "unpackedHelp": "Les builds de développement doivent être mis à jour depuis leur checkout source.",
+          "nodeServerHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute Orca sans son programme de mise à jour intégré, comme le fait le serveur Node d’Orca (orcad). Installez la nouvelle version d’Orca sur le serveur, puis redémarrez orca serve.",
+          "updaterNotStartedHelp": "Les mises à jour à distance sont désactivées : Orca n’a pas démarré son programme de mise à jour sur ce serveur. Redémarrez Orca sur le serveur et vérifiez à nouveau, ou mettez-le à jour sur place.",
+          "headlessServeHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute orca serve sans superviseur de mise à jour, il ne peut donc pas redémarrer sur une nouvelle version. Mettez à jour Orca sur le serveur, puis redémarrez son service.",
+          "systemPackageHelp": "Les mises à jour à distance sont désactivées : Orca a été installé sur ce serveur par un paquet système ou un autre installateur qui doit le mettre à jour. Mettez-le à jour de la même façon, par exemple avec apt ou dnf pour un .deb ou un .rpm.",
+          "devBuildHelp": "Les mises à jour à distance sont désactivées : ce serveur exécute une version de développement. Mettez-la à jour depuis son dépôt source.",
           "legacyHelp": "Les mises à jour à distance ne sont pas disponibles pour ce serveur. Mettez Orca à jour sur le serveur.",
           "managedOverSshHelp": "Ce bureau met à jour ce serveur via SSH. Utilisez Mettre à jour sur sa ligne dans Serveurs Orca distants."
         },
@@ -20088,8 +20092,7 @@
           "more": "Plus d'actions sur l'artifact"
         },
         "ArtifactCollection": {
-          "loadMore": "Charger plus",
-          "noMatches": "Aucun résultat"
+          "loadMore": "Charger plus"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Toute personne disposant de ce lien peut le consulter",
@@ -22544,7 +22547,9 @@
           "pending": "Connexion au serveur…",
           "tools_many": "{{count}} outils",
           "tools_one": "{{count}} outil",
-          "tools_other": "{{count}} outils"
+          "tools_other": "{{count}} outils",
+          "orcaRemoved": "Supprimé : redémarre au prochain message",
+          "orcaChanged": "Modifié : redémarre au prochain message"
         },
         "signIn": {
           "external": "Terminez sur la page qui s’est ouverte",
@@ -22586,7 +22591,8 @@
           "user": "Utilisateur",
           "plugin": "Plugin",
           "session": "Session"
-        }
+        },
+        "stillFailing": "Échoue toujours après la reconnexion."
       }
     },
     "tab": {
@@ -25550,6 +25556,7 @@
       "errors": {
         "ownerSilent": "L’appareil à l’origine de cette connexion ne répond plus.",
         "superseded": "Un changement de compte sur cet hôte a interrompu la connexion. Relancez-la.",
+        "noPrompt": "La commande de connexion du serveur n’a affiché aucun lien de connexion en une minute. Mettez à jour Orca sur le serveur, puis réessayez.",
         "failed": "Échec de la connexion. Réessayez."
       }
     },

@@ -17,11 +17,11 @@ import { listenForBrowserGuestPageVisibility } from '../guest-lifecycle/visibili
 let initialized = false
 let profilesRead = false
 
-export function initializeBrowserSessionsForApp(
+export async function initializeBrowserSessionsForApp(
   activeProfile?: BrowserSessionRegistryProfileOptions & {
     listLocalSshTargetIds?: () => string[]
   }
-): void {
+): Promise<void> {
   if (initialized) {
     return
   }
@@ -53,7 +53,7 @@ export function initializeBrowserSessionsForApp(
   }
 
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
-  browserSessionRegistry.applyPendingCookieImport()
+  await browserSessionRegistry.applyPendingCookieImport()
   profilesRead = browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   initialized = true
 }

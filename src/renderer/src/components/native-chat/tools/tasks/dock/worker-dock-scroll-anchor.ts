@@ -69,6 +69,25 @@ export function workerDockRowKeyTarget(key: string, index: number, length: numbe
   }
 }
 
+/** Where a key pressed on a list row moves focus: another row's index, the chip above the first
+ *  row, or null when the key is not a list move. */
+export function workerDockListKeyTarget(
+  event: { key: string; target: EventTarget | null },
+  ids: readonly string[]
+): number | 'chip' | null {
+  const row =
+    event.target instanceof Element
+      ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
+      : null
+  const index = ids.indexOf(row?.dataset.workerDockRow ?? '')
+  const next = index === -1 ? null : workerDockRowKeyTarget(event.key, index, ids.length)
+  if (next === null) {
+    return null
+  }
+  // The open chip heads the list: up from the first row returns to it.
+  return event.key === 'ArrowUp' && index === 0 ? 'chip' : Math.min(next, ids.length - 1)
+}
+
 /** A soft edge where the card's list has more rows out of view: at the bottom while rows remain
  *  below, at the top once it has scrolled. Undefined when everything fits. */
 export function workerDockScrollFade(element: HTMLElement): string | undefined {

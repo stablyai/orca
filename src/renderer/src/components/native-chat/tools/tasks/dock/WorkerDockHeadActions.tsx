@@ -34,7 +34,7 @@ function WorkerDockStopAll({
         variant="ghost"
         size="xs"
         // Never cut: a long translation in a narrow pane wraps inside the button, right-aligned.
-        className="h-auto min-h-6 min-w-0 shrink whitespace-normal text-right"
+        className="my-1 h-auto min-h-6 min-w-0 shrink whitespace-normal text-right"
         title={note ?? undefined}
         aria-describedby={note ? noteId : undefined}
         aria-disabled={stopAll.pending}
@@ -55,10 +55,12 @@ function WorkerDockStopAll({
   )
 }
 
-/** The panel's bulk actions, one right-aligned row in its footer, drawn only when they apply: Clear
- *  failed once two or more failures can be acknowledged, and the chat's own Stop all. The row never
- *  wraps: when both labels can't fit, only Stop shows (failed rows keep their own Clear). */
-export function WorkerDockCardFooter({
+/** The open list's bulk actions, at the right of its header, drawn only when they apply: Clear
+ *  failed once two or more failures can be acknowledged, and the chat's own Stop all. They never
+ *  wrap onto two rows: when the header is too narrow for both labels, only Stop shows (failed rows
+ *  keep their own Clear). A press aimed at a chip that opened under the pointer lands where the chip
+ *  was, on the list's last rows, never up here. */
+export function WorkerDockHeadActions({
   clearable,
   clearing,
   namesWorkers = false,
@@ -86,22 +88,23 @@ export function WorkerDockCardFooter({
   }
   return (
     <div
-      data-worker-dock-footer=""
-      className="@container/dock-footer mt-1 flex flex-nowrap items-center justify-end gap-1 border-t border-border px-1 pt-1"
+      data-worker-dock-actions=""
+      className="flex min-w-0 shrink flex-nowrap items-center justify-end gap-1"
     >
       {showClear ? (
         <Button
           variant="ghost"
           size="xs"
-          // Beside Stop in a footer too narrow for both labels, the bulk Clear steps aside: every
+          // Beside Stop in a header too narrow for both labels, the bulk Clear steps aside: every
           // failed row it would clear has its own Clear, and Stop's label is never cut.
-          // The width both labels need side by side: the longer Clear label needs more.
+          // The header width both labels need beside the chip's own label (its lead never yields):
+          // the longer Clear label needs more.
           className={
             !stopAll
               ? 'shrink-0'
               : namesWorkers
-                ? 'hidden shrink-0 @min-[22rem]/dock-footer:inline-flex'
-                : 'hidden shrink-0 @min-[18rem]/dock-footer:inline-flex'
+                ? 'hidden shrink-0 @min-[29rem]/dock-header:inline-flex'
+                : 'hidden shrink-0 @min-[25rem]/dock-header:inline-flex'
           }
           aria-label={clearName}
           aria-disabled={clearing}

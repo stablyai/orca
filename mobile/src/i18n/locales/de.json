@@ -1158,7 +1158,9 @@
         "pending": "Verbindung wird hergestellt…",
         "tools_one": "{{count}} Werkzeug",
         "tools_other": "{{count}} Werkzeuge",
-        "waitingForSignIn": "Wartet auf Anmeldung…"
+        "waitingForSignIn": "Wartet auf Anmeldung…",
+        "orcaRemoved": "Entfernt: Neustart bei der nächsten Nachricht",
+        "orcaChanged": "Geändert: Neustart bei der nächsten Nachricht"
       },
       "source": {
         "project": "Projekt",
@@ -1190,7 +1192,8 @@
         "failed": "Fehler: {{count}}"
       },
       "pasteHint": "Wenn der Browser auf einer Seite landet, die nicht lädt, ihre Adresse kopieren und hier einfügen.",
-      "manage": "MCP-Server verwalten"
+      "manage": "MCP-Server verwalten",
+      "stillFailing": "Nach dem erneuten Verbinden weiterhin fehlerhaft."
     }
   },
   "common": {
@@ -6688,6 +6691,7 @@
     "workspacesCount": "{{count}} Arbeitsbereiche",
     "workspacesAllButCount": "Alle außer {{count}}",
     "headerMissing": "{{header}} ausfüllen, um diesen Server hinzuzufügen.",
-    "servers": "Server"
+    "servers": "Server",
+    "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich nicht öffnen. Erneut anmelden."
   }
 }

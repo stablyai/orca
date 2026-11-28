@@ -12,7 +12,6 @@
 1 src/renderer/src/components/agent/launch-settings/AgentLaunchChoiceEditor.tsx
 2 src/renderer/src/components/agent/use-agent-launch-picker-inventory.ts
 1 src/renderer/src/components/artifacts/ArtifactPublishButton.tsx
-2 src/renderer/src/components/artifacts/ArtifactsPage.tsx
 2 src/renderer/src/components/artifacts/useArtifactPagination.ts
 1 src/renderer/src/components/automations/AutomationsPageSurface.tsx
 2 src/renderer/src/components/automations/authoring/AutomationEditorPromptEditor.tsx

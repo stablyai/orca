@@ -19,6 +19,8 @@ export const EXECUTION_HOST_METHODS = [
   'orcaAccount.status',
   'orcaAccount.subscribe',
   'orcaAccount.unsubscribe',
+  // A relayed phone asks the server itself for its own pairing; the server refuses any other caller.
+  'pairing.delegatedMobileDevice.createOffer',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',
