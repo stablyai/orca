@@ -284,7 +284,7 @@ export function NativeChatQuestionCard({
           ref={surfaceRef}
           data-native-chat-dock-clip
           className={cn(
-            'native-chat-question-card-surface relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
+            'native-chat-question-card-surface scrollbar-sleek relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto',
             look?.surfaceClassName
           )}
         >
@@ -312,9 +312,8 @@ export function NativeChatQuestionCard({
           {look?.header}
           <div
             data-native-chat-dock-unsqueezed
-            // Short of room (fit level card), options and typed answers scroll as one body, still tall
-            // enough for option 1 while the question keeps its own two-line floor in the pinned band.
-            className="native-chat-question-card-body scrollbar-sleek flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:min-h-[calc(var(--spacing)*14)] [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto"
+            // Short of room, the whole card scrolls together so its question and actions stay reachable.
+            className="native-chat-question-card-body flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:shrink-0 [[data-native-chat-dock-fit~=card]_&]:overflow-visible"
           >
             {q.options.length > 0 ? (
               // Padded so each tile's outside focus outline clears the scroll clip.
