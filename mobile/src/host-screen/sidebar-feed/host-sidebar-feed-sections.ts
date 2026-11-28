@@ -42,6 +42,8 @@ export type HostFeedListSources = {
   hostContextOf: WorktreeHostContextOf
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
+  /** Search matches the filters hide, listed by the plan as forced rows; tagged Hidden. */
+  filterHiddenIdentities?: ReadonlySet<string>
 }
 
 // Clients name Pinned/All/PR lanes themselves; the builder names data headers.
@@ -209,6 +211,11 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
             lineageChildCount: row.lineageChildCount,
             lineageCollapsed: row.lineageCollapsed === true,
             isLastLineageChild: row.isLastLineageChild,
+            ...(sources.filterHiddenIdentities?.has(
+              composeWorktreeHostIdentity(hostId, row.worktree.id)
+            )
+              ? { filterHidden: true as const }
+              : {}),
             ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {}),
             showProjectName: row.showProjectName === true,
             // The desktop's mixed-host rule names the host; a health word alone still shows.
