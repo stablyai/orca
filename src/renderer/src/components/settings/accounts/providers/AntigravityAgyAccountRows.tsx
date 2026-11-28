@@ -1,5 +1,5 @@
 import { AlertCircle, Eye, RefreshCw, Save, Trash2, UserPlus } from 'lucide-react'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { Button } from '../../../ui/button'
@@ -7,7 +7,6 @@ import { Label } from '../../../ui/label'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 import { AccountCard, AccountCardPlaceholder } from '../account-card'
-import { formatAccountTimestamp, joinAccountDetails } from '../scope/accounts-pane-runtime'
 
 export type AntigravityAccountAction = 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove'
 
@@ -30,7 +29,6 @@ export function AntigravityAgyAccountRows({
   signIn?: AntigravityChatSignInControls
 }): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const signingIn = signIn?.ownFlow === true
   const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
   // Until Orca reads agy's login it can't tell which account holds it, so nothing changed yet.
@@ -192,11 +190,7 @@ export function AntigravityAgyAccountRows({
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
         active={active}
-        detail={
-          <span className="truncate">
-            {joinAccountDetails([note, formatAccountTimestamp(account.updatedAt, intlLocale)])}
-          </span>
-        }
+        detail={note ? <span className="truncate">{note}</span> : undefined}
         onSelect={() => run('Select', account.id)}
         selectDisabled={busy}
         actions={
