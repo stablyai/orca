@@ -155,7 +155,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtyRetireWhenIdl
     }
   }
 
-
   /** True once this daemon accepted idle retirement: it is leaving and never serves again. */
   hasRetiredForIdle(): boolean {
     return this.idleRetirementState === 'retiring'
