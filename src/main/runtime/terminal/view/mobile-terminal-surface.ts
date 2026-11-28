@@ -132,24 +132,21 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     ) {
       return null
     }
-    const surface = this.findMobileTerminalSurfaceForPty(authority.worktreeId, authority.ptyId)
+    // Its tab is in its list: a teammate's own workspace for theirs.
+    const list = this.tabWorkspaceOf(live.pty)
+    const surface = this.findMobileTerminalSurfaceForPty(list, authority.ptyId)
     if (!surface) {
       return null
     }
-    const [hostId] = this.getWorkspaceSessionHostIdsForTab(
-      authority.worktreeId,
-      surface.tab.parentTabId
-    )
+    const [hostId] = this.getWorkspaceSessionHostIdsForTab(list, surface.tab.parentTabId)
     const session = hostId ? (this.store?.getWorkspaceSession?.(hostId) ?? null) : null
-    const sessionWorktreeId = session
-      ? resolveTerminalSessionWorktreeId(session, authority.worktreeId)
-      : null
+    const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, list) : null
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(
           (tab) => tab.id === surface.tab.parentTabId
         )
       : undefined
-    if (persistedTab && !worktreeIdsEqual(persistedTab.worktreeId, authority.worktreeId)) {
+    if (persistedTab && !worktreeIdsEqual(persistedTab.worktreeId, list)) {
       return null
     }
     const paneKey = makePaneKey(surface.tab.parentTabId, surface.tab.leafId)
@@ -166,7 +163,7 @@ export abstract class OrcaRuntimeWithWaitForMobileTerminalSurface extends OrcaRu
     }
     if (
       !this.resolveTerminalSplitSourceAuthority(
-        authority.worktreeId,
+        list,
         surface.tab.parentTabId,
         surface.tab.leafId,
         authority.ptyId

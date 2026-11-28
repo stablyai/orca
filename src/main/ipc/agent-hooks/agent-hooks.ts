@@ -10,7 +10,7 @@ import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { getMigrationUnsupportedPtySnapshot } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import {
   ownerWindowHearsMigrationNotice,
-  ownerWindowHearsStatus,
+  ownerWindowShowsAgentPane,
   type OwnerWindowAgentStatusRuntime
 } from '../../agent-hooks/window/owner-window-agent-status'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
@@ -55,7 +55,7 @@ export function registerAgentHookHandlers(
         // Same rule as the live push: the renderer's feed bridge owns structured rows for now.
         // The snapshot the owner's window pulls on load follows the rule its live pushes do.
         .filter(
-          (entry) => entry.structuredHost === undefined && ownerWindowHearsStatus(runtime, entry)
+          (entry) => entry.structuredHost === undefined && ownerWindowShowsAgentPane(runtime, entry)
         )
         .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
     )

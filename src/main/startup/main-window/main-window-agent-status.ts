@@ -9,10 +9,8 @@ import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-st
 import { cliWriterTopology } from '../../agent-hooks/server/cli-writer-topology'
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import {
-  ownerWindowHearsClear,
-  ownerWindowHearsMigrationClear,
   ownerWindowHearsMigrationNotice,
-  ownerWindowHearsStatus
+  ownerWindowShowsAgentPane
 } from '../../agent-hooks/window/owner-window-agent-status'
 
 export type MainWindowAgentStatusOptions = {
@@ -64,7 +62,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       return
     }
     // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
-    if (structuredHost || !ownerWindowHearsStatus(state.core.runtime, { paneKey, worktreeId })) {
+    if (structuredHost || !ownerWindowShowsAgentPane(state.core.runtime, { paneKey, worktreeId })) {
       return
     }
     const launchConfig = state.core.runtime?.getLaunchStatementForPaneKey(
@@ -142,7 +140,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
   agentHookServer.setPaneStatusClearListener((clear) => {
     if (
       state.mainWindow?.isDestroyed() ||
-      ('paneKey' in clear && !ownerWindowHearsClear(state.core.runtime, clear))
+      ('paneKey' in clear && !ownerWindowShowsAgentPane(state.core.runtime, clear))
     ) {
       return
     }
@@ -154,7 +152,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       state.mainWindow?.isDestroyed() ||
       !(event.type === 'set'
         ? ownerWindowHearsMigrationNotice(runtime, event.entry)
-        : ownerWindowHearsMigrationClear(runtime, event.ptyId))
+        : ownerWindowShowsAgentPane(runtime, { ptyId: event.ptyId }))
     ) {
       return
     }

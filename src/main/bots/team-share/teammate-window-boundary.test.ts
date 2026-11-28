@@ -6,7 +6,8 @@ import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/worksp
 import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import { ownerWindowProbe } from './owner-window-probe.test-support'
-import { rig, settleTeammateRig, TEAMMATE } from './teammate-tabs.test-support'
+import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
+import { C, rig, settleTeammateRig, TEAMMATE } from './teammate-tabs.test-support'
 
 afterEach(settleTeammateRig)
 
@@ -211,6 +212,45 @@ it("follows a launched chat in the owner's window for the owner's workspace alon
     expect(probe.relays).toEqual([])
     r.runtime.focusLaunchedChatInHostWindow(r.home, 'chat-o')
     expect(probe.relays.map((relay) => relay.name)).toEqual(['focusEditorTab'])
+  } finally {
+    probe.close()
+  }
+})
+
+it("closes a teammate's chat tab in their own workspace without telling the owner's window", async () => {
+  const { r, K, probe, before } = await besideOwnerWindow()
+  const CHAT = `agent-session:${C}`
+  const warn = vi.spyOn(console, 'warn')
+  try {
+    // Their chat in their own workspace's live list.
+    await r.runtime.listMobileSessionTabs(`id:${K}`)
+    const snapshots = r.runtime['mobileSessionTabsByWorktree']
+    const live = snapshots.get(K)!
+    snapshots.set(K, {
+      ...live,
+      tabs: [
+        ...live.tabs,
+        {
+          type: 'agent-session',
+          id: CHAT,
+          title: 'Chat',
+          sessionId: C,
+          agent: 'claude',
+          isActive: false
+        }
+      ]
+    })
+    const listed = async () =>
+      (await r.runtime.listMobileSessionTabs(`id:${K}`)).tabs.map((tab) => tab.id)
+    expect(await listed()).toContain(CHAT)
+    // What the window hears on attaching is not the close's.
+    await chatTabCommandsSettled()
+    probe.relays.splice(0)
+
+    await r.runtime.closeMobileSessionTab(`id:${K}`, CHAT, { reason: 'user', person: 'owner' })
+    expect(probe.relays).toEqual([])
+    expect(warn.mock.calls.flat().map(String).join('\n')).not.toMatch(/window_relay/)
+    expect(await probe.ownerState()).toBe(before)
   } finally {
     probe.close()
   }

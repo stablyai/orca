@@ -18,7 +18,6 @@ import { rig, settleTeammateRig, TEAMMATE } from './teammate-tabs.test-support'
 import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
 import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/workspace-session/teammate-homes-session-partition'
-import { mobileTerminalTabPaneKey } from '../../runtime/session-lifecycle/projection/runtime-mobile-session-projection'
 import {
   clearMigrationUnsupportedPty,
   setMigrationUnsupportedPty
@@ -206,60 +205,59 @@ it('keeps a teammate’s agent terminal and its launch recipe off the owner’s 
   }
 })
 
-it('leaves a teammate’s status no live terminal places out of the pulled snapshot, and keeps the owner’s restored one', async () => {
+it('drops a persisted status only when a teammate’s list holds its pane, and keeps every owner’s', async () => {
   const r = await rig()
   const K = personWorkspaceKey({ folderWorkspaceId: r.home.slice('folder:'.length), ...TEAMMATE })
   const LEAF = '0f8fad5b-d9cb-469f-a165-70867728950e'
-  // The owner's terminal restored from their saved layout, with no process or window pane yet.
-  const ownersTab = {
-    id: 'owner-tab',
-    ptyId: null,
-    worktreeId: r.workspace,
-    title: 'Terminal 1',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1
-  }
-  r.profile.setWorkspaceSession({
-    ...getDefaultWorkspaceSession(),
-    tabsByWorktree: {
-      [r.workspace]: [ownersTab]
-    }
-  })
-  // A teammate's terminal in their own workspace, restored with no process.
+  // A teammate's terminal saved in their own workspace, restored with no process.
   r.profile.setWorkspaceSession(
     {
       ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [K]: [{ ...ownersTab, id: 'mate-saved', worktreeId: K }] }
+      tabsByWorktree: {
+        [K]: [
+          {
+            id: 'mate-saved',
+            ptyId: null,
+            worktreeId: K,
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      }
     },
     TEAM
   )
-  const listed = await r.runtime.listMobileSessionTabs(`id:${K}`)
-  const matesSaved = listed.tabs.find((tab) => tab.type === 'terminal')
-  expect(matesSaved).toBeDefined()
   registerAgentHookHandlers(r.runtime)
   const row = (paneKey: string, worktreeId?: string) => ({
     paneKey,
     ...(worktreeId ? { worktreeId } : {}),
     payload: { state: 'done', agentType: 'claude' }
   })
+  const owners = [
+    row(`owner-tab:${LEAF}`, r.workspace),
+    // Spelled another way than any saved key, a legacy numeric pane, or one nothing places.
+    row(`owner-tab:${LEAF}`, r.workspace.toUpperCase()),
+    row('owner-tab:0', r.workspace),
+    row(`gone-tab:${LEAF}`)
+  ]
   vi.spyOn(agentHookServer, 'getStatusSnapshot').mockReturnValue(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pull reads only these fields.
     [
-      row(`owner-tab:${LEAF}`, r.workspace),
-      // A teammate's, saved across a restart: its terminal is gone, nothing places its pane.
-      row(`gone-tab:${LEAF}`, r.workspace),
-      row(`mate-tab:${LEAF}`, K),
-      // A hook that names no workspace: the pane is placed in the teammate's list.
-      row(mobileTerminalTabPaneKey(matesSaved!)!)
+      ...owners,
+      // A teammate's, saved across a restart: their terminal's hook names the Home it ran in.
+      row(`mate-saved:${LEAF}`, r.workspace),
+      row('mate-saved:1', r.workspace),
+      row(`mate-tab:${LEAF}`, K)
     ] as unknown as ReturnType<typeof agentHookServer.getStatusSnapshot>
   )
 
   const pulled = z
     .array(z.looseObject({ paneKey: z.string() }))
     .parse(handlers.get('agentStatus:getSnapshot')?.())
-  expect(pulled.map((status) => status.paneKey)).toEqual([`owner-tab:${LEAF}`])
+  expect(pulled.map((status) => status.paneKey)).toEqual(owners.map((status) => status.paneKey))
 })
 
 it('keeps a teammate’s terminal migration notice off the owner’s window, pushed and pulled', async () => {
@@ -323,9 +321,27 @@ it('closes a teammate’s terminal by its handle without telling the owner’s w
   try {
     await r.runtime.closeTerminal(matesTerminal.terminal)
     await chatTabCommandsSettled()
+    const listed = await r.list('mate-desk')
+    expect(listed.tabs.map((tab) => tab.id)).not.toContain(matesTerminal.id)
     expect(owner.probe.relays).toEqual([])
     expect(warn.mock.calls.flat().map(String).join('\n')).not.toMatch(/window_relay/)
   } finally {
     owner.close()
   }
+})
+
+it('renames a teammate’s live terminal by its tab in their own workspace', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r, (ptyId) => void r.runtime.onPtyExit(ptyId, 0))
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  const K = personWorkspaceKey({ folderWorkspaceId: r.home.slice('folder:'.length), ...TEAMMATE })
+  const pty = r.runtime['ptysById'].get(matesTerminal.ptyId)!
+  Object.assign(pty, { tabId: matesTerminal.tabId, paneKey: matesTerminal.paneKey })
+
+  await r.runtime.setMobileSessionTabProps(`id:${K}`, {
+    tabId: matesTerminal.tabId,
+    customTitle: 'Build'
+  })
+  expect(pty.manualTitle).toBe('Build')
 })

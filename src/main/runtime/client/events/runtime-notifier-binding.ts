@@ -5,6 +5,7 @@ import { guardDesktopSurface, guardWindowRelays, type WindowRelayLists } from '.
 import { setRuntimeDesktopSurfaceGate } from '../../construction/runtime-desktop-surface'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
+import { teammateListHoldsPane } from '../../session-tabs/restoration/status-pane-placement'
 
 /** A workspace, or a terminal whose tabs' workspace is its holder's list. */
 export type WindowTarget = string | Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 'holder'>
@@ -34,6 +35,11 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
   /** A live terminal's record, for the classifiers that place its facts (`hostListPty`). */
   ptyRecordOf(ptyId: string): Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined {
     return this.ptysById.get(ptyId)
+  }
+
+  /** Whether a teammate's own workspace lists a pane, for a status no live terminal places. */
+  teammateListHoldsPane(paneKey: string): boolean {
+    return teammateListHoldsPane(this.store, paneKey)
   }
 
   protected countTerminalSideEffectConsumingClientEventListeners(): number {
