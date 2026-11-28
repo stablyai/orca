@@ -14,11 +14,12 @@ let preloaded: { native: NativeCaptureModule; host: ProcessHostModule } | null =
 /** Loads capture code early: a module load during a hang needs the disk and thread pool main may be blocking. */
 export function preloadHangCaptureModules(): ReturnType<typeof setTimeout> {
   const timer = setTimeout(() => {
-    void Promise.all([
-      import('./native-hang-capture'),
-      import('@orca/process-host'),
-      import('./hang-incident-snapshot')
-    ])
+    // Enrichment runs everywhere; the native sample (and its process host) is macOS-only, so load it only there.
+    void import('./hang-incident-snapshot').catch(() => {})
+    if (process.platform !== 'darwin') {
+      return
+    }
+    void Promise.all([import('./native-hang-capture'), import('@orca/process-host')])
       .then(([native, host]) => {
         preloaded = { native, host }
       })
