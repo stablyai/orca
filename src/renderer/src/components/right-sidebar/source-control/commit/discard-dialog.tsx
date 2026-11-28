@@ -8,7 +8,8 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle
+  DialogTitle,
+  focusDialogConfirmButton
 } from '@/components/ui/dialog'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { DiscardAllArea } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
@@ -21,18 +22,6 @@ import { useTranslate } from '@/i18n/use-translate'
 export type PendingDiscardConfirmation =
   | { kind: 'entry'; entry: GitStatusEntry }
   | { kind: 'area'; area: DiscardAllArea; paths: readonly string[] }
-
-export function focusDiscardDialogConfirmButton(
-  event: Event,
-  confirmButton: HTMLButtonElement | null
-): void {
-  if (!confirmButton) {
-    return
-  }
-  // Override Radix's initial Cancel focus so Enter confirms this destructive action.
-  event.preventDefault()
-  confirmButton.focus()
-}
 
 export function SourceControlDiscardDialog({
   pendingDiscard,
@@ -67,9 +56,7 @@ export function SourceControlDiscardDialog({
     >
       <DialogContent
         className="max-w-md"
-        onOpenAutoFocus={(event) =>
-          focusDiscardDialogConfirmButton(event, confirmButtonRef.current)
-        }
+        onOpenAutoFocus={(event) => focusDialogConfirmButton(event, confirmButtonRef.current)}
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
