@@ -10,6 +10,17 @@ export const FILE_WRITE_IDENTICAL_RUNTIME_CAPABILITY = 'files.write.identical-no
 
 export const FILE_WRITE_IF_UNCHANGED_METHOD = 'files.writeIfUnchanged'
 
+// Why its own method: a host too old to serve it answers method_not_found, so a placeholder is kept
+// rather than removed by a delete that cannot check what the path holds now.
+export const FILE_DELETE_IF_UNCHANGED_METHOD = 'files.deleteIfUnchanged'
+
+// Why a capability as well as the method: without it the host's `files.stat` and `files.delete` are
+// separate requests, the read-then-delete window this guards against.
+export const FILE_DELETE_IF_UNCHANGED_RUNTIME_CAPABILITY = 'files.delete.if-unchanged.v1' as const
+
+/** Only a host that can hold the file open while it checks and deletes it may answer the guarded delete. */
+export const FILE_DELETE_LOCAL_ONLY_MESSAGE = 'files.deleteIfUnchanged is local to this host'
+
 // Why: earlier hosts refuse `files.writeIfUnchanged` from phones, so a phone offers Edit only with this.
 export const MOBILE_FILE_WRITE_RUNTIME_CAPABILITY = 'files.mobile-write-if-unchanged.v1' as const
 
@@ -45,6 +56,24 @@ export type FileWriteResult =
 
 export const FILE_WRITE_OK: FileWriteResult = { ok: true }
 export const FILE_WRITE_UNCHANGED: FileWriteResult = { ok: true, unchanged: true }
+
+/** The guarded delete's answer: `deleted` on success, or the disk state that made it refuse. */
+export type FileDeleteIfUnchangedResult =
+  | { ok: true }
+  | { ok: false; diskConflict: FileWriteDiskConflict }
+
+export const FILE_DELETE_OK: FileDeleteIfUnchangedResult = { ok: true }
+
+export function parseFileDeleteIfUnchangedResult(value: unknown): FileDeleteIfUnchangedResult {
+  if (typeof value !== 'object' || value === null || !('ok' in value) || value.ok !== false) {
+    return FILE_DELETE_OK
+  }
+  const diskConflict = 'diskConflict' in value ? value.diskConflict : undefined
+  return {
+    ok: false,
+    diskConflict: diskConflict === 'missing' || diskConflict === 'not-utf8' ? diskConflict : 'changed'
+  }
+}
 
 /** `current` is the decoded disk text, `null` when missing, `undefined` when not comparable text; `content` is the text being saved. */
 export function compareDiskWritePrecondition(

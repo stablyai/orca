@@ -10,12 +10,18 @@ import {
   localAccess
 } from '../runtime-file-routing'
 import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
+import { joinPath } from '../../../lib/path'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import { REMOTE_RUNTIME_MAX_FILE_WRITE_CONTENT_BYTES } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import {
+  FILE_DELETE_IF_UNCHANGED_METHOD,
+  FILE_DELETE_LOCAL_ONLY_MESSAGE,
   FILE_WRITE_OK,
+  parseFileDeleteIfUnchangedResult,
   parseFileWriteResult,
+  type FileDeleteIfUnchangedResult,
   type FileWriteDiskPrecondition,
   type FileWriteResult
 } from '../../../../../shared/file-write/file-write-disk-precondition'
@@ -260,4 +266,57 @@ export async function deleteRuntimeRelativePath(
     15_000
   )
   return true
+}
+
+/**
+ * Deletes a file only if the host still holds the bytes `precondition` pinned, as one request.
+ * `null` means the host is too old to answer in one step; the caller must not fall back to a
+ * separate read and delete, since that is the window this closes.
+ */
+export async function deleteRuntimeRelativePathIfUnchanged(
+  context: RuntimeFileOperationArgs,
+  relativePath: string,
+  precondition: FileWriteDiskPrecondition
+): Promise<FileDeleteIfUnchangedResult | null> {
+  const target = context.target
+  if (target.kind !== 'environment' || !context.worktreeId) {
+    // An SSH-owned worktree's files are transferred by its connection, which serves no guarded delete;
+    // keeping an empty placeholder is the safe answer there.
+    if (!context.worktreePath || context.connectionId) {
+      return null
+    }
+    // The caller passes a worktree-relative path; this client expects an absolute one.
+    const filePath = joinPath(context.worktreePath, relativePath)
+    assertLocalFilesystemFallbackAllowed(context)
+    return window.api.fs.deletePathIfUnchanged({
+      targetPath: filePath,
+      connectionId: context.connectionId,
+      diskPrecondition: precondition
+    })
+  }
+  if (!canReadRelativeRuntimeFile(relativePath)) {
+    return null
+  }
+  try {
+    return parseFileDeleteIfUnchangedResult(
+      await callRuntimeFileMutation(
+        target,
+        FILE_DELETE_IF_UNCHANGED_METHOD,
+        withSshMutationExpectation(context, {
+          worktree: toRuntimeWorktreeSelector(context.worktreeId),
+          relativePath: normalizeRelativePath(relativePath),
+          diskPrecondition: precondition
+        }),
+        15_000
+      )
+    )
+  } catch (error) {
+    if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+      return null
+    }
+    if (error instanceof Error && error.message.includes(FILE_DELETE_LOCAL_ONLY_MESSAGE)) {
+      return null
+    }
+    throw error
+  }
 }

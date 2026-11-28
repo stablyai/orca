@@ -300,7 +300,7 @@ export function createCloseFileAction(
 
         // Eagerly created empty untitled paths are bindable placeholders; delete them after close to avoid disk clutter.
         if (shouldDeleteFromDisk && preClose && typeof window !== 'undefined') {
-          deleteUntouchedUntitledFile(get, preClose)
+          deleteUntouchedUntitledFile(get, preClose, get().rememberClosedEditorTabForReopen)
         }
       }
 

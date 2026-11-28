@@ -10,6 +10,7 @@ import type { LocalFileAccess } from '../../../shared/file-access/local-file-acc
 import type { RemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
 import type {
+  FileDeleteIfUnchangedResult,
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../shared/file-write/file-write-disk-precondition'
@@ -189,6 +190,14 @@ export const fsApi = {
       permanent?: boolean
     } & SshMutationExpectation
   ): Promise<void> => ipcRenderer.invoke('fs:deletePath', args),
+  deletePathIfUnchanged: (
+    args: {
+      targetPath: string
+      connectionId?: string
+      diskPrecondition: FileWriteDiskPrecondition
+    } & SshMutationExpectation
+  ): Promise<FileDeleteIfUnchangedResult> =>
+    ipcRenderer.invoke('fs:deletePathIfUnchanged', args),
   stat: (args: {
     filePath: string
     connectionId?: string

@@ -15,9 +15,12 @@ import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { registerAgentSessionAttachmentUploadHandlers } from '../../agent-attachments/agent-session-attachment-upload-ipc'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import type {
+  FileDeleteIfUnchangedResult,
   FileWriteDiskPrecondition,
   FileWriteResult
 } from '../../../../shared/file-write/file-write-disk-precondition'
+import { deleteLocalFileIfUnchanged } from '../../../filesystem/local-file-io/local-file-delete-if-unchanged'
+import { FILE_DELETE_LOCAL_ONLY_MESSAGE } from '../../../../shared/file-write/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../../../filesystem/local-file-io/local-disk-write-precondition'
 import { replaceLocalFileBytesIfUnchanged } from '../../../filesystem/local-file-io/local-disk-bytes-replace'
 import type { FileBytesWritePrecondition } from '../../../../shared/file-write/file-bytes-write'
@@ -142,6 +145,35 @@ export function registerFilesystemWriteHandlers(
         const reason = error instanceof Error ? error.message : String(error)
         throw new Error(`${TRASH_DELETE_FAILED_MESSAGE}: ${reason}`)
       }
+    }
+  )
+
+  ipc.handle(
+    'fs:deletePathIfUnchanged',
+    async (
+      _event,
+      args: {
+        targetPath: string
+        connectionId?: string
+        diskPrecondition: FileWriteDiskPrecondition
+      } & SshMutationExpectation
+    ): Promise<FileDeleteIfUnchangedResult> => {
+      assertSshMutationExpectation(
+        args.connectionId,
+        args.expectedSshTargetId,
+        args.expectedSshConnectionGeneration,
+        args.expectedExecutionHostId
+      )
+      if (args.connectionId) {
+        // A phone or paired viewer's SSH host transfers files over its own connection, which cannot hold
+        // the file while it checks it; the caller treats this as unsupported and keeps the placeholder.
+        throw new Error(FILE_DELETE_LOCAL_ONLY_MESSAGE)
+      }
+      // The symlink entry is what the caller pinned; a realpath target may sit outside allowed roots.
+      const targetPath = await resolveDesktopAuthorizedPath(args.targetPath, store, {
+        preserveSymlink: true
+      })
+      return deleteLocalFileIfUnchanged(windowsFsPath(targetPath), args.diskPrecondition)
     }
   )
 

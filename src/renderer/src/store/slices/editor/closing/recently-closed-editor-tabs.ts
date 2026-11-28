@@ -4,6 +4,7 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import {
   createRecentlyClosedTabPositionIndex,
+  getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition
 } from '../../tabs/recently-closed-tab-position'
 import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
@@ -14,10 +15,7 @@ import {
   type OpenFile
 } from '../types/open-file'
 import { mayShareEditorBackingFile } from '../file-ids/editor-file-ids'
-import {
-  deleteUntouchedUntitledFile,
-  shouldDeleteUntouchedUntitledFile
-} from '../tabs/untitled-file-cleanup'
+import { deleteUntouchedUntitledFile, shouldDeleteUntouchedUntitledFile } from '../tabs/untitled-file-cleanup'
 import { unifiedTabsKeepWorktreeSelected } from '../tabs/unified-tabs-keep-worktree-selected'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
@@ -30,8 +28,38 @@ import type { AppState } from '../../../types'
 export function createRecentlyClosedEditorTabs(
   set: EditorSet,
   get: EditorGet
-): Pick<EditorSlice, 'reopenClosedEditorTab' | 'closeAllFiles'> {
+): Pick<EditorSlice, 'reopenClosedEditorTab' | 'closeAllFiles' | 'rememberClosedEditorTabForReopen'> {
   return {
+    rememberClosedEditorTabForReopen: (file) => {
+      // Why: the close dropped this tab before the host answered; an empty close then gets its reopen
+      // entry back, so Cmd+Shift+T still reaches a note that turned out to hold content.
+      set((s) => {
+        const worktreeId = file.worktreeId
+        const stack = s.recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
+        if (!worktreeId || stack.some((entry) => entry.reopenId === file.id)) {
+          return s
+        }
+        const position = ORCA_LAYOUT_OWNER_IS_MAIN
+          ? getRecentlyClosedTabPosition(s, worktreeId, file.id)
+          : undefined
+        const entry = {
+          ...(closedEditorFileSnapshot(file) as ClosedEditorTabSnapshot),
+          reopenId: file.id,
+          ...(position ? { position } : {})
+        }
+        return {
+          recentlyClosedEditorTabsByWorktree: {
+            ...s.recentlyClosedEditorTabsByWorktree,
+            [worktreeId]: [entry, ...stack].slice(0, MAX_RECENT_CLOSED_EDITOR_TABS)
+          },
+          recentlyClosedTabKindsByWorktree: pushRecentlyClosedTabKind(
+            s.recentlyClosedTabKindsByWorktree,
+            worktreeId,
+            'editor'
+          )
+        }
+      })
+    },
     reopenClosedEditorTab: (worktreeId) => {
       const stack = get().recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
       const next = stack[0]
@@ -242,7 +270,7 @@ export function createRecentlyClosedEditorTabs(
         if (typeof window !== 'undefined') {
           for (const f of untitledToDelete) {
             if (!kept.has(f.id)) {
-              deleteUntouchedUntitledFile(get, f)
+              deleteUntouchedUntitledFile(get, f, get().rememberClosedEditorTabForReopen)
             }
           }
         }
