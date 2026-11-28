@@ -1,7 +1,5 @@
-import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type {
   AsyncProfileStateAuthority,
-  ProfileStateDomainReplacement,
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
@@ -21,16 +19,16 @@ import {
   closeIdleProfileStateWriter,
   ProfileStateIdleWriterStop
 } from './writer/profile-state-idle-writer-stop'
-import {
-  ProfileStateWriterReopenPolicy,
-  reportTerminalReopenFailure
-} from './writer/profile-state-writer-reopen-policy'
+import { ProfileStateWriterReopenPolicy } from './writer/profile-state-writer-reopen-policy'
+import type { ProfileStateSaveNotice } from '../../../shared/orca-profiles/profile-state-save-notice'
+
+type WriterCommand<T> = (writer: ProfileStateWriteWorkerClient) => Promise<T>
 
 export type ProfileStateWorkerAuthorityOptions = {
   workerPath?: string
   backupWorkerPath?: string
   onFailure?: (error: Error) => void
-  onSaveDelayChanged?: (delayed: boolean) => void
+  onSaveDelayChanged?: (notice: ProfileStateSaveNotice) => void
   /** Close the writer thread after this long without a command; the next one reopens it (~22 ms). */
   writerIdleStopMs?: number
 }
@@ -43,7 +41,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   private stopping: Promise<void> | undefined
   private readonly idleStop: ProfileStateIdleWriterStop
   private inFlight = 0
-  private readonly reopenPolicy = new ProfileStateWriterReopenPolicy()
+  private readonly reopenPolicy = new ProfileStateWriterReopenPolicy(() => this.options)
   private stoppedFailure: Error | undefined
   private backups: ProfileStateBackupRotation
   private closing: Promise<void> | undefined
@@ -81,6 +79,14 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     }
   }
 
+  /** True once no reopen will be tried: aborted, closing, or the reopen policy gave up. A retiring writer is not stopped. */
+  get savingStopped(): boolean {
+    return Boolean(this.stoppedFailure || this.closing) || this.reopenPolicy.savingStopped
+  }
+
+  /** Saving is frozen until restart outside the writer (a failed maintenance pause); say so instead of leaving a retry notice up. */
+  readonly reportSavingStopped = (error: unknown): void => this.reopenPolicy.reportStopped(error)
+
   async abort(): Promise<void> {
     this.idleStop.cancel()
     // Set before waiting so neither this abort's fault nor a retirement under way is recovered by a reopen.
@@ -108,12 +114,9 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
   }
 
   writeSerializedAutomationRuns(
-    replacements: readonly ProfileStateDomainReplacement[],
-    runs: readonly AutomationRun[]
+    ...args: Parameters<AsyncProfileStateAuthority['writeSerializedAutomationRuns']>
   ): Promise<void> {
-    return this.run((writer) => writer.writeSerializedAutomationRuns(replacements, runs)).then(
-      () => {}
-    )
+    return this.run((writer) => writer.writeSerializedAutomationRuns(...args)).then(() => {})
   }
 
   writeCompleteSerializedDomains(
@@ -126,13 +129,11 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     return this.run((writer) => writer.writeSerializedState(payload)).then(() => {})
   }
 
-  writeJsonExport(targetPath: string): Promise<number> {
-    return this.run((writer) => writer.writeJsonExport(targetPath))
-  }
+  readonly writeJsonExport = (targetPath: string): Promise<number> =>
+    this.run((writer) => writer.writeJsonExport(targetPath), false)
 
-  writeLatestJsonExport(dataFile: string): Promise<number | undefined> {
-    return this.run((writer) => writer.writeLatestJsonExport(dataFile))
-  }
+  readonly writeLatestJsonExport = (dataFile: string): Promise<number | undefined> =>
+    this.run((writer) => writer.writeLatestJsonExport(dataFile), false)
 
   scheduleBackup(): void {
     if (!this.closing) {
@@ -221,18 +222,18 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
     )
   }
 
-  private run<T>(command: (writer: ProfileStateWriteWorkerClient) => Promise<T>): Promise<T> {
+  private run<T>(command: WriterCommand<T>, save = true): Promise<T> {
     this.idleStop.cancel()
     this.inFlight += 1
     const writer = this.writer
-    const result = writer && !this.stopping ? command(writer) : this.reopen().then(command)
+    const result = writer && !this.stopping ? command(writer) : this.reopen(save).then(command)
     return result.finally(() => {
       this.inFlight -= 1
       this.idleStop.schedule()
     })
   }
 
-  private async reopen(): Promise<ProfileStateWriteWorkerClient> {
+  private async reopen(save: boolean): Promise<ProfileStateWriteWorkerClient> {
     await this.stopping
     if (this.writer) {
       await this.writer.ready
@@ -255,6 +256,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       await writer.ready
     } catch (error) {
       this.forgetFailedReopen(writer, error)
+      this.reopenPolicy.recordReopenRefused(error, save)
       throw error
     }
     this.reopenPolicy.recordSuccess()
@@ -266,7 +268,7 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       return
     }
     if (!this.reopenPolicy.recordFailure(error)) {
-      reportTerminalReopenFailure(this.options.onFailure, this.reopenPolicy.terminalFailure(error))
+      this.reopenPolicy.reportStopped(error)
       return
     }
     this.writer = null
@@ -281,13 +283,15 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
       initialization,
       this.options,
       reportInitializationFailure,
-      (writer, error) => this.handleIndeterminateWriterFailure(writer, error)
+      this.reopenPolicy,
+      (writer, error, save) => this.handleIndeterminateWriterFailure(writer, error, save)
     )
   }
 
   private handleIndeterminateWriterFailure(
     writer: ProfileStateWriteWorkerClient,
-    error: Error
+    error: Error,
+    save: boolean
   ): void {
     const stopping = closeIndeterminateProfileStateWriter(
       writer,
@@ -298,12 +302,12 @@ export class ProfileStateWorkerAuthority implements AsyncProfileStateAuthority {
         }
         this.writer = null
         this.stoppedRevision = revision
-        this.reopenPolicy.recoverFrom(error)
         return true
       },
-      () => reportTerminalReopenFailure(this.options.onFailure, error)
+      () => this.reopenPolicy.reportStopped(error)
     )
     if (stopping) {
+      this.reopenPolicy.recoverFrom(error, save)
       this.stopping = stopping.finally(() => (this.stopping = undefined))
     }
   }

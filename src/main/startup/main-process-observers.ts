@@ -9,6 +9,8 @@ import { AgentAwakeService } from '../power/agent-awake-service'
 import { bindAgentAwakeToHookStatus } from '../power/agent-awake-hook-status-binding'
 import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
+import { retryParkedSaves } from '../persistence/loading-store/profile-writing/refused-save-retry'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
 import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
@@ -48,6 +50,16 @@ function feedWakeSignalClock(): () => void {
 /** Main's power, presence, awake, telemetry and hang observers; core observers start in composition. */
 export function initializeMainProcessObservers(store: Store): void {
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  // A save refused past its timed retries is tried again when the user comes back, not on a timer.
+  app.on('browser-window-focus', retryParkedSaves)
+  const unsubscribeResume = subscribeSystemPowerLifecycle({
+    onSuspend: () => {},
+    onResume: retryParkedSaves
+  })
+  state.unsubscribeRefusedSaveRetry = () => {
+    app.off('browser-window-focus', retryParkedSaves)
+    unsubscribeResume()
+  }
   if (process.platform === 'darwin') {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }

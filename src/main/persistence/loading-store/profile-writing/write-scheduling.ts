@@ -1,6 +1,6 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
-import { enqueueWrite } from './primary-state-writes'
+import { runScheduledSave } from './refused-save-retry'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   notifyWorkspaceSessionWritten,
@@ -78,6 +78,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'firstPendingSaveAt'
   | 'pendingWrite'
   | 'profileMaintenancePending'
+  | 'profileStateAuthority'
   | 'quitFlushStarted'
   | 'writeGeneration'
   | 'writeTimer'
@@ -238,9 +239,5 @@ function scheduleDomainSave(
   }
   const untilMaxWait = Math.max(0, runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now)
   const delay = Math.min(SAVE_DEBOUNCE_MS, untilMaxWait)
-  runtime.writeTimer = setTimeout(() => {
-    runtime.writeTimer = null
-    runtime.firstPendingSaveAt = null
-    void enqueueWrite(writes, { skipIfClean: true }).catch(() => {})
-  }, delay)
+  runtime.writeTimer = setTimeout(() => runScheduledSave(runtime, writes), delay)
 }

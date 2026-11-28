@@ -41,7 +41,7 @@ export type ProfileStateWriterErrorData = {
   expectedRevision?: number
   actualRevision?: number
   domain?: string | null
-  /** Preserve SQLite causes that the outer open-error class cannot identify. */
+  /** Preserve SQLite causes that an open error or an interrupted write cannot identify. */
   cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =

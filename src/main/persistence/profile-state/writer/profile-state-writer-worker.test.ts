@@ -10,6 +10,7 @@ import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
 import { ProfileStateWorkerAuthority } from '../profile-state-worker-authority'
+import type { ProfileStateSaveNotice } from '../../../../shared/orca-profiles/profile-state-save-notice'
 
 let bundleRoot: string
 let workerPath: string
@@ -186,8 +187,8 @@ describe('persistent profile state write worker', () => {
   async function interruptedAuthority(
     root: string,
     f: ReturnType<typeof fixture>,
-    afterCommit: boolean,
-    onFailure?: (error: Error) => void
+    mode: 'before-commit' | 'after-commit' | 'disk-full' | 'refused',
+    reported: { failures: Error[]; notices: ProfileStateSaveNotice[] }
   ) {
     const interruptedPath = join(root, 'interrupted-worker.cjs')
     const marker = JSON.stringify(join(root, 'interrupted-once'))
@@ -208,7 +209,13 @@ describe('persistent profile state write worker', () => {
             builder.onLoad({ filter: /profile-state-write-transaction\.ts$/ }, (args) => ({
               contents: readFileSync(args.path, 'utf8').replace(
                 "db.exec('COMMIT')",
-                afterCommit ? `db.exec('COMMIT'); ${exitOnce}` : `${exitOnce}; db.exec('COMMIT')`
+                {
+                  'before-commit': `${exitOnce}; db.exec('COMMIT')`,
+                  'after-commit': `db.exec('COMMIT'); ${exitOnce}`,
+                  // SQLite's SQLITE_FULL (13) on COMMIT leaves the transaction open, so it rolls back cleanly.
+                  'disk-full': `${exitOnce.replace('process.exit(17)', "throw Object.assign(new Error('database or disk is full'), { code: 'ERR_SQLITE_ERROR', errcode: 13 })")}; db.exec('COMMIT')`,
+                  refused: `${exitOnce.replace('process.exit(17)', "throw new Error('database is locked')")}; db.exec('COMMIT')`
+                }[mode]
               ),
               loader: 'ts'
             }))
@@ -218,39 +225,85 @@ describe('persistent profile state write worker', () => {
     })
     const authority = new ProfileStateWorkerAuthority(f.initialization, {
       workerPath: interruptedPath,
-      onFailure
+      onFailure: (error) => reported.failures.push(error),
+      onSaveDelayChanged: (notice) => reported.notices.push(notice)
     })
     await authority.ready
     const failure = await authority
       .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
       .catch((error: unknown) => error)
-    expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    expect(profileStateWriterFailureOutcome(failure)).toBe(
+      mode === 'disk-full' || mode === 'refused' ? 'known-failure' : 'indeterminate'
+    )
     return authority
   }
 
   it('reopens after an indeterminate write only when the transaction did not commit', async () => {
     const rolledBack = fixture()
-    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false)
+    const recovery: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const recovered = await interruptedAuthority(
+      rolledBack.root,
+      rolledBack,
+      'before-commit',
+      recovery
+    )
     await expect(
       recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
     ).resolves.toBeUndefined()
+    // The notice stays up from the interrupted write until a save lands; nothing reports saving stopped.
+    expect(recovery).toEqual({ failures: [], notices: ['failing', null] })
     await recovered.close()
     expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
       settings: { recovered: true }
     })
 
     const committed = fixture()
-    const failures: Error[] = []
-    const refused = await interruptedAuthority(committed.root, committed, true, (error) =>
-      failures.push(error)
-    )
+    const refusal: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const refused = await interruptedAuthority(committed.root, committed, 'after-commit', refusal)
     await expect(
       refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
     ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
-    expect(failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    expect(refusal.failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    expect(refusal.notices).toEqual(['failing', null])
     await refused.close().catch(() => {})
     expect(readState(committed.path, committed.profileId)).toEqual({
       settings: { interrupted: true }
     })
+  })
+
+  it('warns about a refused save without claiming a full disk, until a later save lands', async () => {
+    const locked = fixture()
+    const events: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const authority = await interruptedAuthority(locked.root, locked, 'refused', events)
+    await expect(
+      authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
+    ).resolves.toBeUndefined()
+    expect(events).toEqual({ failures: [], notices: ['failing', null] })
+    await authority.close()
+  })
+
+  it('keeps the warning up from a disk-full save until a later save lands', async () => {
+    const full = fixture()
+    const events: { failures: Error[]; notices: ProfileStateSaveNotice[] } = {
+      failures: [],
+      notices: []
+    }
+    const authority = await interruptedAuthority(full.root, full, 'disk-full', events)
+    expect(events.notices).toEqual(['disk-full'])
+    await expect(
+      authority.writeSerializedDomains([{ domain: 'settings', payload: '{"saved":true}' }])
+    ).resolves.toBeUndefined()
+    expect(events).toEqual({ failures: [], notices: ['disk-full', null] })
+    await authority.close()
+    expect(readState(full.path, full.profileId)).toEqual({ settings: { saved: true } })
   })
 })

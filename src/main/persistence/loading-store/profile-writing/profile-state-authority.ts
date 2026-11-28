@@ -82,6 +82,8 @@ export type AsyncProfileStateAuthority = Omit<
     reason?: string
   ): Promise<ProfileStateDatabaseQuarantine>
   close(): Promise<void>
+  /** Saving was frozen until restart outside the writer; show the stopped-saving report. */
+  reportSavingStopped?(error: unknown): void
 }
 
 export type ProfileStatePersistenceAuthority = ProfileStateAuthority | AsyncProfileStateAuthority

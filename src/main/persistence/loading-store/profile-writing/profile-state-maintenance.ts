@@ -95,7 +95,12 @@ export function beginProfileStateMaintenance(
       resumeScheduling()
     } else {
       runtime.writesFrozen = true
-      await runtime.profileStateAuthority?.close?.()
+      // Saving stays off until restart; a lingering retry notice could advise freeing space, which no longer helps.
+      const authority = runtime.profileStateAuthority
+      if (authority?.asynchronous) {
+        authority.reportSavingStopped?.(error)
+      }
+      await authority?.close?.()
     }
     throw error
   })

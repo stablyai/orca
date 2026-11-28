@@ -1,3 +1,4 @@
+import { forgetParkedSave, retryRefusedSave } from './refused-save-retry'
 import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -97,6 +98,8 @@ export class PrimaryStateWriteOperations {
             }
           }
         }
+        // The refused save left its domains dirty; retry them so the unsaved warning can clear.
+        retryRefusedSave(runtime, this, error)
         throw error
       }
       return mutation.value
@@ -162,7 +165,12 @@ export class PrimaryStateWriteOperations {
 
 export function enqueueWrite(
   owner: PrimaryStateWriteOperations,
-  options: { fullCheckpoint?: boolean; skipIfClean?: boolean; signal?: AbortSignal } = {}
+  options: {
+    fullCheckpoint?: boolean
+    skipIfClean?: boolean
+    signal?: AbortSignal
+    onSaveFailed?: (error: unknown) => void
+  } = {}
 ): Promise<void> {
   const context = owner[primaryStateWriteOperationsContext]
   const { runtime } = context
@@ -174,6 +182,9 @@ export function enqueueWrite(
     // Explicit flushes must still save every domain for getter edits outside tracked domains.
     queued.capture.allDomains ||= !queued.capture.skipIfClean
     queued.capture.pendingSnapshotFileWork = runtime.pendingSnapshotFileWork
+    if (options.onSaveFailed) {
+      queued.completion.catch(options.onSaveFailed)
+    }
     return queued.completion
   }
   const capture = {
@@ -209,6 +220,9 @@ export function enqueueWrite(
   })
   if (batchable) {
     context.queuedSnapshot = { completion, capture }
+  }
+  if (options.onSaveFailed) {
+    completion.catch(options.onSaveFailed)
   }
   // Caller cancellation must not discard an admitted write or its acknowledgement/order.
   return waitForPromiseWithSignal(completion, options.signal)
@@ -264,11 +278,14 @@ export async function writeToDiskAsync(
       if (!(await sealProtectedSecretsBeforeCapture(owner))) {
         return false
       }
-      return await writeProfileStateInWorker(
+      const written = await writeProfileStateInWorker(
         owner[primaryStateWriteOperationsContext],
         runtime.profileStateAuthority,
         wholeSessions
       )
+      // Storage took a save (any caller's), so a save waiting for focus or wake has nothing left to retry.
+      forgetParkedSave(runtime)
+      return written
     } finally {
       // A failure belongs to this save only; exports and later saves seal it afresh.
       runtime.protectedSecrets.forgetFailedSeals()

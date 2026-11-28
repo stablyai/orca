@@ -70,3 +70,10 @@ export function createProfileStateWriterRequest(
     clearSlowWarning
   }
 }
+
+/** Saves write rows, or confirm the revision when nothing changed; exports and lifecycle commands do not. */
+export function isProfileStateSaveCommand(
+  command: PendingProfileStateWriterRequest['command']
+): boolean {
+  return command.startsWith('write-') || command === 'assert-revision'
+}
