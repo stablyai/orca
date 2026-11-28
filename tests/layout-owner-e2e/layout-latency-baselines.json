@@ -1,7 +1,7 @@
 {
-  "note": "Switch-off p95 (ms) from layout-latency-budget.spec.ts with the switch off (no ORCA_LAYOUT_OWNER=main), worst of the recorded runs per action so runner noise does not fail the budget. linux: CI runner, hidden window draws no frames, so it times the committed change (6 runs, 2026-11-28). darwin: drawn (2 runs, 2026-11-28). Refresh by running that spec with the switch off.",
+  "note": "Switch-off p95 (ms) from layout-latency-budget.spec.ts run with the switch off: the median of the recorded runs per action (runners vary by up to 40 ms run to run). linux: CI runner, where the hidden window draws no frames, so it times the committed change (newTab 6 runs, split 4, tabSwitch 10; 2026-11-28). darwin: drawn (3 runs, 2026-11-28). Refresh by running that spec with the switch off.",
   "switchOffP95Ms": {
-    "linux": { "timing": "committed", "newTab": 78.3, "split": 57.3, "tabSwitch": 87.6 },
-    "darwin": { "timing": "drawn", "newTab": 50.2, "split": 45.1, "tabSwitch": 16.7 }
+    "linux": { "timing": "committed", "newTab": 67.7, "split": 40.1, "tabSwitch": 27.6 },
+    "darwin": { "timing": "drawn", "newTab": 49.3, "split": 44.6, "tabSwitch": 15.8 }
   }
 }

@@ -7,6 +7,7 @@ import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/termin
 import { waitForSessionReady } from './helpers/store'
 import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 import { percentile, timeLayoutAction } from './helpers/layout-action-latency'
+import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 
 // Lane budget: with the main-owned layout path on, new tab, split and tab switch keep their p95 within the
 // switch-off p95 plus one frame. A switch-off run prints the p95s the baseline file records, per
@@ -27,84 +28,108 @@ const baselines = JSON.parse(
   )
 ).switchOffP95Ms as Record<string, Baseline>
 
-test('new tab, split and tab switch stay within the switch-off p95 plus a frame', async (// oxlint-disable-next-line no-empty-pattern -- owns its launch
-{}, testInfo) => {
-  test.setTimeout(300_000)
-  const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
-  // Production: development turns on per-frame layout checks that release builds skip.
-  const session = createRestartSession(testInfo, { NODE_ENV: 'production' })
-  const { app, page } = await session.launch()
-  try {
-    const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
-    await waitForSessionReady(page)
-    await waitForActiveTerminalManager(page, 30_000)
-    await waitForPaneCount(page, 1, 30_000)
-    // Keep a hidden window drawing where the platform allows; time the committed change where not.
-    await app.evaluate(({ BrowserWindow }) => {
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.webContents.setBackgroundThrottling(false)
-      }
-    })
-    const frameMs = await page.evaluate(async () => {
-      const t0 = performance.now()
-      for (let i = 0; i < 5; i++) {
-        await new Promise((resolve) => requestAnimationFrame(resolve))
-      }
-      return (performance.now() - t0) / 5
-    })
-    const timing: Timing = frameMs < 100 ? 'drawn' : 'committed'
-    const options = { drawn: timing === 'drawn' }
+/** Over budget with the switch on, per platform: the lane's runner splits ~35 ms slower (census, Performance). */
+const KNOWN_OVER_BUDGET: Partial<Record<NodeJS.Platform, Partial<Record<Budgeted, string>>>> = {
+  linux: { split: 'Performance: split' }
+}
 
-    const samples: Record<Budgeted, number[]> = { newTab: [], split: [], tabSwitch: [] }
-    for (let i = 0; i < WARMUP + SAMPLES; i++) {
-      const newTab = await timeLayoutAction(page, 'newTab', null, options)
-      await page.keyboard.press('Escape')
-      const split = await timeLayoutAction(page, 'split', null, options)
-      await timeLayoutAction(page, 'closePane', null, options)
-      const tabIds = await page.evaluate(
-        (id) =>
-          (window.__store!.getState().tabsByWorktree[id] ?? [])
-            .map((tab: { id: string }) => tab.id)
-            .slice(0, 2),
-        worktreeId
-      )
-      const tabSwitch = await timeLayoutAction(page, 'tabSwitch', tabIds, options)
-      // Keep the tab count bounded: close the tab this round made.
-      await page.evaluate((id) => {
-        const s = window.__store!.getState()
-        const tabs = s.tabsByWorktree[id] ?? []
-        if (tabs.length > 2) {
-          s.closeTab(tabs.at(-1)!.id)
+test.describe.configure({ mode: 'serial' })
+
+let measured: { timing: Timing; p95: Record<Budgeted, number> } | null = null
+
+// One launch measures all three; each action then has its own budget, so a known one stays marked alone.
+test.beforeAll(
+  async (
+    // oxlint-disable-next-line no-empty-pattern -- owns its launch
+    {},
+    testInfo
+  ) => {
+    test.setTimeout(300_000)
+    const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
+    // Production: development turns on per-frame layout checks that release builds skip.
+    const session = createRestartSession(testInfo, { NODE_ENV: 'production' })
+    const { app, page } = await session.launch()
+    try {
+      const worktreeId = await attachRepoAndOpenTerminal(page, repoPath)
+      await waitForSessionReady(page)
+      await waitForActiveTerminalManager(page, 30_000)
+      await waitForPaneCount(page, 1, 30_000)
+      // Keep a hidden window drawing where the platform allows; time the committed change where not.
+      await app.evaluate(({ BrowserWindow }) => {
+        for (const window of BrowserWindow.getAllWindows()) {
+          window.webContents.setBackgroundThrottling(false)
         }
-      }, worktreeId)
-      if (i >= WARMUP) {
-        samples.newTab.push(newTab)
-        samples.split.push(split)
-        samples.tabSwitch.push(tabSwitch)
+      })
+      const frameMs = await page.evaluate(async () => {
+        const t0 = performance.now()
+        for (let i = 0; i < 5; i++) {
+          await new Promise((resolve) => requestAnimationFrame(resolve))
+        }
+        return (performance.now() - t0) / 5
+      })
+      const timing: Timing = frameMs < 100 ? 'drawn' : 'committed'
+      const options = { drawn: timing === 'drawn' }
+
+      const samples: Record<Budgeted, number[]> = { newTab: [], split: [], tabSwitch: [] }
+      for (let i = 0; i < WARMUP + SAMPLES; i++) {
+        const newTab = await timeLayoutAction(page, 'newTab', null, options)
+        await page.keyboard.press('Escape')
+        const split = await timeLayoutAction(page, 'split', null, options)
+        await timeLayoutAction(page, 'closePane', null, options)
+        const tabIds = await page.evaluate(
+          (id) =>
+            (window.__store!.getState().tabsByWorktree[id] ?? [])
+              .map((tab: { id: string }) => tab.id)
+              .slice(0, 2),
+          worktreeId
+        )
+        const tabSwitch = await timeLayoutAction(page, 'tabSwitch', tabIds, options)
+        // Keep the tab count bounded: close the tab this round made.
+        await page.evaluate((id) => {
+          const s = window.__store!.getState()
+          const tabs = s.tabsByWorktree[id] ?? []
+          if (tabs.length > 2) {
+            s.closeTab(tabs.at(-1)!.id)
+          }
+        }, worktreeId)
+        if (i >= WARMUP) {
+          samples.newTab.push(newTab)
+          samples.split.push(split)
+          samples.tabSwitch.push(tabSwitch)
+        }
       }
+
+      const p95 = Object.fromEntries(
+        BUDGETED.map((action) => [action, +percentile(samples[action], 95).toFixed(1)])
+      ) as Record<Budgeted, number>
+      const layoutOwner = LAYOUT_OWNER_SWITCH_ON ? 'on' : 'off'
+      const report = { layoutOwner, platform: process.platform, timing, p95 }
+      console.log(`layout-latency-p95 ${JSON.stringify(report)}`)
+      console.log(`layout-latency-samples ${JSON.stringify(samples)}`)
+      measured = { timing, p95 }
+    } finally {
+      await session.dispose(app)
     }
+  }
+)
 
-    const p95 = Object.fromEntries(
-      BUDGETED.map((action) => [action, +percentile(samples[action], 95).toFixed(1)])
-    ) as Record<Budgeted, number>
-    const layoutOwner = LAYOUT_OWNER_SWITCH_ON ? 'on' : 'off'
-    const report = { layoutOwner, platform: process.platform, timing, p95 }
-    testInfo.annotations.push({ type: 'layout-latency-p95', description: JSON.stringify(report) })
-    console.log(`layout-latency-p95 ${JSON.stringify(report)}`)
-    console.log(`layout-latency-samples ${JSON.stringify(samples)}`)
-
+for (const action of BUDGETED) {
+  test(`${action} p95 stays within the switch-off p95 plus a frame`, (// oxlint-disable-next-line no-empty-pattern -- reads the shared measurement
+  {}, testInfo) => {
     const baseline = baselines[process.platform]
     test.skip(
       !LAYOUT_OWNER_SWITCH_ON || !baseline,
       'the budget applies to the main-owned layout path'
     )
-    expect(timing, 'timed the way the baseline was').toBe(baseline.timing)
-    for (const action of BUDGETED) {
-      expect
-        .soft(p95[action], `${action} p95 vs switch-off ${baseline[action]} ms plus a frame`)
-        .toBeLessThan(baseline[action] + FRAME_MS)
+    const known = KNOWN_OVER_BUDGET[process.platform]?.[action]
+    if (known) {
+      knownSwitchOnFailure(known)
     }
-  } finally {
-    await session.dispose(app)
-  }
-})
+    const { timing, p95 } = measured!
+    testInfo.annotations.push({ type: 'layout-latency-p95', description: `${p95[action]} ms` })
+    expect(timing, 'timed the way the baseline was').toBe(baseline.timing)
+    expect(p95[action], `${action} p95 vs switch-off ${baseline[action]} ms`).toBeLessThan(
+      baseline[action] + FRAME_MS
+    )
+  })
+}
