@@ -19,6 +19,8 @@ async function callRuntimeEnvironmentOnce(args: {
   background?: boolean
   /** The user asked for it: it may wake a WSL host Orca stopped idle. */
   wake?: boolean
+  /** An orchestration write's retry key. Not with `signal`: the abortable path carries none. */
+  orchestrationRequestId?: string
 }): Promise<unknown> {
   if (args.signal) {
     return callAbortableRuntimeEnvironment(
@@ -41,6 +43,7 @@ async function callRuntimeEnvironmentOnce(args: {
     expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision,
     expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
     ...(args.background ? { background: true } : {}),
-    ...(args.wake ? { wake: true } : {})
+    ...(args.wake ? { wake: true } : {}),
+    ...(args.orchestrationRequestId ? { orchestrationRequestId: args.orchestrationRequestId } : {})
   })
 }

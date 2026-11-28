@@ -19,12 +19,18 @@ export function shouldUseSharedControlEnvelope(
   return envelope && sharedControlEligible ? envelope : undefined
 }
 
-/** The renderer ships with this main process, so its orchestration writes speak this contract. */
+/** The renderer ships with this main process, so its orchestration writes speak this contract. A
+ *  write that names its request id keeps a receipt on the host, as it does over local IPC. */
 export function rendererOrchestrationEnvelope(
   method: string,
-  params: unknown
+  params: unknown,
+  requestId?: string
 ): RuntimeOrchestrationEnvelope | undefined {
-  return isOrchestrationMutation(method, params)
-    ? { orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
-    : undefined
+  if (!isOrchestrationMutation(method, params)) {
+    return undefined
+  }
+  return {
+    orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+    ...(typeof requestId === 'string' && requestId ? { orchestrationRequestId: requestId } : {})
+  }
 }

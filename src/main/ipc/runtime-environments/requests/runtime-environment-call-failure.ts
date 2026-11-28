@@ -6,6 +6,7 @@ import type {
   RuntimeRpcResponse
 } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { runtimeEnvironmentManualDisconnectReason } from '../connectivity/runtime-environment-manual-disconnect'
+import { CLIENT_MADE_FAILURE_DATA } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
 
 export function manuallyDisconnectedResponse(
   environment: Awaited<ReturnType<typeof resolveEnvironment>>
@@ -15,7 +16,8 @@ export function manuallyDisconnectedResponse(
     ok: false,
     error: {
       code: 'runtime_manually_disconnected',
-      message: runtimeEnvironmentManualDisconnectReason(environment.id)
+      message: runtimeEnvironmentManualDisconnectReason(environment.id),
+      data: CLIENT_MADE_FAILURE_DATA
     },
     _meta: { runtimeId: environment.runtimeId }
   }
@@ -35,7 +37,7 @@ export function runtimeEnvironmentCallFailure(
   return {
     id: method,
     ok: false,
-    error: { code: error.code, message: error.message },
+    error: { code: error.code, message: error.message, data: CLIENT_MADE_FAILURE_DATA },
     _meta: { runtimeId: environment.runtimeId }
   }
 }

@@ -29,6 +29,9 @@ type RuntimeRpcCallOptions = {
   background?: boolean
   /** The user asked for it: it may wake a WSL host Orca stopped idle. Defaults to a recent gesture. */
   wake?: boolean
+  /** A paired host keeps this orchestration write's receipt under this key, as local IPC does.
+   *  Not with `signal`: an abortable call carries none. */
+  orchestrationRequestId?: string
 }
 
 export async function callRuntimeRpc<TResult>(
@@ -98,7 +101,10 @@ export async function callRuntimeRpcResponse<TResult>(
             options.expectedEnvironmentRuntimeId ??
             (options.paramsForStatus ? compatibilityStatus?.runtimeId : undefined),
           background,
-          wake
+          wake,
+          ...(options.orchestrationRequestId
+            ? { orchestrationRequestId: options.orchestrationRequestId }
+            : {})
         })
   const envelope = response as RuntimeRpcResponse<TResult>
   if (!envelope.ok) {

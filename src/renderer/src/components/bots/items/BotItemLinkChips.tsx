@@ -202,7 +202,7 @@ function WorkerChip({
   const worker = botItemWorkerRow(link)
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
-  const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '', botTarget(bot))
+  const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '', botTarget(bot), worker.title)
   return (
     <HoverCard openDelay={400} closeDelay={100}>
       <div className="flex h-6 min-w-0 max-w-60 items-center rounded-md border border-border bg-background text-xs text-foreground">

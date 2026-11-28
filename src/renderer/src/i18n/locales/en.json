@@ -22554,7 +22554,8 @@
         "unavailable": "No preview for this page."
       },
       "workers": {
-        "stopUnconfirmed": "Orca couldn’t confirm the worker stopped."
+        "stopUnconfirmed": "Orca couldn’t confirm the worker stopped.",
+        "stopUnreachable": "Orca couldn't reach {{server}} to stop {{agent}}."
       },
       "connectorAsker": {
         "anApp": "An app",

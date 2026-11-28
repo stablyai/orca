@@ -125,6 +125,7 @@ export const runtimeEnvironmentsApi = {
     expectedEnvironmentRuntimeId?: string
     background?: boolean
     wake?: boolean
+    orchestrationRequestId?: string
   }): Promise<RuntimeRpcResponse<unknown>> => ipcRenderer.invoke('runtimeEnvironments:call', args),
   cancelSubscription: (args: { subscriptionId: string }): Promise<void> =>
     cancelRuntimeEnvironmentSubscriptionFromPreload(ipcRenderer, args.subscriptionId),

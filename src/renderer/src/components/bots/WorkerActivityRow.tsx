@@ -52,7 +52,8 @@ export type WorkerActivityRowProps = {
   /** The host's own record, which carries time, agent and result; absent for an older host. */
   worker: OrchestrationSessionWorker | null
   onOpen?: () => void
-  /** Offered only where this computer can stop the worker. */
+  /** Whether this row offers Stop. The Workers island leaves it off for a paired server's chat
+   *  by choice (not yet offered there); the bot surfaces offer it for any host. */
   canStop: boolean
   /** The host that owns the worker's Dispatch, where Stop is sent. */
   target: RuntimeClientTarget
@@ -102,7 +103,12 @@ function Detail({
 export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Element {
   const t = useTranslate()
   const { worker } = props
-  const { stopping, stop } = useWorkerStop(props.dispatchId, props.target, props.onStopped)
+  const { stopping, stop } = useWorkerStop(
+    props.dispatchId,
+    props.target,
+    props.title,
+    props.onStopped
+  )
   const workspace = useAppStore((state) =>
     props.workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, props.workspaceId) : null
   )
@@ -200,16 +206,18 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
   )
 }
 
-/** Stops the worker through `target`, the host that owns its Dispatch; `stopping` while the request is out. */
+/** Stops the worker through `target`, the host that owns its Dispatch; `stopping` while the request is out.
+ *  `name` is the worker as its row shows it. */
 export function useWorkerStop(
   dispatchId: string,
   target: RuntimeClientTarget,
+  name: string,
   onStopped?: () => void
 ): { stopping: boolean; stop: () => void } {
   const [stopping, setStopping] = useState(false)
   const stop = (): void => {
     setStopping(true)
-    void stopOrchestrationWorker(dispatchId, target).finally(() => {
+    void stopOrchestrationWorker(dispatchId, target, name).finally(() => {
       setStopping(false)
       onStopped?.()
     })

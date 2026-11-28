@@ -193,6 +193,8 @@ function registerPassiveCallHandler(
         expectedEnvironmentRuntimeId?: string
         background?: boolean
         wake?: boolean
+        /** An orchestration write's retry key, as local IPC's `orchestration.requestId`. */
+        orchestrationRequestId?: string
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
@@ -243,7 +245,7 @@ function registerPassiveCallHandler(
           accounts.params,
           args.timeoutMs,
           args.expectedEnvironmentPairingRevision,
-          rendererOrchestrationEnvelope(args.method, accounts.params),
+          rendererOrchestrationEnvelope(args.method, accounts.params, args.orchestrationRequestId),
           {
             expectedEnvironmentRuntimeId: args.expectedEnvironmentRuntimeId,
             background: args.background === true,

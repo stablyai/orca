@@ -168,6 +168,8 @@ export type RuntimeApi = {
       background?: boolean
       /** The user asked for it: it may wake a WSL host Orca stopped idle. */
       wake?: boolean
+      /** An orchestration write's retry key: the host keeps its receipt and replays it. */
+      orchestrationRequestId?: string
     }) => Promise<RuntimeRpcResponse<unknown>>
     subscribeCrewAttempt?: (
       args: CrewSubscriptionAttemptArgs,
