@@ -63,3 +63,50 @@ it.each([300, 3_000])('updates a group with %i PTYs without revisiting its rows'
   expect(selectionUpdate).toHaveBeenCalledTimes(1)
   stopSelectionUpdates()
 })
+
+it.each([300, 3_000])(
+  'ends the last PTY of %i groups at once without scanning every group',
+  (count) => {
+    const groups: ResourcePtyGroup[] = Array.from({ length: count }, (_, index) => ({
+      kind: 'workspace',
+      key: `workspace-${index}`,
+      name: null,
+      rows: [
+        {
+          identity: `pty-${index}`,
+          session: {
+            id: `pty-${index}`,
+            incarnationId: `incarnation-${index}`,
+            title: 'Terminal',
+            cwd: '',
+            agentOwnership: 'absent',
+            fencedTermination: true
+          },
+          label: 'Terminal',
+          usesRuntimeTitle: false,
+          sortName: 'Terminal',
+          lastActivityAt: 0,
+          workspace: 'Workspace',
+          workspaceId: `workspace-${index}`,
+          workspacePath: '/workspace',
+          project: null,
+          tabId: null,
+          paneKey: null,
+          binding: 'bound'
+        }
+      ]
+    }))
+    const ending = new ResourcePtyActionStatus()
+    const { result } = renderHook(() => useResourcePtyEndableGroups(groups, ending))
+    const mapIterations = vi.spyOn(Map.prototype, Symbol.iterator)
+    act(() => {
+      ending.start(groups.map((group) => group.rows[0]!.identity))
+    })
+    const iterations = mapIterations.mock.calls.length
+    mapIterations.mockRestore()
+    expect(result.current.canEnd('workspace-0')).toBe(false)
+    expect(result.current.canEnd(`workspace-${count - 1}`)).toBe(false)
+    // Each newly unavailable group is found by its own counts, not by walking every group.
+    expect(iterations).toBeLessThan(10)
+  }
+)

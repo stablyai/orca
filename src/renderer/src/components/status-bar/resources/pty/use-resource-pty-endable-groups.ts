@@ -3,7 +3,7 @@ import type { ResourcePtyGroup } from './resource-pty-view-model'
 import { canEndResourcePty } from './use-resource-pty-actions'
 import type { ResourcePtyEndingSource } from './resource-pty-action-status'
 
-type Endability = { total: number; remaining: number }
+type Endability = { key: string; total: number; remaining: number }
 
 class ResourcePtyEndabilityStore {
   private readonly byKey = new Map<string, Endability>()
@@ -12,7 +12,7 @@ class ResourcePtyEndabilityStore {
 
   constructor(groups: readonly ResourcePtyGroup[]) {
     for (const group of groups) {
-      const counts = { total: 0, remaining: 0 }
+      const counts = { key: group.key, total: 0, remaining: 0 }
       for (const row of group.rows) {
         if (canEndResourcePty(row)) {
           this.byRow.set(row.identity, counts)
@@ -62,12 +62,7 @@ class ResourcePtyEndabilityStore {
         const wasAvailable = counts.remaining > 0
         counts.remaining += started ? -1 : 1
         if (wasAvailable !== counts.remaining > 0) {
-          for (const [key, value] of this.byKey) {
-            if (value === counts) {
-              changed.add(key)
-              break
-            }
-          }
+          changed.add(counts.key)
         }
       }
       for (const key of changed) {
