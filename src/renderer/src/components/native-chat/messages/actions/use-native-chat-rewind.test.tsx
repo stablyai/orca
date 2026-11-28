@@ -81,4 +81,14 @@ it('a chat released mid-rewind keeps refusing sends until the rewound conversati
     }
   })
   expect(again.result.current.admitsSend()).toBe(false)
+  // The rewound conversation loads; a later remount before history arrives holds nothing.
+  again.unmount()
+  const loaded = renderHook(
+    () => useNativeChatRewind({ ...input, state: { ...input.state, epoch: 'e2' } }),
+    { wrapper: inTab }
+  )
+  expect(loaded.result.current.admitsSend()).toBe(true)
+  loaded.unmount()
+  const later = renderHook(() => useNativeChatRewind(cold), { wrapper: inTab })
+  expect(later.result.current.admitsSend()).toBe(true)
 })

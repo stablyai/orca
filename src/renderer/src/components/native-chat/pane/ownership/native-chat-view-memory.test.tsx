@@ -77,11 +77,11 @@ it('a restore that never reads history keeps its bookmark through the next hide'
   const jumpTo = vi.fn((_position: unknown, settled: (result: 'superseded') => void) =>
     settled('superseded')
   )
-  const props = { isVisible: true }
+  const props = { isVisible: true, positionKey: 't' }
   const view = renderHook(
-    ({ isVisible }: { isVisible: boolean }) =>
+    ({ isVisible, positionKey }: { isVisible: boolean; positionKey: string }) =>
       useNativeChatReadingPosition({
-        positionKey: 't',
+        positionKey,
         isVisible,
         ready: true,
         scrollRef: { current: document.createElement('div') },
@@ -95,10 +95,14 @@ it('a restore that never reads history keeps its bookmark through the next hide'
   )
   const tries = jumpTo.mock.calls.length
   expect(tries).toBe(5)
-  view.rerender({ isVisible: false })
+  view.rerender({ isVisible: false, positionKey: 't' })
   expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
-  view.rerender({ isVisible: true })
+  view.rerender({ isVisible: true, positionKey: 't' })
   expect(jumpTo.mock.calls.length).toBe(tries)
   expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
+  // Another transcript in the same view clears its own stale bookmark as usual.
+  writeNativeChatViewMemory(TAB, 'reading-position:u', bookmark)
+  view.rerender({ isVisible: true, positionKey: 'u' })
+  expect(readNativeChatViewMemory(TAB, 'reading-position:u')).toBeUndefined()
   vi.unstubAllGlobals()
 })

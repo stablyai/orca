@@ -89,6 +89,10 @@ export function useNativeChatReadingPosition({
   useLayoutEffect(() => {
     latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt, onGiveUp }
   })
+  // A given-up restore belongs to its own transcript; another one's bookmark is handled as usual.
+  useLayoutEffect(() => {
+    gaveUpRef.current = false
+  }, [key])
   // Leaving reads the rows while they are still laid out, before a hide takes them off the page.
   useLayoutEffect(() => {
     const container = scrollRef.current

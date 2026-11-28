@@ -43,3 +43,17 @@ it('releases closed chat tabs by workspace, never walking other workspaces', () 
   expect(readNativeChatViewMemory(elsewhere, 'kept')).toBeUndefined()
   forgetChatLayer('layer-b2', 'wt-2')
 })
+
+it('a workspace removed while no layer showed it is released by a later unmount elsewhere', () => {
+  const gone = { tabId: 'tab-9', worktreeId: 'wt-9' }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  const tab = (id: string): Tab => ({ id }) as Tab
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-9': [tab('tab-9')], 'wt-1': [] } })
+  reportChatLayerTabs('layer-9', 'wt-9', new Set(['tab-9']))
+  writeNativeChatViewMemory(gone, 'kept', 1)
+  forgetChatLayer('layer-9', 'wt-9')
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': [] } })
+  reportChatLayerTabs('layer-1', 'wt-1', new Set())
+  forgetChatLayer('layer-1', 'wt-1')
+  expect(readNativeChatViewMemory(gone, 'kept')).toBeUndefined()
+})

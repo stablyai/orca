@@ -15,6 +15,7 @@ export function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
 // Chat tabs a layer has owned, by workspace: only they can hold released state.
 const trackedByWorktree = new Map<string, Set<string>>()
 const tabsByLayer = new Map<string, ReadonlySet<string>>()
+const layerWorktrees = new Map<string, string>()
 
 /**
  * A layer's tabs changed: only the tabs it lost are released. Its first report also releases this workspace's tabs
@@ -29,6 +30,7 @@ export function reportChatLayerTabs(
   trackedByWorktree.set(worktreeId, tracked)
   const previous = tabsByLayer.get(layerId) ?? tracked
   tabsByLayer.set(layerId, tabIds)
+  layerWorktrees.set(layerId, worktreeId)
   const gone = [...previous].filter((id) => !tabIds.has(id))
   for (const tabId of tabIds) {
     tracked.add(tabId)
@@ -36,14 +38,41 @@ export function reportChatLayerTabs(
   releaseGone(worktreeId, tracked, gone)
 }
 
+/** Other workspaces swept per unmount: tabs closed (or a workspace removed) where no layer shows are found in turn. */
+const SWEPT_ELSEWHERE_PER_UNMOUNT = 8
+
 /** A layer unmounted (its workspace parked, emptied or removed): its workspace's closed tabs are released. */
 export function forgetChatLayer(layerId: string, worktreeId: string): void {
   tabsByLayer.delete(layerId)
+  layerWorktrees.delete(layerId)
+  const byWorktree = useAppStore.getState().unifiedTabsByWorktree
+  sweepWorktree(worktreeId, byWorktree)
+  // Workspaces no layer shows get no report or unmount; a few are checked per unmount, oldest-checked first.
+  const shown = new Set(layerWorktrees.values())
+  const due: string[] = []
+  for (const other of trackedByWorktree.keys()) {
+    if (due.length === SWEPT_ELSEWHERE_PER_UNMOUNT) {
+      break
+    }
+    if (other !== worktreeId && !shown.has(other)) {
+      due.push(other)
+    }
+  }
+  due.forEach((other) => sweepWorktree(other, byWorktree))
+}
+
+function sweepWorktree(
+  worktreeId: string,
+  byWorktree: ReturnType<typeof useAppStore.getState>['unifiedTabsByWorktree']
+): void {
   const tracked = trackedByWorktree.get(worktreeId)
   if (!tracked) {
     return
   }
-  const live = new Set(useAppStore.getState().unifiedTabsByWorktree[worktreeId]?.map((tab) => tab.id))
+  // Re-inserted, so the next sweeps start with workspaces checked longest ago.
+  trackedByWorktree.delete(worktreeId)
+  trackedByWorktree.set(worktreeId, tracked)
+  const live = new Set(byWorktree[worktreeId]?.map((tab) => tab.id))
   releaseGone(worktreeId, tracked, [...tracked].filter((id) => !live.has(id)))
 }
 

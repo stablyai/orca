@@ -167,6 +167,14 @@ export function createAgentSessionRewindHook(
         (awaiting.epoch === input.state.epoch &&
           (awaiting.sequence === undefined ||
             (input.state.cursor?.sequence ?? 0) < awaiting.sequence)))
+    // A known epoch that shows the reset ends the wait, so a later unknown epoch never brings it back.
+    const resetSeen =
+      awaiting?.sessionId === input.sessionId && input.state.epoch !== null && !awaitingReset
+    useEffect(() => {
+      if (resetSeen) {
+        setAwaiting(null)
+      }
+    }, [resetSeen, setAwaiting])
     // Hidden views stop reading; missing reset evidence while hidden is not a failure.
     const hiddenWhileAwaiting = useRef(false)
     const visible = input.isVisible !== false
