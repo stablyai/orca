@@ -2,6 +2,7 @@ import {
   ANTIGRAVITY_INDEX_MAX_BYTES,
   antigravityCachePath,
   antigravityMetadataWorkspaces,
+  antigravitySummariesDbPath,
   readBoundedAntigravityIndex
 } from './session-scanner-antigravity-metadata'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -81,7 +82,8 @@ export type AntigravityWorkspaceResolver = {
 }
 
 export function createAntigravityWorkspaceResolver(
-  readHistory: (historyPath: string) => Promise<string | null>
+  readHistory: (historyPath: string) => Promise<string | null>,
+  readSummaryWorkspaces?: (dbPath: string) => Promise<Map<string, string>>
 ): AntigravityWorkspaceResolver {
   const indexes = new Map<string, Promise<AntigravityWorkspaceIndex>>()
 
@@ -105,16 +107,24 @@ export function createAntigravityWorkspaceResolver(
         const pending: Promise<AntigravityWorkspaceIndex> = readHistory(historyPath)
           .then(async (history) => {
             const index = indexAntigravityHistory(history)
-            const [metadata, projects, lastConversations] = await Promise.all(
-              ['conversation_metadata.json', 'projects.json', 'last_conversations.json'].map(
-                (name) => readHistory(antigravityCachePath(historyPath, name))
-              )
-            )
+            const [metadata, projects, lastConversations, summaryWorkspaces] = await Promise.all([
+              readHistory(antigravityCachePath(historyPath, 'conversation_metadata.json')),
+              readHistory(antigravityCachePath(historyPath, 'projects.json')),
+              readHistory(antigravityCachePath(historyPath, 'last_conversations.json')),
+              readSummaryWorkspaces
+                ? readSummaryWorkspaces(antigravitySummariesDbPath(historyPath))
+                : Promise.resolve(new Map<string, string>())
+            ])
             const { paths, workspaceUriPathById } = antigravityMetadataWorkspaces({
               metadata: metadata ?? null,
               projects: projects ?? null,
               lastConversations: lastConversations ?? null
             })
+            for (const [id, path] of summaryWorkspaces) {
+              if (!workspaceUriPathById.has(id)) {
+                workspaceUriPathById.set(id, path)
+              }
+            }
             for (const [id, path] of paths) {
               if (!index.byId.has(id)) {
                 index.byId.set(id, path)
