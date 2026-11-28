@@ -19,6 +19,7 @@ import {
   type MobileNativeChatRowLookups
 } from './use-mobile-native-chat-row-props'
 import { equalMobileNativeChatRowContent } from './mobile-native-chat-row-projection'
+import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
 import type { MobileNativeChatVisualSource } from '../../visual/mobile-native-chat-visual-read'
 import type { MobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
@@ -78,8 +79,12 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   )
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      {/* Always this View, so a row a new one joins keeps its mounted content. */}
-      <View style={mobileNativeChatActivityJoinMargins(activityJoin, props.message)}>
+      {/* Always this View, so a row a new one joins keeps its mounted content. It carries the
+          row's tag because the reading place reads it on the row box's direct children. */}
+      <View
+        style={mobileNativeChatActivityJoinMargins(activityJoin, props.message)}
+        testID={mobileNativeChatRowId(props.rowKey ?? props.message.id)}
+      >
         <MobileNativeChatQuietTurnContext.Provider value={quietTurn}>
           <MobileNativeChatMessage {...props} />
         </MobileNativeChatQuietTurnContext.Provider>
