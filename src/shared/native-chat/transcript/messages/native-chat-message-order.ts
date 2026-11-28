@@ -11,6 +11,9 @@ import {
 
 // Clocks cannot order a null-timestamp preview against a client send or a remote transcript.
 export function nativeChatDisplaySortRank(message: NativeChatMessage): number {
+  if (message.pendingBeforeMessage) {
+    return 0
+  }
   if (message.queued || message.pendingSend === 'queued') {
     return 3
   }
@@ -27,13 +30,29 @@ export function nativeChatDisplaySortRank(message: NativeChatMessage): number {
   return 0
 }
 
+function transcriptSortMessage(message: NativeChatMessage): NativeChatMessage {
+  return message.pendingBeforeMessage
+    ? { ...message, ...message.pendingBeforeMessage, source: 'transcript' }
+    : message
+}
+
+function comparePositionedMessages(a: NativeChatMessage, b: NativeChatMessage): number {
+  return (
+    compareNativeChatTranscriptMessages(a, b) ||
+    Number(Boolean(b.pendingBeforeMessage)) - Number(Boolean(a.pendingBeforeMessage))
+  )
+}
+
 export function compareNativeChatDisplayMessages(
   a: NativeChatMessage,
   b: NativeChatMessage
 ): number {
   const rank = nativeChatDisplaySortRank(a)
   const difference = rank - nativeChatDisplaySortRank(b)
-  return difference || (rank === 0 ? compareNativeChatTranscriptMessages(a, b) : 0)
+  return (
+    difference ||
+    (rank === 0 ? comparePositionedMessages(transcriptSortMessage(a), transcriptSortMessage(b)) : 0)
+  )
 }
 
 export function orderNativeChatDisplayEntries<T>(
@@ -42,7 +61,13 @@ export function orderNativeChatDisplayEntries<T>(
 ): T[] {
   return [0, 1, 2, 3].flatMap((rank) => {
     const tier = entries.filter((entry) => nativeChatDisplaySortRank(messageOf(entry)) === rank)
-    return rank === 0 ? orderNativeChatTranscriptEntries(tier, messageOf) : tier
+    return rank === 0
+      ? orderNativeChatTranscriptEntries(
+          tier,
+          (entry) => transcriptSortMessage(messageOf(entry)),
+          comparePositionedMessages
+        )
+      : tier
   })
 }
 
