@@ -1,4 +1,6 @@
 import { RuntimePtyForegroundAgent } from './runtime-pty-foreground-agent'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
@@ -257,4 +259,11 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     hasMobileSubscribers: (ptyId) => (this.mobileSubscribers.get(ptyId)?.size ?? 0) > 0,
     ensureProviderAttach: (ptyId) => this.mainDaemonAttachments.ensure(ptyId)
   })
+
+  /** The window hears of a terminal's driver only for a terminal it shows. */
+  protected notifyWindowOfTerminalDriver(ptyId: string, next: RuntimeTerminalDriverState): void {
+    if (windowShowsPty(this.ptysById.get(ptyId))) {
+      this.notifier?.terminalDriverChanged(ptyId, next)
+    }
+  }
 }

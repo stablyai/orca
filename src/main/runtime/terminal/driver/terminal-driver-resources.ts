@@ -140,7 +140,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
 
   // Mobile ownership locks desktop input/resize in both renderer and main; clientId selects the active phone viewport (docs/mobile-presence-lock.md).
   protected readonly terminalDrivers = new RuntimeTerminalDriverController({
-    notifyChanged: (ptyId, next) => this.notifier?.terminalDriverChanged(ptyId, next),
+    notifyChanged: (ptyId, next) => this.notifyWindowOfTerminalDriver(ptyId, next),
     canClaimMobileFloor: (ptyId, clientId) => {
       const softLeaver = this.pendingSoftLeavers.get(ptyId)
       return this.mobileSubscribers.get(ptyId)?.has(clientId) || softLeaver?.clientId === clientId

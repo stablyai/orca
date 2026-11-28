@@ -6,10 +6,7 @@ import { z } from 'zod'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { ownerWindowProbe } from './owner-window-probe.test-support'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { AgentHookStatusRowMutation } from '../../agent-hooks/server/server-types'
 import type { PtyLayoutTarget } from '../../runtime/terminal/layout/terminal-layout-state'
-import type { AgentStatusStoreView } from '../../runtime/sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import {
   B,
   C,
@@ -18,9 +15,9 @@ import {
   rig,
   settleTeammateRig,
   SCOPE,
-  startTerminalsOnTheHost,
   TEAMMATE
 } from './teammate-tabs.test-support'
+import { bothTerminals, hookStatusStore, type Rig } from './teammate-terminals.test-support'
 import { randomUUID } from 'node:crypto'
 import { spawnWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { teammateTabListKey } from './teammate-rules'
@@ -28,8 +25,6 @@ import { personWorkspaceKey } from '../../../shared/workspace/identity/person-wo
 import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/workspace-session/teammate-homes-session-partition'
 
 afterEach(settleTeammateRig)
-
-type Rig = Awaited<ReturnType<typeof rig>>
 
 const SCOPE_LIST = teammateTabListKey(SCOPE)
 
@@ -40,15 +35,6 @@ const listed = async (r: Rig, deviceId: string) =>
     .object({ terminals: z.array(z.looseObject({ ptyId: z.string().nullable() })) })
     .parse(await r.call(deviceId, 'terminal.list', { worktree: `id:${r.workspace}` }))
     .terminals.map((row) => row.ptyId)
-
-/** The owner's and Mate's terminals in the Home, opened before the owner's window is watched. */
-async function bothTerminals(r: Rig) {
-  startTerminalsOnTheHost(r)
-  const owners = await openTerminal(r, 'owner-desk')
-  const mates = await openTerminal(r, 'mate-desk')
-  await chatTabCommandsSettled()
-  return { owners, mates }
-}
 
 it('stops or closes all of a Home’s terminals in the caller’s own list alone', async () => {
   const r = await rig()
@@ -210,15 +196,12 @@ it('sleeps a teammate’s own terminals alone, telling only their devices', asyn
     expect(mates$()).toContainEqual(expect.objectContaining({ phase: 'woken' }))
   )
 
-  // Closing all of Mate's terminals drops their slept record from the teammates' partition.
-  r.profile.setWorkspaceSession(
-    { ...r.profile.getWorkspaceSession(TEAM), tabsByWorktree: {} },
-    TEAM
-  )
+  // Closing all of Mate's terminals drops their slept tab and record from the teammates' partition.
   await r.call('mate-desk', 'terminal.closeAll', { worktree })
-  expect(r.profile.getWorkspaceSession(TEAM).sleepingAgentSessionsByPaneKey?.[matesPane]).toBe(
-    undefined
-  )
+  const team = r.profile.getWorkspaceSession(TEAM)
+  expect(team.sleepingAgentSessionsByPaneKey?.[matesPane]).toBe(undefined)
+  expect(team.tabsByWorktree[K]).toBe(undefined)
+  expect((await r.list('mate-desk')).tabs).toEqual([])
 
   // The owner's sleep takes the host list's alone, as before; only their devices hear it, and an
   // owner's spawn wakes it while a teammate's does not.
@@ -254,15 +237,33 @@ it('tells only a terminal’s own list’s devices of its bells and titles', asy
   }
   const owners$ = sideEffects('owner-desk')
   const others$ = sideEffects('other-desk')
+  // The owner's window's own feed, and a main-side listener taking the default (host) lists.
+  const windowFeed: string[] = []
+  const hostListener: string[] = []
+  Reflect.set(r.runtime, 'onTerminalSideEffects', (batch: { ptyId: string }) =>
+    windowFeed.push(batch.ptyId)
+  )
+  r.runtime['setTerminalSideEffectConsumerAvailable'](true)
+  const stopListening = r.runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'terminalSideEffects') {
+        hostListener.push(event.batch.ptyId)
+      }
+    },
+    { consumesTerminalSideEffects: true }
+  )
   await vi.waitFor(() =>
-    expect(r.runtime['countTerminalSideEffectConsumingClientEventListeners']()).toBeGreaterThan(1)
+    expect(r.runtime['countTerminalSideEffectConsumingClientEventListeners']()).toBeGreaterThan(2)
   )
   for (const ptyId of [mates.ptyId, owners.ptyId]) {
     r.runtime.onPtyData(ptyId, '\x1b]0;Build\x1b\\\x07', Date.now())
   }
   await vi.waitFor(() => expect(owners$()).toContain(owners.ptyId))
+  stopListening()
   expect(owners$()).not.toContain(mates.ptyId)
   expect(others$()).not.toContain(mates.ptyId)
+  expect([...new Set(windowFeed)]).toEqual([owners.ptyId])
+  expect([...new Set(hostListener)]).toEqual([owners.ptyId])
 })
 
 it('lists a teammate’s own terminals alone in their Home, and every one of them to the owner', async () => {
@@ -319,42 +320,6 @@ it('keeps a finished agent in a teammate’s terminal off the owner’s sidebar 
     hooks.detach()
   }
 })
-
-/** The hook server's status rows, as the runtime's transitions read them. */
-function hookStatusStore(r: Rig) {
-  const rows = new Map<string, AgentStatusIpcPayload>()
-  const listeners = new Set<(mutation: AgentHookStatusRowMutation) => void>()
-  let receivedAt = Date.now()
-  const store: AgentStatusStoreView = {
-    getStatusSnapshot: () => [...rows.values()],
-    getStatusSnapshotForPane: (paneKey) => (rows.has(paneKey) ? [rows.get(paneKey)!] : []),
-    subscribeStatusRowMutations: (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
-    subscribeStatusFreshness: () => () => {}
-  }
-  const detach = r.runtime.attachAgentStatusStore(store)
-  return {
-    report: (row: { paneKey: string; worktreeId: string; state: 'working' | 'done' }) => {
-      const before = rows.get(row.paneKey) ?? null
-      receivedAt += 1
-      const after: AgentStatusIpcPayload = {
-        ...row,
-        agentType: 'claude',
-        prompt: '',
-        connectionId: null,
-        stateStartedAt: receivedAt,
-        receivedAt
-      }
-      rows.set(row.paneKey, after)
-      for (const listener of listeners) {
-        listener({ before, after })
-      }
-    },
-    detach
-  }
-}
 
 it('sleeps a teammate’s own chats alone in their Home, and every chat there for the owner', async () => {
   const r = await rig()
@@ -425,6 +390,46 @@ it('sizes a teammate’s terminal as a paired server does, and never holds the o
     }
     expect(await viewThenLeave(mates.ptyId)).toBe('remote-desktop')
     expect(await viewThenLeave(owners.ptyId)).toBe('desktop')
+  } finally {
+    probe.close()
+  }
+})
+
+it('never tells the owner’s window of a teammate’s terminal’s phone, take-back or saved sizes', async () => {
+  const r = await rig()
+  const { owners, mates } = await bothTerminals(r)
+  r.runtime['ptyController']!.resize = () => true
+  const probe = ownerWindowProbe(r.runtime, r.profile, r.home, { ownerPtyIds: [owners.ptyId] })
+  // A phone fits the terminal and types in it, then a desktop takes it back.
+  const phoneThenTakeBack = async (ptyId: string) => {
+    const relays = probe.relays.length
+    r.runtime['freshSubscribeGuard'].add(ptyId)
+    const phone: PtyLayoutTarget = { kind: 'phone', cols: 40, rows: 20, ownerClientId: 'phone' }
+    expect(await r.runtime['enqueueLayout'](ptyId, phone)).toMatchObject({ ok: true })
+    r.runtime.markMobileActor(ptyId, 'phone')
+    const hydration = {
+      sizes: [...r.runtime.getAllTerminalFitOverrides().keys()],
+      drivers: [...r.runtime.getAllTerminalDrivers().keys()]
+    }
+    // Its resize fails, so the take-back clears the held fit itself.
+    r.runtime['ptyController']!.resize = () => false
+    await r.runtime.reclaimTerminalForDesktop(ptyId)
+    r.runtime['ptyController']!.resize = () => true
+    r.runtime['freshSubscribeGuard'].delete(ptyId)
+    return { relays: probe.relays.slice(relays).map((relay) => relay.name), hydration }
+  }
+  try {
+    const before = await probe.ownerState()
+    const matesRun = await phoneThenTakeBack(mates.ptyId)
+    expect(matesRun.relays).toEqual([])
+    expect(matesRun.hydration).toEqual({ sizes: [], drivers: [] })
+    expect(await probe.ownerState()).toBe(before)
+
+    const ownersRun = await phoneThenTakeBack(owners.ptyId)
+    expect(ownersRun.relays).toEqual(
+      expect.arrayContaining(['terminalFitOverrideChanged', 'terminalDriverChanged'])
+    )
+    expect(ownersRun.hydration).toEqual({ sizes: [owners.ptyId], drivers: [owners.ptyId] })
   } finally {
     probe.close()
   }
