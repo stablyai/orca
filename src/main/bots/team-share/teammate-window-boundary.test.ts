@@ -10,6 +10,9 @@ import { rig, settleTeammateRig, TEAMMATE } from './teammate-tabs.test-support'
 
 afterEach(settleTeammateRig)
 
+const FILE = '/home/notes.md'
+const LEAF = '0f8fad5b-d9cb-469f-a165-70867728950e'
+
 const terminalTab = (id: string, worktreeId: string, sortOrder: number) => ({
   id,
   ptyId: null,
@@ -29,6 +32,9 @@ async function besideOwnerWindow() {
     {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [K]: [terminalTab('tab-a', K, 0), terminalTab('tab-b', K, 1)] },
+      openFilesByWorktree: {
+        [K]: [{ filePath: FILE, relativePath: 'notes.md', worktreeId: K, language: 'markdown' }]
+      },
       activeTabIdByWorktree: { [K]: 'tab-a' }
     },
     TEAM
@@ -72,7 +78,7 @@ it("reorders a teammate's tabs and keeps their workspace through the owner's win
       kind: 'reorder',
       tabId: 'tab-b',
       targetGroupId: group!.id,
-      tabOrder: ['tab-b', 'tab-a']
+      tabOrder: group!.tabOrder.toReversed()
     })
     expect(saved().map((tab) => tab.id)).toEqual(['tab-b', 'tab-a'])
     expect(probe.relays).toEqual([])
@@ -81,7 +87,7 @@ it("reorders a teammate's tabs and keeps their workspace through the owner's win
     // The owner's window publishes its graph, which never names the teammate's workspace.
     await r.runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     const order = (await r.runtime.listMobileSessionTabs(`id:${K}`)).tabGroups?.[0]?.tabOrder
-    expect(order).toEqual(['tab-b', 'tab-a'])
+    expect(order).toEqual(group!.tabOrder.toReversed())
   } finally {
     probe.close()
   }
@@ -111,6 +117,55 @@ it("refuses a relay to the owner's window that names a teammate's workspace, and
       'workspaceSleepChanged',
       'sendToWindow:terminal:requestTabMount'
     ])
+  } finally {
+    probe.close()
+  }
+})
+
+it("closes a teammate's tab and pane, and activates their file, without telling the owner's window", async () => {
+  const { r, K, probe, saved, before } = await besideOwnerWindow()
+  try {
+    const listed = await r.runtime.listMobileSessionTabs(`id:${K}`)
+    const file = listed.tabs.find((tab) => tab.type !== 'terminal')
+    expect(file).toBeDefined()
+    await r.runtime.activateMobileSessionTab(`id:${K}`, file!.id, undefined, { person: 'owner' })
+    await r.runtime['closeTerminalPane'](K, { kind: 'pane', tabId: 'tab-b', leafId: LEAF })
+    await r.runtime.closeMobileSessionTab(`id:${K}`, 'tab-a', { reason: 'user', person: 'owner' })
+
+    expect(saved().map((tab) => tab.id)).toEqual(['tab-b'])
+    expect(probe.relays).toEqual([])
+    expect(await probe.ownerState()).toBe(before)
+  } finally {
+    probe.close()
+  }
+})
+
+it("keeps a teammate's live tabs, files included, through the owner's window graph", async () => {
+  const { r, K, probe } = await besideOwnerWindow()
+  try {
+    await r.runtime.listMobileSessionTabs(`id:${K}`)
+    const live = r.runtime['mobileSessionTabsByWorktree'].get(K)
+    expect(live?.tabs.some((tab) => tab.type !== 'terminal')).toBe(true)
+
+    await r.runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    // Read before anything hydrates it again from the saved partition.
+    expect(r.runtime['mobileSessionTabsByWorktree'].get(K)?.tabs).toEqual(live?.tabs)
+  } finally {
+    probe.close()
+  }
+})
+
+it("saves a teammate's chat tab in their own workspace beside the owner's window", async () => {
+  const { r, K, probe, before } = await besideOwnerWindow()
+  try {
+    await r.runtime['changeWindowlessChatTabs'](K, [
+      { open: { sessionId: 'chat-k', agent: 'claude', tabId: 'agent-session:chat-k' } }
+    ])
+
+    const unified = r.profile.getWorkspaceSession(TEAM).unifiedTabs?.[K] ?? []
+    expect(unified.some((tab) => tab.contentType === 'agent-session')).toBe(true)
+    expect(probe.relays).toEqual([])
+    expect(await probe.ownerState()).toBe(before)
   } finally {
     probe.close()
   }

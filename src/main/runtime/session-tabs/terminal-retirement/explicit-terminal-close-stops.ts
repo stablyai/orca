@@ -121,7 +121,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
               pty.pty.ptyId
             )
           }
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(pty.pty, tabId)
         }
         const stop = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId, owed)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
@@ -145,7 +145,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
             )
           }
           const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId, owed)
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(pty.pty, tabId)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
         }
         const stop = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId, owed)
@@ -201,10 +201,10 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           ) {
             throw error
           }
-          this.notifyRendererOfHeadlessTerminalClose(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(pty.pty, tabId)
         }
       } else {
-        this.notifyRendererOfHeadlessTerminalClose(tabId)
+        this.notifyRendererOfHeadlessTerminalClose(pty.pty, tabId)
       }
       return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, stop)
     }

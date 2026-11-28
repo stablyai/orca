@@ -1,4 +1,5 @@
 import type { RuntimeNotifier } from './runtime-notifier-contract'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { OrcaRuntimeWithPtyController } from '../../terminal/lifecycle/orca-runtime-pty-controller'
 import { guardDesktopSurface, guardWindowRelays, type WindowRelayLists } from './window-relay-guard'
 import { setRuntimeDesktopSurfaceGate } from '../../construction/runtime-desktop-surface'
@@ -18,12 +19,20 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
     }
   }
 
+  /** The window's notifier for a workspace's tabs, or a terminal's (its holder's list); none for a
+   *  teammate's own workspace, which no window shows. */
+  protected windowNotifierFor(
+    of: string | Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 'holder'>
+  ): RuntimeNotifier | null {
+    return windowOwns(typeof of === 'string' ? of : tabListOfPty(of)) ? this.notifier : null
+  }
+
   protected countTerminalSideEffectConsumingClientEventListeners(): number {
     return this.clientEvents.countTerminalSideEffectConsumers()
   }
 
   /** What the window guard reads to tell a teammate's own workspace's PTYs, pages and tabs. */
-  private windowRelayLists(): WindowRelayLists {
+  protected windowRelayLists(): WindowRelayLists {
     return {
       heldPty: (ptyId) => {
         const pty = this.ptysById.get(ptyId)
@@ -36,7 +45,14 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
   }
 
   private personWorkspaceHoldsTab(tabId: string): boolean {
-    const saved = this.store?.getWorkspaceSession?.(TEAMMATE_HOMES_SESSION_PARTITION)
+    // A teammate's terminal opened before their workspace existed is in their own list (#51293).
+    if (
+      this.personSessionTabs.holderOfSurface(
+        (surface) => surface.kind === 'terminal' && surface.parentTabId === tabId
+      )
+    ) {
+      return true
+    }
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       if (
         isPersonWorkspaceKey(worktreeId) &&
@@ -47,12 +63,14 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
         return true
       }
     }
+    const saved = this.store?.getWorkspaceSession?.(TEAMMATE_HOMES_SESSION_PARTITION)
     if (!saved) {
       return false
     }
     const keys = new Set([
       ...Object.keys(saved.tabsByWorktree ?? {}),
-      ...Object.keys(saved.unifiedTabs ?? {})
+      ...Object.keys(saved.unifiedTabs ?? {}),
+      ...Object.keys(saved.openFilesByWorktree ?? {})
     ])
     for (const worktreeId of keys) {
       if (
@@ -60,7 +78,8 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
         (saved.tabsByWorktree?.[worktreeId]?.some((tab) => tab.id === tabId) ||
           saved.unifiedTabs?.[worktreeId]?.some(
             (tab) => tab.id === tabId || tab.entityId === tabId
-          ))
+          ) ||
+          saved.openFilesByWorktree?.[worktreeId]?.some((file) => file.filePath === tabId))
       ) {
         return true
       }

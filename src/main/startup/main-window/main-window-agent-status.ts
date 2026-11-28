@@ -7,10 +7,21 @@ import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from '../main-process-state'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import { cliWriterTopology } from '../../agent-hooks/server/cli-writer-topology'
+import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
   onRecordAgentState: (agentType: string, status: string) => void
+}
+
+/** Through the window guard, so a teammate's own pane reports to their own clients alone. */
+function sendAgentStatus(channel: string, payload: unknown, options?: { popout: true }): void {
+  const desktop = getRuntimeDesktopSurface()
+  for (const window of [state.mainWindow, options?.popout ? getDashboardPopoutWindow() : null]) {
+    if (window && !window.isDestroyed()) {
+      desktop.sendToWindow(window.id, channel, payload)
+    }
+  }
 }
 
 export function installMainWindowAgentStatusListeners(options: MainWindowAgentStatusOptions): void {
@@ -62,7 +73,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         return
       }
       // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
-      state.mainWindow?.webContents.send('agentStatus:set', {
+      sendAgentStatus('agentStatus:set', {
         ...payload,
         paneKey,
         ...(launchToken ? { launchToken } : {}),
@@ -116,8 +127,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       // Mark reconnect replays so cached completions do not notify again.
       ...(isReplay === true ? { isReplay: true } : {})
     }
-    state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
+    sendAgentStatus('agentStatus:set', statusEvent, { popout: true })
     // A facet-only republish (progress tick) or a settled id is not a state the agent entered.
     if (programStatusOnly !== true && identityOnly !== true) {
       options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
@@ -127,17 +137,16 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     if (state.mainWindow?.isDestroyed()) {
       return
     }
-    state.mainWindow?.webContents.send('agentStatus:clear', clear)
-    getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
+    sendAgentStatus('agentStatus:clear', clear, { popout: true })
   })
   setMigrationUnsupportedPtyListener((event) => {
     if (state.mainWindow?.isDestroyed()) {
       return
     }
     if (event.type === 'set') {
-      state.mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
+      sendAgentStatus('agentStatus:migrationUnsupported', event.entry)
     } else {
-      state.mainWindow?.webContents.send('agentStatus:migrationUnsupportedClear', {
+      sendAgentStatus('agentStatus:migrationUnsupportedClear', {
         ptyId: event.ptyId
       })
     }

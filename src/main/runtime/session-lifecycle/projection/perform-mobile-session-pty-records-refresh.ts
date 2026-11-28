@@ -289,11 +289,11 @@ export abstract class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh exten
         await this.serveBrowserTabs.start(worktreeId, tab.browserPageId)
       }
       // Browser rows are renderer-owned; session-tab focus preserves desktop order/group authority.
-      if (targetsHost) {
+      if (targetsHost && windowOwns(worktreeId)) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
     } else {
-      if (targetsHost) {
+      if (targetsHost && windowOwns(worktreeId)) {
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
     }

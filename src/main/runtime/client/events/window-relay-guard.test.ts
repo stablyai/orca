@@ -91,7 +91,10 @@ const ACTS: Record<string, Census> = {
     fields: ['worktree', 'tab'],
     args: (n) => [{ worktreeId: n.worktree, tabId: n.tab, leafId: LEAF }]
   },
-  splitTerminal: { fields: ['tab'], args: (n) => [n.tab, 1, { direction: 'vertical' }] },
+  splitTerminal: {
+    fields: ['tab', 'worktree'],
+    args: (n) => [n.tab, 1, { direction: 'vertical', worktreeId: n.worktree }]
+  },
   renameTerminal: { fields: ['tab'], args: (n) => [n.tab, 'Build'] },
   setPaneTitle: { fields: ['tab'], args: (n) => [n.tab, LEAF, 'Build'] },
   focusTerminal: { fields: ['tab', 'worktree'], args: (n) => [n.tab, n.worktree, LEAF] },
@@ -259,6 +262,7 @@ describe('the desktop channel table', () => {
     tabId: 'tab',
     splitFromTabId: 'tab',
     ptyId: 'pty',
+    paneKey: 'pane',
     browserPageId: 'page'
   }
   const CHANNELS: Record<string, { kind: 'notice' | 'act'; fields: string[] }> = {
@@ -275,7 +279,14 @@ describe('the desktop channel table', () => {
     'browser:navigation-update': { kind: 'notice', fields: ['browserPageId'] },
     'browser:pane-focus': { kind: 'notice', fields: ['worktreeId', 'browserPageId'] },
     'emulator:pane-focus': { kind: 'notice', fields: ['worktreeId'] },
-    'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] }
+    'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] },
+    'agentStatus:set': { kind: 'notice', fields: ['worktreeId', 'tabId', 'paneKey'] },
+    'agentStatus:clear': { kind: 'notice', fields: ['paneKey'] },
+    'agentStatus:migrationUnsupported': {
+      kind: 'notice',
+      fields: ['worktreeId', 'tabId', 'ptyId']
+    },
+    'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: ['ptyId'] }
   }
   const payload = (fields: string[], names: Names) =>
     Object.fromEntries(fields.map((field) => [field, names[PAYLOAD_FIELD[field]!]]))

@@ -22,7 +22,14 @@ import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../../runtime/browser-host/leas
 import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { installHookStatusSessionTabsRepublish } from '../../agent-hooks/runtime/hook-status-session-tabs-republish'
-import type { AgentHookStatusRowMutation } from '../../agent-hooks/server/server-types'
+import type {
+  AgentHookStatusRowMutation,
+  EnrichedAgentHookEventPayload
+} from '../../agent-hooks/server/server-types'
+import { installMainWindowAgentStatusListeners } from '../../startup/main-window/main-window-agent-status'
+import { mainProcessState } from '../../startup/main-process-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { ownerWindowProbe } from './owner-window-probe.test-support'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -369,6 +376,59 @@ it('keeps a hook status from a teammate’s terminal or chat out of the owner’
   hooks.uninstall()
   expect(ownersFrames.length).toBe(framesBefore)
   expect(await ownersSide(r)).toBe(before)
+})
+
+it('keeps an agent in a teammate’s terminal finishing off the owner’s window, sidebar and notifications', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  const ownersTerminal = await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  const probe = ownerWindowProbe(r.runtime, r.profile, r.home)
+  // The owner's window, as the desktop wires its agent-status relay.
+  const previous = mainProcessState.mainWindow
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay reads only the window's id and isDestroyed.
+  mainProcessState.mainWindow = { id: 1, isDestroyed: () => false } as typeof previous
+  installMainWindowAgentStatusListeners({
+    window: mainProcessState.mainWindow!,
+    onRecordAgentState: () => {}
+  })
+  const finishes = (tab: { id: string }) => {
+    const [tabId, leafId] = tab.id.split('::')
+    const paneKey = makePaneKey(tabId!, leafId!)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a hook's finished row, with the fields the relay reads.
+    const row = {
+      paneKey,
+      tabId,
+      worktreeId: r.workspace,
+      payload: { state: 'done', agentType: 'claude', prompt: '' },
+      receivedAt: Date.now(),
+      stateStartedAt: Date.now()
+    } as unknown as EnrichedAgentHookEventPayload
+    agentHookServer['onAgentStatus']?.(row)
+    agentHookServer['onPaneStatusCleared']?.({ paneKey })
+  }
+  try {
+    // Installing a window sends it the host's sleeping mail; the acts below start after that.
+    await chatTabCommandsSettled()
+    probe.relays.splice(0)
+    const before = await probe.ownerState()
+    finishes(matesTerminal)
+    await chatTabCommandsSettled()
+    expect(probe.relays).toEqual([])
+    expect(await probe.ownerState()).toBe(before)
+
+    finishes(ownersTerminal)
+    expect(probe.relays.map((relay) => relay.name)).toEqual([
+      'sendToWindow:agentStatus:set',
+      'sendToWindow:agentStatus:clear'
+    ])
+  } finally {
+    agentHookServer.setListener(null)
+    agentHookServer.setPaneStatusClearListener(null)
+    mainProcessState.mainWindow = previous
+    probe.close()
+  }
 })
 
 it('still republishes a hook status from the owner’s restored terminal and legacy pane', async () => {

@@ -222,7 +222,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     }
     // Exit may never arrive; leaf-addressed retirement and renderer exit handling are mutually idempotent.
     this.retireClosedTerminalLeafFromMobileSnapshot(worktreeId, target.tabId, target.leafId)
-    this.notifier?.closeTerminalPane?.(target.tabId, target.leafId)
+    this.windowNotifierFor(worktreeId)?.closeTerminalPane?.(target.tabId, target.leafId)
   }
 
   /** A paired client's close of one pane: stops only that pane's process, commits only that pane. */

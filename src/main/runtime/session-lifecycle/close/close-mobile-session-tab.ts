@@ -181,10 +181,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             (options.reason === undefined || options.reason === 'user'),
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })
-        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+        this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
         return finishCommittedClose()
       }
-      if (closingWholeParent && this.notifier?.closeTerminalTab) {
+      if (closingWholeParent && windowOwns(worktreeId) && this.notifier?.closeTerminalTab) {
         // Commit the acknowledged identity even if renderer flush rebased its omission.
         const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
         // Await renderer pin guard, retirement and forced session flush.
@@ -234,7 +234,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+          this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
         } else if (retirement.hasPersistedTab) {
           // Cover acknowledged tabs absent from renderer inventory; concurrent durable removal is idempotent.
           await this.closeTerminalSurface(
@@ -260,7 +260,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             force: options.force,
             ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
           })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+          this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
           return finishCommittedClose()
         }
         this.notifier.closeTerminal(tab.parentTabId)
@@ -283,7 +283,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         await this.offscreenBrowserBackend!.closeTab(tab.browserPageId!).catch(() => {})
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, tab.browserPageId!)
       } else {
-        if (!this.notifier?.closeSessionTab) {
+        if (!windowOwns(worktreeId) || !this.notifier?.closeSessionTab) {
           throw new Error('runtime_unavailable')
         }
         await this.notifier.closeSessionTab(tab.id, worktreeId)

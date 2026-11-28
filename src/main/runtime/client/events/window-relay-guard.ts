@@ -81,7 +81,7 @@ export const WINDOW_RELAY_TABLE: { [M in NotifierMethod]-?: WindowRelayRow<M> } 
     paneKeys: [paneKey],
     ptyId
   })),
-  splitTerminal: act((tabId) => ({ tabId })),
+  splitTerminal: act((tabId, _paneRuntimeId, opts) => ({ tabId, worktreeId: opts.worktreeId })),
   renameTerminal: act((tabId) => ({ tabId })),
   setPaneTitle: act((tabId) => ({ tabId })),
   focusTerminal: act((tabId, worktreeId) => ({ tabId, worktreeId })),
@@ -113,7 +113,13 @@ export const WINDOW_RELAY_TABLE: { [M in NotifierMethod]-?: WindowRelayRow<M> } 
   clientHostedBrowserRowsChanged: notice((event) => ({ worktreeId: event.worktreeId }))
 }
 
-type PayloadField = 'worktreeId' | 'fallbackWorktreeId' | 'tabId' | 'splitFromTabId' | 'ptyId'
+type PayloadField =
+  | 'worktreeId'
+  | 'fallbackWorktreeId'
+  | 'tabId'
+  | 'splitFromTabId'
+  | 'ptyId'
+  | 'paneKey'
 type DesktopChannelRow = {
   kind: 'notice' | 'act'
   fields: readonly (PayloadField | 'browserPageId')[]
@@ -134,7 +140,11 @@ export const DESKTOP_CHANNEL_TABLE: Readonly<Record<string, DesktopChannelRow>> 
   'browser:navigation-update': { kind: 'notice', fields: ['browserPageId'] },
   'browser:pane-focus': { kind: 'notice', fields: ['worktreeId', 'browserPageId'] },
   'emulator:pane-focus': { kind: 'notice', fields: ['worktreeId'] },
-  'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] }
+  'ui:emulatorAutoAttach': { kind: 'act', fields: ['worktreeId'] },
+  'agentStatus:set': { kind: 'notice', fields: ['worktreeId', 'tabId', 'paneKey'] },
+  'agentStatus:clear': { kind: 'notice', fields: ['paneKey'] },
+  'agentStatus:migrationUnsupported': { kind: 'notice', fields: ['worktreeId', 'tabId', 'ptyId'] },
+  'agentStatus:migrationUnsupportedClear': { kind: 'notice', fields: ['ptyId'] }
 }
 
 /** The teammate's workspace a relay names, or null when every target is the window's. */
@@ -223,14 +233,16 @@ export function guardWindowRelays(raw: RuntimeNotifier, lists: WindowRelayLists)
   })
 }
 
-const PAYLOAD_TARGET: Record<PayloadField | 'browserPageId', keyof WindowRelayTarget> = {
-  worktreeId: 'worktreeId',
-  fallbackWorktreeId: 'worktreeId',
-  tabId: 'tabId',
-  splitFromTabId: 'tabId',
-  ptyId: 'ptyId',
-  browserPageId: 'browserPageId'
-}
+const PAYLOAD_TARGET: Record<PayloadField | 'browserPageId', (value: string) => WindowRelayTarget> =
+  {
+    worktreeId: (worktreeId) => ({ worktreeId }),
+    fallbackWorktreeId: (worktreeId) => ({ worktreeId }),
+    tabId: (tabId) => ({ tabId }),
+    splitFromTabId: (tabId) => ({ tabId }),
+    ptyId: (ptyId) => ({ ptyId }),
+    paneKey: (paneKey) => ({ paneKeys: [paneKey] }),
+    browserPageId: (browserPageId) => ({ browserPageId })
+  }
 
 /** Each field a channel's payload names, as its own target, so none hides behind another. */
 function payloadTargets(row: DesktopChannelRow, payload: unknown): WindowRelayTarget[] {
@@ -239,7 +251,7 @@ function payloadTargets(row: DesktopChannelRow, payload: unknown): WindowRelayTa
   )
   return row.fields.flatMap((field) => {
     const value = fields.get(field)
-    return typeof value === 'string' ? [{ [PAYLOAD_TARGET[field]]: value }] : []
+    return typeof value === 'string' ? [PAYLOAD_TARGET[field](value)] : []
   })
 }
 
