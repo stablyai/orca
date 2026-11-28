@@ -54,6 +54,13 @@ export function agentListPreview(
   return prompt === title ? '' : prompt
 }
 
+/** The project to name before the workspace; null when the workspace name already is it or a bot names the row. */
+export function agentListProjectName(entry: HomeAgentEntry): string | null {
+  const oneLine = (name: string | undefined) => name?.replace(/[\r\n]+/g, ' ').trim()
+  const project = oneLine(entry.repo)
+  return entry.bot || !project || project === oneLine(entry.workspaceName) ? null : project
+}
+
 /** Search covers what the row shows plus the prompt; `query` is already lower-cased. */
 export function agentListEntryMatches(entry: HomeAgentEntry, query: string): boolean {
   const { agent } = entry

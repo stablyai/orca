@@ -29,7 +29,7 @@ import {
 import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import type { AgentListSection } from './agent-list-model'
 import { agentStatusGroup, type AgentListRow } from './agent-list-rows'
-import { agentListPreview } from './agent-list-row-text'
+import { agentListPreview, agentListProjectName } from './agent-list-row-text'
 
 // The Home rollup glyph is the list's size; this maps a per-agent state onto its palette.
 const GLYPH_STATUS: Record<AgentDotState, AgentSpinnerStatus> = {
@@ -171,12 +171,14 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const needsYou = group === 'needs-you'
   const stateWord = needsYou ? agentStateLabel(row.dotState, t) : ''
   const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState, t) : stateWord
-  const place = [
+  const project = props.footer === 'project-workspace' ? agentListProjectName(row.entry) : null
+  const where = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
     props.nameDesktop ? desktop : null
   ]
     .filter(Boolean)
     .join(' · ')
+  const place = project ? `${project} · ${where}` : where
   const time = row.timeAt > 0 ? formatTimeAgo(row.timeAt, props.now, t) : ''
   const workerCount = row.workers.length
   const workersLabel =
@@ -306,14 +308,26 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
               </Text>
             ) : null}
             <View style={styles.footer}>
-              {row.entry.bot && props.footer === 'workspace' ? (
+              {row.entry.bot && props.footer !== 'agent' ? (
                 <MobileBotAvatar avatar={mobileBotAvatarSource(row.entry.bot)} size={13} />
               ) : agent.agentType ? (
                 <MobileAgentIcon agentId={agent.agentType} size={13} />
               ) : null}
-              <Text style={styles.place} numberOfLines={1}>
-                {place}
-              </Text>
+              {project ? (
+                // Its own text so a long repo shrinks with the workspace, keeping both ends of its name.
+                <View style={styles.placeLine}>
+                  <Text style={styles.place} numberOfLines={1} ellipsizeMode="middle">
+                    {project}
+                  </Text>
+                  <Text style={styles.place} numberOfLines={1}>
+                    {` · ${where}`}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.place} numberOfLines={1}>
+                  {place}
+                </Text>
+              )}
               <View style={styles.trailing}>
                 {unread ? (
                   <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} />
@@ -359,6 +373,7 @@ const stylesSheet = themedStyleSheet((colors) => ({
   stateFailed: { color: colors.statusRed, fontWeight: '600' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   place: { flexShrink: 1, fontSize: 12, color: colors.textMuted },
+  placeLine: { flexDirection: 'row', flexShrink: 1, minWidth: 0 },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 'auto' },
   workers: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   workersLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary },
