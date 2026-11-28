@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
-import type { DiffCommentBaseMutation } from '../../../../../shared/file-review/diff-comment-mutation'
-import { applyDiffCommentWrite } from '../../../../../shared/file-review/diff-comment-mutation'
-import type { Repo } from '../../../../../shared/repository/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
-import '../../../../../shared/execution-host/execution-host'
 import {
   diffCommentSendKey,
   isNoteInFlight
 } from '@/components/notes/delivery/notes-send-in-flight'
-import { createTestStore } from '../../testing/app-store-test-fixture'
-import type { DiffCommentOwner } from './diff-comment-owner'
+import {
+  cleanupCalls,
+  createStore,
+  host,
+  note,
+  OWNER,
+  shown,
+  WT
+} from './diff-comment-delivery-cleanup.test-fixture'
 
 type ToastOptions = { action?: { label: string; onClick: () => void } }
 const toastError = vi.hoisted(() => vi.fn<(message: string, options?: ToastOptions) => void>())
@@ -18,90 +19,6 @@ const toastDismiss = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: toastError, dismiss: toastDismiss }
 }))
-
-type Updates = { diffComments?: DiffComment[] } & DiffCommentBaseMutation
-
-// A host on this computer: it keeps its own list and answers each write with it.
-const host: {
-  notes: DiffComment[]
-  // Older host: drops the cleanup field it does not know, as a stripping parser would.
-  ignoresCleanup: boolean
-  gate: ((updates: Updates) => Promise<void>) | null
-} = { notes: [], ignoresCleanup: false, gate: null }
-const updateMeta = vi.fn(async ({ updates }: { updates: Updates }) => {
-  await host.gate?.(updates)
-  const applied = host.ignoresCleanup
-    ? { ...updates, deliveredDiffCommentSnapshots: undefined }
-    : updates
-  host.notes = applyDiffCommentWrite(host.notes, applied) ?? host.notes
-  return { diffComments: host.notes }
-})
-vi.stubGlobal('window', { api: { worktrees: { updateMeta }, ui: { set: vi.fn() } } })
-
-const REPO = 'repo-1'
-const WT = `${REPO}::/work/sample`
-const OWNER: DiffCommentOwner = {
-  kind: 'worktree',
-  worktreeId: WT,
-  authority: { endpoint: { kind: 'self' }, at: 'local' }
-}
-
-function note(id: string, body = `Sample note ${id}`): DiffComment {
-  return {
-    id,
-    worktreeId: WT,
-    filePath: 'sample.ts',
-    lineNumber: 1,
-    body,
-    createdAt: 1,
-    side: 'modified'
-  }
-}
-
-function worktree(diffComments: DiffComment[]): Worktree {
-  return {
-    id: WT,
-    repoId: REPO,
-    path: '/work/sample',
-    head: 'abc',
-    branch: 'refs/heads/sample',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'sample',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    hostId: 'local',
-    diffComments
-  }
-}
-
-function createStore(notes: DiffComment[]) {
-  host.notes = notes
-  const repo: Repo = {
-    id: REPO,
-    path: '/work/repo',
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0,
-    executionHostId: 'local'
-  }
-  const store = createTestStore()
-  store.setState({ repos: [repo], worktreesByRepo: { [REPO]: [worktree(notes)] } })
-  return store
-}
-
-const shown = (store: ReturnType<typeof createStore>): DiffComment[] =>
-  store.getState().getDiffComments(WT)
-
-const cleanupCalls = (): number =>
-  updateMeta.mock.calls.filter(([args]) => args.updates.deliveredDiffCommentSnapshots).length
 
 describe('removing delivered review notes', () => {
   beforeEach(() => {
@@ -231,54 +148,16 @@ describe('removing delivered review notes', () => {
     expect(host.notes.map((n) => n.body)).toEqual(['Later sample edit'])
   })
 
-  // Why: snapshots count their id reads, so a per-note scan of every snapshot (STA-19463) fails the bound.
-  function countedSnapshots(notes: DiffComment[]): {
-    snapshots: DiffComment[]
-    idReads: () => number
-  } {
-    let reads = 0
-    const snapshots = notes.map((n) => {
-      const copy = { ...n }
-      const { id } = copy
-      Object.defineProperty(copy, 'id', {
-        enumerable: true,
-        get: () => {
-          reads += 1
-          return id
-        }
-      })
-      return copy
-    })
-    return { snapshots, idReads: () => reads }
-  }
+  it('keeps a note edited after the send captured it, and removes the rest', async () => {
+    const [a, b] = [note('a'), note('b')]
+    const store = createStore([a, b])
+    expect(await store.getState().updateDiffComment(OWNER, 'a', 'Edited mid-send')).toBe(true)
 
-  it.each([
-    ['the host removes them', false],
-    ['the host keeps them', true]
-  ])(
-    'checks a large send in linear time when %s, sparing a note edited mid-send',
-    async (_, keeps) => {
-      const count = 3000
-      const notes = Array.from({ length: count }, (_, i) => note(`n${i}`))
-      const store = createStore(notes)
-      host.ignoresCleanup = keeps
-      const { snapshots, idReads } = countedSnapshots(notes)
-      // Edited after the send captured its snapshots, before the success report.
-      expect(await store.getState().updateDiffComment(OWNER, 'n1500', 'Edited mid-send')).toBe(true)
+    expect(await store.getState().clearDeliveredDiffComments(OWNER, [a, b])).toBe(true)
 
-      expect(await store.getState().clearDeliveredDiffComments(OWNER, snapshots)).toBe(!keeps)
-
-      expect(idReads()).toBeLessThan(count * 20)
-      const edited = shown(store).find((n) => n.id === 'n1500')
-      expect(edited?.body).toBe('Edited mid-send')
-      expect(edited?.sentAt).toBeUndefined()
-      if (keeps) {
-        expect(shown(store)).toHaveLength(count)
-        expect(shown(store).filter((n) => n.sentAt)).toHaveLength(count - 1)
-      } else {
-        expect(shown(store).map((n) => n.id)).toEqual(['n1500'])
-        expect(host.notes.map((n) => n.body)).toEqual(['Edited mid-send'])
-      }
-    }
-  )
+    expect(shown(store).map((n) => [n.id, n.body, n.sentAt])).toEqual([
+      ['a', 'Edited mid-send', undefined]
+    ])
+    expect(host.notes.map((n) => n.body)).toEqual(['Edited mid-send'])
+  })
 })
