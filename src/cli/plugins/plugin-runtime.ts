@@ -63,9 +63,13 @@ export function translatePluginRpcError(
     return error
   }
   const command = approvalRerunCommand(ctx.rawArgs ?? [], fingerprint)
-  const nextSteps = nextStepsOf(data).map((step) =>
-    step.startsWith('To approve, run the same command again') ? `To approve, run: ${command}` : step
-  )
+  // The approve command goes last: the tail of the output is what the user reads next.
+  const nextSteps = [
+    ...nextStepsOf(data).filter(
+      (step) => !step.startsWith('To approve, run the same command again')
+    ),
+    `To approve, run: ${command}`
+  ]
   return new RuntimeClientError(code, message, { ...data, command, nextSteps })
 }
 
