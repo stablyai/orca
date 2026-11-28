@@ -349,24 +349,23 @@ export function connectorMessageShown(message: ShownMessage): {
   drawnMarkdown?: string
 } {
   const { role, blocks } = message
-  const [only] = blocks
-  if (
-    message.origin !== 'connector' ||
-    role !== 'user' ||
-    blocks.length !== 1 ||
-    only?.type !== 'text'
-  ) {
-    return { blocks }
-  }
-  const shown = connectorMessageShownText(only.text)
-  if (shown === null) {
+  const textBlocks = blocks.filter((block) => block.type === 'text')
+  const [only] = textBlocks
+  const onlyTextAndImages =
+    textBlocks.length === 1 &&
+    only !== undefined &&
+    blocks.every((block) => block.type === 'text' || block.type === 'image-ref')
+  const shown =
+    message.origin === 'connector' && role === 'user' && onlyTextAndImages
+      ? connectorMessageShownText(only.text)
+      : null
+  if (shown === null || !only) {
     return { blocks }
   }
   // Slack's markup stays in what the agent reads; the chat shows it as Slack does.
   const slack = message.asker?.source === 'slack' ? slackMarkupShownText(shown) : null
-  return slack
-    ? { blocks: [{ ...only, text: slack.text }], drawnMarkdown: slack.markdown }
-    : { blocks: [{ ...only, text: shown }] }
+  const updated = blocks.map((b) => (b === only ? { ...b, text: slack ? slack.text : shown } : b))
+  return slack ? { blocks: updated, drawnMarkdown: slack.markdown } : { blocks: updated }
 }
 
 /** A message's blocks as the chat shows them; see `connectorMessageShown`. */
