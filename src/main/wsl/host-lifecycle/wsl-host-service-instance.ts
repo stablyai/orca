@@ -28,10 +28,18 @@ export function setWslHostService(service: WslHostService | null): void {
   }
 }
 
-/** Every service installed from now on; startup sets it after the IPC that needs it registers. */
-export function onWslHostServiceSet(listener: (service: WslHostService) => void): () => void {
-  serviceListeners.add(listener)
-  return () => serviceListeners.delete(listener)
+/** Once, with the installed service or the next one: startup installs it after its consumers register. */
+export function whenWslHostServiceSet(listener: (service: WslHostService) => void): () => void {
+  if (instance) {
+    listener(instance)
+    return () => {}
+  }
+  const once = (service: WslHostService): void => {
+    serviceListeners.delete(once)
+    listener(service)
+  }
+  serviceListeners.add(once)
+  return () => serviceListeners.delete(once)
 }
 
 /** Statuses of whichever service is installed, now or later. */

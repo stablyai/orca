@@ -44,7 +44,7 @@ import { wslHostAddRefusal } from '../../wsl/host-lifecycle/wsl-host-add-admissi
 import { runAsWslUserAct } from '../../wsl/filesystem/wsl-unc-access-gate'
 import {
   getWslHostService,
-  onWslHostServiceSet
+  whenWslHostServiceSet
 } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { onWslHostUserAction } from '../../wsl/host-lifecycle/wsl-host-user-actions'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
@@ -294,37 +294,29 @@ export function registerWslMoveOrchestrator(
   if (!wslHostsGateOpen() || orchestrator) {
     return
   }
-  if (getWslHostService()) {
-    startOrchestrator(store, driverDeps)
-    return
-  }
   // Startup installs the service after this registers (and Add may create it later still).
-  stopWaitingForService = onWslHostServiceSet(() => {
-    stopWaitingForService?.()
-    stopWaitingForService = null
-    startOrchestrator(store, driverDeps)
+  stopWaitingForService = whenWslHostServiceSet(() => {
+    if (orchestrator) {
+      return
+    }
+    // Runs inside registerCoreHandlers or setWslHostService: a throw would break either caller.
+    try {
+      const created = createOrchestrator(store, driverDeps)
+      orchestrator = created
+      followHostReadiness(created)
+      onWslMoveReleasedByUser(
+        async (distro) => await created.releasedByUser(distro, 'released-here')
+      )
+      // A Remove is the user declining the host; only their own Add (or Retry) takes it back.
+      onWslHostUserAction(async ({ kind, distro }) =>
+        kind === 'removed'
+          ? await created.releasedByUser(distro, 'removed')
+          : created.hostAddedByUser(distro)
+      )
+    } catch (error) {
+      console.warn('[wsl-move] Move orchestrator did not start:', error)
+    }
   })
 }
 
 let stopWaitingForService: (() => void) | null = null
-
-function startOrchestrator(store: Store, driverDeps: () => WslMoveDriverDeps): void {
-  if (orchestrator) {
-    return
-  }
-  // Runs inside registerCoreHandlers or setWslHostService: a throw would break either caller.
-  try {
-    const created = createOrchestrator(store, driverDeps)
-    orchestrator = created
-    followHostReadiness(created)
-    onWslMoveReleasedByUser(async (distro) => await created.releasedByUser(distro, 'released-here'))
-    // A Remove is the user declining the host; only their own Add (or Retry) takes it back.
-    onWslHostUserAction(async ({ kind, distro }) =>
-      kind === 'removed'
-        ? await created.releasedByUser(distro, 'removed')
-        : created.hostAddedByUser(distro)
-    )
-  } catch (error) {
-    console.warn('[wsl-move] Move orchestrator did not start:', error)
-  }
-}

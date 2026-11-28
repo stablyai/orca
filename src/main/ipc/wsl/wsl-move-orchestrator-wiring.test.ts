@@ -44,6 +44,7 @@ import type { Store } from '../../persistence/loading-store/store'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 
 const fakeService = (): WslHostService =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the wiring reads only these two members at construction.
   ({ getStatuses: () => [], onStatusesChanged: () => () => {} }) as unknown as WslHostService
 
 describe('registerWslMoveOrchestrator', () => {
@@ -54,6 +55,7 @@ describe('registerWslMoveOrchestrator', () => {
   // Startup registers this before the host service is installed; the service arriving later must build it.
   it('builds the orchestrator once when the host service is set after registration', () => {
     setWslHostService(null)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: construction reads only getSettings.
     const store = { getSettings: () => ({ experimentalWslHosts: true }) } as unknown as Store
     registerWslMoveOrchestrator(store, () => {
       throw new Error('driver not used')
