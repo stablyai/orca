@@ -27,7 +27,8 @@ export class DaemonRouterLegacyIdleRetirement {
   private readonly checkAgain = new Set<DaemonPtyAdapter>()
   private readonly waitingForQuiet = new Set<DaemonPtyAdapter>()
   private readonly fences = new Set<Promise<void>>()
-  private readonly recheckDelays = new Map<DaemonPtyAdapter, number>()
+  // Weak: a generation can also leave through the endpoint-loss path, which never tells this class.
+  private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
   private reattachesInFlight = 0
   private reattachEpoch = 0
   private disposed = false
@@ -97,7 +98,6 @@ export class DaemonRouterLegacyIdleRetirement {
     this.timers.clear()
     this.waitingForQuiet.clear()
     this.checkAgain.clear()
-    this.recheckDelays.clear()
   }
 
   /** The current generation is never retired here, even when it is empty. */
