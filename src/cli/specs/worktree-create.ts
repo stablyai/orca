@@ -48,6 +48,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
     "--parent-worktree is looked up in the new worktree's environment. For a parent in another environment, add --parent-environment with local or a saved environment id or name, such as a row's address.environment from `orca worktree ps --json`. No other environment is searched.",
     'Use --no-parent when the new worktree should be independent of the current context.',
+    "A create run from a bot's home (its chat or terminal) stays under that bot even with --no-parent; pass --parent-worktree for another parent, or make it top-level afterwards with `orca worktree set --worktree <selector> --no-parent`.",
     'Pass --branch to name the Git branch without the configured prefix (a taken name gets a numeric suffix); --base-branch selects the starting ref instead.',
     '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
     'By default this creates the worktree and its first terminal without switching the active Orca view.',

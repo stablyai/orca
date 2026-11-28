@@ -1,18 +1,31 @@
 // A bot's chats in the host list, from the model the desktop sidebar draws: each chat that replies,
 // waits on the owner or is unread (never Home Chat, which the bot's row opens), then (while it is
-// open) its workers' lines and their paging.
+// open) its workers' lines and their paging. Every other workspace of the bot lists flat above them,
+// paged as a chat's, since the project list leaves all of them out.
 import {
   botChatFoldKey,
   chatIsGoing,
   type BotChatFold,
   type BotChatTreeChat
 } from '../../../src/shared/bots/bot-chat-tree'
-import { botLiveWorkspaceIds } from '../../../src/shared/bots/bot-sidebar-chat-groups'
-import { buildBotSidebarTree } from '../../../src/shared/bots/bot-sidebar-tree'
+import {
+  botLiveWorkspaceRanks,
+  botSidebarListedChats,
+  pageChatLines,
+  sortBotWorkspacesByLiveRank
+} from '../../../src/shared/bots/bot-sidebar-chat-groups'
+import {
+  botSidebarWorkerPaging,
+  buildBotSidebarTree,
+  type BotSidebarWorkerPaging
+} from '../../../src/shared/bots/bot-sidebar-tree'
 import type { WorkspaceListItem } from '../worktree/workspace-list/workspace-list-types'
 import type { MobileBotChatLineFacts } from './host-bot-row-facts'
 import type { HostBotWorkerBranch } from './host-bot-worker-lines'
 import type { HostBotChatTree } from './bot-chat-tree-reads'
+
+/** Not a chat id (chat ids are session ids): the steps key of the bot's flat lines. */
+const FLAT_LINES_KEY = '\u0000flat-lines'
 
 /** A chat the list shows under its bot: one that needs a look now. */
 function listsUnderBot(chat: BotChatTreeChat): boolean {
@@ -40,9 +53,18 @@ export function hostBotChatItems(args: {
   }
   const dim = args.dimmed ? { dimmed: true as const } : {}
   const keyOf = (chatId: string) => botChatFoldKey(hostKey, botId, chatId)
+  // Each workspace lists once: under a chat the list shows, else flat under the bot.
+  const shownChats = new Set(
+    botSidebarListedChats(tree.chats)
+      .filter(listsUnderBot)
+      .map(({ chatId }) => chatId)
+  )
+  const underChat = (branch: HostBotWorkerBranch) =>
+    shownChats.has(tree.workspaceChats[branch.id] ?? '')
+  const rest = args.branches.filter((branch) => !underChat(branch))
   const view = buildBotSidebarTree({
     chats: tree.chats,
-    workspaces: args.branches,
+    workspaces: args.branches.filter(underChat),
     workspaceChats: tree.workspaceChats,
     foldOf: (chatId) => args.folds[keyOf(chatId)],
     stepsOf: (chatId) => args.steps[keyOf(chatId)] ?? 0,
@@ -63,20 +85,22 @@ export function hostBotChatItems(args: {
         }
       }
     }))
+  const pagingItem = (
+    id: string,
+    steps: number,
+    paging: BotSidebarWorkerPaging | null
+  ): WorkspaceListItem => ({
+    row: home.row,
+    view: {
+      sectionListKey: `bot-chat-paging:${args.homeIdentity}:${id}`,
+      botChatPaging: { stepsKey: keyOf(id), steps, paging },
+      ...dim
+    }
+  })
   const items: WorkspaceListItem[] = []
-  // Lines of the chats left out lead, so none reads as a listed chat's.
-  const leftOut: WorkspaceListItem[] = []
-  const liveIds = botLiveWorkspaceIds(tree.chats)
   for (const chatView of view.chats) {
     const { chat } = chatView
-    if (!listsUnderBot(chat)) {
-      // A chat left out (Home Chat, or a quiet one) still lists its live and open workers, flat
-      // under the bot, so one waiting on you can be reached.
-      for (const branch of chatView.lines) {
-        if (branch.lines.some((line) => liveIds.has(line.row.worktreeId) || line.row.isActive)) {
-          leftOut.push(...lineItems(branch, view.notes.get(branch.id)))
-        }
-      }
+    if (!shownChats.has(chat.chatId)) {
       continue
     }
     items.push({
@@ -101,22 +125,33 @@ export function hostBotChatItems(args: {
       items.push(...lineItems(branch, view.notes.get(branch.id)))
     }
     if (chatView.paging || chatView.steps > 0) {
-      items.push({
-        row: home.row,
-        view: {
-          sectionListKey: `bot-chat-paging:${args.homeIdentity}:${chat.chatId}`,
-          botChatPaging: {
-            stepsKey: keyOf(chat.chatId),
-            steps: chatView.steps,
-            paging: chatView.paging
-          },
-          ...dim
-        }
-      })
+      items.push(pagingItem(chatView.chat.chatId, chatView.steps, chatView.paging))
     }
   }
-  for (const branch of view.stray) {
-    items.push(...lineItems(branch, view.notes.get(branch.id)))
+  // Every workspace no shown chat has (Home Chat's, a quiet or closed chat's) leads, flat, so none
+  // reads as a listed chat's: live ones and the open one always, the rest paged as a chat's lines.
+  if (rest.length === 0) {
+    return items
   }
-  return [...leftOut, ...items]
+  const flatSteps = args.steps[keyOf(FLAT_LINES_KEY)] ?? 0
+  const ranks = botLiveWorkspaceRanks(tree.chats)
+  const live: HostBotWorkerBranch[] = []
+  const idle: HostBotWorkerBranch[] = []
+  for (const branch of rest) {
+    if (branch.lines.some((line) => ranks.has(line.row.worktreeId))) {
+      live.push(branch)
+    } else {
+      idle.push(branch)
+    }
+  }
+  // Idle ones keep the list's order; only live ones rank, those waiting on the owner first.
+  const flat = live.length > 0 ? [...sortBotWorkspacesByLiveRank(live, ranks), ...idle] : idle
+  const page = pageChatLines(flat, new Set(live.map(({ id }) => id)), flatSteps)
+  const leading = flat
+    .filter((branch, index) => index < page.shown || branch.lines.some((line) => line.row.isActive))
+    .flatMap((branch) => lineItems(branch, view.notes.get(branch.id)))
+  if (page.remaining > 0 || flatSteps > 0) {
+    leading.push(pagingItem(FLAT_LINES_KEY, flatSteps, botSidebarWorkerPaging(page.remaining)))
+  }
+  return [...leading, ...items]
 }

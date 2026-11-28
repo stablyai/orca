@@ -40,6 +40,7 @@ import { hostBotChatItems } from './host-bot-chat-items'
 import { hostBotFoldKey } from './host-bot-fold-key'
 import { botListsUnderRow } from '../../../src/shared/bots/bot-sidebar-tree'
 import { hostBotsKey } from './host-bots-read'
+import { BOTS_GROUP_KEY } from '../../../src/shared/sidebar-list/sections/group-keys'
 import { hostBotTreeKey, type HostBotChatTrees } from './bot-chat-tree-reads'
 
 export type HostBotSectionInputs = {
@@ -127,7 +128,9 @@ export function drawHostBotEntries(
   hostRows: readonly Worktree[],
   inputs: HostBotSectionInputs,
   lineageOf: ReturnType<typeof lazyHostBotLineage>,
-  hosts: BotHostNames
+  hosts: BotHostNames,
+  /** The Bot options hide paused bots from this list. */
+  hidesPausedBots: boolean
 ): { drawn: DrawnBotEntry[]; listed: Set<string>; total: number; shownTotal: number } {
   const shown = inputs.drawRow
   const { hostId } = listing
@@ -227,9 +230,13 @@ export function drawHostBotEntries(
     // Searching lists the matching workspaces flat, as before chats; otherwise its chats, once read. A
     // down host's last tree is not live, and its bot lists nothing.
     const tree = query || offline ? undefined : inputs.chatTrees.get(hostBotTreeKey(hostId, bot.id))
+    // Lines no one can see aren't built: the bot or the Bots list folded, or a paused bot the options
+    // hide. A search still needs them to match.
+    const linesUnseen =
+      !listsUnder || inputs.collapsedGroups.has(BOTS_GROUP_KEY) || (bot.paused && hidesPausedBots)
     // Until its first read lands it lists nothing, so its rows don't swap under you.
     const chatItems =
-      tree === 'loading'
+      tree === 'loading' || (linesUnseen && !query)
         ? []
         : hostBotChatItems({
             tree,

@@ -25,6 +25,13 @@ export type BotSidebarChatTrailing =
 /** A chat's "Show more" for its workers: a full step reads "Show 8 more", a last partial one names its count. */
 export type BotSidebarWorkerPaging = { remaining: number; label: 'step' | 'count' }
 
+/** The "Show more" for `remaining` hidden workers; null when none are hidden. */
+export function botSidebarWorkerPaging(remaining: number): BotSidebarWorkerPaging | null {
+  return remaining === 0
+    ? null
+    : { remaining, label: remaining > CHAT_TREE_CAPS.step ? 'step' : 'count' }
+}
+
 export function botSidebarWorkerPagingLabel(
   t: BotChatTranslate,
   paging: BotSidebarWorkerPaging
@@ -93,13 +100,7 @@ export function buildBotSidebarTree<T extends { id: string }>(input: {
       lines: workspaces.filter(
         (line, index) => index < page.shown || line.id === input.activeLineId
       ),
-      paging:
-        page.remaining === 0
-          ? null
-          : {
-              remaining: page.remaining,
-              label: page.remaining > CHAT_TREE_CAPS.step ? 'step' : 'count'
-            },
+      paging: botSidebarWorkerPaging(page.remaining),
       steps
     }
   })
