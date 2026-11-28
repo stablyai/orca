@@ -72,7 +72,7 @@ export class AcpPendingSteers {
       if (turn && sessionId !== undefined) {
         this.queue.shift()
         this.inFlight = next.send
-        void this.inject(next.send, sessionId, turn)
+        void this.inject(next.send, next.mode, sessionId, turn)
       }
     }
   }
@@ -127,6 +127,7 @@ export class AcpPendingSteers {
 
   private async inject(
     send: AcpTurnSend,
+    mode: 'mail' | 'steer',
     sessionId: string,
     turn: AgentJournalItemIdentity
   ): Promise<void> {
@@ -157,8 +158,12 @@ export class AcpPendingSteers {
         agentSessionFailureFact('cancelled', { neverReachedAgent: true })
       )
     } else {
-      // Keep the same submission ahead of newer steers; it waits for the turn to end, uncancelled.
-      this.queue.unshift({ send, mode: 'wait' })
+      // Keep the same submission ahead of newer steers. Mail waits for the turn to end, uncancelled;
+      // a person's refused Steer falls back to cancelling it, as a Steer without the extension does.
+      this.queue.unshift({
+        send,
+        mode: mode === 'steer' && outcome === 'failed' ? 'cancel' : 'wait'
+      })
     }
     this.advance()
     this.turns.onSettled()

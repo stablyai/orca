@@ -23,7 +23,7 @@ export type AcpTurnSend = {
   requestedAt: number
   adopted?: true
 }
-export type AcpSteerMode = 'mail' | 'cancel'
+export type AcpSteerMode = 'mail' | 'steer' | 'cancel'
 
 export type AcpStructuredTurnsDeps = {
   connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel' | 'requestExtension'>
