@@ -148,6 +148,8 @@ export function createPushServer(
   app.get('/health', (context) =>
     context.json({ ok: true, pushProtocol: 1, deliveryProtocol: 2, mode: config.mode })
   )
+  // Open like /health: a 429 must not look like a missing prompt capability.
+  app.get('/v1/capabilities', (context) => context.json({ promptCategory: true }))
   app.get('/ready', limitUnauthenticatedIp, async (context) =>
     (await ready())
       ? context.json({ ok: true })

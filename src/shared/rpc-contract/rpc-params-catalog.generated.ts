@@ -122,6 +122,7 @@ import {
 import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch/agent-launch-params'
 import { AgentLaunchSettingsMutation } from './agent-launch/agent-launch-settings-params'
+import { AgentPromptListPendingParams, AgentPromptRespondParams } from './agent-prompt-params'
 import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
@@ -1209,6 +1210,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentCliUpdate.run': AgentCliUpdateRunParams,
   'agentCliUpdate.subscribe': null,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
+  'agentPrompt.listPending': AgentPromptListPendingParams,
+  'agentPrompt.respond': AgentPromptRespondParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
   'agentSession.agents': AgentsParams,

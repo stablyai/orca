@@ -12,8 +12,9 @@ import type { OrcaRuntimeRpcServer } from '../rpc/server/runtime-rpc'
 import { PushDispatcher, type PushCoverageRequest } from './push-dispatcher'
 import { PushBadgeSync } from './push-badge-sync'
 import type { ExecutionHostPushCoverage } from './push-burst-slots'
-import { mobilePushTokenDigest } from './push-token-digest'
+import { storePushRegistration } from './push-registration-store'
 import { pushTestResult, unregisteredTestResult } from './push-test-result'
+import { desktopPushPrompt } from './desktop-push-prompt'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
 import {
@@ -24,8 +25,6 @@ import type { PushUnregisterOutbox } from './push-unregister-outbox'
 
 const OUTBOX_RETRY_BASE_MS = 30_000
 const OUTBOX_RETRY_MAX_MS = 10 * 60_000
-
-type RegisterStorageFailure = 'not_mobile' | 'registration_storage_failed'
 
 type DesktopPushServiceOptions = {
   runtime: OrcaRuntimeService
@@ -75,6 +74,7 @@ export class DesktopPushService {
       client,
       registry,
       deliveryMode: this.deliveryMode,
+      prompt: desktopPushPrompt(this.runtime, client),
       coverage: options.coverage
     })
     this.badgeSync = new PushBadgeSync({ client, registry, runtime: options.runtime })
@@ -197,7 +197,7 @@ export class DesktopPushService {
         reason: result.reason === 'unreachable' ? 'gateway_unreachable' : 'gateway_rejected'
       }
     }
-    const failure = this.storeRegistration(input, result.registrationId)
+    const failure = storePushRegistration(this.registry, input, result.registrationId)
     if (failure) {
       // Gateway accepted an unstorable token; durably queue deletion rather than leak it.
       this.outbox.enqueue({ registrationId: result.registrationId, deviceId: input.deviceId })
@@ -260,27 +260,6 @@ export class DesktopPushService {
     } finally {
       // Clear ownership before the runner settles, so a late request starts a new drain.
       this.flushLoop = null
-    }
-  }
-
-  /** Returns the refusal reason when a gateway-accepted registration cannot be stored. */
-  private storeRegistration(
-    input: MobilePushRegisterInput,
-    registrationId: string
-  ): RegisterStorageFailure | null {
-    try {
-      const stored = this.registry.setPushRegistration(input.deviceId, {
-        registrationId,
-        filter: input.filter,
-        expiresAt: Date.now() + 7 * 24 * 60 * 60_000,
-        tokenDigest: mobilePushTokenDigest(input)
-      })
-      // False means the device was removed or left mobile scope while the gateway
-      // call was in flight.
-      return stored ? null : 'not_mobile'
-    } catch (error) {
-      console.warn('[push] Failed to persist a push registration:', error)
-      return 'registration_storage_failed'
     }
   }
 

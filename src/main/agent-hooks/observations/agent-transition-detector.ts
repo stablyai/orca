@@ -258,6 +258,14 @@ export class AgentTransitionDetector {
     return this.panes.get(paneKey)?.phase ?? 'rest'
   }
 
+  /** Panes still in needs-you or working. Rest is dropped, so a poll does not wake idle shells. */
+  trackedPanes(): readonly { paneKey: string; worktreeId: string }[] {
+    return [...this.panes].map(([paneKey, pane]) => ({
+      paneKey,
+      worktreeId: pane.workspace.worktreeId
+    }))
+  }
+
   /** Use the newest row to match the window's arrival-order projection. */
   latestRow(paneKey: string): AgentStatusIpcPayload | null {
     let latest: AgentStatusIpcPayload | null = null

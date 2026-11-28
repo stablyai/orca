@@ -7,6 +7,24 @@ export type MobilePushSource = (typeof MOBILE_PUSH_SOURCES)[number]
 export const MOBILE_PUSH_AGENT_STATES = ['needs-input', 'finished'] as const
 export type MobilePushAgentState = (typeof MOBILE_PUSH_AGENT_STATES)[number]
 
+/** iOS notification category. The gateway copies it to `aps.category` only after it advertises support. */
+export const MOBILE_PUSH_PROMPT_CATEGORY = 'orca.prompt' as const
+
+export const MOBILE_PUSH_PROMPT_ROLES = ['approve', 'approve-always', 'deny', 'other'] as const
+export type MobilePushPromptRole = (typeof MOBILE_PUSH_PROMPT_ROLES)[number]
+
+export type MobilePushPromptOption = {
+  optionId: string
+  label: string
+  role: MobilePushPromptRole
+}
+
+/** No `detail`: the watch notification only needs the ids the reply action sends back. */
+export type MobilePushPrompt = {
+  promptId: string
+  options: MobilePushPromptOption[]
+}
+
 export const MOBILE_PUSH_PLATFORMS = ['ios', 'android'] as const
 export type MobilePushPlatform = (typeof MOBILE_PUSH_PLATFORMS)[number]
 

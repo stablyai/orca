@@ -6,6 +6,25 @@ import {
 import { PUSH_LIMITS } from './push-limits.js'
 import { OpaqueIdSchema, SequenceSchema } from './wire-scalars.js'
 
+/** Bounds match the desktop host in src/shared/mobile-push-prompt.ts. No detail: the watch only needs reply ids. */
+const PushPromptSchema = z
+  .object({
+    promptId: z.string().min(1).max(512),
+    options: z
+      .array(
+        z
+          .object({
+            optionId: z.string().min(1).max(256),
+            label: z.string().min(1).max(80),
+            role: z.enum(['approve', 'approve-always', 'deny', 'other'])
+          })
+          .strict()
+      )
+      .min(1)
+      .max(12)
+  })
+  .strict()
+
 export const PushNotificationSchema = z
   .object({
     // Absent for terminal-bell; printable ASCII only because desktop URL-encoded IDs become APNs collapse headers.
@@ -33,12 +52,24 @@ export const PushNotificationSchema = z
       .string()
       .max(2048)
       .regex(/^runtime:[^|\s]+$/)
-      .optional()
+      .optional(),
+    category: z.literal('orca.prompt').optional(),
+    prompt: PushPromptSchema.optional()
   })
   .strict()
   .refine(
     (notification) => notification.kind !== 'dismiss' || Boolean(notification.notificationId),
     { message: 'dismiss requires notificationId' }
+  )
+  .refine(
+    (notification) => notification.prompt === undefined || notification.category === 'orca.prompt',
+    { message: 'prompt requires category' }
+  )
+  .refine(
+    (notification) =>
+      notification.kind !== 'dismiss' ||
+      (notification.category === undefined && notification.prompt === undefined),
+    { message: 'dismiss cannot carry a prompt' }
   )
   .refine(
     (notification) => (notification.kind === 'badge') === (notification.badge !== undefined),

@@ -72,3 +72,9 @@ export const MOBILE_AGENT_SESSION_RPC_METHODS = [
   'agentSession.hold',
   'agentSession.release'
 ] as const
+
+/** Phone callers that list or answer a live approval or question. */
+export const MOBILE_AGENT_PROMPT_RPC_METHODS = [
+  'agentPrompt.listPending',
+  'agentPrompt.respond'
+] as const

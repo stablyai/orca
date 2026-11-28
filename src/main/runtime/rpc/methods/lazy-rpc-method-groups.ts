@@ -256,6 +256,10 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
     }
   ),
   prefixRpcMethodGroup(
+    ['agentPrompt.'],
+    async () => (await import('./structured-sessions/agent-prompt-methods')).AGENT_PROMPT_METHODS
+  ),
+  prefixRpcMethodGroup(
     ['terminalDaemon.'],
     async () => (await import('./terminal/terminal-daemon')).TERMINAL_DAEMON_METHODS
   ),

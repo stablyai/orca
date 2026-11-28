@@ -12,6 +12,15 @@ export type PushOrcaData = {
   notificationEpoch: string
   source: string
   agentState: string | null
+  category?: 'orca.prompt'
+  prompt?: {
+    promptId: string
+    options: {
+      optionId: string
+      label: string
+      role: 'approve' | 'approve-always' | 'deny' | 'other'
+    }[]
+  }
 }
 
 export type PushDelivery = {
@@ -54,6 +63,12 @@ export function buildPushDelivery(input: {
     collapseId: collapseIdFor(notification, hostFingerprint),
     orca: {
       ...(notification.kind ? { kind: notification.kind } : {}),
+      ...(notification.kind === 'dismiss'
+        ? {}
+        : {
+            ...(notification.category ? { category: notification.category } : {}),
+            ...(notification.prompt ? { prompt: notification.prompt } : {})
+          }),
       hostFingerprint,
       ...(notification.paneKey === undefined ? {} : { paneKey: notification.paneKey }),
       ...(notification.worktreeId === undefined ? {} : { worktreeId: notification.worktreeId }),

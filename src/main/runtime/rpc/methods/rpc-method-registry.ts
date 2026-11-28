@@ -77,6 +77,7 @@ import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessio
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
 import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
+import { AGENT_PROMPT_METHODS } from './structured-sessions/agent-prompt-methods'
 import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
@@ -106,6 +107,7 @@ const CORE_RPC_METHODS = [
   ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
+  ...AGENT_PROMPT_METHODS,
   ...AGENT_ACTIVITY_METHODS,
   ...AGENT_LAUNCH_METHODS
 ] as const

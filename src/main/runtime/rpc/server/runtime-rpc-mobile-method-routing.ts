@@ -1,4 +1,7 @@
-import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
+import {
+  MOBILE_AGENT_PROMPT_RPC_METHODS,
+  MOBILE_AGENT_SESSION_RPC_METHODS
+} from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 import { MOBILE_BOT_RPC_METHODS } from './runtime-rpc-mobile-bot-methods'
 import { MOBILE_MCP_SERVER_RPC_METHODS } from './runtime-rpc-mobile-mcp-server-methods'
@@ -275,6 +278,7 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.unsubscribe',
   'session.tabs.unsubscribeAll',
   ...MOBILE_AGENT_SESSION_RPC_METHODS,
+  ...MOBILE_AGENT_PROMPT_RPC_METHODS,
   'terminal.ackOutput',
   'terminal.adoptOrphans',
   'terminal.agentStatus',
