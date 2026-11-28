@@ -58,7 +58,9 @@ export const mainThreadHangDetectedSchema = lazyZodSchema(() =>
         .max(64)
         .regex(/^macOS \d+(?:\.\d+){0,3} \([A-Za-z0-9]+\)$/)
         .optional(),
-      menu_bar_icon: z.boolean().nullable().optional()
+      menu_bar_icon: z.boolean().nullable().optional(),
+      // The launch that reports a hang may run another version than the one that hung.
+      detected_app_version: z.string().max(64).optional()
     })
     .strict()
 )

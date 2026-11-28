@@ -123,12 +123,16 @@ export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
   }
 }
 
-export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
+type SshTargetDraftConnectionFields = {
   host: string
   configHost: string
   username: string
   port: number
-} {
+}
+
+export function getSshTargetDraftConnectionFields(
+  draft: EditingTarget
+): SshTargetDraftConnectionFields {
   const parsed = parseSshHostInput(draft.host)
   const host = parsed?.host ?? draft.host.trim()
   const configHost = draft.configHost.trim() || host
@@ -147,6 +151,20 @@ export function getSshTargetDraftConnectionFields(draft: EditingTarget): {
     username,
     port
   }
+}
+
+/** Without an alias, a non-default port is the only thing telling hosts on one gateway apart. */
+export function getDefaultSshTargetLabel({
+  host,
+  configHost,
+  username,
+  port
+}: SshTargetDraftConnectionFields): string {
+  if (configHost !== host) {
+    return username ? `${username}@${host}` : configHost
+  }
+  const endpoint = port === 22 ? host : `${host.includes(':') ? `[${host}]` : host}:${port}`
+  return username ? `${username}@${endpoint}` : endpoint
 }
 
 export function hasAdvancedConnectionValues(form: EditingTarget): boolean {

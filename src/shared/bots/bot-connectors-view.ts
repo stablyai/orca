@@ -46,6 +46,8 @@ export function ghSignedOutGap(server: string | null): string {
     : 'gh is signed out on this computer. Ask your owner to run `gh auth login` here.'
 }
 export const GH_MISSING = 'Install the GitHub CLI (gh) on this computer, then run `gh auth login`.'
+export const GH_UNREAD =
+  "Orca couldn't read gh's sign-in on this computer; `gh auth status` shows it."
 export const LINEAR_NO_KEY =
   'Connect Linear to your bot, or add a Linear API key in Settings › Integrations.'
 
@@ -53,9 +55,10 @@ export const LINEAR_NO_KEY =
 // google: the Google accounts connected on this computer; absent from hosts that report none.
 // googleApp: whether this computer has a Google app (client) to sign in with.
 // googleDefault: this computer's default as the host reads it: an account, none, or unreadable.
+// gh: absent when gh's sign-in couldn't be read (a timeout, a locked keyring), so it isn't called signed out.
 // server: this host's name when it is a headless Orca server; null on a computer with Orca's window.
 export type LocalSignIns = {
-  gh: 'signed-in' | 'signed-out' | 'missing'
+  gh?: 'signed-in' | 'signed-out' | 'missing'
   server?: string | null
   linear: boolean
   google?: readonly GoogleAccountView[]
@@ -163,7 +166,14 @@ export function botConnectorServices(
       signedIn: local.gh === 'signed-in',
       ...(local.gh === 'signed-in'
         ? {}
-        : { gap: local.gh === 'missing' ? GH_MISSING : ghSignedOutGap(local.server ?? null) }),
+        : {
+            gap:
+              local.gh === 'missing'
+                ? GH_MISSING
+                : local.gh === 'signed-out'
+                  ? ghSignedOutGap(local.server ?? null)
+                  : GH_UNREAD
+          }),
       wakes: bot.github !== null
     },
     {

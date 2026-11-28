@@ -53,7 +53,7 @@ few seconds and retry the command. Before retrying a command that changes someth
 whether it already took effect, and reuse any request ID the error names. `ORCA open` can
 bring Orca's window to the front over the user's work, so never run it to retry a failed
 command. Run it only when the user asks, or when Orca is really not running:
-`ORCA status --json` reports `result.app.running: false`, or every command, `ORCA status`
+`ORCA status --json` reports `result.app.running: false` and no `result.app.restarting`, or every command, `ORCA status`
 included, still cannot connect after about 30 seconds of retries. If a command fails with
 `runtime_access_denied`, your sandbox blocked the connection: re-run it with escalated
 permissions, and do not run `ORCA open` or restart Orca. If `skills get` is unknown, explain

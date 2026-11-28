@@ -216,6 +216,10 @@ export function fitInteractivePrompt(
     parsed === undefined
       ? truncatePreservingSurrogates(prompt, limit)
       : JSON.stringify(compactInteractivePromptValue(parsed, limit))
+  // Nothing fits when even the shortest cut does not (e.g. OMP's `html` form, which never shortens).
+  if (!fits(promptAtLimit(1))) {
+    return null
+  }
   let low = 1
   let high = prompt.length
   let fitted: string | null = null

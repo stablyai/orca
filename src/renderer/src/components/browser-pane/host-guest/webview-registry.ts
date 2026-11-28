@@ -131,7 +131,7 @@ registerWebviewDragPassthroughSurface(applyWebviewsDragPassthrough)
 export function setWebviewsDragPassthrough(passthrough: boolean): void {
   if (passthrough) {
     if (!nativeDragPassthroughRelease) {
-      nativeDragPassthroughRelease = acquireWebviewsDragPassthrough()
+      nativeDragPassthroughRelease = acquireWebviewsDragPassthrough({ nativeDrag: true })
     }
     return
   }
