@@ -226,7 +226,7 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
+      <div className={cn('flex gap-1', expanded ? 'items-start' : 'items-center')}>
         <span className="relative flex size-3.5 shrink-0 items-center justify-center">
           {attention && !drag?.grip ? (
             <AlertCircle className="size-3.5 text-destructive" aria-hidden />
