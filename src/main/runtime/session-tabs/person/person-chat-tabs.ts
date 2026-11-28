@@ -63,7 +63,26 @@ export type PersonChatOpen = {
 export class PersonChatTabs {
   constructor(private readonly host: PersonChatTabsHost) {}
 
-  async open(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
+  /** Each list's opens and closes, in call order: one runs whole (save and live row) before the next. */
+  private readonly writes = new Map<string, Promise<void>>()
+
+  private inOrder(list: string, write: () => Promise<void>): Promise<void> {
+    const run = (this.writes.get(list) ?? Promise.resolve()).then(write)
+    const settled = run.catch(() => {})
+    this.writes.set(list, settled)
+    void settled.then(() => {
+      if (this.writes.get(list) === settled) {
+        this.writes.delete(list)
+      }
+    })
+    return run
+  }
+
+  open(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
+    return this.inOrder(list, () => this.openNow(list, chat))
+  }
+
+  private async openNow(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
     await this.host.restored()
     const home = homeOfPersonWorkspace(list)
     const ownerListed = home
@@ -102,9 +121,12 @@ export class PersonChatTabs {
     })
   }
 
-  /** Drops the chat's row from the list; the chat runs on, as a closed tab's does. Its saved row
-   *  goes in the same queue as the open that saved it, so a close never misses one still landing. */
-  async close(list: string, sessionId: string): Promise<void> {
+  /** Drops the chat's row from the list; the chat runs on, as a closed tab's does. */
+  close(list: string, sessionId: string): Promise<void> {
+    return this.inOrder(list, () => this.closeNow(list, sessionId))
+  }
+
+  private async closeNow(list: string, sessionId: string): Promise<void> {
     const snapshot = this.host.snapshots().get(list)
     const next = snapshot ? retireStructuredAgentSessionTabFrom(snapshot, sessionId) : null
     if (next) {

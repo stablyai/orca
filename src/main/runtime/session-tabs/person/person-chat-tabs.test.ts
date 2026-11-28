@@ -1,8 +1,8 @@
-// A teammate's chat close goes into the same layout queue as the open that saved it: under a
-// main-owned layout the queue applies later, so a close must neither skip an open still in it nor
-// report done before its own change lands.
+// A teammate's chat opens and closes in their own list run one at a time, in call order, each whole
+// (its saved row and its live row): under a main-owned layout a save lands later, so a close must
+// neither jump ahead of an open still landing nor leave a live row that open projects after it.
 import { expect, it } from 'vitest'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { personWorkspaceKey } from '../../../../shared/workspace/identity/person-workspace-key'
 import type { ChatTabChange } from '../chat/agent-session-tab-layout'
 import { PersonChatTabs } from './person-chat-tabs'
@@ -13,39 +13,101 @@ const LIST = personWorkspaceKey({
   accountId: 'usr_mate'
 })
 
-it('queues a close behind an open still landing, and settles only once it lands', async () => {
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+function harness() {
+  const snapshots = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  const saved = new Set<string>()
   const queued: ChatTabChange[] = []
-  let land = (): void => {}
-  const landed = new Promise<void>((resolve) => (land = resolve))
+  const pending: (() => void)[] = []
   const tabs = new PersonChatTabs({
-    snapshots: () => new Map(),
-    storeSnapshot: (_list, snapshot) => snapshot,
+    snapshots: () => snapshots,
+    storeSnapshot: (list, snapshot) => (snapshots.set(list, snapshot), snapshot),
     emit: () => {},
-    // Nothing saved yet: the open is still in the queue.
     savedLists: () => undefined,
-    saveChanges: async (_list, changes) => {
+    // Each save lands when the test says, as a main-owned layout queue applies later.
+    saveChanges: (_list, changes) => {
       queued.push(...changes)
-      await landed
+      return new Promise<void>((resolve) =>
+        pending.push(() => {
+          for (const change of changes) {
+            if ('open' in change) {
+              saved.add(change.open.sessionId)
+            } else {
+              saved.delete(change.close)
+            }
+          }
+          resolve()
+        })
+      )
     },
-    project: () => {},
+    project: (input) =>
+      snapshots.set(input.workspaceId, {
+        worktree: input.workspaceId,
+        publicationEpoch: 'e',
+        snapshotVersion: (snapshots.get(input.workspaceId)?.snapshotVersion ?? 0) + 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: [
+          {
+            type: 'agent-session',
+            id: input.rowId ?? input.sessionId,
+            title: 'Chat',
+            sessionId: input.sessionId,
+            agent: input.agent,
+            isActive: false
+          }
+        ]
+      }),
     forgetTabs: () => {},
     restored: async () => {},
     agents: () => [],
     closeListTab: () => {}
   })
+  const live = () =>
+    (snapshots.get(LIST)?.tabs ?? []).flatMap((tab) =>
+      tab.type === 'agent-session' ? [tab.sessionId] : []
+    )
+  const landNext = async () => {
+    await tick()
+    pending.shift()?.()
+    await tick()
+  }
+  return { tabs, saved, queued, live, landNext }
+}
 
-  const opening = tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
-  await new Promise((resolve) => setTimeout(resolve, 0))
+it('runs a close called during an open after it, leaving the chat closed live and saved', async () => {
+  const h = harness()
+  const opening = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
   let closed = false
-  const closing = tabs.close(LIST, 's1').then(() => (closed = true))
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  const closing = h.tabs.close(LIST, 's1').then(() => (closed = true))
+  await tick()
 
-  expect(queued).toMatchObject([
-    { open: { sessionId: 's1' } },
-    { close: 's1', tabId: structuredAgentSessionTabId('s1') }
-  ])
+  // The close waits for the open whole: nothing of it is queued yet.
+  expect(h.queued).toMatchObject([{ open: { sessionId: 's1' } }])
+  await h.landNext()
+  expect(h.queued).toMatchObject([{ open: { sessionId: 's1' } }, { close: 's1' }])
   expect(closed).toBe(false)
-  land()
+  await h.landNext()
   await Promise.all([opening, closing])
+
   expect(closed).toBe(true)
+  expect(h.live()).toEqual([])
+  expect([...h.saved]).toEqual([])
+})
+
+it('runs an open called during a close after it, leaving the chat open live and saved', async () => {
+  const h = harness()
+  const first = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
+  await h.landNext()
+  await first
+  const closing = h.tabs.close(LIST, 's1')
+  const opening = h.tabs.open(LIST, { sessionId: 's1', agent: 'codex', activate: true })
+  await h.landNext()
+  await h.landNext()
+  await Promise.all([closing, opening])
+
+  expect(h.live()).toEqual(['s1'])
+  expect([...h.saved]).toEqual(['s1'])
 })
