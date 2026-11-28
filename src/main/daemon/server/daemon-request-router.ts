@@ -58,6 +58,10 @@ export class DaemonRequestRouter {
       case 'relayList':
       case 'relayDetach':
         throw new Error('Relay requests are answered before routing')
+      case 'toolRelayFrontOpen':
+      case 'toolRelayFrontServe':
+      case 'toolRelayFrontRevoke':
+        throw new Error('Tool relay front requests are answered before routing')
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
