@@ -5,6 +5,7 @@ export type WorkerThreadRole =
   | 'orca-child-process-spawner'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'
+  | 'orca-codex-account-copies'
   | 'orca-codex-history-disk-usage'
   | 'orca-codex-project-trust'
   | 'orca-codex-rollout-references'
