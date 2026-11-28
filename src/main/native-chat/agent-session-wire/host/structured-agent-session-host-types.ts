@@ -63,6 +63,7 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from '../startup/structured-agent-session-startup-attempt-contract'
+import type { TransientRecoveryPolicy } from '../recovery/structured-agent-session-transient-recovery'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
 import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
@@ -218,6 +219,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+  /** Host-local opt-in; absent never sends an automatic continuation. */
+  transientRecovery?: TransientRecoveryPolicy
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** A message the session took: one that opens its turn or joins its running one; must not throw. */

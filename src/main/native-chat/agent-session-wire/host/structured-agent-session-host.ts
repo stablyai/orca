@@ -25,6 +25,7 @@ import * as conversation from '../delivery/structured-agent-session-host-deliver
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
 import * as sessionLogger from './structured-agent-session-logger'
 import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
+import * as transientRecovery from '../recovery/structured-agent-session-transient-recovery-wiring'
 
 export class StructuredAgentSessionHost {
   private readonly conversationCommands = new CommandController(() => this.mutationContext(), this)
@@ -61,6 +62,7 @@ export class StructuredAgentSessionHost {
   private readonly eventRecovery: EventRecovery
   private readonly background: Background
   readonly restartResume: StructuredAgentSessionRestartResume
+  private readonly recovery
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
 
@@ -135,6 +137,7 @@ export class StructuredAgentSessionHost {
     this.usageLimitContinue = usageLimit.start(this.mutationContext(), this, this.clientDelivery)
     this.runtimeState.startLeaseRenewal()
     this.lifetime.idleSweep.start()
+    this.recovery = transientRecovery.wireTransientRecovery(this, this.sessions)
   }
 
   private now = (): number => this.deps.now?.() ?? Date.now()
@@ -176,12 +179,13 @@ export class StructuredAgentSessionHost {
     subscribers: this.clientDelivery.subscribers,
     tasks: this.tasks,
     reconcileLeases: (sessionId) => this.runtimeState.reconcileLeases(sessionId),
-    serialize: (sessionId, task) => this.serialize(sessionId, task),
+    serialize: this.serialize,
     openProviderChild: this.eventRecovery.openProviderChild,
     openConversation: this.conversationDelivery.open
   })
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: typeof this.lifetime.close = (...args) => this.lifetime.close(...args)
+  close: typeof this.lifetime.close = (sessionId, cause, admit) =>
+    this.recovery.beforeUserAction(sessionId, () => this.lifetime.close(sessionId, cause, admit))
 
   /** Stop a finished background run's agent now, as the idle sweep would; owed work keeps it, and
    *  so does a viewer unless `anyway`. */
@@ -226,10 +230,10 @@ export class StructuredAgentSessionHost {
   /** Barrier for streamed event writes; `landed` waits for admitted writes only (relay acks). */
   flushStreamedEvents = (id: string, landed?: true) => this.runtimeState.flushEventSink(id, landed)
 
-  /** Quit stops delivery and queued-card handover. */
+  /** Quit stops delivery, queued-card handover, and automatic continuation. */
   stopDelivery = () => {
     this.sessions.endPublications()
-    ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
+    ;[this.conversationDelivery, this.queued.drain, this.recovery].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()
   }
 
@@ -247,20 +251,20 @@ export class StructuredAgentSessionHost {
 
   private mutationContext = () =>
     mutationWiring.createStructuredAgentSessionHostMutationContext({
-      deps: this.deps,
-      sessions: this.sessions,
-      lifetime: this.lifetime,
-      clientDelivery: this.clientDelivery,
-      conversationDelivery: this.conversationDelivery,
+      ...this.collaborators(),
       queued: this.queued,
-      runtimeState: this.runtimeState,
       attachContext: () => this.attachContext(),
-      trackProviderOperation: (operation) => this.tasks.trackAttach(operation),
-      serialize: (sessionId, task) => this.serialize(sessionId, task),
-      now: () => this.now()
+      now: this.now,
+      trackProviderOperation: (operation) => this.tasks.trackAttach(operation)
     })
 
-  send = this.conversationCommands.send
+  readonly mutations = transientRecovery.createTransientRecoveryMutationDelegates(
+    () => this.recovery,
+    this.mutationContext,
+    this.attachContext,
+    this.conversationCommands
+  )
+  send = this.mutations.send
 
   queuedMessageSend = this.queued.queuedMessageSend
   queuedMessageDelete = this.queued.queuedMessageDelete
@@ -271,10 +275,6 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  readonly mutations = mutationWiring.structuredAgentSessionMutationDelegates(
-    () => this.mutationContext(),
-    () => this.attachContext()
-  )
   cancel = this.mutations.cancel
   respondToPrompt = this.mutations.respondToPrompt
   approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
@@ -283,8 +283,8 @@ export class StructuredAgentSessionHost {
   readOptions = this.mutations.readOptions
 
   rewind = this.mutations.rewind
-
-  conversationCommand = this.conversationCommands.run
+  conversationCommand = this.mutations.conversationCommand
+  /** Undefined means unavailable; an empty array is an authoritative catalog. */
   readCommands = this.reads.readCommands
 
   handoffStatus = (sessionId: string) => this.background.handoffStatus(sessionId)

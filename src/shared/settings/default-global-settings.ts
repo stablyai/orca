@@ -160,6 +160,7 @@ export function buildDefaultSettings(args: {
     browserExtensionsEnabled: true,
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: true,
+    nativeChatAutoContinueOnTransientError: false,
     nativeChatQueueFollowUps: true,
     nativeChatAutoContinueAfterUsageLimit: true,
     nativeChatAutoContinueAfterUsageLimitDefaultedOn: true,

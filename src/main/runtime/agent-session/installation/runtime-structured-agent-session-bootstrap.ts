@@ -154,7 +154,7 @@ export async function ensureRuntimeStructuredAgentSessionHost(
       nativeChatVisuals: {
         isEnabled: () => context.requireStore().getSettings().nativeChatInlineVisuals !== false
       },
-      ...structuredAgentSettingGates(() => context.requireStore().getSettings()),
+      ...structuredAgentSettingGates(() => context.requireStore()),
       launchAccountHome: (record, purpose) =>
         context.resolveStructuredAgentLaunchAccountHome(record, purpose),
       prepareLaunchAccountHome: (record, launchDirectory) =>
