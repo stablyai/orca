@@ -19,7 +19,7 @@ type FixtureSummary = { id: string; file: string }
 // Driven by config/scripts/component-fixtures/fixture-server.mjs to re-render in a warm page.
 type ComponentFixtureHost = {
   render: (id: string, theme: ComponentFixtureTheme) => Promise<void>
-  list: () => Promise<FixtureSummary[]>
+  list: (componentIds?: readonly string[]) => Promise<FixtureSummary[]>
 }
 
 function parseTheme(value: string | null): ComponentFixtureTheme {
@@ -118,8 +118,8 @@ async function renderFixture(id: string, theme: ComponentFixtureTheme): Promise<
   }
 }
 
-async function listFixtures(): Promise<FixtureSummary[]> {
-  return (await listComponentFixtures()).map(({ id, file }) => ({ id, file }))
+async function listFixtures(componentIds?: readonly string[]): Promise<FixtureSummary[]> {
+  return (await listComponentFixtures(componentIds)).map(({ id, file }) => ({ id, file }))
 }
 
 const host: ComponentFixtureHost = { render: renderFixture, list: listFixtures }

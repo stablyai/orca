@@ -64,15 +64,21 @@ export function createFixturePageRunner(baseUrl, browserPromise) {
     )
   }
 
-  function listFixtures() {
+  function listFixtures(componentIds) {
     return serialize(async () => {
-      if (cachedList?.revision !== sourceRevision) {
-        const revision = sourceRevision
-        const { page } = await readyWorker(1)
-        const fixtures = await page.evaluate(() => window.__orcaComponentFixtureHost.list())
+      if (!componentIds && cachedList?.revision === sourceRevision) {
+        return cachedList.fixtures
+      }
+      const revision = sourceRevision
+      const { page } = await readyWorker(1)
+      const fixtures = await page.evaluate(
+        (ids) => window.__orcaComponentFixtureHost.list(ids),
+        componentIds
+      )
+      if (!componentIds) {
         cachedList = { revision, fixtures }
       }
-      return cachedList.fixtures
+      return fixtures
     })
   }
 
