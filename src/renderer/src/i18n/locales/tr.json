@@ -26039,8 +26039,7 @@
         "failing": "başarısız",
         "running": "beklemede",
         "cancelled": "iptal edildi",
-        "passing": "başarılı",
-        "more": "+{{count}} tane daha"
+        "passing": "başarılı"
       },
       "addEmoji": "Emoji ekle",
       "addEmojiTooltip": "Emoji ekle (veya : yaz)",

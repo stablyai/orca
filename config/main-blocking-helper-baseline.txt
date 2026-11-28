@@ -614,8 +614,6 @@
 2 src/main/ipc/hooks/register-worktree-hook-file-handlers.ts
 1 src/main/ipc/linear/register-handlers.ts
 7 src/main/ipc/notebook.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
-2 src/main/ipc/notifications/notifications.ts
 5 src/main/ipc/orca-uninstall.ts
 3 src/main/ipc/plugins/plugin-management-ipc.ts # moved from plugins.ts for lazy IPC loading
 2 src/main/ipc/plugins/plugins.ts # lazy loader references registerPluginManagementHandlers
@@ -648,7 +646,7 @@
 1 src/main/ipc/register-core-handlers/lazy-account-and-diagnostic-ipc-handlers.ts # diagnostics charge moved from direct registration; the module imports on first invoke, so mkdirSync never runs at boot
 2 src/main/ipc/register-core-handlers/lazy-rare-ipc-handlers.ts # charges moved from register-core-handlers; handlers import on first invoke, so the blocking helpers never run at boot
 2 src/main/ipc/register-core-handlers/lazy-setup-ipc-handlers.ts # cli and shell handler charges moved from register-core-handlers; modules import on first invoke, never at boot
-8 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
+7 src/main/ipc/register-core-handlers/register-core-handlers.ts # clipboard path authorization moved here from window/clipboard/clipboard-ipc-handlers.ts
 5 src/main/ipc/repos.ts
 1 src/main/ipc/repos/local-repo-registration.ts
 1 src/main/ipc/repos/nested-repo-import-handler.ts
