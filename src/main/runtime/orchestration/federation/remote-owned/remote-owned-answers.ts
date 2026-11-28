@@ -1,3 +1,5 @@
+import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import {
   RemoteRuntimeClientError,
   type RemoteRuntimePairingStage
@@ -6,6 +8,27 @@ import { OrchestrationError } from '../../orchestration-error'
 import { UnsentRequestError } from '../unsent-request-error'
 import { serverAnswered } from './remote-owed-actions'
 import type { RemoteForwardKey } from './remote-forward-caller'
+
+const WorktreeEffects = lazyZodSchema(() =>
+  z.object({
+    effects: z.array(z.unknown())
+  })
+)
+const WorktreeEffect = lazyZodSchema(() =>
+  z.object({ kind: z.literal('worktree'), id: z.string().min(1) })
+)
+
+/** The workspace a server's start (or follow-up) answer says its worker runs in, created or reused. */
+export function answeredWorktreeId(answer: unknown): string | null {
+  const parsed = WorktreeEffects.safeParse(answer)
+  for (const effect of parsed.success ? parsed.data.effects : []) {
+    const worktree = WorktreeEffect.safeParse(effect)
+    if (worktree.success) {
+      return worktree.data.id
+    }
+  }
+  return null
+}
 
 /** The server got nothing, or never answered, so whatever the call did there is unknown here. */
 export function serverNeverAnswered(error: unknown): boolean {

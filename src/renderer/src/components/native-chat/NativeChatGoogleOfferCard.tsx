@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { botTarget, callBotRpc } from '@/lib/bot-hosts'
-import { connectorDescription } from '../bots/AddConnectorDialog'
+import { connectorDescription } from '../bots/bot-connector-descriptions'
 import { BotAppBrandLogo } from '../bots/apps/BotAppBrandLogo'
 import { BOT_CONNECTORS } from '../bots/bot-connectors'
 import { useConnectorSetup } from '../bots/ConnectorSetupDialogs'
@@ -43,7 +43,7 @@ export function NativeChatGoogleOfferCard({
   const chat = useContext(NativeChatBotKickoffContext)
   const setup = useConnectorSetup(bot)
   const turnOnGoogle = useTurnOnBotGoogle()
-  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const signIn = useGoogleSignIn(botTarget(bot), bot, `offer:${messageId}`)
   const view = useGoogleHost(botTarget(bot))
   const google = view.status === 'ready' ? view.google : null
   const face = google ? googleOfferFace(google, bot.google === true) : { kind: 'connect' as const }

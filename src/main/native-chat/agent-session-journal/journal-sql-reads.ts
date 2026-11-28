@@ -1,6 +1,6 @@
 import type { NativeChatTaskList } from '../../../shared/native-chat/input/task-lists/native-chat-task-list'
 import type { JournalTurnAttribution } from './journal-domain-turn-attribution'
-import type { JournalRequestMark } from './journal-request-failure'
+import type { JournalRequestFailureRead, JournalRequestMark } from './journal-request-failure'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
 import type { JournalForkBoundary, JournalSavedContent } from './journal-domain-fork-reads'
@@ -49,7 +49,10 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   savedContent(): Promise<JournalSavedContent>
   conversationOutline(budgetBytes: number): Promise<AgentSessionConversationOutline>
   requestFailure(kind: JournalRequestMark['kind'], id: string): Promise<AgentJournalSnapshot>
-  runningRequest(stopSettle?: JournalStopSettleFact): Promise<JournalRequestMark | null>
+  runningRequest(
+    stopSettle?: JournalStopSettleFact,
+    exit?: Extract<JournalRequestFailureRead, { kind: 'running-request' }>['exit']
+  ): Promise<JournalRequestMark | null>
   rewindTarget(itemId: string): Promise<JournalRewindTarget>
   rewindCut(target: JournalRewindSelection): Promise<JournalRewindCut | null>
   namingPrompt(hostStartedAt?: number): Promise<string>
@@ -154,8 +157,8 @@ export function journalSqlReads(
       (await read({ kind: 'conversation-outline', budgetBytes })).outline,
     requestFailure: async (requestKind, id) =>
       (await read({ kind: 'request-failure', requestKind, id })).snapshot,
-    runningRequest: async (stopSettle) =>
-      (await read({ kind: 'running-request', stopSettle })).request,
+    runningRequest: async (stopSettle, exit) =>
+      (await read({ kind: 'running-request', stopSettle, exit })).request,
     rewindTarget: async (itemId) => (await read({ kind: 'rewind-target', itemId })).target,
     rewindCut: async (target) => (await read({ kind: 'rewind-cut', target })).cut,
     namingPrompt: async (hostStartedAt) =>

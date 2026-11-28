@@ -4,12 +4,14 @@ import { automationResultsCarriedText } from '../../../../../src/shared/bots/bot
 import { tookOverLabel } from '../../../../../src/shared/native-chat/took-over-notice'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
-import { styles } from './messages/mobile-native-chat-message-styles'
+import { stylesSheet } from './messages/mobile-native-chat-message-styles'
 import { MobileNativeChatDivider } from './MobileNativeChatDivider'
 import { nativeChatNoticeCopy } from './notices/native-chat-notice-copy'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 /** Orca's first turn to a bot it just created, which the owner never typed. */
 export function MobileNativeChatBotCreatedRow({ rowId }: { rowId: string }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.row} testID={mobileNativeChatRowId(rowId)}>
@@ -26,6 +28,7 @@ export function MobileNativeChatTookOverRow({
   rowId?: string
   workspace: string
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.row} testID={rowId ? mobileNativeChatRowId(rowId) : undefined}>
       <MobileNativeChatDivider label={tookOverLabel(workspace)} />
@@ -38,5 +41,6 @@ export function MobileNativeChatAutomationResultsCarried({
 }: {
   count: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return <Text style={styles.automationResultsCarried}>{automationResultsCarriedText(count)}</Text>
 }

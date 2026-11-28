@@ -1,6 +1,7 @@
 import { Notification, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
@@ -21,20 +22,22 @@ import {
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import { noteBrowserExtensionNeedsCleanStart } from '../profile-sessions/browser-extension-idle-kept-state'
 
-const optionsSchema = z
-  .object({
-    type: z.enum(['basic', 'image', 'list', 'progress']),
-    iconUrl: z.string(),
-    title: z.string(),
-    message: z.string(),
-    contextMessage: z.string(),
-    buttons: z.array(z.object({ title: z.string() }).loose()).max(2),
-    requireInteraction: z.boolean(),
-    silent: z.boolean(),
-    priority: z.number().int()
-  })
-  .partial()
-  .loose()
+const optionsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      type: z.enum(['basic', 'image', 'list', 'progress']),
+      iconUrl: z.string(),
+      title: z.string(),
+      message: z.string(),
+      contextMessage: z.string(),
+      buttons: z.array(z.object({ title: z.string() }).loose()).max(2),
+      requireInteraction: z.boolean(),
+      silent: z.boolean(),
+      priority: z.number().int()
+    })
+    .partial()
+    .loose()
+)
 
 type NotificationOptions = z.infer<typeof optionsSchema>
 

@@ -13,13 +13,12 @@ import type { BotToolProblem } from '../../../../src/shared/bot-tools'
 import { LIST_LEADING_INSET, ListRow } from '../../components/list/ListGroup'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { DrillRow } from '../../host-screen/workspace-options/workspace-option-rows'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botAgentLabel } from '../mobile-bot-sheet-copy'
 import { MobileBotSettingsOffline } from '../MobileBotSettingsOffline'
@@ -36,13 +35,17 @@ import { MobileBotHostMcpServersRow } from './MobileBotHostMcpServersRow'
 import { MobileBotToolPage } from './MobileBotToolPage'
 import { useBotToolsPage, type PhoneBotTools } from './use-bot-tools-page'
 
-function toolsLine(tools: PhoneBotTools | null, agent: string, t: Translate): string | null {
+function toolsLine(
+  tools: PhoneBotTools | null,
+  agent: string,
+  t: Translate,
+  intlLocale: string
+): string | null {
   return botToolsLine(tools, {
     none: t('bots.tools.none', 'None'),
     from: (count) => t('bots.tools.from', '{{count}} from {{agent}}', { count, agent }),
     more: (count) => t('bots.tools.more', '{{count}} more from {{agent}}', { count, agent }),
-    list: (names) =>
-      new Intl.ListFormat(getUiIntlLocale(), { type: 'unit', style: 'short' }).format(names)
+    list: (names) => new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
   })
 }
 
@@ -53,6 +56,7 @@ export function MobileBotToolsRow(props: {
   onOpen: () => void
 }) {
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { client } = props
   const botId = props.bot.id
   const [tools, setTools] = useState<PhoneBotTools | 'failed' | null>(null)
@@ -84,7 +88,7 @@ export function MobileBotToolsRow(props: {
       value={
         tools === 'failed'
           ? t('bots.settings.readFailed', 'Couldn’t load')
-          : (toolsLine(tools, botAgentLabel(props.bot.agent), t) ?? '')
+          : (toolsLine(tools, botAgentLabel(props.bot.agent), t, intlLocale) ?? '')
       }
       detail={tools !== 'failed'}
       onPress={props.onOpen}
@@ -103,7 +107,7 @@ export function MobileBotToolsPage(props: {
   showToast: (message: string, durationMs?: number) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const banner = <MobileBotSettingsOffline hostName={props.hostName} client={props.client} />
   const page = useBotToolsPage(props.client, props.bot.id)
   const [opened, setOpened] = useState<Opened | null>(null)
@@ -265,6 +269,7 @@ export function ToolRow(props: {
   disabled: boolean
   onOpen: (signIn: boolean) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { tool, problem } = props
   const face = botToolSignInFace(tool, problem, false, undefined)

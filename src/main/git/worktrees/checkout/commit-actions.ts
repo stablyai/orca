@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { detectConflictOperation } from '../../source-control/mutations/git-conflict-operation'
+import { assertOperationRunIdentity } from '../../source-control/mutations/operation-run-identity'
+import type { GitAbortOperationRequest } from '../../../../shared/git/status/git-status-types'
 import type {
   GitCommitAction,
   GitCommitActionResult
@@ -199,7 +201,8 @@ export async function recoverSequencer(
   worktreePath: string,
   operation: GitCommitAction,
   action: 'abort' | 'continue',
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  request: GitAbortOperationRequest = {}
 ): Promise<GitCommitActionResult | void> {
   if (operation !== 'cherry-pick' && operation !== 'revert') {
     throw new Error('Expected cherry-pick or revert')
@@ -210,6 +213,14 @@ export async function recoverSequencer(
     )
     if (inProgress !== operation) {
       throw new Error(`There is no ${operation} in progress. Refresh Source Control and try again.`)
+    }
+    if (action === 'abort') {
+      await assertOperationRunIdentity(
+        worktreePath,
+        operation,
+        request.expectedRunIdentity,
+        options
+      )
     }
     const execution = gitOptionsForWorktree(worktreePath, options)
     return runWithGitReadCacheInvalidation(() =>

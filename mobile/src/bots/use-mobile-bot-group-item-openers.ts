@@ -1,7 +1,7 @@
 // Where a group's Items rows lead: a member's chat (this group's room in place, its Home, or that chat
 // once its host has the tab ready, else Home, as a card's link does) and a worker where its host finds it.
 import { useEffect, useMemo } from 'react'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { findBotGroupRoomOfSession, type BotGroup } from '../../../src/shared/bots/bot-group'
 import type { BotChatTreeWorker } from '../../../src/shared/bots/bot-chat-tree'
 import {
@@ -52,11 +52,13 @@ export function useMobileBotGroupItemOpeners({
           openMobileSession({
             hostId,
             worktreeId: opened.worktreeId,
-            paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
+            paneKey: chatPaneKey(chatId),
             name: bot.name
           }),
-        home: (bot) =>
-          openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot)
+        home: (bot, current) =>
+          openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot, {
+            current
+          })
       }),
     [client, hostId, openMobileSession, openBotHome]
   )
@@ -70,7 +72,7 @@ export function useMobileBotGroupItemOpeners({
       if (room) {
         onOpenRoom(room.threadId)
       } else if (bot && home) {
-        openBotHome({ pairedHostId: hostId, executionHost: LOCAL_EXECUTION_HOST_ID }, bot)
+        chatOpener.home(bot)
       } else if (bot) {
         chatOpener.open(bot, chatId)
       }

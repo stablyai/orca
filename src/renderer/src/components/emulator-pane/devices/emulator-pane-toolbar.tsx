@@ -12,6 +12,7 @@ type EmulatorPaneToolbarProps = {
   loading: boolean
   devices: SimulatorDeviceRow[]
   selectedUdid: string | null
+  serverLabel: string | null
   onSelectDevice: (udid: string) => void
   onAttach: () => void
   onShutdown: () => void
@@ -25,6 +26,7 @@ export function EmulatorPaneToolbar({
   loading,
   devices,
   selectedUdid,
+  serverLabel,
   onSelectDevice,
   onAttach,
   onShutdown,
@@ -56,6 +58,7 @@ export function EmulatorPaneToolbar({
       <EmulatorDevicePicker
         devices={devices}
         selectedUdid={selectedUdid}
+        serverLabel={serverLabel}
         onSelectDevice={onSelectDevice}
         disabled={loading}
       />

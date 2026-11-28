@@ -23,14 +23,19 @@ import { GitGraphDetails } from './git-graph-details'
 import { GitGraphRefs, useGitGraphWorkspaces } from './git-graph-ref-menu'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
+import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const sameGroup = () => undefined
 // About 200px of rows, so scrolling fetches before the end shows.
 const PAGE_AHEAD_ROWS = 8
 
-export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
+export function GitGraphTab({ worktreeId, tabId }: { worktreeId: string; tabId: string }) {
   const t = useTranslate()
+  // A folder workspace can show a child worktree's graph; its diffs belong next to it.
+  const placementWorkspaceId = useAppStore((state) =>
+    editorTabWorkspace(state.unifiedTabsByWorktree, tabId)
+  )
   const intlLocale = useIntlLocale()
   const history = useGitGraphHistory(worktreeId)
   const { result, scope, selectedId, revealId, controller, loading } = history
@@ -108,7 +113,8 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
     activeRepoTarget: scope?.target ?? null,
     ownerConnectionId: scope?.connectionId,
     resolveSplitTargetGroupId: sameGroup,
-    isSurfaceOpen: isGraphOpen
+    isSurfaceOpen: isGraphOpen,
+    placementWorkspaceId
   })
   return (
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">

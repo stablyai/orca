@@ -216,7 +216,11 @@ function entryFields(entry: Record<string, unknown>, dialect: AgentMcpConfigDial
   }
 }
 
-function entryDisabled(entry: Record<string, unknown>, dialect: AgentMcpConfigDialect): boolean {
+/** Whether the agent keeps the entry but doesn't start it, whether or not Orca can carry it. */
+export function agentMcpConfigEntryDisabled(
+  entry: Record<string, unknown>,
+  dialect: AgentMcpConfigDialect
+): boolean {
   return dialect === 'opencode-v2'
     ? entry.disabled === true
     : entry.enabled === false || entry.disabled === true
@@ -242,7 +246,7 @@ export function agentMcpConfigEntry(
     ...fields
   })
   return parsed.success
-    ? { configName, server: parsed.data, disabled: entryDisabled(entry, dialect) }
+    ? { configName, server: parsed.data, disabled: agentMcpConfigEntryDisabled(entry, dialect) }
     : null
 }
 

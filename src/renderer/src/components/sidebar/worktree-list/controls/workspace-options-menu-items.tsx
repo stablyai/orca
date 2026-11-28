@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
+import { Fragment, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
@@ -10,9 +10,6 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { OptionChoiceSubmenu } from './OptionChoiceSubmenu'
-import { countActiveWorkspaceFilters } from '../../../../../../shared/workspace-view/workspace-row-filters'
-import { useShallow } from 'zustand/react/shallow'
-import { selectSidebarFilterState, sidebarWorkspaceRowFilters } from './sidebar-filter-actions'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import { WorkspaceFilterOptionRow } from './workspace-filter-option-row'
 import {
@@ -36,30 +33,10 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
-import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
-export function useWorkspaceOptionsFilterBadge(): {
-  hasAnyFilter: boolean
-  activeFilterCount: number
-} {
-  const filterState = useAppStore(useShallow(selectSidebarFilterState))
-  const repos = useAppStore((s) => s.repos)
-  const activeFilterCount = useMemo(
-    () =>
-      countActiveWorkspaceFilters(
-        sidebarWorkspaceRowFilters(filterState),
-        // A filter id with no listed copy filters nothing, so it does not count.
-        withoutHiddenRepos(repos).map((repo) => repo.id)
-      ),
-    [filterState, repos]
-  )
-  return {
-    hasAnyFilter: activeFilterCount > 0,
-    activeFilterCount
-  }
-}
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 type OptionItemProps = {
   preserveWorkspaceBoardOpen: boolean
@@ -69,7 +46,7 @@ type OptionItemProps = {
 function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const t = useTranslate()
   const experimental = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
-  const updateSettings = useAppStore((s) => s.updateSettings)
+  const { updateSettings } = getAppStoreState()
   const classicLabel = t(
     'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
     'Classic'
@@ -123,9 +100,8 @@ function HostsOptionItem({
   hostOptions
 }: OptionItemProps): JSX.Element {
   const t = useTranslate()
-  const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
-  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
+  const { setWorkspaceHostScope, setVisibleWorkspaceHostIds } = getAppStoreState()
   return (
     <SidebarHostScopeMenuSection
       hostVisibilityLabel={getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions, t)}
@@ -140,7 +116,7 @@ function HostsOptionItem({
 
 function GroupByOptionItem(): JSX.Element {
   const groupBy = useAppStore((s) => s.groupBy)
-  const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const { setGroupBy } = getAppStoreState()
   return (
     <div className="px-2 pt-0.5 pb-1">
       <SidebarGroupByToggle groupBy={groupBy} setGroupBy={setGroupBy} />
@@ -151,7 +127,7 @@ function GroupByOptionItem(): JSX.Element {
 function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const t = useTranslate()
   const sortBy = useAppStore((s) => s.sortBy)
-  const setSortBy = useAppStore((s) => s.setSortBy)
+  const { setSortBy } = getAppStoreState()
   return (
     <OptionChoiceSubmenu
       label={t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab', 'Sort by')}
@@ -166,7 +142,7 @@ function SortByOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.
 function ProjectOrderOptionItem({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const t = useTranslate()
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
-  const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
+  const { setProjectOrderBy } = getAppStoreState()
   return (
     <OptionChoiceSubmenu
       label={t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875', 'Project order')}

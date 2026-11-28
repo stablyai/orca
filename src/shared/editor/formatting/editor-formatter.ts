@@ -1,10 +1,13 @@
 import { z } from 'zod'
 import { tokenizeCustomCommandTemplate } from '../../source-control/ai/generation/commit-message-prompt'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
-export const editorFormatterSchema = z.object({
-  command: z.string().max(4096),
-  include: z.array(z.string().min(1).max(512)).max(32)
-})
+export const editorFormatterSchema = lazyZodSchema(() =>
+  z.object({
+    command: z.string().max(4096),
+    include: z.array(z.string().min(1).max(512)).max(32)
+  })
+)
 
 export type EditorFormatter = z.infer<typeof editorFormatterSchema>
 

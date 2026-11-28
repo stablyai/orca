@@ -31,7 +31,13 @@ function importReport(payload: Record<string, unknown>): string {
     coordinatorPaneKey: null
   }).id
   const link = openRemoteRunLink(home, runId, SERVER)
-  reserveRemotePlacement(home, { link, taskId: TASK, requestKey: 'key', create: { spec: 'work' } })
+  reserveRemotePlacement(home, {
+    link,
+    taskId: TASK,
+    requestKey: 'key',
+    create: { spec: 'work' },
+    creator: { kind: 'system' }
+  })
   const peerRunId = server.admitPeerRun({
     peerFingerprint: 'fp_home',
     peerRun: { runId, conversationId: link.conversation_id, label: 'home' }

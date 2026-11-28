@@ -12,6 +12,7 @@ import {
 } from '../../../../../shared/work-items/task-source-context'
 
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import { resolveGitHubItemUrlRepository } from '../../../../../shared/github/work-items/work-item-target'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseHostAuthorityKey } from '../../../../../shared/execution-host/host-authority'
@@ -82,7 +83,7 @@ export function captureGitHubTaskTarget(
     repoId: item.repoId,
     repoHostId: item.repoHostId ?? source.hostId
   })
-  const ownerRepo = parseGitHubIssueOrPRLink(item.url)?.slug
+  const ownerRepo = parseGitHubIssueOrPRLink(item.url) && resolveGitHubItemUrlRepository(item)
   if (!repo || !ownerRepo || getRepoExecutionHostId(repo) !== source.hostId) {
     return null
   }

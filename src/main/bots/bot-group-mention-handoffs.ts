@@ -1,8 +1,5 @@
 // A member's reply that names other members as @Name wakes them under the same person's post.
 import type { Nodes } from 'mdast'
-import remarkGfm from 'remark-gfm'
-import remarkParse from 'remark-parse'
-import { unified } from 'unified'
 import {
   BOT_GROUP_CONTEXT_MAX,
   fitBotGroupContext,
@@ -16,15 +13,29 @@ import { deliverTurn } from './bot-group-delivery'
 import { reserveGroupTurns } from './bot-group-turn-reservation'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
+type MarkdownParser = { parse(value: string): Nodes }
+let markdownLoader: Promise<MarkdownParser> | null = null
+
 // GFM, as replies render: table cells end inline code at a pipe.
-const markdown = unified().use(remarkParse).use(remarkGfm)
+function loadMarkdownParser(): Promise<MarkdownParser> {
+  markdownLoader ??= Promise.all([import('unified'), import('remark-parse'), import('remark-gfm')])
+    .then(([{ unified }, { default: remarkParse }, { default: remarkGfm }]) =>
+      unified().use(remarkParse).use(remarkGfm)
+    )
+    .catch((error: unknown) => {
+      markdownLoader = null
+      throw error
+    })
+  return markdownLoader
+}
 
 /** `reply` with its Markdown code (fenced, indented, inline) and block quotes blanked in place,
  *  lines and offsets kept; text with no `@` has nothing to blank. */
-export function blankMarkdownCode(reply: string): string {
+export async function blankMarkdownCode(reply: string): Promise<string> {
   if (!reply.includes('@')) {
     return reply
   }
+  const markdown = await loadMarkdownParser()
   const ranges: [number, number][] = []
   const pending: Nodes[] = [markdown.parse(reply)]
   for (let node = pending.pop(); node; node = pending.pop()) {
@@ -96,7 +107,7 @@ export async function handOffGroupMentions(
     }
     const bots = groups.runtime.bots.list()
     const named = active(turn.botId, turn.sessionId)
-      ? botGroupReplyMentions(blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
+      ? botGroupReplyMentions(await blankMarkdownCode(reply.full), room, bots, turn.botId).filter(
           ({ id }) =>
             active(id) && !mailed.has(id) && bots.some((bot) => bot.id === id && !bot.paused)
         )

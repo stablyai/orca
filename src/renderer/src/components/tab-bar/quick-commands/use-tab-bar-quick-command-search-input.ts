@@ -1,5 +1,6 @@
 import { useCallback, type KeyboardEvent, type RefObject } from 'react'
 
+import { isCommandInputCaretKey } from '@/lib/keyboard/command-input-caret-keys'
 import { isSelectAllShortcut } from '@/lib/text-input/focus/editable-target'
 
 type SearchInputOptions<TCommand> = {
@@ -27,6 +28,9 @@ export function useTabBarQuickCommandSearchInput<TCommand>({
     (event: KeyboardEvent<HTMLInputElement>) => {
       if (isSelectAllShortcut(event)) {
         event.stopPropagation()
+        return
+      }
+      if (isCommandInputCaretKey(event)) {
         return
       }
       if (event.key === 'Enter' && selectedCommand) {

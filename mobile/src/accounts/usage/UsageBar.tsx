@@ -1,7 +1,7 @@
 import { View, Text, ActivityIndicator, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 import {
   clampUsedPercent,
@@ -18,7 +18,8 @@ import './usage-selectors'
 export function usageBarFill(
   usedPercent: number | null,
   unavailable: boolean,
-  display: UsagePercentageDisplay
+  display: UsagePercentageDisplay,
+  colors: MobilePalette
 ): { shown: number | null; color: string } {
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : clampUsedPercent(usedPercent)
@@ -71,10 +72,11 @@ export function UsageBar({
   wideLabel?: boolean
   style?: StyleProp<ViewStyle>
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const display = useUsagePercentageDisplay()
-  const { shown, color } = usageBarFill(usedPercent, unavailable, display)
+  const { shown, color } = usageBarFill(usedPercent, unavailable, display, colors)
   return (
     <View style={[wideLabel ? styles.usageBarStack : styles.usageBarRow, style]}>
       <Text style={styles.usageLabel} numberOfLines={1}>
@@ -115,7 +117,7 @@ export function UsageBar({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   usageBarRow: {
     flex: 1,
     flexDirection: 'row',

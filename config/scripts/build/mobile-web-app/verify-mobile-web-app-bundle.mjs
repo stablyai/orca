@@ -32,8 +32,9 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 
 // UI-language catalogs have their own allowance, like the font: one chunk per non-English locale,
 // fetched only for the active language, never before the first route. Code keeps its own fence.
+// 4 MiB covers the 10 translated locale chunks (~3.19 MiB as of 2026-11-26).
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
-export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 4 * 1024 * 1024
 // A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
 // reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
 // read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
@@ -47,8 +48,11 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
 // Eager: main's own fence. 11 MiB since reverting #48282 put the diagram engine back in it, at 11,479,156
-// bytes (2026-11-24).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024
+// bytes (2026-11-24); +16 KiB when main reached 11,534,272 and item reply targets added ~1.8 KB (2026-11-26).
+// +1 MiB when React Compiler's memo caches took it from 11,530,494 to 12,657,291 (2026-11-27);
+// +16 KiB for main's growth since, 94 merges touching mobile code, to 12,699,706 (2026-11-28);
+// +240 KiB of room at 12,700,609 while the compiler's memo-cache cost is trimmed (2026-11-28).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 12 * 1024 * 1024 + 368 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 

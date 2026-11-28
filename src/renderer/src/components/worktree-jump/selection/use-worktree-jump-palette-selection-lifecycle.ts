@@ -68,6 +68,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   defaultSelectionItemId,
   showCreateAction,
   deferredQuery,
+  resultsReady,
   prefetchCreateWorkspaceBaseForComposer,
   fallbackFocusOuterFrameRef,
   fallbackFocusInnerFrameRef,
@@ -168,7 +169,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     },
     [setSelectedItemId]
   )
-  // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes.
+  // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes,
+  // and again when results arrive after the opening frame so a seeded query picks the full list's head.
   // The empty query clears instead: a re-run mount effect (StrictMode) would commit the head before recent tabs load.
   useLayoutEffect(() => {
     if (!deferredQuery) {
@@ -185,8 +187,8 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
         autoSelectCreateAction: taskSourceUrl !== null
       })
     )
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- selection resets only when the deferred query commits.
-  }, [deferredQuery])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- selection resets only when the deferred query or result readiness commits.
+  }, [deferredQuery, resultsReady])
   useEffect(() => {
     const isCreateWorkspaceHighlighted =
       commandSelectedItemId === CREATE_WORKTREE_ITEM_ID ||

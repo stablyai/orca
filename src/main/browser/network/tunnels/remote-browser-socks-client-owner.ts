@@ -56,8 +56,15 @@ export function createSocksClientAdmission(
       socket.destroy()
       return
     }
-    void verifySocksClientOwner(socket).then((verdict) => {
+    const departure = process.platform === 'darwin' ? watchClientDeparture(socket) : undefined
+    void verifySocksClientOwner(socket, undefined, departure?.signal).then((verdict) => {
+      departure?.stop()
       if (socket.destroyed) {
+        return
+      }
+      // Its lookup was dropped because the client left; nothing to report.
+      if (!verdict.allowed && departure?.signal.aborted) {
+        socket.destroy()
         return
       }
       if (!verdict.allowed || verdict.unreadableOwnProcess) {
@@ -70,6 +77,17 @@ export function createSocksClientAdmission(
       socket.destroy()
     })
   }
+}
+
+/** macOS lookups queue behind one helper, so one for a client that already left is dropped unscanned.
+ *  A half-close is not a close: forwards stay half-open, and the client may still be reading. */
+function watchClientDeparture(socket: Socket): { signal: AbortSignal; stop: () => void } {
+  const departed = new AbortController()
+  const abort = (): void => departed.abort()
+  socket.once('close', abort)
+  // A pauseOnConnect socket doesn't notice a reset until it reads; bytes stay buffered.
+  socket.read(0)
+  return { signal: departed.signal, stop: () => socket.off('close', abort) }
 }
 
 /** Uid of the socket whose local end is `client` and remote end is `listener`: the connecting side, not our accepted copy. */
@@ -162,7 +180,9 @@ export function holdSocksClientOwnerLookup(): () => void {
  *  connections with their owner, and macOS looks among this account's own processes. */
 export async function verifySocksClientOwner(
   socket: AcceptedSocket,
-  readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8')
+  readTable: (path: string) => Promise<string> = (path) => readFile(path, 'utf-8'),
+  /** Aborts when the connection closes, so a queued macOS lookup is dropped unscanned. */
+  closed?: AbortSignal
 ): Promise<SocksClientOwnerVerdict> {
   const lookup = await readOwnerLookup()
   if (lookup.kind === 'unavailable') {
@@ -180,7 +200,7 @@ export async function verifySocksClientOwner(
     }
     if (lookup.kind === 'darwin') {
       // Another account's sockets are unreadable without root, so they read as not ours.
-      return (await isOwnDarwinConnection(client, listener))
+      return (await isOwnDarwinConnection(client, listener, closed))
         ? { allowed: true }
         : { allowed: false, reason: 'lookup-failed', detail: 'no process of this account holds it' }
     }

@@ -39,6 +39,10 @@ export type AgentSessionCancelOutcome = {
 
 export type AgentSessionPromptCancelRoute = { kind: 'dismiss' } | { kind: 'stop' }
 
+/** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
+type KeptLaunchOutgrownAnswer = boolean | 'pending' | undefined
+type KeptLaunchOutgrown = KeptLaunchOutgrownAnswer | Promise<KeptLaunchOutgrownAnswer>
+
 export type StructuredAgentSessionAdapterStop = {
   /** Stop named tasks only; acknowledge each accepted stop immediately so later batch failures cannot erase it. */
   stopBackgroundTasks?(input: {
@@ -76,4 +80,18 @@ export type StructuredAgentSessionAdapterStop = {
     answer: boolean
     commit: () => Promise<void>
   }): Promise<void>
+  /** Open work, keyed as the provider's relay work markers key it, for a detached idle stop. */
+  relayOpenWork?(sessionId: string, rootTurnRunning: boolean): Record<string, string[][]> | null
+  /** A kept agent the chat reattached: true when it lacks the tools its launch has and ending it
+   *  loses no replayed output (the next new turn starts a child that has them); 'pending' when it
+   *  lacks them but its replay isn't durable yet (the send neither reaches it nor ends it); false
+   *  when no tools refresh may end it (it owes work, its replay isn't durable, or its work can't be
+   *  seen); undefined with nothing to protect. Only when a refresh could follow (it lacks tools, or
+   *  `toolsOutdated`, the host's `launchTools.outdated`) does it ask `owesWork`, then may wait for
+   *  its replay's last ack, so the send that follows reaches the fresh agent. */
+  keptLaunchOutgrown?(
+    sessionId: string,
+    toolsOutdated: boolean,
+    owesWork: () => Promise<boolean>
+  ): KeptLaunchOutgrown
 }

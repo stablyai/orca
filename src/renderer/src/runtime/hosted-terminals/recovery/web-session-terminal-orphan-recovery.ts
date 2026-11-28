@@ -236,7 +236,8 @@ export function recoverWebSessionTerminalOrphansBeforeApply(
   // Every delta enters here; recover previously sent proofs per the negotiated ledger contract.
   const snapshot = suppressCancelledStructuredSessionTabs(
     mergeRetainedTerminalRetirementProofs(environmentId, frame),
-    { kind: 'environment', environmentId }
+    { kind: 'environment', environmentId },
+    options.cancelledChatSessionIds
   )
   const key = recoveryKey(
     environmentId,

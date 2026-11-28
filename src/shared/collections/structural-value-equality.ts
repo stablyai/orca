@@ -30,29 +30,49 @@ function valuesEqual(a: unknown, b: unknown, policy: ValueEqualityPolicy): boole
     return true
   }
   if (Array.isArray(a) || Array.isArray(b)) {
-    return (
-      Array.isArray(a) &&
-      Array.isArray(b) &&
-      a.length === b.length &&
-      a.every((item, index) => valuesEqual(item, b[index], policy))
-    )
-  }
-  if (!isPlainRecord(a) || !isPlainRecord(b)) {
-    return false
-  }
-  if (policy.absentKeyEqualsUndefined) {
-    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      if (!valuesEqual(a[key], b[key], policy)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) {
+      return false
+    }
+    for (let index = 0; index < a.length; index++) {
+      if (!valuesEqual(a[index], b[index], policy)) {
         return false
       }
     }
     return true
   }
-  const keys = Object.keys(a)
-  if (keys.length !== Object.keys(b).length) {
+  if (!isPlainRecord(a) || !isPlainRecord(b)) {
     return false
   }
-  return keys.every((key) => Object.hasOwn(b, key) && valuesEqual(a[key], b[key], policy))
+  if (policy.absentKeyEqualsUndefined) {
+    for (const key in a) {
+      if (Object.hasOwn(a, key) && !valuesEqual(a[key], b[key], policy)) {
+        return false
+      }
+    }
+    for (const key in b) {
+      if (Object.hasOwn(b, key) && !Object.hasOwn(a, key) && b[key] !== undefined) {
+        return false
+      }
+    }
+    return true
+  }
+  let aKeyCount = 0
+  for (const key in a) {
+    if (!Object.hasOwn(a, key)) {
+      continue
+    }
+    aKeyCount += 1
+    if (!Object.hasOwn(b, key) || !valuesEqual(a[key], b[key], policy)) {
+      return false
+    }
+  }
+  let bKeyCount = 0
+  for (const key in b) {
+    if (Object.hasOwn(b, key)) {
+      bKeyCount += 1
+    }
+  }
+  return aKeyCount === bKeyCount
 }
 
 /** Compare leaves with === and require identical own keys: repo/project merges use in, making undefined distinct from absence. */

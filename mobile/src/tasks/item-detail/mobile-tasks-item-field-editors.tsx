@@ -1,12 +1,10 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
 import { SHOW_MOBILE_DETAIL_METADATA_EDITORS } from '../task-list/mobile-tasks-options'
 import { splitCommaList } from './mobile-tasks-reviewer-linear'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { TextField } from '../../components/composer-input/TextField'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { pressedStyle } from '../../theme/mobile-theme'
 import { Check } from 'lucide-react-native'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { SectionHeader } from '../../components/list/ListGroup'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
@@ -32,7 +30,10 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
     setItemTitleDraft,
     updateGitHubIssueMetadata,
     updateGitHubPullRequestMetadata,
-    updateGitLabIssueMetadata
+    updateGitLabIssueMetadata,
+    colors,
+    styles,
+    t
   } = model
   if (!actionItem || !detailPayload) {
     return null
@@ -45,12 +46,12 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr') &&
         detailPayload.provider === 'gitlab')) ? (
     <>
-      <SectionHeader title={translate('tasks.itemFieldEditors.title', 'Title')} />
+      <SectionHeader title={t('tasks.itemFieldEditors.title', 'Title')} />
       <View style={styles.itemSectionBody}>
         <TextField
           value={itemTitleDraft}
           onChangeText={setItemTitleDraft}
-          placeholder={translate('tasks.itemFieldEditors.title', 'Title')}
+          placeholder={t('tasks.itemFieldEditors.title', 'Title')}
         />
         <Pressable
           style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
@@ -80,16 +81,14 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
           }}
         >
           <Text style={styles.inlineSaveText}>
-            {translate('tasks.itemFieldEditors.saveTitle', 'Save title')}
+            {t('tasks.itemFieldEditors.saveTitle', 'Save title')}
           </Text>
         </Pressable>
       </View>
 
       <SectionHeader
-        title={translate('tasks.itemFieldEditors.labels', 'Labels')}
-        trailing={String(
-          detailPayload.labels.length || translate('tasks.itemFieldEditors.none', 'None')
-        )}
+        title={t('tasks.itemFieldEditors.labels', 'Labels')}
+        trailing={String(detailPayload.labels.length || t('tasks.itemFieldEditors.none', 'None'))}
       />
       <View style={styles.itemSectionBody}>
         {actionItem.provider === 'github' ? (
@@ -97,14 +96,14 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
             <View style={styles.detailLoadingInline}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
               <Text style={styles.detailMuted}>
-                {translate('tasks.itemFieldEditors.loadingLabels', 'Loading labels...')}
+                {t('tasks.itemFieldEditors.loadingLabels', 'Loading labels...')}
               </Text>
             </View>
           ) : itemLabelsError ? (
             <Text style={styles.detailError}>{itemLabelsError}</Text>
           ) : itemAvailableLabels.length === 0 ? (
             <Text style={styles.detailMuted}>
-              {translate('tasks.itemFieldEditors.noLabels', 'No labels in this repository.')}
+              {t('tasks.itemFieldEditors.noLabels', 'No labels in this repository.')}
             </Text>
           ) : (
             <View style={styles.chipRow}>
@@ -140,17 +139,14 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
             <TextField
               value={itemAddLabelsDraft}
               onChangeText={setItemAddLabelsDraft}
-              placeholder={translate(
-                'tasks.itemFieldEditors.addLabels',
-                'Add labels, comma separated'
-              )}
+              placeholder={t('tasks.itemFieldEditors.addLabels', 'Add labels, comma separated')}
               autoCapitalize="none"
             />
             <TextField
               style={styles.stackedInput}
               value={itemRemoveLabelsDraft}
               onChangeText={setItemRemoveLabelsDraft}
-              placeholder={translate(
+              placeholder={t(
                 'tasks.itemFieldEditors.removeLabels',
                 'Remove labels, comma separated'
               )}
@@ -171,7 +167,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               }
             >
               <Text style={styles.inlineSaveText}>
-                {translate('tasks.itemFieldEditors.updateLabels', 'Update labels')}
+                {t('tasks.itemFieldEditors.updateLabels', 'Update labels')}
               </Text>
             </Pressable>
           </>
@@ -179,9 +175,9 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
       </View>
 
       <SectionHeader
-        title={translate('tasks.itemFieldEditors.assignees', 'Assignees')}
+        title={t('tasks.itemFieldEditors.assignees', 'Assignees')}
         trailing={String(
-          detailPayload.assignees.length || translate('tasks.itemFieldEditors.none', 'None')
+          detailPayload.assignees.length || t('tasks.itemFieldEditors.none', 'None')
         )}
       />
       <View style={styles.itemSectionBody}>
@@ -190,14 +186,14 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
             <View style={styles.detailLoadingInline}>
               <ActivityIndicator size="small" color={colors.textSecondary} />
               <Text style={styles.detailMuted}>
-                {translate('tasks.itemFieldEditors.loadingAssignees', 'Loading assignees...')}
+                {t('tasks.itemFieldEditors.loadingAssignees', 'Loading assignees...')}
               </Text>
             </View>
           ) : itemAssignableUsersError ? (
             <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
           ) : itemAssignableUsers.length === 0 ? (
             <Text style={styles.detailMuted}>
-              {translate(
+              {t(
                 'tasks.itemFieldEditors.noAssignableUsers',
                 'No assignable users found for this repository.'
               )}
@@ -249,7 +245,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
             <TextField
               value={itemAddAssigneesDraft}
               onChangeText={setItemAddAssigneesDraft}
-              placeholder={translate(
+              placeholder={t(
                 'tasks.itemFieldEditors.addUsernames',
                 'Add usernames, comma separated'
               )}
@@ -259,7 +255,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               style={styles.stackedInput}
               value={itemRemoveAssigneesDraft}
               onChangeText={setItemRemoveAssigneesDraft}
-              placeholder={translate(
+              placeholder={t(
                 'tasks.itemFieldEditors.removeUsernames',
                 'Remove usernames, comma separated'
               )}
@@ -280,7 +276,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
               }
             >
               <Text style={styles.inlineSaveText}>
-                {translate('tasks.itemFieldEditors.updateAssignees', 'Update assignees')}
+                {t('tasks.itemFieldEditors.updateAssignees', 'Update assignees')}
               </Text>
             </Pressable>
           </>

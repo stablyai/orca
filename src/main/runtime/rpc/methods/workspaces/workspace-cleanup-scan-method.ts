@@ -7,9 +7,12 @@ export const WORKSPACE_CLEANUP_SCAN_METHOD = defineMethod({
   name: 'workspaceCleanup.scan',
   permission: 'workspace',
   params: WorkspaceCleanupScanParams,
-  handler: (params, { runtime, signal }) =>
-    scanWorkspaceCleanup(runtime.requireStore(), params, {
+  handler: async (params, { runtime, signal }) => {
+    // orcad has no renderer filling its PR cache; read stale linked PRs first, bounded (#50758).
+    await runtime.hostPRCache?.backfill({ wait: true, signal, worktreeIds: params.worktreeIds })
+    return scanWorkspaceCleanup(runtime.requireStore(), params, {
       signal,
       getOrchestrationDb: () => runtime.getExistingOrchestrationDb()
     })
+  }
 })

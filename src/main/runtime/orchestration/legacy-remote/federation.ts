@@ -259,7 +259,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               // Enforce the execution host's nesting cap using its own setting.
               canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
               subWorkersInOwnRun: true,
-              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+              ...runtime.getTerminalOrchestrationCliTarget(terminalHandle)
             })
           }
         }).finally(() => briefGuard?.dispose())

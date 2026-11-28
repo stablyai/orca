@@ -206,6 +206,6 @@ export function formatUpdateFailure(
     : translate(
         'diagnostics.webShellUpdateFailureCopy.failedAgo',
         'Last update from {{hostName}} failed {{time}} ago: {{reason}}{{offered}}. {{outcome}}',
-        { ...options, time: formatTimeAgo(failure.at, now) }
+        { ...options, time: formatTimeAgo(failure.at, now, translate) }
       )
 }

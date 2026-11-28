@@ -1,26 +1,30 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { View, Text, ScrollView, Pressable, type ScrollViewInstance } from 'react-native'
 import {
-  ChevronDown,
-  Keyboard as KeyboardIcon,
-  Monitor,
-  Plus,
-  Smartphone
-} from 'lucide-react-native'
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  type GestureResponderEvent,
+  type ScrollViewInstance
+} from 'react-native'
+import { ClipboardPaste, Ellipsis } from 'lucide-react-native'
 import { triggerMediumImpact } from '../../../platform/haptics/haptics'
 import { createTerminalLiveAccessoryInput } from '../../live-input/terminal-live-accessory-input'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../../key-input/terminal-accessory-repeat'
-import { getVisibleTerminalAccessoryKeys } from '../../key-input/terminal-accessory-layout'
-import { useDirectionPadAvailable } from '../../../layout/use-shell-side-rail'
-import { isTerminalPhoneDisplayMode } from '../pane-layout/terminal-phone-display-mode'
-import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import {
+  TERMINAL_ACCESSORY_KEY_DEFINITIONS,
+  terminalAccessoryKeyAccessibilityLabel
+} from '../../key-input/terminal-key-definitions'
+import {
+  TERMINAL_ARROW_HIT_SLOP,
+  TERMINAL_KEY_HIT_SLOP,
+  terminalDockStylesSheet
+} from './terminal-dock-styles'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { colors } from '../../../theme/mobile-theme'
-import { styles as sessionStyles } from '../../../session/mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../../../platform/keyboard/keyboard-persisting-taps'
 import type { MobileSessionController } from '../../../session/use-mobile-session-controller'
-import { useMobileSessionKeyboardLift } from '../input-controls/use-mobile-session-keyboard-lift'
 import {
   AGENT_SMART_KEY_STEP_MS,
   type AgentSmartKey
@@ -33,27 +37,29 @@ import { isAccessibilityClick, useTerminalKeyRowTouch } from './use-terminal-key
 
 type PreparedPress = ReturnType<MobileSessionController['prepareAccessoryPress']>
 
-// The terminal's key row above the live input; every key goes straight to the terminal.
+const BUILT_IN = new Map(TERMINAL_ACCESSORY_KEY_DEFINITIONS.map((key) => [key.id, key]))
+const builtIn = (id: string): TerminalAccessoryKey => BUILT_IN.get(id)!
+const LEADING_KEYS = [builtIn('escape'), builtIn('tab')]
+const ARROW_KEYS = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight'].map(builtIn)
+const BACKSPACE_KEY = builtIn('backspace')
+
+// The terminal's key row above the live input: the keys people reach for, then ⋯ for the rest.
 export function MobileSessionAccessoryKeys({
-  controller
+  controller,
+  onMoreKeys
 }: {
   controller: MobileSessionController
+  onMoreKeys: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(terminalDockStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const {
-    activeHandle,
     customKeys,
-    setShowCustomKeyModal,
     setDeleteKeyTarget,
-    visibleBuiltInIds,
-    visibleBuiltInAccessoryKeys,
-    terminalModes,
     canPaste,
     canSend,
-    toggleDisplayMode,
     handleAccessoryKey,
-    dismissSoftwareKeyboard,
     stopAccessoryRepeat,
     cancelAccessoryRepeat,
     prepareAccessoryPress,
@@ -63,7 +69,6 @@ export function MobileSessionAccessoryKeys({
     terminals,
     smartRailEnabled
   } = controller
-  const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   const accessoryPresses = useRef(new Map<string, PreparedPress>())
   const scrollRef = useRef<ScrollViewInstance>(null)
   const latestSmartKeys = useMemo(
@@ -80,16 +85,6 @@ export function MobileSessionAccessoryKeys({
   const keepsKeyboard = useKeyboardPersistingTaps('always')
   // An unmounting Pressable never fires onPressOut, so a held key would outlive its row.
   useEffect(() => cancelAccessoryRepeat, [cancelAccessoryRepeat])
-  const phoneDisplay = isTerminalPhoneDisplayMode(activeHandle, terminalModes)
-  // A D-pad device's layout leaves the arrows to the rail, and this row only shows without the rail.
-  const padAvailable = useDirectionPadAvailable()
-  const builtInKeys = useMemo(
-    () =>
-      padAvailable
-        ? getVisibleTerminalAccessoryKeys(visibleBuiltInIds, true)
-        : visibleBuiltInAccessoryKeys,
-    [padAvailable, visibleBuiltInIds, visibleBuiltInAccessoryKeys]
-  )
   const keyStyle = ({ pressed }: { pressed: boolean }) => [
     styles.key,
     pressed && styles.keyPressed,
@@ -134,44 +129,57 @@ export function MobileSessionAccessoryKeys({
       }
     })()
   }
-  const latchIndex = builtInKeys.findIndex((key) => key.id === 'tab') + 1
-  const latchKeys = (
-    <MobileSessionLatchKeys
-      key="latches"
-      modifiers={dockKeys.modifiers}
-      disabled={!canSend}
-      onPressIn={() => touch.arm('latch')}
-      onPress={(modifier, event) =>
-        touch.fire('latch', event, () => dockKeys.tapModifier(modifier))
+  // A key fires on release; ⌫ and the arrows repeat while held.
+  const builtInPressProps = (key: TerminalAccessoryKey) => ({
+    disabled: !canSend,
+    onPressIn: (event: GestureResponderEvent) => {
+      touch.arm(key.id)
+      if (!key.repeatable) {
+        return
       }
-    />
+      const prepared = prepareBuiltInPress(key)
+      accessoryPresses.current.set(key.id, prepared)
+      if (event.type === 'keydown') {
+        prepared.hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
+      }
+    },
+    onPressOut: () => {
+      if (key.repeatable) {
+        stopAccessoryRepeat()
+      }
+    },
+    onPress: (event: GestureResponderEvent) => {
+      // Accessibility clicks have no touch-down to prepare a sender.
+      const prepared =
+        (key.repeatable && !isAccessibilityClick(event) && accessoryPresses.current.get(key.id)) ||
+        prepareBuiltInPress(key)
+      accessoryPresses.current.delete(key.id)
+      touch.fire(key.id, event, () => void prepared.tap())
+    },
+    onLongPress: key.repeatable
+      ? () => {
+          if (touch.stillArmed(key.id)) {
+            accessoryPresses.current.get(key.id)?.hold()
+          }
+        }
+      : undefined,
+    delayLongPress: TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
+    // A web <button> clicks on Enter keydown as well, which would send a held key twice.
+    accessibilityRole: key.repeatable ? undefined : ('button' as const),
+    accessibilityLabel: terminalAccessoryKeyAccessibilityLabel(key, t) ?? sendKeyLabel(key.label)
+  })
+  const builtInKey = (key: TerminalAccessoryKey) => (
+    <Pressable
+      key={key.id}
+      style={keyStyle}
+      hitSlop={TERMINAL_KEY_HIT_SLOP}
+      {...builtInPressProps(key)}
+    >
+      <Text style={styles.keyText}>{key.label}</Text>
+    </Pressable>
   )
   return (
     <View ref={keepsKeyboard} style={styles.keyRow} {...touch.rowTouchHandlers}>
-      {/* Why: fixed keyboard escape hatch; outside the ScrollView so it can't scroll away (#5106). */}
-      {keyboardLift > 0 && (
-        <Pressable
-          style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
-          onPress={dismissSoftwareKeyboard}
-          hitSlop={TERMINAL_KEY_HIT_SLOP}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.accessoryKeys.dismissKeyboard', 'Dismiss keyboard')}
-          accessibilityHint={t(
-            'session.accessoryKeys.dismissKeyboardHint',
-            'Hides the software keyboard and keeps the current terminal session open.'
-          )}
-        >
-          <View style={sessionStyles.keyboardDismissGlyph}>
-            <KeyboardIcon size={15} color={colors.textPrimary} strokeWidth={2} />
-            <ChevronDown
-              size={10}
-              color={colors.textPrimary}
-              strokeWidth={2.5}
-              style={sessionStyles.keyboardDismissChevron}
-            />
-          </View>
-        </Pressable>
-      )}
       {/* Why: default tap handling makes the first key tap dismiss the keyboard and get swallowed (#5106). */}
       <ScrollView
         ref={scrollRef}
@@ -192,31 +200,36 @@ export function MobileSessionAccessoryKeys({
             onPress={(key, event) => touch.fire(`smart:${key.id}`, event, () => sendSmartKey(key))}
           />
         ) : null}
-        <Pressable
-          style={keyStyle}
+        {LEADING_KEYS.map(builtInKey)}
+        <MobileSessionLatchKeys
+          modifiers={dockKeys.modifiers}
           disabled={!canSend}
-          hitSlop={TERMINAL_KEY_HIT_SLOP}
-          onPressIn={() => touch.arm('displayMode')}
-          onPress={(event) =>
-            touch.fire('displayMode', event, () => {
-              if (activeHandle) {
-                void toggleDisplayMode(activeHandle)
-              }
-            })
+          onPressIn={() => touch.arm('latch')}
+          onPress={(modifier, event) =>
+            touch.fire('latch', event, () => dockKeys.tapModifier(modifier))
           }
-          accessibilityRole="button"
-          accessibilityLabel={
-            phoneDisplay
-              ? t('session.accessoryKeys.switchToDesktopMode', 'Switch to desktop mode')
-              : t('session.accessoryKeys.switchToPhoneMode', 'Switch to phone mode')
-          }
-        >
-          {phoneDisplay ? (
-            <Monitor size={15} color={colors.textPrimary} strokeWidth={2} />
-          ) : (
-            <Smartphone size={15} color={colors.textPrimary} strokeWidth={2} />
-          )}
-        </Pressable>
+        />
+        <View style={[styles.arrowCluster, !canSend && styles.disabled]}>
+          {ARROW_KEYS.map((key, index) => (
+            <Pressable
+              key={key.id}
+              style={({ pressed }) => [
+                styles.arrowKey,
+                index > 0 && styles.arrowKeyDivided,
+                pressed && styles.arrowKeyPressed
+              ]}
+              hitSlop={{
+                ...TERMINAL_ARROW_HIT_SLOP,
+                left: index === 0 ? TERMINAL_KEY_HIT_SLOP.left : 0,
+                right: index === ARROW_KEYS.length - 1 ? TERMINAL_KEY_HIT_SLOP.right : 0
+              }}
+              {...builtInPressProps(key)}
+            >
+              <Text style={styles.keyText}>{key.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {builtInKey(BACKSPACE_KEY)}
         {canPaste && (
           <Pressable
             style={keyStyle}
@@ -230,96 +243,49 @@ export function MobileSessionAccessoryKeys({
               'Paste from clipboard'
             )}
           >
-            <Text style={styles.keyText}>{t('session.accessoryKeys.paste', 'Paste')}</Text>
+            <ClipboardPaste size={15} color={colors.textPrimary} strokeWidth={2} />
           </Pressable>
         )}
-        {latchIndex === 0 ? latchKeys : null}
-        {builtInKeys.flatMap((key, index) => [
-          <Pressable
-            key={key.id}
-            style={keyStyle}
-            disabled={!canSend}
-            hitSlop={TERMINAL_KEY_HIT_SLOP}
-            onPressIn={(event) => {
-              touch.arm(key.id)
-              if (!key.repeatable) {
-                return
+        {customKeys
+          .filter((key) => key.visible !== false)
+          .map((key) => (
+            <Pressable
+              key={key.id}
+              style={({ pressed }) => [...keyStyle({ pressed }), styles.customKey]}
+              disabled={!canSend}
+              hitSlop={TERMINAL_KEY_HIT_SLOP}
+              onPressIn={() => touch.arm(key.id)}
+              onPress={(event) =>
+                touch.fire(key.id, event, () => void handleAccessoryKey({ bytes: key.bytes }))
               }
-              const prepared = prepareBuiltInPress(key)
-              accessoryPresses.current.set(key.id, prepared)
-              if (event.type === 'keydown') {
-                prepared.hold(TERMINAL_ACCESSORY_REPEAT_DELAY_MS)
-              }
-            }}
-            onPressOut={() => {
-              if (key.repeatable) {
-                stopAccessoryRepeat()
-              }
-            }}
-            onPress={(event) => {
-              // Accessibility clicks have no touch-down to prepare a sender.
-              const prepared =
-                (key.repeatable &&
-                  !isAccessibilityClick(event) &&
-                  accessoryPresses.current.get(key.id)) ||
-                prepareBuiltInPress(key)
-              accessoryPresses.current.delete(key.id)
-              touch.fire(key.id, event, () => void prepared.tap())
-            }}
-            onLongPress={
-              key.repeatable
-                ? () => {
-                    if (touch.stillArmed(key.id)) {
-                      accessoryPresses.current.get(key.id)?.hold()
-                    }
-                  }
-                : undefined
-            }
-            delayLongPress={TERMINAL_ACCESSORY_REPEAT_DELAY_MS}
-            // A web <button> clicks on Enter keydown as well, which would send a held key twice.
-            accessibilityRole={key.repeatable ? undefined : 'button'}
-            accessibilityLabel={key.accessibilityLabel ?? sendKeyLabel(key.label)}
-          >
-            <Text style={styles.keyText}>{key.label}</Text>
-          </Pressable>,
-          index + 1 === latchIndex ? latchKeys : null
-        ])}
-        {customKeys.map((key) => (
-          <Pressable
-            key={key.id}
-            style={({ pressed }) => [...keyStyle({ pressed }), styles.customKey]}
-            disabled={!canSend}
-            hitSlop={TERMINAL_KEY_HIT_SLOP}
-            onPressIn={() => touch.arm(key.id)}
-            onPress={(event) =>
-              touch.fire(key.id, event, () => void handleAccessoryKey({ bytes: key.bytes }))
-            }
-            onLongPress={() => {
-              triggerMediumImpact()
-              setDeleteKeyTarget(key)
-            }}
-            delayLongPress={400}
-            accessibilityRole="button"
-            accessibilityLabel={sendKeyLabel(key.label)}
-            accessibilityHint={t(
-              'session.terminalMoreKeys.deleteKeyHint',
-              'Long press to delete this key'
-            )}
-          >
-            <Text style={styles.keyText}>{key.label}</Text>
-          </Pressable>
-        ))}
-        <Pressable
-          style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
-          hitSlop={TERMINAL_KEY_HIT_SLOP}
-          onPressIn={() => touch.arm('addKey')}
-          onPress={(event) => touch.fire('addKey', event, () => setShowCustomKeyModal(true))}
-          accessibilityRole="button"
-          accessibilityLabel={t('session.accessoryKeys.addCustomShortcut', 'Add custom shortcut')}
-        >
-          <Plus size={15} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
+              onLongPress={() => {
+                triggerMediumImpact()
+                setDeleteKeyTarget(key)
+              }}
+              delayLongPress={400}
+              accessibilityRole="button"
+              accessibilityLabel={sendKeyLabel(key.label)}
+              accessibilityHint={t(
+                'session.terminalMoreKeys.deleteKeyHint',
+                'Long press to delete this key'
+              )}
+            >
+              <Text style={styles.keyText} numberOfLines={1}>
+                {key.label}
+              </Text>
+            </Pressable>
+          ))}
       </ScrollView>
+      {/* Pinned outside the scroll, so the rest of the keys are always one tap away. */}
+      <Pressable
+        style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+        hitSlop={TERMINAL_KEY_HIT_SLOP}
+        onPress={onMoreKeys}
+        accessibilityRole="button"
+        accessibilityLabel={t('session.accessoryKeys.moreKeys', 'More keys and actions')}
+      >
+        <Ellipsis size={16} color={colors.textPrimary} strokeWidth={2.2} />
+      </Pressable>
     </View>
   )
 }

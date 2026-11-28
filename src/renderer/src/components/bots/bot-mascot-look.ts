@@ -1,6 +1,7 @@
 // A mascot as a bot shows it: its SVG on the bot's tile color (on a dark color, with the light rim) and wearing
-// its outfit. The SVGs ship with the page, so a new color is built in the same render; an outfit's art is read
-// the first time it is worn, and the picture shows the mascot without it until then.
+// its outfit. Mascot SVGs are fetched on demand from their asset URLs only when recoloring or redrawing a face,
+// keeping the ~250 KB raw SVG set out of the initial renderer boot bundle.
+import { useSyncExternalStore } from 'react'
 import { BOT_MASCOT_IDS, type BotMascotId } from '../../../../shared/bot-avatar'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
@@ -16,11 +17,76 @@ import {
   type BotOutfitLayers
 } from './bot-outfit-art'
 
-const MASCOT_SVGS = import.meta.glob<string>('../../../../shared/bot-mascots/*.svg', {
-  query: '?raw',
-  import: 'default',
-  eager: true
-})
+type MascotSvgEntry = {
+  value: string | undefined
+  pending: Promise<string | null> | null
+  listeners: Set<() => void>
+  subscribe: (listener: () => void) => () => void
+  getSnapshot: () => string | undefined
+}
+
+const mascotSvgEntries = new Map<BotMascotId, MascotSvgEntry>()
+
+function mascotSvgEntry(id: BotMascotId): MascotSvgEntry {
+  let entry = mascotSvgEntries.get(id)
+  if (!entry) {
+    const listeners = new Set<() => void>()
+    const created: MascotSvgEntry = {
+      value: undefined,
+      pending: null,
+      listeners,
+      subscribe: (listener) => {
+        listeners.add(listener)
+        if (created.value === undefined) {
+          void loadRawMascotSvg(id)
+        }
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+      getSnapshot: () => created.value
+    }
+    entry = created
+    mascotSvgEntries.set(id, entry)
+  }
+  return entry
+}
+
+function loadRawMascotSvg(id: BotMascotId): Promise<string | null> {
+  const entry = mascotSvgEntry(id)
+  if (entry.value !== undefined) {
+    return Promise.resolve(entry.value)
+  }
+  if (!entry.pending) {
+    const url = BOT_MASCOT_URLS[id]
+    entry.pending = fetch(url)
+      .then((res) => (res.ok ? res.text() : null))
+      .catch(() => null)
+      .then((svg) => {
+        entry.pending = null
+        if (svg) {
+          entry.value = svg
+          for (const listener of entry.listeners) {
+            listener()
+          }
+        }
+        return svg
+      })
+  }
+  return entry.pending
+}
+
+const NOOP_SUBSCRIBE = () => () => {}
+const NO_SVG = () => undefined
+
+function useRawMascotSvg(id: BotMascotId | null, needed: boolean): string | undefined {
+  const entry = id && needed ? mascotSvgEntry(id) : null
+  return useSyncExternalStore(
+    entry ? entry.subscribe : NOOP_SUBSCRIBE,
+    entry ? entry.getSnapshot : NO_SVG,
+    NO_SVG
+  )
+}
 
 /** The SVG drawn on `color`; the mascots read their background and rim from these defaults. */
 export function recolorMascotSvg(svg: string, color: string): string {
@@ -55,12 +121,12 @@ export function faceMascotSvg(svg: string, outfit: BotOutfitLayer): string {
 }
 
 /** The mascot's SVG on `color` (null: its own sky blue), with the face `outfit` redraws, if any. */
-export function botMascotSvg(
+export async function readBotMascotSvg(
   id: BotMascotId,
   color: string | null,
   outfit?: BotOutfitLayer
-): string | null {
-  const svg = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
+): Promise<string | null> {
+  const svg = await loadRawMascotSvg(id)
   if (!svg) {
     return null
   }
@@ -115,18 +181,21 @@ function svgSrc(svg: string): string {
 // Each picture is built once per mascot, color and outfit, inside the cache miss.
 function pictureSrc(
   id: BotMascotId,
+  rawSvg: string | undefined,
   color: string | null,
   key: string,
   build: (svg: string) => string
 ): string {
-  return cached(pictures, `${id}|${color ?? ''}|${key}`, () => {
-    const svg = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
-    return svg ? svgSrc(build(color ? recolorMascotSvg(svg, color) : svg)) : BOT_MASCOT_URLS[id]
-  })
+  if (!rawSvg) {
+    return BOT_MASCOT_URLS[id]
+  }
+  return cached(pictures, `${id}|${color ?? ''}|${key}`, () =>
+    svgSrc(build(color ? recolorMascotSvg(rawSvg, color) : rawSvg))
+  )
 }
 
-function plainSrc(id: BotMascotId, color: string | null): string {
-  return color ? pictureSrc(id, color, '', (svg) => svg) : BOT_MASCOT_URLS[id]
+function plainSrc(id: BotMascotId, rawSvg: string | undefined, color: string | null): string {
+  return color ? pictureSrc(id, rawSvg, color, '', (svg) => svg) : BOT_MASCOT_URLS[id]
 }
 
 // What `id` wears at `size`. A large picture wears nothing until its large art has arrived, so it never
@@ -198,13 +267,14 @@ export function useBotMascotLayers(
   const layers = useBotOutfitLayers(worn)
   const largeArt = useBotOutfitLargeArt(worn, size === 'large')
   const tile = tileColor(color)
+  const layer = id ? wornLayer(id, worn, layers, largeArt, size) : undefined
+  const rawSvg = useRawMascotSvg(id, Boolean(tile || layer?.face))
   if (!id) {
     return null
   }
-  const layer = wornLayer(id, worn, layers, largeArt, size)
   const src = layer?.face
-    ? pictureSrc(id, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
-    : plainSrc(id, tile)
+    ? pictureSrc(id, rawSvg, tile, `${worn}|faced`, (svg) => faceMascotSvg(svg, layer))
+    : plainSrc(id, rawSvg, tile)
   return { src, outfit: tileLook(id, worn, layers, largeArt, size).outfit }
 }
 
@@ -217,7 +287,7 @@ export function useBotMascotLook(
 ): BotMascotLook {
   return (
     useBotMascotLayers(id, color, outfit, size) ?? {
-      src: plainSrc(id, tileColor(color)),
+      src: BOT_MASCOT_URLS[id],
       outfit: null
     }
   )

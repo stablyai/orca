@@ -1,7 +1,7 @@
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type StatusRows = {
@@ -11,7 +11,7 @@ type StatusRows = {
 /** A chat whose turn its own background tasks hold open, by its status row. */
 export function chatWaitsOnBackground(rows: StatusRows, sessionId: string): boolean {
   return rows
-    .getStatusSnapshotForPane(structuredAgentSessionStatusPaneKey(sessionId))
+    .getStatusSnapshotForPane(chatPaneKey(sessionId))
     .some((row) => agentBackgroundWait(row) !== null)
 }
 
@@ -26,20 +26,11 @@ export function rowsShowWait(
     : rows.some((row) => agentBackgroundWait(row)?.since === wait.since)
 }
 
-/** Whether a recorded wait's pane still shows it, by this host's status rows. */
-export function backgroundWaitShown(
-  rows: StatusRows,
-  wait: { since: number; paneKey?: string; chat?: true }
-): boolean {
-  return !wait.paneKey || rowsShowWait(rows.getStatusSnapshotForPane(wait.paneKey), wait)
-}
-
 /** The report deps that read background waits from this host's status rows. */
 export function backgroundWaitReportDeps(
   rows: StatusRows = agentHookServer
-): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground' | 'backgroundWaitShown'> {
+): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground'> {
   return {
-    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId),
-    backgroundWaitShown: (wait) => backgroundWaitShown(rows, wait)
+    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId)
   }
 }

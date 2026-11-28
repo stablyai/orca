@@ -60,7 +60,11 @@ function readLogin(
   if (shared) {
     return shared
   }
-  const read = fetchActiveClaudeRateLimits({ signal: options.signal, authPreparation })
+  const read = fetchActiveClaudeRateLimits({
+    signal: options.signal,
+    authPreparation,
+    networkProxySettings: options.networkProxySettings
+  })
   options.readsByHome?.set(authPreparation.configDir, read)
   return read
 }

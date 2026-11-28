@@ -1,9 +1,16 @@
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import { GRAB_PICK_CONTROL_SCRIPT } from './grab-guest-pick-control-script'
+import {
+  BROWSER_GRAB_HOVER_ATTRIBUTE,
+  BROWSER_GRAB_SELECTED_ATTRIBUTE
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+
+import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
   document.documentElement.appendChild(host);
+
 
   var shadow = host.attachShadow({ mode: 'closed' });
 
@@ -23,7 +30,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   overlay.appendChild(hoverLabel);
 
   var currentEl = null;
-
+${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
   function updateHighlight(el) {
     if (!el || el === document.documentElement || el === document.body) {
       highlightBox.style.display = 'none';
@@ -50,25 +57,24 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     if (text) parts.push('"' + text + '"');
     parts.push(w + 'x' + h);
     hoverLabel.textContent = parts.join('  ');
-
-    var labelY = rect.bottom + 6;
-    if (labelY + 28 > window.innerHeight) {
-      labelY = rect.top - 28;
-    }
-    hoverLabel.style.left = Math.max(4, rect.x) + 'px';
-    hoverLabel.style.top = labelY + 'px';
+    // Shown before placing, so its width is measurable.
     hoverLabel.style.display = 'block';
+    var place = placeLabel(rect);
+    hoverLabel.style.left = place.left + 'px';
+    hoverLabel.style.top = place.top + 'px';
   }
 
-  function onPointerMove(e) {
+  var lastPointer = null;
+  var hoverMarked = null;
+  function hitAt(x, y) {
     // Exclude the overlay from hit testing to find the page element underneath.
     host.style.pointerEvents = 'none';
-    var el = document.elementFromPoint(e.clientX, e.clientY);
+    var el = document.elementFromPoint(x, y);
     // Document hit-testing stops at a shadow host; closed roots stay opaque.
     // Page code can shadow shadowRoot (e.g. a form control named "shadowRoot"); keep the deepest real hit.
     try {
       while (el && el.shadowRoot) {
-        var inner = el.shadowRoot.elementFromPoint(e.clientX, e.clientY);
+        var inner = el.shadowRoot.elementFromPoint(x, y);
         if (!inner || inner === el) break;
         el = inner;
       }
@@ -76,6 +82,18 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     } finally {
       host.style.pointerEvents = 'all';
     }
+    return el;
+  }
+  // The outline follows a frame later; a pick or hover read hit-tests now, like the preload's trusted pointer.
+  function settleHover() {
+    if (!lastPointer) return;
+    var el = hitAt(lastPointer.x, lastPointer.y);
+    if (el) updateHighlight(el);
+  }
+
+  function onPointerMove(e) {
+    lastPointer = { x: e.clientX, y: e.clientY };
+    var el = hitAt(e.clientX, e.clientY);
     if (el) {
       requestAnimationFrame(function() { updateHighlight(el); });
     }
@@ -153,10 +171,15 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     previousSelectedValue = null;
   }
 
-  var grab = window.__orcaGrab = {
-    host: host,
-    extractPayload: extractPayload,
-    getCurrentElement: function() { return currentEl; },
+  ${GRAB_PICK_CONTROL_SCRIPT}
+
+  // Never published on window: page code cannot swap the picker, its pick or its cleanup.
+  var grab = {
+    // Orca's palette moved, resized or closed: re-place the label for the hovered element.
+    setLabelAvoidArea: function(area) {
+      labelAvoidArea = area;
+      if (currentEl && selectedEl === null) updateHighlight(currentEl);
+    },
     // Release pointer events while preserving the selection outline for the copy menu.
     freezeHighlight: function(selectionId) {
       stopPointerInput();
@@ -187,15 +210,91 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     },
     // Set by awaitClick to receive the next pick.
     onPick: null,
+    cancelAwait: null,
     cleanup: function() {
       stopPointerInput();
       window.removeEventListener('toggle', raiseOverlay, true);
       window.removeEventListener('fullscreenchange', raiseOverlay, true);
       stopTrackingSelection();
+      currentEl = null;
+      if (hoverMarked) hoverMarked.removeAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)});
+      hoverMarked = null;
       try { host.remove(); } catch(e) {}
-      delete window.__orcaGrab;
     }
   };
 
-  return true;
+  var awaitCount = 0;
+  // Resolves with the pick's private control, or a cancellation marker.
+  function awaitClick() {
+    if (grab.cancelAwait) grab.cancelAwait(false);
+    return new Promise(function(resolve, reject) {
+      grab.onPick = function(e) {
+        grab.onPick = null;
+        grab.cancelAwait = null;
+        host.removeAttribute('data-orca-grab-awaiting');
+        lastPointer = { x: e.clientX, y: e.clientY };
+        settleHover();
+        var el = currentEl;
+        if (!el) {
+          grab.cleanup();
+          resolve({ __orcaCancelled: true });
+          return;
+        }
+        var payload;
+        try {
+          payload = extractPayload(el);
+        } catch (error) {
+          grab.cleanup();
+          reject(error instanceof Error ? error : new Error('Failed to extract element context'));
+          return;
+        }
+        // Keep the selected element outlined while the renderer shows its copy menu.
+        var control = pickControl(el, payload, e.type === 'contextmenu');
+        grab.freezeHighlight(payload.page.capturedAt);
+        resolve(control);
+      };
+      grab.cancelAwait = function(removeOverlay) {
+        grab.onPick = null;
+        grab.cancelAwait = null;
+        host.removeAttribute('data-orca-grab-awaiting');
+        if (removeOverlay !== false) grab.cleanup();
+        resolve({ __orcaCancelled: true, __orcaPreserveOverlay: removeOverlay === false });
+      };
+      // Observable readiness for automation; not an authority for anything.
+      host.setAttribute('data-orca-grab-awaiting', String(++awaitCount));
+    });
+  }
+
+  return function(action, argument) {
+    if (action === 'teardown') {
+      if (grab.cancelAwait) grab.cancelAwait();
+      else grab.cleanup();
+      return !host.isConnected;
+    }
+    // An async function returns an intrinsic Promise even when the page replaces global Promise.
+    if (action === 'awaitClick') return (async function() { return await awaitClick(); })();
+    if (action === 'cancelAwait') {
+      if (grab.cancelAwait) grab.cancelAwait(argument);
+      return true;
+    }
+    if (action === 'extractHover') {
+      settleHover();
+      if (!currentEl) return null;
+      try {
+        var hoverPayload = extractPayload(currentEl);
+        // Names the described element, so the preload pairs this payload only with the node it hit itself.
+        if (hoverMarked && hoverMarked !== currentEl) hoverMarked.removeAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)});
+        currentEl.setAttribute(${JSON.stringify(BROWSER_GRAB_HOVER_ATTRIBUTE)}, hoverPayload.page.capturedAt);
+        hoverMarked = currentEl;
+        return pickControl(currentEl, hoverPayload, false);
+      } catch (e) {
+        return null;
+      }
+    }
+    if (action === 'setLabelAvoidArea') {
+      grab.setLabelAvoidArea(argument);
+      return true;
+    }
+    return false;
+  };
 })()`

@@ -181,6 +181,25 @@ function Answered(): React.JSX.Element {
 
 export const answered = defineFixture({ width: 340, render: () => <Answered /> })
 
+// Answered in the owner's own words: the answer reads as a comment does, Markdown and mentions drawn.
+const inWords: BotItemEvent = {
+  ...answer,
+  data: {
+    text: 'Wait: ask [Bot: Docs helper](bot:docs-helper) to check **the tone** in `guide.md` first',
+    answers: 'q1'
+  }
+}
+
+function AnsweredInWords(): React.JSX.Element {
+  return (
+    <Feed>
+      <Card event={ask('q1', MERGE)} waiting={false} answers={[inWords]} />
+    </Feed>
+  )
+}
+
+export const answeredInWords = defineFixture({ width: 340, render: () => <AnsweredInWords /> })
+
 const LONG_CONTEXT: BotItemAsk = {
   ...MERGE,
   context: [

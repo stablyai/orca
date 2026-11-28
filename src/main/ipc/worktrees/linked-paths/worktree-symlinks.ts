@@ -1,4 +1,4 @@
-import { symlink, mkdir, stat, lstat, unlink, cp, realpath } from 'node:fs/promises'
+import { symlink, mkdir, stat, lstat, unlink, realpath } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import {
   ApfsCloneUnavailableError,
@@ -15,6 +15,7 @@ import {
   type WorktreeCopyBudget
 } from './worktree-include-copy-budget'
 import { getSafeRelativePath } from '../../../git/worktrees/content-paths/worktree-symlink-detection'
+import { copyPath } from '../../../../shared/copy-path'
 
 type WorktreeLinkedPathOptions = {
   platform?: NodeJS.Platform
@@ -61,7 +62,7 @@ async function symlinkWorktreePath(
 async function copyWorktreePath(source: string, target: string): Promise<void> {
   await mkdir(dirname(target), { recursive: true })
   // Preserve targets created by racing processes after preflight.
-  await cp(source, target, { recursive: true, force: false, errorOnExist: false })
+  await copyPath(source, target, { recursive: true, force: false, errorOnExist: false })
 }
 
 /** Predicted clone failed and a real-copy fallback would exceed the byte budget. */

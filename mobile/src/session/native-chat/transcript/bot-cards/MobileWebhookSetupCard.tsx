@@ -19,8 +19,8 @@ import { startHostBotRefresh } from '../../../../bots/host-bot-refresh'
 import { useNow } from '../../../../hooks/use-now'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePill'
@@ -29,6 +29,7 @@ import { webhookCardRead } from './mobile-bot-card-operations'
 import { MobileBotCardActions, MobileBotCardFrame, MobileBotCardMeta } from './MobileBotCardFrame'
 import { mobileWebhookStatus } from './MobileBotWebhookCard'
 import { MobileGoogleSetupReceipt } from './MobileGoogleSetupCardParts'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 const MASK = '••••••••'
 
@@ -51,6 +52,8 @@ export function MobileWebhookSetupCard({
   name: string
   fontScale: number
 }): React.JSX.Element {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const client = useMobileBotCardHost()?.client ?? null
   const botName = useContext(MobileNativeChatBotIdentityContext)?.name ?? ''
@@ -273,6 +276,7 @@ function Field({
   onPress?: () => void
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const meta = scaledType(typography.metaSize, fontScale, 4)
   return (
     <View style={styles.field}>
@@ -293,7 +297,7 @@ function Field({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   wrap: { gap: spacing.xs },
   on: { color: colors.statusGreen },
   muted: { color: colors.textMuted },

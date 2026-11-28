@@ -1,13 +1,21 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { formatPermissionNotice, formatPopupNotice } from './browser-notices'
 
+export type BrowserResourceNotice =
+  | { kind: 'text'; text: string }
+  | { kind: 'cookies-imported'; count: number }
+
 export function useBrowserPageResourceNotices(browserTabId: string): {
-  resourceNotice: string | null
-  setResourceNotice: React.Dispatch<React.SetStateAction<string | null>>
+  resourceNotice: BrowserResourceNotice | null
+  setResourceNotice: (notice: string | null) => void
 } {
-  const [resourceNotice, setResourceNotice] = useState<string | null>(null)
+  const [resourceNotice, setNotice] = useState<BrowserResourceNotice | null>(null)
+  const setResourceNotice = useCallback(
+    (notice: string | null) => setNotice(notice === null ? null : { kind: 'text', text: notice }),
+    []
+  )
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
 
@@ -16,33 +24,10 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       return
     }
     if (browserSessionImportState.status === 'success' && browserSessionImportState.summary) {
-      const { importedCookies: count, domains: allDomains } = browserSessionImportState.summary
-      const domains = allDomains.slice(0, 3).join(', ')
-      const more = allDomains.length - 3
-      setResourceNotice(
-        more > 0
-          ? translate(
-              'browser.cookieImport.notice.importedMore',
-              'Imported {{count}} cookies for {{domains}} +{{more}} more. Reload the page to use them.',
-              {
-                count,
-                domains,
-                more,
-                defaultValue_one:
-                  'Imported {{count}} cookie for {{domains}} +{{more}} more. Reload the page to use them.'
-              }
-            )
-          : translate(
-              'browser.cookieImport.notice.imported',
-              'Imported {{count}} cookies for {{domains}}. Reload the page to use them.',
-              {
-                count,
-                domains,
-                defaultValue_one:
-                  'Imported {{count}} cookie for {{domains}}. Reload the page to use them.'
-              }
-            )
-      )
+      setNotice({
+        kind: 'cookies-imported',
+        count: browserSessionImportState.summary.importedCookies
+      })
       clearBrowserSessionImportState()
     } else if (browserSessionImportState.status === 'error' && browserSessionImportState.error) {
       setResourceNotice(
@@ -52,13 +37,13 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       )
       clearBrowserSessionImportState()
     }
-  }, [browserSessionImportState, clearBrowserSessionImportState])
+  }, [browserSessionImportState, clearBrowserSessionImportState, setResourceNotice])
 
   useEffect(() => {
     if (!resourceNotice) {
       return
     }
-    const timer = setTimeout(() => setResourceNotice(null), 10_000)
+    const timer = setTimeout(() => setNotice(null), 10_000)
     return () => clearTimeout(timer)
   }, [resourceNotice])
 
@@ -69,7 +54,7 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
       }
       setResourceNotice(formatPermissionNotice(event))
     })
-  }, [browserTabId])
+  }, [browserTabId, setResourceNotice])
 
   useEffect(() => {
     return window.api.browser.onPopup((event) => {
@@ -81,7 +66,7 @@ export function useBrowserPageResourceNotices(browserTabId: string): {
         setResourceNotice(notice)
       }
     })
-  }, [browserTabId])
+  }, [browserTabId, setResourceNotice])
 
   return { resourceNotice, setResourceNotice }
 }
