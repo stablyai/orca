@@ -3,10 +3,34 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host/execution-host'
-import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { RepoOfWorktree } from '../row-types'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+
+function createRawHostDeduper(firstRawHost: string): (worktree: Worktree) => boolean {
+  const firstSeenIds = new Set<string>()
+  let seenByRawHost: Map<string, Set<string>> | undefined
+  return (worktree: Worktree) => {
+    const rawHost = worktree.hostId ?? ''
+    if (rawHost === firstRawHost) {
+      if (firstSeenIds.has(worktree.id)) {
+        return false
+      }
+      firstSeenIds.add(worktree.id)
+      return true
+    }
+    seenByRawHost ??= new Map([[firstRawHost, firstSeenIds]])
+    let seenIds = seenByRawHost.get(rawHost)
+    if (!seenIds) {
+      seenIds = new Set()
+      seenByRawHost.set(rawHost, seenIds)
+    } else if (seenIds.has(worktree.id)) {
+      return false
+    }
+    seenIds.add(worktree.id)
+    return true
+  }
+}
 
 export function getHostWorktreeCounts(
   worktrees: readonly Worktree[],
@@ -16,15 +40,17 @@ export function getHostWorktreeCounts(
   if (worktrees.length === 0) {
     return undefined
   }
+  if (worktrees.length === 1) {
+    const worktree = worktrees[0]
+    return new Map([[getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId), 1]])
+  }
   // Same-ID workspaces on two hosts count under each host (STA-4343).
   const counts = new Map<ExecutionHostId, number>()
-  const seenIdentities = new Set<string>()
+  const markUnique = createRawHostDeduper(worktrees[0].hostId ?? '')
   for (const worktree of worktrees) {
-    const identity = getWorktreeHostIdentity(worktree)
-    if (seenIdentities.has(identity)) {
+    if (!markUnique(worktree)) {
       continue
     }
-    seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
     counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
   }
@@ -39,14 +65,18 @@ export function getHostWorktreeIds(
   if (worktrees.length === 0) {
     return undefined
   }
+  if (worktrees.length === 1) {
+    const worktree = worktrees[0]
+    return new Map([
+      [getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId), [worktree.id]]
+    ])
+  }
   const idsByHost = new Map<ExecutionHostId, string[]>()
-  const seenIdentities = new Set<string>()
+  const markUnique = createRawHostDeduper(worktrees[0].hostId ?? '')
   for (const worktree of worktrees) {
-    const identity = getWorktreeHostIdentity(worktree)
-    if (seenIdentities.has(identity)) {
+    if (!markUnique(worktree)) {
       continue
     }
-    seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
     const ids = idsByHost.get(hostId)
     if (ids) {
