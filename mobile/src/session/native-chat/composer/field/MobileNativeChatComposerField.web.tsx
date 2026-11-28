@@ -17,6 +17,12 @@ import {
 } from '../../../../components/composer-input/composer-input-styles'
 import type { MobileNativeChatComposerFieldProps } from './mobile-native-chat-composer-field-skill'
 import { MobileNativeChatComposerFieldCopy } from './MobileNativeChatComposerFieldCopy'
+import { useChatHardwareEnterToSend } from '../../preferences/mobile-chat-keyboard-settings'
+import {
+  submitMobileChatHardwareReturn,
+  submitMobileChatKeyboardEvent
+} from './mobile-chat-keyboard-submit'
+import { hostOs } from '../../../../platform/host-os'
 import { useThemedStyles } from '../../../../theme/themed-styles'
 import type { MobilePalette } from '../../../../theme/mobile-theme'
 import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
@@ -49,6 +55,7 @@ export function MobileNativeChatComposerField({
   placeholder,
   ref,
   onKeyboardSubmit,
+  dictating = false,
   onKeyPress,
   onWebPaste,
   ...props
@@ -59,9 +66,35 @@ export function MobileNativeChatComposerField({
   const [scrollTop, setScrollTop] = useState(0)
   const [fieldHeight, setFieldHeight] = useState(0)
   const ownRef = useRef<TextInputInstance>(null)
+  const composing = useRef(false)
+  const enterToSend = useChatHardwareEnterToSend()
+  const hardwareReturnEnabled =
+    enterToSend && Boolean(onKeyboardSubmit) && !dictating && !dictationPreview
   const input = ref ?? ownRef
   useTextInputSelectionReveal(input)
   const paste = useEffectEvent((event: ClipboardEvent) => onWebPaste?.(event))
+  const hardwareReturn = useEffectEvent(() => {
+    if (onKeyboardSubmit) {
+      submitMobileChatHardwareReturn({
+        enterToSend,
+        composing: composing.current,
+        dictating: dictating || Boolean(dictationPreview),
+        submit: onKeyboardSubmit
+      })
+    }
+  })
+  useEffect(() => {
+    const field: unknown = input.current
+    if (!(field instanceof HTMLElement)) {
+      return
+    }
+    field.setAttribute('data-orca-hardware-enter-to-send', String(hardwareReturnEnabled))
+    document.dispatchEvent(new Event('orca-chat-keyboard-policy'))
+    return () => {
+      field.removeAttribute('data-orca-hardware-enter-to-send')
+      document.dispatchEvent(new Event('orca-chat-keyboard-policy'))
+    }
+  }, [input, hardwareReturnEnabled])
   // react-native-web forwards no paste prop; its TextInput ref is the textarea itself.
   useEffect(() => {
     const field: unknown = input.current
@@ -69,8 +102,27 @@ export function MobileNativeChatComposerField({
       return
     }
     const listener = (event: ClipboardEvent) => paste(event)
+    const startComposition = () => {
+      composing.current = true
+    }
+    const endComposition = () => {
+      composing.current = false
+    }
+    const returnListener = () => {
+      if (document.activeElement === field) {
+        hardwareReturn()
+      }
+    }
     field.addEventListener('paste', listener)
-    return () => field.removeEventListener('paste', listener)
+    field.addEventListener('compositionstart', startComposition)
+    field.addEventListener('compositionend', endComposition)
+    field.addEventListener('orca-chat-hardware-return', returnListener)
+    return () => {
+      field.removeEventListener('paste', listener)
+      field.removeEventListener('compositionstart', startComposition)
+      field.removeEventListener('compositionend', endComposition)
+      field.removeEventListener('orca-chat-hardware-return', returnListener)
+    }
   }, [input])
   const shown = dictationPreview
     ? `${dictationPreview.before}${dictationPreview.text}${dictationPreview.after}`
@@ -113,24 +165,19 @@ export function MobileNativeChatComposerField({
         onKeyPress={(event) => {
           onKeyPress?.(event)
           const key = event.nativeEvent
-          if (
-            event.defaultPrevented ||
-            !onKeyboardSubmit ||
-            !(key instanceof KeyboardEvent) ||
-            key.key !== 'Enter' ||
-            key.isComposing ||
-            key.keyCode === 229 ||
-            key.shiftKey ||
-            key.altKey ||
-            !(primaryModifierKey() === 'Meta'
-              ? key.metaKey && !key.ctrlKey
-              : key.ctrlKey && !key.metaKey)
-          ) {
-            return
-          }
-          event.preventDefault()
-          if (!key.repeat) {
-            onKeyboardSubmit()
+          if (!event.defaultPrevented && onKeyboardSubmit && key instanceof KeyboardEvent) {
+            submitMobileChatKeyboardEvent(key, {
+              enterToSend,
+              requiresNativeHardwareReturn: hostOs() === 'ios',
+              composing: composing.current,
+              dictating: dictating || Boolean(dictationPreview),
+              primaryModifier: primaryModifierKey(),
+              submit: onKeyboardSubmit
+            })
+            // The DOM event and React's wrapper are not always the same object.
+            if (key.defaultPrevented) {
+              event.preventDefault()
+            }
           }
         }}
       />

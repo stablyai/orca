@@ -243,7 +243,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     // Disabling text interaction suppresses text after keydown; page user-select handles long-press selection.
     configuration.setURLSchemeHandler(schemeHandler, forURLScheme: MobileWebShellOrigin.scheme)
     configuration.userContentController.addUserScript(Self.makeBlockerScript())
-    webView = WKWebView(frame: .zero, configuration: configuration)
+    webView = MobileWebShellChatWebView(frame: .zero, configuration: configuration)
     super.init()
     bridgeReceiver.document = self
     webView.navigationDelegate = self
@@ -370,6 +370,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
       controller.removeScriptMessageHandler(forName: MobileWebShellBridge.handlerName)
       controller.removeAllUserScripts()
       controller.addUserScript(Self.makeBlockerScript())
+      controller.addUserScript(MobileWebShellChatWebView.keyboardPolicyScript())
     }
     bridgeInstalled = bridgeEnabled
   }
@@ -584,6 +585,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
   }
 
   func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+    (webView as? MobileWebShellChatWebView)?.resetChatKeyboard()
     // Clear replies and acceptance when the document is replaced; its successor must commit and send ready.
     clearBridgeTarget()
     loadState.documentEnded()
@@ -621,6 +623,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
 
   /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    (webView as? MobileWebShellChatWebView)?.resetChatKeyboard()
     MobileWebShellWarmUp.release()
     clearBridgeTarget()
     // Jetsam takes WebContent while Orca is backgrounded; the report can arrive as the app resumes, before it is active.
