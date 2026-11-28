@@ -48,6 +48,7 @@ function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean 
     a.filePathsLinkedInTree === b.filePathsLinkedInTree &&
     a.rowLongPress === b.rowLongPress &&
     a.renderImage === b.renderImage &&
+    a.documentImages === b.documentImages &&
     a.renderVisual === b.renderVisual &&
     sameStyle(a.listText, b.listText) &&
     sameStyle(a.listMarker, b.listMarker) &&

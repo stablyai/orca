@@ -241,20 +241,20 @@ function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
 const withoutComments = (html: string): string =>
   html.replace(/<!--(?:(?!-->)[\s\S])*(?:-->|$)/g, '')
 
-function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
+function withoutHtml(parent: Parent, nested: boolean, env: MathEnv, documentImages: boolean): void {
   const inline = !BLOCK_PARENTS.has(parent.type)
   parent.children = parent.children.flatMap((child): RootContent[] => {
     if (child.type !== 'html') {
       if ('children' in child) {
-        withoutHtml(child, nested, env)
+        withoutHtml(child, nested, env, documentImages)
       }
       return [child]
     }
     if (inline && LINE_BREAK_TAG.test(child.value.trim())) {
       return [{ type: 'break' }]
     }
-    // An https `<img>` draws as an image with its authored width; the HTML around it as before.
-    return withImagesSplitOut(withoutComments(child.value)).flatMap((piece): RootContent[] => {
+    const pieces = withImagesSplitOut(withoutComments(child.value), documentImages)
+    return pieces.flatMap((piece): RootContent[] => {
       if (typeof piece !== 'string') {
         return inline ? [piece] : [{ type: 'paragraph', children: [piece] }]
       }
@@ -262,14 +262,12 @@ function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
       if (!text) {
         return []
       }
-      if (inline) {
-        return [{ type: 'text', value: text }]
-      }
-      if (nested) {
-        return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
+      if (inline || nested) {
+        const remainingText = { type: 'text' as const, value: text }
+        return inline ? [remainingText] : [{ type: 'paragraph', children: [remainingText] }]
       }
       const blocks = toTree(markdown.parse(text, env), text, env)
-      withoutHtml(blocks, true, env)
+      withoutHtml(blocks, true, env, documentImages)
       return blocks.children
     })
   })
@@ -298,7 +296,8 @@ export function parseMobileMarkdownTree(
   source: string,
   growing: boolean,
   chatMath = false,
-  parsed?: { env: MathEnv; tokens: readonly Token[] }
+  parsed?: { env: MathEnv; tokens: readonly Token[] },
+  documentImages = false
 ): Root {
   const env = parsed?.env ?? { chatMath }
   let tokens = parsed?.tokens ?? markdown.parse(source, env)
@@ -308,7 +307,7 @@ export function parseMobileMarkdownTree(
     tokens = text === source ? tokens : markdown.parse(text, env)
   }
   const root = toTree(tokens, text, env)
-  withoutHtml(root, false, env)
+  withoutHtml(root, false, env, documentImages)
   // GitHub's `> [!NOTE]` alerts, read by desktop's rule.
   forEachGitHubCallout(root, (quote, kind) => {
     quote.data = { ...quote.data, callout: kind }

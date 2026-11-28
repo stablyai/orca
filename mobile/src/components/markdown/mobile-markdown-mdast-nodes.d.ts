@@ -69,6 +69,7 @@ declare module 'mdast' {
   interface ImageData {
     /** An HTML `<img width>`: the width GitHub draws it at. */
     width?: number
+    linkHref?: string
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging registers the node.
   interface ListItemData {

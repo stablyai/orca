@@ -42,9 +42,10 @@ export function MobileFileMarkdownPreview({
         content={content}
         textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE}
         onOpenFile={onOpenFile}
+        documentImages={Boolean(worktreeId)}
         renderImage={
           worktreeId
-            ? (href, alt) => (
+            ? (href, alt, width, onOpenLink) => (
                 <MobileMarkdownPreviewImage
                   key={`${worktreeId}:${relativePath}:${href}`}
                   client={client ?? null}
@@ -52,6 +53,8 @@ export function MobileFileMarkdownPreview({
                   documentPath={relativePath}
                   href={href}
                   alt={alt}
+                  width={width}
+                  onOpenLink={onOpenLink}
                 />
               )
             : undefined

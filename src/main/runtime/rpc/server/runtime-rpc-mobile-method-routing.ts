@@ -213,6 +213,7 @@ export const EXECUTION_HOST_METHODS = [
   'hostedReview.forBranch',
   'hostedReview.getCreationEligibility',
   'linear.resolveCurrentIssue',
+  'linkPreview.image',
   'markdown.readTab',
   'markdown.saveTab',
   'nativeChat.readSession',

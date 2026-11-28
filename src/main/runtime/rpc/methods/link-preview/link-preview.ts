@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import { LinkPreviewGetParams } from '../../../../../shared/rpc-contract/link-preview/link-preview-params'
-import { getLinkPreview } from '../../../../link-preview/link-preview'
+import { getLinkPreview, getLinkPreviewImage } from '../../../../link-preview/link-preview'
 
 export const LINK_PREVIEW_METHODS = [
   defineMethod({
@@ -8,5 +8,11 @@ export const LINK_PREVIEW_METHODS = [
     permission: 'workspace',
     params: LinkPreviewGetParams,
     handler: async (params) => getLinkPreview({ url: params.url })
+  }),
+  defineMethod({
+    name: 'linkPreview.image',
+    permission: 'workspace',
+    params: LinkPreviewGetParams,
+    handler: async ({ url }) => ({ dataUri: await getLinkPreviewImage(url) })
   })
 ]

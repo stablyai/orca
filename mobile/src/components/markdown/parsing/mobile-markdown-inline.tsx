@@ -159,9 +159,12 @@ function renderPhrasing(
         : renderInlineCode(key, node.value, ctx, outer)
     case 'link': {
       const only = node.children.length === 1 ? node.children[0] : undefined
-      return only?.type === 'inlineCode'
-        ? renderInlineCode(key, only.value, ctx, outer, () => openMarkdownHref(node.url, ctx))
-        : renderLink(key, plainText(node), node.url, ctx, outer)
+      if (only?.type === 'inlineCode') {
+        return renderInlineCode(key, only.value, ctx, outer, () => openMarkdownHref(node.url, ctx))
+      }
+      const label = plainText(node)
+      const needsImageLabel = !label.trim() && node.children.some((child) => child.type === 'image')
+      return renderLink(key, needsImageLabel ? 'image' : label, node.url, ctx, outer)
     }
     case 'htmlSpan': {
       const tagStyle =
@@ -191,7 +194,7 @@ function renderPhrasing(
         />
       )
     case 'image':
-      return renderLink(key, node.alt || 'image', node.url, ctx, outer)
+      return renderLink(key, node.alt || 'image', node.data?.linkHref || node.url, ctx, outer)
     case 'footnoteReference':
       return (
         // GitHub's raised note number.

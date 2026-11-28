@@ -8,6 +8,7 @@ import { markdownTokens, parseMobileMarkdownTree } from './mobile-markdown-tree'
 export type MobileMarkdownTreeCache = {
   source: string
   chatMath: boolean
+  documentImages: boolean
   link: (root: Root) => void
   /** Linked nodes of the blocks before `line`; text added later cannot change them. */
   settled: RootContent[]
@@ -54,10 +55,11 @@ export function parseGrowingMobileMarkdownTree(
   source: string,
   growing: boolean,
   chatMath: boolean,
-  link: (root: Root) => void
+  link: (root: Root) => void,
+  documentImages = false
 ): { root: Root; cache: MobileMarkdownTreeCache | null } {
   const whole = (parsed?: { env: MathEnv; tokens: readonly Token[] }) => {
-    const root = parseMobileMarkdownTree(source, growing, chatMath, parsed)
+    const root = parseMobileMarkdownTree(source, growing, chatMath, parsed, documentImages)
     link(root)
     return { root, cache: null }
   }
@@ -66,7 +68,10 @@ export function parseGrowingMobileMarkdownTree(
     return whole()
   }
   const resume =
-    previous?.chatMath === chatMath && previous.link === link && source.startsWith(previous.source)
+    previous?.chatMath === chatMath &&
+    previous.documentImages === documentImages &&
+    previous.link === link &&
+    source.startsWith(previous.source)
   let { settled, line, offset } = resume ? previous : NOTHING_SETTLED
   const env: MathEnv & { references?: unknown; footnotes?: unknown } = { chatMath }
   const unfinished = fromLine(source, line, offset)
@@ -77,10 +82,16 @@ export function parseGrowingMobileMarkdownTree(
   }
   const split = finishedSplit(tokens, env.waitingMathLine)
   if (split > 0) {
-    const finished = parseMobileMarkdownTree(unfinished, false, chatMath, {
-      env,
-      tokens: tokens.slice(0, split)
-    })
+    const finished = parseMobileMarkdownTree(
+      unfinished,
+      false,
+      chatMath,
+      {
+        env,
+        tokens: tokens.slice(0, split)
+      },
+      documentImages
+    )
     link(finished)
     settled = [...settled, ...finished.children]
     for (const end = tokens[split]!.map![0]; line < end; line += 1) {
@@ -88,16 +99,22 @@ export function parseGrowingMobileMarkdownTree(
     }
     tokens = tokens.slice(split)
   }
-  const tail = parseMobileMarkdownTree(fromLine(source, line, offset), growing, chatMath, {
-    env,
-    tokens
-  })
+  const tail = parseMobileMarkdownTree(
+    fromLine(source, line, offset),
+    growing,
+    chatMath,
+    {
+      env,
+      tokens
+    },
+    documentImages
+  )
   if (env.references || env.footnotes) {
     return whole()
   }
   link(tail)
   return {
     root: { type: 'root', children: [...settled, ...tail.children] },
-    cache: { source, chatMath, link, settled, line, offset }
+    cache: { source, chatMath, documentImages, link, settled, line, offset }
   }
 }

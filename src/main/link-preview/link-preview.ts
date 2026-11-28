@@ -144,6 +144,10 @@ function fetchFaviconDataUrl(
   return fetchImageDataUrl(iconUrl, FAVICON_TYPES, MAX_FAVICON_BYTES, signal)
 }
 
+export function getLinkPreviewImage(url: string): Promise<string | null> {
+  return fetchImageDataUrl(url, FAVICON_TYPES, MAX_IMAGE_BYTES, AbortSignal.timeout(DEADLINE_MS))
+}
+
 async function fetchImageDataUrl(
   url: string,
   mimeTypes: ReadonlySet<string>,

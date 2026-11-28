@@ -122,7 +122,6 @@ const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
 
 export type HtmlImage = {
   start: number
-  end: number
   src: string
   alt: string
   width?: number
@@ -135,17 +134,16 @@ function pixels(value: string): number | undefined {
   return match ? Number(match[1]) : undefined
 }
 
-/** The `<img>` tags in HTML with an https source, where they sit, and their authored width. */
-export function htmlImages(html: string): HtmlImage[] {
+/** The allowed `<img>` tags in HTML, where they sit, and their authored size. */
+export function htmlImages(html: string, accepts: (src: string) => boolean): HtmlImage[] {
   return [...html.matchAll(imageTagPattern)].flatMap((match) => {
-    const src = attrValue(match[0], 'src')
+    const src = attrValue(match[0], 'src').trim()
     const width = pixels(attrValue(match[0], 'width'))
     const height = pixels(attrValue(match[0], 'height'))
-    return /^https:\/\//i.test(src)
+    return accepts(src)
       ? [
           {
             start: match.index,
-            end: match.index + match[0].length,
             src,
             alt: attrValue(match[0], 'alt'),
             ...(width ? { width } : {}),

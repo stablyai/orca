@@ -44,7 +44,13 @@ export function useMobileMarkdownTree(
   visuals: boolean,
   growing: boolean,
   chatMath: boolean,
-  { fileLinkExists, githubRepo, slackMentions = false, slackPeople = null }: MobileMarkdownTreeLinks
+  {
+    fileLinkExists,
+    githubRepo,
+    slackMentions = false,
+    slackPeople = null
+  }: MobileMarkdownTreeLinks,
+  documentImages: boolean
 ): {
   root: Root
   directives: NativeChatVisualDirective[]
@@ -76,12 +82,19 @@ export function useMobileMarkdownTree(
   // Streaming text grows a little each frame; blocks it finished earlier are not parsed again.
   const cache = useRef<MobileMarkdownTreeCache | null>(null)
   const root = useMemo(() => {
-    const parsed = parseGrowingMobileMarkdownTree(cache.current, source, growing, chatMath, link)
+    const parsed = parseGrowingMobileMarkdownTree(
+      cache.current,
+      source,
+      growing,
+      chatMath,
+      link,
+      documentImages
+    )
     // Safe if this render is discarded: a later parse reuses the cache only for text it prefixes.
     // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
     cache.current = parsed.cache
     return parsed.root
-  }, [source, growing, chatMath, link])
+  }, [source, growing, chatMath, link, documentImages])
   return {
     root,
     directives: visualLines?.directives ?? NO_DIRECTIVES,
