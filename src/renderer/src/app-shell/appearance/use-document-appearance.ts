@@ -10,6 +10,7 @@ import { syncThemeBackgroundVideo } from './theme-background-video'
 import { usePrefersReducedMotion } from '../../hooks/theme/usePrefersReducedMotion'
 import { useWindowActive } from '../../lib/window-activity/use-window-active'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../../shared/plugins/artifacts/plugin-theme-background'
+import { normalizeMarkdownReadingWidth } from '../../../../shared/editor/markdown/markdown-reading-width'
 import {
   findCodeEditorTheme,
   paintCodeEditorColors,
@@ -64,6 +65,12 @@ export function useDocumentAppearance(): void {
       String(surfaceOpacity)
     )
   }, [surfaceOpacity])
+  const markdownReadingWidth = useAppStore((s) =>
+    normalizeMarkdownReadingWidth(s.settings?.markdownReadingWidth)
+  )
+  useEffect(() => {
+    document.documentElement.dataset.markdownReadingWidth = markdownReadingWidth
+  }, [markdownReadingWidth])
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
   const registeredBackground = pluginTheme?.background

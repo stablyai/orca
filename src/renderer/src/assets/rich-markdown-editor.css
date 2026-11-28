@@ -264,6 +264,11 @@
   );
 }
 
+/* Full width: lift the reading cap, keep the editor's 32px side padding. */
+:root[data-markdown-reading-width='full'] .rich-markdown-editor-shell {
+  --rich-md-measure: 100%;
+}
+
 .rich-markdown-editor-shell.has-rich-markdown-review-notes {
   --rich-md-pad-end: var(--rich-md-rail-reserve);
 }
