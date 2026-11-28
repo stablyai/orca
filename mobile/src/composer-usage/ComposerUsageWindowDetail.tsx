@@ -218,7 +218,7 @@ export function ComposerUsageWindowDetail({
   const recentLabel = daily
     ? t('composerUsage.stats.last24h', 'Used last 24h')
     : t('composerUsage.stats.lastHour', 'Used last hour')
-  const length = formatUsageWindowLength(entry.window.windowMinutes)
+  const title = windowTitle(entry, t)
   return (
     <View style={styles.detail} testID={`composer-usage-window-${entry.id}`}>
       <View style={styles.headlineRow}>
@@ -285,17 +285,32 @@ export function ComposerUsageWindowDetail({
           <UsageHistoryChart
             model={chart}
             color={fill}
-            accessibilityLabel={t(
-              'composerUsage.chart.label',
-              '{{window}} usage over time, with a dashed line for an even pace',
-              { window: length }
-            )}
+            seriesLabel={
+              remaining
+                ? t('composerUsage.chart.legendLeft', '{{window}} left', { window: title })
+                : t('composerUsage.chart.legendUsed', '{{window}} used', { window: title })
+            }
+            accessibilityLabel={
+              chart.firstAt !== null
+                ? t(
+                    'composerUsage.chart.labelFullWindow',
+                    '{{window}} usage from the last reset to the next, recorded since {{first}}, with a dashed line for an even pace',
+                    {
+                      window: title,
+                      first: new Date(chart.firstAt).toLocaleString(locale, {
+                        weekday: 'short',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })
+                    }
+                  )
+                : t(
+                    'composerUsage.chart.labelExtrapolatedWindow',
+                    '{{window}} usage from the last reset to the next, extrapolated to now, with a dashed line for an even pace',
+                    { window: title }
+                  )
+            }
           />
-          <Text style={styles.caption}>
-            {chart.pace
-              ? t('composerUsage.chart.legend', 'Dashed line: an even pace to reset')
-              : t('composerUsage.chart.legendNoReset', 'Usage since the first reading')}
-          </Text>
         </View>
       ) : (
         <View style={styles.collecting} testID="composer-usage-chart-collecting">

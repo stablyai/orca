@@ -8614,10 +8614,18 @@
       "used": "{{percent}}% used"
     },
     "chart": {
-      "label": "{{window}} usage over time, with a dashed line for an even pace",
-      "legend": "Dashed line: an even pace to reset",
-      "legendNoReset": "Usage since the first reading",
-      "collecting": "Collecting usage history. The graph fills in as the desktop checks usage."
+      "collecting": "Collecting usage history. The graph fills in as the desktop checks usage.",
+      "legendLeft": "{{window}} left",
+      "legendUsed": "{{window}} used",
+      "labelFullWindow": "{{window}} usage from the last reset to the next, recorded since {{first}}, with a dashed line for an even pace",
+      "labelExtrapolatedWindow": "{{window}} usage from the last reset to the next, extrapolated to now, with a dashed line for an even pace",
+      "historySince": "History since {{when}} · {{duration}}",
+      "extrapolatedOnly": "No readings yet · extrapolated from reset",
+      "oneReading": "one reading",
+      "now": "Now",
+      "legendExtrapolated": "Extrapolated",
+      "legendPace": "Even pace to reset",
+      "legendFirst": "First reading"
     },
     "position": {
       "label": "Meter position",
