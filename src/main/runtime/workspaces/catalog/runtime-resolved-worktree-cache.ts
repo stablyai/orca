@@ -23,6 +23,7 @@ type ResolvedInFlight = {
 }
 export class RuntimeResolvedWorktreeCache {
   private resolved: ResolvedCache | null = null
+  private lastKnown: ResolvedWorktreeSnapshot | null = null
   private resolvedInFlight: ResolvedInFlight | null = null
   private resolvedGeneration = 0
 
@@ -32,6 +33,11 @@ export class RuntimeResolvedWorktreeCache {
 
   peek(): ResolvedCache | null {
     return this.resolved
+  }
+
+  /** Survives invalidation, for readers that prefer a possibly stale listing over none. */
+  peekLastKnown(): ResolvedWorktreeSnapshot | null {
+    return this.lastKnown
   }
 
   /** One published row by its host and id, or undefined when none is published. */
@@ -75,6 +81,7 @@ export class RuntimeResolvedWorktreeCache {
           expiresAt: Date.now() + ttlMs,
           byHostKey: indexByHostKey(result.worktrees)
         }
+        this.lastKnown = result
       }
       return result
     } finally {
