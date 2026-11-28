@@ -177,6 +177,23 @@ describe('executeManifest', () => {
   })
 })
 
+describe('executeManifest missing sources', () => {
+  // Electron's Windows Node can turn a failed opendir into a null handle (#50997); missing folders must reject.
+  it('rejects a missing required folder and skips a missing optional one', async () => {
+    const missing = join(installDir, 'resources', 'no-such-folder')
+    const staging = join(tempDir, 'staging-missing')
+    await expect(
+      executeManifest([{ sourcePath: missing, destRel: 'required', kind: 'dir' }], staging)
+    ).rejects.toThrow('missing required input')
+    await executeManifest(
+      [{ sourcePath: missing, destRel: 'optional', kind: 'dir', optional: true }],
+      staging
+    )
+    expect(existsSync(join(staging, 'optional'))).toBe(false)
+    await expect(removeDaemonHostTree(missing)).rejects.toThrow()
+  })
+})
+
 describe('removeDaemonHostTree', () => {
   it('removes a copy without following links out of it', async () => {
     const outside = join(tempDir, 'install-file.txt')
