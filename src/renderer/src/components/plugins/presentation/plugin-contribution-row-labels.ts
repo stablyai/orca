@@ -17,7 +17,7 @@ export function withMode(
 }
 
 /** Each item's text, or its id when it shows only an icon. */
-export function statusBarItemTitles(
+export function pluginItemTitles(
   items: readonly { id: string; text?: string }[] | undefined
 ): string[] {
   return (items ?? []).map((item) => item.text || item.id)
@@ -33,6 +33,34 @@ export function statusBarContributionRows(
     kind: 'statusBarItems',
     title,
     detail,
+    tone: 'default'
+  }))
+}
+
+export function composerItemContributionRows(
+  titles: readonly string[],
+  t: Translate
+): PluginContribution[] {
+  const detail = t('components.plugins.composerItems', 'Chat composer')
+  return titles.map((title, index) => ({
+    key: `composerItems:${index}`,
+    kind: 'composerItems',
+    title,
+    detail,
+    tone: 'default'
+  }))
+}
+
+export function newFileContributionRows(
+  files: readonly { title: string; extension: string }[],
+  t: Translate
+): PluginContribution[] {
+  const label = t('auto.components.settings.pluginContributions.newFileMenu', 'Adds to the + menu')
+  return files.map(({ title, extension }, index) => ({
+    key: `newFiles:${index}`,
+    kind: 'newFiles',
+    title,
+    detail: extension ? `${label} · ${extension}` : label,
     tone: 'default'
   }))
 }

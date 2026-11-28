@@ -1,3 +1,7 @@
+import {
+  validatePluginComposerItems,
+  type PluginComposerItemContribution
+} from '../contributions/plugin-composer-item-contribution'
 import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from '../contributions/plugin-command-actions'
 import { getKeybindingConflictIdentity } from '../../keybindings/matching-key'
@@ -34,6 +38,7 @@ type ContributionValidationManifest = {
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
+    composerItems: PluginComposerItemContribution[]
     mcpServers: { name: string }[]
   }
   capabilities: { kind: string }[]
@@ -173,6 +178,7 @@ export function validatePluginManifestContributions(
   }
 
   validatePluginStatusBarItems(manifest.contributes, ctx)
+  validatePluginComposerItems(manifest.contributes, ctx)
   const commands = new Map(manifest.contributes.commands.map((command) => [command.id, command]))
   for (const [index, command] of manifest.contributes.commands.entries()) {
     if (command.action !== undefined && !isPluginCommandAliasActionId(command.action)) {

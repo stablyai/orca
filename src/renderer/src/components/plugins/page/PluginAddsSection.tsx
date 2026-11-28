@@ -7,6 +7,7 @@ import {
   FilePlus,
   Highlighter,
   Languages,
+  MessageSquare,
   Palette,
   PanelBottom,
   PanelRight,
@@ -98,7 +99,8 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   vmRecipes: <Server />,
   mcpServers: <Plug />,
   newFiles: <FilePlus />,
-  statusBarItems: <PanelBottom />
+  statusBarItems: <PanelBottom />,
+  composerItems: <MessageSquare />
 }
 
 type AddsCommand = {
@@ -251,6 +253,7 @@ function useContributionRowActions(
       case 'vmRecipes':
       case 'mcpServers':
       case 'statusBarItems':
+      case 'composerItems':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }

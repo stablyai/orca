@@ -28,6 +28,9 @@ import type { NativeChatContextUsageSummary } from '../../../../../../shared/nat
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
 import type { NativeChatSteerChordPreview } from '../../../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 
+import { NativeChatPluginComposerItem } from './NativeChatPluginComposerItem'
+import { NativeChatPluginComposerItems } from './use-native-chat-plugin-composer-items'
+
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
   attachDisabled: boolean
@@ -102,6 +105,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 }: NativeChatComposerActionsProps): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
+  const pluginItems = useContext(NativeChatPluginComposerItems)
   const roomReplies = useContext(NativeChatRoomContext)?.replies
   const mode = useNativeChatPlanMode({
     surface: sessionOptionsSurface,
@@ -252,6 +256,16 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         />
       )
     },
+    ...pluginItems
+      .filter((item) => item.placement !== 'footer')
+      .map((item) => ({
+        id: `plugin:${item.key}`,
+        priority: -1,
+        content: <NativeChatPluginComposerItem item={item} />,
+        overflow: (close: () => void) => (
+          <NativeChatPluginComposerItem item={item} onInvoke={close} />
+        )
+      })),
     ...(contextUsage
       ? [
           {

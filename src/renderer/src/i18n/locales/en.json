@@ -24647,6 +24647,10 @@
         "sentNotesStillListed": "Notes sent, but they're still in the list.",
         "removeSentNotes": "Remove"
       }
+    },
+    "plugins": {
+      "composerItems": "Chat composer",
+      "newComposerItems": "Chat composer items"
     }
   },
   "dashboardPopout": {

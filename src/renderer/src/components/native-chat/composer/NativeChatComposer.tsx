@@ -1,5 +1,10 @@
 import { NativeChatTextAttachmentScope } from '../media/text/NativeChatTextAttachments'
 import { forwardRef } from 'react'
+import {
+  NativeChatPluginComposerItems,
+  nativeChatSessionModel,
+  useNativeChatPluginComposerItems
+} from './controls/use-native-chat-plugin-composer-items'
 import { NativeChatComposerPane } from './NativeChatComposerPane'
 import type {
   NativeChatComposerHandle,
@@ -8,12 +13,28 @@ import type {
 
 export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
   function NativeChatComposer(props, ref): React.JSX.Element {
+    const { structuredTransport, editSession, launchPrompt } = props
+    const chat =
+      editSession || launchPrompt || structuredTransport?.sessionPending
+        ? undefined
+        : structuredTransport
+    const items = useNativeChatPluginComposerItems(
+      {
+        sessionId: chat?.sessionId,
+        agent: props.agent,
+        runtime: chat?.runtime,
+        model: nativeChatSessionModel(chat?.optionSnapshot)
+      },
+      props.isWorking ?? false
+    )
     return (
       <NativeChatTextAttachmentScope
         key={props.paneKey}
         enabled={Boolean(props.structuredTransport)}
       >
-        <NativeChatComposerPane {...props} ref={ref} />
+        <NativeChatPluginComposerItems.Provider value={items}>
+          <NativeChatComposerPane {...props} ref={ref} />
+        </NativeChatPluginComposerItems.Provider>
       </NativeChatTextAttachmentScope>
     )
   }

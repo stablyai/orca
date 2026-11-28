@@ -262,6 +262,7 @@ export async function buildPluginList(
           ...(command.replaces ? { replaces: command.replaces } : {})
         })),
         statusBarItems: plugin.manifest.contributes.statusBarItems,
+        composerItems: plugin.manifest.contributes.composerItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
         mcpServers: plugin.manifest.contributes.mcpServers.map(pluginMcpServerListing),

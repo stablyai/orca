@@ -1280,6 +1280,7 @@
     "components.notes.sendButton.clearNotes",
     "components.notes.sendButton.clearPageNotes",
     "components.notes.sendButton.copyNotes",
+    "components.plugins.newComposerItems",
     "components.settings.agents.deleteHistoryWithWorkspace.cancel",
     "components.settings.agents.deleteHistoryWithWorkspace.chat",
     "components.settings.agents.deleteHistoryWithWorkspace.chatHistory",

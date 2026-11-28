@@ -13,11 +13,13 @@ import { languageDisplayName } from '@/i18n/ui-intl-formatters'
 import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
+  composerItemContributionRows,
   fontContributionRows,
+  newFileContributionRows,
   mcpServerContributionRows,
   statusBarContributionRows,
   vmRecipeContributionRows,
-  statusBarItemTitles,
+  pluginItemTitles,
   withMode
 } from './plugin-contribution-row-labels'
 
@@ -64,6 +66,7 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
+  composerItems: readonly string[]
   /** Each server's name with its URL or the command line that starts it. */
   mcpServers: readonly { name: string; detail: string }[]
 }
@@ -80,6 +83,7 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   vmRecipes: [],
   newFiles: [],
   statusBarItems: [],
+  composerItems: [],
   mcpServers: []
 }
 
@@ -115,7 +119,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
-    statusBarItems: statusBarItemTitles(contributes.statusBarItems),
+    statusBarItems: pluginItemTitles(contributes.statusBarItems),
+    composerItems: pluginItemTitles(contributes.composerItems),
     mcpServers: contributes.mcpServers.map(pluginMcpServerListing)
   }
 }
@@ -157,6 +162,7 @@ export function summaryContributionSource(
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
     statusBarItems: of('statusBarItems').map((item) => item.name),
+    composerItems: of('composerItems').map((item) => item.name),
     // Why no detail: install checks a summary's names, not its details, so a catalog's address or
     // command line could differ from what runs.
     mcpServers: of('mcpServers').map((item) => ({ name: item.name, detail: '' }))
@@ -287,21 +293,9 @@ export function describePluginContributions(
       tone: takeover ? 'warning' : 'default'
     })
   }
-  for (const [index, newFile] of source.newFiles.entries()) {
-    // Why no name: the row title is the menu item itself, so title and detail read as one line.
-    const label = t(
-      'auto.components.settings.pluginContributions.newFileMenu',
-      'Adds to the + menu'
-    )
-    rows.push({
-      key: `newFiles:${index}`,
-      kind: 'newFiles',
-      title: newFile.title,
-      detail: newFile.extension ? `${label} · ${newFile.extension}` : label,
-      tone: 'default'
-    })
-  }
+  rows.push(...newFileContributionRows(source.newFiles, t))
   rows.push(...statusBarContributionRows(source.statusBarItems, t))
+  rows.push(...composerItemContributionRows(source.composerItems, t))
   rows.push(...mcpServerContributionRows(source.mcpServers, t))
   rows.push(...vmRecipeContributionRows(source.vmRecipes, t))
   return rows
