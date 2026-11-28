@@ -13,6 +13,7 @@ import {
   isConnectorCardOffer,
   MobileNativeChatConnectorOfferRow
 } from '../MobileNativeChatConnectorOfferRow'
+import { MobileBotBackupSwitchCard } from './MobileBotBackupSwitchCard'
 import { MobileBotCreateOfferCard } from './MobileBotCreateOfferCard'
 import { MobileBotImportDoneCard } from './MobileBotImportDoneCard'
 import { MobileBotImportPlanCard } from './MobileBotImportPlanCard'
@@ -75,6 +76,9 @@ const MOBILE_BOT_CARDS: NativeChatPhoneBotCardRenderers<
   ),
   toolAdded: (added, { timestamp, fontScale }) => (
     <MobileBotToolAddedCard added={added} timestamp={timestamp} fontScale={fontScale} />
+  ),
+  botBackupModelSwitch: (switched, { timestamp, fontScale }) => (
+    <MobileBotBackupSwitchCard switched={switched} timestamp={timestamp} fontScale={fontScale} />
   ),
   webhook: (directive, { fontScale }) => (
     <MobileBotWebhookCard directive={directive} fontScale={fontScale} />

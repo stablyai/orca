@@ -30,6 +30,7 @@ import {
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMembersFrom, tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
+import { BotBackupSettingsRow } from './BotBackupModelsPage'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
@@ -354,6 +355,7 @@ export function BotSettingsRoot({
           page="agent"
           onOpen={() => open('agent')}
         />
+        <BotBackupSettingsRow bot={bot} onOpen={() => open('backup-models')} />
         <SettingsInsetRow
           icon={<Shield />}
           title={t('settings.bots.permissions', 'Permissions')}

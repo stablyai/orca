@@ -5,6 +5,7 @@ import type {
   NativeChatBotCardValues,
   NativeChatMessageBotCard
 } from '../../../../shared/native-chat/bot-cards/native-chat-bot-card-kind'
+import { NativeChatBotBackupSwitchCard } from './NativeChatBotBackupSwitchCard'
 import { NativeChatBotCreateOfferCard } from './NativeChatBotCreateOfferCard'
 import { NativeChatBotRequestCard } from './NativeChatBotRequestCard'
 import { NativeChatConnectorOfferCard } from './NativeChatConnectorOfferCard'
@@ -84,5 +85,7 @@ export function NativeChatMessageBotCardSurface({
   switch (card.kind) {
     case 'toolAdded':
       return <NativeChatToolAddedCard added={card.value} timestamp={timestamp} />
+    case 'botBackupModelSwitch':
+      return <NativeChatBotBackupSwitchCard switched={card.value} timestamp={timestamp} />
   }
 }

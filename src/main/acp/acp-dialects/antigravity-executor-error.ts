@@ -14,7 +14,7 @@ const EXECUTOR_API_ERROR =
  *  line, broken at its Status and Details, under Details. Other notices keep their own words. */
 export function antigravityExecutorErrorWords(
   notice: string
-): Pick<AcpTurnEnding, 'failureDetail' | 'failureFrame'> | undefined {
+): (Pick<AcpTurnEnding, 'failureDetail' | 'failureFrame'> & { stopReason?: string }) | undefined {
   // The lazy groups backtrack on a long line; agy's own lines are far shorter, and a longer one
   // keeps its raw words.
   if (notice.length > MAX_PARSED_LENGTH) {
@@ -27,12 +27,14 @@ export function antigravityExecutorErrorWords(
   const [, lead, code, rawMessage, status, details] = match
   const message = rawMessage.trim()
   const keyRejected = details !== undefined && KEY_REASON.test(details)
+  const rateLimited = code === '429' || status === 'RESOURCE_EXHAUSTED'
   const failureDetail = !message
     ? `Google returned error ${code} (${status}).`
     : keyRejected
       ? `Google rejected the API key: ${message}`
       : `Google returned an error: ${message}`
   return {
+    ...(rateLimited ? { stopReason: 'rate_limit' } : {}),
     failureDetail,
     failureFrame: [
       lead,

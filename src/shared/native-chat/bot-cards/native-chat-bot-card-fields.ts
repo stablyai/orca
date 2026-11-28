@@ -5,7 +5,10 @@ import type { BotImportDone, BotImportPlan } from '../../bots/bot-import-cards'
 import type { BotRequestCard } from '../../bots/bot-request-card'
 import type { GoogleSetupCardRef } from '../../google/google-setup-card'
 import type { ComposioSetupCardRef } from '../../composio/composio-setup-card'
-import type { AgentJournalToolAddedItem } from '../../agent-journal-orca-card-items'
+import type {
+  AgentJournalBotBackupModelSwitchItem,
+  AgentJournalToolAddedItem
+} from '../../agent-journal-orca-card-items'
 
 /** Each card a status line can carry in place of its text, by its field. */
 export type NativeChatBotCardFieldValues = {
@@ -36,6 +39,8 @@ export type NativeChatBotCardFields = {
 export type NativeChatBotMessageCardFieldValues = {
   /** Projected fact: this chat's bot gave itself a tool. */
   toolAdded: Omit<AgentJournalToolAddedItem, 'kind'>
+  /** Projected fact: this chat's bot switched to a backup model or returned to its primary. */
+  botBackupModelSwitch: Omit<AgentJournalBotBackupModelSwitchItem, 'kind'>
 }
 
 /** Read only through `nativeChatBotMessageCardOf`, like the status-line cards. */

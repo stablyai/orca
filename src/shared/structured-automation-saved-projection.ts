@@ -74,6 +74,23 @@ export function projectBotItemNoteItem(item: AgentJournalRenderItem): NativeChat
   }
 }
 
+/** A bot backup-model switch notice, drawn by desktop and mobile; null for anything else. */
+export function projectBotBackupModelSwitchItem(
+  item: AgentJournalRenderItem
+): NativeChatMessage | null {
+  if (item.body.kind !== 'bot-backup-model-switch') {
+    return null
+  }
+  const { kind: _kind, ...botBackupModelSwitch } = item.body
+  return {
+    ...agentJournalItemRowOrigin(item),
+    ...agentJournalLinkageFields(item),
+    role: 'system',
+    blocks: [],
+    botBackupModelSwitch
+  }
+}
+
 /** Orca's transcript cards (a started worker, a saved automation or ended wait, an added tool, a run
  *  that couldn't start); every other row as usual. */
 export function projectStructuredOrcaCardItem(
@@ -94,6 +111,9 @@ export function projectStructuredOrcaCardItem(
   }
   if (item.body.kind === 'bot-item-note') {
     return projectBotItemNoteItem(item)
+  }
+  if (item.body.kind === 'bot-backup-model-switch') {
+    return projectBotBackupModelSwitchItem(item)
   }
   return projectAutomationSavedItem(item) ?? projectStructuredAgentStartItem(item)
 }

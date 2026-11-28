@@ -146,9 +146,11 @@ const cloudCodeErrorSchema = lazyZodSchema(() =>
   })
 )
 
+const CLOUD_CODE_ERROR_PREFIX = /^Cloud Code Assist API error \((\d{3})\):\s*/
+
 function promptErrorDetail(error: AcpAgentError): string | undefined {
   const text = acpErrorDataWords(error.data) ?? error.message
-  const prefix = /^Cloud Code Assist API error \(\d{3}\):\s*/.exec(text)
+  const prefix = CLOUD_CODE_ERROR_PREFIX.exec(text)
   if (!prefix) {
     return undefined
   }
@@ -158,6 +160,29 @@ function promptErrorDetail(error: AcpAgentError): string | undefined {
   } catch {
     return undefined
   }
+}
+
+function promptFailure(error: AcpAgentError, at: number) {
+  const quota = antigravityQuotaFailure(
+    [acpErrorDataWords(error.data), error.message].join('\n'),
+    at
+  )
+  if (quota) {
+    return quota
+  }
+  if (
+    error.code === 429 ||
+    [acpErrorDataWords(error.data), error.message].some(
+      (text) => text && CLOUD_CODE_ERROR_PREFIX.exec(text)?.[1] === '429'
+    )
+  ) {
+    return { stopReason: 'rate_limit' }
+  }
+  const text = `${error.message} ${acpErrorDataWords(error.data) ?? ''}`
+  if (/\b(?:RESOURCE_EXHAUSTED|quota exceeded|rate[ -]?limit(?:ed| exceeded)?)\b/i.test(text)) {
+    return { stopReason: 'rate_limit' }
+  }
+  return undefined
 }
 
 // agy 1.5+ retries an empty model reply until it gets output, sending this text each time.
@@ -249,6 +274,7 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
+  promptFailure,
   sessionLost: (error, sessionId) => {
     const detail = acpErrorDataWords(error.data)
     return (
@@ -263,8 +289,6 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
     acpReplyNoticeFailure(method, params, FAILURE_NOTICE, {}, (notice) =>
       noticeFailure(notice, at)
     ),
-  promptFailure: (error, at) =>
-    antigravityQuotaFailure([acpErrorDataWords(error.data), error.message].join('\n'), at),
   providerRetry: (update) => {
     const cause =
       update.sessionUpdate === 'agent_message_chunk' && update.content.type === 'text'

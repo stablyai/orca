@@ -297,10 +297,13 @@ export class BotController {
   }
 
   /** Not a user edit: the Chat module names which session is the bot's Chat. */
-  setChatSession(botId: string, chatSessionId: string): Promise<Bot> {
+  setChatSession(botId: string, chatSessionId: string, expected?: string): Promise<Bot> {
     return this.serialize(async () => {
       const store = requireBotStore(this.deps.getStore())
       const bot = requireStoredBot(store, botId)
+      if (expected !== undefined && bot.chatSessionId !== expected) {
+        throw new Error('bot_home_chat_changed')
+      }
       const next: Bot = { ...bot, chatSessionId, updatedAt: Date.now() }
       store.saveBot(next)
       this.deps.notifyBotsWritten(false)

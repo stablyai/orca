@@ -17,7 +17,8 @@ import {
 } from '../../../../shared/rpc-contract/bot-avatar-params'
 import { googleSetupRuns } from '../../../google/google-setup-runs'
 import { readSharedBotActivity } from '../../../bots/bot-activity-host'
-import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-chat-session'
+import { botOnSetup } from '../../../../shared/bots/bot-agent-setup'
+import { runtimeBotChats, startBotSession } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { connectedClientRosters } from '../../orchestration/federation/client-asks/client-ask-listeners'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -27,6 +28,8 @@ import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
 import { BOT_CREATE_METHOD } from './bots-create'
 import { BOT_AGENT_CHOICES_METHOD } from './bots-agent-choices'
+import { runtimeBotBackupFailover } from '../../../bots/bot-usage-limit-failover-runtime'
+import { BOT_BACKUP_MODEL_METHODS } from './bots-backup-models'
 import { BOT_CHATS_METHODS, botChatsSummary, readBotChats } from './bots-chats'
 import { BOT_CHAT_TREE_METHODS } from './bots-chat-tree'
 import { BOT_MEMORY_METHODS } from './bots-memory'
@@ -49,11 +52,19 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
   }
+  if (params.updates.backupModels !== undefined) {
+    ownerOnly(context, 'Only the owner can change backup models.')
+  }
   const { members, addMembers: added, permissionMode } = params.updates
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
   const bot = await context.runtime.bots.update(params.botId, params.updates)
+  if (params.updates.backupModels !== undefined) {
+    void runtimeBotBackupFailover(context.runtime)
+      .failover.onBackupConfigChanged(bot.id)
+      .catch(() => {})
+  }
   if (params.updates.skillProjects !== undefined) {
     // Replies after the links and caches change, so a `/` menu opened next lists them.
     await relinkBotSkills(bot, context.runtime.listRepos())
@@ -183,6 +194,7 @@ export const BOT_METHODS = [
   }),
   BOT_CREATE_METHOD,
   BOT_AGENT_CHOICES_METHOD,
+  ...BOT_BACKUP_MODEL_METHODS,
   ...BOT_CHATS_METHODS,
   ...BOT_CHAT_TREE_METHODS,
   ...BOT_MEMORY_METHODS,
@@ -296,7 +308,8 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
-      const onAgent = botOnAgent(bot, params.agent)
+      const onAgent =
+        params.agent && params.agent !== bot.agent ? botOnSetup(bot, { agent: params.agent }) : bot
       // Like a blank page: an empty chat already open is the new chat, not one more.
       const empty = await openEmptyBotChat(runtimeBotChatTreeHost(runtime), onAgent).catch(
         (error: unknown) => {
@@ -306,7 +319,14 @@ export const BOT_METHODS = [
       )
       // The owner's own chat, as Home Chat is: recorded so a /clear never leaves it unattributed.
       const actsFor = { actsFor: [...OWNER_ACTS_FOR] }
-      return { sessionId: empty ?? (await startBotSession(runtime, onAgent, { actsFor })) }
+      return {
+        sessionId:
+          empty ??
+          (await startBotSession(runtime, onAgent, {
+            actsFor,
+            ...(params.agent ? { skipBackupResolve: true } : {})
+          }))
+      }
     }
   })
 ]

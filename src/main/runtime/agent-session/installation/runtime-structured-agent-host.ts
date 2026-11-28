@@ -19,6 +19,7 @@ import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../sess
 import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../../session-tabs/chat/structured-session-create-support'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
+import { getRegisteredBotBackupFailoverHostHook } from '../../../bots/bot-backup-status-read'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../../terminal/wait/terminal-wait-visible-probe'
 import {
   hostShellEnvironment,
@@ -70,8 +71,10 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
       .modelCatalog
   }
 
+  /** Overridden by OrcaRuntimeService to connect bot backup-model failover. */
   /** Read the setting live so turning it off stops every pending automatic continuation. */
   protected usageLimitAutoContinueHostDeps(): StructuredAgentSessionHostDeps['usageLimitAutoContinue'] {
+    const botBackupFailover = getRegisteredBotBackupFailoverHostHook(this)
     return {
       isEnabled: () =>
         this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
@@ -84,7 +87,8 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
         shellEnvironment: () => hostShellEnvironment(true),
         shellEnvironmentRevision: hostShellEnvironmentRevision,
         claudeLaunchEnv: (settings) => this.structuredAgentLaunchEnv('claude', settings)
-      })
+      }),
+      ...(botBackupFailover ? { botBackupFailover } : {})
     }
   }
 

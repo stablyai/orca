@@ -21,6 +21,10 @@ import {
   createBotOwnerChatCheck,
   createBotUnansweredQuestionNote
 } from './bot-unanswered-question-note'
+import { registerBotBackupFailoverHostHook } from './bot-backup-status-read'
+import { runtimeBotBackupFailover } from './bot-usage-limit-failover-runtime'
+import { holdBotTurnWatch } from './bot-run-turn-watch'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 
@@ -40,6 +44,31 @@ export function botTurnEnded(
   void import('../runtime/rpc/methods/orchestration/messaging/bot-request-outcome')
     .then(({ settleBotRequestTurn }) => settleBotRequestTurn(runtime, sessionId, turnId, ended))
     .catch((error: unknown) => console.warn('[bots] could not settle a bot request turn', error))
+  if (ended?.outcome === 'success') {
+    void runtimeBotBackupFailover(runtime)
+      .failover.onTurnSucceeded(sessionId)
+      .catch(() => {})
+  } else if (ended?.outcome === 'cancellation') {
+    void runtimeBotBackupFailover(runtime)
+      .failover.onTurnInterrupted(sessionId)
+      .catch(() => {})
+  } else if (ended?.outcome === 'failure') {
+    const host = getStructuredAgentSessionHost()
+    if (host) {
+      const releaseWatch = holdBotTurnWatch(sessionId)
+      void host
+        .journalReads(sessionId)
+        .then((reads) => reads.usageLimitCut())
+        .then(async (cut) => {
+          const failover = runtimeBotBackupFailover(runtime).failover
+          if (!(await failover.onTurnInterrupted(sessionId)) && cut) {
+            await failover.onUsageLimitCut(sessionId, cut)
+          }
+        })
+        .catch(() => {})
+        .finally(releaseWatch)
+    }
+  }
 }
 
 /** Bot session work the runtime base needs but only the whole runtime can do. */
@@ -75,6 +104,7 @@ function activeWorkSlot(
 }
 
 export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
+  registerBotBackupFailoverHostHook(runtime)
   const isOwnerChat = createBotOwnerChatCheck({
     getOrchestrationDb: () => runtime.getOrchestrationDb(),
     listAutomationRuns: () => runtime.listAutomationRuns(),

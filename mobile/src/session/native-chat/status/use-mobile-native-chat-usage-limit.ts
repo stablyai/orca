@@ -14,6 +14,7 @@ import type { AgentJournalRenderItem } from '../../../../../src/shared/agent-ses
 import type { AgentJournalCardSubmission } from '../../../../../src/shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { useMobileBotBackupUsageLimit } from './use-mobile-bot-backup-usage-limit'
 import { mobileStructuredSessionStatusFeed } from '../agent-session/mobile-structured-session-status-feed'
 import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
 import type {
@@ -36,6 +37,14 @@ export type MobileNativeChatUsageLimit = {
   canSwitchAccount: boolean | undefined
   /** Sends desktop's "Continue where you left off." for this cut. */
   continueNow: () => void
+  /** Bot backup-model failover state for this cut when the session belongs to a bot. */
+  backupState?: 'switching' | 'ask-backup' | 'backups-exhausted'
+  backupResetsAt?: number
+  backupSwitchLabel?: string
+  backupSwitching?: boolean
+  backupSwitchFailed?: boolean
+  backupContinuationFailed?: boolean
+  switchToBackup?: (() => void) | null
 }
 
 const noSubscription = (): (() => void) => () => {}
@@ -43,7 +52,7 @@ const noSubscription = (): (() => void) => () => {}
 export function useMobileNativeChatUsageLimit(
   chat: Pick<
     MobileStructuredAgentSessionArgs,
-    'client' | 'sessionId' | 'enabled' | 'connected' | 'hostSupport'
+    'client' | 'sessionId' | 'sourceIdentity' | 'enabled' | 'connected' | 'hostSupport'
   >,
   journal: {
     items: readonly AgentJournalRenderItem[]
@@ -105,6 +114,30 @@ export function useMobileNativeChatUsageLimit(
     [feed, sessionId, cut]
   )
   const continueAt = useSyncExternalStore(subscribe, readContinueAt, readContinueAt)
+  const readBackupState = useCallback(() => {
+    if (!feed || !sessionId || turnItemId === null) {
+      return undefined
+    }
+    const published = feed.getSnapshot().get(sessionId)?.usageLimitContinue
+    return published?.turnItemId === turnItemId ? published.backupState : undefined
+  }, [feed, sessionId, turnItemId])
+  const backupState = useSyncExternalStore(subscribe, readBackupState, readBackupState)
+  const readBackupResetsAt = useCallback(() => {
+    if (!feed || !sessionId || turnItemId === null) {
+      return undefined
+    }
+    const published = feed.getSnapshot().get(sessionId)?.usageLimitContinue
+    return published?.turnItemId === turnItemId ? published.backupResetsAt : undefined
+  }, [feed, sessionId, turnItemId])
+  const backupResetsAt = useSyncExternalStore(subscribe, readBackupResetsAt, readBackupResetsAt)
+  const backupAction = useMobileBotBackupUsageLimit({
+    live,
+    client,
+    sessionId,
+    sourceIdentity: chat.sourceIdentity,
+    turnItemId,
+    backupState
+  })
   // The host publishes no state for a cut it can't schedule and republishes one that ages out.
   const kind = nativeChatUsageLimitAutoContinueKind(state, { schedulable: true, localHost: false })
   // The chat's last options answer predates the cut (the host says no until one exists), so ask
@@ -189,7 +222,10 @@ export function useMobileNativeChatUsageLimit(
       // A re-ask at a later cursor keeps this cut's last answer, so the row never blanks out.
       canSwitchAccount:
         switchAnswer?.turnItemId === turnItemId ? switchAnswer.canSwitch : live ? undefined : false,
-      continueNow
+      continueNow,
+      ...(backupState ? { backupState } : {}),
+      ...(backupResetsAt !== undefined ? { backupResetsAt } : {}),
+      ...backupAction
     }
   }, [
     turnItemId,
@@ -201,6 +237,9 @@ export function useMobileNativeChatUsageLimit(
     failedCut,
     switchAnswer,
     live,
-    continueNow
+    continueNow,
+    backupState,
+    backupResetsAt,
+    backupAction
   ])
 }

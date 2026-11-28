@@ -3,10 +3,11 @@ import { BotImportedFromSchema } from './bot-import'
 import { BotSharedFromSchema } from './bot-shared-from'
 import { AGENT_CHAT_PERMISSION_MODES } from '../agent-launch/permissions/agent-chat-permission-mode'
 import { optionalConnectorAvatarUrl } from '../connector-message-asker'
-import type { NativeChatAgent } from '../agent-launch/permissions/agent-chat-permission-support'
+import { BOT_AGENTS, BOT_HELD_BACK_AGENTS, type BotAgent } from './bot-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host/execution-host'
 import { BotLookAroundSchema } from './bot-look-around'
 import { BotLaunchSchema } from './bot-launch'
+import { BotActiveBackupSchema, BotBackupModelsSchema } from './bot-backup-models'
 import { BotTidyUpSchema } from './bot-tidy-up'
 import { BotOfferAnswerSchema } from './bot-offer-answers'
 import { BotCancelledWaitSchema } from './bot-cancelled-waits'
@@ -15,34 +16,7 @@ import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_AGENT_SUCCESSORS, BOT_RETIRED_AGENTS, isBotRetiredAgent } from './bot-retired-agents'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
-/** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = [] as const
-
-/** Bots run in a native chat; every native-chat agent but the held-back ones. */
-export const BOT_AGENTS = [
-  'claude',
-  'codex',
-  'grok',
-  'opencode',
-  'omp',
-  'pi',
-  'antigravity',
-  'cursor',
-  'hermes',
-  'copilot',
-  'opencode2',
-  'kimi',
-  'kiro',
-  'aug',
-  'goose',
-  'kilo',
-  'mimo-code',
-  'droid',
-  'qwen-code',
-  'cline',
-  'devin',
-  'codebuddy'
-] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+export { BOT_AGENTS, BOT_HELD_BACK_AGENTS, type BotAgent }
 
 /** A bot agent as old records and peers name it: a retired agent reads as its successor. */
 export const BotAgentReadSchema = lazyZodSchema(() =>
@@ -165,6 +139,8 @@ export const BotSchema = lazyZodSchema(() =>
     /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
     // A malformed value reads as unset rather than losing the whole bot.
     launch: BotLaunchSchema.optional().catch(undefined),
+    backupModels: BotBackupModelsSchema.optional().catch(undefined),
+    activeBackup: BotActiveBackupSchema.optional().catch(undefined),
     notifications: BotNotificationsSchema,
     members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
     /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
@@ -240,7 +216,6 @@ export const BotSchema = lazyZodSchema(() =>
   })
 )
 
-export type BotAgent = (typeof BOT_AGENTS)[number]
 export type BotMember = z.infer<typeof BotMemberSchema>
 export type BotNotifications = z.infer<typeof BotNotificationsSchema>
 export type BotSlackApp = z.infer<typeof BotSlackAppSchema>

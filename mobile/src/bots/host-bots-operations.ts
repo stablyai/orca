@@ -25,6 +25,8 @@ export const phoneBotSchema = z.looseObject({
   agent: z.string(),
   permissionMode: salvagedOptional('permissionMode', z.enum(AGENT_CHAT_PERMISSION_MODES)),
   launch: BotSchema.shape.launch,
+  backupModels: BotSchema.shape.backupModels,
+  activeBackup: BotSchema.shape.activeBackup,
   notifications: BotNotificationsSchema,
   members: salvagingArray(BotMemberSchema),
   // Only whether each is set: an automation's events need their connector.

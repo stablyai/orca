@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import {
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
-  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
+  BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY
 } from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
@@ -28,6 +29,7 @@ import {
 import { MobileBotPermissionsPage } from './MobileBotPermissionsPage'
 import { MobileBotIdentityPage } from './MobileBotIdentityPage'
 import { MobileBotAgentPage } from './MobileBotAgentPage'
+import { MobileBotBackupModelsPage } from './MobileBotBackupModelsPage'
 import { MobileBotComputerPage } from './MobileBotComputerPage'
 import { MobileBotWhoCanAskPage } from './MobileBotWhoCanAskPage'
 import { ensureBotHomeChat } from './host-bots-read'
@@ -70,6 +72,7 @@ export function MobileBotSettingsTab(props: {
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
   const takesColor = useRouteCapability(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
   const takesOutfit = useRouteCapability(BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
+  const takesBackupModels = useRouteCapability(BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY)
   const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const locked = saving || !props.online
@@ -274,6 +277,21 @@ export function MobileBotSettingsTab(props: {
       />
     )
   }
+  if (page === 'backup-models') {
+    return (
+      <MobileBotBackupModelsPage
+        bot={bot}
+        client={props.client}
+        online={props.online}
+        disabled={locked}
+        hostName={props.hostName}
+        banner={offlineBanner}
+        onBack={backToSettings}
+        onSave={(backupModels) => save({ backupModels })}
+        showToast={props.showToast}
+      />
+    )
+  }
   if (page === 'computer') {
     return (
       <MobileBotComputerPage
@@ -329,6 +347,7 @@ export function MobileBotSettingsTab(props: {
       }
       onDelete={() => setDeleting(true)}
       rows={features.flatMap((feature) => feature.rows)}
+      takesBackupModels={takesBackupModels}
       header={
         <>
           {props.onBack ? (

@@ -12,6 +12,7 @@ import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycl
 import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
+import type { BotCarriedMessage } from './bot-chat-queued-carry'
 
 /** Why a run has no result of its own (result_unavailable). */
 export type BotRunUnavailable =
@@ -53,6 +54,39 @@ type BotTurnHost = Pick<
 
 /** Streaming changes the journal many times a second; the run re-reads it once it settles. */
 const JOURNAL_WAKE = { flushMs: 300, maxWaitMs: 2_000 }
+
+type SessionRebindListener = (
+  fromSessionId: string,
+  toSessionId: string,
+  handoffSend: BotRunSend | undefined,
+  carried: ReadonlyMap<string, BotCarriedMessage>
+) => void
+const rebindListeners = new Set<SessionRebindListener>()
+const handoffsInFlight = new Map<string, Set<Promise<void>>>()
+
+export function holdBotTurnWatch(sessionId: string): () => void {
+  const holds = handoffsInFlight.get(sessionId) ?? new Set<Promise<void>>()
+  const hold = Promise.withResolvers<void>()
+  holds.add(hold.promise)
+  handoffsInFlight.set(sessionId, holds)
+  return () => {
+    holds.delete(hold.promise)
+    if (holds.size === 0) {
+      handoffsInFlight.delete(sessionId)
+    }
+    hold.resolve()
+  }
+}
+
+/** Notifies active bot run watches that `fromSessionId` handed off cross-agent to `toSessionId`. */
+export function notifyBotTurnWatchRebind(
+  fromSessionId: string,
+  toSessionId: string,
+  handoffSend: BotRunSend | undefined,
+  carried: ReadonlyMap<string, BotCarriedMessage>
+): void {
+  rebindListeners.forEach((listener) => listener(fromSessionId, toSessionId, handoffSend, carried))
+}
 
 const unavailable = (reason: BotRunUnavailable): BotTurnEnd => ({ unavailable: reason })
 
@@ -151,31 +185,90 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
   })
   return {
     dispose,
-    next: async (send) => {
+    next: async (initialSend) => {
+      let current = initialSend
+      let handoffOpener: BotRunSend | undefined
+      let active = true
+      let subscribeSeq = 0
+      let unsubscribe = (): void => {}
       let changes = 0
       const journalChanged = createKeyedTrailingEdgeCoalescer(() => {
         changes += 1
         wake()
       }, JOURNAL_WAKE)
-      // Without it the run still wakes at turn ends.
-      const unsubscribe = await host
-        .subscribe({
-          id: `bot-run:${randomUUID()}`,
-          sessionId: send.sessionId,
-          emit: (event) => {
-            if (event.type === 'batch' || event.type === 'reset') {
-              journalChanged.schedule(send.sessionId)
+      const subscribeSession = (sessionId: string) =>
+        host
+          .subscribe({
+            id: `bot-run:${randomUUID()}`,
+            sessionId,
+            emit: (event) => {
+              if (event.type === 'batch' || event.type === 'reset') {
+                journalChanged.schedule(sessionId)
+              }
             }
+          })
+          .catch(() => () => {})
+      const attachSubscription = (sessionId: string): Promise<void> => {
+        const seq = ++subscribeSeq
+        unsubscribe()
+        unsubscribe = () => {}
+        return subscribeSession(sessionId).then((nextUnsub) => {
+          if (!active || seq !== subscribeSeq || current.sessionId !== sessionId) {
+            nextUnsub()
+            return
           }
+          unsubscribe = nextUnsub
         })
-        .catch(() => () => {})
-      const seen = () => (turnEnds.get(send.sessionId) ?? 0) + changes
+      }
+      const onRebind: SessionRebindListener = (
+        fromSessionId,
+        toSessionId,
+        replacementOpener,
+        carried
+      ) => {
+        if (current.sessionId !== fromSessionId) {
+          return
+        }
+        changes += 1
+        const moved = carried.get(current.clientMessageId)
+        if (moved) {
+          current = {
+            ...current,
+            sessionId: toSessionId,
+            fingerprint: moved.from === current.fingerprint ? moved.to : current.fingerprint
+          }
+          void attachSubscription(toSessionId)
+        } else {
+          handoffOpener = replacementOpener
+        }
+        wake()
+      }
+      // Register before awaiting initial subscription so an intervening handoff is never missed.
+      rebindListeners.add(onRebind)
+      const seen = () => (turnEnds.get(current.sessionId) ?? 0) + changes
       try {
+        await attachSubscription(current.sessionId)
         for (;;) {
           const before = seen()
+          const readSend = current
           // A journal that can't be read can't tell which turn was the run's.
-          const end = await readRunTurn(host, send).catch(() => unavailable('unread'))
+          const end = await readRunTurn(host, readSend).catch(() => unavailable('unread'))
+          const holds = handoffsInFlight.get(readSend.sessionId)
+          if (end && holds) {
+            await Promise.all(holds)
+            continue
+          }
+          // Discard any read that completed after a cross-agent handoff replaced the watched send.
+          if (current !== readSend) {
+            continue
+          }
           if (end) {
+            if ('outcome' in end && end.outcome === 'failure' && handoffOpener) {
+              current = handoffOpener
+              handoffOpener = undefined
+              void attachSubscription(current.sessionId)
+              continue
+            }
             return end
           }
           while (seen() === before) {
@@ -186,6 +279,8 @@ export function watchBotTurnEnds(host: BotTurnHost): BotTurnWatch {
           }
         }
       } finally {
+        active = false
+        rebindListeners.delete(onRebind)
         journalChanged.dispose()
         unsubscribe()
         dispose()

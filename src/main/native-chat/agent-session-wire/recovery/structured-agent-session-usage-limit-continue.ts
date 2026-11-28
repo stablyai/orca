@@ -1,7 +1,6 @@
 import type { UsageLimitContinueDeps } from './structured-agent-session-usage-limit-continue-deps'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import {
-  USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   switchFreeIdentity as attemptIdentity,
   usageLimitContinueIdentity as identity,
   type HostUsageLimitCut
@@ -10,13 +9,13 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-cuts'
+import { projectUsageLimitContinueSummary } from './structured-agent-session-usage-limit-backup'
 import { usageLimitContinueMutation } from './structured-agent-session-usage-limit-continue-message'
 import {
   cancelsCut,
   usageLimitCutContinuable,
-  isUsageLimitChatOpen,
   openUsageLimitChats,
-  usageLimitCutDisposition,
+  readUsageLimitCutDisposition,
   type UsageLimitCutDisposition
 } from './structured-agent-session-usage-limit-disposition'
 
@@ -122,64 +121,51 @@ export class StructuredAgentSessionUsageLimitContinue {
     id: string,
     read: HostUsageLimitCut | null
   ): AgentSessionStatusSummary['usageLimitContinue'] => {
+    const backup = read
+      ? this.deps.host.usageLimitAutoContinue?.botBackupFailover?.readCutState(id, read.turnItemId)
+      : undefined
     const cut = read && this.holds.withSwitchReset(id, read)
-    // A cut Orca can never continue shows only the manual actions, whatever the setting.
-    if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
-      return undefined
-    }
-    const hold = this.holds.verdict(id, cut, this.deps.now())
+    const sched = cut && this.holds.schedulable(id, cut, this.deps.now()) ? cut : null
+    const attempt = this.attempts.get(id)
     const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
-    const attempt = this.attempts.get(id)
-    const state = cancelsCut(cancel, cut)
-      ? 'cancelled'
-      : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
-          (attempt?.identity === attemptIdentity(cut) &&
-            (attempt.count >= 5 || attempt.unconfirmed))
-        ? 'failed'
-        : this.eligible(id, cut)
-          ? 'scheduled'
-          : 'off'
-    // An unknown reset has no time to promise, yet fresh room still releases it: say nothing.
-    // A relaunch's stand-in reset is no reset at all, so it never reads as "can continue now".
-    if (hold.awaitingRoom || (hold.unknownReset && state === 'scheduled')) {
-      return undefined
-    }
-    return {
-      turnItemId: cut.turnItemId,
-      resetsAt: cut.resetsAt,
-      // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
-      ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt
-        ? { continueAt: hold.resetsAt }
-        : {}),
-      state
-    }
-  }
-
-  /** See usageLimitCutDisposition; the cut read as the journal stands now. */
-  disposition = async (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> => {
-    const cut = await this.cold.read(id, true)
-    const record = this.deps.host.store.getRecord(id)
-    const attempt = this.attempts.get(id)
-    return usageLimitCutDisposition({
-      cut,
-      turnItemId,
-      continuable:
-        cut !== null &&
-        this.enabled() &&
-        this.holds.schedulable(id, cut, this.deps.now()) &&
-        record?.location.executionHostId === this.deps.host.store.hostId &&
-        isUsageLimitChatOpen(this.deps.host.store, id),
-      cancel: record?.usageLimitContinueCancel,
-      attempt: cut && attempt?.identity === attemptIdentity(cut) ? attempt : undefined
+    return projectUsageLimitContinueSummary({
+      read,
+      cut: sched,
+      hold: sched ? this.holds.verdict(id, sched, this.deps.now()) : null,
+      cancels: sched ? cancelsCut(cancel, sched) : false,
+      attemptFailed:
+        sched !== null &&
+        attempt?.identity === attemptIdentity(sched) &&
+        (attempt.count >= 5 || Boolean(attempt.unconfirmed)),
+      eligible: sched ? this.eligible(id, sched) : false,
+      backup
     })
   }
+
+  disposition = (id: string, turnItemId: string): Promise<UsageLimitCutDisposition> =>
+    readUsageLimitCutDisposition({
+      host: this.deps.host,
+      sessionId: id,
+      turnItemId,
+      readCut: () => this.cold.read(id, true),
+      isEnabled: () => this.enabled(),
+      schedulable: (cut) => this.holds.schedulable(id, cut, this.deps.now()),
+      attempt: () => this.attempts.get(id)
+    })
 
   private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
     return this.continuable(id, cut) && this.holds.schedulable(id, cut, this.deps.now())
   }
 
-  private continuable = (id: string, cut: HostUsageLimitCut): boolean =>
-    !this.disposed && usageLimitCutContinuable(this.deps.host, id, cut)
+  private continuable = (id: string, cut: HostUsageLimitCut): boolean => {
+    const backup = this.deps.host.usageLimitAutoContinue?.botBackupFailover
+    return (
+      !this.disposed &&
+      !backup?.isSwitching(id, cut.turnItemId) &&
+      !backup?.isSuperseded(id, cut.turnItemId) &&
+      usageLimitCutContinuable(this.deps.host, id, cut)
+    )
+  }
 
   cancel = (input: { sessionId: string; turnItemId: string; resetsAt: number }): Promise<void> =>
     this.deps.serialize(input.sessionId, async () => {
@@ -220,6 +206,7 @@ export class StructuredAgentSessionUsageLimitContinue {
         // Before the overdue check: after a restart only the reading still knows a later reset,
         // and a switched account frees the chat before it, even when its reset is unknown.
         if (read) {
+          this.deps.host.usageLimitAutoContinue?.botBackupFailover?.onCutObserved(id, read)
           await this.holds.attribute(id, this.deps.host, read, this.deps.now())
         }
         const cut = read && this.holds.withSwitchReset(id, read)
@@ -273,6 +260,9 @@ export class StructuredAgentSessionUsageLimitContinue {
   }
 
   private async send(id: string, cut: Cut): Promise<void> {
+    if (!this.continuable(id, cut)) {
+      return
+    }
     // Earlier sends take time; moved sources resolve again, once per new witness for every chat.
     if (!this.holds.bindingHolds(id, this.deps.host, this.holds.attributionBinding(id))) {
       await this.holds.attribute(id, this.deps.host, cut, this.deps.now())

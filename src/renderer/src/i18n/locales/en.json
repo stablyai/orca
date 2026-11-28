@@ -1895,7 +1895,45 @@
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
       "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
-      "teamDisabled": "Bots are turned off by your team."
+      "teamDisabled": "Bots are turned off by your team.",
+      "backupModels": {
+        "summaryActive": "On backup · {{model}}",
+        "summaryOff": "Off",
+        "modeAuto": "Auto",
+        "modeAsk": "Ask",
+        "summaryCount": "{{count}} · {{mode}}",
+        "activeTitle": "Using backup model",
+        "activeDetailReset": "Running on {{backup}}. Returns to {{primary}} after {{time}}.",
+        "activeDetail": "Running on {{backup}}. Returns to {{primary}} when its limit resets.",
+        "returnNow": "Return now",
+        "returnPending": "Returns to the primary model after this turn finishes.",
+        "returnFailed": "Couldn’t return to the primary model.",
+        "modeAutoFoot": "When {{primary}} hits its usage limit, {{name}} switches to the first available backup automatically.",
+        "modeAskFoot": "When {{primary}} hits its usage limit, {{name}} pauses and asks in chat before switching.",
+        "askBeforeSwitching": "Ask before switching",
+        "orderTitle": "Backup order",
+        "returnFoot": "{{name}} automatically returns to {{primary}} once its usage limit resets.",
+        "empty": "No backup models configured. Add models from this or another installed agent to keep {{name}} running when {{primary}} hits its usage limit.",
+        "atLimitReset": "At limit · {{time}}",
+        "atLimit": "At limit",
+        "unavailable": "Unavailable",
+        "moveUp": "Move {{model}} up",
+        "moveUpShort": "Move up",
+        "moveDown": "Move {{model}} down",
+        "moveDownShort": "Move down",
+        "remove": "Remove {{model}}",
+        "loadingModels": "Loading models…",
+        "add": "Add backup model",
+        "searchModels": "Search models…",
+        "noModels": "No matching models.",
+        "allAgents": "All",
+        "backToModels": "Back to models",
+        "reasoningEffort": "Reasoning effort",
+        "defaultEffort": "Default",
+        "loadFailed": "Couldn't load available models.",
+        "retry": "Retry",
+        "title": "Backup models"
+      }
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -22644,7 +22682,15 @@
         "statusCanContinueNowAuto": "{{agent}} can continue now. Orca will continue this chat at {{time}}.",
         "statusCanContinueNow": "{{agent}} can continue now.",
         "titleCanContinueNow": "{{agent}} can continue now",
-        "turnOnAutoContinue": "Auto-continue on reset"
+        "turnOnAutoContinue": "Auto-continue on reset",
+        "backupSwitching": "Switching to backup model…",
+        "backupsExhaustedReset": "Primary and backup models hit their usage limits · next reset at {{time}}.",
+        "backupsExhausted": "Primary and backup models hit their usage limits.",
+        "backupSelect": "Choose backup model",
+        "backupRemember": "Switch automatically next time",
+        "backupSwitchAction": "Switch & continue",
+        "backupSwitchFailed": "Could not switch to the backup model.",
+        "backupContinuationFailed": "Switched to the backup model. Continue the interrupted turn manually."
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
@@ -23219,6 +23265,14 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "botBackupSwitch": {
+        "returnedLead": "Returned to",
+        "switchedLead": "Switched to backup",
+        "returnedDetail": "after usage limit reset",
+        "returnedManualDetail": "returned manually",
+        "switchedDetailReset": "while {{from}} is at limit · resets {{time}}",
+        "switchedDetail": "while {{from}} is at its usage limit"
       }
     },
     "tab": {
@@ -25452,7 +25506,8 @@
     "cancel": "Cancel",
     "unassigned": "Unassigned",
     "copy": "Copy",
-    "delete": "Delete"
+    "delete": "Delete",
+    "remove": "Remove"
   },
   "terminal": {
     "recentImages": {
@@ -30615,7 +30670,8 @@
       "youAndOthers_one": "You and {{count}} other",
       "youAndOthers_other": "You and {{count}} others",
       "shareAction": "Share",
-      "sharingOn": "On"
+      "sharingOn": "On",
+      "backupModels": "Backup models"
     },
     "items": {
       "activity": {

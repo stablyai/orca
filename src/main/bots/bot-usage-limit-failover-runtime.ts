@@ -1,0 +1,292 @@
+// Wires BotUsageLimitGate and BotUsageLimitFailover to OrcaRuntimeService, host sessions and RateLimitService.
+import type { AgentJournalBotBackupModelSwitchItem } from '../../shared/agent-journal-orca-card-items'
+import type { BotAgent } from '../../shared/bot-types'
+import { isBotAgent } from '../../shared/bot-types'
+import type { BotBackupStatusResult } from '../../shared/bots/bot-backup-models'
+import { agentSessionAccountHomePath } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { rateLimitSpentUntil } from '../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { usageLimitContinueMutation } from '../native-chat/agent-session-wire/recovery/structured-agent-session-usage-limit-continue-message'
+import { canonicalUsageLimitAccountHome } from '../runtime/agent-session/installation/usage-limit-account-usage'
+import { hostReadyBotAgents } from '../runtime/rpc/methods/bots-agent-choices'
+import { botOfSession } from './bot-session-tabs'
+import { startBotSession } from './bot-chat-session'
+import { closeReplacedBotChat } from './bot-chat-replacement'
+import { carryQueuedMessages } from './bot-chat-queued-carry'
+import { showBotSessionTab } from './bot-session-tab-show'
+import { holdBotTurnWatch, notifyBotTurnWatchRebind } from './bot-run-turn-watch'
+import { checkStartupBackupReturns, readBotBackupStatus } from './bot-backup-status-read'
+import { BotUsageLimitGate, type BotUsageLimitKey } from './bot-usage-limit-gate'
+import { BotUsageLimitFailover } from './bot-usage-limit-failover'
+import { applySameAgentOptionsOnHost } from './bot-backup-session-options'
+import { botHomeFolder } from './bot-home'
+
+const AVAILABLE_AGENTS_CACHE_MS = 15_000
+
+export type RuntimeBotBackupFailover = {
+  readonly gate: BotUsageLimitGate
+  readonly failover: BotUsageLimitFailover
+  readonly readStatus: (botId: string) => Promise<BotBackupStatusResult>
+  readonly dispose: () => void
+}
+
+export function createRuntimeBotUsageLimitFailover(
+  runtime: OrcaRuntimeService
+): RuntimeBotBackupFailover {
+  let cachedAgents: { at: number; agents: ReadonlySet<BotAgent> } | null = null
+
+  const availableAgents = async (): Promise<ReadonlySet<BotAgent>> => {
+    const now = Date.now()
+    if (cachedAgents && now - cachedAgents.at < AVAILABLE_AGENTS_CACHE_MS) {
+      return cachedAgents.agents
+    }
+    const choices = await hostReadyBotAgents(runtime).catch((): BotAgent[] => [])
+    const agents = new Set<BotAgent>(choices)
+    if (agents.size > 0) {
+      cachedAgents = { at: now, agents }
+    }
+    return agents
+  }
+
+  const resolveAccountHomeKey = async (agent: BotAgent, sessionId?: string): Promise<string> => {
+    const host = getStructuredAgentSessionHost()
+    if (sessionId && host) {
+      const record = host.deps.store.getRecord(sessionId)
+      if (record?.provider === agent) {
+        const home =
+          (await host.deps.launchAccountHome?.(record).catch(() => null)) ?? record.accountHome
+        const path = agentSessionAccountHomePath(home)
+        return path ? canonicalUsageLimitAccountHome(path) : 'default'
+      }
+    }
+    const home = await runtime.resolveStructuredAgentAccountHome(agent, 'catalog').catch(() => null)
+    const path = home && agentSessionAccountHomePath(home)
+    return path ? canonicalUsageLimitAccountHome(path) : 'default'
+  }
+
+  const readSpentUntil = async (key: BotUsageLimitKey): Promise<number | null | undefined> => {
+    if (key.agent !== 'claude' && key.agent !== 'codex') {
+      return undefined
+    }
+    const service = runtime.getUsageRateLimits()
+    const source = service?.usageReadingAccount(key.agent)
+    if (
+      !service ||
+      !source ||
+      (await canonicalUsageLimitAccountHome(source.home)) !== key.accountHomeKey
+    ) {
+      return undefined
+    }
+    if (service.usageReadingAccount(key.agent) !== source) {
+      return undefined
+    }
+    const reading = service.usageReading(key.agent)
+    return reading?.status === 'ok' ? rateLimitSpentUntil(reading) : undefined
+  }
+
+  let failoverRef: BotUsageLimitFailover | null = null
+  const gate = new BotUsageLimitGate({
+    readSpentUntil,
+    onLimitReleased: (key) => {
+      void failoverRef?.onLimitReleased(key).catch(() => {})
+    },
+    onLimitChanged: () => {
+      runtime.notifyBotsChanged({ kinds: ['settings'] })
+    }
+  })
+
+  const appendSwitchCard = async (
+    sessionId: string,
+    item: AgentJournalBotBackupModelSwitchItem,
+    at: number
+  ): Promise<void> => {
+    const host = getStructuredAgentSessionHost()
+    const destination = host ? await host.captureAgentStartDestination(sessionId) : null
+    if (host && destination) {
+      await host.appendAgentStart(destination, item, at)
+    }
+  }
+
+  const failover = new BotUsageLimitFailover({
+    gate,
+    listBots: () => runtime.bots.list(),
+    botOfSession: (sessionId) => botOfSession(runtime.bots, sessionId),
+    updateBot: (botId, edit) => runtime.bots.update(botId, edit),
+    getSessionInfo: async (sessionId) => {
+      const host = getStructuredAgentSessionHost()
+      const record = host?.deps.store.getRecord(sessionId)
+      if (!host || !record || !isBotAgent(record.provider)) {
+        return null
+      }
+      const work = await host.currentWork(sessionId).catch(() => null)
+      return {
+        sessionId,
+        provider: record.provider,
+        ...(record.options?.model ? { model: record.options.model } : {}),
+        options: record.options,
+        isIdle: !work || (!work.working() && !work.hasActionablePrompt()),
+        runtimeFence: record.lease.runtimeFence
+      }
+    },
+    resolveAccountHomeKey,
+    holdTurnWatch: holdBotTurnWatch,
+    availableAgents,
+    isBackupModelOffered: async (bot, target, sessionId) => {
+      const catalog = await runtime.structuredAgentModelCatalog().catch(() => null)
+      const listing = await catalog
+        ?.read({
+          agent: target.agent,
+          ...(sessionId ? { sessionId } : { workspacePath: botHomeFolder(bot) }),
+          waitForListing: false,
+          verifiedOnly: true
+        })
+        .catch(() => null)
+      // A cold or provisional listing does not prove that a configured model disappeared.
+      return (
+        !listing ||
+        listing.origin === 'unknown' ||
+        listing.listingInProgress === true ||
+        listing.models.some(
+          (model) => model.id === target.model || model.resolvedModel === target.model
+        )
+      )
+    },
+    applySameAgentOptions: applySameAgentOptionsOnHost,
+    sendSameAgentContinuation: async (sessionId, cut, runtimeFence) => {
+      const host = getStructuredAgentSessionHost()
+      if (!host) {
+        return false
+      }
+      const mutation = await usageLimitContinueMutation({
+        sessionId,
+        cut,
+        at: Date.now(),
+        expectedRuntimeFence: runtimeFence
+      })
+      const result = await host.send({ callerKey: 'trusted-local:bot-backup-failover' }, mutation)
+      return result.ok
+    },
+    appendSwitchCard,
+    publishSessionStatus: (sessionId) => {
+      const host = getStructuredAgentSessionHost()
+      if (host) {
+        void host.readUsageLimitContinue(sessionId).catch(() => {})
+      }
+      runtime.notifyBotsChanged({ kinds: ['chats', 'settings'] })
+    },
+    listBotSessionIds: (botId) => {
+      const bot = runtime.bots.list().find((entry) => entry.id === botId)
+      const host = getStructuredAgentSessionHost()
+      if (!bot || !host) {
+        return []
+      }
+      const homeKey = folderWorkspaceKey(bot.folderWorkspaceId)
+      const ids = new Set<string>([
+        ...host.deps.store.listVisibleSessionIds(),
+        ...host.deps.store.listBackgroundSessionIds()
+      ])
+      return [...ids].filter(
+        (id) => host.deps.store.getConversation(id)?.location.workspaceId === homeKey
+      )
+    },
+    readSessionCut: async (sessionId) => {
+      const reads = await getStructuredAgentSessionHost()
+        ?.journalReads(sessionId)
+        .catch(() => null)
+      return reads ? reads.usageLimitCut() : null
+    },
+    crossAgentHandoff: {
+      readContinuationContext: async (sessionId, workspaceId) => {
+        const host = getStructuredAgentSessionHost()
+        const history = host
+          ? await host.history({ sessionId, direction: 'tail' }).catch(() => null)
+          : null
+        if (!host || !history?.ok) {
+          return null
+        }
+        const expectedCursor =
+          history.page.liveCursor ?? history.page.window.newest ?? history.page.window.nextCursor
+        return host.continuationContext({ sessionId, workspaceId, expectedCursor })
+      },
+      readConversationName: (sessionId) =>
+        getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.conversationName,
+      isBackgroundSession: (sessionId) =>
+        getStructuredAgentSessionHost()?.deps.store.isSessionInBackground(sessionId) === true,
+      isTabVisible: (sessionId) =>
+        getStructuredAgentSessionHost()?.deps.store.isSessionTabVisible(sessionId) === true,
+      readActsFor: (sessionId) =>
+        runtime.getOrchestrationDb().getBotConversationActsFor(sessionId) ?? null,
+      startSession: (botOnTarget, input) =>
+        startBotSession(runtime, botOnTarget, {
+          sessionId: input.sessionId,
+          background: input.background,
+          actsFor: input.actsFor,
+          message: { text: input.text, clientMessageId: input.clientMessageId },
+          beforeFirstMessage: input.beforeFirstMessage,
+          skipBackupResolve: true
+        }),
+      setHomeChatSession: async (botId, sessionId, expected) => {
+        await runtime.bots.setChatSession(botId, sessionId, expected)
+      },
+      carryQueuedMessages: (fromSessionId, toSessionId) => {
+        const host = getStructuredAgentSessionHost()
+        return host
+          ? carryQueuedMessages(host, fromSessionId, toSessionId)
+          : Promise.resolve({ complete: false, messages: new Map<string, never>() })
+      },
+      closeOldHomeChat: async (sessionId) => {
+        await closeReplacedBotChat(runtime, sessionId)
+      },
+      showTab: (bot, sessionId) => showBotSessionTab(runtime, bot, sessionId),
+      nameSession: async (sessionId, name) => {
+        await getStructuredAgentSessionHost()?.setUserConversationName(sessionId, name, 'rename')
+      },
+      appendSwitchCard,
+      linkStore: () => {
+        try {
+          return runtime.requireStore()
+        } catch {
+          return null
+        }
+      },
+      onSessionHandedOff: (fromSessionId, toSessionId, handoffSend, carried) => {
+        runtime.lookAround.rebindSession(fromSessionId, toSessionId)
+        notifyBotTurnWatchRebind(fromSessionId, toSessionId, handoffSend, carried)
+        runtime.notifyBotsChanged({ kinds: ['chats', 'bot'] })
+      }
+    }
+  })
+  failoverRef = failover
+
+  queueMicrotask(() =>
+    checkStartupBackupReturns(runtime.bots.list(), { gate, failover, resolveAccountHomeKey })
+  )
+  const onCatalogWarmed = (): void => runtime.notifyBotsChanged({ kinds: ['settings'] })
+  const statusDeps = { runtime, gate, availableAgents, resolveAccountHomeKey, onCatalogWarmed }
+  return {
+    gate,
+    failover,
+    readStatus: (botId) => readBotBackupStatus(statusDeps, botId),
+    dispose: () => gate.dispose()
+  }
+}
+
+const runtimeFailovers = new WeakMap<OrcaRuntimeService, RuntimeBotBackupFailover>()
+
+export function runtimeBotBackupFailover(runtime: OrcaRuntimeService): RuntimeBotBackupFailover {
+  const existing = runtimeFailovers.get(runtime)
+  if (existing) {
+    return existing
+  }
+  const instance = createRuntimeBotUsageLimitFailover(runtime)
+  runtimeFailovers.set(runtime, instance)
+  return instance
+}
+
+export function peekRuntimeBotBackupFailover(
+  runtime: OrcaRuntimeService
+): RuntimeBotBackupFailover | null {
+  return runtimeFailovers.get(runtime) ?? null
+}

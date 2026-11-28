@@ -58,3 +58,10 @@ it("reads agy's quota notices as usage limits, resetting when they say, and noth
   const ending = acpPromptFailureEnding(ANTIGRAVITY_ACP_DIALECT, refused, AT)
   expect([ending.stopReason, ending.usageLimit]).toEqual(['rate_limit', { resetsAt: AT + HOUR }])
 })
+
+it('reads Cloud Code HTTP 429 without quota wording as a usage limit', () => {
+  const refused = new AcpAgentError(-32603, 'Internal error', {
+    details: 'Cloud Code Assist API error (429): Too many requests'
+  })
+  expect(acpPromptFailureEnding(ANTIGRAVITY_ACP_DIALECT, refused, AT).stopReason).toBe('rate_limit')
+})

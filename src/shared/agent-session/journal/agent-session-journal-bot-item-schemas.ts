@@ -67,5 +67,21 @@ export const BOT_JOURNAL_ITEM_BODIES = [
         })
       )
     })
+  ),
+  lazyZodSchema(() =>
+    z.object({
+      kind: z.literal('bot-backup-model-switch'),
+      switchId: z.string().min(1),
+      botId: z.string().min(1),
+      direction: z.enum(['to-backup', 'to-primary']),
+      returnReason: z.enum(['limit-reset', 'manual']).optional(),
+      fromAgent: z.string().min(1),
+      fromModel: z.string().min(1).optional(),
+      toAgent: z.string().min(1),
+      toModel: z.string().min(1).optional(),
+      linkedSessionId: z.string().min(1).optional(),
+      resetsAt: z.number().finite().optional(),
+      at: z.number().finite()
+    })
   )
 ] as const

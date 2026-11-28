@@ -35,6 +35,8 @@ function orcaCardMessageId(entry: AgentJournalOrcaCardItem | OrcaStatusLine): st
       return `automation-run-not-started:${entry.run.runId}`
     case 'bot-item-note':
       return `bot-item-note:${entry.noteId}`
+    case 'bot-backup-model-switch':
+      return `bot-backup-model-switch:${entry.switchId}`
   }
 }
 

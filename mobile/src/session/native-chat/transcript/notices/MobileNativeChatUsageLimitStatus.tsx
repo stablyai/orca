@@ -2,6 +2,7 @@ import { useCallback, useContext, useSyncExternalStore, type ReactNode } from 'r
 import { Text, View } from 'react-native'
 import { ArrowLeftRight, Gauge, Play } from 'lucide-react-native'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { formatUsageLimitResetClock } from '../../../../../../src/shared/agent-session/failures/agent-session-usage-limit'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { feedback, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
@@ -105,7 +106,32 @@ export function MobileNativeChatUsageLimitStatus({
   )
   const switchAccount = actions?.canSwitchAccount ? (openAccounts ?? null) : null
   const continueNow = actions && resetPassed ? actions.continueNow : null
-  if (!status && !switchAccount && !continueNow) {
+  const backupSwitch =
+    actions?.backupState === 'ask-backup' ? (actions.switchToBackup ?? null) : null
+  const backupStatusLine =
+    actions?.backupState === 'switching'
+      ? t('chat.usageLimit.backupSwitching', 'Switching to backup model…')
+      : actions?.backupState === 'backups-exhausted'
+        ? actions.backupResetsAt !== undefined
+          ? t(
+              'chat.usageLimit.backupsExhaustedReset',
+              'Primary and backup models hit their usage limits · next reset at {{time}}.',
+              { time: formatUsageLimitResetClock(actions.backupResetsAt, undefined, locale) }
+            )
+          : t(
+              'chat.usageLimit.backupsExhausted',
+              'Primary and backup models hit their usage limits.'
+            )
+        : null
+  if (
+    !status &&
+    !switchAccount &&
+    !continueNow &&
+    !backupSwitch &&
+    !backupStatusLine &&
+    !actions?.backupSwitchFailed &&
+    !actions?.backupContinuationFailed
+  ) {
     return null
   }
   const meta = [styles.meta, scaledType(typography.metaSize, fontScale)]
@@ -129,6 +155,11 @@ export function MobileNativeChatUsageLimitStatus({
           ) : null}
         </Text>
       ) : null}
+      {backupStatusLine ? (
+        <Text selectable={INLINE_TEXT_SELECTION} style={meta}>
+          {backupStatusLine}
+        </Text>
+      ) : null}
       {actions?.cancelFailed ? (
         <Text style={meta}>
           {t(
@@ -137,8 +168,30 @@ export function MobileNativeChatUsageLimitStatus({
           )}
         </Text>
       ) : null}
-      {continueNow || switchAccount ? (
+      {actions?.backupSwitchFailed ? (
+        <Text style={meta}>
+          {t('chat.usageLimit.backupSwitchFailed', "Couldn't switch to backup model. Try again.")}
+        </Text>
+      ) : null}
+      {actions?.backupContinuationFailed ? (
+        <Text style={meta}>
+          {t(
+            'chat.usageLimit.backupContinuationFailed',
+            'Switched to the backup model. Continue the interrupted turn manually.'
+          )}
+        </Text>
+      ) : null}
+      {continueNow || switchAccount || backupSwitch ? (
         <View style={styles.pills}>
+          {backupSwitch ? (
+            <MobileNativeChatNoticePill
+              label={t('chat.usageLimit.switchToBackup', 'Switch to {{target}}', {
+                target: actions?.backupSwitchLabel ?? t('chat.usageLimit.backupFallback', 'backup')
+              })}
+              Icon={ArrowLeftRight}
+              onPress={backupSwitch}
+            />
+          ) : null}
           {continueNow ? (
             <MobileNativeChatNoticePill
               label={t('common.continue', 'Continue')}

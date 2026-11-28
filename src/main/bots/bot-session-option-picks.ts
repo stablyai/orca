@@ -15,10 +15,14 @@ type SessionLookup = Parameters<typeof botOfSession>[2]
 export async function keepSessionPicksOnBot(
   bots: Pick<BotController, 'enabled' | 'list' | 'update'>,
   mutation: NativeChatSessionOptionSettingsMutation,
-  host?: SessionLookup
+  host?: SessionLookup,
+  isProgrammatic?: (sessionId: string) => boolean
 ): Promise<boolean> {
   if (mutation.type !== 'apply-picks' || !mutation.sessionId || !bots.enabled()) {
     return false
+  }
+  if (isProgrammatic?.(mutation.sessionId)) {
+    return true
   }
   const bot = botOfSession(bots, mutation.sessionId, host)
   if (!bot) {
@@ -28,13 +32,16 @@ export async function keepSessionPicksOnBot(
   if (bot.agent !== mutation.agent) {
     return true
   }
-  if (sameLaunch(botLaunchWithPicks(bot.launch, mutation.picks), bot.launch)) {
+  if (!bot.activeBackup && sameLaunch(botLaunchWithPicks(bot.launch, mutation.picks), bot.launch)) {
     return true
   }
   await bots
     .update(bot.id, (current) =>
       current.agent === mutation.agent
-        ? { launch: botLaunchWithPicks(current.launch, mutation.picks) ?? null }
+        ? {
+            launch: botLaunchWithPicks(current.launch, mutation.picks) ?? null,
+            ...(current.activeBackup ? { activeBackup: null } : {})
+          }
         : {}
     )
     .catch((error: unknown) => {

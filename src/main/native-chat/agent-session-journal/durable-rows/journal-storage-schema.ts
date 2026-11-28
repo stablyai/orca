@@ -52,7 +52,8 @@ const [
   toolAddedBody,
   waitEndedBody,
   automationRunNotStartedBody,
-  botItemNoteBody
+  botItemNoteBody,
+  botBackupModelSwitchBody
 ] = AgentJournalKnownSchemas.bodies
 
 const text = lazyZodSchema(() => z.string().optional())
@@ -252,7 +253,8 @@ export const storedItemBody = lazyZodSchema(() =>
     toolAddedBody,
     waitEndedBody.extend(storedWaitEnded),
     automationRunNotStartedBody.extend(storedAutomationRunNotStarted),
-    botItemNoteBody.extend(storedBotItemNote)
+    botItemNoteBody.extend(storedBotItemNote),
+    botBackupModelSwitchBody
   ])
 )
 

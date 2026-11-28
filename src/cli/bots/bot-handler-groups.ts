@@ -7,6 +7,19 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('./bot.js')).BOT_HANDLERS
   },
   {
+    name: 'bot-backup',
+    keys: [
+      'bot backup list',
+      'bot backup add',
+      'bot backup remove',
+      'bot backup reorder',
+      'bot backup mode',
+      'bot backup clear',
+      'bot backup return'
+    ],
+    load: async () => (await import('./bot-backup-models.js')).BOT_BACKUP_HANDLERS
+  },
+  {
     name: 'bot-create',
     keys: ['bot create'],
     load: async () => (await import('./bot-create.js')).BOT_CREATE_HANDLERS

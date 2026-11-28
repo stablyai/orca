@@ -12,6 +12,7 @@ import { BotMemoryBody, BotSoulBody } from '../../settings/bots/BotSoulAndMemory
 import { BotTidyUpSection } from '../../settings/bots/BotTidyUpSection'
 import { BotToolsSection } from '../../settings/bots/BotToolsSection'
 import { botFolderDisplay } from '../bot-presentation'
+import { BotBackupModelsPage } from './BotBackupModelsPage'
 import { BotComputerPage } from './BotComputerPage'
 import { BotMemoryTopicFiles } from './BotMemoryTopicFiles'
 import type { BotSettingsPlace } from './bot-settings-place'
@@ -52,6 +53,8 @@ export function BotSettingsSubpage({
   switch (place.page) {
     case 'agent':
       return <BotAgentSettings bot={bot} update={update} />
+    case 'backup-models':
+      return <BotBackupModelsPage bot={bot} update={update} />
     case 'permissions':
       return <BotPermissionSettings bot={bot} update={update} />
     case 'computer':

@@ -26,9 +26,14 @@ import type { AgentSessionOptionsResult } from '../../../../../shared/agent-sess
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatFileLinkContext } from '@/components/native-chat/links/actions/native-chat-file-link-context'
+import { useBotForWorkspace } from '@/components/bots/bot-workspace'
+import { botHostTakes } from '@/components/bots/bot-host-capability'
+import { BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { NativeChatBotBackupSwitchRow } from './NativeChatBotBackupSwitchRow'
 
 export type UsageLimitActions = {
   account: ReactNode
+  botBackup?: ReactNode
   handOff?: () => void
   disabled: boolean
   /** Hand off is gathering the chat's context. */
@@ -195,9 +200,38 @@ export function NativeChatUsageLimitActionsProvider({
     messages,
     view.onUsageLimitHandOffStarted
   ])
+  const hostId = executionHostIdForStructuredTarget(pane.target)
+  const bot = useBotForWorkspace(directory?.worktreeId ?? null, hostId)
+  const botBackup = useMemo<ReactNode>(
+    () =>
+      active &&
+      pane.isVisible &&
+      bot &&
+      view.usageLimitTurnItemId &&
+      view.usageLimitBackupState &&
+      botHostTakes(bot, BOTS_BACKUP_MODELS_RUNTIME_CAPABILITY) ? (
+        <NativeChatBotBackupSwitchRow
+          bot={bot}
+          sessionId={pane.sessionId}
+          turnItemId={view.usageLimitTurnItemId}
+          backupState={view.usageLimitBackupState}
+          backupResetsAt={view.usageLimitBackupResetsAt}
+        />
+      ) : null,
+    [
+      active,
+      bot,
+      pane.isVisible,
+      pane.sessionId,
+      view.usageLimitBackupResetsAt,
+      view.usageLimitBackupState,
+      view.usageLimitTurnItemId
+    ]
+  )
   const actions = useMemo<UsageLimitActions>(
     () => ({
       account,
+      ...(botBackup ? { botBackup } : {}),
       disabled,
       preparing: handOffPreparing,
       ...(canHandOff || (loading && isTuiAgent(pane.agent))
@@ -208,7 +242,7 @@ export function NativeChatUsageLimitActionsProvider({
           }
         : {})
     }),
-    [account, canHandOff, disabled, handOffPreparing, loading, openHandOff, pane.agent]
+    [account, botBackup, canHandOff, disabled, handOffPreparing, loading, openHandOff, pane.agent]
   )
   const stopView = useMemo(
     () => ({

@@ -3,10 +3,13 @@
 // New bot, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
+  agentMenuRowReady,
+  agentMenuRowSupportsChat,
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { BOT_AGENTS, type BotAgent } from '../../../../shared/bot-types'
 import {
   botAgentChoices,
   newBotAgent,
@@ -50,7 +53,7 @@ function availabilitySnapshot(
   })
 }
 
-export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+async function hostAgentMenuRows(runtime: OrcaRuntimeService, offerAgentSetup: boolean) {
   const settings = runtime.requireStore().getSettings()
   const [detected, roster] = await Promise.all([
     detectAgentsOnHost(HOST_DEFAULT_AGENT_DETECTION, hostDetectionOptions(runtime)).catch(
@@ -86,15 +89,34 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
     chatAgents,
     hostChatAnswer,
     chatProgram: (agent) => roster?.get(agent)?.chatProgram ?? 'unknown',
-    offerAgentSetup: true,
+    offerAgentSetup,
     hostPlatform: process.platform
   })
+  return { rows, detectedIds, roster, defaultTuiAgent: settings.defaultTuiAgent }
+}
+
+export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
+  const { rows, detectedIds, defaultTuiAgent } = await hostAgentMenuRows(runtime, true)
   const model = { state: 'settled' as const, rows, detection: { detectedIds } }
   const agents = botAgentChoices(model)
   return {
     agents,
-    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent))
+    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, defaultTuiAgent))
   }
+}
+
+/** Only agents genuinely installed and runnable on this host now (excludes uninstalled setup offers). */
+export async function hostReadyBotAgents(runtime: OrcaRuntimeService): Promise<BotAgent[]> {
+  const { rows, roster } = await hostAgentMenuRows(runtime, false)
+  return BOT_AGENTS.filter((agent) => {
+    const program = roster?.get(agent)?.chatProgram
+    if (program === 'installable' || program === 'missing') {
+      return false
+    }
+    return rows.some(
+      (row) => row.agent === agent && agentMenuRowReady(row) && agentMenuRowSupportsChat(row)
+    )
+  })
 }
 
 export const BOT_AGENT_CHOICES_METHOD = defineMethod({

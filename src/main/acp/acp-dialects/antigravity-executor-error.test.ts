@@ -130,4 +130,16 @@ describe('Antigravity failed-turn row for a Google API error', () => {
     expect(row?.text).toBe(notice)
     expect(row && 'providerFrame' in row && row.providerFrame).toBeFalsy()
   })
+
+  it('classifies HTTP 429 RESOURCE_EXHAUSTED executor errors as usageLimitReached', () => {
+    const quotaNotice =
+      '⚠ agent executor error: generating and executing: Error 429, Message: Resource has been exhausted (e.g. check quota)., Status: RESOURCE_EXHAUSTED, Details: []\n'
+    const [row] = failedRow(quotaNotice)
+    expect(row).toMatchObject({
+      tone: 'warning',
+      failure: {
+        kind: 'usageLimitReached'
+      }
+    })
+  })
 })
