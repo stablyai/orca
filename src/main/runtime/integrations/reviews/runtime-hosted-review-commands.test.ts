@@ -13,13 +13,27 @@ vi.mock('../../../github/pull-requests/refresh/pr-refresh-coordinator', () => ({
 }))
 
 it('hands each served PR read to the host cache recorder with its request hints', async () => {
-  const repo = { id: 'repo-1', path: '/home/me/repo', kind: 'git' } as Repo
+  const repo: Repo = {
+    id: 'repo-1',
+    path: '/home/me/repo',
+    displayName: 'repo',
+    badgeColor: '#000',
+    addedAt: 0
+  }
   const outcome = {
     kind: 'found' as const,
-    pr: { number: 42, url: 'https://github.com/o/r/pull/42', state: 'merged' },
+    pr: {
+      number: 42,
+      title: 'Feature',
+      url: 'https://github.com/o/r/pull/42',
+      state: 'merged' as const,
+      checksStatus: 'success' as const,
+      updatedAt: '',
+      mergeable: 'UNKNOWN' as const
+    },
     fetchedAt: 1
   }
-  vi.mocked(runHostedPRRead).mockResolvedValue(outcome as never)
+  vi.mocked(runHostedPRRead).mockResolvedValue(outcome)
   const recordPROutcome = vi.fn()
   const commands = new RuntimeHostedReviewCommands({
     resolveRepo: async () => repo,

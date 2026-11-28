@@ -33,6 +33,7 @@ import { installOrcadConnectorHost } from '../orcad/orcad-orca-account'
 import {
   attachOrcadRuntimeServices,
   publishOrcadRuntimeGraph,
+  registerOrcadRuntimeShutdownSteps,
   repairOrcadDuplicatePtyPanes,
   startOrcadHostSearchAndModels,
   startOrcadManagedRuntimeReleases
@@ -203,10 +204,13 @@ export async function activateBackendRuntime(
   const relay = await attachOrcadRuntimeServices({
     runtime,
     store: profileStore,
-    userDataPath: runtimeUserDataPath,
     registerCleanup,
     attachAccounts: () => accountLaunch?.attachToRuntime(runtime)
   })
+  // Restore prior desktop-pushed account selection before automations or CLI launches.
+  const { restoreOrcadHostAccountLaunchEnv } =
+    await import('../orcad/account-launch/orcad-host-account-launch-env-store')
+  restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
   featureReadiness.open('accounts')
   sessionSearch = await startOrcadHostSearchAndModels(profileStore, runtimeUserDataPath)
   featureReadiness.open('sessionSearch')
@@ -239,16 +243,12 @@ export async function activateBackendRuntime(
   runtime.agentTransitions.seedRestoredRows()
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
-  // Run after RPC stops; later dismissal records save synchronously until exit.
-  registerCleanup(() => runtime.closeNotificationDismissals())
-  // Stop recovery retries before final profile flush.
-  registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
+  registerOrcadRuntimeShutdownSteps(runtime, registerCleanup)
 
   // Recovery establishes terminal/dispatch identities before fencing observations.
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
-  // First RPC clients must see a fully published graph.
   await publishOrcadRuntimeGraph(runtime)
 
   const connector = await installOrcadConnectorHost(runtime, profileStore, registerCleanup)

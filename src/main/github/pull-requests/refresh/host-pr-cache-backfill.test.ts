@@ -2,17 +2,26 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { Worktree } from '../../../../shared/worktree/types'
 import { readWorkspaceReviewPR } from '../../../../shared/sidebar-list/feed-facts/workspace-review-facts'
-import { createHostPRCache, HOST_PR_BACKFILL_TTL_MS } from './host-pr-cache-backfill'
+import {
+  createHostPRCache,
+  HOST_PR_BACKFILL_TTL_MS,
+  type HostPRBackfillWorktree
+} from './host-pr-cache-backfill'
 
-const repo = { id: 'repo-1', path: '/home/me/repo' } as Repo
+const repo: Repo = {
+  id: 'repo-1',
+  path: '/home/me/repo',
+  displayName: 'repo',
+  badgeColor: '#000',
+  addedAt: 0
+}
 
 function worktree(
   branch: string,
   linkedPR: number | null,
-  extra: Partial<Worktree> = {}
-): Worktree {
+  extra: Partial<HostPRBackfillWorktree> = {}
+): HostPRBackfillWorktree {
   return {
     id: `repo-1::/home/me/${branch}`,
     repoId: 'repo-1',
@@ -21,14 +30,25 @@ function worktree(
     linkedPR,
     isMainWorktree: false,
     ...extra
-  } as Worktree
+  }
 }
 
 function pr(state: PRInfo['state']): PRInfo {
-  return { number: 7, title: 't', state, url: 'u', checksStatus: 'success' } as PRInfo
+  return {
+    number: 7,
+    title: 't',
+    state,
+    url: 'u',
+    checksStatus: 'success',
+    updatedAt: '',
+    mergeable: 'UNKNOWN'
+  }
 }
 
-function setup(worktrees: Worktree[], initial: PersistedState['githubCache']['pr'] = {}) {
+function setup(
+  worktrees: HostPRBackfillWorktree[],
+  initial: PersistedState['githubCache']['pr'] = {}
+) {
   let cache: PersistedState['githubCache'] = { pr: initial, issue: {} }
   const time = 10_000_000
   const store = {

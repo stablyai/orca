@@ -28,6 +28,12 @@ export type HostPRCache = {
   backfill(options?: HostPRCacheBackfillOptions): Promise<void>
 }
 
+/** The worktree fields the backfill reads; ResolvedWorktree rows satisfy it. */
+export type HostPRBackfillWorktree = Pick<
+  Worktree,
+  'id' | 'repoId' | 'hostId' | 'branch' | 'head' | 'linkedPR' | 'isMainWorktree'
+>
+
 type BackfillTarget = {
   key: string
   repo: Repo
@@ -46,7 +52,10 @@ const HOST_PR_BACKFILL_UNAWAITED_MIN_GAP_MS = 30_000
 
 export function createHostPRCache(deps: {
   store: HostPRCacheStore
-  listWorktrees: () => Promise<{ worktrees: readonly Worktree[]; repos: readonly Repo[] }>
+  listWorktrees: () => Promise<{
+    worktrees: readonly HostPRBackfillWorktree[]
+    repos: readonly Repo[]
+  }>
   readPR: (repo: Repo, branch: string, linkedPR: number, head: string | null) => Promise<unknown>
   now?: () => number
 }): HostPRCache {
@@ -173,7 +182,10 @@ export function installHostPRCache(
   store: HostPRCacheStore,
   runtime: {
     hostPRCache: HostPRCache | null
-    listHostPRCacheWorktrees(): Promise<{ worktrees: readonly Worktree[]; repos: readonly Repo[] }>
+    listHostPRCacheWorktrees(): Promise<{
+      worktrees: readonly HostPRBackfillWorktree[]
+      repos: readonly Repo[]
+    }>
     getRepoPRForBranch(
       repoSelector: string,
       branch: string,

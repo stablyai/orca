@@ -12,7 +12,6 @@ import { installOrcadRelayAndAccount } from '../orcad-orca-account'
 export async function attachOrcadRuntimeServices(args: {
   runtime: OrcaRuntimeService
   store: Store
-  userDataPath: string
   registerCleanup: (cleanup: BackendServiceCleanup) => void
   attachAccounts: () => void
 }): Promise<OrcadRelay> {
@@ -45,11 +44,6 @@ export async function attachOrcadRuntimeServices(args: {
   // Agents here set Google up through a paired desktop's browser; their key and secret stay here.
   const { installGoogleSetupHostWatch } = await import('../../google/google-setup-host-watch')
   registerCleanup(installGoogleSetupHostWatch(runtime))
-
-  // Restore prior desktop-pushed account selection before automations or CLI launches.
-  const { restoreOrcadHostAccountLaunchEnv } =
-    await import('../account-launch/orcad-host-account-launch-env-store')
-  restoreOrcadHostAccountLaunchEnv(runtime, args.userDataPath)
   return relay
 }
 
@@ -93,6 +87,7 @@ export async function repairOrcadDuplicatePtyPanes(
   await repairDuplicatePtyPanesOnStart(store, runtime)
 }
 
+/** First RPC clients must see a fully published graph. */
 export async function publishOrcadRuntimeGraph(runtime: OrcaRuntimeService): Promise<void> {
   const { publishHeadlessRuntimeGraph } =
     await import('../../runtime/session-graph/headless-runtime-graph')
@@ -108,4 +103,14 @@ export async function startOrcadManagedRuntimeReleases(runtime: OrcaRuntimeServi
     await import('../../runtime/rpc/methods/host-management/managed-runtime-install')
   reclaimManagedRuntimeReleasesAtLaunch(runtime)
   startManagedRuntimeAutoUpdates()
+}
+
+export function registerOrcadRuntimeShutdownSteps(
+  runtime: OrcaRuntimeService,
+  registerCleanup: (cleanup: BackendServiceCleanup) => void
+): void {
+  // Run after RPC stops; later dismissal records save synchronously until exit.
+  registerCleanup(() => runtime.closeNotificationDismissals())
+  // Stop recovery retries before final profile flush.
+  registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
 }
