@@ -118,18 +118,7 @@ async function readMergeEvidence(
       options: { signal }
     })
   const headInDefaultBranch = aheadOfDefault === 0 || (await headLandedIn(baseOid))
-  const review = readWorkspaceReviewPR(worktree, repo, prCache)
-  const head = headOid.toLowerCase()
-  const mergedReview =
-    review?.state === 'merged'
-      ? {
-          number: review.number,
-          provider: 'github' as const,
-          containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
-            (oid) => oid?.trim().toLowerCase() === head
-          )
-        }
-      : undefined
+  const mergedReview = readCachedMergedReview(worktree, repo, prCache, headOid)
   // Only worth proving when HEAD has not already landed another way.
   const coordinatorOid =
     coordinatorBranch && !headInDefaultBranch && mergedReview?.containsHead !== true
@@ -197,5 +186,26 @@ async function resolveCommitOid(git: CleanupGit, ref: string): Promise<string | 
     )
   } catch {
     return null
+  }
+}
+
+/** A cached merged PR counts as holding HEAD only when its head (or a provider-confirmed head) is HEAD. */
+export function readCachedMergedReview(
+  worktree: Pick<Worktree, 'branch' | 'linkedPR' | 'suppressedGitHubPR'>,
+  repo: Repo,
+  prCache: PRCacheView<PRInfo>,
+  headOid: string
+): WorkspaceCleanupMergeEvidence['mergedReview'] {
+  const review = readWorkspaceReviewPR(worktree, repo, prCache)
+  if (review?.state !== 'merged') {
+    return undefined
+  }
+  const head = headOid.toLowerCase()
+  return {
+    number: review.number,
+    provider: 'github',
+    containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
+      (oid) => oid?.trim().toLowerCase() === head
+    )
   }
 }

@@ -198,45 +198,59 @@ function waitBounded(run: Promise<void>, signal: AbortSignal | undefined): Promi
   })
 }
 
+/** The hosted PR read a backfill target goes through; it answers with the served outcome. */
+export type HostPRBackfillRuntime = {
+  listHostPRCacheWorktrees(): Promise<{
+    worktrees: readonly HostPRBackfillWorktree[]
+    repos: readonly Repo[]
+  }>
+  getRepoPRForBranch(
+    repoSelector: string,
+    branch: string,
+    linkedPRNumber?: number | null,
+    fallbackPRNumber?: number | null,
+    acceptMergedFallbackPR?: boolean,
+    currentHeadOid?: string | null,
+    reason?: 'visible',
+    userRefresh?: boolean,
+    clientKind?: undefined,
+    signal?: AbortSignal
+  ): Promise<PRSnapshotReply>
+}
+
+// Budgeted background reads share the coordinator's admission, pacing and rate-limit gates.
+export function readHostPRForBackfill(
+  runtime: HostPRBackfillRuntime,
+  repo: Repo,
+  branch: string,
+  linkedPR: number,
+  head: string | null,
+  signal?: AbortSignal
+): Promise<PRSnapshotReply> {
+  return runtime.getRepoPRForBranch(
+    repo.id,
+    branch,
+    linkedPR,
+    null,
+    false,
+    head,
+    'visible',
+    undefined,
+    undefined,
+    signal
+  )
+}
+
 /** orcad only: served PR reads and on-demand backfill fill the cache no renderer writes here. */
 export function installHostPRCache(
   store: HostPRCacheStore,
-  runtime: {
-    hostPRCache: HostPRCache | null
-    listHostPRCacheWorktrees(): Promise<{
-      worktrees: readonly HostPRBackfillWorktree[]
-      repos: readonly Repo[]
-    }>
-    getRepoPRForBranch(
-      repoSelector: string,
-      branch: string,
-      linkedPRNumber?: number | null,
-      fallbackPRNumber?: number | null,
-      acceptMergedFallbackPR?: boolean,
-      currentHeadOid?: string | null,
-      reason?: 'visible',
-      userRefresh?: boolean,
-      clientKind?: undefined,
-      signal?: AbortSignal
-    ): Promise<unknown>
-  }
+  runtime: HostPRBackfillRuntime & { hostPRCache: HostPRCache | null }
 ): void {
   runtime.hostPRCache = createHostPRCache({
     store,
     listWorktrees: () => runtime.listHostPRCacheWorktrees(),
-    // Budgeted background reads share the coordinator's admission, pacing and rate-limit gates.
+    // getRepoPRForBranch records its own outcome through runtime.hostPRCache.
     readPR: (repo, branch, linkedPR, head, signal) =>
-      runtime.getRepoPRForBranch(
-        repo.id,
-        branch,
-        linkedPR,
-        null,
-        false,
-        head,
-        'visible',
-        undefined,
-        undefined,
-        signal
-      )
+      readHostPRForBackfill(runtime, repo, branch, linkedPR, head, signal)
   })
 }

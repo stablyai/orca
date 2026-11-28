@@ -11,6 +11,7 @@ import {
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
+import type { HostPRBackfillRuntime } from '../../github/pull-requests/refresh/host-pr-cache-backfill'
 import { abortWhenRendererGone } from '../renderer-requests/renderer-lifetime-abort'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
 
@@ -25,7 +26,8 @@ function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): 
 
 export function registerWorkspaceCleanupHandlers(
   store: Store,
-  getOrchestrationDb?: () => OrchestrationDb | null
+  getOrchestrationDb?: () => OrchestrationDb | null,
+  prBackfillRuntime?: HostPRBackfillRuntime
 ): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
@@ -58,6 +60,15 @@ export function registerWorkspaceCleanupHandlers(
       const lifetime = abortWhenRendererGone(sender)
       lifetime.signal.addEventListener('abort', () => controller.abort(), { once: true })
       try {
+        if (prBackfillRuntime) {
+          // Auto PR refresh skips hidden rows; read their stale linked PRs first, bounded.
+          const { workspaceCleanupPRBackfill } = await import('./workspace-cleanup-pr-backfill')
+          await workspaceCleanupPRBackfill(store, prBackfillRuntime).backfill({
+            wait: true,
+            signal: controller.signal,
+            worktreeIds: scanArgs.worktreeIds
+          })
+        }
         const { scanWorkspaceCleanup } = await import('./workspace-cleanup-scan')
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,

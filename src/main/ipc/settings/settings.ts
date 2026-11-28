@@ -7,6 +7,7 @@ import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { applyAutomaticUpdatesSetting } from '../../updater/updater-service-slot'
 import { readSettingsWithRuntimeEnvironmentPreference } from '../runtime-environments/catalog/runtime-environment-preference'
 import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
+import { keepMainRecordedPREntries } from '../../github/pull-requests/refresh/main-recorded-pr-entries'
 
 const registryRoot = getRuntimeEnvironmentRegistryRoot
 
@@ -114,6 +115,6 @@ export function registerSettingsHandlers(
   })
 
   ipcMain.handle('cache:setGitHub', (_event, args: { cache: PersistedState['githubCache'] }) => {
-    store.setGitHubCache(args.cache)
+    store.setGitHubCache(keepMainRecordedPREntries(args.cache, store.getGitHubCache()))
   })
 }

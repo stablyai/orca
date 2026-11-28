@@ -173,4 +173,26 @@ describe('host PR cache backfill', () => {
     // The first read cancels synchronously, so neither worker starts another.
     expect(readPR).toHaveBeenCalledTimes(1)
   })
+
+  it('reads at most 16 targets per run, 2 at a time', async () => {
+    let running = 0
+    let peak = 0
+    const readPR = vi.fn(async () => {
+      running += 1
+      peak = Math.max(peak, running)
+      await Promise.resolve()
+      running -= 1
+    })
+    const hostCache = createHostPRCache({
+      store: { getGitHubCache: () => ({ pr: {}, issue: {} }), setGitHubCache: vi.fn() },
+      listWorktrees: async () => ({
+        worktrees: Array.from({ length: 20 }, (_, index) => worktree(`b${index}`, 7)),
+        repos: [repo]
+      }),
+      readPR
+    })
+    await hostCache.backfill({ wait: true })
+    expect(readPR).toHaveBeenCalledTimes(16)
+    expect(peak).toBe(2)
+  })
 })
