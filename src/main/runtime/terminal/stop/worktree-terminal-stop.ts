@@ -83,17 +83,14 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           (ptyId) => ORCA_LAYOUT_OWNER_IS_MAIN && mainHoldsTerminal(this, ptyId)
         )
       )
-      const parentTabIds = [
-        ...new Set(
-          (hostTabs?.tabs ?? []).flatMap((tab) =>
-            tab.type === 'terminal' ? [tab.parentTabId] : []
-          )
-        )
-      ]
-      const closed = hostTabs
-        ? await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
-        : [...targetPtyIds].filter((ptyId) => this.ptysById.get(ptyId)?.connected).length
+      let closed: number | null = null
       if (hostTabs) {
+        const parentTabIds = [
+          ...new Set(
+            hostTabs.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
+          )
+        ]
+        closed = await this.closeWorktreeTabsOwingPtyStops(worktree.id, parentTabIds)
         await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
       }
       const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
@@ -110,7 +107,8 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           (this.isSshOwnedPtyId(ptyId) && this.ptysById.has(ptyId))
       )
       return {
-        closed,
+        // A teammate's list closes each terminal's tab as it stops.
+        closed: closed ?? stopped,
         stopped,
         retiredSurfaces: true,
         ...ptyStop
@@ -256,13 +254,14 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     }
   }
 
-  /** With `soleLivePtyId`, stops nothing unless that PTY is the worktree's only live terminal. */
+  /** With `soleLivePtyId`, stops nothing unless that PTY is the worktree's only live terminal.
+   *  `list`: whose terminals (the host list's by default). */
   async sleepTerminalsForWorktree(
     worktreeSelector: string,
-    options: { soleLivePtyId?: string } = {}
+    options: { soleLivePtyId?: string; list?: PtyList } = {}
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
-    const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree)
+    const scope = resolveSleepScope(this.store?.getRepos() ?? [], worktree, options.list)
     const existing = this.terminalSleepByHostWorktree.get(scope.key)
     if (existing) {
       return await existing

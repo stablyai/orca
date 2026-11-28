@@ -145,7 +145,8 @@ export class AgentWorkspaceTracker {
         const kept = teammateClientEvent(event, {
           now: this.set,
           before: this.previous,
-          botId: this.scope.botId
+          botId: this.scope.botId,
+          accountId: this.scope.accountId
         })
         if (kept) {
           emit(kept)

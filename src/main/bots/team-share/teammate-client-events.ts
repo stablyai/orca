@@ -9,12 +9,22 @@ import {
 } from '../../runtime/workspaces/process-listing/agent-workspace-set'
 import type { BotChangeKind } from '../../../shared/bots/bot-change-scope'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import {
+  isPersonWorkspaceKey,
+  parsePersonWorkspaceKey
+} from '../../../shared/workspace/identity/person-workspace-key'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 export const chatWorkspaceOf = (sessionId: string): string | undefined =>
   getStructuredAgentSessionHost()?.deps?.store.getConversation(sessionId)?.location.workspaceId
 
-/** The set as of this event, and as it was before the read this event caused. */
-export type TeammateEventSets = { now: AgentWorkspaceSet; before: AgentWorkspaceSet; botId: string }
+/** The set as of this event, and as it was before the read this event caused; the teammate. */
+export type TeammateEventSets = {
+  now: AgentWorkspaceSet
+  before: AgentWorkspaceSet
+  botId: string
+  accountId: string
+}
 
 type EventOf<T extends RuntimeClientEvent['type']> = Extract<RuntimeClientEvent, { type: T }>
 type Decision<T extends RuntimeClientEvent['type']> =
@@ -59,7 +69,11 @@ export const TEAMMATE_CLIENT_EVENT_DECISIONS: { [T in RuntimeClientEvent['type']
     return worktreeIds?.length === 0 ? null : { ...event, ...(worktreeIds ? { worktreeIds } : {}) }
   },
   pullRequestChanged: byWorkspace((event) => event.worktreeId),
-  worktreeTerminalSleepState: byWorkspace((event) => event.worktreeId),
+  // A teammate's own list's sleep reaches them alone, naming the Home they address.
+  worktreeTerminalSleepState: (event, sets) => {
+    const own = ownWorkspaceEvent(event, sets)
+    return own && hasEither(sets, own.worktreeId) ? own : null
+  },
   linearLinkedIssueUpdated: byWorkspace((event) => event.worktreeId),
   workspaceMetadataSet: byWorkspace((event) => event.worktreeId),
   terminalSideEffects: byWorkspace((event) => event.batch.worktreeId),
@@ -121,4 +135,27 @@ function botsChangedFor(
     ...(kinds ? { kinds } : {}),
     ...(event.itemUids ? { itemUids: items ? { [botId]: items } : {} } : {})
   }
+}
+
+/** An event about a teammate's own workspace (`person:`) as they address it, the Home; null for
+ *  another person's. Any other event is as it is. */
+function ownWorkspaceEvent<E extends { worktreeId: string }>(
+  event: E,
+  teammate: { botId: string; accountId: string }
+): E | null {
+  const person = parsePersonWorkspaceKey(event.worktreeId)
+  if (!person) {
+    return event
+  }
+  return person.botId === teammate.botId && person.accountId === teammate.accountId
+    ? { ...event, worktreeId: folderWorkspaceKey(person.folderWorkspaceId) }
+    : null
+}
+
+/** An event for a client that is no workspace's teammate (the owner's devices, the CLI): a
+ *  teammate's own workspace is never theirs to hear of. */
+export function hostClientEvent(event: RuntimeClientEvent): RuntimeClientEvent | null {
+  return event.type === 'worktreeTerminalSleepState' && isPersonWorkspaceKey(event.worktreeId)
+    ? null
+    : event
 }

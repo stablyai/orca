@@ -13,31 +13,44 @@ import {
   type LaunchHostRepo
 } from '../../workspaces/catalog/worktree-launch-host-repo'
 import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
+import type { PtyList } from '../records/runtime-terminal-state-records'
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 
 /** Host-scope sleep keys so same-id twins cannot wake or block one another's spawns. */
 export function hostSleepKey(hostId: ExecutionHostId, worktreeId: string): HostScopedWorktreeKey {
   return composeWorktreeHostIdentity(hostId, worktreeIdentityKey(worktreeId))
 }
 
-/** One host's copy of a worktree, as a sleep stops and records it. */
+/** One host's copy of a worktree's tab list, as a sleep stops and records it. */
 export type WorktreeSleepScope = {
   key: HostScopedWorktreeKey
   /** Which live PTYs are this copy's; a twin's PTYs are never stopped or filed under `key`. */
   fence: WorktreePtyHostFence
+  /** Whose terminals: the host list's, or a teammate's own list's in a shared agent's Home. */
+  list: PtyList
+  /** The list's workspace, which its sleep state, events and resume records name: the workspace
+   *  itself for the host list, the teammate's own workspace (`person:`) for theirs. */
+  listWorkspaceId: string
 }
 
 /** Use the launch host resolver and refuse ambiguity. Capture once: repo retargeting while asleep must not move the slept host's record. */
 export function resolveSleepScope(
   repos: readonly LaunchHostRepo[],
-  worktree: { id: string; repoId: string; hostId?: string | null }
+  worktree: { id: string; repoId: string; hostId?: string | null },
+  list: PtyList = 'host'
 ): WorktreeSleepScope {
   const launch = resolveWorktreeLaunchHost(repos, worktree)
   if (launch.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
   }
+  // Keyed by the list's workspace, so one list's sleep never wakes, blocks or replays as another's.
+  const listWorkspaceId =
+    list === 'host' ? worktree.id : tabListOfPty({ holder: list, worktreeId: worktree.id })
   return {
-    key: hostSleepKey(getConnectionExecutionHostId(launch.connectionId), worktree.id),
-    fence: { resolvedConnectionId: launch.connectionId }
+    key: hostSleepKey(getConnectionExecutionHostId(launch.connectionId), listWorkspaceId),
+    fence: { resolvedConnectionId: launch.connectionId },
+    list,
+    listWorkspaceId
   }
 }
 

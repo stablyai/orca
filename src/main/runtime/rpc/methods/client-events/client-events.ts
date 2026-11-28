@@ -22,6 +22,8 @@ import {
   AgentWorkspaceTracker,
   workspaceTeammateOf
 } from '../../../../bots/team-share/agent-workspace-tracker'
+import { hostClientEvent } from '../../../../bots/team-share/teammate-client-events'
+import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 let clientEventSubscriptionSeq = 0
 
@@ -41,7 +43,14 @@ export const CLIENT_EVENT_METHODS = [
         tracker?.dispose()
         return
       }
-      const deliver = tracker ? tracker.orderedClientEvents(emit) : emit
+      const deliver = tracker
+        ? tracker.orderedClientEvents(emit)
+        : (event: RuntimeClientEvent) => {
+            const kept = hostClientEvent(event)
+            if (kept) {
+              emit(kept)
+            }
+          }
       await new Promise<void>((resolve) => {
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(

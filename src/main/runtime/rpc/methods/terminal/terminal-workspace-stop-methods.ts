@@ -62,10 +62,13 @@ export const TERMINAL_WORKSPACE_STOP_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: TerminalSleep,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, callerScope }) =>
       queueTerminalWorkspaceCommand(runtime, params.worktree, {
         kind: 'sleep',
-        run: () => runtime.sleepTerminalsForWorktree(params.worktree),
+        run: async () =>
+          runtime.sleepTerminalsForWorktree(params.worktree, {
+            list: await callerTerminalList(runtime, params.worktree, callerScope)
+          }),
         outcome: sleepOutcome,
         lostContact: terminalLostContact,
         observe: observeTerminals(runtime, params.worktree)

@@ -1,7 +1,7 @@
 // A teammate's own terminals in a shared agent's Home: their workspace-wide acts take their own list,
 // and nothing their terminals do (bells, finished agents, sizes) reaches the owner. Through the real
 // dispatcher, runtime and record store; the host's PTY daemon is the only stand-in.
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { ownerWindowProbe } from './owner-window-probe.test-support'
@@ -17,8 +17,11 @@ import {
   openTerminal,
   rig,
   settleTeammateRig,
-  startTerminalsOnTheHost
+  startTerminalsOnTheHost,
+  TEAMMATE
 } from './teammate-tabs.test-support'
+import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
+import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/workspace-session/teammate-homes-session-partition'
 
 afterEach(settleTeammateRig)
 
@@ -48,10 +51,8 @@ it('stops or closes all of a Home’s terminals in the caller’s own list alone
   const probe = ownerWindowProbe(r.runtime, r.profile, r.home, { ownerPtyIds: [owners.ptyId] })
   try {
     const before = await probe.ownerState()
-    // Sleeping all of them stays the owner's.
-    for (const method of ['terminal.sleep', 'worktree.sleep']) {
-      expect(await r.send('mate-desk', method, { worktree }), method).toMatchObject({ ok: false })
-    }
+    // Sleeping the whole workspace stays the owner's.
+    expect(await r.send('mate-desk', 'worktree.sleep', { worktree })).toMatchObject({ ok: false })
     await r.call('mate-desk', 'terminal.stop', { worktree })
     await chatTabCommandsSettled()
     expect(live(r, mates.ptyId)).toBe(false)
@@ -79,6 +80,127 @@ it('stops or closes all of a Home’s terminals in the caller’s own list alone
   await r.call('owner-desk', 'terminal.closeAll', { worktree })
   expect(live(r, owners.ptyId)).toBe(false)
   expect(live(r, matesLast.ptyId)).toBe(true)
+})
+
+it('sleeps a teammate’s own terminals alone, telling only their devices', async () => {
+  const r = await rig()
+  const { owners, mates } = await bothTerminals(r)
+  const worktree = `id:${r.workspace}`
+  // The daemon lists its live processes, and a sleep's stop waits for the exit.
+  r.runtime['ptyController'] = {
+    ...r.runtime['ptyController']!,
+    listProcesses: async () =>
+      [...r.runtime['ptysById'].values()]
+        .filter((pty) => pty.connected)
+        .map((pty) => ({ id: pty.ptyId, cwd: '', title: '' })),
+    stopAndWait: async (ptyId) => {
+      await r.runtime.onPtyExit(ptyId, 0)
+      return true
+    }
+  }
+  const sleepEvents = (deviceId: string) => {
+    const replies = r.stream(deviceId, 'runtime.clientEvents.subscribe', {})
+    return () =>
+      replies.flatMap((reply) => {
+        const event = z.object({ result: z.looseObject({ type: z.string() }) }).safeParse(reply)
+          .data?.result
+        return event?.type === 'worktreeTerminalSleepState' ? [event] : []
+      })
+  }
+  // Mate's terminal runs a resumable agent, as K's saved tabs hold it; its record is captured as
+  // the hook store tells it (the one read stood in for).
+  const K = personWorkspaceKey({ folderWorkspaceId: r.home.slice('folder:'.length), ...TEAMMATE })
+  const [matesTabId, matesLeafId] = mates.id.split('::')
+  const matesPane = makePaneKey(matesTabId!, matesLeafId!)
+  r.profile.setWorkspaceSession(
+    {
+      ...r.profile.getWorkspaceSession(TEAM),
+      tabsByWorktree: {
+        [K]: [
+          {
+            id: matesTabId!,
+            ptyId: mates.ptyId,
+            worktreeId: K,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    },
+    TEAM
+  )
+  const recorder = r.runtime['sleepResumeRecords']
+  const capture = recorder.capture.bind(recorder)
+  recorder.capture = async (worktreeId, ptyIds) => {
+    const captured = await capture(worktreeId, ptyIds)
+    captured.set(mates.ptyId, {
+      retiredPaneKeys: [],
+      records: [
+        {
+          paneKey: matesPane,
+          tabId: matesTabId!,
+          worktreeId,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session-1' },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'worktree-sleep',
+          restoreOnTabOpenOnly: true,
+          connectionId: null
+        }
+      ]
+    })
+    return captured
+  }
+  const owners$ = sleepEvents('owner-desk')
+  const ownersPhone$ = sleepEvents('owner-phone')
+  const mates$ = sleepEvents('mate-desk')
+  const others$ = sleepEvents('other-desk')
+  const probe = ownerWindowProbe(r.runtime, r.profile, r.home, { ownerPtyIds: [owners.ptyId] })
+  try {
+    const before = await probe.ownerState()
+    expect(await r.call('mate-desk', 'terminal.sleep', { worktree })).toMatchObject({
+      stoppedPtyIds: [mates.ptyId]
+    })
+    await chatTabCommandsSettled()
+    expect(live(r, mates.ptyId)).toBe(false)
+    expect(live(r, owners.ptyId)).toBe(true)
+    // Their devices hear it as the Home they address; no one else hears of it.
+    await vi.waitFor(() =>
+      expect(mates$()).toContainEqual(
+        expect.objectContaining({ worktreeId: r.home, phase: 'committed', ptyIds: [mates.ptyId] })
+      )
+    )
+    expect(mates$().every((event) => event.worktreeId === r.home)).toBe(true)
+    expect([...owners$(), ...ownersPhone$(), ...others$()]).toEqual([])
+    // A device that subscribes later is told the same way.
+    const late = sleepEvents('owner-desk')
+    const matesLate = sleepEvents('mate-phone')
+    await vi.waitFor(() => expect(matesLate()).not.toEqual([]))
+    expect(late()).toEqual([])
+    // Its resume record is saved in K, in the teammates' partition, never the owner's session.
+    expect(
+      r.profile.getWorkspaceSession(TEAM).sleepingAgentSessionsByPaneKey?.[matesPane]
+    ).toMatchObject({ worktreeId: K, agent: 'claude' })
+    expect(probe.relays.filter((relay) => relay.via !== 'window')).toEqual([])
+    expect(await probe.ownerState()).toBe(before)
+  } finally {
+    probe.close()
+  }
+
+  // The owner's sleep takes the host list's alone, as before, and their devices hear it.
+  await r.call('owner-desk', 'terminal.sleep', { worktree })
+  expect(live(r, owners.ptyId)).toBe(false)
+  await vi.waitFor(() =>
+    expect(owners$()).toContainEqual(
+      expect.objectContaining({ worktreeId: r.workspace, ptyIds: [owners.ptyId] })
+    )
+  )
 })
 
 it('lists a teammate’s own terminals alone in their Home, and every one of them to the owner', async () => {

@@ -1752,6 +1752,7 @@
       "session.tabs.unsubscribe",
       "session.tabs.unsubscribeAll",
       "terminal.closeAll",
+      "terminal.sleep",
       "terminal.stop"
     ],
     "hostList": [
@@ -1769,7 +1770,6 @@
       "terminal.create",
       "terminal.createAgentSession",
       "terminal.ensureAgentSession",
-      "terminal.sleep",
       "worktree.sleep"
     ],
     "none": ["session.tabs.terminalShellChoices"]
