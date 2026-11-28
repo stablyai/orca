@@ -3272,6 +3272,7 @@
           "notOrcaLauncherScript": "{{path}} exists but is not an Orca launcher script.",
           "notOrcaSymlink": "{{path}} exists but is not an Orca symlink.",
           "olderLauncher": "{{path}} contains an older Orca launcher.",
+          "otherAppOwnsLink": "{{path}} belongs to another Orca app ({{app}}). Register replaces it. To switch back, register the CLI again in that app.",
           "platformUnsupported": "CLI registration is not implemented on this platform.",
           "readlinkPermissionDenied": "Orca does not have permission to inspect {{path}}. Check the path and its parent directory permissions, then try again.",
           "registeredAt": "Registered at {{path}}.",
