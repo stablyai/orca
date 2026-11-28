@@ -36,6 +36,7 @@ it.each(['single', 'bulk'])('keeps workspace removal out of the %s Activity row 
   render(
     <ActivityThreadVirtualRow
       item={{ type: 'thread', thread, groupKey: 'all' }}
+      projectLabelsByRepoHost={new Map()}
       collapsed={false}
       onToggleGroup={noAction}
       selectedPaneKey={null}
