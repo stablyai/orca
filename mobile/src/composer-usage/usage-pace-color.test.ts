@@ -23,19 +23,21 @@ describe('usagePaceTone', () => {
 
 describe('usagePaceColor', () => {
   it('colors the window by pace: green on or under, amber ahead, red over', () => {
-    expect(usagePaceColor({ kind: 'under', deltaPercent: 5 }, 40)).toBe(colors.statusGreen)
-    expect(usagePaceColor({ kind: 'on-pace', deltaPercent: 1 }, 40)).toBe(colors.statusGreen)
-    expect(usagePaceColor({ kind: 'ahead', deltaPercent: 10, runOutBeforeResetMs: null }, 40)).toBe(
-      colors.statusAmber
+    expect(usagePaceColor({ kind: 'under', deltaPercent: 5 }, 40, colors)).toBe(colors.statusGreen)
+    expect(usagePaceColor({ kind: 'on-pace', deltaPercent: 1 }, 40, colors)).toBe(
+      colors.statusGreen
     )
-    expect(usagePaceColor({ kind: 'ahead', deltaPercent: 10, runOutBeforeResetMs: 1000 }, 40)).toBe(
-      colors.statusRed
-    )
-    expect(usagePaceColor({ kind: 'exhausted' }, 100)).toBe(colors.statusRed)
+    expect(
+      usagePaceColor({ kind: 'ahead', deltaPercent: 10, runOutBeforeResetMs: null }, 40, colors)
+    ).toBe(colors.statusAmber)
+    expect(
+      usagePaceColor({ kind: 'ahead', deltaPercent: 10, runOutBeforeResetMs: 1000 }, 40, colors)
+    ).toBe(colors.statusRed)
+    expect(usagePaceColor({ kind: 'exhausted' }, 100, colors)).toBe(colors.statusRed)
   })
 
   it('falls back to the used-level band without a pace', () => {
-    expect(usagePaceColor({ kind: 'unknown' }, 90)).toBe('band:90')
-    expect(usagePaceColor({ kind: 'unknown' }, null)).toBe('band:null')
+    expect(usagePaceColor({ kind: 'unknown' }, 90, colors)).toBe('band:90')
+    expect(usagePaceColor({ kind: 'unknown' }, null, colors)).toBe('band:null')
   })
 })

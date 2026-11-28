@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { hasUsageWindows, withoutResetWindows } from '../service/service-result-policy'
@@ -32,24 +33,28 @@ export const USAGE_PROVIDER_KEYS: readonly ProviderKey[] = [
   'muse'
 ]
 
-const WindowSchema = z.looseObject({
-  usedPercent: z.number(),
-  windowMinutes: z.number(),
-  resetsAt: z.number().nullable(),
-  resetDescription: z.string().nullable()
-})
+const WindowSchema = lazyZodSchema(() =>
+  z.looseObject({
+    usedPercent: z.number(),
+    windowMinutes: z.number(),
+    resetsAt: z.number().nullable(),
+    resetDescription: z.string().nullable()
+  })
+)
 
-const ReadingSchema = z.looseObject({
-  provider: z.string(),
-  session: WindowSchema.nullable(),
-  weekly: WindowSchema.nullable(),
-  fableWeekly: WindowSchema.nullable().optional(),
-  monthly: WindowSchema.nullable().optional(),
-  buckets: z.array(WindowSchema.extend({ name: z.string() })).optional(),
-  updatedAt: z.number(),
-  error: z.string().nullable(),
-  status: z.enum(['ok', 'error'])
-})
+const ReadingSchema = lazyZodSchema(() =>
+  z.looseObject({
+    provider: z.string(),
+    session: WindowSchema.nullable(),
+    weekly: WindowSchema.nullable(),
+    fableWeekly: WindowSchema.nullable().optional(),
+    monthly: WindowSchema.nullable().optional(),
+    buckets: z.array(WindowSchema.extend({ name: z.string() })).optional(),
+    updatedAt: z.number(),
+    error: z.string().nullable(),
+    status: z.enum(['ok', 'error'])
+  })
+)
 
 /** What a reading may still show after a restart: current windows of a reading no older than the
  *  longest stale-display allowance. The usual stale policy then governs failed polls. */

@@ -5,8 +5,6 @@ import {
 } from '../components/controls/MobileSegmentedControl'
 import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-
 /** A labeled meter choice; the same row sits in Settings and in the usage sheet. */
 export function ComposerUsageChoiceRow<Value extends string>({
   label,
@@ -25,7 +23,6 @@ export function ComposerUsageChoiceRow<Value extends string>({
 }): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
 
-  useMobileColorScheme()
   return (
     <View style={[styles.row, inSettings && styles.settingsRow]}>
       <Text style={styles.label}>{label}</Text>

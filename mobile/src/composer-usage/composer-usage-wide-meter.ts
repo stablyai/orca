@@ -29,17 +29,17 @@ export function composerUsageWideMeterLayout(args: {
   percentWidth: number | null
   /** The space between label, bar and percent. */
   gap: number
-}): { width: number; label: 'full' | 'compact' } | null {
+}): { width: number; resetText: 'full' | 'compact' } | null {
   const { room, fullLabelWidth, percentWidth, gap } = args
   const width = composerUsageWideMeterWidth(room)
   if (width === null || room === null) {
     return null
   }
   if (fullLabelWidth === null || percentWidth === null) {
-    return { width, label: 'full' }
+    return { width, resetText: 'full' }
   }
   const need = Math.ceil(fullLabelWidth + percentWidth + 2 * gap + WIDE_METER_MIN_BAR)
   return need <= room
-    ? { width: Math.max(width, need), label: 'full' }
-    : { width, label: 'compact' }
+    ? { width: Math.max(width, need), resetText: 'full' }
+    : { width, resetText: 'compact' }
 }
