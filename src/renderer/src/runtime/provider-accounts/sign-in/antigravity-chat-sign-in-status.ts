@@ -31,8 +31,6 @@ export type AntigravityChatSignInView = {
   /** The browser could not open the link this client asked for. */
   openFailed: boolean
   retryIntent: AntigravityChatSignInIntent
-  /** Moves when the host sees agy's stored login change; null before it answers or on older hosts. */
-  loginRevision: number | null
 }
 
 type HostStatus = AntigravityChatSignInStatus & { runtimeId?: string }
@@ -284,8 +282,7 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
     openFailed: notes.openFailed,
     retryIntent: notes.attempt?.receipt
       ? (notes.attempt.receipt.flow?.intent ?? 'signIn')
-      : (notes.attempt?.intent ?? known?.flow?.intent ?? 'signIn'),
-    loginRevision: known?.loginRevision ?? null
+      : (notes.attempt?.intent ?? known?.flow?.intent ?? 'signIn')
   }
   views.set(hostKey(owner), { snapshot, notes, view })
   return view

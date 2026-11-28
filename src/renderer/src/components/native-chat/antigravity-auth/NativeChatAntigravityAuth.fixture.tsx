@@ -43,8 +43,7 @@ const view = (error: string | null = null) => ({
   auth: 'signedOut' as const,
   error,
   openFailed: false,
-  retryIntent: 'signIn' as const,
-  loginRevision: null
+  retryIntent: 'signIn' as const
 })
 
 function Strip(props: { detection: AntigravityChatAuthDetection; error?: string }) {

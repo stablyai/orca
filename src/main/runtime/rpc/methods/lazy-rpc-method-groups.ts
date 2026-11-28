@@ -118,7 +118,13 @@ export const DEFAULT_LAZY_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] = [
         ])
       return [...ACCOUNT_METHODS, ...ANTIGRAVITY_ACCOUNT_METHODS, ...USAGE_CREDENTIAL_METHODS]
     },
-    { streamingNames: ['accounts.subscribe', 'accounts.antigravityChatSignInSubscribe'] }
+    {
+      streamingNames: [
+        'accounts.subscribe',
+        'accounts.antigravityChatSignInSubscribe',
+        'accounts.antigravityLoginSubscribe'
+      ]
+    }
   ),
   prefixRpcMethodGroup(
     ['orcaAccount.'],

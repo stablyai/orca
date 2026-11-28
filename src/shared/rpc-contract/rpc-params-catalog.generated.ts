@@ -1166,6 +1166,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatSignInStart': AntigravityChatSignInStartParams,
   'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
+  'accounts.antigravityLoginSubscribe': null,
   'accounts.antigravityReadCurrent': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,

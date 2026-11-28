@@ -177,7 +177,7 @@ export function AntigravityAccountsSection({
       : 'idle'
   useOnLaterChange(endedFlow, reread)
   // agy's login on the host doesn't change a WSL distro's.
-  useAgyLoginChange(state, chats ? signIn.loginRevision : null, reread, () => {
+  useAgyLoginChange(owner, chats, state, reread, () => {
     setError(null)
     // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.
     if (chats) {

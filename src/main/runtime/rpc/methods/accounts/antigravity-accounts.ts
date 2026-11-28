@@ -54,7 +54,7 @@ import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../../../antigravity/antigravity-acp-launch-spec'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import type { AntigravityChatSignInHost } from '../../../../antigravity/antigravity-chat-sign-in'
-import { watchAgyLoginChanges } from '../../../../antigravity/agy-login-change-watch'
+import { followAgyLoginChanges } from '../../../../antigravity/agy-login-change-watch'
 import { agyGoogleSignInEnv } from '../../../../antigravity/antigravity-chat-credential'
 
 const stopLiveChats = () => stopStructuredAgentChats('antigravity', 'Antigravity')
@@ -234,16 +234,25 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       if (stream.isClosed()) {
         return
       }
-      const release = watchAgyLoginChanges()
-      const unsubscribe = subscribeAntigravityChatSignIn(() =>
-        emit(readAntigravityChatSignInStatus(owner))
-      )
-      dispose = () => {
-        unsubscribe()
-        release()
-      }
+      dispose = subscribeAntigravityChatSignIn(() => emit(readAntigravityChatSignInStatus(owner)))
       emit(readAntigravityChatSignInStatus(owner))
       readAgySignInInBackground(ctx.runtime)
+    }
+  }),
+  defineStreamingMethod({
+    // Only Settings' host account rows follow it, so chats never watch agy's login stores.
+    name: 'accounts.antigravityLoginSubscribe',
+    permission: 'accounts-admin',
+    params: null,
+    handler: async (_, ctx, emit) => {
+      const frame = ctx.requestId ? `:${ctx.requestId}` : ''
+      const subscriptionId = `antigravityLogin:${ctx.connectionId ?? 'local'}${frame}`
+      let dispose = (): void => {}
+      const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
+      if (stream.isClosed()) {
+        return
+      }
+      dispose = followAgyLoginChanges((loginRevision) => emit({ loginRevision }))
     }
   }),
   defineMethod({

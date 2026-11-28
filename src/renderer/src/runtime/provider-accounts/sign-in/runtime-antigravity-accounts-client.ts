@@ -95,6 +95,14 @@ export async function subscribeAntigravityChatSignIn(
   })
 }
 
+/** Each time agy's stored login changes on the host; an older host refuses the method. */
+export function subscribeAntigravityLoginChanges(
+  owner: RuntimeClientTarget,
+  handlers: RuntimeRpcSubscriptionHandlers
+): Promise<{ unsubscribe: () => void }> {
+  return subscribeRuntimeRpc(owner, 'accounts.antigravityLoginSubscribe', null, handlers)
+}
+
 export async function callAntigravityChatAuthConfig(
   owner: RuntimeClientTarget,
   config?: AntigravityChatAuthConfig

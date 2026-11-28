@@ -92,9 +92,11 @@ export type AntigravityChatSignInStatus = {
   auth: AntigravityChatAuth
   /** The latest flow; an ended one stays readable until the next starts. */
   flow: AntigravityChatSignInState | null
-  /** Moves each time agy's stored login changes on the host. Absent from older hosts. */
-  loginRevision?: number
 }
+
+/** A frame of `accounts.antigravityLoginSubscribe`: moves each time agy's stored login changes on
+ *  the host. */
+export type AntigravityLoginChange = { loginRevision: number }
 
 export type AntigravityAccountTarget = {
   runtime: 'host' | 'wsl'

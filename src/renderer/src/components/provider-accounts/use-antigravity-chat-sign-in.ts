@@ -86,8 +86,7 @@ const NOT_FOLLOWED: AntigravityChatSignInView = {
   auth: 'unknown',
   error: null,
   openFailed: false,
-  retryIntent: 'signIn',
-  loginRevision: null
+  retryIntent: 'signIn'
 }
 
 export function useAntigravityChatSignIn(
@@ -147,7 +146,6 @@ export function useAntigravityChatSignInControls(props: {
   return {
     flow,
     known: status === 'known',
-    loginRevision: view.loginRevision,
     auth: status === 'known' ? auth : 'unknown',
     signingIn: running(flow),
     ownFlow,
