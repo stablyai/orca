@@ -20,6 +20,7 @@ import {
 import { NativeChatAgentControls } from '../actions/NativeChatAgentControls'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
+import { NativeChatHandOffAction } from '../actions/NativeChatHandOffAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatGalleryMessageContext } from '../../media/images/gallery/native-chat-image-gallery-context'
@@ -60,7 +61,8 @@ export function NativeChatAssistantMessageRow({
     latestResponse = true,
     actionsHang = false,
     runtimeContext,
-    fork
+    fork,
+    handOff
   } = props
   const { prose, hasImages } = content
   const toolRun = toolRunProps(props, content, run)
@@ -135,7 +137,13 @@ export function NativeChatAssistantMessageRow({
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          action={fork ? <NativeChatForkAction itemId={message.id} fork={fork} /> : null}
+          action={
+            fork ? (
+              <NativeChatForkAction itemId={message.id} fork={fork} />
+            ) : handOff ? (
+              <NativeChatHandOffAction messageId={message.id} handOff={handOff} />
+            ) : null
+          }
           className={cn(
             'w-fit select-none',
             !latestResponse &&

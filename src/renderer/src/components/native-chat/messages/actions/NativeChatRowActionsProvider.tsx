@@ -8,6 +8,10 @@ import {
   NativeChatForkedFromContext,
   NativeChatSideChatForkPointContext
 } from '@/components/native-chat/messages/actions/native-chat-fork-context'
+import {
+  NativeChatHandOffContext,
+  type NativeChatHandOffSurface
+} from '@/components/native-chat/messages/actions/native-chat-hand-off-context'
 import { NativeChatRewindContext } from '@/components/native-chat/messages/actions/native-chat-rewind-context'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
@@ -25,6 +29,7 @@ export function NativeChatRowActionsProvider({
   pane,
   chat,
   forks,
+  handOff,
   children
 }: {
   pane: Pick<NativeChatStructuredViewProps, 'tabId' | 'agent' | 'target'>
@@ -35,6 +40,8 @@ export function NativeChatRowActionsProvider({
   }
   /** The session's fork, shared with its `/fork` and `/btw` commands. */
   forks: NativeChatPaneForks
+  /** Context-seeded hand-off offered on finished responses that have no native Fork button. */
+  handOff?: NativeChatHandOffSurface | undefined
   children: React.ReactNode
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
@@ -63,15 +70,17 @@ export function NativeChatRowActionsProvider({
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>
       <NativeChatForkContext.Provider value={forks.fork}>
-        <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
-          <NativeChatForkedFromContext.Provider value={openSource}>
-            <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
-              <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
-                {children}
-              </NativeChatWaitingAgentMailRowsContext.Provider>
-            </NativeChatWaitingAgentMailContext.Provider>
-          </NativeChatForkedFromContext.Provider>
-        </NativeChatSideChatForkPointContext.Provider>
+        <NativeChatHandOffContext.Provider value={handOff}>
+          <NativeChatSideChatForkPointContext.Provider value={forks.sideChat?.reportForkPoint}>
+            <NativeChatForkedFromContext.Provider value={openSource}>
+              <NativeChatWaitingAgentMailContext.Provider value={chat.waitingAgentMail}>
+                <NativeChatWaitingAgentMailRowsContext.Provider value={chat.waitingAgentRows}>
+                  {children}
+                </NativeChatWaitingAgentMailRowsContext.Provider>
+              </NativeChatWaitingAgentMailContext.Provider>
+            </NativeChatForkedFromContext.Provider>
+          </NativeChatSideChatForkPointContext.Provider>
+        </NativeChatHandOffContext.Provider>
       </NativeChatForkContext.Provider>
     </NativeChatRewindContext.Provider>
   )

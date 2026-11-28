@@ -283,17 +283,29 @@ export function AgentSessionContinuationDialog({
             )}
           </DialogTitle>
           <DialogDescription size="compact">
-            {sourceAgentLabel
-              ? t(
-                  'components.agentSessionContinuation.metaWithAgent',
-                  'From {{agent}} · {{session}} · original stays unchanged',
-                  { agent: sourceAgentLabel, session: sourceLabel }
-                )
-              : t(
-                  'components.agentSessionContinuation.meta',
-                  '{{session}} · original stays unchanged',
-                  { session: sourceLabel }
-                )}
+            {request?.source.truncatedToResponse
+              ? sourceAgentLabel
+                ? t(
+                    'components.agentSessionContinuation.metaWithAgentTruncated',
+                    'From {{agent}} · {{session}} · up to selected response · original stays unchanged',
+                    { agent: sourceAgentLabel, session: sourceLabel }
+                  )
+                : t(
+                    'components.agentSessionContinuation.metaTruncated',
+                    '{{session}} · up to selected response · original stays unchanged',
+                    { session: sourceLabel }
+                  )
+              : sourceAgentLabel
+                ? t(
+                    'components.agentSessionContinuation.metaWithAgent',
+                    'From {{agent}} · {{session}} · original stays unchanged',
+                    { agent: sourceAgentLabel, session: sourceLabel }
+                  )
+                : t(
+                    'components.agentSessionContinuation.meta',
+                    '{{session}} · original stays unchanged',
+                    { session: sourceLabel }
+                  )}
           </DialogDescription>
         </DialogHeader>
 

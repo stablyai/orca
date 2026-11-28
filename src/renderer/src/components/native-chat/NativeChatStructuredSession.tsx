@@ -158,13 +158,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
-  const handOff = useNativeChatHandOff({
-    pane: props,
-    directory: fileLinkContext,
-    messages: controller.messages,
-    epoch: controller.epoch,
-    focusComposer
-  })
+  const handOff = useNativeChatHandOff(props, fileLinkContext, controller, focusComposer)
   const paneCommands = useStructuredNativeChatPaneCommands({
     pane: props,
     handOff,
@@ -284,7 +278,12 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                         pane={{ slot: install.slot, agent: props.agent, tabId: props.tabId }}
                       />
                     ) : (
-                      <NativeChatRowActionsProvider pane={props} chat={submits.rows} forks={forks}>
+                      <NativeChatRowActionsProvider
+                        pane={props}
+                        chat={submits.rows}
+                        forks={forks}
+                        handOff={handOff.rowSurface}
+                      >
                         <NativeChatUsageLimitActionsProvider
                           recovery={controller}
                           pane={props}

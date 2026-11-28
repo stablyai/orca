@@ -20,7 +20,9 @@ import type {
 import { NativeChatRewindContext } from '../actions/native-chat-rewind-context'
 import { nativeChatRowOffersRewind } from '../../../../../../shared/native-chat/transcript/turns/native-chat-rewind-eligibility'
 import { NativeChatForkContext } from '../actions/native-chat-fork-context'
+import { NativeChatHandOffContext } from '../actions/native-chat-hand-off-context'
 import { nativeChatSlotOffersFork } from '../actions/native-chat-side-chat-fork-point'
+import { nativeChatRowOffersHandOff } from '../../../../../../shared/native-chat/transcript/turns/native-chat-hand-off-offer'
 import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { NativeChatNewRowsMarker } from '../../viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlackMirrorPost'
@@ -131,6 +133,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
+  const handOff = useContext(NativeChatHandOffContext)
   if (slot.kind === 'subagent') {
     return (
       <NativeChatSubagentHead
@@ -176,6 +179,23 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     ) : (
       bar
     )
+  const rowFork =
+    fork && nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
+      ? fork.rowAction
+      : undefined
+  const rowHandOff =
+    !rowFork &&
+    handOff &&
+    nativeChatRowOffersHandOff(
+      {
+        message: slot.message,
+        inSubagentSection: false,
+        turnWorking: slot.activeTurnIsWorking
+      },
+      handOff
+    )
+      ? handOff.rowAction
+      : undefined
   const row = (
     // The negative margin shortens the measured row, which is what moves the next one up.
     // A row that holds its response's actions keeps the gap whole: they stay in flow above the
@@ -252,12 +272,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
               ? rewind
               : undefined
           }
-          fork={
-            fork &&
-            nativeChatSlotOffersFork(slot, { chat: fork, latestTurnKey: context.latestTurnKey })
-              ? fork.rowAction
-              : undefined
-          }
+          fork={rowFork}
+          handOff={rowHandOff}
           workRun={workRun}
         />
       )}

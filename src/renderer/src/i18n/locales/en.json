@@ -23230,6 +23230,10 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "handOff": {
+        "action": "Hand off from this response",
+        "tooltip": "Hand off from this response. Starts a new session with this chat up to this response."
       }
     },
     "tab": {
@@ -23643,7 +23647,9 @@
       "modeLatestStatus": "Latest status (recommended)",
       "modeFullTranscript": "Full transcript",
       "modeFullCost": "Slower, and uses more of your plan or API credits.",
-      "startSessionSentence": "Start session"
+      "startSessionSentence": "Start session",
+      "metaWithAgentTruncated": "From {{agent}} · {{session}} · up to selected response · original stays unchanged",
+      "metaTruncated": "{{session}} · up to selected response · original stays unchanged"
     },
     "status": {
       "bar": {
