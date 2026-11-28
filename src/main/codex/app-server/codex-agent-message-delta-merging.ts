@@ -1,5 +1,8 @@
 import { isProviderRecord } from '../../provider-process/provider-json-record'
-import type { ProviderRecordMerging } from '../../provider-process/provider-record-reader'
+import {
+  createProviderRecordReader,
+  type ProviderRecordMerging
+} from '../../provider-process/provider-record-reader'
 
 const AGENT_MESSAGE_DELTA_METHOD = 'item/agentMessage/delta'
 
@@ -67,4 +70,11 @@ export const CODEX_AGENT_MESSAGE_DELTA_MERGING: ProviderRecordMerging<HeldCodexD
   },
   finish: ({ message, params, parts }) =>
     parts.length === 1 ? message : { ...message, params: { ...params, delta: parts.join('') } }
+}
+
+/** An app-server stdout reader that hands each run of message deltas on as one record. */
+export function createCodexRecordReader(
+  input: Omit<Parameters<typeof createProviderRecordReader>[0], 'merging'>
+): ReturnType<typeof createProviderRecordReader> {
+  return createProviderRecordReader({ ...input, merging: CODEX_AGENT_MESSAGE_DELTA_MERGING })
 }

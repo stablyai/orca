@@ -1,4 +1,5 @@
 import { ownRetainedString } from '../text/own-retained-string'
+import { boundedUtf8Prefix } from './bounded-utf8-prefix'
 
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
@@ -41,23 +42,6 @@ export type IncrementalNdjsonFramerOptions = {
   beforeLine?: (input: string, lineStart: number) => boolean
   /** Skips parsing lines the consumer can rule out from their text. */
   acceptLine?: (line: string) => boolean
-}
-
-function boundedUtf8Prefix(value: string, maxBytes: number): string {
-  if (Buffer.byteLength(value, 'utf8') <= maxBytes) {
-    return value
-  }
-  let low = 0
-  let high = Math.min(value.length, maxBytes)
-  while (low < high) {
-    const midpoint = Math.ceil((low + high) / 2)
-    if (Buffer.byteLength(value.slice(0, midpoint), 'utf8') <= maxBytes) {
-      low = midpoint
-    } else {
-      high = midpoint - 1
-    }
-  }
-  return value.slice(0, low)
 }
 
 // Why: a strict slice is a V8 SlicedString that pins all of `source`; the whole string needs no copy.

@@ -32,7 +32,7 @@ describe('createProviderRecordReader with Codex delta merging', () => {
       }
     })
     const request = JSON.stringify({ id: 9, method: 'item/tool/requestUserInput', params: {} })
-    stdout.write([delta('a', 'He'), delta('a', 'llo'), request, delta('b', 'x')].join('\n') + '\n')
+    stdout.write(`${[delta('a', 'He'), delta('a', 'llo'), request, delta('b', 'x')].join('\n')}\n`)
     await new Promise((resolve) => setImmediate(resolve))
 
     const merged = JSON.parse(delta('a', 'Hello'))
@@ -68,7 +68,7 @@ describe('createProviderRecordReader with Codex delta merging', () => {
     })
     const broken = `${delta('a', 'x').slice(0, -2)},}`
     const request = JSON.stringify({ id: 9, method: 'item/tool/requestUserInput', params: {} })
-    stdout.write([delta('a', 'He'), broken, request].join('\n') + '\n')
+    stdout.write(`${[delta('a', 'He'), broken, request].join('\n')}\n`)
     await new Promise((resolve) => setImmediate(resolve))
     expect(order).toEqual(['delta'])
 
