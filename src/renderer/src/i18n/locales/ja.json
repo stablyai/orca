@@ -24331,6 +24331,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "クリックしてコミットを開く",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "ディスクから再読み込み · 自動再読み込みは一時停止中",
+      "ariaLabelPaused": "ディスクから再読み込み、自動再読み込みは一時停止中",
+      "noChanges": "ディスク上に変更はありません",
+      "readFailed": "{{value0}} を読み込めませんでした",
+      "retry": "再試行",
+      "fileDeleted": "ファイルはディスクから削除されました",
+      "cannotCheckDirty": "未保存の編集があるため、ディスクと比較できません",
+      "changedOnDisk": "ディスク上で変更されました",
+      "editsKept": "{{value0}} の未保存の編集は保持されます",
+      "openTab": "タブを開く",
+      "paletteTitle": "ファイルをディスクから再読み込み",
+      "paletteDescription": "アクティブなファイルをディスクから読み込み、変更があれば再読み込みします。",
+      "verbs": {
+        "reloadFile": "ファイルを再読み込み",
+        "reloadFromDisk": "ディスクから再読み込み",
+        "refreshFile": "ファイルを更新",
+        "revertFile": "ファイルを元に戻す"
+      }
     }
   },
   "featureTips": {

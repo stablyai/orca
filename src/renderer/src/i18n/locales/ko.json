@@ -24628,6 +24628,26 @@
       "statusAriaLabel": "Git Blame: {{summary}}",
       "openCommitHint": "클릭하여 커밋 열기",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "디스크에서 다시 불러오기 · 자동 다시 불러오기 일시 중지됨",
+      "ariaLabelPaused": "디스크에서 다시 불러오기, 자동 다시 불러오기 일시 중지됨",
+      "noChanges": "디스크에 변경 사항 없음",
+      "readFailed": "{{value0}}을(를) 읽을 수 없습니다",
+      "retry": "다시 시도",
+      "fileDeleted": "디스크에서 파일이 삭제됨",
+      "cannotCheckDirty": "저장하지 않은 편집이 있어 디스크와 비교할 수 없습니다",
+      "changedOnDisk": "디스크에서 변경됨",
+      "editsKept": "{{value0}}의 저장하지 않은 편집은 유지됩니다",
+      "openTab": "탭 열기",
+      "paletteTitle": "디스크에서 파일 다시 불러오기",
+      "paletteDescription": "활성 파일을 디스크에서 읽고 변경된 경우 다시 불러옵니다.",
+      "verbs": {
+        "reloadFile": "파일 다시 불러오기",
+        "reloadFromDisk": "디스크에서 다시 불러오기",
+        "refreshFile": "파일 새로 고침",
+        "revertFile": "파일 되돌리기"
+      }
     }
   },
   "featureTips": {

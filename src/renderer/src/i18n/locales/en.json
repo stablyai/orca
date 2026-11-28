@@ -746,6 +746,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Click to open the commit",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Reload from Disk · auto-reload paused",
+      "ariaLabelPaused": "Reload from Disk, auto-reload paused",
+      "noChanges": "No changes on disk",
+      "readFailed": "Couldn't read {{value0}}",
+      "retry": "Retry",
+      "fileDeleted": "File deleted on disk",
+      "cannotCheckDirty": "Can't compare with disk while edits are unsaved",
+      "changedOnDisk": "Changed on disk",
+      "editsKept": "Unsaved edits in {{value0}} are kept",
+      "openTab": "Open Tab",
+      "paletteTitle": "Reload File from Disk",
+      "paletteDescription": "Read the active file from disk and reload it if it changed.",
+      "verbs": {
+        "reloadFile": "reload file",
+        "reloadFromDisk": "reload from disk",
+        "refreshFile": "refresh file",
+        "revertFile": "revert file"
+      }
     }
   },
   "githubChecks": {

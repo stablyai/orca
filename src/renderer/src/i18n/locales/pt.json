@@ -429,6 +429,26 @@
       "title": "Arquivo muito grande para comparação",
       "detail": "Uma versão deste arquivo tem mais de 10 MB, então o Orca não o carrega para uma comparação de texto.",
       "connectionDetail": "Este diff é grande demais para abrir por uma conexão remota."
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Recarregar do disco · recarregamento automático pausado",
+      "ariaLabelPaused": "Recarregar do disco, recarregamento automático pausado",
+      "noChanges": "Nenhuma alteração no disco",
+      "readFailed": "Não foi possível ler {{value0}}",
+      "retry": "Tentar novamente",
+      "fileDeleted": "Arquivo excluído do disco",
+      "cannotCheckDirty": "Não é possível comparar com o disco enquanto houver edições não salvas",
+      "changedOnDisk": "Alterado no disco",
+      "editsKept": "As edições não salvas em {{value0}} são mantidas",
+      "openTab": "Abrir aba",
+      "paletteTitle": "Recarregar arquivo do disco",
+      "paletteDescription": "Lê o arquivo ativo do disco e o recarrega se ele mudou.",
+      "verbs": {
+        "reloadFile": "recarregar arquivo",
+        "reloadFromDisk": "recarregar do disco",
+        "refreshFile": "atualizar arquivo",
+        "revertFile": "reverter arquivo"
+      }
     }
   },
   "notifications": {

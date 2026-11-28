@@ -25068,6 +25068,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Haz clic para abrir el commit",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Recargar desde el disco · recarga automática en pausa",
+      "ariaLabelPaused": "Recargar desde el disco, recarga automática en pausa",
+      "noChanges": "No hay cambios en el disco",
+      "readFailed": "No se pudo leer {{value0}}",
+      "retry": "Reintentar",
+      "fileDeleted": "Archivo eliminado del disco",
+      "cannotCheckDirty": "No se puede comparar con el disco mientras haya cambios sin guardar",
+      "changedOnDisk": "Cambiado en el disco",
+      "editsKept": "Se conservan los cambios sin guardar de {{value0}}",
+      "openTab": "Abrir pestaña",
+      "paletteTitle": "Recargar archivo desde el disco",
+      "paletteDescription": "Lee el archivo activo desde el disco y lo recarga si cambió.",
+      "verbs": {
+        "reloadFile": "recargar archivo",
+        "reloadFromDisk": "recargar desde el disco",
+        "refreshFile": "actualizar archivo",
+        "revertFile": "revertir archivo"
+      }
     }
   },
   "accounts": {
