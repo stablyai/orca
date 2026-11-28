@@ -48,10 +48,10 @@ function BitbucketHostIntegrationCard({
 }): React.JSX.Element {
   const t = useTranslate()
   // Why the preflight host: the badge comes from it, so saves and status reads must go there too.
-  const [host] = useState(card.host)
-  const target = host?.target ?? null
+  // Why only the target frozen: the key pins it, while the scope copy follows live focus changes.
+  const [target] = useState(card.host?.target ?? null)
   const remoteHost = target?.kind === 'environment'
-  const accountScope = useBitbucketHostScope(host)
+  const accountScope = useBitbucketHostScope(card.host)
   const { statuses, unavailable, refresh } = card
   const status = unavailable ? 'unavailable' : statuses.bitbucketStatus
   const connected = status === 'connected'

@@ -60,6 +60,11 @@ describe('bitbucket credential RPCs', () => {
     expect(mocks.resetPreflight).not.toHaveBeenCalled()
   })
 
+  it('needs account-admin rights to write or remove the credential', () => {
+    expect(method('bitbucket.connect').permission).toBe('accounts-admin')
+    expect(method('bitbucket.disconnect').permission).toBe('accounts-admin')
+  })
+
   it('rejects an unknown auth mode before touching the store', () => {
     expect(BitbucketConnectParams.safeParse({ authMode: 'oauth' }).success).toBe(false)
   })

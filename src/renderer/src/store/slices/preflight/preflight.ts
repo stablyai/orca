@@ -112,6 +112,7 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
     set({
       preflightStatus: contextChanged ? null : get().preflightStatus,
       preflightStatusChecked: contextChanged ? false : get().preflightStatusChecked,
+      preflightStatusHost: contextChanged ? null : get().preflightStatusHost,
       preflightStatusLoading: true,
       preflightStatusError: null
     })
