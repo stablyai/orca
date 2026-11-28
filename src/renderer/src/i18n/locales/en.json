@@ -28198,7 +28198,9 @@
       "missing": "That conversation isn't open on this computer.",
       "unreachable": "Couldn't reach {{hosts}}. The bot may be there; open the link again once it's back.",
       "pick": "More than one computer has a bot for this link: {{hosts}}. Open it from the sidebar.",
-      "updateNeeded": "Update Orca on {{hosts}} to open this bot here."
+      "updateNeeded": "Update Orca on {{hosts}} to open this bot here.",
+      "workspaceMissing": "That workspace isn't in Orca on this computer. Opened the bot's Home instead.",
+      "workspaceBotMissing": "The bot for that workspace isn't on this computer or a computer paired with it."
     },
     "chatOpen": {
       "homeDidNotLoad": "Bot's Home didn't load."

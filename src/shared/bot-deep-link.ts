@@ -8,7 +8,13 @@ export type BotDeepLink = {
   conversation?: { source: ConnectorSource; externalId: string }
   sessionId?: string
   itemId?: string
+  /** `?workspace=<worktreeId>[&agent=<sessionId>]`, from `orca bot link`: a workspace on the bot's
+   *  computer, opened in the window it is clicked in. Never with `conversation`. Clients that
+   *  don't read it open the bot's Home. */
+  workspace?: BotDeepLinkWorkspace
 }
+
+export type BotDeepLinkWorkspace = { worktreeId: string; agentSessionId?: string }
 
 export type ConnectorLinkSource = ConnectorConnectSource
 
@@ -25,7 +31,12 @@ export type BotAccessRequestDeepLink = { token: string }
 export type BotDeepLinkOutcome =
   | { kind: 'chat'; workspaceId: string; sessionId: string; itemId?: string }
   // `conversation`: this computer has no chat for the link's thread, so it may be another computer's bot.
-  | { kind: 'home'; botId: string; conversation?: BotDeepLink['conversation'] }
+  | {
+      kind: 'home'
+      botId: string
+      conversation?: BotDeepLink['conversation']
+      workspace?: BotDeepLinkWorkspace
+    }
   | { kind: 'missing' }
   | ({ kind: 'connector-link' } & ConnectorLinkDeepLink)
   | ({ kind: 'access-request' } & BotAccessRequestDeepLink)
@@ -36,6 +47,25 @@ const ACCESS_REQUEST_PATH = 'access-request'
 const BOT_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 // Matched exactly against stored links, never used as a path; bounded and printable only.
 const EXTERNAL_ID_PATTERN = /^[\x21-\x7e]{1,512}$/
+// A worktree id is `<repoId>::<path>`; matched against the catalog, never opened as a path.
+const WORKTREE_ID_PATTERN = /^[^\x00-\x1f\x7f]{1,2048}$/
+
+/** An agent's orca session id as a workspace link carries it (without `orca_session_id:`). */
+export function isBotDeepLinkSessionId(value: string): boolean {
+  return BOT_ID_PATTERN.test(value)
+}
+
+function parseWorkspace(url: URL): BotDeepLinkWorkspace | null | undefined {
+  const worktreeId = url.searchParams.get('workspace')
+  const agent = url.searchParams.get('agent')
+  if (worktreeId === null) {
+    return agent === null ? undefined : null
+  }
+  if (!WORKTREE_ID_PATTERN.test(worktreeId) || (agent !== null && !BOT_ID_PATTERN.test(agent))) {
+    return null
+  }
+  return { worktreeId, ...(agent ? { agentSessionId: agent } : {}) }
+}
 
 function isConnectorSource(value: string): value is ConnectorSource {
   return CONNECTOR_SOURCES.some((source) => source === value)
@@ -57,7 +87,11 @@ export function parseBotDeepLink(value: string): BotDeepLink | null {
   }
   const conversation = url.searchParams.get('conversation')
   if (conversation === null) {
-    return { botId }
+    const workspace = parseWorkspace(url)
+    if (workspace === null) {
+      return null
+    }
+    return workspace ? { botId, workspace } : { botId }
   }
   const separator = conversation.indexOf(':')
   const source = conversation.slice(0, separator)
@@ -81,8 +115,20 @@ export function parseBotDeepLink(value: string): BotDeepLink | null {
   }
 }
 
-export function formatBotDeepLink({ botId, conversation, sessionId, itemId }: BotDeepLink): string {
+export function formatBotDeepLink({
+  botId,
+  conversation,
+  sessionId,
+  itemId,
+  workspace
+}: BotDeepLink): string {
   const url = new URL(`orca://bot/${botId}`)
+  if (!conversation && workspace) {
+    url.searchParams.set('workspace', workspace.worktreeId)
+    if (workspace.agentSessionId) {
+      url.searchParams.set('agent', workspace.agentSessionId)
+    }
+  }
   if (conversation) {
     url.searchParams.set('conversation', `${conversation.source}:${conversation.externalId}`)
     if (sessionId) {

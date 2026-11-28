@@ -10,6 +10,7 @@ import { BOT_CONNECT_METHODS } from './bots-connect'
 import { BOT_LOOK_AROUND_METHODS } from './bots-look-around'
 import { BOT_TIDY_UP_METHODS } from './bots-tidy-up'
 import { BOT_WORK_METHODS } from './bots-work'
+import { BOT_LINK_METHODS } from './bots-link'
 import { BOT_ITEMS_METHODS } from './bots-items'
 import { BOT_CONNECTOR_OFFER_METHOD } from './bots-connector-offer'
 import { GOOGLE_SETUP_METHODS } from './bots-google-setup'
@@ -46,6 +47,7 @@ export const BOT_RPC_METHODS = [
   ...BOT_LOOK_AROUND_METHODS,
   ...BOT_TIDY_UP_METHODS,
   ...BOT_WORK_METHODS,
+  ...BOT_LINK_METHODS,
   ...BOT_ITEMS_METHODS,
   BOT_CONNECTOR_OFFER_METHOD,
   ...GOOGLE_SETUP_METHODS,

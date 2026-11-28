@@ -63,6 +63,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     activated: boolean
     /** unsupported-headless means no renderer holds wake records; clients must not claim agents resumed. */
     sleepingAgentWake: 'requested' | 'unsupported-headless' | 'not-applicable'
+    /** With host navigation: whether this host had an Orca window to switch. A paired client, a
+     *  phone or Slack is never switched by it, so callers must not say anyone saw it. */
+    hostWindow?: 'open' | 'none'
   }> {
     this.assertGraphReady()
     const worktree = await this.resolveGitWorktreeSelector(worktreeSelector)
@@ -122,7 +125,13 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         )
       }
     }
-    return { repoId: repo.id, worktreeId: worktree.id, activated: true, sleepingAgentWake }
+    return {
+      repoId: repo.id,
+      worktreeId: worktree.id,
+      activated: true,
+      sleepingAgentWake,
+      ...(targetsHost ? { hostWindow: this.hasAuthoritativeWindow() ? 'open' : 'none' } : {})
+    }
   }
 
   /** Use buildStartupForDraft's selection so launches can name the agent before creation. */

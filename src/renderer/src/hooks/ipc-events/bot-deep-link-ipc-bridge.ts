@@ -5,7 +5,7 @@ import { useAppStore } from '../../store'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import type { BotDeepLinkOutcome } from '../../../../shared/bot-deep-link'
 import { watchAccessRequests } from '@/lib/bot-access-requests'
-import { openAccessRequestLink, openBotLinkHome } from '@/lib/bot-link-open'
+import { openAccessRequestLink, openBotLinkHome, openBotLinkWorkspace } from '@/lib/bot-link-open'
 import { openBotShareLink } from '@/components/bots/sharing/bot-share-receive-open'
 import { botGitHubErrorMessage } from '@/components/bots/github/bot-github-copy'
 import { botLinearErrorMessage } from '@/components/bots/linear/bot-linear-copy'
@@ -26,7 +26,9 @@ function openBotLink(outcome: BotDeepLinkOutcome): void {
       botHostTarget(LOCAL_EXECUTION_HOST_ID)
     )
   } else if (outcome.kind === 'home') {
-    void openBotLinkHome(outcome.botId, outcome.conversation ?? null)
+    void (outcome.workspace
+      ? openBotLinkWorkspace(outcome.botId, outcome.workspace)
+      : openBotLinkHome(outcome.botId, outcome.conversation ?? null))
   } else if (outcome.kind === 'missing') {
     toast.info(translate('bots.deepLink.missing', "That conversation isn't open on this computer."))
   } else if (outcome.kind === 'bot-share') {

@@ -22,6 +22,11 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('./bot-work.js')).BOT_WORK_HANDLERS
   },
   {
+    name: 'bot-link',
+    keys: ['bot link'],
+    load: async () => (await import('./bot-link.js')).BOT_LINK_HANDLERS
+  },
+  {
     name: 'bot-items',
     keys: [
       'bot item add',

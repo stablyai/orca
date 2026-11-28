@@ -16,7 +16,8 @@ export async function openBotDeepLink(
   ) => Promise<readonly { host: string; chatSessionId: string | null; worktreeId: string | null }[]>
 ): Promise<BotDeepLinkOutcome> {
   if (!link.conversation) {
-    return { kind: 'home', botId: link.botId }
+    // A workspace link goes to the renderer: the bot, and so the workspace, may be a paired server's.
+    return { kind: 'home', botId: link.botId, ...(link.workspace ? { workspace: link.workspace } : {}) }
   }
   const linked = findLink(store, link.conversation)
   if (
