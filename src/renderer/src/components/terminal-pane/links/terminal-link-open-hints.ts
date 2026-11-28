@@ -105,3 +105,8 @@ export function getTerminalWorktreePathOpenHint(
     ? `${prefix}⌘+click to switch workspace, or ⇧⌘+click to open in Finder`
     : `${prefix}Ctrl+click to switch workspace, or Shift+Ctrl+click to open folder`
 }
+
+export function getTerminalCommandRunHint(showActions = true): string {
+  const prefix = showActions ? 'Click for actions or ' : ''
+  return isMacPlatform() ? `${prefix}⌘+click to run` : `${prefix}Ctrl+click to run`
+}

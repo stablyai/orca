@@ -15,6 +15,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalCursorBlink: 'Cursor Blink',
   terminalCursorOpacity: 'Cursor Opacity',
   terminalMouseHideWhileTyping: 'Mouse Hide While Typing',
+  terminalRunSuggestedCommands: 'Run Suggested Commands',
   terminalInlineImages: 'Inline Images',
   terminalWordSeparator: 'Word Separator',
   primarySelectionMiddleClickPaste: 'Middle-click Paste from Selection',
