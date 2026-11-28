@@ -22818,6 +22818,8 @@
         "annotateTooLarge": "Dieses Bild ist zu groß, um Notizen darauf zu zeichnen (über 33 Megapixel).",
         "imageNotReady": "Das Bild ist noch nicht bereit.",
         "closeNoMessageBox": "Kein Nachrichtenfeld.",
+        "closeNoImages": "Chat nimmt keine Bilder an.",
+        "imagesUnsupported": "Dieser Chat nimmt keine Bilder an, daher können keine Notizen hinzugefügt werden.",
         "closeEditingQueued": "Beende zuerst die Bearbeitung.",
         "closeGoal": "Ein Ziel nimmt keine Bilder an.",
         "closeCommand": "Befehl im Nachrichtenfeld.",

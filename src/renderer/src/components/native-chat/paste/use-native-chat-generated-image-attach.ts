@@ -2,7 +2,11 @@ import { useCallback } from 'react'
 import type { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import type { UseNativeChatComposerPasteArgs } from './native-chat-composer-paste-options'
 import { ownerAcceptsClipboardImage } from './native-chat-clipboard-image-save'
-import { markNativeChatImageOnlyPending } from '../attachments/chips/use-native-chat-image-only-resolve'
+import {
+  markNativeChatImageOnlyPending,
+  releaseNativeChatImageOnlyPending
+} from '../attachments/chips/use-native-chat-image-only-pending'
+import type { NativeChatComposerInput } from '../composer/editor/native-chat-composer-input'
 import {
   nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice
@@ -22,7 +26,9 @@ type PasteParts = Pick<
  *  message-box notice of its own: the viewer that asked reports the failure. */
 export function useNativeChatGeneratedImageAttach(
   { startImageChip, saveClipboardImage, canPaste }: PasteParts,
-  resolveAttachmentOwner: UseNativeChatComposerPasteArgs['resolveAttachmentOwner']
+  resolveAttachmentOwner: UseNativeChatComposerPasteArgs['resolveAttachmentOwner'],
+  /** The message box's editor, whose caret the chip goes in at. */
+  input: () => NativeChatComposerInput | null = () => null
 ): (image: Blob) => Promise<string | null> {
   return useCallback(
     async (image: Blob): Promise<string | null> => {
@@ -36,6 +42,12 @@ export function useNativeChatGeneratedImageAttach(
       }
       // Read before the chip starts, so a failed read leaves no pending chip behind.
       const png = new Uint8Array(await image.arrayBuffer())
+      // The chip goes in at the caret like a paste, but never in place of selected words: a
+      // selection left in the message box keeps them, and the chip goes after it.
+      const editor = input()
+      if (editor && editor.selectionEnd !== null && editor.selectionStart !== editor.selectionEnd) {
+        editor.setSelectionRange(editor.selectionEnd, editor.selectionEnd)
+      }
       const { id: pendingId } = startImageChip(owner, image, {
         deferPreview: false,
         canShow: canPaste
@@ -44,10 +56,14 @@ export function useNativeChatGeneratedImageAttach(
         return null
       }
       markNativeChatImageOnlyPending(pendingId)
-      return (await saveClipboardImage(owner, pendingId, false, undefined, undefined, png))
-        ? pendingId
-        : null
+      try {
+        return (await saveClipboardImage(owner, pendingId, false, undefined, undefined, png))
+          ? pendingId
+          : null
+      } finally {
+        releaseNativeChatImageOnlyPending(pendingId)
+      }
     },
-    [canPaste, resolveAttachmentOwner, saveClipboardImage, startImageChip]
+    [canPaste, input, resolveAttachmentOwner, saveClipboardImage, startImageChip]
   )
 }

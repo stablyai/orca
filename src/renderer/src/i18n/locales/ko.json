@@ -22460,6 +22460,8 @@
         "annotateTooLarge": "이 이미지는 너무 커서 메모를 그릴 수 없습니다(3,300만 화소 초과).",
         "imageNotReady": "이미지가 아직 준비되지 않았습니다.",
         "closeNoMessageBox": "메시지 입력란이 없습니다.",
+        "closeNoImages": "이 채팅은 이미지를 받지 않습니다.",
+        "imagesUnsupported": "이 채팅은 이미지를 받지 않아 메모를 추가할 수 없습니다.",
         "closeEditingQueued": "먼저 대기 중인 편집을 마치세요.",
         "closeGoal": "목표 설정에는 이미지를 넣을 수 없습니다.",
         "closeCommand": "메시지 입력란에 명령이 있습니다.",

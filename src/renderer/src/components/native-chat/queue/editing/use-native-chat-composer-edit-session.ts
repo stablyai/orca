@@ -141,19 +141,28 @@ export function useNativeChatComposerEditSession({
   )
   const submit = useLatestHandler(() => send())
   // Notes may send with the draft only when Enter would deliver it as a message, never run it as a command.
-  const notesBlocked = useLatestHandler((): 'editing' | 'goal' | 'command' | null => {
-    if (isEditing) {
-      return 'editing'
+  const notesBlocked = useLatestHandler(
+    (): 'unavailable' | 'images' | 'editing' | 'goal' | 'command' | null => {
+      if (isEditing) {
+        return 'editing'
+      }
+      // A message box that takes no input, or no images, has nowhere to put the marked copy.
+      if (disabled) {
+        return 'unavailable'
+      }
+      if (structuredTransport?.acceptsImages === false) {
+        return 'images'
+      }
+      if (submission.goalActive) {
+        return 'goal'
+      }
+      const text = readNativeChatComposerDraft(draftScopeKey).text
+      return submission.messageDelivery &&
+        (Boolean(structuredTransport) || peekSendClassification(text) !== 'command')
+        ? null
+        : 'command'
     }
-    if (submission.goalActive) {
-      return 'goal'
-    }
-    const text = readNativeChatComposerDraft(draftScopeKey).text
-    return submission.messageDelivery &&
-      (Boolean(structuredTransport) || peekSendClassification(text) !== 'command')
-      ? null
-      : 'command'
-  })
+  )
   // The pane's own handle object, so its identity changes only when that handle does.
   useImperativeHandle(ref, () => Object.assign(handle.current!, { submit, notesBlocked }))
   const chooseEditItem = useCallback(

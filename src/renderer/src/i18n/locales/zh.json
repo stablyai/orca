@@ -22098,6 +22098,8 @@
         "annotateTooLarge": "这张图片太大，无法绘制备注（超过 3300 万像素）。",
         "imageNotReady": "图片尚未准备好。",
         "closeNoMessageBox": "没有可添加备注的消息框。",
+        "closeNoImages": "此聊天不接受图片。",
+        "imagesUnsupported": "此聊天不接受图片，因此无法添加备注。",
         "closeEditingQueued": "请先完成队列中的编辑。",
         "closeGoal": "设置目标时不能添加图片。",
         "closeCommand": "消息框中有一条命令。",

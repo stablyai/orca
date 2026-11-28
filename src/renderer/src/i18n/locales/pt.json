@@ -24391,6 +24391,8 @@
         "annotateTooLarge": "Esta imagem é grande demais para desenhar notas (mais de 33 megapixels).",
         "imageNotReady": "A imagem não está pronta.",
         "closeNoMessageBox": "Sem caixa de mensagem.",
+        "closeNoImages": "Este chat não aceita imagens.",
+        "imagesUnsupported": "Este chat não aceita imagens, então não é possível adicionar notas.",
         "closeEditingQueued": "Termine a edição na fila.",
         "closeGoal": "Uma meta não aceita imagens.",
         "closeCommand": "A mensagem tem um comando.",

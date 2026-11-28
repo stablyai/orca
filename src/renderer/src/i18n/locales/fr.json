@@ -23108,6 +23108,8 @@
         "annotateTooLarge": "Cette image est trop grande pour y dessiner des notes (plus de 33 mégapixels).",
         "imageNotReady": "L’image n’est pas encore prête.",
         "closeNoMessageBox": "Aucune zone de message.",
+        "closeNoImages": "Ce chat refuse les images.",
+        "imagesUnsupported": "Ce chat n’accepte pas d’images, les notes ne peuvent donc pas y être ajoutées.",
         "closeEditingQueued": "Terminez l’édition en attente.",
         "closeGoal": "Un objectif refuse les images.",
         "closeCommand": "Commande dans le message.",

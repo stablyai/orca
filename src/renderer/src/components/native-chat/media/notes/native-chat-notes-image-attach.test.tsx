@@ -13,6 +13,9 @@ import {
 } from '../../paste/use-native-chat-generated-image-attach'
 import type { NativeChatAttachmentOwner } from '../../attachments/uploads/native-chat-attachment-owner'
 import { translate } from '@/i18n/i18n'
+import { nativeChatImageOnlyPendingCountForTests } from '../../attachments/chips/use-native-chat-image-only-pending'
+import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
+import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import {
   nativeChatNotesCloseErrorText,
   nativeChatNotesHandOffErrorText
@@ -35,14 +38,15 @@ const noop = () => {}
 function mountComposer(
   scope: string,
   owner: NativeChatAttachmentOwner = { kind: 'local' },
-  setNotice: Mock = vi.fn()
+  setNotice: Mock = vi.fn(),
+  box: { acceptsImages?: boolean; input?: NativeChatComposerInput } = {}
 ) {
-  const textareaRef = { current: null }
+  const textareaRef = { current: box.input ?? null }
   return renderHook(() => {
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: scope,
       allowWithoutTarget: true,
-      acceptsImages: true,
+      acceptsImages: box.acceptsImages ?? true,
       imageReferences: true,
       caret: 0,
       disabled: false,
@@ -70,7 +74,11 @@ function mountComposer(
       setCaret: noop,
       setNotice
     })
-    return useNativeChatGeneratedImageAttach(paste, () => owner)
+    return useNativeChatGeneratedImageAttach(
+      paste,
+      () => owner,
+      () => textareaRef.current
+    )
   })
 }
 
@@ -96,6 +104,7 @@ it('a marked image saved while its message box is open joins that message', asyn
 
   const id = await attached
   expect(id).not.toBeNull()
+  expect(nativeChatImageOnlyPendingCountForTests()).toBe(0)
   expect(readNativeChatComposerDraft(scope).images.map((chip) => [chip.id, chip.path])).toEqual([
     [id, '/tmp/marked.png']
   ])
@@ -116,6 +125,7 @@ it('a marked image whose message box goes away while it saves is dropped, not ke
 
   expect(await attached).toBeNull()
   expect(readNativeChatComposerDraft(scope).images).toEqual([])
+  expect(nativeChatImageOnlyPendingCountForTests()).toBe(0)
   expect(log.mock.calls).toEqual([
     ['[native-chat] saved image paste dropped', 'notes-image-destination-lost']
   ])
@@ -162,4 +172,60 @@ it('a marked image that fails to save leaves the message box quiet: the viewer r
   expect(attached).toBeNull()
   expect(readNativeChatComposerDraft(scope).images).toEqual([])
   expect(setNotice.mock.calls.filter(([notice]) => notice !== null)).toEqual([])
+  expect(nativeChatImageOnlyPendingCountForTests()).toBe(0)
+})
+
+it('a chat that takes no images keeps no @path for a marked image, and the message is unchanged', async () => {
+  const scope = 'agent-session:notes-attach-text-only'
+  updateNativeChatComposerDraft(scope, { text: 'please check' }, 'immediate')
+  const composer = mountComposer(scope, { kind: 'local' }, vi.fn(), { acceptsImages: false })
+  const { finish } = holdSave()
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+  let attached!: Promise<string | null>
+  await act(async () => {
+    attached = composer.result.current(image())
+  })
+  await act(async () => finish('/tmp/marked.png'))
+
+  expect(await attached).toBeNull()
+  const draft = readNativeChatComposerDraft(scope)
+  expect(draft.text).toBe('please check')
+  expect(draft.images).toEqual([])
+  expect(nativeChatImageOnlyPendingCountForTests()).toBe(0)
+})
+
+it('a marked image never takes the place of words selected in the message box', async () => {
+  const scope = 'agent-session:notes-attach-selection'
+  updateNativeChatComposerDraft(scope, { text: 'please check this' }, 'immediate')
+  // An editor holding "check" selected, writing to the draft as the message box's does.
+  const input = {
+    value: 'please check this',
+    selectionStart: 7,
+    selectionEnd: 12,
+    disabled: false,
+    focus: noop,
+    select: noop,
+    setSelectionRange(from: number, to: number) {
+      input.selectionStart = from
+      input.selectionEnd = to
+    },
+    insertText(text: string) {
+      input.value =
+        input.value.slice(0, input.selectionStart) + text + input.value.slice(input.selectionEnd)
+      updateNativeChatComposerDraft(scope, { text: input.value }, 'immediate')
+    }
+  }
+  const composer = mountComposer(scope, { kind: 'local' }, vi.fn(), { input })
+  const { finish } = holdSave()
+  let attached!: Promise<string | null>
+  await act(async () => {
+    attached = composer.result.current(image())
+  })
+  await act(async () => finish('/tmp/marked.png'))
+
+  const id = await attached
+  const { text } = readNativeChatComposerDraft(scope)
+  expect(text).toContain('please check')
+  expect(text).toContain(`[Image](orca-image:${id})`)
+  expect(text.indexOf('check')).toBeLessThan(text.indexOf('[Image]'))
 })

@@ -23285,6 +23285,8 @@
         "annotateTooLarge": "This image is too large to draw notes on (over 33 megapixels).",
         "imageNotReady": "The image isn’t ready yet.",
         "closeNoMessageBox": "No message box to add notes to.",
+        "closeNoImages": "This chat takes no images.",
+        "imagesUnsupported": "This chat doesn’t take images, so notes can’t be added to it.",
         "closeEditingQueued": "Finish the queued edit first.",
         "closeGoal": "Goals can’t include images.",
         "closeCommand": "Message box has a command.",

@@ -26,7 +26,13 @@ export function nativeChatAnnotateReason(
 }
 
 /** Why the chat's message box can't take notes now; null when it can. */
-export type NativeChatNotesBlocked = 'unavailable' | 'editing' | 'goal' | 'command' | null
+export type NativeChatNotesBlocked =
+  | 'unavailable'
+  | 'images'
+  | 'editing'
+  | 'goal'
+  | 'command'
+  | null
 
 /** Why Send is off for a blocked message box. */
 export function nativeChatNotesBlockedReason(
@@ -38,6 +44,11 @@ export function nativeChatNotesBlockedReason(
       return t(
         'components.native-chat.notes.noMessageBox',
         'This chat’s message box isn’t available right now.'
+      )
+    case 'images':
+      return t(
+        'components.native-chat.notes.imagesUnsupported',
+        'This chat doesn’t take images, so notes can’t be added to it.'
       )
     case 'editing':
       return t(
@@ -65,6 +76,8 @@ export function nativeChatNotesCloseBlockedText(
   switch (blocked) {
     case 'unavailable':
       return t('components.native-chat.notes.closeNoMessageBox', 'No message box to add notes to.')
+    case 'images':
+      return t('components.native-chat.notes.closeNoImages', 'This chat takes no images.')
     case 'editing':
       return t('components.native-chat.notes.closeEditingQueued', 'Finish the queued edit first.')
     case 'goal':

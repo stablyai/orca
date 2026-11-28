@@ -79,9 +79,11 @@ export function useNativeChatComposerHandle(
     ...pasteArgs,
     insertTypedText: insertPastedTextOrFile
   })
+  const editorInput = useCallback(() => textareaRef.current, [textareaRef])
   const attachGeneratedImage = useNativeChatGeneratedImageAttach(
     pasteParts,
-    args.resolveAttachmentOwner
+    args.resolveAttachmentOwner,
+    editorInput
   )
 
   useImperativeHandle(

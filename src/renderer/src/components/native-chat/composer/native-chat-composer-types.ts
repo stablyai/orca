@@ -134,7 +134,7 @@ export type NativeChatComposerHandle = {
   /** Why notes can't go with the current draft now: this box is editing a queued message, is setting
    *  a goal (which takes no images), or Enter would run the draft as a command. Null when Enter would
    *  send it to the agent as a message. */
-  notesBlocked?: () => 'editing' | 'goal' | 'command' | null
+  notesBlocked?: () => 'unavailable' | 'images' | 'editing' | 'goal' | 'command' | null
   /** Attaches an image Orca drew as a chip, like a paste; resolves its attachment id. */
   attachGeneratedImage?: (image: Blob) => Promise<string | null>
 }

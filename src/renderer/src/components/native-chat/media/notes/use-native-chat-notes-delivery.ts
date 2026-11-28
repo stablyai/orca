@@ -138,7 +138,9 @@ export function useNativeChatNotesDelivery({
           composer,
           mediaName: title,
           notes,
-          frame: async () => ({ image: loaded.image, ...loaded.size })
+          frame: async () => ({ image: loaded.image, ...loaded.size }),
+          // Asked as the notes go in, not when Send was drawn: the box may have changed since.
+          blocked: () => blockedIn(composer)
         })
         handed = true
         await afterComposerRender()
@@ -252,7 +254,8 @@ async function handOffFromGoneViewer(
       composer: box,
       mediaName: title,
       notes,
-      frame: async () => ({ image: loaded.image, ...loaded.size })
+      frame: async () => ({ image: loaded.image, ...loaded.size }),
+      blocked: () => blockedIn(box)
     })
     await afterComposerRender()
     announceNativeChatNotesHandOff(box.scopeKey, before, added, notes.length)
@@ -262,8 +265,11 @@ async function handOffFromGoneViewer(
   }
 }
 
+/** The notes of a viewer that went are gone with it: the line stays until the user has seen it,
+ *  even when they come back to the chat later. */
 function showGoneNotAdded(scopeKey: string, title: string, t: typeof translate): void {
   showNativeChatNotesNotice(scopeKey, {
+    sticky: true,
     text: t('components.native-chat.notes.goneNotAdded', 'Notes on {{name}} weren’t added.', {
       name: title
     })

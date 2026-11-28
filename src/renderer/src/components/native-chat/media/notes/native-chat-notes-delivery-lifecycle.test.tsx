@@ -27,6 +27,20 @@ import {
 } from './native-chat-notes-notice'
 import { scopeListeners } from '../../drafts/native-chat-composer-draft-memory'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
+import type * as DraftJournal from '../../drafts/native-chat-composer-draft-journal'
+import { promptTextContent } from '../../composer/editor/native-chat-prompt-document-text'
+
+// The draft journal, refusing an addition when a test says so (storage full).
+const journal = vi.hoisted(() => ({ refuse: false }))
+vi.mock('../../drafts/native-chat-composer-draft-journal', async (importOriginal) => {
+  const actual = await importOriginal<typeof DraftJournal>()
+  return {
+    ...actual,
+    journalNativeChatComposerDraftAddition: (
+      ...args: Parameters<typeof actual.journalNativeChatComposerDraftAddition>
+    ) => !journal.refuse && actual.journalNativeChatComposerDraftAddition(...args)
+  }
+})
 
 vi.mock('./native-chat-media-notes-draw', () => ({
   drawNativeChatNotesImage: async () => new Blob(['png'], { type: 'image/png' })
@@ -116,6 +130,7 @@ beforeEach(async () => {
   await hydrateNativeChatComposerDrafts()
 })
 afterEach(() => {
+  journal.refuse = false
   document.body.replaceChildren()
 })
 
@@ -369,4 +384,212 @@ it('a hand-off that fails after its viewer went says so in the message box', asy
   })
   await vi.waitFor(() => expect(line.result.current?.text).toBe('Notes on a.png weren’t added.'))
   expect(draft()).toEqual({ text: '', ids: [] })
+})
+
+/** An attach that marks each copy with its own id, as the message box does. */
+function attachEach(): () => Promise<string | null> {
+  let count = 0
+  return async () => {
+    const id = `marked-${++count}`
+    appendToNativeChatComposerDraft(SCOPE, { images: [{ id, path: `/m${count}.png` }] })
+    insertImageReferences(SCOPE, null, [id])
+    return id
+  }
+}
+
+it('Undo isn’t offered when a held image was filled in while the marked image was prepared, and the fill stays', async () => {
+  updateNativeChatComposerDraft(
+    SCOPE,
+    { text: 'please check', images: [{ id: 'held', path: '' }] },
+    'immediate'
+  )
+  const { opener } = chat({
+    attach: async () => {
+      // The user's own image, still on its way when the hand-off began, lands under its id.
+      updateNativeChatComposerDraft(
+        SCOPE,
+        { images: [{ id: 'held', path: '/shot.png' }] },
+        'immediate'
+      )
+      return attachEach()()
+    }
+  })
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(line.result.current?.text).toBe('1 note added to your message')
+  expect(line.result.current?.action).toBeUndefined()
+  expect(readNativeChatComposerDraft(SCOPE).images[0]).toEqual({ id: 'held', path: '/shot.png' })
+})
+
+it('Undo after an edit to the message’s document while the image was prepared keeps that edit', async () => {
+  updateNativeChatComposerDraft(
+    SCOPE,
+    { text: 'please check', document: promptTextContent('please check') },
+    'immediate'
+  )
+  const bold = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'please check', marks: [{ type: 'bold' }] }]
+      }
+    ]
+  }
+  const { opener } = chat({
+    attach: async () => {
+      // Same words, a different document: only the editor's own structure changed.
+      updateNativeChatComposerDraft(SCOPE, { text: 'please check', document: bold }, 'immediate')
+      return attachEach()()
+    }
+  })
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  act(() => line.result.current?.action?.onClick())
+  const after = readNativeChatComposerDraft(SCOPE)
+  expect(after.text).toBe('please check')
+  expect(after.images).toEqual([])
+  expect(after.document?.content?.[0]?.content?.[0]?.marks).toEqual([{ type: 'bold' }])
+})
+
+it('a line break added after the hand-off ends Undo', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(line.result.current?.action?.label).toBe('Undo')
+  act(() => {
+    const { text } = readNativeChatComposerDraft(SCOPE)
+    updateNativeChatComposerDraft(
+      SCOPE,
+      { text: text.replace('please check', 'please\ncheck') },
+      'immediate'
+    )
+  })
+  expect(line.result.current).toBeNull()
+})
+
+it('the same notes added twice each keep their text beside their image', async () => {
+  // A message box whose images aren't referenced in its words (a terminal-backed chat's): the
+  // message already ends in the same notes text when the second copy's notes go in.
+  let count = 0
+  const { opener } = chat({
+    attach: async () => {
+      const id = `marked-${++count}`
+      appendToNativeChatComposerDraft(SCOPE, { images: [{ id, path: `/m${count}.png` }] })
+      return id
+    }
+  })
+  for (let round = 0; round < 2; round++) {
+    const view = viewer(opener, vi.fn())
+    await act(async () => {
+      await view.result.current.delivery.close()
+    })
+    view.unmount()
+  }
+  expect(draft().ids).toEqual(['marked-1', 'marked-2'])
+  expect(draft().text).toBe(`${NOTES_TEXT}\n\n${NOTES_TEXT}`)
+})
+
+it('notes whose text can’t be saved with the message stay in the viewer, and the message is as it was', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  const { opener } = chat()
+  const onOpenChange = vi.fn()
+  const view = viewer(opener, onOpenChange)
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  // The draft journal refuses the addition (storage full).
+  journal.refuse = true
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  expect(onOpenChange).not.toHaveBeenCalled()
+  const { status } = view.result.current.editor
+  expect(status?.kind === 'error' && status.message).toBe('Couldn’t add the marked image.')
+  expect(view.result.current.editor.notes).toHaveLength(1)
+  expect(draft()).toEqual({ text: 'please check', ids: [] })
+})
+
+it('Send when the message box stopped taking notes since the viewer drew it says why and adds nothing', async () => {
+  let blocked: 'command' | null = null
+  const { handle, opener } = chat()
+  handle.notesBlocked = () => blocked
+  const view = viewer(opener, vi.fn())
+  expect(view.result.current.delivery.canSend).toBe(true)
+  blocked = 'command'
+  await act(async () => {
+    await view.result.current.delivery.send()
+  })
+  expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
+  expect(handle.submit).not.toHaveBeenCalled()
+  const { status } = view.result.current.editor
+  expect(status?.kind === 'error' && status.message).toBe(
+    'Your message box holds a command. Send or clear it first.'
+  )
+  expect(draft()).toEqual({ text: '', ids: [] })
+})
+
+it('a message box that stops taking notes while the image is prepared keeps nothing of them', async () => {
+  updateNativeChatComposerDraft(SCOPE, { text: 'please check' }, 'immediate')
+  let blocked: 'goal' | null = null
+  const attach = attachEach()
+  const { handle, opener } = chat({
+    attach: async () => {
+      const id = await attach()
+      blocked = 'goal'
+      return id
+    }
+  })
+  handle.notesBlocked = () => blocked
+  const view = viewer(opener, vi.fn())
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  const { status } = view.result.current.editor
+  expect(status?.kind === 'error' && status.message).toBe('Goals can’t include images.')
+  expect(status?.kind === 'error' && status.discard).toBeTypeOf('function')
+  expect(draft()).toEqual({ text: 'please check', ids: [] })
+})
+
+it('a chat that takes no images says so on Close and Send, and adds nothing', async () => {
+  const { handle, opener } = chat({ blocked: 'images' })
+  const view = viewer(opener, vi.fn())
+  expect(view.result.current.delivery.canSend).toBe(false)
+  expect(view.result.current.delivery.sendReason).toBe(
+    'This chat doesn’t take images, so notes can’t be added to it.'
+  )
+  await act(async () => {
+    await view.result.current.delivery.close()
+  })
+  const { status } = view.result.current.editor
+  expect(status?.kind === 'error' && status.message).toBe('This chat takes no images.')
+  expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
+  expect(draft()).toEqual({ text: '', ids: [] })
+})
+
+it('the line saying a gone viewer’s notes weren’t added stays until it is dismissed', async () => {
+  chat({ blocked: 'command' })
+  const opener = { current: document.querySelector('button') }
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  try {
+    view.unmount()
+    await vi.waitFor(() => expect(line.result.current?.text).toBe('Notes on a.png weren’t added.'))
+    act(() => vi.advanceTimersByTime(60_000))
+    expect(line.result.current?.text).toBe('Notes on a.png weren’t added.')
+    act(() => line.result.current?.onDismiss?.())
+    expect(line.result.current).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
 })

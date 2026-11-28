@@ -22944,6 +22944,8 @@
         "annotateTooLarge": "這張圖片太大，無法繪製備註（超過 3300 萬像素）。",
         "imageNotReady": "圖片尚未準備好。",
         "closeNoMessageBox": "沒有可加入備註的訊息框。",
+        "closeNoImages": "此聊天不接受圖片。",
+        "imagesUnsupported": "此聊天不接受圖片，因此無法加入備註。",
         "closeEditingQueued": "請先完成佇列中的編輯。",
         "closeGoal": "設定目標時無法加入圖片。",
         "closeCommand": "訊息框中有一則指令。",

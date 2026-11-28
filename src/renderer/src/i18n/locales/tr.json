@@ -23261,6 +23261,8 @@
         "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
         "imageNotReady": "Görsel henüz hazır değil.",
         "closeNoMessageBox": "Not eklenecek mesaj kutusu yok.",
+        "closeNoImages": "Bu sohbet görsel kabul etmez.",
+        "imagesUnsupported": "Bu sohbet görsel kabul etmiyor, bu yüzden not eklenemez.",
         "closeEditingQueued": "Önce sıradaki düzenlemeyi bitirin.",
         "closeGoal": "Hedef görsel kabul etmez.",
         "closeCommand": "Mesaj kutusunda bir komut var.",
