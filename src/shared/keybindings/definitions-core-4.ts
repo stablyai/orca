@@ -201,5 +201,35 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     conflictGroups: ['global', 'tabs', 'botItem'],
     searchKeywords: ['shortcut', 'bot', 'item', 'items', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Alt+ArrowDown'])
+  },
+  {
+    id: 'worktree.navigateUpAll',
+    title: 'Previous sidebar workspace (all sections)',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'bot', 'sidebar', 'previous', 'up', 'all'],
+    defaultBindings: platformBindings([]),
+    allowInTextField: 'non-default-chords',
+    runsInChatPrompt: true
+  },
+  {
+    id: 'worktree.navigateDownAll',
+    title: 'Next sidebar workspace (all sections)',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'bot', 'sidebar', 'next', 'down', 'all'],
+    defaultBindings: platformBindings([]),
+    allowInTextField: 'non-default-chords',
+    runsInChatPrompt: true
+  },
+  {
+    id: 'sidebar.switchSection',
+    title: 'Switch between Bots and Projects',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'bots', 'projects', 'switch', 'section'],
+    defaultBindings: platformBindings([]),
+    allowInTextField: 'non-default-chords',
+    runsInChatPrompt: true
   }
 ]

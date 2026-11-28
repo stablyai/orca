@@ -20,6 +20,7 @@ import {
   setBotSidebarCycleWorkers
 } from '@/components/bots/bot-sidebar-cycle-entries'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
+import { resolveSwitchedSectionRow } from './sidebar-section-switch'
 
 type TestBot = { hostId: ExecutionHostId }
 
@@ -169,6 +170,7 @@ describe('worktree keyboard cycling across Bots and Projects', () => {
         botsRows,
         projectsFirst,
         projectsCollapsed: false,
+        scope: 'all',
         activeWorktreeId,
         activeWorkspaceExecutionHostId: activeHost,
         lastActiveWorkspace: null,
@@ -223,6 +225,7 @@ describe('worktree keyboard cycling across Bots and Projects', () => {
       botsRows,
       projectsFirst: false,
       projectsCollapsed: false,
+      scope: 'all',
       activeWorktreeId: botWorker.id,
       activeWorkspaceExecutionHostId: 'local',
       lastActiveWorkspace: null,
@@ -239,6 +242,7 @@ describe('worktree keyboard cycling across Bots and Projects', () => {
       botsRows,
       projectsFirst: false,
       projectsCollapsed: false,
+      scope: 'all',
       activeWorktreeId: folderWorkspaceKey(remoteBotHome.id),
       activeWorkspaceExecutionHostId: pairedHost,
       lastActiveWorkspace: null,
@@ -343,5 +347,170 @@ describe('worktree keyboard cycling across Bots and Projects', () => {
     } finally {
       setBotSidebarCycleEntries([])
     }
+  })
+
+  it('scopes default Previous/Next cycling to the active section and respects activeSection on duplicates', () => {
+    const secondProjectWt = makeWorktree('wt-proj-2')
+    const twoProjectRows: HostSectionRow[] = [
+      makeProjectRow(projectWt, localRepo),
+      makeProjectRow(secondProjectWt, localRepo)
+    ]
+    const botsRows = buildBotSidebarCycleRows({
+      entries: [botEntry, groupEntry],
+      workersByEntryKey: new Map([[botEntry.id, [botWorker]]]),
+      collapsedGroups: new Set(),
+      repoMap,
+      isHostOffline: () => false
+    })
+
+    // Inside Bots: cycles botHome -> botWorker -> groupHome -> botHome without leaving Bots.
+    const nextBot = resolveCycledWorkspaceRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      projectsFirst: false,
+      projectsCollapsed: false,
+      activeSection: 'bots',
+      activeWorktreeId: folderWorkspaceKey(groupHome.id),
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      navHistory: [],
+      navHistoryIndex: -1,
+      direction: 'down'
+    })
+    expect(nextBot?.worktree.id).toBe(folderWorkspaceKey(botHome.id))
+
+    // Inside Projects: wraps within Projects without entering Bots or opening Bot Groups.
+    const prevProject = resolveCycledWorkspaceRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      projectsFirst: false,
+      projectsCollapsed: false,
+      activeSection: 'projects',
+      activeWorktreeId: projectWt.id,
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      navHistory: [],
+      navHistoryIndex: -1,
+      direction: 'up'
+    })
+    expect(prevProject?.worktree.id).toBe(secondProjectWt.id)
+
+    // Duplicate worktree (Hide bot workspaces off): activeSection selects which list to cycle.
+    const rowsWithDuplicate: HostSectionRow[] = [
+      makeProjectRow(botWorker, localRepo),
+      makeProjectRow(projectWt, localRepo)
+    ]
+    const nextInProjects = resolveCycledWorkspaceRow({
+      rows: rowsWithDuplicate,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      projectsFirst: false,
+      projectsCollapsed: false,
+      activeSection: 'projects',
+      activeWorktreeId: botWorker.id,
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      navHistory: [],
+      navHistoryIndex: -1,
+      direction: 'down'
+    })
+    expect(nextInProjects?.worktree.id).toBe(projectWt.id)
+
+    const nextInBots = resolveCycledWorkspaceRow({
+      rows: rowsWithDuplicate,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      projectsFirst: false,
+      projectsCollapsed: false,
+      activeSection: 'bots',
+      activeWorktreeId: botWorker.id,
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      navHistory: [],
+      navHistoryIndex: -1,
+      direction: 'down'
+    })
+    expect(nextInBots?.worktree.id).toBe(folderWorkspaceKey(groupHome.id))
+  })
+
+  it('switches between Bots and Projects using remembered per-section selection with first-row fallback', () => {
+    const secondProjectWt = makeWorktree('wt-proj-2')
+    const twoProjectRows: HostSectionRow[] = [
+      makeProjectRow(projectWt, localRepo),
+      makeProjectRow(secondProjectWt, localRepo)
+    ]
+    const botsRows = buildBotSidebarCycleRows({
+      entries: [botEntry, groupEntry],
+      workersByEntryKey: new Map(),
+      collapsedGroups: new Set(),
+      repoMap,
+      isHostOffline: () => false
+    })
+
+    // No remembered project yet -> falls back to first visible Project.
+    const toFirstProject = resolveSwitchedSectionRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      activeSection: 'bots',
+      activeWorktreeId: folderWorkspaceKey(botHome.id),
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      lastActiveBySection: {},
+      navHistory: [],
+      navHistoryIndex: -1
+    })
+    expect(toFirstProject?.worktree.id).toBe(projectWt.id)
+
+    // With remembered entries in both sections -> returns straight to the last selected entry.
+    const lastActiveBySection = {
+      bots: { worktreeId: folderWorkspaceKey(groupHome.id), executionHostId: 'local' as const },
+      projects: { worktreeId: secondProjectWt.id, executionHostId: 'local' as const }
+    }
+    const toRememberedProject = resolveSwitchedSectionRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      activeSection: 'bots',
+      activeWorktreeId: folderWorkspaceKey(botHome.id),
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      lastActiveBySection,
+      navHistory: [],
+      navHistoryIndex: -1
+    })
+    expect(toRememberedProject?.worktree.id).toBe(secondProjectWt.id)
+
+    const toRememberedBot = resolveSwitchedSectionRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      activeSection: 'projects',
+      activeWorktreeId: secondProjectWt.id,
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      lastActiveBySection,
+      navHistory: [],
+      navHistoryIndex: -1
+    })
+    expect(toRememberedBot?.worktree.id).toBe(folderWorkspaceKey(groupHome.id))
+
+    // Collapsed target section returns null instead of jumping into hidden rows.
+    const blockedWhenCollapsed = resolveSwitchedSectionRow({
+      rows: twoProjectRows,
+      pinnedDisplayPolicy: 'single-location',
+      botsRows,
+      projectsCollapsed: true,
+      activeSection: 'bots',
+      activeWorktreeId: folderWorkspaceKey(botHome.id),
+      activeWorkspaceExecutionHostId: 'local',
+      lastActiveWorkspace: null,
+      lastActiveBySection,
+      navHistory: [],
+      navHistoryIndex: -1
+    })
+    expect(blockedWhenCollapsed).toBeNull()
   })
 })

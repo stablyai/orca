@@ -8,8 +8,9 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type { LastActiveCycleWorkspace } from './worktree-keyboard-cycle'
+import type { LastActiveCycleWorkspace, SidebarCycleScope } from './worktree-keyboard-cycle'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
+import { switchAndRevealSidebarSection } from './sidebar-section-switch'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { focusActiveWorkspaceSurfaceFromSidebar, focusProjects } from './focus-workspace-surface'
@@ -20,8 +21,11 @@ import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 import {
   activateAndRevealCycledRow,
   clearPendingBotGroupCycleRow,
+  matchSidebarCycleShortcut,
+  readActiveSidebarCycleSection,
   readGlobalSidebarCycleOptions,
-  readPendingBotGroupCycleRow
+  readPendingBotGroupCycleRow,
+  recordLastActiveSectionWorkspace
 } from './cycled-workspace-activation'
 import { useSidebarWorkspacePreview } from './use-sidebar-workspace-preview'
 
@@ -64,10 +68,12 @@ export function useWorktreeListKeyboardNavigation(args: {
   useEffect(() => {
     // Closing the last tab clears both selection and host; history retains only the id.
     if (activeWorktreeId !== null) {
-      lastActiveWorkspaceRef.current = {
+      const activeWorkspace = {
         worktreeId: activeWorktreeId,
         executionHostId: activeWorkspaceExecutionHostId
       }
+      lastActiveWorkspaceRef.current = activeWorkspace
+      recordLastActiveSectionWorkspace(readActiveSidebarCycleSection(), activeWorkspace)
     }
     clearPendingBotGroupCycleRow()
   }, [activeWorktreeId, activeWorkspaceExecutionHostId])
@@ -84,18 +90,26 @@ export function useWorktreeListKeyboardNavigation(args: {
     useSidebarWorkspaceDeleteKeyboard({ keybindings, resolveDeleteIntent, dropPreview })
 
   const navigateWorktree = useCallback(
-    (direction: 'up' | 'down', isRepeat: boolean, selectInList = false) => {
+    (
+      direction: 'up' | 'down',
+      isRepeat: boolean,
+      selectInList = false,
+      scope: SidebarCycleScope = 'section'
+    ) => {
       const { worktreeNavHistory, worktreeNavHistoryIndex } = useAppStore.getState()
       const preview = readActivePreviewRow()
       // BotGroup opens wait for folder fetch, so chain non-repeated presses until activation settles.
       const pendingBotGroup = !selectInList && !isRepeat ? readPendingBotGroupCycleRow() : null
       const anchorRow = preview ?? pendingBotGroup
       const focused = selectInList ? focusedWorktree : null
+      const globalOptions = selectInList ? null : readGlobalSidebarCycleOptions()
       // Cycle actual rendered rows so collapse, pins, hosts, Bots and folder workspaces stay aligned with the screen.
       const nextRow = resolveCycledWorkspaceRow({
         rows,
         pinnedDisplayPolicy,
-        ...(selectInList ? {} : readGlobalSidebarCycleOptions()),
+        ...globalOptions,
+        scope,
+        activeSection: anchorRow?.section ?? globalOptions?.activeSection,
         activeWorktreeId: anchorRow?.worktree.id ?? focused?.id ?? activeWorktreeId,
         activeWorkspaceExecutionHostId: anchorRow
           ? getWorktreeExecutionHostId(anchorRow.worktree, anchorRow.repo)
@@ -164,16 +178,32 @@ export function useWorktreeListKeyboardNavigation(args: {
         return
       }
 
-      const direction = keybindingMatchesAction('worktree.navigateUp', e, platform, keybindings)
-        ? 'up'
-        : keybindingMatchesAction('worktree.navigateDown', e, platform, keybindings)
-          ? 'down'
-          : null
-      const directionAction = direction === 'up' ? 'worktree.navigateUp' : 'worktree.navigateDown'
-      if (direction && !textFieldClaimsActionKey(e, directionAction) && !hasVisibleOverlay()) {
+      if (
+        keybindingMatchesAction('sidebar.switchSection', e, platform, keybindings) &&
+        !textFieldClaimsActionKey(e, 'sidebar.switchSection') &&
+        !hasVisibleOverlay()
+      ) {
         endListNavigation()
         markDirectScrollInput()
-        navigateWorktree(direction, e.repeat)
+        switchAndRevealSidebarSection({
+          rows,
+          pinnedDisplayPolicy,
+          previewRow: readActivePreviewRow(),
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId,
+          lastActiveWorkspace: lastActiveWorkspaceRef.current,
+          dropPreview
+        })
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
+      const cycleMatch = matchSidebarCycleShortcut(e, platform, keybindings)
+      if (cycleMatch && !textFieldClaimsActionKey(e, cycleMatch.action) && !hasVisibleOverlay()) {
+        endListNavigation()
+        markDirectScrollInput()
+        navigateWorktree(cycleMatch.direction, e.repeat, false, cycleMatch.scope)
         e.preventDefault()
         // Why: a user-bound chord fired from a field must not also reach the field's own handler.
         e.stopPropagation()
@@ -217,12 +247,17 @@ export function useWorktreeListKeyboardNavigation(args: {
     }
   }, [
     activeModal,
+    activeWorkspaceExecutionHostId,
+    activeWorktreeId,
     commitPreview,
     dropPreview,
     hasPendingPreview,
     keybindings,
     markDirectScrollInput,
     navigateWorktree,
+    pinnedDisplayPolicy,
+    readActivePreviewRow,
+    rows,
     scrollRef,
     resetDeleteGesture
   ])

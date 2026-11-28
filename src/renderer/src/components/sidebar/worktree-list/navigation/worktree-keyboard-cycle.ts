@@ -5,20 +5,28 @@ import {
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import {
-  getWorktreeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
-import { getRenderedWorkspaceRowsInSidebarOrder as getCyclableWorktreeRows } from './worktree-sidebar-row-preference'
+import {
+  dedupeCycleRows,
+  getCyclableRowIdentity,
+  getRenderedWorkspaceRowsInSidebarOrder as getCyclableWorktreeRows,
+  resolveActiveSidebarSection,
+  type LastActiveCycleWorkspace,
+  type LastActiveSectionWorkspaces,
+  type RenderedWorkspaceRow,
+  type SidebarCycleScope,
+  type SidebarCycleSection
+} from './worktree-sidebar-row-preference'
 
-/** Resolve host ownership like activation does; raw local rows omit hostId and would fail identity matching. */
-export function getCyclableRowIdentity(row: RenderedWorkspaceRow): string {
-  return composeWorktreeHostIdentity(
-    getWorktreeExecutionHostId(row.worktree, row.repo),
-    row.worktree.id
-  )
+export {
+  dedupeCycleRows,
+  getCyclableRowIdentity,
+  resolveActiveSidebarSection,
+  type LastActiveCycleWorkspace,
+  type LastActiveSectionWorkspaces,
+  type SidebarCycleScope,
+  type SidebarCycleSection
 }
 
 export function resolveActiveCycleIdentity(args: {
@@ -94,11 +102,6 @@ export type SidebarWorkspaceOrigin = {
 
 export type SidebarWorkspacePreview = SidebarWorkspaceOrigin & { row: RenderedWorkspaceRow }
 
-export type LastActiveCycleWorkspace = {
-  worktreeId: string
-  executionHostId: ExecutionHostId | null
-}
-
 export type SidebarKeyboardPreview = LastActiveCycleWorkspace & SidebarWorkspaceOrigin
 
 export function matchesSidebarWorkspaceOrigin<T extends SidebarWorkspaceOrigin>(
@@ -162,17 +165,7 @@ export function composeSidebarCycleRows(args: {
   const ordered = args.projectsFirst
     ? [...visibleProjects, ...args.botsRows]
     : [...args.botsRows, ...visibleProjects]
-  const seen = new Set<string>()
-  const deduped: RenderedWorkspaceRow[] = []
-  for (const row of ordered) {
-    const identity = getCyclableRowIdentity(row)
-    if (seen.has(identity)) {
-      continue
-    }
-    seen.add(identity)
-    deduped.push(row)
-  }
-  return deduped
+  return dedupeCycleRows(ordered)
 }
 
 /** The rendered row one keyboard step lands on, in exact sidebar order. */
@@ -182,6 +175,8 @@ export function resolveCycledWorkspaceRow(args: {
   botsRows?: readonly RenderedWorkspaceRow[]
   projectsFirst?: boolean
   projectsCollapsed?: boolean
+  scope?: SidebarCycleScope
+  activeSection?: SidebarCycleSection | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   lastActiveWorkspace: LastActiveCycleWorkspace | null
@@ -190,33 +185,52 @@ export function resolveCycledWorkspaceRow(args: {
   direction: 'up' | 'down'
 }): RenderedWorkspaceRow | null {
   const projectRows = getCyclableWorktreeRows(args.rows, args.pinnedDisplayPolicy)
-  const worktreeRows =
-    args.botsRows !== undefined || args.projectsCollapsed
-      ? composeSidebarCycleRows({
-          botsRows: args.botsRows ?? [],
-          projectsRows: projectRows,
-          projectsFirst: args.projectsFirst ?? false,
-          projectsCollapsed: args.projectsCollapsed ?? false
-        })
-      : projectRows
+  const hasSidebarSections = args.botsRows !== undefined || args.projectsCollapsed === true
+  const visibleProjects = args.projectsCollapsed ? [] : projectRows
+  const visibleBots = args.botsRows ?? []
+  const allRows = hasSidebarSections
+    ? composeSidebarCycleRows({
+        botsRows: visibleBots,
+        projectsRows: projectRows,
+        projectsFirst: args.projectsFirst ?? false,
+        projectsCollapsed: args.projectsCollapsed ?? false
+      })
+    : projectRows
   const anchorWorktreeId = resolveCycleAnchorWorktreeId({
     activeWorktreeId: args.activeWorktreeId,
     navHistory: args.navHistory,
     navHistoryIndex: args.navHistoryIndex,
-    worktreeIds: worktreeRows.map((row) => row.worktree.id)
+    worktreeIds: allRows.map((row) => row.worktree.id)
   })
+  const activeIdentity = resolveActiveCycleIdentity({
+    rows: allRows,
+    activeWorktreeId: anchorWorktreeId,
+    activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
+      anchorWorktreeId,
+      activeWorktreeId: args.activeWorktreeId,
+      activeWorkspaceExecutionHostId: args.activeWorkspaceExecutionHostId,
+      lastActiveWorkspace: args.lastActiveWorkspace
+    })
+  })
+  let worktreeRows: RenderedWorkspaceRow[]
+  if (!hasSidebarSections || args.scope === 'all') {
+    worktreeRows = allRows
+  } else {
+    const section = resolveActiveSidebarSection({
+      botsRows: visibleBots,
+      projectsRows: visibleProjects,
+      activeIdentity,
+      preferredSection: args.activeSection,
+      projectsFirst: args.projectsFirst ?? false
+    })
+    if (section === null) {
+      return null
+    }
+    worktreeRows = dedupeCycleRows(section === 'bots' ? visibleBots : visibleProjects)
+  }
   const nextIdentity = resolveCycledWorktreeId({
     worktreeIds: worktreeRows.map(getCyclableRowIdentity),
-    activeWorktreeId: resolveActiveCycleIdentity({
-      rows: worktreeRows,
-      activeWorktreeId: anchorWorktreeId,
-      activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
-        anchorWorktreeId,
-        activeWorktreeId: args.activeWorktreeId,
-        activeWorkspaceExecutionHostId: args.activeWorkspaceExecutionHostId,
-        lastActiveWorkspace: args.lastActiveWorkspace
-      })
-    }),
+    activeWorktreeId: activeIdentity,
     direction: args.direction
   })
   if (nextIdentity === null) {
