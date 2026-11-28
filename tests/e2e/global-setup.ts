@@ -101,6 +101,7 @@ export function seedTestRepository(): string {
   const testRepoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-repo-')))
 
   execSync('git init', { cwd: testRepoDir, stdio: 'pipe' })
+  execSync('git symbolic-ref HEAD refs/heads/main', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.email "e2e@test.local"', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git config user.name "E2E Test"', { cwd: testRepoDir, stdio: 'pipe' })
 
