@@ -105,6 +105,8 @@ function hide(): void {
 let visible = true
 let events: WorktreeBasePollEvent[] = []
 let repoIds = ['repo']
+// The activity registry is module-global, so a test that throws must not leave its owner registered.
+const started: ReturnType<typeof createGitCommonWatchReconciliation>[] = []
 
 async function startReconciliation(): Promise<
   ReturnType<typeof createGitCommonWatchReconciliation>
@@ -135,6 +137,7 @@ async function startReconciliation(): Promise<
     subscribeRepoActivity: onRepoActivity,
     getRepoIds: () => repoIds
   })
+  started.push(reconciliation)
   await reconciliation.ensureStarted()
   reveal = () => {
     visible = true
@@ -150,6 +153,7 @@ beforeEach(() => {
   fs.stall = null
   fs.latencyMs = 0
   events = []
+  repoIds = ['repo']
   visible = true
   put(join('/', 'repo'), true)
   put(COMMON, true)
@@ -159,7 +163,8 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(started.splice(0).map((reconciliation) => reconciliation.unsubscribe()))
   vi.useRealTimers()
 })
 
@@ -293,7 +298,6 @@ it('routes activity to a repo that joins this git directory on watcher sync', as
   notifyWorktreeActivity('joined::/w')
   await vi.advanceTimersByTimeAsync(0)
   expect(events).toContainEqual({ type: 'create', path: added })
-  repoIds = ['repo']
   await reconciliation.unsubscribe()
 })
 
