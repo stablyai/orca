@@ -39,7 +39,10 @@ export function dropLegacyAdapter(
 }
 
 /** No more work goes to it; its exit subscription stays. */
-export function unrouteLegacyAdapter(adapter: DaemonPtyAdapter, legacy: DaemonPtyAdapter[]): boolean {
+export function unrouteLegacyAdapter(
+  adapter: DaemonPtyAdapter,
+  legacy: DaemonPtyAdapter[]
+): boolean {
   const index = legacy.indexOf(adapter)
   if (index === -1) {
     return false
