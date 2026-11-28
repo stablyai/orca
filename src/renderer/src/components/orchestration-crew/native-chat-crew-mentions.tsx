@@ -9,6 +9,7 @@ import type {
 import type { OrchestrationAgentReference } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { NativeChatRoomMention } from '../native-chat/composer/native-chat-composer-types'
 import { crewPartyStatus } from './crew-party-status'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../shared/agent-session/identity/orca-session-address-prefix'
 
 const AGENT_VALUE = 'crew-agent:'
 
@@ -29,11 +30,14 @@ export function crewRowStatus(row: OrchestrationCrewRow) {
 export type CrewAgentMentions = {
   mentions: readonly NativeChatRoomMention[]
   references: ReadonlyMap<string, OrchestrationAgentReference>
+  /** Every address a listed agent is reached or opened by: its mail address, chat and terminal. */
+  addresses: ReadonlySet<string>
 }
 
 export const NO_CREW_AGENT_MENTIONS: CrewAgentMentions = Object.freeze({
   mentions: [],
-  references: new Map()
+  references: new Map(),
+  addresses: new Set<string>()
 })
 
 /** The agents this chat's strip lists that mail can reach: its manager, workers and peers. Subagents have no address. */
@@ -48,6 +52,7 @@ export function crewAgentMentions(
   const seen = new Set<string>()
   const mentions: NativeChatRoomMention[] = []
   const references = new Map<string, OrchestrationAgentReference>()
+  const addresses = new Set<string>()
   const sections = [
     [rows.sections.managedBy, t('components.orchestrationCrew.managedBy', 'Managed by')],
     [rows.sections.managing, null]
@@ -58,6 +63,13 @@ export function crewAgentMentions(
         continue
       }
       seen.add(row.partyKey)
+      const open = row.openTarget
+      addresses.add(row.sendAddress)
+      if (open?.kind === 'chat') {
+        addresses.add(`${ORCA_SESSION_ADDRESS_PREFIX}${open.sessionId}`)
+      } else if (open?.kind === 'terminal') {
+        addresses.add(open.handle)
+      }
       const key = `${AGENT_VALUE}${row.partyKey}`
       references.set(key, {
         label: row.label,
@@ -74,7 +86,7 @@ export function crewAgentMentions(
       })
     }
   }
-  return { mentions, references }
+  return { mentions, references, addresses }
 }
 
 export function rankNativeChatCrewMentions(
@@ -82,11 +94,20 @@ export function rankNativeChatCrewMentions(
   query: string
 ): string[] {
   const needle = query.toLocaleLowerCase()
-  const has = (text: string | undefined) => text?.toLocaleLowerCase().includes(needle) === true
-  const starts = members.filter((member) => member.name.toLocaleLowerCase().startsWith(needle))
-  const named = members.filter((member) => !starts.includes(member) && has(member.name))
-  const described = members.filter(
-    (member) => !starts.includes(member) && !named.includes(member) && has(member.detail)
-  )
-  return [...starts, ...named, ...described].map((member) => member.key ?? member.name)
+  // One pass: a host can list thousands of terminals.
+  const starts: string[] = []
+  const named: string[] = []
+  const described: string[] = []
+  for (const member of members) {
+    const key = member.key ?? member.name
+    const name = member.name.toLocaleLowerCase()
+    if (name.startsWith(needle)) {
+      starts.push(key)
+    } else if (name.includes(needle)) {
+      named.push(key)
+    } else if (member.detail?.toLocaleLowerCase().includes(needle)) {
+      described.push(key)
+    }
+  }
+  return [...starts, ...named, ...described]
 }
