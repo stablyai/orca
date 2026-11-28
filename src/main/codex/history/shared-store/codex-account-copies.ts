@@ -29,6 +29,9 @@ export const homeName = (accountHome: string, path: string): string =>
   relative(accountHome, path).split(/[\\/]/).join('/')
 // What one launch's move phase can get through; the rest is verified again next launch.
 const MAX_VERIFIED_PER_HOME = 5_000
+// What the first oversized pair may read and take each launch, even past the launch's budget.
+const OVERSIZED_SLICE_BYTES = 256 * 1024 ** 2
+const OVERSIZED_SLICE_MS = 20_000
 
 /** `maxBytes`: what this home may still read of copies and originals together. */
 export type VerifyBudget = { maxBytes: number; deadline: number }
@@ -91,12 +94,12 @@ export async function verifyCodexAccountCopies(args: {
   const oversized: Candidate[] = []
   let bytesRead = 0
   let outOfTime = false
-  const compare = (candidate: Candidate, maxBytes: number): void => {
+  const compare = (candidate: Candidate, maxBytes: number, deadline: number): void => {
     const { name, key, copy, copyStats, original } = candidate
     const result = originalHoldsCopy(copy, original.path, copyStats.size, {
       from: candidate.from,
       maxBytes,
-      deadline: args.budget.deadline
+      deadline
     })
     const copyAfter = lstatOrNull(copy)
     const originalAfter = lstatOrNull(original.path)
@@ -131,7 +134,8 @@ export async function verifyCodexAccountCopies(args: {
   for (const { root, copy, segments } of walkCopies(
     args.accountHome,
     args.storeHome,
-    cursor.walkAfter
+    cursor.walkAfter,
+    args.budget.deadline
   )) {
     const name = segments.join('/')
     if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
@@ -212,24 +216,32 @@ export async function verifyCodexAccountCopies(args: {
         continue
       }
       bytesRead += size
-      compare(candidate, Infinity)
+      compare(candidate, Infinity, args.budget.deadline)
     } catch {
       tally.error += 1
     }
   }
-  for (const candidate of oversized) {
+  // A walk the deadline or cap cut short stopped at a directory, not a copy: still unfinished.
+  outOfTime ||= Date.now() > args.budget.deadline
+  for (const [index, candidate] of oversized.entries()) {
     // Whatever the rest left; progress is saved, so each launch gets further.
-    const allowance = Math.floor((args.budget.maxBytes - bytesRead - 1) / 2)
-    if (outOfTime || allowance <= 0 || Date.now() > args.budget.deadline) {
-      tally.deferred += 1
-      if (progress[candidate.name]?.key === candidate.key) {
-        nextProgress[candidate.name] = progress[candidate.name]
+    let allowance = Math.floor((args.budget.maxBytes - bytesRead - 1) / 2)
+    let deadline = args.budget.deadline
+    if (outOfTime || allowance <= 0 || Date.now() > deadline) {
+      if (index > 0) {
+        tally.deferred += 1
+        if (progress[candidate.name]?.key === candidate.key) {
+          nextProgress[candidate.name] = progress[candidate.name]
+        }
+        continue
       }
-      continue
+      // The first still gets a slice of its own, so oversized pairs progress every launch.
+      allowance = OVERSIZED_SLICE_BYTES
+      deadline = Date.now() + OVERSIZED_SLICE_MS
     }
     bytesRead += allowance * 2 + 1
     try {
-      compare(candidate, allowance)
+      compare(candidate, allowance, deadline)
     } catch {
       tally.error += 1
     }

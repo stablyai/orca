@@ -92,8 +92,13 @@ function* sortedRolloutFiles(
   folder: string,
   segments: string[],
   after: string[] | null,
-  listed: Map<string, Dirent[]>
+  listed: Map<string, Dirent[]>,
+  deadline: number
 ): Generator<WalkedCopy> {
+  // Checked before each listing too: a tree of folders with no rollouts mustn't outrun it.
+  if (Date.now() > deadline) {
+    return
+  }
   let entries = listed.get(folder)
   try {
     entries ??= readdirSync(folder, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))
@@ -120,7 +125,7 @@ function* sortedRolloutFiles(
     }
     const path = join(folder, entry.name)
     if (entry.isDirectory()) {
-      yield* sortedRolloutFiles(root, path, next, from, listed)
+      yield* sortedRolloutFiles(root, path, next, from, listed, deadline)
     } else if (entry.isFile() && ROLLOUT_FILE.test(entry.name)) {
       yield { root, copy: path, segments: next }
     }
@@ -134,7 +139,8 @@ function* sortedRolloutFiles(
 export function* walkCopies(
   accountHome: string,
   storeHome: string,
-  after?: string
+  after: string | undefined,
+  deadline = Infinity
 ): Generator<WalkedCopy> {
   const cursor = after ? after.split('/') : null
   const listed = new Map<string, Dirent[]>()
@@ -144,14 +150,21 @@ export function* walkCopies(
   for (const { root, segments } of roots) {
     const order = cursor ? compareWalkPaths(segments, cursor.slice(0, segments.length)) : 1
     if (order >= 0) {
-      yield* sortedRolloutFiles(root, root.root, segments, order === 0 ? cursor : null, listed)
+      yield* sortedRolloutFiles(
+        root,
+        root.root,
+        segments,
+        order === 0 ? cursor : null,
+        listed,
+        deadline
+      )
     }
   }
   if (!cursor) {
     return
   }
   for (const { root, segments } of roots) {
-    for (const item of sortedRolloutFiles(root, root.root, segments, null, listed)) {
+    for (const item of sortedRolloutFiles(root, root.root, segments, null, listed, deadline)) {
       if (compareWalkPaths(item.segments, cursor) > 0) {
         return
       }

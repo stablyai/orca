@@ -3,11 +3,11 @@ import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { isCodexAccountHistoryWorkStopping } from './codex-account-history-index'
+import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
 import {
-  cleanUpCodexAccountCopies,
   startCodexAccountCopiesWorker,
   type CodexAccountCopiesWorker
-} from './codex-account-copies-cleanup'
+} from './codex-account-copies-worker'
 import { reportCodexHistoryCopiesCleanup } from '../../../telemetry/codex-history-copies-telemetry'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'

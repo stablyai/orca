@@ -11,7 +11,6 @@ import {
   isInsideHome,
   lstatOrNull,
   onlyOwnerWrites,
-  trashKey,
   type VerifiedCopy
 } from './codex-account-copy-checks'
 import {
@@ -84,15 +83,27 @@ export function recheckTrashedCopies(args: {
     // Smallest first: one huge copy can't hold back the rest, and it resumes where it stopped.
     const present = entries
       .map((entry) => ({ entry, path: join(trash, basename(entry.name)) }))
-      .map((item) => ({ ...item, stats: lstatOrNull(item.path) }))
+      .map((item) => {
+        try {
+          return { ...item, stats: lstatOrNull(item.path), failed: false }
+        } catch {
+          return { ...item, stats: null, failed: true }
+        }
+      })
       .sort((a, b) => Number((a.stats?.size ?? 0n) - (b.stats?.size ?? 0n)))
-    for (const { entry, path, stats } of present) {
+    for (const { entry, path, stats, failed } of present) {
+      if (failed) {
+        // Unreadable right now: kept listed for a later launch.
+        tally.error += 1
+        next.push(entry)
+        continue
+      }
       if (!stats) {
         // Listed, but its move never happened (the list is older than any late move).
         changed = true
         continue
       }
-      const before = `${entry.progress?.matched}|${entry.passed}`
+      const before = JSON.stringify([entry.progress, entry.passed])
       let reason: keyof CopiesTally | null
       try {
         reason = recheckOne(args, entry, list.name, path, stats, {
@@ -103,7 +114,7 @@ export function recheckTrashedCopies(args: {
       } catch {
         reason = 'error'
       }
-      changed ||= `${entry.progress?.matched}|${entry.passed}` !== before
+      changed ||= JSON.stringify([entry.progress, entry.passed]) !== before
       if (reason === null) {
         // Listed until its delete.
         next.push(entry)
@@ -179,8 +190,8 @@ function recheckOne(
   if (!onlyOwnerWrites(stats)) {
     return 'open'
   }
-  // Written to since the move: an appender that had it open.
-  if (trashKey(stats) !== entry.copyKey) {
+  // Written to since the move (an appender that had it open), or its key after the move unknown.
+  if (!entry.movedKey || fileKey(stats) !== entry.movedKey) {
     return 'changed'
   }
   const original = lstatOrNull(entry.original)
@@ -193,11 +204,11 @@ function recheckOne(
   if (stats.size > original.size) {
     return 'differs'
   }
-  const pairKey = `${trashKey(stats)}|${fileKey(original)}`
+  const pairKey = `${fileKey(stats)}|${fileKey(original)}`
   const copy: VerifiedCopy = {
     copy: path,
     original: entry.original,
-    copyKey: trashKey(stats),
+    copyKey: fileKey(stats),
     originalKey: fileKey(original),
     list
   }
@@ -225,7 +236,7 @@ function recheckOne(
   if (
     !copyAfter ||
     !originalAfter ||
-    trashKey(copyAfter) !== trashKey(stats) ||
+    fileKey(copyAfter) !== fileKey(stats) ||
     fileKey(originalAfter) !== fileKey(original)
   ) {
     // Changed during the read: looked at again next launch.
@@ -263,7 +274,7 @@ export function deleteTrashedCopies(accountHome: string, copies: VerifiedCopy[])
         !copy.list ||
         dirname(copy.copy) !== trash ||
         !stats ||
-        trashKey(stats) !== copy.copyKey ||
+        fileKey(stats) !== copy.copyKey ||
         !original ||
         fileKey(original) !== copy.originalKey ||
         !safeToRemove(accountHome, copy.copy, stats)

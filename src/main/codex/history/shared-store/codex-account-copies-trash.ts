@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { type BigIntStats, renameSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { emptyTally, type CopiesTally } from './codex-account-copies-tally'
@@ -6,7 +7,6 @@ import {
   isThreadBusy,
   lstatOrNull,
   onlyOwnerWrites,
-  trashKey,
   type VerifiedCopy
 } from './codex-account-copy-checks'
 import {
@@ -72,7 +72,8 @@ export function moveCheckedCopiesToTrash(
   } catch {
     // Kept below.
   }
-  const stamp = now.toString(36)
+  // Random too: two launches in the same millisecond must not pick the same names.
+  const stamp = `${now.toString(36)}${randomBytes(2).toString('hex')}`
   const moving = passing.map(({ copy, stats }, index) => ({
     copy,
     stats,
@@ -80,17 +81,18 @@ export function moveCheckedCopiesToTrash(
       name: `${stamp}-${index}-${basename(copy.copy)}`,
       from: homePath(accountHome, copy.copy),
       original: copy.original,
-      copyKey: trashKey(stats),
+      copyKey: copy.copyKey,
       originalKey: copy.originalKey,
       movedAt: now
     } satisfies TrashEntry
   }))
+  const listName = newListName(now)
   // Listed before any move, so a copy in the trash always has its origin and checks on record.
   if (
     !trash ||
     !writeList(
       trash,
-      newListName(now),
+      listName,
       moving.map((m) => m.entry)
     )
   ) {
@@ -107,10 +109,21 @@ export function moveCheckedCopiesToTrash(
       renameSync(copy.copy, target)
       tally.trashed += 1
       tally.bytesTrashed += Number(stats.size)
+      const moved = lstatOrNull(target)
+      if (moved) {
+        entry.movedKey = fileKey(moved)
+      }
     } catch (error) {
       // Windows: a handle opened without delete sharing, which a writer's could be.
       tally[busyOnWindows(error) ? 'open' : 'error'] += 1
     }
+  }
+  if (tally.trashed > 0) {
+    writeList(
+      trash,
+      listName,
+      moving.map((m) => m.entry)
+    )
   }
   return tally
 }

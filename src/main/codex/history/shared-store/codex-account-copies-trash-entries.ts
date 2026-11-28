@@ -38,6 +38,8 @@ export type TrashEntry = {
   copyKey: string
   originalKey: string
   movedAt: number
+  /** The copy's full key just after its move (a rename changes ctime); missing, it goes back. */
+  movedKey?: string
   /** Bytes a recheck already matched, while both files keep these keys. */
   progress?: { key: string; matched: number }
   /** Both files' keys when a recheck last passed; unchanged, the next launch skips the read. */
@@ -53,6 +55,7 @@ function isEntry(value: unknown): value is TrashEntry {
   const fields: Record<string, unknown> = { ...value }
   return (
     typeof value.movedAt === 'number' &&
+    (fields.movedKey === undefined || typeof fields.movedKey === 'string') &&
     STRING_FIELDS.every((field) => typeof fields[field] === 'string')
   )
 }

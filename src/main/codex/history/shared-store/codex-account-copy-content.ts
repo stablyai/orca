@@ -40,7 +40,9 @@ export function originalHoldsCopy(
   options: { from?: number; maxBytes?: number; deadline?: number } = {}
 ): CompareResult {
   const size = Number(copySize)
-  const from = options.from ?? 0
+  // A saved offset is trusted only inside the copy: past its end nothing would be compared.
+  const from =
+    options.from !== undefined && options.from >= 0 && options.from < size ? options.from : 0
   const deadline = options.deadline ?? Infinity
   const end = Math.min(size, from + Math.max(1, options.maxBytes ?? Infinity))
   const compressed = copy.endsWith(COMPRESSED_ROLLOUT_SUFFIX)

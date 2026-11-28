@@ -11,6 +11,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,15 +22,25 @@ import { writeCursor, writeKeptCopies } from './codex-account-copies-kept'
 import { cleanUpCodexAccountCopies } from './codex-account-copies-cleanup'
 import { verifyCodexAccountCopies } from './codex-account-copies'
 import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
-import { TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
+import { moveCheckedCopiesToTrash } from './codex-account-copies-trash'
+import { listFiles, readList, TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
+import { originalHoldsCopy } from './codex-account-copy-content'
 import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
 
+// Paths whose lstat fails as on a failing disk.
+const lstatFails = vi.hoisted(() => new Set<string>())
 // Lets a test count directory listings, and make each cost time as on a slow or network disk.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const readdirSync = vi.fn(actual.readdirSync)
-  return { ...actual, readdirSync, default: { ...actual, readdirSync } }
+  function lstatSync(...args: Parameters<typeof actual.lstatSync>) {
+    if (lstatFails.has(String(args[0]))) {
+      throw Object.assign(new Error('EIO: i/o error, lstat'), { code: 'EIO' })
+    }
+    return actual.lstatSync(...args)
+  }
+  return { ...actual, readdirSync, lstatSync, default: { ...actual, readdirSync, lstatSync } }
 })
 const listingsOf = (path?: string): number =>
   vi.mocked(readdirSync).mock.calls.filter(([listed]) => path === undefined || listed === path)
@@ -68,6 +79,8 @@ function run(
     hangOpen?: boolean
     /** Moves happen, but their answer never arrives: a move that lands after the locks went. */
     lateMove?: boolean
+    /** This step outside the locks never answers. */
+    hang?: string
     events?: string[]
   } = {}
 ) {
@@ -99,9 +112,13 @@ function run(
       }
     },
     lockHoldMs: 50,
+    stepWaitMs: options.hang ? 20 : undefined,
     worker: {
       call: async (request) => {
         options.events?.push(request.op)
+        if (options.hang === request.op) {
+          return new Promise<never>(() => {})
+        }
         if (request.op === 'trash') {
           options.beforeMove?.()
           if (options.hangMove) {
@@ -155,6 +172,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  lstatFails.clear()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -707,5 +725,154 @@ describe('a launch that resumes mid-walk', () => {
     } finally {
       stringify.mockRestore()
     }
+  })
+})
+
+describe('a step that never answers', () => {
+  it('abandons the run and deletes nothing when a delete outside the locks hangs', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    await run()
+    const events: string[] = []
+
+    expect(await afterGrace({ hang: 'delete-trashed', events })).toBeNull()
+
+    expect(events.slice(events.indexOf('delete-trashed'))).toEqual(['delete-trashed', 'stop'])
+    expect(trashed()).toHaveLength(1)
+  })
+})
+
+describe('trash bookkeeping', () => {
+  it('never trusts a saved offset past the copy, which would compare nothing', () => {
+    const copy = put(conflictCopy(), 'abcd')
+    const original = put(storeFile(), 'abce')
+
+    expect(originalHoldsCopy(copy, original, 4n, { from: 9 })).toEqual({ holds: false })
+  })
+
+  it('keeps going through a list when one trashed copy cannot be looked at', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    put(storeFile(otherThread(3)), LINE_1)
+    put(conflictCopy(otherThread(3)), LINE_1)
+    await run()
+    const [failing] = trashed()
+    lstatFails.add(failing)
+
+    expect(await afterGrace()).toMatchObject({ deleted: 1 })
+
+    expect(trashed()).toEqual([failing])
+    lstatFails.clear()
+    expect(await afterGrace()).toMatchObject({ deleted: 1 })
+  })
+
+  it('saves recheck progress when only the original key moved on', async () => {
+    const big = LINE_1.repeat(200)
+    put(storeFile(), big)
+    put(conflictCopy(), big)
+    await run()
+    const trash = trashDir()
+    const recheck = () =>
+      recheckTrashedCopies({
+        accountHome: home,
+        maxBytes: 1_001,
+        deadline: Date.now() + 60_000,
+        now: Date.now() + TRASH_GRACE_MS + 60_000
+      })
+    const matched = () => readList(trash, listFiles(trash)[0].name)?.[0].progress?.matched
+
+    recheck()
+    expect(matched()).toBe(500)
+    appendFileSync(storeFile(), LINE_2)
+    recheck()
+    recheck()
+
+    expect(matched()).toBe(1_000)
+  })
+
+  it('gives copies moved in the same millisecond under one name their own trash names', async () => {
+    const days = ['2026/11/20', '2026/11/21']
+    for (const day of days) {
+      put(storeFile(REL.replace('2026/11/20', day)), LINE_1)
+      put(conflictCopy(REL.replace('2026/11/20', day)), LINE_1)
+    }
+    const { verified } = await verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 60_000 },
+      version: 'test-names',
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+    const locks = join(root, 'locks')
+    mkdirSync(locks)
+
+    const tallies = verified.map((copy) => moveCheckedCopiesToTrash(home, [copy], [locks], 1_000))
+
+    expect(tallies.map((tally) => tally.trashed)).toEqual([1, 1])
+    expect(trashed()).toHaveLength(2)
+  })
+
+  it('never deletes a trashed copy rewritten in place after its recheck, times put back', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+    utimesSync(copy, 1_700_000_000, 1_700_000_000)
+    await run()
+    // The recheck passes, but the copy is open, so it waits.
+    await afterGrace({ open: (paths) => new Set(paths) })
+    const [inTrash] = trashed()
+
+    writeFileSync(inTrash, LINE_1.replace('meta', 'mETA'))
+    utimesSync(inTrash, 1_700_000_000, 1_700_000_000)
+
+    expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 1 })
+    expect(readFileSync(copy, 'utf8')).toBe(LINE_1.replace('meta', 'mETA'))
+  })
+})
+
+describe('a launch with nothing left of its budget', () => {
+  it('still moves the first oversized copy along', async () => {
+    const big = LINE_1.repeat(200)
+    put(storeFile(), big)
+    const copy = put(conflictCopy(), big)
+
+    const { verified } = await verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 1, deadline: Date.now() + 60_000 },
+      version: 'test-oversized',
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+
+    expect(verified.map((item) => item.copy)).toEqual([copy])
+  })
+
+  it('stops listing empty folders once its time is up', async () => {
+    for (let f = 0; f < 300; f += 1) {
+      mkdirSync(
+        join(home, 'sessions.orca-profile-merge', '2026', '11', String(f).padStart(3, '0')),
+        {
+          recursive: true
+        }
+      )
+    }
+    // Each listing costs five ticks, as on a slow disk.
+    let tick = 0
+    const before = listingsOf()
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockImplementation(() => (tick += 1) + 5 * (listingsOf() - before))
+    try {
+      await verifyCodexAccountCopies({
+        accountHome: home,
+        storeHome: store,
+        budget: { maxBytes: 4 * 1024 ** 3, deadline: Date.now() + 100 },
+        version: 'test-empty',
+        managedAccountsRoot: join(root, 'codex-accounts')
+      })
+    } finally {
+      clock.mockRestore()
+    }
+
+    expect(listingsOf() - before).toBeLessThan(40)
   })
 })

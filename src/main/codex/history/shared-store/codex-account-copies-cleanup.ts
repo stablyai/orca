@@ -1,9 +1,3 @@
-import type { Worker } from 'node:worker_threads'
-import { spawnWorkerThread } from '../../../worker-threads/worker-thread-spawn'
-import {
-  currentWorkerEntryLayout,
-  resolveWorkerThreadEntryPath
-} from '../../../worker-threads/worker-thread-entry-path'
 import { join } from 'node:path'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
 import { findFilesWithAcl } from '../../../filesystem/macos-file-acl'
@@ -13,12 +7,9 @@ import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeou
 import { addTally, emptyTally, type CopiesTally } from './codex-account-copies-tally'
 import type { VerifiedCopy } from './codex-account-copy-checks'
 import type { CodexHistoryMoveOutcome } from '../../../telemetry/codex-history-move-telemetry'
-import type {
-  CodexAccountCopiesRequest,
-  CodexAccountCopiesResponse
-} from './codex-account-copies-worker-protocol'
+import type { CodexAccountCopiesWorker } from './codex-account-copies-worker'
+import type { CodexAccountCopiesResponse } from './codex-account-copies-worker-protocol'
 
-const WORKER_FILENAME = 'codex-account-copies-worker-entry.js'
 // One launch reads at most this much of the copies and their originals; the rest
 // waits for later launches, so a heavy history costs a few idle minutes spread over runs.
 const MAX_BYTES_PER_LAUNCH = 4 * 1024 ** 3
@@ -26,52 +17,13 @@ const MAX_MS_PER_LAUNCH = 3 * 60_000
 // Each home's moves get their own time after its comparisons, so a long check still moves.
 const MOVE_MS_PER_HOME = 60_000
 const GAP_BETWEEN_HOMES_MS = 1_000
-const STOP_WAIT_MS = 10_000
 // Codex gives up waiting on lock coordination after 30 s; a batch's renames take milliseconds.
 const LOCK_HOLD_MS = 10_000
 // One lock hold and one `lsof` per batch: Codex waits on coordination for well under a second,
 // and no process starts per file.
 const OPEN_CHECK_BATCH = 128
-
-export type CodexAccountCopiesWorker = {
-  call(request: CodexAccountCopiesRequest): Promise<CodexAccountCopiesResponse>
-  /** Ends the worker, waiting a bounded time: for when nothing it does can still matter. */
-  stop(): Promise<void>
-}
-
-export function startCodexAccountCopiesWorker(): CodexAccountCopiesWorker {
-  const worker: Worker = spawnWorkerThread(
-    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_FILENAME),
-    { name: 'orca-codex-account-copies' }
-  )
-  let failure: Error | null = null
-  let pending: ((response: CodexAccountCopiesResponse) => void) | null = null
-  const fail = (error: Error): void => {
-    failure ??= error
-    pending?.({ ok: false, message: failure.message })
-    pending = null
-  }
-  worker.on('message', (response: CodexAccountCopiesResponse) => {
-    pending?.(response)
-    pending = null
-  })
-  worker.on('error', (error) => fail(error instanceof Error ? error : new Error(String(error))))
-  worker.on('exit', (code) => fail(new Error(`Codex account copies worker exited (${code})`)))
-  return {
-    call: (request) =>
-      failure
-        ? Promise.resolve({ ok: false, message: failure.message })
-        : new Promise((resolve) => {
-            pending = resolve
-            worker.postMessage(request)
-          }),
-    stop: async () => {
-      fail(new Error('Codex account copies cleanup stopped'))
-      // A worker stuck in a read on a hung mount never exits; a pass must not wait on it.
-      await withTimeoutResult(worker.terminate(), STOP_WAIT_MS)
-    }
-  }
-}
+// A step outside the locks that hasn't answered this long past its own deadline is on a hung disk.
+const STEP_WAIT_MS = 60_000
 
 /**
  * In homes whose history moved into ~/.codex: deletes trashed copies that waited out their grace
@@ -95,6 +47,8 @@ export async function cleanUpCodexAccountCopies(args: {
   findAcl?: typeof findFilesWithAcl
   /** The longest Codex's lock coordination is held for one batch, whatever the disk does. */
   lockHoldMs?: number
+  /** How long a step outside the locks may run past its deadline before the run is abandoned. */
+  stepWaitMs?: number
   /** Called after any batch deleted a copy, so a stop midway still refreshes disk usage. */
   onDeleted?: () => void
   platform?: NodeJS.Platform
@@ -113,6 +67,16 @@ export async function cleanUpCodexAccountCopies(args: {
   const findAcl = async (paths: string[]): Promise<Set<string> | null> =>
     platform === 'darwin' ? (args.findAcl ?? findFilesWithAcl)(paths) : new Set()
   const lockHoldMs = args.lockHoldMs ?? LOCK_HOLD_MS
+  const stepWaitMs = args.stepWaitMs ?? STEP_WAIT_MS
+  // A step that never answers ends this launch's run (the worker too); the next launch retries.
+  const settle = async <T>(work: Promise<T>, by = Date.now()): Promise<{ value: T } | null> => {
+    const result = await withTimeoutResult(work, Math.max(0, by - Date.now()) + stepWaitMs)
+    if (result.ok) {
+      return { value: result.value }
+    }
+    void args.worker.stop()
+    return null
+  }
   const total = { ...emptyTally(), homes: 0 }
   const deadline = Date.now() + MAX_MS_PER_LAUNCH
   let bytesLeft = MAX_BYTES_PER_LAUNCH
@@ -136,17 +100,21 @@ export async function cleanUpCodexAccountCopies(args: {
       break
     }
     // Trash past its grace period first, with no lock held: nothing Codex waits on.
-    const rechecked = await args.worker.call({
-      op: 'recheck-trash',
-      accountHome,
-      storeHome: args.storeHome,
-      managedAccountsRoot: args.managedAccountsRoot,
-      maxBytes: bytesLeft,
+    const recheckAnswer = await settle(
+      args.worker.call({
+        op: 'recheck-trash',
+        accountHome,
+        storeHome: args.storeHome,
+        managedAccountsRoot: args.managedAccountsRoot,
+        maxBytes: bytesLeft,
+        deadline
+      }),
       deadline
-    })
-    if (args.shouldStop()) {
+    )
+    if (!recheckAnswer || args.shouldStop()) {
       return null
     }
+    const rechecked = recheckAnswer.value
     if (!rechecked.ok || rechecked.op !== 'recheck-trash') {
       warn(rechecked, 'rechecked')
       continue
@@ -160,11 +128,13 @@ export async function cleanUpCodexAccountCopies(args: {
         break
       }
       const paths = batch.map((copy) => copy.copy)
-      const open = await findOpen(paths, { shouldStop: args.shouldStop })
-      const withAcl = open ? await findAcl(paths) : null
-      if (args.shouldStop()) {
+      const probe = await settle(findOpen(paths, { shouldStop: args.shouldStop }))
+      const aclProbe = probe?.value ? await settle(findAcl(paths)) : { value: null }
+      if (!probe || !aclProbe || args.shouldStop()) {
         return null
       }
+      const open = probe.value
+      const withAcl = aclProbe.value
       if (!open || !withAcl) {
         // The checks can't answer now: the rest waits for a later launch, not one probe each.
         total.open += rechecked.ready.length - start
@@ -175,13 +145,16 @@ export async function cleanUpCodexAccountCopies(args: {
       if (closed.length === 0) {
         continue
       }
-      const deleted = await args.worker.call({ op: 'delete-trashed', accountHome, copies: closed })
-      // Before the stop check, and also when the answer is lost (a stop cut the batch short):
-      // files it may have deleted still leave disk usage.
-      if (!deleted.ok || (deleted.op === 'delete-trashed' && deleted.tally.deleted > 0)) {
+      const deleteAnswer = await settle(
+        args.worker.call({ op: 'delete-trashed', accountHome, copies: closed })
+      )
+      const deleted = deleteAnswer?.value
+      // Before the stop check, and also when the answer is lost (a stop or a timeout cut the batch
+      // short): files it may have deleted still leave disk usage.
+      if (!deleted?.ok || (deleted.op === 'delete-trashed' && deleted.tally.deleted > 0)) {
         args.onDeleted?.()
       }
-      if (args.shouldStop()) {
+      if (!deleted || args.shouldStop()) {
         return null
       }
       if (!deleted.ok || deleted.op !== 'delete-trashed') {
@@ -190,17 +163,21 @@ export async function cleanUpCodexAccountCopies(args: {
       }
       addTally(total, deleted.tally)
     }
-    const checked = await args.worker.call({
-      op: 'verify',
-      accountHome,
-      storeHome: args.storeHome,
-      budget: { maxBytes: bytesLeft, deadline },
-      version: args.version,
-      managedAccountsRoot: args.managedAccountsRoot
-    })
-    if (args.shouldStop()) {
+    const verifyAnswer = await settle(
+      args.worker.call({
+        op: 'verify',
+        accountHome,
+        storeHome: args.storeHome,
+        budget: { maxBytes: bytesLeft, deadline },
+        version: args.version,
+        managedAccountsRoot: args.managedAccountsRoot
+      }),
+      deadline
+    )
+    if (!verifyAnswer || args.shouldStop()) {
       return null
     }
+    const checked = verifyAnswer.value
     if (!checked.ok || checked.op !== 'verify') {
       warn(checked, 'checked')
       continue
@@ -213,10 +190,13 @@ export async function cleanUpCodexAccountCopies(args: {
     let trashedHere = 0
     // Noted once per home after its batches: the note rewrites the home's kept-copies record.
     const aclKeptHere: VerifiedCopy[] = []
-    const lockFolders = await distinctFolders([
-      join(args.storeHome, WRITER_LOCKS),
-      join(accountHome, WRITER_LOCKS)
-    ])
+    const folders = await settle(
+      distinctFolders([join(args.storeHome, WRITER_LOCKS), join(accountHome, WRITER_LOCKS)])
+    )
+    if (!folders) {
+      return null
+    }
+    const lockFolders = folders.value
     for (let start = 0; start < checked.verified.length; start += OPEN_CHECK_BATCH) {
       if (args.shouldStop()) {
         return null
@@ -228,7 +208,11 @@ export async function cleanUpCodexAccountCopies(args: {
       }
       // macOS: an ACL can let another user write without any mode bit, and lsof can't see them.
       // Checked before the hold, so Codex never waits on it; the trash's recheck looks again.
-      const withAcl = await findAcl(batch.map((copy) => copy.copy))
+      const aclProbe = await settle(findAcl(batch.map((copy) => copy.copy)))
+      if (!aclProbe) {
+        return null
+      }
+      const withAcl = aclProbe.value
       if (!withAcl) {
         total.open += checked.verified.length - start
         break
@@ -308,12 +292,20 @@ export async function cleanUpCodexAccountCopies(args: {
         await hold.release()
       }
     }
-    if (aclKeptHere.length > 0 && !args.shouldStop()) {
-      await args.worker.call({ op: 'remember-acl', accountHome, copies: aclKeptHere })
+    if (
+      aclKeptHere.length > 0 &&
+      !args.shouldStop() &&
+      !(await settle(args.worker.call({ op: 'remember-acl', accountHome, copies: aclKeptHere })))
+    ) {
+      return null
     }
     // Once per home and outside the locks: empty folders only, so Codex never waits on the walk.
-    if (trashedHere > 0 && !args.shouldStop()) {
-      await args.worker.call({ op: 'prune', accountHome, storeHome: args.storeHome })
+    if (
+      trashedHere > 0 &&
+      !args.shouldStop() &&
+      !(await settle(args.worker.call({ op: 'prune', accountHome, storeHome: args.storeHome })))
+    ) {
+      return null
     }
     await new Promise((resolve) => setTimeout(resolve, GAP_BETWEEN_HOMES_MS).unref?.())
   }

@@ -14,12 +14,7 @@ export type VerifiedCopy = {
 
 // Inode, size, mtime and ctime: any write, replace or compression since the check changes one.
 export function fileKey(stats: BigIntStats): string {
-  return `${trashKey(stats)}:${stats.ctimeNs}`
-}
-
-/** `fileKey` without ctime, which the move into the trash itself changes; a write still shows. */
-export function trashKey(stats: BigIntStats): string {
-  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}`
+  return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`
 }
 
 export function lstatOrNull(path: string): BigIntStats | null {
