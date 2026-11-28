@@ -24,4 +24,19 @@ describe('internal addresses with paths or query params', () => {
       'https://www.google.com/search?q=why%3F'
     )
   })
+
+  it('keeps numeric fractions as search queries instead of IPv4 single-label hosts', () => {
+    expect(looksLikeSearchQuery('24/7')).toBe(true)
+    expect(looksLikeSearchQuery('9/11')).toBe(true)
+    expect(looksLikeSearchQuery('3/4')).toBe(true)
+    expect(normalizeBrowserNavigationUrl('24/7', 'google')).toBe(
+      'https://www.google.com/search?q=24%2F7'
+    )
+    expect(normalizeBrowserNavigationUrl('9/11', 'google')).toBe(
+      'https://www.google.com/search?q=9%2F11'
+    )
+    expect(normalizeBrowserNavigationUrl('3/4', 'google')).toBe(
+      'https://www.google.com/search?q=3%2F4'
+    )
+  })
 })
