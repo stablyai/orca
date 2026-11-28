@@ -29,9 +29,10 @@ export type JournalLegacySourceReceipt = {
 )
 
 export function journalLegacyFileIdentityFromStat(
-  file: BigIntStats | undefined
+  file: BigIntStats | undefined,
+  requireSingleLink = true
 ): JournalLegacyFileIdentity {
-  if (!file?.isFile() || file.ino === 0n || file.nlink !== 1n) {
+  if (!file?.isFile() || file.ino === 0n || (requireSingleLink && file.nlink !== 1n)) {
     throw new Error('legacy journal identity is unavailable')
   }
   return {

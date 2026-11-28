@@ -1,5 +1,6 @@
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -32,6 +33,7 @@ import {
 import { initializeJournalDomainDatabase } from './journal-domain-database'
 import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
 import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
 
 const directories: string[] = []
 afterEach(() => {
@@ -423,6 +425,26 @@ it('keeps the clear chain’s original tab id across competing bootstrap snapsho
       ['structured-agent-session-original-chat', 'original-chat'],
       ['original-custom-tab', 'current-chat']
     ])
+  } finally {
+    db.close()
+  }
+})
+
+it('restores a stable linked v3 source without giving it a retirement receipt', async () => {
+  const { root, journal, primary } = profile()
+  const alias = join(root, 'linked-original.db')
+  linkSync(journal, alias)
+  const before = readFileSync(alias)
+  saveRecords(primary, { 'linked-chat': stored('linked-chat') })
+  const db = new Database(await initializeJournalDomainDatabase(root))
+  try {
+    expect([...loadAgentSessionStoreRows(db).records.keys()]).toEqual(['linked-chat'])
+    const receipt = db
+      .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+      .get(JOURNAL_LEGACY_SOURCE_RECEIPT)
+    expect(JSON.parse(String(receipt?.value))).toMatchObject({ disposition: 'uncertifiable' })
+    expect(readFileSync(journal)).toEqual(before)
+    expect(readFileSync(alias)).toEqual(before)
   } finally {
     db.close()
   }

@@ -32,7 +32,7 @@ import {
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
-import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
+import { captureJournalLegacyInitializationSource } from './journal-legacy-source-capture'
 import {
   assertJournalLegacyRecordFilesStable,
   createJournalLegacyRecordStage,
@@ -64,14 +64,20 @@ export async function initializeJournalDomainDatabase(
     const filename = join(temporary, 'snapshot.db')
     const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
-    const sourceReceipt = captureJournalLegacySourceReceipt(sourcePath)
-    const savedReceipt = JSON.stringify(sourceReceipt)
+    const initialSource = captureJournalLegacyInitializationSource(sourcePath)
+    const savedReceipt = JSON.stringify(initialSource.receipt)
+    const stability = JSON.stringify(initialSource.stability)
     let recordFiles: JournalLegacyRecordSnapshot['files'] | undefined
     const assertStable = (): void => {
       if (!recordFiles) {
         return
       }
-      if (!sameJournalLegacySource(savedReceipt, captureJournalLegacySourceReceipt(sourcePath))) {
+      if (
+        !sameJournalLegacySource(
+          stability,
+          captureJournalLegacyInitializationSource(sourcePath).stability
+        )
+      ) {
         throw new Error('the original chat journal changed during initialization')
       }
       assertJournalLegacyRecordFilesStable(recordFiles)
