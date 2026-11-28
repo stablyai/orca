@@ -68,10 +68,8 @@ export function reportChatWorkerClosedByPerson(
       return
     }
     for (const { dispatch, from } of chatWorkerDispatches(closed.sessionId, db)) {
-      // A start still running reports its own outcome, and a stop asked for is no news; a start
-      // left unknown has no one else to report the close.
-      const state = db.getWorkerDispatch(dispatch.id)?.state
-      if (state === 'starting' || isWorkerStopRequested(state)) {
+      // A stop asked for is no news. A start, running or left unknown, never reports the close.
+      if (isWorkerStopRequested(db.getWorkerDispatch(dispatch.id)?.state)) {
         continue
       }
       const release = stop.releaseFor(dispatch.id)

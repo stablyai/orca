@@ -89,11 +89,12 @@ export function beginWorkerStop(
       commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'already_settled', worker, dispatch }
     }
-    if (!options.closedByPerson) {
-      refuseStopWhileKeptOpen(this, dispatchId)
-    }
+    refuseStopWhileKeptOpen(this, dispatchId, options)
     // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
-    if (!isWorkerStoppable(worker) && !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)) {
+    // A person's close can land mid-start; the start sees its Dispatch settled and reports nothing.
+    const stoppable =
+      isWorkerStoppable(worker) || (options.closedByPerson && worker.state === 'starting')
+    if (!stoppable && !isStopStrandedByAnotherRuntime(worker, runtimeEpoch)) {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${dispatchId} cannot stop from ${worker.state}.`

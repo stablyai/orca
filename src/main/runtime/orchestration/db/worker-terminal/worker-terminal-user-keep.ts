@@ -115,8 +115,13 @@ export function allowWorkerTerminalAutoClose(
 }
 
 /** Called before a stop changes anything: a refused stop must leave the worker and its authority as they were. */
-export function refuseStopWhileKeptOpen(db: OrchestrationDb, dispatchId: string): void {
-  if (isUserKeptWorkerTerminalOwner(db, dispatchId)) {
+/** A person's own close of the kept worker is that person letting it go. */
+export function refuseStopWhileKeptOpen(
+  db: OrchestrationDb,
+  dispatchId: string,
+  stop: { closedByPerson?: true } = {}
+): void {
+  if (!stop.closedByPerson && isUserKeptWorkerTerminalOwner(db, dispatchId)) {
     throw keptOpenStopRefusal(dispatchId)
   }
 }
