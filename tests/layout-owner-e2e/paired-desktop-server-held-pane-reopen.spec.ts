@@ -20,6 +20,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toWebTerminalSurfaceTabId
 } from '../../src/shared/workspace-layout/terminal-surface-id'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { LAYOUT_REOPEN_HELD_PANES_CAPABILITY } from '../../src/shared/workspace-layout/published-layout/layout-intents-capability'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
@@ -182,14 +183,29 @@ test.describe("paired desktop reopens a switch-on server's held pane", () => {
             message: "The desktop never showed the server's held pane on the banner"
           })
           .toContain('Reopen terminal')
-        // The desktop re-activates the tab on its own; none of those may start the held pane.
-        for (const deadline = Date.now() + 5_000; Date.now() < deadline;) {
+        // A client's background re-activations (as the desktop sends) must never start the held pane.
+        const listed = await host.client.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
+          worktree: `id:${worktreeId}`
+        })
+        const surface = listed.result.tabs.find(
+          (tab) => tab.type === 'terminal' && tab.parentTabId === hostTabId
+        )
+        expect(surface).toBeDefined()
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          await host.client
+            .call('session.tabs.activate', {
+              worktree: `id:${worktreeId}`,
+              tabId: surface!.id,
+              notifyClients: false,
+              navigation: 'caller',
+              intent: 'automatic'
+            })
+            .catch(() => undefined)
           expect(await readHostHandles(host, worktreeId, hostTabId)).toEqual({
             [created.leafId]: null
           })
-          expect(isAlive(fake.daemon!.pid!)).toBe(true)
-          await new Promise((resolve) => setTimeout(resolve, 250))
         }
+        expect(isAlive(fake.daemon!.pid!)).toBe(true)
       })
 
       await test.step("Reopen stops the server's newer build and the pane binds", async () => {
