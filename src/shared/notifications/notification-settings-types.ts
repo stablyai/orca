@@ -103,6 +103,8 @@ export type NotificationDispatchRequest = {
   agentType?: AgentType
   agentState?: AgentStatusState
   agentPrompt?: string
+  /** Approval JSON the hook captured for this prompt, when there is one. */
+  agentInteractivePrompt?: string
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string

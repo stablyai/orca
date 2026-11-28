@@ -12,6 +12,7 @@ import {
 } from '../ipc/notifications/notification-options'
 import { translateMain } from '../i18n/main-i18n'
 import { reserveNotificationCooldown } from '../../shared/notifications/notification-burst-cooldown'
+import { watchPromptReplyFromAgent } from '../../shared/notifications/watch-prompt-reply'
 import { toHostSessionPaneKey } from '../../shared/workspace-layout/terminal-surface-id'
 import { isNotificationSourceEnabled } from '../../shared/notifications/notification-source-gate'
 import { notificationDeliveryId } from '../../shared/notifications/notification-delivery-id'
@@ -151,6 +152,15 @@ export function createNotificationDeliveryService(
           )
         ) {
           const options = readNotificationOptions()
+          const paneKey = request.paneKey ? toHostSessionPaneKey(request.paneKey) : undefined
+          const promptReply = paneKey
+            ? watchPromptReplyFromAgent({
+                state: request.agentState,
+                agent: request.agentType,
+                interactivePrompt: request.agentInteractivePrompt,
+                lastAssistantMessage: request.agentLastAssistantMessage
+              })
+            : null
           deps.dispatchMobileNotification({
             type: 'notification',
             emittedAt: deps.now(),
@@ -163,7 +173,8 @@ export function createNotificationDeliveryService(
               ? { workspaceExecutionHostId: request.workspaceExecutionHostId }
               : {}),
             // The phone asks the execution host for tabs, which never name this window's mirror tabs.
-            ...(request.paneKey ? { paneKey: toHostSessionPaneKey(request.paneKey) } : {}),
+            ...(paneKey ? { paneKey } : {}),
+            ...(promptReply ? { promptReply } : {}),
             ...(request.executionHost ? { executionHost: request.executionHost } : {}),
             ...(request.notificationId ? { notificationId: request.notificationId } : {}),
             // Push needs real agent state to distinguish input/completion and silence running agents.

@@ -219,7 +219,8 @@ export class PushDispatcher {
         ...content,
         ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
         ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-        ...(event.executionHost ? { executionHost: event.executionHost } : {})
+        ...(event.executionHost ? { executionHost: event.executionHost } : {}),
+        ...(event.promptReply ? { promptReply: event.promptReply } : {})
       }
     }
   }
@@ -265,6 +266,10 @@ export class PushDispatcher {
             entry.status === 'queued' ? [entry.registrationId] : []
           )
         )
+      }
+      // A gateway that predates watch replies rejects the send and queues nothing.
+      if (result.reason === 'rejected' && notification.promptReply) {
+        return await this.deliver(targets, { ...notification, promptReply: undefined }, attempt)
       }
       this.outcomes.record(result.reason)
       // Retry transport misses once; an identical refused payload will be refused again.

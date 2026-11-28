@@ -27,6 +27,7 @@ import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-sur
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
 import { DesktopClientPresenceTracker } from './desktop-client-presence-tracker'
 import type { DeliveredNotificationIdentity } from '../../../../shared/notifications/mobile-notification-identity'
+import type { WatchPromptReply } from '../../../../shared/notifications/watch-prompt-reply'
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
@@ -51,6 +52,8 @@ export type MobileNotificationDispatchEvent = {
   /** See `NotificationDispatchRequest.attentionKey`: cooldowns key on it instead of the workspace. */
   attentionKey?: string
   structuredOrigin?: StructuredAttentionOrigin
+  /** Binary Allow/Deny keystrokes. Old phones ignore the field. */
+  promptReply?: WatchPromptReply
 }
 
 export type MobileNotificationDismissEvent = {

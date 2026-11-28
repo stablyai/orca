@@ -20,6 +20,7 @@ import type {
   NotificationSettings
 } from '../../../../shared/notifications/notification-settings-types'
 import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
+import { watchPromptReplyFromAgent } from '../../../../shared/notifications/watch-prompt-reply'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
 import type { RuntimeClientEventBus } from '../../client/events/runtime-client-event-bus'
@@ -198,7 +199,8 @@ export class TerminalAgentPhonePush {
       worktreeId,
       paneKey,
       ...(notificationId ? { notificationId } : {}),
-      agentState: row.state
+      agentState: row.state,
+      ...watchPromptFields(row, paneKey)
     }
   }
 
@@ -243,4 +245,20 @@ export class TerminalAgentPhonePush {
       return {}
     }
   }
+}
+
+function watchPromptFields(
+  row: AgentStatusIpcPayload,
+  paneKey: string
+): Pick<MobileNotificationDispatchEvent, 'promptReply'> {
+  if (!paneKey) {
+    return {}
+  }
+  const promptReply = watchPromptReplyFromAgent({
+    state: row.state,
+    agent: row.agentType,
+    interactivePrompt: row.interactivePrompt,
+    lastAssistantMessage: row.lastAssistantMessage
+  })
+  return promptReply ? { promptReply } : {}
 }

@@ -12,6 +12,7 @@ export type PushOrcaData = {
   notificationEpoch: string
   source: string
   agentState: string | null
+  promptReply?: { allow: string; deny: string }
 }
 
 export type PushDelivery = {
@@ -66,7 +67,8 @@ export function buildPushDelivery(input: {
       notificationSeq: notification.notificationSeq,
       notificationEpoch: notification.notificationEpoch,
       source: notification.source,
-      agentState: notification.agentState
+      agentState: notification.agentState,
+      ...(notification.promptReply === undefined ? {} : { promptReply: notification.promptReply })
     }
   }
 }

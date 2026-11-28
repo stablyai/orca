@@ -200,6 +200,9 @@ export function dispatchTerminalNotification(
         agentType: agentStatus.agentType,
         agentState: agentStatus.state,
         agentPrompt: agentStatus.prompt,
+        ...(agentStatus.interactivePrompt
+          ? { agentInteractivePrompt: agentStatus.interactivePrompt }
+          : {}),
         agentToolName: agentStatus.toolName,
         agentToolInput: agentStatus.toolInput,
         agentLastAssistantMessage: agentStatus.lastAssistantMessage,

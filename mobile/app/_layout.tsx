@@ -26,6 +26,12 @@ import {
 } from '../src/notifications/foreground-delivery/push-receive'
 import { startPushTokenSync } from '../src/notifications/push-registration'
 import { ensureDesktopNotificationChannel } from '../src/notifications/foreground-delivery/desktop-notification-channel'
+import { registerWatchPromptCategory } from '../src/notifications/watch-prompt/watch-prompt-category'
+import { WatchPromptActions } from '../src/notifications/watch-prompt/WatchPromptActions'
+import {
+  pendingWatchPromptFromNotification,
+  rememberWatchPrompt
+} from '../src/notifications/watch-prompt/watch-prompt-action'
 import { loadHostCatalog } from '../src/host-catalog/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { readWorkspaceRouteExecutionHost } from '../src/navigation/route-param-reader'
@@ -57,6 +63,7 @@ subscribeMobileUiLanguage(() => {
   void ensureDesktopNotificationChannel().catch(() => {})
 })
 void registerPushDismissalTask().catch(() => {})
+void registerWatchPromptCategory().catch(() => {})
 
 // Register before scheduling so foreground delivery uses the same suppression policy.
 Notifications.setNotificationHandler({
@@ -141,6 +148,15 @@ export default function RootLayout() {
 
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
+        const hosts = await loadHostCatalog().catch(() => null)
+        const pending = pendingWatchPromptFromNotification(
+          response.actionIdentifier,
+          readNativeNotificationData(response.notification.request),
+          hosts ?? []
+        )
+        if (pending) {
+          void rememberWatchPrompt(pending)
+        }
         clearLastNotificationResponse()
         return
       }
@@ -195,6 +211,7 @@ export default function RootLayout() {
 
   return (
     <RpcClientProvider>
+      <WatchPromptActions />
       <OrcaQueryProvider>
         <View style={styles.root} onLayout={onNavigatorLayout}>
           <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />

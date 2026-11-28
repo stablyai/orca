@@ -1,3 +1,8 @@
+import {
+  WATCH_PROMPT_REPLY_MAX_LENGTH,
+  type WatchPromptReply
+} from '../../../../src/shared/notifications/watch-prompt-reply'
+
 // APNs nests custom fields under orca; FCM data is flat/string-valued. Read both and coerce numeric fields.
 export type OrcaPushPayload = {
   readonly kind?: 'alert' | 'dismiss'
@@ -10,6 +15,7 @@ export type OrcaPushPayload = {
   readonly executionHost?: string
   readonly source?: string
   readonly agentState?: string
+  readonly promptReply?: WatchPromptReply
 }
 
 function readString(value: unknown): string | undefined {
@@ -19,6 +25,32 @@ function readString(value: unknown): string | undefined {
 function readSeq(value: unknown): number | undefined {
   const raw = typeof value === 'number' ? value : Number(readString(value))
   return Number.isFinite(raw) ? raw : undefined
+}
+
+function readPromptReply(value: unknown): WatchPromptReply | undefined {
+  const parsed = typeof value === 'string' ? parseJson(value) : value
+  if (!parsed || typeof parsed !== 'object' || !('allow' in parsed) || !('deny' in parsed)) {
+    return undefined
+  }
+  const allow = readReplyKey(parsed.allow)
+  const deny = readReplyKey(parsed.deny)
+  return allow && deny ? { allow, deny } : undefined
+}
+
+function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function readReplyKey(value: unknown): string | undefined {
+  return typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= WATCH_PROMPT_REPLY_MAX_LENGTH
+    ? value
+    : undefined
 }
 
 export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
@@ -32,6 +64,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   if (!hostFingerprint) {
     return null
   }
+  const promptReply = readPromptReply(record.promptReply)
   return {
     hostFingerprint,
     ...(record.kind === 'dismiss' || record.kind === 'alert' ? { kind: record.kind } : {}),
@@ -42,6 +75,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
     worktreeId: readString(record.worktreeId),
     executionHost: readString(record.executionHost),
     source: readString(record.source),
-    agentState: readString(record.agentState)
+    agentState: readString(record.agentState),
+    ...(promptReply ? { promptReply } : {})
   }
 }

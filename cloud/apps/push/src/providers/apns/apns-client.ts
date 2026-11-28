@@ -1,4 +1,5 @@
 import type { ApnsEnvironment } from '@orca-cloud/push-contract/device-registration-messages'
+import { PUSH_PROMPT_DECISION_CATEGORY } from '@orca-cloud/push-contract/send-messages'
 import { ApnsAuthenticationToken } from './apns-authentication-token.js'
 import type { ApnsTransport } from './apns-http2-transport.js'
 import type { ApnsCredentials } from '../../config.js'
@@ -41,6 +42,7 @@ export function apnsBody(delivery: PushDelivery): string {
             alert: { title: delivery.title, body: delivery.body },
             ...(delivery.badge === undefined ? {} : { badge: delivery.badge }),
             ...(delivery.sound === false ? {} : { sound: 'default' }),
+            ...(delivery.orca.promptReply ? { category: PUSH_PROMPT_DECISION_CATEGORY } : {}),
             'thread-id': delivery.hostFingerprint
           },
     orca: delivery.orca
