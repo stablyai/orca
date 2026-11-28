@@ -21,6 +21,7 @@ import { runtimeBotChats, startBotSession, botOnAgent } from '../../../bots/bot-
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { connectedClientRosters } from '../../orchestration/federation/client-asks/client-ask-listeners'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { runtimeBotGroups } from '../../../bots/bot-group-runtime'
 import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
@@ -53,10 +54,20 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (members !== undefined || added !== undefined || permissionMode !== undefined) {
     ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
+  const previous = context.runtime.bots.list().find((entry) => entry.id === params.botId)
   const bot = await context.runtime.bots.update(params.botId, params.updates)
   if (params.updates.skillProjects !== undefined) {
     // Replies after the links and caches change, so a `/` menu opened next lists them.
     await relinkBotSkills(bot, context.runtime.listRepos())
+  }
+  // A room runs each member on the agent it was made on, so a member chat left behind keeps sending
+  // the old agent's provider, whose model id no longer exists there, on every room post.
+  if (previous && previous.agent !== bot.agent) {
+    void runtimeBotGroups(context.runtime)
+      .refreshMemberAgent(bot, previous.agent)
+      .catch((error: unknown) => {
+        console.warn('[bots] could not move its room chats to its new agent', error)
+      })
   }
   if (params.updates.agent !== undefined) {
     void linkBotOwnSkills(botHomeFolder(bot)).catch(() => {})
