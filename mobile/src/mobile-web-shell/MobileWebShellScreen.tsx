@@ -368,6 +368,7 @@ export function MobileWebShellScreen({
       />
     )
   }
+  const hideUntilPaint = overlay && pageFrame !== 'painted' && styles.unpaintedOverlay
   return (
     <View
       ref={pageFold.rootRef}
@@ -392,11 +393,7 @@ export function MobileWebShellScreen({
         key={state.sessionId}
         ref={bridge.viewRef}
         // Overlays cannot cover the screen beneath; hide their opaque WebView until first paint.
-        style={[
-          styles.shellView,
-          overlay && pageFrame !== 'painted' && styles.unpaintedOverlay,
-          tabletRail.pageStyle
-        ]}
+        style={[styles.shellView, hideUntilPaint, tabletRail.pageStyle]}
         onLayout={tabletRail.onPageLayout}
         generationDirectory={state.generationDirectory}
         sessionId={state.sessionId}
