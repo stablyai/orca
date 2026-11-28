@@ -78,7 +78,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       return {
         dispatch: exposeDispatchContext(dispatch),
         worker: exposeWorker(worker),
-        ...projectWorkerShowCustody(runtime, db, params.dispatch, resource),
+        ...(await projectWorkerShowCustody(runtime, db, params.dispatch, resource)),
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
         autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
@@ -124,7 +124,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       // Two verdicts: status.liveness is the output source's, the projection is the agent's.
       const output = await readLocalWorkerOutput(runtime, params, dispatch, worker)
-      return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
+      return { ...output, projection: await projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
   defineOrchestrationMethod({

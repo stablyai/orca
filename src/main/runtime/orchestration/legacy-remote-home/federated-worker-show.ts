@@ -16,15 +16,15 @@ import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
 /** Query host evidence: push-fed fleet snapshots cover only local panes and would fabricate unverifiable for federated workers. */
-export function projectFederatedFleetWorker(args: {
+export async function projectFederatedFleetWorker(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
   dispatchId: string
   environmentId: string
   observation: { status?: string; exactWorker: boolean; reason?: string }
   autoReleaseAt: string | null
-}): OrchestrationFleetWorker | null {
-  const fleet = projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
+}): Promise<OrchestrationFleetWorker | null> {
+  const fleet = await projectFleetWorkerPage(args.runtime, args.db, args.dispatchId)
   if (!fleet) {
     return null
   }
@@ -104,7 +104,7 @@ export async function showFederatedWorker(args: {
   return {
     dispatch: exposeDispatchContext(db.getDispatchContextById(dispatchId) ?? args.dispatch),
     worker: exposeWorker(worker),
-    projection: projectFederatedFleetWorker({
+    projection: await projectFederatedFleetWorker({
       runtime,
       db,
       dispatchId,

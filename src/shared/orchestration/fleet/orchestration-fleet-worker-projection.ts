@@ -42,6 +42,21 @@ export const DURABLE_EXIT_PROOF = {
   terminationReasons: readonly NonNullable<FleetDurableWorker['terminationReason']>[]
 }
 
+/** States a live recorded process may carry past the hook clock: a running turn or one that ended
+ *  at rest. A wait or block keeps its own evidence, so permission and question prompts never upgrade. */
+export function fleetStatusAcceptsProcessConfirmation(
+  evidence: FleetAgentStatusEvidence,
+  now: number
+): boolean {
+  return (
+    evidence.activity.connectionId === null &&
+    !evidence.activity.restoredUnconfirmed &&
+    !evidence.activity.providerSessionOnly &&
+    (evidence.activity.state === 'working' || evidence.activity.state === 'done') &&
+    now - evidence.clock.at > AGENT_STATUS_STALE_AFTER_MS
+  )
+}
+
 /** Any certified termination reason proves exit independently of settlement state. */
 function hasCertifiedExit(worker: FleetLivenessSubject): boolean {
   return (
@@ -113,6 +128,16 @@ export function projectLiveness(
     return { verdict: 'unverifiable', reason: 'missing_status', observedAt }
   }
   if (now - observedAt > AGENT_STATUS_STALE_AFTER_MS) {
+    // An at-rest or running row outlives its hook clock while its recorded process still runs:
+    // a re-probe stands in for the quiet stream without restamping the row's evidence clock.
+    const confirmedAt = evidence.processConfirmedAt
+    if (
+      confirmedAt !== undefined &&
+      now - confirmedAt <= AGENT_STATUS_STALE_AFTER_MS &&
+      fleetStatusAcceptsProcessConfirmation(evidence, now)
+    ) {
+      return { verdict: 'live', observedAt: confirmedAt, source: 'agent_status' }
+    }
     return { verdict: 'unverifiable', reason: 'stale_status', observedAt }
   }
   return { verdict: 'live', observedAt, source: 'agent_status' }

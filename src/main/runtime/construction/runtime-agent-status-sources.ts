@@ -12,6 +12,14 @@ import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driv
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalDrivers {
+  protected readonly checkHookAgentPresenceFn!: HostBindings['checkHookAgentPresence'] | null
+
+  /** The hook store's verdict on the process a pane's current row recorded; null when it records
+   *  none. Its row identity/generation checks keep a replaced row from answering for this one. */
+  checkHookAgentPresence(paneKey: string): Promise<'live' | 'unverifiable' | 'exited' | null> {
+    return this.checkHookAgentPresenceFn?.(paneKey) ?? Promise.resolve(null)
+  }
+
   protected getPaneAgentIdentityFn: HostBindings['getPaneAgentIdentity'] | null = null
 
   readPaneAgentIdentity(

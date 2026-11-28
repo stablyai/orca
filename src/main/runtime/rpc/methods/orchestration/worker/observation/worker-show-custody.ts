@@ -5,13 +5,13 @@ import { exposeWorkerTerminalResource } from '../release/worker-terminal-resourc
 import { projectFleetWorkerPage } from './worker-observation'
 
 /** worker-show's fleet verdict and terminal; a handed-on Dispatch shows the shared row it last held, owned by its follow-up. */
-export function projectWorkerShowCustody(
+export async function projectWorkerShowCustody(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   dispatchId: string,
   owned: WorkerTerminalResourceRow | undefined
 ) {
-  const fleet = projectFleetWorkerPage(runtime, db, dispatchId)
+  const fleet = await projectFleetWorkerPage(runtime, db, dispatchId)
   const handedOn = fleet?.durable.get(dispatchId)?.handedOn ?? null
   const shown = owned ?? (handedOn ? db.getWorkerTerminalResourceFormerlyOwnedBy(dispatchId) : null)
   return {

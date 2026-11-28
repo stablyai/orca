@@ -80,6 +80,14 @@ class MailboxRuntime extends OrcaRuntimeService {
   get idleEvidenceSource() {
     return this.tuiIdleEvidenceSource
   }
+
+  /** Model a reattached/restored pane whose last title is no longer a live status observation. */
+  markAgentStatusUnobserved(ptyId: string): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      pty.lastAgentStatusObservedLive = false
+    }
+  }
 }
 
 export type MailboxNotificationHarness = {

@@ -29,6 +29,7 @@ import {
 import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { projectWorkerFleet } from './fleet/worker-list-projection'
+import { confirmStaleWorkerAgentProcesses } from './fleet/fleet-agent-process-confirmation'
 import { readCachedFederatedFleetSnapshots } from '../../../../orchestration/legacy-remote-home/federated-fleet-observation-cache'
 import {
   applyFederatedFleetObservations,
@@ -63,6 +64,7 @@ export type SessionWorkersRuntime = Pick<
   | 'getOrchestrationFleetAgentStatusSnapshot'
   | 'ensureStructuredAgentSessionHost'
   | 'getAgentStatusSnapshotFn'
+  | 'checkHookAgentPresence'
 > &
   FederatedFleetRuntime &
   Partial<TerminalPresenceReads>
@@ -140,8 +142,16 @@ export async function projectDispatchFleet(
   } = {}
 ) {
   const db = runtime.getOrchestrationDb()
-  const { statuses, chatStatusRows } = read.evidence ?? readDispatchFleetEvidence(runtime)
+  const evidence = read.evidence ?? readDispatchFleetEvidence(runtime)
   await ensureSessionWorkerRecords(runtime, rows)
+  // Read a quiet idle worker's recorded process before its old hook row reads as stale.
+  const statuses = await confirmStaleWorkerAgentProcesses({
+    rows,
+    attentionFacts,
+    statuses: evidence.statuses,
+    now,
+    checkPresence: (paneKey) => runtime.checkHookAgentPresence(paneKey)
+  })
   const fleet = projectWorkerFleet({
     rows,
     attentionFacts,
@@ -168,7 +178,7 @@ export async function projectDispatchFleet(
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
   }
-  return { fleet, chatStatusRows }
+  return { fleet, chatStatusRows: evidence.chatStatusRows }
 }
 
 /** This machine's agent statuses, once for any number of projections. */

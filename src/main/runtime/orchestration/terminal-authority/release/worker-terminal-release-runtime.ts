@@ -17,6 +17,7 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'getTerminalProcessIncarnation'
     | 'getTerminalLivenessVerdict'
     | 'checkTerminalAgentPresence'
+    | 'checkHookAgentPresence'
     | 'getOrchestrationDispatchAuthority'
     | 'ensureStructuredAgentSessionHost'
     | 'inspectTerminalProcessIncarnationLiveness'
