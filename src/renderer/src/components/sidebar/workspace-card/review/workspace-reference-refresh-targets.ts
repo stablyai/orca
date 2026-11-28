@@ -7,7 +7,7 @@ import { reviewRefreshIntervalMs } from '../../../../../../shared/source-control
 import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getWorkspaceReferenceRequest,
   getWorkspaceReferenceRuntimeVersion,
@@ -21,40 +21,69 @@ import {
   selectWorktreeIdsWithLiveAgent
 } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
-function workspaceReferenceWorkspaces(state: AppState, options?: { selectedOnly?: boolean }) {
-  return [...getVisibleHostedReviewWorkspaces(state, options)].filter(({ worktree }) =>
-    getWorkspaceAttachments(worktree).some((item) => item.type !== 'issue')
-  )
+type VisibleHostedReviewWorkspace =
+  ReturnType<typeof getVisibleHostedReviewWorkspaces> extends Iterable<infer T> ? T : never
+
+function workspaceReferenceWorkspaces(
+  state: AppState,
+  options?: { selectedOnly?: boolean }
+): VisibleHostedReviewWorkspace[] {
+  const matched: VisibleHostedReviewWorkspace[] = []
+  for (const entry of getVisibleHostedReviewWorkspaces(state, options)) {
+    const attachments = getReadonlyWorkspaceAttachments(entry.worktree)
+    for (let i = 0; i < attachments.length; i += 1) {
+      if (attachments[i].type !== 'issue') {
+        matched.push(entry)
+        break
+      }
+    }
+  }
+  return matched
 }
 
 export function createWorkspaceReferenceRefreshTargetsSelector(options?: {
   selectedOnly?: boolean
 }) {
   let workspaces: ReturnType<typeof workspaceReferenceWorkspaces> = []
-  let inputs: readonly unknown[] = []
+  let initialized = false
+  let prevTabsByWorktree: AppState['tabsByWorktree'] | undefined
+  let prevPtyIdsByTabId: AppState['ptyIdsByTabId'] | undefined
+  let prevBrowserTabsByWorktree: AppState['browserTabsByWorktree'] | undefined
+  let prevUnifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] | undefined
+  let prevStructuredChatSleptAtByPaneKey: AppState['structuredChatSleptAtByPaneKey'] | undefined
+  let prevAgentStatusByPaneKey: AppState['agentStatusByPaneKey'] | undefined
+  let prevAgentStatusEpoch: AppState['agentStatusEpoch'] | undefined
   let sleeping = new Map<string, boolean>()
   let liveWorktreeIds: ReadonlySet<string> = new Set()
   let result: VisibleHostedReviewRefreshTarget[] = []
   return (state: AppState, reviewInputsChanged: boolean): VisibleHostedReviewRefreshTarget[] => {
-    const reset = inputs.length === 0 || reviewInputsChanged
+    const reset = !initialized || reviewInputsChanged
     if (reset) {
       workspaces = workspaceReferenceWorkspaces(state, options)
     }
-    const next = [
-      state.tabsByWorktree,
-      state.ptyIdsByTabId,
-      state.browserTabsByWorktree,
-      state.unifiedTabsByWorktree,
-      state.structuredChatSleptAtByPaneKey,
-      state.agentStatusByPaneKey,
-      state.agentStatusEpoch
-    ]
-    if (!reset && next.every((value, index) => value === inputs[index])) {
+    const topologyInputsChanged =
+      state.tabsByWorktree !== prevTabsByWorktree ||
+      state.ptyIdsByTabId !== prevPtyIdsByTabId ||
+      state.browserTabsByWorktree !== prevBrowserTabsByWorktree ||
+      state.unifiedTabsByWorktree !== prevUnifiedTabsByWorktree ||
+      state.structuredChatSleptAtByPaneKey !== prevStructuredChatSleptAtByPaneKey
+    if (
+      !reset &&
+      !topologyInputsChanged &&
+      state.agentStatusByPaneKey === prevAgentStatusByPaneKey &&
+      state.agentStatusEpoch === prevAgentStatusEpoch
+    ) {
       return result
     }
-    const topologyChanged =
-      reset || next.slice(0, 5).some((value, index) => value !== inputs[index])
-    inputs = next
+    initialized = true
+    prevTabsByWorktree = state.tabsByWorktree
+    prevPtyIdsByTabId = state.ptyIdsByTabId
+    prevBrowserTabsByWorktree = state.browserTabsByWorktree
+    prevUnifiedTabsByWorktree = state.unifiedTabsByWorktree
+    prevStructuredChatSleptAtByPaneKey = state.structuredChatSleptAtByPaneKey
+    prevAgentStatusByPaneKey = state.agentStatusByPaneKey
+    prevAgentStatusEpoch = state.agentStatusEpoch
+    const topologyChanged = reset || topologyInputsChanged
     const nextLiveWorktreeIds =
       workspaces.length > 0 ? selectWorktreeIdsWithLiveAgent(state) : liveWorktreeIds
     let changed = reset
@@ -115,7 +144,7 @@ function referenceRefreshTargets(
     const runtimeVersion = getWorkspaceReferenceRuntimeVersion(worktree, repo)
     const cadenceHost = getPRRefreshOwnerRuntimeEnvironmentId(candidate)
     const cadence = hostPRAutoRefreshCadence(cadenceHost)
-    for (const item of getWorkspaceAttachments(worktree)) {
+    for (const item of getReadonlyWorkspaceAttachments(worktree)) {
       if (item.type === 'issue') {
         continue
       }
