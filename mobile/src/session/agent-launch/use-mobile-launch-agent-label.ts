@@ -4,7 +4,12 @@ import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
 import { agentLaunchContextOf, useMobileAgentLaunchQueries } from './mobile-agent-launch-queries'
-import { resolveMobileSourceControlLaunchAgent } from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
+import {
+  hostOpensChatsWithoutCli,
+  resolveMobileSourceControlLaunchAgent
+} from '../../source-control/review/agent-launch/mobile-source-control-launch-agent'
+import { useMobileRegisteredAgents } from '../native-chat/agent-session/use-mobile-registered-agent'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 // The agent a Fix button would start, by the same resolution the launch uses, so it can say "Fix with Claude".
 export function useMobileLaunchAgentLabel(args: {
@@ -15,6 +20,7 @@ export function useMobileLaunchAgentLabel(args: {
   enabled: boolean
 }): string | null {
   const { client, worktreeId, hostCapabilities, actionId, enabled } = args
+  const t = useMobileTranslation()
   const context = agentLaunchContextOf(
     useMobileAgentLaunchQueries({
       hostId: useRouteHostId(),
@@ -24,11 +30,18 @@ export function useMobileLaunchAgentLabel(args: {
       enabled
     })
   )
+  const registeredAgents = useMobileRegisteredAgents(
+    client,
+    enabled && hostOpensChatsWithoutCli(hostCapabilities)
+  )
   if (!actionId || !context) {
     return null
   }
   // An unknown agent keeps the generic label; the launch itself reports the real failure.
-  const agent = resolveMobileSourceControlLaunchAgent(context, actionId)
+  const agent = resolveMobileSourceControlLaunchAgent(context, actionId, t, {
+    hostCapabilities,
+    registeredAgents
+  })
   return agent.kind === 'agent' ? MOBILE_TUI_AGENT_LABELS[agent.agent] : null
 }
 

@@ -1,6 +1,16 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import {
+  folderGroupOf,
+  folderSiblingsByWorktree,
+  summaryHostId,
+  summaryIdentity
+} from './workspace-cleanup-folder-membership'
+import {
+  pairedFolderChildrenOnce,
+  type PairedFolderChildren
+} from './workspace-cleanup-paired-folder-children'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
@@ -39,6 +49,11 @@ export type WorkspaceCleanupWorkspace = {
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
+  /** Its host identity; every workspace here is this host's. */
+  identity: string
+  /** The host identities of the other worktrees its folder workspace lists, on any host. */
+  folderSiblings: string[]
+  readPairedFolderChildren: () => Promise<PairedFolderChildren>
 }
 
 /** Repos whose checkouts this process owns; a host served by its own orcad is that server's to clean. */
@@ -53,10 +68,9 @@ export function listWorkspaceCleanupOwnedRepos(store: RuntimeStore): Map<string,
 }
 
 function isOwnedSummary(summary: RuntimeWorktreePsSummary, repos: Map<string, Repo>): boolean {
-  const hostId = summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
   return (
     repos.has(summary.repoId) &&
-    hostId === LOCAL_EXECUTION_HOST_ID &&
+    summaryHostId(summary) === LOCAL_EXECUTION_HOST_ID &&
     summary.workspaceKind !== 'folder-workspace'
   )
 }
@@ -108,7 +122,7 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   }
 }
 
-/** This host's own window persists its unsaved drafts in the session; remote clients report theirs. Keyed by identity so path spellings match. */
+/** Every connected window, this host's own included, reports its unsaved buffers; the session adds drafts no window holds open. Keyed by identity so path spellings match. */
 function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService): Set<string> {
   const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
   const ids = new Set([...listClientUnsavedEditorWorktreeIds(runtime)].map(worktreeIdentityKey))
@@ -170,23 +184,44 @@ function withHostBlockers(
   return { ...input, blockers }
 }
 
-/** Every workspace this process owns, with the evidence the evaluator reads; one id narrows it for a re-check. */
+/** Every workspace this process owns, with the evidence the evaluator reads; one id narrows it for a
+ * re-check, to that workspace and its folder siblings as listed now when `withFolderSiblings` is set. */
 export async function collectWorkspaceCleanupWorkspaces(args: {
   store: RuntimeStore
   runtime: OrcaRuntimeService
   globalRules: WorkspaceCleanupRules
   now: number
   worktreeId?: string
+  withFolderSiblings?: boolean
+  /** The scan's read of paired servers, so a re-check never asks them again. */
+  readPairedFolderChildren?: () => Promise<PairedFolderChildren>
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
   const repos = listWorkspaceCleanupOwnedRepos(store)
-  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times.
-  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, worktreeId)
+  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times;
+  // a folder member needs the whole listing to see who is in its folder now.
+  const ps = await runtime.getWorktreePs(
+    WORKTREE_PS_LIMIT,
+    true,
+    false,
+    args.withFolderSiblings ? undefined : worktreeId
+  )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
+  const readPairedFolderChildren =
+    args.readPairedFolderChildren ?? pairedFolderChildrenOnce(runtime)
+  const folderSiblingsOf = await folderSiblingsByWorktree(
+    store,
+    ps.worktrees,
+    readPairedFolderChildren
+  )
+  const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
+  const summaries =
+    args.withFolderSiblings && worktreeId !== undefined
+      ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
+      : owned
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   for (const summary of summaries) {
     if (!policies.has(summary.repoId)) {
@@ -238,7 +273,10 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
         dirtyEditors.has(worktreeIdentityKey(summary.worktreeId))
       ),
       paneAgentStates,
-      removing: summary.removing === true
+      removing: summary.removing === true,
+      identity: summaryIdentity(summary),
+      folderSiblings: folderSiblingsOf(summary),
+      readPairedFolderChildren
     }
   })
 }

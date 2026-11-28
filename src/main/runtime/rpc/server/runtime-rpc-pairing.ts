@@ -15,6 +15,7 @@ import type { RuntimePairingReach } from '../../../../shared/remote-runtime/pair
 import { resolveAdvertisedPairingEndpoint } from './pairing/network/pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
+import { RelayedPhoneServers } from '../../mobile-desktop-relay/relayed-phone-servers'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
@@ -90,6 +91,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.onUnpairedDeviceAuthFailure = callback
   }
 
+  // Registry instances are replaced on restart, so the listener lives here and is rebound per instance.
+  setOnPairedDevicesChanged(callback: (() => void) | null): void {
+    this.onPairedDevicesChanged = callback
+  }
+
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
   }
@@ -104,9 +110,15 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       ? new MobileDesktopRelay({
           hosts,
           listPhones: () => this.listRelayedPhones(),
+          relayedPhoneServers: new RelayedPhoneServers(this.userDataPath),
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
+          sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
+          phoneConnectionMode: (deviceId) =>
+            this.deviceRegistry?.getMobilePairingConnectionMode(deviceId) === 'local-only'
+              ? 'local-only'
+              : 'automatic',
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(
@@ -141,6 +153,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
         changed: () => this.runtime.notifyRelayHostsChanged()
       }) ?? null
+    const detachRowChanges =
+      this.mobileRelayHostCatalog?.publishRowChanges((hostId) =>
+        this.runtime.notifyRelayHostRowsChanged(hostId)
+      ) ?? null
     // Phones filter pending VM checkouts when they read; a change makes them read again.
     const detachPendingVmChanges = this.mobileRelayHostCatalog
       ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
@@ -148,18 +164,25 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         )
       : null
     this.detachRelayHostsChanges =
-      detachListChanges || detachPendingVmChanges
+      detachListChanges || detachRowChanges || detachPendingVmChanges
         ? () => {
             detachListChanges?.()
+            detachRowChanges?.()
             detachPendingVmChanges?.()
           }
         : null
     this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 
-  private listRelayedPhones(): { phoneKey: string; name: string }[] {
+  // Null when the registry is missing or unreadable: an empty list would revoke every phone.
+  private listRelayedPhones(): { phoneKey: string; name: string }[] | null {
+    const registry = this.deviceRegistry
+    if (!registry?.isReadable()) {
+      return null
+    }
     const computerName = this.runtime.readMachineName()
-    return (this.deviceRegistry?.listDevices() ?? [])
+    return registry
+      .listDevices()
       .filter(
         // Phones delegated by another desktop remain that desktop's relay responsibility.
         (device) =>
@@ -187,6 +210,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     grants?: readonly RuntimeDeviceGrant[]
     // Desktop UI only; absent keeps headless offers valid until scanned.
     offerTtlMs?: number
+    // The paired client whose terminal asked; revoking it revokes the offer and whoever paired with it.
+    createdByDeviceId?: string
   }):
     | PairingOfferUnavailable
     | {
@@ -226,10 +251,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
-      const ttl = args.offerTtlMs
+      const options = { offerTtlMs: args.offerTtlMs, createdByDeviceId: args.createdByDeviceId }
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, ttl)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, ttl)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, options)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, options)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

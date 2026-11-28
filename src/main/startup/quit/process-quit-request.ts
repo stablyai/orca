@@ -16,7 +16,3 @@ export function markProcessQuitRequested(): void {
 export function isProcessQuitRequested(): boolean {
   return processQuitRequested
 }
-
-export function resetProcessQuitRequestForTest(): void {
-  processQuitRequested = false
-}

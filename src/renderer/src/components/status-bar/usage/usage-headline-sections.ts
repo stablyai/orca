@@ -38,7 +38,7 @@ export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): nu
     : -1
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
+// Buckets (Cursor pools) keep their name; windows use their duration.
 export function shortUsageLabel(
   p: ProviderRateLimits,
   section: UsageSection,
@@ -124,7 +124,7 @@ export function getTopScopedSection(
   const top = scoped.reduce((a, b) =>
     clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
   )
-  return { ...top, label: shortUsageLabel(p, top) }
+  return { ...top, label: shortUsageLabel(p, top, false) }
 }
 
 /** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */

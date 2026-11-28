@@ -16,7 +16,12 @@ export type EmulatorApi = {
   onFrameStreamError: (
     callback: (data: { streamId: string; message: string }) => void
   ) => () => void
-  startVideoStream: (args: { deviceId: string; streamId: string }) => Promise<{ streamId: string }>
+  /** `streamUrl`: the pane's iOS stream, which names a paired server's simulator through a forward. */
+  startVideoStream: (args: {
+    deviceId: string
+    streamId: string
+    streamUrl?: string
+  }) => Promise<{ streamId: string }>
   stopVideoStream: (args: { streamId: string }) => Promise<void>
   onVideoStreamMeta: (
     callback: (data: {
@@ -33,7 +38,9 @@ export type EmulatorApi = {
   }) => void
   /** Resolves false when the device has no live scrcpy control socket. */
   sendScrcpyKeyboard: (
-    input: { deviceId: string; text: string } | { deviceId: string; key: string; shift: boolean }
+    input:
+      | { deviceId: string; text: string; paste?: boolean; hid?: { usage: number; shift: boolean } }
+      | { deviceId: string; key: string; shift: boolean; hid?: { usage: number; shift: boolean } }
   ) => Promise<boolean>
   onVideoStreamFrame: (
     callback: (data: {

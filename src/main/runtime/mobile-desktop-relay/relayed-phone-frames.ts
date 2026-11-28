@@ -1,8 +1,15 @@
+import { DELEGATED_PHONE_SERVER_OFFER_METHOD } from '../../../shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
+import type { MobilePairingConnectionMode } from '../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
 } from '../../../shared/browser/runtime/browser-runtime-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX } from '../../../shared/source-control/ai/generation/commit-message-host-key'
+import {
+  pickCommitMessageGenerationSettings,
+  type CommitMessageGenerationSettings
+} from '../../../shared/source-control/ai/generation/commit-message-generation-settings'
 import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
@@ -56,7 +63,7 @@ export function declareRelayedPhoneCapabilities(frame: string): string {
 
 const LAUNCH_METHODS_READING_CHAT_DEFAULT = new Set(['agent.launch', 'agent.launchReplay'])
 
-// The relaying desktop owns the user chat default; older servers strip this additive field.
+// The phone's own Chat or CLI pick wins, then the relaying desktop's default; older servers strip this additive field.
 export function withRelayedLaunchChatDefault(
   frame: string,
   method: string,
@@ -70,10 +77,90 @@ export function withRelayedLaunchChatDefault(
     return frame
   }
   const agent = typeof parsed.params.agent === 'string' ? parsed.params.agent : ''
+  const picked = parsed.params.nativeChatDefault
   return JSON.stringify({
     ...parsed,
-    params: { ...parsed.params, nativeChatDefault: nativeChatDefaultFor(agent) }
+    params: {
+      ...parsed.params,
+      nativeChatDefault: typeof picked === 'boolean' ? picked : nativeChatDefaultFor(agent)
+    }
   })
+}
+
+const GENERATION_METHODS_READING_AI_SETTINGS = new Set([
+  'git.generateCommitMessage',
+  'git.generatePullRequestFields'
+])
+
+// Desktop's own Source Control sends its settings to a server, so the phone through it gets the same agent.
+// Model discovery is left alone: the phone uses it for chats, which launch with the server's commands.
+export function withRelayedSourceControlAiSettings(
+  frame: string,
+  method: string,
+  environmentId: string,
+  desktopSettings: () => CommitMessageGenerationSettings
+): string {
+  if (!GENERATION_METHODS_READING_AI_SETTINGS.has(method)) {
+    return frame
+  }
+  const parsed: unknown = JSON.parse(frame)
+  if (!isRecord(parsed) || !isRecord(parsed.params)) {
+    return frame
+  }
+  const stamped = {
+    ...pickCommitMessageGenerationSettings(desktopSettings()),
+    // The key desktop's own call uses, so the model picked for this server is the one used.
+    commitMessageDiscoveryHostKey: `${RUNTIME_COMMIT_MESSAGE_HOST_KEY_PREFIX}${environmentId}`
+  }
+  // Fields the phone sent itself win.
+  return JSON.stringify({ ...parsed, params: { ...stamped, ...parsed.params } })
+}
+
+// The phone's own pairing with this desktop decides whether its server pairing may use Relay.
+export function withRelayedPhoneConnectionMode(
+  frame: string,
+  method: string,
+  connectionMode: () => MobilePairingConnectionMode
+): string {
+  if (method !== DELEGATED_PHONE_SERVER_OFFER_METHOD) {
+    return frame
+  }
+  const parsed: unknown = JSON.parse(frame)
+  if (!isRecord(parsed)) {
+    return frame
+  }
+  const params = isRecord(parsed.params) ? parsed.params : {}
+  // Overwrites any mode the phone sent: a local-only phone must not mint a Relay pairing.
+  return JSON.stringify({ ...parsed, params: { ...params, connectionMode: connectionMode() } })
+}
+
+export type RelayedDesktopDefaults = {
+  /** Whether this desktop's settings open `agent` as a chat. */
+  nativeChatDefault: (agent: string) => boolean
+  /** This desktop's Source Control AI settings, which its own calls to a server send. */
+  sourceControlAiSettings: () => CommitMessageGenerationSettings
+  /** How the relayed phone itself paired with this desktop. */
+  phoneConnectionMode: (phoneDeviceId: string) => MobilePairingConnectionMode
+}
+
+/** Stamp the desktop's own defaults on a relayed frame, as its own calls to that server carry them. */
+export function withRelayedDesktopDefaults(
+  frame: string,
+  method: string,
+  environmentId: string,
+  phoneDeviceId: string,
+  desktop: RelayedDesktopDefaults
+): string {
+  return withRelayedPhoneConnectionMode(
+    withRelayedSourceControlAiSettings(
+      withRelayedLaunchChatDefault(frame, method, desktop.nativeChatDefault),
+      method,
+      environmentId,
+      desktop.sourceControlAiSettings
+    ),
+    method,
+    () => desktop.phoneConnectionMode(phoneDeviceId)
+  )
 }
 
 /** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */

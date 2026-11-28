@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useNativeChatViewGuard } from '../../pane/ownership/native-chat-view-memory'
 import type { AgentSessionCancelResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import {
   structuredSessionConfirmedStopsStillListed,
@@ -32,7 +33,11 @@ export function useStructuredSessionTaskStop(
     stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
   }
 ): StructuredSessionTaskStop {
-  const [stopping, setStopping] = useState<StoppingBackgroundTasks | null>(null)
+  // Kept with the chat tab: a view released mid-Stop returns with its Stop buttons still pending.
+  const [stopping, setStopping] = useNativeChatViewGuard<StoppingBackgroundTasks | null>(
+    'task-stop',
+    null
+  )
   // Keep confirmed Stop buttons pending until that specific run leaves the strip.
   const [confirmed, setConfirmed] = useState<ConfirmedStops | null>(null)
   const activeStopping = stopping?.sessionId === sessionId ? stopping : null
@@ -44,53 +49,69 @@ export function useStructuredSessionTaskStop(
     // A row that left and came back is a task the Stop did not end, so it offers Stop again.
     setConfirmed(confirmedListed?.size ? { sessionId, taskIds: confirmedListed } : null)
   }
-  const stoppingTaskIds = confirmedListed?.size
-    ? new Set([...(activeStopping?.taskIds ?? NO_STOPPING_TASKS), ...confirmedListed.keys()])
-    : (activeStopping?.taskIds ?? NO_STOPPING_TASKS)
+  const stoppingIds = activeStopping?.taskIds ?? NO_STOPPING_TASKS
+  const stoppingTaskIds = useMemo(
+    () =>
+      confirmedListed?.size ? new Set([...stoppingIds, ...confirmedListed.keys()]) : stoppingIds,
+    [stoppingIds, confirmedListed]
+  )
 
-  const onStop = (taskId?: string) => {
-    // A provider may reuse the row's id for the task's next run, which this Stop did not end.
-    const run = taskId ? structuredSessionListedTaskRun(tasks.backgroundTasks, taskId) : null
-    setStopping((current) => {
-      const taskIds = new Set(
-        current?.sessionId === sessionId ? current.taskIds : NO_STOPPING_TASKS
-      )
-      if (taskId) {
-        taskIds.add(taskId)
-      }
-      return {
-        sessionId,
-        taskIds,
-        all: taskId ? current?.sessionId === sessionId && current.all : true
-      }
-    })
-    void tasks
-      .stopBackgroundTask(taskId)
-      .then((result) => {
-        if (taskId && run !== null && result?.cancelled) {
-          setConfirmed((current) => ({
-            sessionId,
-            taskIds: new Map([
-              ...(current?.sessionId === sessionId ? current.taskIds : NO_CONFIRMED_STOPS),
-              [taskId, run]
-            ])
-          }))
+  // One Stop for the session's life: a session update rebuilds its controller, never the strip.
+  const latest = useRef({ sessionId, tasks })
+  useLayoutEffect(() => {
+    latest.current = { sessionId, tasks }
+  })
+  const onStop = useCallback(
+    (taskId?: string) => {
+      const { sessionId, tasks } = latest.current
+      // A provider may reuse the row's id for the task's next run, which this Stop did not end.
+      const run = taskId ? structuredSessionListedTaskRun(tasks.backgroundTasks, taskId) : null
+      setStopping((current) => {
+        const taskIds = new Set(
+          current?.sessionId === sessionId ? current.taskIds : NO_STOPPING_TASKS
+        )
+        if (taskId) {
+          taskIds.add(taskId)
+        }
+        return {
+          sessionId,
+          taskIds,
+          all: taskId ? current?.sessionId === sessionId && current.all : true
         }
       })
-      .finally(() => {
-        setStopping((current) => {
-          if (current?.sessionId !== sessionId) {
-            return current
+      void tasks
+        .stopBackgroundTask(taskId)
+        .then((result) => {
+          if (taskId && run !== null && result?.cancelled) {
+            setConfirmed((current) => ({
+              sessionId,
+              taskIds: new Map([
+                ...(current?.sessionId === sessionId ? current.taskIds : NO_CONFIRMED_STOPS),
+                [taskId, run]
+              ])
+            }))
           }
-          const taskIds = new Set(current.taskIds)
-          if (taskId) {
-            taskIds.delete(taskId)
-          }
-          const all = taskId ? current.all : false
-          return taskIds.size === 0 && !all ? null : { sessionId, taskIds, all }
         })
-      })
-  }
+        .finally(() => {
+          setStopping((current) => {
+            if (current?.sessionId !== sessionId) {
+              return current
+            }
+            const taskIds = new Set(current.taskIds)
+            if (taskId) {
+              taskIds.delete(taskId)
+            }
+            const all = taskId ? current.all : false
+            return taskIds.size === 0 && !all ? null : { sessionId, taskIds, all }
+          })
+        })
+    },
+    [setStopping]
+  )
 
-  return { stoppingTaskIds, stoppingAll: activeStopping?.all ?? false, onStop }
+  const stoppingAll = activeStopping?.all ?? false
+  return useMemo(
+    () => ({ stoppingTaskIds, stoppingAll, onStop }),
+    [stoppingTaskIds, stoppingAll, onStop]
+  )
 }

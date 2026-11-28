@@ -1,9 +1,10 @@
 import type { AgentJournalPlainStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/native-chat-provider-frame-summary'
+import { CLAUDE_LOCAL_COMMAND_OUTPUT_FRAME_KIND } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   boundPayload,
+  CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS,
   PROVIDER_FRAME_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../../agent-session-journal/item-lifecycle/journal-payload-bounds'
@@ -11,6 +12,7 @@ import {
   codexGoalRowText,
   codexThreadGoalState
 } from '../../../codex/structured/journal/codex-goal-journal-rows'
+import { readCodexAutoReviewDenial } from '../../../../shared/agent-session/requests/approvals/codex-auto-review-denial'
 import { isProviderRecord } from '../../../provider-process/provider-json-record'
 import { classifyProviderFrame } from './provider-frame-disposition'
 import { hookOutcomeRowBody } from '../../../../shared/agent-session/journal/agent-session-hook-outcome'
@@ -164,17 +166,29 @@ export function unhandledProviderFrameJournalItem(
   ) {
     return null
   }
-  const serialized = serializeProviderPayload(payload)
-  const bounded = boundPayload(serialized, limits)
   // Lead with the provider sentence; raw opcodes are unreadable protocol noise.
   const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+  const denial =
+    provider === 'codex' && method === 'item/autoApprovalReview/completed'
+      ? readCodexAutoReviewDenial(payload)
+      : null
+  const serialized = serializeProviderPayload(payload)
+  const bounded = boundPayload(
+    serialized,
+    denial?.event ? CODEX_AUTO_REVIEW_DENIAL_FRAME_LIMITS : limits
+  )
   const compaction =
     provider === 'codex' && (method === 'thread/compacted' || method === 'item:contextCompaction')
   const noticeTone =
     provider === 'codex'
       ? method === 'deprecationNotice'
         ? 'notice'
-        : ['warning', 'guardianWarning', 'configWarning'].includes(method)
+        : [
+              'warning',
+              'guardianWarning',
+              'configWarning',
+              'item/autoApprovalReview/completed'
+            ].includes(method)
           ? 'warning'
           : undefined
       : undefined
@@ -201,6 +215,9 @@ export function unhandledProviderFrameJournalItem(
         ? payload.content
         : null
     message = typeof content === 'string' && content.trim() ? content.trim() : message
+  }
+  if (denial) {
+    message = `Codex's automatic review denied: ${denial.summary}${denial.rationale ? `\n\n${denial.rationale}` : ''}`
   }
   const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const threadGoal = provider === 'codex' ? codexThreadGoalState(method, payload) : null

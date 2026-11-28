@@ -1,4 +1,5 @@
 import { runProcess } from '@orca/process-host'
+import { secretServiceProcessEnvironment } from '../linux-secret-service/session-bus-environment'
 import {
   decodeAntigravityKeychainValue,
   parseAntigravityNativeCredential,
@@ -19,18 +20,31 @@ function requireLinux(): void {
   }
 }
 
+/** gdbus or secret-tool, which Orca reads the keyring with, isn't installed; agy talks to the
+ *  Secret Service itself, so this says nothing about agy's own store. */
+export class AntigravityKeyringToolMissingError extends Error {
+  constructor(
+    readonly program: 'gdbus' | 'secret-tool',
+    message: string
+  ) {
+    super(message)
+  }
+}
+
 async function run(program: 'gdbus' | 'secret-tool', args: string[], input?: string) {
   try {
     return await runProcess({
       program,
       args,
       input,
+      env: await secretServiceProcessEnvironment(),
       timeoutMs: 10_000,
       maxOutputBytes: 64 * 1024
     })
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      throw new Error(
+      throw new AntigravityKeyringToolMissingError(
+        program,
         program === 'gdbus'
           ? 'Antigravity account switching on Linux needs gdbus (GLib) to reach the keyring. Install it and try again.'
           : 'Antigravity account switching on Linux needs secret-tool. Install libsecret-tools (or your distribution’s equivalent) and try again.'
@@ -56,16 +70,19 @@ async function getSecretServiceProperty(objectPath: string, iface: string, prope
     iface,
     property
   ])
-  if (result.timedOut || result.signal || result.outputTruncated) {
+  if (
+    result.timedOut ||
+    result.signal ||
+    result.outputTruncated ||
+    /Timeout was reached|DBus\.Error\.(NoReply|Timeout|TimedOut)/.test(result.stderr)
+  ) {
     throw new Error('The Antigravity Linux keyring did not respond.')
   }
   if (result.code === 0) {
     return { value: result.stdout }
   }
-  if (/ServiceUnknown|NameHasNoOwner|UnknownObject|NoSuchObject/.test(result.stderr)) {
-    return null
-  }
-  throw new Error('The Antigravity Linux keyring could not be accessed.')
+  // agy reads its token file after any keyring error but a timeout, e.g. no bus or no collection.
+  return null
 }
 
 /** Mirrors go-keyring's GetLoginCollection; null means agy falls back to its credential file. */
@@ -96,6 +113,32 @@ async function resolveAgyCollection(): Promise<string | null> {
   return path
 }
 
+function readFailed(): Error {
+  return new Error('The Antigravity Linux keyring could not be read.')
+}
+
+// `search` prints the raw secret, which may span lines, between these two line prefixes.
+const SEARCH_SECRET_START = '\nsecret = '
+const SEARCH_SECRET_END = '\ncreated = '
+
+async function search(): Promise<AntigravityNativeCredential> {
+  const result = await run('secret-tool', ['search', ...ITEM_ATTRIBUTES])
+  const start = result.stdout.indexOf(SEARCH_SECRET_START)
+  const end = result.stdout.lastIndexOf(SEARCH_SECRET_END)
+  if (
+    result.code !== 0 ||
+    result.timedOut ||
+    result.signal ||
+    result.outputTruncated ||
+    start === -1 ||
+    end < start + SEARCH_SECRET_START.length
+  ) {
+    throw readFailed()
+  }
+  const secret = result.stdout.slice(start + SEARCH_SECRET_START.length, end)
+  return parseAntigravityNativeCredential(decodeAntigravityKeychainValue(secret))
+}
+
 async function lookup(): Promise<AntigravityNativeCredential | null> {
   const result = await run('secret-tool', ['lookup', ...ITEM_ATTRIBUTES])
   if (!result.timedOut && !result.signal && !result.outputTruncated) {
@@ -106,8 +149,13 @@ async function lookup(): Promise<AntigravityNativeCredential | null> {
     if (result.code === 1 && !result.stdout && !result.stderr.trim()) {
       return null
     }
+    // libsecret before 0.21.8 looks up only exactly text/plain secrets, but go-keyring labels agy's
+    // with a charset, which KDE's ksecretd keeps; search prints any content type.
+    if (result.code === 1 && result.stderr.includes('secret does not contain a textual password')) {
+      return search()
+    }
   }
-  throw new Error('The Antigravity Linux keyring could not be read.')
+  throw readFailed()
 }
 
 export async function readAntigravityLinuxCredential(): Promise<AntigravityNativeCredential | null> {

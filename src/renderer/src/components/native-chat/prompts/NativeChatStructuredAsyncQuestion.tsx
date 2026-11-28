@@ -1,14 +1,17 @@
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import {
+  nativeChatAnswerOperationEvidence,
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
   formatAskAnswer
@@ -18,13 +21,17 @@ import type { NativeChatStructuredComposerTransport } from '../composer/submit/n
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
+import { projectionBesideStreamedText } from '../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 import {
   useStructuredAgentSessionAsyncQuestionSkip,
   type StructuredAgentSessionAsyncQuestionSkip
 } from './use-structured-agent-session-async-question-skip'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
+
+type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
 
 /** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
  *  them on every device where the host saves it, else on this screen only. */
@@ -52,6 +59,13 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
+  // Kept with the chat tab: a chat released mid-send returns still holding its answer. Each rewind starts a
+  // new scope, so only the newest few settled ones are kept, and one is dropped once its delivery shows.
+  const [operation, setOperation] = useNativeChatViewState<PromptAnswerOperation | null>(
+    `async-answer:${sourceScope}`,
+    null,
+    KEPT_PROMPT_VIEWS
+  )
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,
@@ -63,44 +77,37 @@ export function NativeChatStructuredAsyncQuestion({
     queuedTexts,
     skip
   })
+  // A send's evidence is its own row or submission, never a streamed reply's text.
+  const structure = projectionBesideStreamedText(session.messages)
+  const operationPending = useMemo(
+    () => nativeChatAnswerOperationPending(operation, structure, submissions),
+    [operation, structure, submissions]
+  )
+  // Dropped only on proof the answer landed (a queue handoff can still bring a pending submission), or when the
+  // send never created a message to wait on.
+  const settled =
+    operation !== null &&
+    !operation.inFlight &&
+    (operation.clientMessageId === undefined ||
+      nativeChatAnswerOperationEvidence(operation.clientMessageId, structure, submissions) ===
+        false)
+  useEffect(() => {
+    if (settled) {
+      setOperation(null)
+    }
+  }, [settled, setOperation])
   if (!prompt) {
     return null
   }
-  return (
-    <NativeChatAsyncQuestionForm
-      key={JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])}
-      {...{ prompt, session, send, sendFollowUp, submissions, answerPending }}
-      onCancel={dismiss}
-    />
-  )
-}
-
-function NativeChatAsyncQuestionForm({
-  prompt,
-  session,
-  send,
-  sendFollowUp,
-  submissions,
-  answerPending,
-  onCancel
-}: {
-  prompt: AskPrompt
-  session: Pick<NativeChatLiveSession, 'messages'>
-  send: NativeChatStructuredComposerTransport['send']
-  sendFollowUp?: NativeChatStructuredComposerTransport['sendFollowUp']
-  submissions: readonly AgentJournalSubmission[]
-  answerPending: boolean
-  onCancel: () => void
-}): React.JSX.Element {
-  const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
+  const promptKey = JSON.stringify([ownerKey, nativeChatAskDismissKey(prompt)])
   return (
     <NativeChatQuestionCard
+      key={promptKey}
       prompt={prompt}
-      isSubmitting={
-        answerPending || nativeChatAnswerOperationPending(operation, session.messages, submissions)
-      }
+      memoryKey={`async-question:${promptKey}`}
+      isSubmitting={answerPending || (operation?.promptKey === promptKey && operationPending)}
       onAnswer={(selections) => {
-        const current: NativeChatAnswerOperation = { inFlight: true }
+        const current: PromptAnswerOperation = { promptKey, inFlight: true }
         const sent = send(formatAskAnswer(prompt, selections), [], {
           ...nativeChatAnswerSendIntent(sendFollowUp),
           callerKeepsText: true,
@@ -116,7 +123,7 @@ function NativeChatAsyncQuestionForm({
           setOperation(current)
         }
       }}
-      onCancel={onCancel}
+      onCancel={dismiss}
     />
   )
 }
@@ -149,7 +156,7 @@ export function nativeChatStructuredAsyncQuestion(
     <NativeChatHostAsyncQuestion
       target={props.target}
       sessionId={sessionId}
-      paneKey={structuredAgentSessionPaneKey(props.tabId, sessionId)}
+      paneKey={chatPaneKey(sessionId)}
       session={session}
       submissions={controller.submissions}
       send={transport.send}

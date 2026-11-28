@@ -4,6 +4,7 @@ import { EMPTY_LAYOUT } from '../empty-terminal-layout'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-active-leaf'
 import { shouldIgnoreStalePanePtyLayoutBinding } from '../../pty-connection/reattach/pane-pty-layout-binding'
 import { useExpandCollapseActions } from '../expand/expanded-pane-layout'
+import { notifyQueuedRestartPaneBound } from '../../account-restart/pane-account-restart-readiness'
 import type { TerminalPaneLayoutController } from '../persistence/use-terminal-pane-layout-persistence'
 
 export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutController) {
@@ -51,10 +52,14 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       }
 
       if (ptyId) {
+        // Why: a new split is selected before its shell binds, so persistence kept a bound sibling.
+        const isManagerActiveLeaf = managerRef.current?.getActivePane()?.leafId === leafId
         setTabLayout(tabId, {
           ...layoutWithoutPtyBindings,
+          ...(isManagerActiveLeaf ? { activeLeafId: leafId } : {}),
           ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
         })
+        notifyQueuedRestartPaneBound(tabId, ptyId)
         return
       }
       const nextBindings = { ...existingBindings }
@@ -76,7 +81,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       }
       setTabLayout(tabId, nextLayout)
     },
-    [setTabLayout, tabId, paneTransportsRef]
+    [setTabLayout, tabId, paneTransportsRef, managerRef]
   )
   const writePanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {

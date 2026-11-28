@@ -119,12 +119,10 @@ export function captureNativeHang(options: {
   pid: number
   publish: (capture: NativeHangCapture) => void
   completeReport?: (report: string) => void
-}): { stop: () => void; started: Promise<void>; done: Promise<void> } {
+  /** Preloaded runner: spawns sample synchronously, before any await or marker write. */
+  runProcess?: typeof runNativeProcess
+}): { stop: () => void; done: Promise<void> } {
   const abort = new AbortController()
-  let acquired: () => void = () => {}
-  const started = new Promise<void>((resolve) => {
-    acquired = resolve
-  })
   const baseline: NativeHangCapture = {
     ...emptyHangStacks(),
     state: 'collecting',
@@ -135,7 +133,6 @@ export function captureNativeHang(options: {
     timedOut: false,
     cleanup: 'pending'
   }
-  options.publish(baseline)
   let latest = baseline
   const publish = (capture: NativeHangCapture): void => {
     latest = capture
@@ -144,10 +141,9 @@ export function captureNativeHang(options: {
   const done = (async (): Promise<void> => {
     let runProcess: typeof runNativeProcess
     try {
-      runProcess = (await import('@orca/process-host')).runProcess
+      runProcess = options.runProcess ?? (await import('@orca/process-host')).runProcess
     } catch {
       publish({ ...baseline, state: 'failed', completedAt: Date.now(), cleanup: 'unverified' })
-      acquired()
       return
     }
     let terminated = false
@@ -156,7 +152,7 @@ export function captureNativeHang(options: {
       release = resolve
     })
     try {
-      const pending = runProcess({
+      const result = await runProcess({
         program: '/usr/bin/sample',
         args: [String(options.pid), '1', '10', '-file', '/dev/stdout'],
         timeoutMs: 10_000,
@@ -168,8 +164,6 @@ export function captureNativeHang(options: {
           release()
         }
       })
-      acquired()
-      const result = await pending
       publish({
         ...baseline,
         ...reduceNativeHangSample(result.stdout),
@@ -195,13 +189,15 @@ export function captureNativeHang(options: {
         completedAt: Date.now(),
         cleanup: terminated ? 'terminated' : 'unverified'
       })
-    } finally {
-      acquired()
     }
     if (!terminated) {
       await termination
       publish({ ...latest, cleanup: 'terminated' })
     }
   })()
-  return { stop: () => abort.abort(), started, done }
+  // Published after the spawn above so a blocked marker write cannot delay sample.
+  if (latest === baseline) {
+    options.publish(baseline)
+  }
+  return { stop: () => abort.abort(), done }
 }

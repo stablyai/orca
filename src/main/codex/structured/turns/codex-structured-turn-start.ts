@@ -123,11 +123,20 @@ export async function startCodexTurn(
     host.appliedTurnInputOptions = knownInput
     discardSettingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
+    // turn/start can steer into a running turn, or one Codex answered but Orca has not yet seen
+    // start: an echo in one of these joined it.
+    const open = host.activeTurnIds ?? new Set<string>()
+    const opening = [
+      host.dispatchEchoes.answeredUnopenedTurn(host.threadId, open),
+      host.dispatchEchoes.answeredTurnLeftUnopened(host.threadId, open)
+    ].filter((turnId): turnId is string => turnId !== null)
     host.dispatchEchoes.expect(
       input.clientMessageId,
       host.threadId,
       'start',
-      turnInputFor(host, body)
+      turnInputFor(host, body),
+      undefined,
+      [...open, ...opening]
     )
     const previousMode = host.permissions?.appliedMode
     if (host.permissions && mode) {

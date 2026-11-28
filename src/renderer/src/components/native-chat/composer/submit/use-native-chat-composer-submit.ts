@@ -1,7 +1,8 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import { useCallback, useMemo, useState, type RefObject } from 'react'
+import { useCallback, useMemo, type RefObject } from 'react'
+import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
@@ -24,6 +25,7 @@ import {
 } from '../../../../../../shared/agent-session/view/structured-agent-session-goal-mode'
 import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { promptHasInteractionModeSkill } from '../editor/native-chat-prompt-document'
+import type { NativeChatResumeCommand } from '../pickers/use-native-chat-resume-command'
 import { runSessionOptionSurfaceCall } from '../../session/options/controls/native-chat-session-option-surface-call'
 import {
   writeNativeChatComposerText,
@@ -55,13 +57,14 @@ export function useNativeChatComposerSubmit(args: {
   textareaRef: RefObject<NativeChatComposerInput | null>
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   disabled: boolean
+  /** The draft names a bot chat that can't take it (or isn't checked yet): Enter keeps it. */
+  held?: boolean
   /** An optional-prompt action still passes the shared paste and attachment admission. */
   submitEmpty?: () => void
   sendPty: () => void
   sendStructured: NativeChatStructuredComposerSend
-  /** Runs a command Orca owns, like `/resume`; true means the draft never reaches the agent. */
-  consumeOrcaCommand?: (draft: string) => boolean
-  matchesOrcaCommand?: (draft: string) => boolean
+  /** Commands Orca owns, like `/resume`; `consume` true means the draft never reaches the agent. */
+  orcaCommands?: Pick<NativeChatResumeCommand, 'consume' | 'matchesDraft'>
   setDraft: (value: string) => void
   setCaret: (caret: number) => void
 }): {
@@ -70,17 +73,12 @@ export function useNativeChatComposerSubmit(args: {
   messageDelivery: boolean
 } {
   const { caret, disabled, draft, draftScopeKey, imageAttachments, sendPty, sendStructured } = args
-  const {
-    agent,
-    consumeOrcaCommand,
-    setCaret,
-    setDraft,
-    structuredTransport,
-    submitEmpty,
-    textareaRef
-  } = args
+  const held = args.held === true
+  const { agent, orcaCommands, setCaret, setDraft, structuredTransport, submitEmpty, textareaRef } =
+    args
   const threadGoal = structuredTransport?.threadGoal
-  const [entered, setEntered] = useState(false)
+  // Goal entry is part of the draft: it survives the chat view being released.
+  const [entered, setEntered] = useNativeChatViewState(`goal-entry:${draftScopeKey}`, false)
   const active = entered && structuredTransport !== undefined
 
   const interceptPick = useCallback(
@@ -129,7 +127,17 @@ export function useNativeChatComposerSubmit(args: {
           setEntered(true)
         }
       },
-    [agent, caret, draft, setCaret, setDraft, structuredTransport, textareaRef, threadGoal]
+    [
+      agent,
+      caret,
+      draft,
+      setCaret,
+      setDraft,
+      setEntered,
+      structuredTransport,
+      textareaRef,
+      threadGoal
+    ]
   )
 
   // Native goals keep the ordinary sender's paste admission and clearing; host goals clear only an unchanged draft.
@@ -160,9 +168,9 @@ export function useNativeChatComposerSubmit(args: {
         return
       }
       if (!threadGoal) {
-        const isCurrent = structuredTransport.capturePresentation()
         void sendStructured(`/goal ${objective}`, [], intent).then((accepted) => {
-          if (accepted && isCurrent() && readNativeChatComposerDraft(draftScopeKey).text === '') {
+          // Goal entry belongs to the draft, not the view: clear it even if the view was released meanwhile.
+          if (accepted && readNativeChatComposerDraft(draftScopeKey).text === '') {
             setEntered(false)
           }
         })
@@ -177,10 +185,10 @@ export function useNativeChatComposerSubmit(args: {
         if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
           return
         }
+        setEntered(false)
         if (isCurrent()) {
           structuredTransport.onError(null)
           setCaret(0)
-          setEntered(false)
         }
       })
     },
@@ -190,6 +198,7 @@ export function useNativeChatComposerSubmit(args: {
       imageAttachments.length,
       sendStructured,
       setCaret,
+      setEntered,
       structuredTransport,
       threadGoal
     ]
@@ -198,7 +207,10 @@ export function useNativeChatComposerSubmit(args: {
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       // Before goal mode too: a navigation command must never become an objective.
-      if (consumeOrcaCommand?.(draft)) {
+      if (orcaCommands?.consume(draft)) {
+        return
+      }
+      if (held) {
         return
       }
       if (
@@ -234,29 +246,31 @@ export function useNativeChatComposerSubmit(args: {
     [
       active,
       submitEmpty,
-      consumeOrcaCommand,
+      orcaCommands,
       disabled,
       draft,
       draftScopeKey,
+      held,
       imageAttachments,
       sendPty,
       sendStructured,
       setCaret,
       setDraft,
+      setEntered,
       setGoal,
       structuredTransport,
       threadGoal
     ]
   )
 
-  const exit = useCallback(() => setEntered(false), [])
+  const exit = useCallback(() => setEntered(false), [setEntered])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])
   const commandText = structuredTransport
     ? resolveNativeChatPastedText(draftScopeKey, draft)
     : draft
   const messageDelivery =
     !(active && threadGoal !== undefined) &&
-    !args.matchesOrcaCommand?.(draft) &&
+    !orcaCommands?.matchesDraft(draft) &&
     !(
       structuredTransport &&
       !promptHasInteractionModeSkill(

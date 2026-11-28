@@ -1,4 +1,4 @@
-import { projectSessionTabsForClient } from './session-tabs-client-projection'
+import { projectSessionTabsForInventoryStream } from './session-tabs-client-projection'
 export { projectSessionTabsForClient } from './session-tabs-client-projection'
 import {
   collectSessionTabsInventory,
@@ -9,6 +9,7 @@ import { isDeepStrictEqual } from 'node:util'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcContext } from '../../core'
+import type { MobileSessionTabSubscription } from '../../../construction/runtime-identity-state'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
@@ -20,7 +21,8 @@ const MAX_CENSUS_COLLECTION_ATTEMPTS = 3
 
 export async function subscribeSessionTabsInventory(
   context: RpcContext,
-  emit: (result: unknown) => void
+  emit: (result: unknown) => void,
+  scope?: MobileSessionTabSubscription['scope']
 ): Promise<void> {
   const { runtime, connectionId, requestId, pairedDeviceId } = context
   if (context.signal?.aborted) {
@@ -53,10 +55,11 @@ export async function subscribeSessionTabsInventory(
   const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
-    projectSessionTabsForClient(
+    projectSessionTabsForInventoryStream(
       snapshot,
       context.clientKind,
-      context.capabilitySource?.current ?? context.clientCapabilities
+      context.capabilitySource?.current ?? context.clientCapabilities,
+      context.runtime
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {
@@ -186,7 +189,7 @@ export async function subscribeSessionTabsInventory(
     },
     pairedDeviceId,
     context.clientKind,
-    { observation: 'caller', acceptsWorktree: () => !closed }
+    { observation: 'caller', acceptsWorktree: () => !closed, scope }
   )
   const stopCapabilities = context.capabilitySource?.observe(() => {
     if (!initialized || closed) {

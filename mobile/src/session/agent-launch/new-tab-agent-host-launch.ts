@@ -7,7 +7,7 @@ import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { launchAgentInExistingWorkspace } from './mobile-existing-agent-launch'
 import { reserveMobileAgentLaunch } from './mobile-agent-launch-reservation'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { agentPromptNotSentMessage } from '../../source-control/review/agent-launch/pr-ai-triage-launch'
+import { agentPromptNotSentMessage } from './mobile-prompted-agent-launch'
 import { readAgentLaunchNotice } from './agent-launch-request'
 import { translate } from '../../i18n/mobile-i18n'
 import {
@@ -51,6 +51,8 @@ export async function launchNewTabAgentThroughHost(args: {
   worktreeId: string
   agent: TuiAgent
   options: NewTabAgentLaunchOptions | undefined
+  /** Chat or CLI from the New Tab sheet; a chat that can't open here starts the CLI. */
+  nativeChatDefault?: boolean
   lock: string
   activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
@@ -73,6 +75,7 @@ export async function launchNewTabAgentThroughHost(args: {
     hostCapabilities: args.hostCapabilities,
     worktreeId: args.worktreeId,
     agent: args.agent,
+    nativeChatDefault: args.nativeChatDefault,
     reservation,
     ...(afterTabId ? { placement: { afterTabId } } : {}),
     ...(prompt?.trim() ? { prompt: { text: prompt, delivery: 'submit' as const } } : {}),

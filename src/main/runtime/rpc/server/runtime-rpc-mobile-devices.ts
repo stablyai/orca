@@ -2,24 +2,42 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
+import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairing/device-entry'
+import type { DeviceSelfRpcContext } from '../core'
+import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
-import type { DeviceEntry } from './pairing/device-entry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
+import { droppedDelegatedPhones } from './pairing/delegated-mobile-devices'
+import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
   private onPushUnregisterQueued?: () => void
+  private relayPhonesChangeQueued = false
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    const revoked = device?.scope === 'mobile' && this.revokeDevicesNow([device])
-    if (revoked) {
-      this.mobileDesktopRelay?.phonesChanged()
+    return device?.scope === 'mobile' && this.revokeDevicesNow([device])
+  }
+
+  /** Every removal counts, a cascade or a disk edit too, so relayed servers drop that phone. */
+  protected announcePairedDevicesChanged(): void {
+    this.queueRelayPhonesChanged()
+    this.onPairedDevicesChanged?.()
+  }
+
+  // Deferred, so a save has taken the saved list, and once per cascade of saves.
+  protected queueRelayPhonesChanged(): void {
+    if (!this.relayPhonesChangeQueued) {
+      this.relayPhonesChangeQueued = true
+      queueMicrotask(() => {
+        this.relayPhonesChangeQueued = false
+        this.mobileDesktopRelay?.phonesChanged()
+      })
     }
-    return revoked
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
@@ -42,7 +60,11 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       }
       visited.add(device.deviceId)
       for (const child of paired) {
-        if (child.parentDeviceId === device.deviceId || child.forkedFrom === device.deviceId) {
+        if (
+          child.parentDeviceId === device.deviceId ||
+          child.forkedFrom === device.deviceId ||
+          child.createdByDeviceId === device.deviceId
+        ) {
           visit(child)
         }
       }
@@ -63,37 +85,88 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
         this.mobileRelayPairingProvider?.onDemandStateChanged?.()
       }
       this.runtime.forgetClientNavigationState(deviceId)
+      if (device.scope === 'runtime') {
+        // Asks this Orca's agents sent that computer under this pairing will not be answered.
+        settleRemovedPairedClient(this.runtime, device)
+      }
       this.mobileSocketWiring?.terminateDeviceConnections(deviceId)
     }
     return true
   }
 
-  /** Make the runtime device `parentDeviceId`'s phones exactly `phones`; dropped ones are fully revoked. */
+  /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
+  pairedDeviceTypist(
+    deviceId: string,
+    connectionClaim?: DeviceOrcaAccount | null
+  ): PairedDeviceTypist | null {
+    const registry = this.deviceRegistry
+    return registry
+      ? pairedDeviceTypistOf(
+          deviceId,
+          (id) => registry.getDevice(id),
+          connectionClaim ?? null,
+          (ownerId, instance) => this.declaredDesktopClients.accountOfInstance(ownerId, instance)
+        )
+      : null
+  }
+
+  /** A desktop socket's account claim: on its row (Slack naming) and the socket (who typed what). */
+  protected desktopAccountSelf(
+    device: Pick<DeviceEntry, 'deviceId' | 'scope'>,
+    connectionId: string
+  ): Pick<DeviceSelfRpcContext, 'declareOrcaAccount' | 'orcaAccount' | 'clientInstanceId'> {
+    return {
+      declareOrcaAccount: (account, clientInstanceId) => {
+        this.deviceRegistry?.setOrcaAccount(device.deviceId, account)
+        if (device.scope === 'runtime') {
+          this.declaredDesktopClients.declareAccount(connectionId, {
+            deviceId: device.deviceId,
+            account,
+            ...(clientInstanceId ? { clientInstanceId } : {})
+          })
+        }
+      },
+      orcaAccount: () => this.declaredDesktopClients.accountOf(connectionId),
+      clientInstanceId: () => this.declaredDesktopClients.instanceOf(connectionId)
+    }
+  }
+
+  /** Make the syncing installation's phones under `parentDeviceId` exactly `phones`; dropped ones are
+   *  fully revoked. Several desktops can share one row, so another installation's phones stay. */
   protected syncDelegatedMobileDevices(
     parentDeviceId: string,
-    phones: readonly DelegatedPhone[]
+    phones: readonly DelegatedPhone[],
+    caller: { connectionId?: string; clientInstanceId?: string } = {}
   ): DelegatedMobileDeviceSyncResult {
+    // The declaration is fire-and-forget, so an older desktop's first sync may arrive before it.
+    const originClientInstanceId =
+      caller.clientInstanceId ??
+      (caller.connectionId === undefined
+        ? undefined
+        : this.declaredDesktopClients.instanceOf(caller.connectionId))
     const registry = this.deviceRegistry
     const parent = registry?.getDevice(parentDeviceId)
     if (!registry || parent?.scope !== 'runtime') {
       throw new Error('delegated_device_parent_unavailable')
     }
-    const wanted = new Set(phones.map((phone) => phone.phoneKey))
-    const dropped = registry
-      .listDelegatedMobileDevices(parentDeviceId)
-      .filter((child) => !child.phoneKey || !wanted.has(child.phoneKey))
+    const dropped = droppedDelegatedPhones(
+      registry.listDevices(),
+      parentDeviceId,
+      phones,
+      originClientInstanceId
+    )
     if (!this.revokeDevicesNow(dropped)) {
       throw new Error('delegated_device_revoke_failed')
     }
 
-    let devices = registry.upsertDelegatedMobileDevices(parent, phones)
+    let devices = registry.upsertDelegatedMobileDevices(parent, phones, originClientInstanceId)
     // A child removed on disk meanwhile is dropped by the save; one rerun mints it fresh.
     if (devices.length < phones.length) {
       const current = registry.getDevice(parentDeviceId)
       if (current?.scope !== 'runtime') {
         throw new Error('delegated_device_parent_unavailable')
       }
-      devices = registry.upsertDelegatedMobileDevices(current, phones)
+      devices = registry.upsertDelegatedMobileDevices(current, phones, originClientInstanceId)
     }
     return {
       devices: devices.map((device) => ({

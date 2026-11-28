@@ -1,10 +1,10 @@
 import * as z from 'zod'
 import type { WorkspaceLinkedItem } from '../worktree/types'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
-export const WorkspaceLinkedItemSchema = z
-  .unknown()
-  .transform((value, ctx): WorkspaceLinkedItem => {
+export const WorkspaceLinkedItemSchema = lazyZodSchema(() =>
+  z.unknown().transform((value, ctx): WorkspaceLinkedItem => {
     const normalized = normalizeWorkspaceLinkedItem(value)
     if (!normalized) {
       ctx.addIssue({ code: 'custom', message: 'Invalid linked work item' })
@@ -12,3 +12,4 @@ export const WorkspaceLinkedItemSchema = z
     }
     return normalized
   })
+)

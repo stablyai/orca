@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { SearchOptions, SearchResult } from '../../../../shared/file-search/code-search-types'
 import {
   throwIfSignalAborted,
@@ -7,20 +8,23 @@ import {
 import { resolveBundledRipgrepWslRouting } from '../../../ripgrep/bundled-ripgrep-wsl-routing'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { resolveDesktopAuthorizedPath } from '../access/local-file-access-resolution'
-import { createSenderScopedRequestCancellations } from '../../sender-scoped-request-cancellation'
+import { createSenderScopedRequestCancellations } from '../../renderer-requests/sender-scoped-request-cancellation'
 import { stopBundledRipgrep } from '../../../ripgrep/bundled-ripgrep-stop'
 import { runBundledRipgrepTextSearch } from '../../../ripgrep/bundled-ripgrep-text-search'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
-export function registerFilesystemContentSearchHandler(context: FilesystemHandlerContext): void {
+export function registerFilesystemContentSearchHandler(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, activeTextSearches } = context
   const searches = createSenderScopedRequestCancellations()
-  ipcMain.handle('fs:cancelSearch', (event, args: { requestToken: string }) => {
+  ipc.handle('fs:cancelSearch', (event, args: { requestToken: string }) => {
     searches.cancel(event, args.requestToken)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'fs:search',
     async (
       event,

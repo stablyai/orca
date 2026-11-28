@@ -7,10 +7,8 @@ import {
   useLaunchedAgentOpener,
   type LaunchedAgentOpens
 } from '../../session/agent-launch/launched-agent-opener'
-import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 type Props = {
   availability: MobileAgentLaunchAvailability
   /** The confirmation that the agent started with its prompt. */
@@ -36,7 +34,7 @@ export function AgentLaunchNotice({
   errorStyle
 }: Props) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const clipboard = useClipboardWriter()
   const openAgent = useLaunchedAgentOpener(opens)
   const [copyState, setCopyState] = useState<{
@@ -47,7 +45,7 @@ export function AgentLaunchNotice({
     availability === 'update-required'
       ? t(
           'components.agentLaunchNotice.updateRequired',
-          'Update Orca on your computer to start an agent from your phone.'
+          'Update Orca on this host to start an agent from your phone.'
         )
       : availability === 'unverified'
         ? t(
@@ -104,7 +102,7 @@ export function AgentLaunchNotice({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   notice: {
     gap: spacing.xs
   },

@@ -5,11 +5,13 @@ import { delimiter } from 'node:path'
 import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
 import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
 import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
+import { removeChromiumCrashpadPipeName } from '../../pty/shell-startup/chromium-crashpad-pipe-env'
 import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
 import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
 import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
 import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
 import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { stampInheritedTmuxEnv } from '../../pty/shell-startup/inherited-tmux-env'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
 import {
@@ -17,10 +19,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../../../shared/git/commands/git-credential-prompt-env'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
-import {
-  ORCA_IMAGE_PROTOCOL_ENV,
-  ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal/images/terminal-image-protocol'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
@@ -177,15 +176,18 @@ function removeInheritedDevAgentHookEndpoint(
 export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<string, string> {
   const inheritedEnv = stripInheritedBuildModeEnv(process.env)
   restoreManagedDataAccountEnvironment(inheritedEnv)
+  removeChromiumCrashpadPipeName(inheritedEnv)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(inheritedEnv, opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
     TERM_PROGRAM: 'Orca',
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-    FORCE_HYPERLINK: '1',
-    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
+    FORCE_HYPERLINK: '1'
   } satisfies Record<string, string>
+  if (opts.env?.[ORCA_IMAGE_PROTOCOL_ENV] === undefined) {
+    delete env[ORCA_IMAGE_PROTOCOL_ENV]
+  }
   stripLegacyTerminalShimEnv(env, process.platform)
   stripInheritedAgentSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
@@ -194,6 +196,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     env.TERM = opts.env.TERM
   }
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  stampInheritedTmuxEnv(env, opts.env)
   stripPiProcessOwnerEnv(env)
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)

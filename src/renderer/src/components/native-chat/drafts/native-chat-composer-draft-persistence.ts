@@ -2,7 +2,7 @@
 
 import { basename } from '@/lib/path'
 import { isNativeChatKeptPastePath } from '../paste/native-chat-image-paste'
-import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
 import { isAgentSessionAttachmentStorePath } from '../../../../../shared/agent-session/agent-session-attachments'
 import {
   dirtyScopes,

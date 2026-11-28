@@ -5,7 +5,7 @@ import {
   closeBrowserMemoryRenderer,
   startBrowserPageAttach
 } from '../../browser/guest-lifecycle/browser-page-memory'
-import { app, type BrowserWindow } from 'electron'
+import { app, session, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
@@ -38,6 +38,7 @@ import { getBrowserExtensionSessionForProfile } from '../../browser/extensions/p
 import { isBrowserExtensionEnabledInProfile } from '../../browser/extensions/web-store/browser-extension-webstore-service'
 import { isBrowserExtensionSupportEnabled } from '../../browser/extensions/browser-extension-support'
 import { holdWebviewFirstLoadForExtensions } from '../../browser/extensions/profile-sessions/browser-extension-page-start'
+import { linkBrowserExtensionsToRouteSession } from '../../browser/extensions/profile-sessions/browser-extension-route-sessions'
 import { installBrowserJavaScriptDialogs } from '../../browser/guest-lifecycle/prompts/browser-javascript-dialogs'
 import { installNativeChatVisualGuestTheme } from '../../host/native-chat-visual-guest-theme'
 import {
@@ -46,7 +47,13 @@ import {
   isPluginFramePartition,
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../../plugins/panels/guest-isolation/plugin-frame-guest-registry'
-import { attachBrowserPasswordGuest } from '../../browser-passwords/browser-password-guest-service'
+import {
+  admitBrowserExtensionSidePanelAttach,
+  isBrowserExtensionSidePanelAttachMarker,
+  startBrowserExtensionSidePanelGuest
+} from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
+import { associateBrowserExtensionSidePanelGuest } from '../../browser/extensions/side-panel/browser-extension-side-panel-guests'
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from '../web-contents-listener-budget'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -59,8 +66,8 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
 
 /**
  * Why its own rule: extension pages (options, tabs.create) are not typed URLs, so they attach only
- * in a local browser-profile partition with that extension installed and enabled. Route, SSH and
- * doc-preview partitions never qualify.
+ * in a partition whose extension profile has that extension installed and enabled: a local
+ * profile's, or an SSH page's. This-device and doc-preview partitions never qualify.
  */
 function isAdmissibleExtensionPageAttach(profileId: string | null, src: string): boolean {
   const extensionUrl = parseChromeExtensionUrl(src)
@@ -90,13 +97,19 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
   })
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
+  const mainWebContentsId = mainWindow.webContents.id
   const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
+    // Each browser subsystem watches a page's lifetime, so a restore alone passes Node's default 10.
+    if (guest.getType() === 'webview') {
+      guest.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+    }
     associateBrowserPageAttach(guest)
+    associateBrowserExtensionSidePanelGuest(guest)
   }
   app.on('web-contents-created', associateCreatedGuest)
   mainWindow.webContents.on('destroyed', () => {
     app.off('web-contents-created', associateCreatedGuest)
-    closeBrowserMemoryRenderer(mainWindow.webContents.id)
+    closeBrowserMemoryRenderer(mainWebContentsId)
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
@@ -137,12 +150,35 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       }
     }
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
-    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(profileId, src)
+    // SSH and This-device pages run their local profile's extensions in their own session.
+    const extensionProfileId =
+      profileId ??
+      (isRoutePartition || isLocalSshPartition
+        ? linkBrowserExtensionsToRouteSession(session.fromPartition(partition))
+        : null)
+    const isExtensionPageAttach = isAdmissibleExtensionPageAttach(
+      isRoutePartition ? null : extensionProfileId,
+      src
+    )
+    // Why a main-minted marker: main must know a panel guest before it loads, and picks its page.
+    let isSidePanelAttach = false
+    if (isBrowserExtensionSidePanelAttachMarker(src)) {
+      if (
+        !extensionProfileId ||
+        !isBrowserExtensionSupportEnabled() ||
+        !admitBrowserExtensionSidePanelAttach(src, mainWindow.webContents.id, partition)
+      ) {
+        event.preventDefault()
+        return
+      }
+      isSidePanelAttach = true
+    }
 
     // Require an allowlisted src/partition; renderer mistakes must not grant preload/Node authority.
     if (
       !isDocPreviewAttach &&
       !isExtensionPageAttach &&
+      !isSidePanelAttach &&
       ((!normalizedSrc && !attachArgument) ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
         (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL && !attachArgument))
@@ -158,7 +194,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
-    if (attachArgument) {
+    if (attachArgument || isSidePanelAttach) {
       delete params.src
     }
     webPreferences.nodeIntegration = false
@@ -174,15 +210,19 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     Object.assign(webPreferences, ORCA_BROWSER_GUEST_WEB_PREFERENCES)
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
-    if (profileId) {
-      // A profile starts its extensions with its first tab, not at launch.
-      browserSessionRegistry.attachExtensions(profileId)
-      holdWebviewFirstLoadForExtensions(mainWindow.webContents, profileId, params)
+    // A profile starts its extensions with its first tab, not at launch.
+    if (extensionProfileId) {
+      browserSessionRegistry.attachExtensions(extensionProfileId)
+      holdWebviewFirstLoadForExtensions(mainWindow.webContents, extensionProfileId, params)
     }
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
     if (attachPluginFrameGuest(guest, mainWindow.webContents)) {
+      return
+    }
+    // Side panels keep the action popup's own link and navigation policy, not a tab's.
+    if (startBrowserExtensionSidePanelGuest(guest)) {
       return
     }
     if (isDocPreviewSession(guest.session)) {
@@ -201,7 +241,23 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     const routeGuest = browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
-    attachBrowserPasswordGuest(guest)
+    let domReadyFired = false
+    const onEarlyDomReady = (): void => {
+      domReadyFired = true
+    }
+    guest.once('dom-ready', onEarlyDomReady)
+    void import('../../browser-passwords/browser-password-guest-service')
+      .then(({ attachBrowserPasswordGuest }) => {
+        if (guest.isDestroyed()) {
+          return
+        }
+        guest.removeListener('dom-ready', onEarlyDomReady)
+        attachBrowserPasswordGuest(guest, domReadyFired)
+      })
+      .catch((error) => {
+        guest.removeListener('dom-ready', onEarlyDomReady)
+        console.warn('[browser-passwords] Failed to load password guest service:', error)
+      })
     if (!routeGuest) {
       startBrowserPageAttach(guest)
     }

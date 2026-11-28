@@ -183,10 +183,10 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     existingWorktreePaths,
     retiredWorktreeNames,
     setupCommand: setupScript.setupCommand,
-    setupTrust: setupScript.setupTrust,
     setupRunPolicy: setupScript.setupRunPolicy,
     setupDecisionChoice: setupScript.setupDecisionChoice,
     runSetup: setupScript.runSetup,
+    setupWait: setupScript.waitForSetupChoice,
     trustedOrcaHooks: runtime.trustedOrcaHooks,
     setTrustedOrcaHooks: runtime.setTrustedOrcaHooks,
     getWorktreeCreateCutoverSupport,
@@ -237,13 +237,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
+  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
     () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
-    [hostLabelById, hostPlatform, repos, selectedProjectId, t]
+    [hostLabelById, hostPlatform, repos, selectedProjectId]
   )
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)
@@ -310,6 +310,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         setupRunPolicy={setupScript.setupRunPolicy}
         setupDecisionChoice={setupScript.setupDecisionChoice}
         runSetup={setupScript.runSetup}
+        waitForSetup={setupScript.waitForSetup}
         error={error}
         creating={createSubmit.creating}
         canCreate={canCreate}
@@ -330,6 +331,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onNoteChange={setNote}
         onSetupDecisionChange={setupScript.setSetupDecisionChoice}
         onRunSetupChange={setupScript.setRunSetup}
+        onWaitForSetupChange={setupScript.setWaitForSetup}
         onCreate={() => void createSubmit.create()}
       />
 

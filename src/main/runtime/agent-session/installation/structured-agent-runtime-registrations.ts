@@ -1,3 +1,4 @@
+import { registerAcpRelayAgent } from '../../../acp/process/acp-relay-work-markers'
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
@@ -13,10 +14,12 @@ import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { journalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
-import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import { nameChatFromClaudeRename } from '../naming/claude-user-rename'
+import { claudeAtRestDiscovery, codexAtRestSkillRoots } from './structured-agent-at-rest-discovery'
+import { acpListsCommandsAtRest } from '../../../acp/discovery/acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
-import type { AcpSavedSessionReads } from '../../../acp/session/acp-structured-resume-history'
+import type { SavedProviderTurnReads } from '../../../native-chat/agent-session-journal/journal-provider-turn-saved'
 import { createAcpAgentConnection } from '../../../acp/process/acp-agent-connection'
 import { createOpenCodeAcpConnection } from '../../../opencode/acp/opencode-acp-connection'
 import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
@@ -41,6 +44,14 @@ import type {
   StructuredAgentRuntimeRegistration
 } from './structured-agent-runtime-registration-types'
 
+function savedProviderTurns(context: StructuredAgentAdapterContext): SavedProviderTurnReads {
+  const { readers } = context.journalDatabase
+  return {
+    hasProviderTurn: (sessionId, nativeId, sinceFence) =>
+      journalSqlReads(readers, sessionId).hasProviderTurn(nativeId, sinceFence)
+  }
+}
+
 function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
   const { deps, followUps, host } = context
   const providerInvocation = {
@@ -57,7 +68,8 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       ...providerInvocation,
       ...(deps.prepareCodexCatalogProbeHome
         ? { prepareHome: deps.prepareCodexCatalogProbeHome }
-        : {})
+        : {}),
+      skillRoots: codexAtRestSkillRoots(deps)
     }),
     resolveLaunch: withSupportedCodexCli(
       composeStructuredLaunch(
@@ -65,6 +77,7 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          savedSession: savedProviderTurns(context),
           ...(deps.prepareLaunchAccountHome
             ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
             : {}),
@@ -74,7 +87,11 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
       deps.readCodexInstallation
     ),
     ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
+    ...(deps.sharedCodexServers ? { sharedServers: deps.sharedCodexServers } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+    ...(deps.nativeChatPromptSuggestions
+      ? { promptSuggestions: deps.nativeChatPromptSuggestions }
+      : {}),
     modelCatalog: agentModelCatalogStore,
     readModelCatalog: (sessionId, verifiedOnly) =>
       host()?.deps.modelCatalog?.peek(sessionId, verifiedOnly) ?? null,
@@ -123,7 +140,10 @@ function createClaudeAdapter(
         ...(deps.resolveClaudeCommand ? { resolveCommand: deps.resolveClaudeCommand } : {}),
         resolveAuthPolicy: deps.resolveClaudeAuthPolicy,
         attachmentDirectory: agentSessionAttachmentStoreRoot(deps.stateDirectory),
-        ...(deps.claudeCliFlags ? { cliFlags: deps.claudeCliFlags } : {})
+        ...(deps.claudeCliFlags ? { cliFlags: deps.claudeCliFlags } : {}),
+        ...(deps.nativeChatPromptSuggestions
+          ? { promptSuggestions: deps.nativeChatPromptSuggestions }
+          : {})
       })
     ),
     ...(deps.resolveClaudeCommand ? { resolveClaudeCommand: deps.resolveClaudeCommand } : {}),
@@ -131,11 +151,16 @@ function createClaudeAdapter(
     ...(overlay ? { resolveClaudeLaunchEnv: overlay } : {}),
     resolveClaudeInheritedEnv: context.environment.resolveBaseEnvironment,
     atRestCommandProbe: createClaudeCommandCatalogProbe(claudeListingDeps(context)),
+    atRestDiscovery: claudeAtRestDiscovery(deps),
     onLifecycleEvent: context.deliverLifecycle,
     logger: deps.logger,
     onChildWorkEvidence: (sessionId, evidence, producer) =>
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
+    onUserRenamed: nameChatFromClaudeRename({
+      naming: deps.conversationNaming,
+      logger: deps.logger
+    }),
     ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
   })
@@ -144,13 +169,10 @@ function createClaudeAdapter(
 function createAcpAdapter(
   spec: AcpLaunchSpec
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
+  registerAcpRelayAgent(spec)
   return (context) => {
     const { deps, followUps } = context
-    const { readers } = context.journalDatabase
-    const savedSession: AcpSavedSessionReads = {
-      hasProviderTurn: (sessionId, nativeId) =>
-        journalSqlReads(readers, sessionId).hasProviderTurn(nativeId)
-    }
+    const savedSession = savedProviderTurns(context)
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {
@@ -169,8 +191,8 @@ function createAcpAdapter(
         ...deps.acpLaunchCommand,
         dataDirectory: deps.stateDirectory
       },
-      // Agents that list models in a throwaway chat-folder session report commands there too.
-      ...(acpListingNeedsChatFolder(spec.modelDiscovery)
+      // A throwaway session in the chat's folder reports the commands that chat gets.
+      ...(acpListsCommandsAtRest(spec.modelDiscovery)
         ? {
             atRestCommands: new AcpAtRestCommandCatalog(spec, {
               ...deps.acpLaunchCommand,
@@ -199,6 +221,20 @@ function createAcpAdapter(
           : createAcpAgentConnection),
       onChildWorkEvidence: (sessionId, evidence, producer) =>
         context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
+      keptWork: async (sessionId) => {
+        const work = await context.host()?.currentWork(sessionId)
+        // The oldest unanswered send is the prompt the agent owes; later ones are queued behind it.
+        const send = work?.restatedSubmissions()[0]
+        const turn = work?.activeTurn()
+        const body = turn?.item.body
+        const sentAt =
+          body?.kind === 'turn' ? (body.requestedAt ?? body.startedAt) : send?.submittedAt
+        return {
+          turnId: turn?.turnId ?? null,
+          unansweredSendId: send?.clientMessageId ?? null,
+          sentAt: sentAt ?? null
+        }
+      },
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
       onDispatchSettledLate: followUps.onDispatchSettledLate,
       logger: deps.logger,

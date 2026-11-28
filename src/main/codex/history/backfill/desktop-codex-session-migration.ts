@@ -1,8 +1,6 @@
 import type { Store } from '../../../persistence/loading-store/store'
 import type { createProviderAccountServices } from '../../../providers/accounts/provider-account-services'
 import { createCodexSessionMigrationScheduler } from './codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from './codex-session-backfill'
-import { startCodexSessionIndexHealInBackground } from '../index/codex-session-index-heal'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import {
   getCodexPaneAccount,
@@ -22,11 +20,21 @@ export function createDesktopCodexSessionMigration(
     isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store.getSettings()),
-    prepareScheduledRun: (scanDates) =>
-      getRuntimeHome()?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
+    prepareScheduledRun: (fullScanRequired, newFullScanRequest) =>
+      getRuntimeHome()?.prepareHostSystemDefaultSessionMigrationPass(
+        fullScanRequired,
+        newFullScanRequest
+      ),
     finishScheduledRun: () => getRuntimeHome()?.finishHostSystemDefaultSessionMigrationPass(),
-    startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
+    startBackfill: async (options, systemCodexHomePathOverride) => {
+      const { startCodexSessionBackfillInBackground } = await import('./codex-session-backfill')
+      return startCodexSessionBackfillInBackground(options, systemCodexHomePathOverride)
+    },
+    startIndexHeal: async (options, systemCodexHomePathOverride) => {
+      const { startCodexSessionIndexHealInBackground } =
+        await import('../index/codex-session-index-heal')
+      return startCodexSessionIndexHealInBackground(options, systemCodexHomePathOverride)
+    }
   })
 }
 

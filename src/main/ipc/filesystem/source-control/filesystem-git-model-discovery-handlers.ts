@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { CommitMessageAgentRuntimeTarget } from '../../../text-generation/execution/commit-message-agent-environment'
 import { discoverCommitMessageModelsLocal } from '../../../text-generation/commit-message-text-generation'
@@ -9,14 +10,15 @@ import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget
 } from './filesystem-source-control-ai-targets'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
 export function registerFilesystemGitModelDiscoveryHandlers(
-  context: FilesystemHandlerContext
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:discoverCommitMessageModels',
     async (
       _event,

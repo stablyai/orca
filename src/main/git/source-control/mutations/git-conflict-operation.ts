@@ -1,14 +1,20 @@
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
-import type { GitConflictOperation } from '../../../../shared/git/status/git-status-types'
+import type {
+  GitAbortOperationRequest,
+  GitConflictOperation
+} from '../../../../shared/git/status/git-status-types'
 
 import {
   type GitRuntimeOptions,
   gitOptionsForWorktree
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { trackGitOperationWriters } from '../../command-runner/git-writer-lifetime'
 import { runWithGitReadCacheInvalidation } from '../git-read-cache-invalidation'
+import { runWithGitWorktreeOperationLock } from '../../../../shared/git/worktrees/git-worktree-operation-lock'
 import { resolveGitDir } from '../resolve-git-dir'
+import { assertOperationRunIdentity } from './operation-run-identity'
 
 // HEAD detection races may yield unknown for one poll; rebase directories persist more reliably than REBASE_HEAD.
 export async function detectConflictOperation(
@@ -56,8 +62,10 @@ async function pathExists(target: string): Promise<boolean> {
 
 export async function abortMerge(
   worktreePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  request: GitAbortOperationRequest = {}
 ): Promise<void> {
+  await assertOperationRunIdentity(worktreePath, 'merge', request.expectedRunIdentity, options)
   await runWithGitReadCacheInvalidation(() =>
     gitExecFileAsync(['merge', '--abort'], gitOptionsForWorktree(worktreePath, options))
   )
@@ -65,9 +73,44 @@ export async function abortMerge(
 
 export async function abortRebase(
   worktreePath: string,
-  options: GitRuntimeOptions = {}
+  options: GitRuntimeOptions = {},
+  request: GitAbortOperationRequest = {}
 ): Promise<void> {
-  await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['rebase', '--abort'], gitOptionsForWorktree(worktreePath, options))
+  const lifetime = trackGitOperationWriters(options, true)
+  // Queued Abort runs once in this worktree after any Orca operation already holding the lane.
+  await runWithGitWorktreeOperationLock(
+    worktreePath,
+    options.signal,
+    async () => {
+      // Checked inside the lane, so no Orca operation can start a new run between check and abort.
+      await assertOperationRunIdentity(worktreePath, 'rebase', request.expectedRunIdentity, options)
+      return runWithGitReadCacheInvalidation(() =>
+        gitExecFileAsync(['rebase', '--abort'], {
+          ...gitOptionsForWorktree(worktreePath, lifetime.options),
+          terminationBarrier: 'wait-for-posix-group'
+        })
+      )
+    },
+    lifetime.waitForWriters
   )
+}
+
+// Git 2.55 reworded "Applying autostash resulted in conflicts"; match both.
+export const AUTOSTASH_REAPPLY_CONFLICT =
+  /Applying autostash resulted in conflicts|local changes are stashed, however applying them\s+resulted in conflicts|could not apply autostash/i
+
+/** Git refuses to rebase over tracked changes unless rebase.autoStash is on. */
+export async function readRebaseAutoStash(
+  worktreePath: string,
+  options: GitRuntimeOptions = {}
+): Promise<boolean> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['config', '--bool', '--get', '--default=false', 'rebase.autoStash'],
+      gitOptionsForWorktree(worktreePath, options)
+    )
+    return stdout.trim() === 'true'
+  } catch {
+    return false
+  }
 }

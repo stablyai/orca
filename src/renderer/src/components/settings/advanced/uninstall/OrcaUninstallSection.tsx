@@ -1,5 +1,6 @@
 import type React from 'react'
 import { Trans } from 'react-i18next'
+import { finalSentenceStop } from '../../../../../../shared/text/sentence-joining'
 import type { OrcaUninstallPlan } from '../../../../../../shared/uninstall/orca-uninstall-types'
 import { i18n } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -9,18 +10,16 @@ import {
   countOrcaUninstallProblems
 } from './orca-uninstall-plan-state'
 import { OrcaUninstallFooter } from './OrcaUninstallFooter'
-import { OrcaUninstallRows } from './OrcaUninstallRows'
+import { describeOrcaUninstallHookTargets, OrcaUninstallRows } from './OrcaUninstallRows'
 import { useOrcaUninstall, type OrcaUninstallModel } from './use-orca-uninstall'
 
 // Parts are joined by Intl.ListFormat, so each one is a lowercase fragment.
 function describePlanParts(plan: OrcaUninstallPlan, t: Translate, intlLocale: string): string {
   const parts: string[] = []
-  if (plan.agents.length > 0) {
+  const hookTargets = describeOrcaUninstallHookTargets(plan, t, intlLocale)
+  if (hookTargets) {
     parts.push(
-      t('settings.uninstall.summary.agents', 'hooks in {{count}} agents', {
-        count: plan.agents.length,
-        defaultValue_one: 'hooks in 1 agent'
-      })
+      t('settings.uninstall.summary.hooksIn', 'hooks in {{targets}}', { targets: hookTargets })
     )
   }
   if (plan.cliCommand) {
@@ -31,25 +30,21 @@ function describePlanParts(plan: OrcaUninstallPlan, t: Translate, intlLocale: st
     )
   }
   if (plan.backgroundService) {
-    parts.push(t('settings.uninstall.summary.service', 'a background service'))
+    parts.push(t('settings.uninstall.summary.service', 'the <cmd>orca serve</cmd> server'))
   }
-  // Scripts are part of the agents' hooks; name them only when no agent entry is left.
-  if (plan.hookScripts && plan.agents.length === 0) {
+  if (plan.terminalDaemon) {
+    parts.push(t('settings.uninstall.summary.terminalDaemon', 'the terminal background process'))
+  }
+  // Scripts are part of the hooks; name them only when no agent or host entry is left.
+  if (plan.hookScripts && !hookTargets) {
     parts.push(t('settings.uninstall.summary.hookScripts', 'hook scripts'))
-  }
-  if (plan.hosts.length > 0) {
-    parts.push(
-      t('settings.uninstall.summary.hosts', '{{count}} SSH hosts', {
-        count: plan.hosts.length,
-        defaultValue_one: '1 SSH host'
-      })
-    )
   }
   if (parts.length === 0) {
     return t('settings.uninstall.summary.nothing', 'Nothing outside the app to remove.')
   }
   const list = new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(parts)
-  return `${list.charAt(0).toLocaleUpperCase(intlLocale)}${list.slice(1)}.`
+  const sentence = `${list.charAt(0).toLocaleUpperCase(intlLocale)}${list.slice(1)}`
+  return `${sentence}${finalSentenceStop(sentence)}`
 }
 
 function OrcaUninstallSummary({

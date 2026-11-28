@@ -72,6 +72,14 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
   return targets
 }
 
+// A merged row is rebuilt only when its evidence entry changes. Fresh objects for every
+// evidenced row on each publish would defeat the downstream facet and row memo caches, making
+// each streamed batch cost O(rows with evidence).
+const mergedEvidenceCache = new WeakMap<
+  WorkspaceCleanupCandidate,
+  { evidence: WorkspaceCleanupCandidate; merged: WorkspaceCleanupCandidate }
+>()
+
 /** Targeted evidence overrides broad-scan unknowns by host-qualified identity, never another host’s same-ID row (STA-4343). */
 export function applyWorkspaceCleanupGitEvidence(
   candidates: readonly WorkspaceCleanupCandidate[],
@@ -89,7 +97,11 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
-    return {
+    const cached = mergedEvidenceCache.get(candidate)
+    if (cached !== undefined && cached.evidence === evidence) {
+      return cached.merged
+    }
+    const merged: WorkspaceCleanupCandidate = {
       ...candidate,
       reasons: [
         ...candidate.reasons.filter((reason) => !GIT_DERIVED_REASONS.has(reason)),
@@ -101,5 +113,7 @@ export function applyWorkspaceCleanupGitEvidence(
       ],
       git: evidence.git
     }
+    mergedEvidenceCache.set(candidate, { evidence, merged })
+    return merged
   })
 }

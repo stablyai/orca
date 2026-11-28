@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DialogFooter } from '@/components/ui/dialog'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type {
   WslMovePreview,
   WslMoveRowRef
@@ -13,9 +13,9 @@ import type {
 import {
   wslMoveBrowserLoginsNotCarried,
   wslMoveChatsStayCopy,
-  wslMoveRefusalMessage,
-  wslMoveScopeRefusalReason
+  wslMoveRefusalMessage
 } from './wsl-move-copy'
+import { wslMoveScopeRefusalReason } from './wsl-move-scope-refusal-copy'
 import type { WslMoveCounts, WslMoveProjectRow } from './wsl-move-scope-rows'
 import { WslMoveBlockerList, type WslMoveBlockerView } from './WslMoveBlockerList'
 
@@ -23,7 +23,8 @@ export type WslMovePreviewBodyProps = {
   distro: string
   rows: WslMoveProjectRow[]
   selected: readonly WslMoveRowRef[]
-  counts: WslMoveCounts
+  /** From the selection's preview; null until it is ready. */
+  counts: WslMoveCounts | null
   /** The selection's preview; null while it is being checked. */
   preview: WslMovePreview | null
   /** Listed by the whole-distro preview but not moved, each with why. */
@@ -97,7 +98,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
                 )
               })}
             </ul>
-            {selected.length > 0 ? (
+            {selected.length > 0 && props.counts ? (
               <div className="text-xs text-muted-foreground" data-testid="wsl-move-counts">
                 {countsLine(props.counts, t)}
               </div>
@@ -183,8 +184,13 @@ export function wslMoveNotMovingLines(
   distro: string,
   t: Translate = translate
 ): { name: string; why: string }[] {
+  const refused = preview.refused?.map((entry) => ({
+    name: nameOf({ kind: entry.kind === 'repo' ? 'repo' : 'folder', id: entry.id }),
+    why: wslMoveScopeRefusalReason(entry.reason, t)
+  }))
   if (preview.outcome !== 'ready') {
-    return []
+    // A refused preview carries why each project can't move when none can.
+    return refused ?? []
   }
   return [
     ...preview.heldByHost.map((ref) => ({
@@ -198,9 +204,6 @@ export function wslMoveNotMovingLines(
         'Moved earlier, then changed here by an older version of Orca. It is not moved again.'
       )
     })),
-    ...preview.refused.map((entry) => ({
-      name: nameOf({ kind: entry.kind === 'repo' ? 'repo' : 'folder', id: entry.id }),
-      why: wslMoveScopeRefusalReason(entry.reason, t)
-    }))
+    ...(refused ?? [])
   ]
 }

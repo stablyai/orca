@@ -189,26 +189,3 @@ export function registerRuntimeFileWatcherRelease(
 export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
   await Promise.allSettled(Array.from(pendingRuntimeFileWatcherUnsubscribes))
 }
-
-export function _getRuntimeFileWatcherReleaseCountForTests(): number {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  return leases.size
-}
-
-export function _resetRuntimeFileWatcherLeasesForTests(): void {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  for (const lease of leases) {
-    lease.forget()
-  }
-  runtimeFileWatcherLeasesByOwnerAndRoot.clear()
-}

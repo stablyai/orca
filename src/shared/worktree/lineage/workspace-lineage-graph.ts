@@ -70,10 +70,10 @@ export function resolveLineageParentsByPolicy<Row extends LineagePolicyRow>(
   rowsByHostIdentity: ReadonlyMap<string, Row>,
   policy: WorkspaceLineagePolicy<Row>
 ): Map<string, Row> {
-  const crossStore = policy.crossStoreLineage
+  const parentByIdentity = policy.crossStoreLineage
     ? resolveCrossStoreLineageParents(rowsByHostIdentity, policy.crossStoreLineage)
     : new Map<string, Row>()
-  const parentByIdentity = new Map(crossStore)
+  const hasCrossStore = parentByIdentity.size > 0
   if (policy.folderRecordOf) {
     for (const [identity, folder] of resolveFolderLineageParents(
       rowsByHostIdentity,
@@ -88,18 +88,27 @@ export function resolveLineageParentsByPolicy<Row extends LineagePolicyRow>(
       parentByIdentity.set(identity, parent)
     }
   }
-  if (policy.keepSameStoreCycles && crossStore.size === 0) {
+  if (parentByIdentity.size === 0 || (policy.keepSameStoreCycles && !hasCrossStore)) {
     return parentByIdentity
   }
-  const identityOf = new Map([...rowsByHostIdentity].map(([identity, row]) => [row, identity]))
-  const cyclic = getCyclicLineageChildKeys(
-    new Map(
-      [...parentByIdentity].flatMap(([identity, parent]) => {
-        const parentIdentity = identityOf.get(parent)
-        return parentIdentity === undefined ? [] : [[identity, parentIdentity] as const]
-      })
-    )
-  )
+  const neededParents = new Set<Row>(parentByIdentity.values())
+  const identityOf = new Map<Row, string>()
+  for (const [identity, row] of rowsByHostIdentity) {
+    if (neededParents.has(row)) {
+      identityOf.set(row, identity)
+    }
+  }
+  const parentKeyByChildKey = new Map<string, string>()
+  for (const [identity, parent] of parentByIdentity) {
+    const parentIdentity = identityOf.get(parent)
+    if (parentIdentity !== undefined) {
+      parentKeyByChildKey.set(identity, parentIdentity)
+    }
+  }
+  if (parentKeyByChildKey.size === 0) {
+    return parentByIdentity
+  }
+  const cyclic = getCyclicLineageChildKeys(parentKeyByChildKey)
   for (const identity of cyclic) {
     parentByIdentity.delete(identity)
   }

@@ -11,7 +11,7 @@ import {
 import {
   restartContinuationHistory,
   type RestartContinuationOutcome
-} from './native-chat-restart-action-notifications'
+} from './native-chat-restart-continuation-outcomes'
 
 export type RestartContinuationBatchResult = {
   attempted: string[]
@@ -20,11 +20,20 @@ export type RestartContinuationBatchResult = {
   failed?: readonly ResumeFailure[]
 }
 
-/** One immutable selection; uncertainty ends dispatch without attributing an outcome to its tail. */
+/** What an action that never reached the host settles with. Read only. */
+export const NO_RESTART_CONTINUATION: RestartContinuationBatchResult = {
+  attempted: [],
+  continued: [],
+  skipped: new Set()
+}
+
+/** One immutable selection; uncertainty ends dispatch without attributing an outcome to its tail.
+ *  `followHostLaunch`: the host's own launch action took the selection; wait for its answer instead. */
 export async function continueRestartChunks(
   target: RuntimeClientTarget,
   requested: readonly string[],
   owner: {
+    followHostLaunch?: boolean
     current: () => boolean
     publish: (offer: NativeChatRestartOffer) => void
     refresh: () => Promise<HostOfferRead>
@@ -37,8 +46,9 @@ export async function continueRestartChunks(
     continued: [],
     skipped: new Set()
   }
-  for (let offset = 0; offset < requested.length && owner.current(); offset += 512) {
-    const chunk = requested.slice(offset, offset + 512)
+  const size = owner.followHostLaunch ? requested.length : 512
+  for (let offset = 0; offset < requested.length && owner.current(); offset += size) {
+    const chunk = requested.slice(offset, offset + size)
     result.attempted.push(...chunk)
     try {
       const answer = await callStructuredAgentSession<
@@ -48,8 +58,10 @@ export async function continueRestartChunks(
         }
       >(
         target,
-        'agentSession.restartContinue',
-        { sessionIds: chunk },
+        owner.followHostLaunch
+          ? 'agentSession.restartLaunchSettled'
+          : 'agentSession.restartContinue',
+        owner.followHostLaunch ? {} : { sessionIds: chunk },
         {
           beforeSend: () => {
             if (!owner.current()) {
@@ -77,8 +89,7 @@ export async function continueRestartChunks(
       result.continued.push(
         ...restartContinuationHistory(
           chunk.filter((id) => !result.skipped.has(id)),
-          answer.continued,
-          listed
+          answer.continued
         )
       )
     } catch (error) {

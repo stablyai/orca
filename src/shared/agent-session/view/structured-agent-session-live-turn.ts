@@ -11,14 +11,14 @@ import type { AgentJournalTurnScope } from '../journal/agent-session-journal-tur
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import type { AgentSessionLatestTurn, AgentSessionSubscribeEvent } from '../agent-session-wire'
 import { readAgentJournalTurn } from '../lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../agent-session-context-clear'
+import { isAgentSessionContextClear } from '../conversation-context/agent-session-context-clear'
 import type { NativeChatToolCallBlock } from '../../native-chat/native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock,
   type StructuredAgentSessionToolAction
-} from '../structured-agent-session-tool-call-block'
+} from './messages/structured-agent-session-tool-call-block'
 
 /** Host current-work scope excludes turns from ended generations. */
 export function activeStructuredAgentSessionTurnId(
@@ -141,7 +141,9 @@ export function latestTurnAfterStructuredAgentSessionBatch(
 ): AgentSessionLatestTurn | null | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  const next = carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  // Live text restates it every window; an equal turn keeps its object, so memos on it hold.
+  return previous && next && JSON.stringify(previous) === JSON.stringify(next) ? previous : next
 }
 
 /** Row-carrying batches restate actionable prompts; missing fields from older hosts clear prior claims. */
@@ -151,9 +153,9 @@ export function actionablePromptIdsAfterStructuredAgentSessionBatch(
 ): string[] | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.actionablePromptIds !== undefined
-    ? event.actionablePromptIds
-    : previous
+  const next =
+    carriesRows || event.actionablePromptIds !== undefined ? event.actionablePromptIds : previous
+  return previous && next && previous.join('\n') === next.join('\n') ? previous : next
 }
 
 /** Apply the same row-carrying/older-host reset rule as latestTurn. */

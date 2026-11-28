@@ -28,6 +28,8 @@ export type JournalDomainItemWrite = JournalDomainItemFields &
     | {
         kind: 'text-snapshot'
         body: AgentJournalMessageItem
+        /** The stream's last save: written whole, folding any appended tail. */
+        final?: true
       }
   )
 

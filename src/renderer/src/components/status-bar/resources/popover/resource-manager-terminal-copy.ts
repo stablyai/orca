@@ -12,6 +12,14 @@ export function formatTerminalSessionCount(count: number | null, t: Translate = 
   )
 }
 
+function appMemoryText(memory: string, t: Translate): string {
+  return t(
+    'auto.components.status.bar.resource.manager.terminal.copy.appMemory',
+    'Orca app memory: {{memory}}',
+    { memory }
+  )
+}
+
 function spaceScanReadyLabel(t: Translate = translate): string {
   return t(
     'auto.components.status.bar.resource.manager.terminal.copy.spaceScanReady',
@@ -21,39 +29,35 @@ function spaceScanReadyLabel(t: Translate = translate): string {
 
 /** Use stable role IDs for React keys and emphasis flags instead of locale-dependent text matching. */
 export type ResourceManagerTooltipLine = {
-  id: 'summary' | 'space-scan' | 'sessions-hint'
+  id: 'summary' | 'app-memory' | 'space-scan' | 'sessions-hint'
   text: string
   emphasized: boolean
 }
 
 export function getResourceManagerTooltipLines(
   args: {
-    memoryLabel: string
     sessionCount: number | null
     spaceScanReady: boolean
+    appMemoryLabel: string | null
   },
   t: Translate = translate
 ): ResourceManagerTooltipLine[] {
-  const rawMemoryLabel = args.memoryLabel.trim()
-  const memoryLabel =
-    rawMemoryLabel === '' || rawMemoryLabel === '-' || rawMemoryLabel === '—'
-      ? t(
-          'auto.components.status.bar.resource.manager.terminal.copy.memoryUnavailable',
-          'memory unavailable'
-        )
-      : rawMemoryLabel
-  // Translate whole summary lines so locales can reorder fields and separators.
+  // Why: only Orca's own app memory shows while closed; the full per-owner sweep runs only when open.
   const lines: ResourceManagerTooltipLine[] = [
     {
       id: 'summary',
       text: t(
-        'auto.components.status.bar.resource.manager.terminal.copy.tooltipSummary',
-        'Resource Manager - {{memory}} - {{sessions}}',
-        { memory: memoryLabel, sessions: formatTerminalSessionCount(args.sessionCount, t) }
+        'auto.components.status.bar.resource.manager.terminal.copy.ariaLabel',
+        'Resource Manager, {{sessions}}',
+        { sessions: formatTerminalSessionCount(args.sessionCount, t) }
       ),
       emphasized: false
     }
   ]
+
+  if (args.appMemoryLabel !== null) {
+    lines.push({ id: 'app-memory', text: appMemoryText(args.appMemoryLabel, t), emphasized: false })
+  }
 
   if (args.spaceScanReady) {
     lines.push({ id: 'space-scan', text: spaceScanReadyLabel(t), emphasized: true })
@@ -83,10 +87,21 @@ export function getResourceManagerAriaLabel(
   args: {
     sessionCount: number | null
     spaceScanReady: boolean
+    appMemoryLabel: string | null
   },
   t: Translate = translate
 ): string {
-  const sessions = formatTerminalSessionCount(args.sessionCount, t)
+  const sessions =
+    args.appMemoryLabel === null
+      ? formatTerminalSessionCount(args.sessionCount, t)
+      : t(
+          'auto.components.status.bar.resource.manager.terminal.copy.appMemoryAndSessions',
+          'Orca app memory {{memory}} (Orca’s own processes, not terminals or agent CLIs), {{sessions}}',
+          {
+            memory: args.appMemoryLabel,
+            sessions: formatTerminalSessionCount(args.sessionCount, t)
+          }
+        )
 
   if (args.spaceScanReady) {
     return t(

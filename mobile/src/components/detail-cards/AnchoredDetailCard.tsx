@@ -4,10 +4,8 @@ import { DetailCardFocusBoundary, DetailCardLayer } from './detail-card-host'
 import type { AnchoredDetailCardState } from './use-anchored-detail-card'
 import { useDetailCardMotion } from './use-detail-card-motion'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 /** Below a trigger by the card's leading/top edges, or above it by its trailing/bottom edges. */
 export type DetailCardPlacement =
   | { side: 'below'; left: number; top: number }
@@ -102,7 +100,7 @@ function AnchoredDetailCard({
   reducedMotion: boolean | null
   onSettled: (motion: number) => void
 } & DetailCardContent): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // Unknown counts as reduced, so the card never slides before the setting is read.
   const slide = reducedMotion === false
   const motionStyle = useDetailCardMotion({
@@ -181,7 +179,7 @@ function AnchoredDetailCard({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   card: {
     position: 'absolute',
     backgroundColor: colors.bgRaised,

@@ -1,8 +1,8 @@
-import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-education/feature-tips'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
-import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 
 export type OrcaCliFeatureTipSource = EventProps<'orca_cli_feature_tip_shown'>['source']

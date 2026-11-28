@@ -19,8 +19,9 @@ import {
   claudeToolUses,
   readClaudeMessageEnvelope
 } from '../structured/journal/claude-structured-item-translation'
-import { claudeMessageWithoutSyntheticText } from '../structured/journal/claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { claudeTranscriptRowFrame } from './claude-local-command-reply'
+import { claudeCompactionIdentity } from '../structured/journal/claude-journal-compactions'
 
 /** Every saved item used by the projection is a conditional commit dependency, even if equal. */
 export async function createClaudeTranscriptItemReader(
@@ -135,15 +136,15 @@ export function claudeTranscriptItemKeys(
   row: Record<string, unknown>,
   providerSessionId: string
 ): string[] {
-  const frame = claudeMessageWithoutSyntheticText({
-    ...row,
-    session_id: row.sessionId,
-    parent_tool_use_id: null
-  })
+  const frame = claudeTranscriptRowFrame(row)
   if (!frame) {
     return []
   }
   const keys: string[] = []
+  const boundary = claudeCompactionIdentity(frame)
+  if (boundary) {
+    keys.push(agentJournalItemKey(boundary))
+  }
   const envelope = readClaudeMessageEnvelope(frame)
   if (envelope?.role === 'assistant') {
     if (envelope.messageId && typeof row.apiBlockIndex === 'number') {

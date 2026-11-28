@@ -11,7 +11,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -204,7 +204,7 @@ export function SessionHistorySettingsPane({
             disabled={busy}
             onClick={() => void enableOnAllComputers()}
           >
-            {t('sessionHistory.settings.enableOnAll', 'Enable on all computers')}
+            {t('sessionHistory.settings.enableOnAll', 'Enable everywhere')}
           </Button>
         </div>
       )}

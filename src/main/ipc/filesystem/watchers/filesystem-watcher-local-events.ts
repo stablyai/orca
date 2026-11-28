@@ -1,17 +1,30 @@
-import { stat } from 'node:fs/promises'
+import { statWithoutArchiveLock } from '../../../filesystem/asar-transparent-fs'
 import type { Event as WatcherEvent } from '@parcel/watcher'
 import type {
   FsChangeEvent,
   FsChangedPayload
 } from '../../../../shared/file-watch/filesystem-change-event'
 import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
-import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
+import {
+  MAX_BATCHED_WATCHER_EVENTS,
+  queueWatcherEvents,
+  type WatcherEventBatchState
+} from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
-import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
+import { buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/watcher-ignore-dirs'
 import type { WatchedRoot } from './filesystem-watcher-wsl'
-import { subscribeViaWatcherProcess } from '../watcher-process/parcel-watcher-process'
+import {
+  setSharedWatcherDeliveryStallListener,
+  subscribeViaWatcherProcess
+} from '../watcher-process/parcel-watcher-process'
 import { normalizeWatcherEventPath } from './filesystem-watcher-paths'
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
+import { isWatcherCrashFuseFailure } from '../watcher-process/parcel-watcher-process-failure'
+import {
+  noteLocalWatchErrored,
+  setLocalWatcherDeliveryStalled
+} from './filesystem-watcher-pause-state'
 import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
@@ -23,6 +36,10 @@ import {
   notifyLocalWatcherEvents,
   notifyLocalWatcherInterrupted
 } from './local-watcher-event-observers'
+
+// Why at load: this module is the only path that subscribes local roots on the shared watcher child,
+// and the handlers import it lazily, so the stall listener is in place before any stall can occur.
+setSharedWatcherDeliveryStallListener(setLocalWatcherDeliveryStalled)
 
 // All local and WSL roots in main share this budget; watcher children have separate pools.
 const DIRECTORY_STAT_CONCURRENCY = 8
@@ -85,7 +102,7 @@ async function tryStatIsDirectory(
       if (root.listeners.size === 0) {
         return undefined
       }
-      return (await stat(filePath)).isDirectory()
+      return (await statWithoutArchiveLock(filePath)).isDirectory()
     } finally {
       release()
     }
@@ -95,12 +112,15 @@ async function tryStatIsDirectory(
   }
 }
 
-function emitOverflowPayload(root: WatchedRoot): void {
-  const { rootPath } = root
-  const payload: FsChangedPayload = {
-    worktreePath: rootPath,
-    events: [{ kind: 'overflow', absolutePath: rootPath }]
+function overflowPayload(root: WatchedRoot): FsChangedPayload {
+  return {
+    worktreePath: root.rootPath,
+    events: [{ kind: 'overflow', absolutePath: root.rootPath }]
   }
+}
+
+function emitOverflowPayload(root: WatchedRoot): void {
+  const payload = overflowPayload(root)
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
       wc.send('fs:changed', payload)
@@ -126,6 +146,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
   root.batch.lastFlushAt = Date.now()
+  root.batch.flushing = { events: rawEvents, overflowed }
 
   try {
     if ((rawEvents.length === 0 && !overflowed) || root.listeners.size === 0) {
@@ -176,6 +197,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       }
     }
   } finally {
+    root.batch.flushing = null
     root.batch.flushInFlight = false
     if (root.batch.flushQueued) {
       root.batch.flushQueued = false
@@ -189,6 +211,34 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
         void flushBatch(root)
       }
     }
+  }
+}
+
+/** What a listener leaving now would never receive: the queued batch and any flush still statting, without directory stats. */
+export function undeliveredBatchPayload(root: WatchedRoot): FsChangedPayload | undefined {
+  const { cancelled, events, overflowed, flushing } = root.batch
+  if (cancelled || (events.length === 0 && !overflowed && !flushing)) {
+    return undefined
+  }
+  const pending: WatcherEventBatchState = {
+    events: flushing ? [...flushing.events] : events,
+    overflowed: overflowed || flushing?.overflowed === true
+  }
+  if (flushing) {
+    // Why the queue's rule: past the batch cap the merged hand-over is an overflow, as a flush of it would be.
+    queueWatcherEvents(pending, events)
+  }
+  if (pending.overflowed) {
+    return overflowPayload(root)
+  }
+  const coalesced = coalesceEvents(pending.events)
+  // Why: a create then delete of one path cancels out, leaving nothing worth a renderer pass.
+  if (coalesced.length === 0) {
+    return undefined
+  }
+  return {
+    worktreePath: root.rootPath,
+    events: coalesced.map(({ type, path }) => ({ kind: type, absolutePath: path }))
   }
 }
 
@@ -217,7 +267,9 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 export async function createLocalWatcher(
   rootKey: string,
   rootPath: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** Receives the listeners of a root the crash fuse dropped, so they can rewatch after the cooldown. */
+  onCrashFuseFailure?: (listeners: WatchedRoot['listeners']) => void
 ): Promise<WatchedRoot> {
   const root: WatchedRoot = {
     subscription: null!,
@@ -229,6 +281,7 @@ export async function createLocalWatcher(
   try {
     // Errors can precede subscribe resolution; retain cleanup evidence to retire the orphan handle.
     let errorCleanedUp = false
+    let cleanedUpError: unknown
 
     const watcherOptions = {
       ...buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS),
@@ -259,7 +312,15 @@ export async function createLocalWatcher(
             void trackDetachedLocalUnsubscribe(rootKey, root)
           }
           errorCleanedUp = true
+          cleanedUpError = err
+          const wasInstalled = watcherLifecycleState.watchedRoots.get(rootKey) === root
           watcherLifecycleState.watchedRoots.delete(rootKey)
+          // Why installed only: an error during subscribe rejects the install, which owns its retry.
+          if (wasInstalled && isWatcherCrashFuseFailure(err)) {
+            onCrashFuseFailure?.(root.listeners)
+          } else if (wasInstalled) {
+            noteLocalWatchErrored(rootKey, root.rootPath, root.listeners)
+          }
           return
         }
 
@@ -283,7 +344,10 @@ export async function createLocalWatcher(
     // subscribe resolved after error cleanup; retire its orphaned native handle.
     if (errorCleanedUp) {
       void trackDetachedLocalUnsubscribe(rootKey, root)
-      throw new Error(`Watcher for ${rootKey} errored during subscribe`)
+      // Keep a crash-fuse failure recognizable so the install retries instead of giving up on the root.
+      throw isWatcherCrashFuseFailure(cleanedUpError)
+        ? cleanedUpError
+        : new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
     // Surface synchronous subscription failures through the caller rather than crashing main.

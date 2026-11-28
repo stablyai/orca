@@ -54,6 +54,19 @@ export function formatAutomationRelativeTime(
   return formatUiNarrowRelativeTime(sign * Math.round(absMs / dayMs), 'day', intlLocale)
 }
 
+/** Compact list form: relative when known, else the date; the full date belongs in a tooltip. */
+export function formatAutomationNextRun(
+  value: number | null | undefined,
+  now = Date.now(),
+  t?: Translate,
+  intlLocale?: string
+): string {
+  return (
+    formatAutomationRelativeTime(value, now, t, intlLocale) ??
+    formatAutomationDateTime(value, t, intlLocale)
+  )
+}
+
 export function formatAutomationDateTimeWithRelative(
   value: number | null | undefined,
   now = Date.now(),
@@ -189,7 +202,7 @@ export function AutomationRunSetupSkippedNotice({
       </span>
       {canReview ? (
         <Button type="button" variant="outline" size="xs" onClick={onReview}>
-          {t('automations.setupTrust.reviewAction', 'Review and approve setup')}
+          {t('automations.setupTrust.reviewAction', 'Review setup')}
         </Button>
       ) : null}
     </div>

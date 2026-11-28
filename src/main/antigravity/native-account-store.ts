@@ -1,31 +1,33 @@
-import { existsSync, lstatSync, mkdirSync, readFileSync, statSync } from 'node:fs'
+import { credentialFileExists, inCredentialFileOrder } from '../credentials/credential-file-io'
+import { lstat, mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import type { AntigravityAccountSummary } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
-import type {
-  ProviderRateLimits,
-  RateLimitRuntimeTarget
-} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { parseAntigravityNativeCredential } from './native-credential-codec'
-import { readPrivateWindowsFile } from '../../shared/secure-storage/secure-path-windows-acl'
+import { readPrivateWindowsCredentialFile } from '../../shared/secure-storage/windows-credential-file-io'
 
-export type StoredAntigravityUsage = {
-  target: RateLimitRuntimeTarget
-  rateLimits: ProviderRateLimits
-}
-export type StoredAntigravityAccount = Omit<AntigravityAccountSummary, 'usage'> & {
+export type StoredAntigravityAccount = AntigravityAccountSummary & {
   credentials: string
-  /** Last verified reading per runtime this account was read on. */
-  usage?: StoredAntigravityUsage[]
+}
+/** agy's login as Orca last read it, keyed by the fingerprint its keychain item had then, so a
+ *  later listing can name it without reading the secret, which may raise a keychain dialog. */
+export type VerifiedAntigravityLogin = {
+  fingerprint: string
+  email: string | null
+  subject: string | null
+  authMethod: string
+  accountId: string | null
 }
 export type AntigravityAccountVault = {
   accounts: StoredAntigravityAccount[]
   selectedAccountId: string | null
+  /** Older builds drop it when they write the vault; Orca then reads the login again on request. */
+  verifiedLogin?: VerifiedAntigravityLogin
 }
 export type AntigravityAccountStore = {
-  read(): AntigravityAccountVault
-  write(vault: AntigravityAccountVault): void
+  read(): Promise<AntigravityAccountVault>
+  write(vault: AntigravityAccountVault): Promise<void>
 }
 
 const MAX_VAULT_BYTES = 4 * 1024 * 1024
@@ -48,15 +50,16 @@ function isAccount(value: unknown): value is StoredAntigravityAccount {
   )
 }
 
-function isStoredUsage(value: unknown): value is StoredAntigravityUsage {
+const nullableString = (value: unknown): boolean => value === null || typeof value === 'string'
+
+function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
   return (
     isRecord(value) &&
-    isRecord(value.target) &&
-    (value.target.runtime === 'host' || value.target.runtime === 'wsl') &&
-    (value.target.wslDistro === null || typeof value.target.wslDistro === 'string') &&
-    isRecord(value.rateLimits) &&
-    value.rateLimits.provider === 'antigravity' &&
-    typeof value.rateLimits.updatedAt === 'number'
+    typeof value.fingerprint === 'string' &&
+    nullableString(value.email) &&
+    nullableString(value.subject) &&
+    typeof value.authMethod === 'string' &&
+    nullableString(value.accountId)
   )
 }
 
@@ -74,81 +77,98 @@ export function createEncryptedAntigravityAccountStore(
   parseCredential = parseAntigravityNativeCredential
 ): AntigravityAccountStore {
   return {
-    read() {
-      if (!existsSync(path)) {
-        return { accounts: [], selectedAccountId: null }
-      }
-      requireProtection()
-      try {
-        const stat = lstatSync(path)
-        if (
-          !stat.isFile() ||
-          stat.size > MAX_VAULT_BYTES ||
-          (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
-        ) {
-          throw new Error('unsafe vault')
+    async read() {
+      return inCredentialFileOrder(`${path}.mutation`, async () => {
+        if (!(await credentialFileExists(path))) {
+          return { accounts: [], selectedAccountId: null }
         }
-        const raw =
-          process.platform === 'win32'
-            ? readPrivateWindowsFile(path, MAX_VAULT_BYTES)
-            : readFileSync(path)
-        if (!raw) {
-          throw new Error('vault disappeared')
-        }
-        const value: unknown = JSON.parse(getSecretStore().decryptString(raw))
-        if (
-          !isRecord(value) ||
-          !Array.isArray(value.accounts) ||
-          !value.accounts.every(isAccount) ||
-          (value.selectedAccountId !== null && typeof value.selectedAccountId !== 'string')
-        ) {
-          throw new Error('invalid vault')
-        }
-        const ids = new Set(value.accounts.map((account) => account.id))
-        if (
-          ids.size !== value.accounts.length ||
-          (value.selectedAccountId !== null && !ids.has(value.selectedAccountId))
-        ) {
-          throw new Error('invalid selection')
-        }
-        for (const account of value.accounts) {
-          const credential = parseCredential(account.credentials)
-          // agy refreshes drop the id_token, so a saved account may hold a credential without one.
+        requireProtection()
+        try {
+          const stat = await lstat(path)
           if (
-            credential.authMethod !== account.authMethod ||
-            (credential.identity !== null && credential.identity.subject !== account.subject)
+            !stat.isFile() ||
+            stat.size > MAX_VAULT_BYTES ||
+            (process.platform !== 'win32' && (stat.mode & 0o077) !== 0)
           ) {
-            throw new Error('inconsistent identity')
+            throw new Error('unsafe vault')
           }
-        }
-        for (const account of value.accounts) {
-          // A malformed reading is only a lost cache entry, never a reason to reject the vault.
-          if (account.usage !== undefined) {
-            account.usage = Array.isArray(account.usage) ? account.usage.filter(isStoredUsage) : []
+          const raw =
+            process.platform === 'win32'
+              ? await readPrivateWindowsCredentialFile(path, MAX_VAULT_BYTES)
+              : await readFile(path)
+          if (!raw) {
+            throw new Error('vault disappeared')
           }
+          const value: unknown = JSON.parse(getSecretStore().decryptString(raw))
+          if (
+            !isRecord(value) ||
+            !Array.isArray(value.accounts) ||
+            !value.accounts.every(isAccount) ||
+            (value.selectedAccountId !== null && typeof value.selectedAccountId !== 'string')
+          ) {
+            throw new Error('invalid vault')
+          }
+          const ids = new Set(value.accounts.map((account) => account.id))
+          if (
+            ids.size !== value.accounts.length ||
+            (value.selectedAccountId !== null && !ids.has(value.selectedAccountId))
+          ) {
+            throw new Error('invalid selection')
+          }
+          for (const account of value.accounts) {
+            const credential = parseCredential(account.credentials)
+            // agy refreshes drop the id_token, so a saved account may hold a credential without one.
+            if (
+              credential.authMethod !== account.authMethod ||
+              (credential.identity !== null && credential.identity.subject !== account.subject)
+            ) {
+              throw new Error('inconsistent identity')
+            }
+          }
+          return {
+            // Older builds cached quota readings in `usage`; drop them so the next write removes them.
+            accounts: value.accounts.map(
+              ({ usage: _usage, ...account }: StoredAntigravityAccount & { usage?: unknown }) =>
+                account
+            ),
+            selectedAccountId: value.selectedAccountId,
+            // A malformed cache only costs a read on request, so it never fails the vault.
+            ...(isVerifiedLogin(value.verifiedLogin)
+              ? {
+                  verifiedLogin: {
+                    fingerprint: value.verifiedLogin.fingerprint,
+                    email: value.verifiedLogin.email,
+                    subject: value.verifiedLogin.subject,
+                    authMethod: value.verifiedLogin.authMethod,
+                    accountId: value.verifiedLogin.accountId
+                  }
+                }
+              : {})
+          }
+        } catch {
+          throw new Error(
+            'Antigravity account snapshots could not be read; the existing vault was preserved.'
+          )
         }
-        return { accounts: value.accounts, selectedAccountId: value.selectedAccountId }
-      } catch {
-        throw new Error(
-          'Antigravity account snapshots could not be read; the existing vault was preserved.'
-        )
-      }
+      })
     },
-    write(vault) {
-      requireProtection()
-      mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-      try {
-        const encrypted = getSecretStore().encryptString(JSON.stringify(vault))
-        if (encrypted.length > MAX_VAULT_BYTES) {
-          throw new Error('vault exceeds readable size')
+    async write(vault) {
+      return inCredentialFileOrder(`${path}.mutation`, async () => {
+        requireProtection()
+        await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+        try {
+          const encrypted = getSecretStore().encryptString(JSON.stringify(vault))
+          if (encrypted.length > MAX_VAULT_BYTES) {
+            throw new Error('vault exceeds readable size')
+          }
+          await writeCredentialFileAtomic(path, encrypted, undefined, true)
+          if (process.platform !== 'win32' && ((await stat(path)).mode & 0o077) !== 0) {
+            throw new Error('unsafe permissions')
+          }
+        } catch {
+          throw new Error('Antigravity account snapshots could not be saved.')
         }
-        writeCredentialFileAtomic(path, encrypted, undefined, true)
-        if (process.platform !== 'win32' && (statSync(path).mode & 0o077) !== 0) {
-          throw new Error('unsafe permissions')
-        }
-      } catch {
-        throw new Error('Antigravity account snapshots could not be saved.')
-      }
+      })
     }
   }
 }

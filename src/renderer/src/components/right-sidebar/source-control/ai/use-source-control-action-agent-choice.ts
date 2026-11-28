@@ -1,5 +1,5 @@
-import { useAppStateView } from '@/store/retained-views/app-state-view'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
@@ -11,8 +11,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentDetectionTargetForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import {
   sourceControlRepoAgentRows,
   sourceControlAgentPickerSelection,
@@ -41,7 +41,6 @@ export function useSourceControlActionAgentChoice(args: {
   livePick: AgentLaunchSurface | undefined
   terminalOnly?: boolean
 }) {
-  const store = useAppStateView()
   const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
   const rows = useMemo(
@@ -101,18 +100,20 @@ export function useSourceControlActionAgentChoice(args: {
       selectedAgent &&
       !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
     )
-  const route = buildAgentLaunchRouteInput(store.getState(), {
-    agent: selectedAgent ?? 'claude',
-    workspace: args.worktreeId
-      ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
-      : typeof rows.target === 'string'
-        ? { worktreeId: rows.target, kind: workspaceKindForWorktreeId(rows.target) }
-        : rows.target.workspace
-  })
+  const canSaveSurface = useAppStateValueWithHostStatuses(
+    (state, statuses) =>
+      buildRouteInputForStatuses(state, statuses, {
+        agent: selectedAgent ?? 'claude',
+        workspace: args.worktreeId
+          ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
+          : typeof rows.target === 'string'
+            ? { worktreeId: rows.target, kind: workspaceKindForWorktreeId(rows.target) }
+            : rows.target.workspace
+      }).hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true
+  )
   return {
     observation,
-    canSaveSurface:
-      route.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
+    canSaveSurface,
     detectedAgents,
     detecting,
     selectedAgent,

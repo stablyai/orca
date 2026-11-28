@@ -27,6 +27,9 @@ export type LazyWithRetryOptions = {
   baseDelayMs?: number
   /** Names the call site on the reload breadcrumbs and on LazyChunkLoadError; never control flow. */
   reloadKey?: string
+  /** Asked just before a reload is requested; false contains the failure instead, so a caller
+   *  that no longer needs the chunk cannot reload the window. Omitted, recovery always may run. */
+  canRecover?: () => boolean
 }
 
 export class LazyChunkLoadError extends Error {
@@ -96,11 +99,6 @@ function clearChunkReloadGuard(): void {
 const MAX_RELOAD_REQUESTS_PER_DOCUMENT = 2
 let reloadRequestsThisDocument = 0
 let reloadRequestInFlight = false
-
-export function resetLazyChunkReloadRequestsForTest(): void {
-  reloadRequestsThisDocument = 0
-  reloadRequestInFlight = false
-}
 
 type ReloadBreadcrumbName = 'lazy_chunk_reload' | 'lazy_chunk_reload_vetoed'
 
@@ -179,6 +177,11 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   const reloadKey = options.reloadKey ?? 'unknown'
   const failureMessage = lastError instanceof Error ? lastError.message : String(lastError)
   const reloadGuardState = readChunkReloadGuardState()
+
+  if (options.canRecover?.() === false) {
+    // Leave the guard untouched so a later caller that still needs a chunk keeps its one recovery.
+    throw containedChunkFailure(lastError, reloadKey)
+  }
 
   if (
     typeof window !== 'undefined' &&

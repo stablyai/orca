@@ -1,6 +1,7 @@
-import { useAppViewExternalStore, useAppStateValue } from '@/store/retained-views/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback } from 'react'
-import type { AgentSessionRegisteredAgent } from '../../../../../shared/agent-session/agent-session-registered-agents'
+import type { AgentSessionRegisteredAgent } from '../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -32,10 +33,8 @@ export function useHostStructuredAgent(
   agent: string
 ): AgentSessionRegisteredAgent | undefined {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const runtimeId = useAppStateValue((state) =>
-    environmentId === null
-      ? null
-      : lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))?.runtimeId
+  const runtimeId = useRuntimeHostStatusViewSelector(environmentId, (entry) =>
+    environmentId === null ? null : lastVerifiedRuntimeStatus(entry)?.runtimeId
   )
   const executionHostId =
     environmentId === null ? LOCAL_EXECUTION_HOST_ID : toRuntimeExecutionHostId(environmentId)

@@ -1,6 +1,6 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/worktree-card-slot-pane-index'
+import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
@@ -65,6 +65,10 @@ export function applyRemoveWorktreeSuccessState(
       workspaceLineageByChildKey: omitRecordKeys(s.workspaceLineageByChildKey, [
         worktreeWorkspaceKey(worktreeId)
       ]),
+      contestedPrimaryHostBySessionKey: omitRecordKeys(s.contestedPrimaryHostBySessionKey, [
+        worktreeId,
+        worktreeWorkspaceKey(worktreeId)
+      ]),
       runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
       automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
       nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
@@ -111,6 +115,10 @@ export function applyRemoveWorktreeSuccessState(
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+      gitRebaseIndexObservationByWorktree: omitByWorktree(
+        s.gitRebaseIndexObservationByWorktree ?? {}
+      ),
+      gitOperationRunIdentityByWorktree: omitByWorktree(s.gitOperationRunIdentityByWorktree ?? {}),
       gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
       gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
       gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

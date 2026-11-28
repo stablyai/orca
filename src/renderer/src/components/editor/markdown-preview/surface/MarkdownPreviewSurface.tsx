@@ -113,6 +113,8 @@ export function MarkdownPreviewSurface({
   const frontMatter = useMemo(() => extractFrontMatter(displayedContent), [displayedContent])
   const frontMatterInner = useMemo(() => markdownFrontMatterInner(frontMatter), [frontMatter])
 
+  const { navigateToTableOfContentsItem, setRootRef } = viewport
+
   return (
     <div className="markdown-preview-shell">
       {showTableOfContents ? (
@@ -126,17 +128,18 @@ export function MarkdownPreviewSurface({
               : tableOfContentsItems
           }
           onClose={onCloseTableOfContents ?? (() => {})}
-          onNavigate={viewport.navigateToTableOfContentsItem}
+          onNavigate={navigateToTableOfContentsItem}
         />
       ) : null}
       <div
-        ref={viewport.setRootRef}
+        ref={setRootRef}
         tabIndex={0}
         style={{
           fontSize: `${editorFontSize}px`,
           overflowAnchor: largePreview ? 'none' : undefined
         }}
-        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}`}
+        // Why: blocks get annotation controls exactly when review tools show and a comment owner exists.
+        className={`markdown-preview h-full min-h-0 overflow-auto scrollbar-editor ${isDark ? 'markdown-dark' : 'markdown-light'}${canShowReviewTools && foundation.commentOwner ? ' has-markdown-review-rail' : ''}`}
       >
         {isSearchOpen ? (
           <MarkdownPreviewSearchBar

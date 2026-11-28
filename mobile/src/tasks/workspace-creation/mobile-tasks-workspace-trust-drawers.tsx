@@ -1,21 +1,30 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
-import { View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text } from 'react-native'
 import { MessageBox } from '../../components/composer-input/MessageBox'
 import { TextField } from '../../components/composer-input/TextField'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
+import { SheetHeader } from '../../components/nav-bar/SheetHeader'
+import { SettingsNote } from '../../settings/settings-screen-frame'
 import { Check, X } from 'lucide-react-native'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from '../task-list/mobile-tasks-options'
 import { setupSourceLabel } from '../repositories/mobile-tasks-repository-presentation'
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'
-import { styles } from '../mobile-tasks-legacy-styles'
 import { translate } from '../../i18n/mobile-i18n'
+import { OrcaHookTrustDrawer } from '../../components/hook-trust/OrcaHookTrustDrawer'
+import type { CreateSetupApproval } from '../../new-workspace/creation/setup-hook-trust'
+import {
+  createdSetupRunFailed,
+  runReviewedCreatedSetup
+} from '../../new-workspace/creation/created-worktree-setup-review'
+import type { OrcaYamlTrustPrompt } from '../mobile-tasks-project-workspace-types'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
     canSaveWorkspaceSparseDraft,
+    groupFieldStyles,
     saveWorkspaceSparsePreset,
     setWorkspaceSparseDraft,
+    t,
     taskUiReady,
     workspaceCreateDraft,
     workspaceSparseDraft,
@@ -36,83 +45,59 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
     >
       {workspaceSparseDraft ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {workspaceSparseDraft.mode === 'new'
-                ? translate('tasks.workspaceTrustDrawers.newSparsePreset', 'New Sparse Preset')
-                : translate('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')}
-            </Text>
-          </View>
-          <View style={styles.detailGroup}>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
-              </Text>
-              <TextField
-                value={workspaceSparseDraft.name}
-                onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
-                placeholder={translate(
-                  'tasks.workspaceTrustDrawers.namePlaceholder',
-                  'Renderer UI'
-                )}
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={80}
-              />
-            </View>
-            <View style={styles.detailSection}>
-              <Text style={styles.detailSectionTitle}>
-                {translate('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
-              </Text>
-              <MessageBox
-                value={workspaceSparseDraft.directoriesText}
-                onChangeText={(directoriesText) =>
-                  setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
-                }
-                placeholder={'src/renderer\npackages/ui'}
-                autoCapitalize="none"
-                autoCorrect={false}
-                monospace
-              />
-            </View>
-            <Text style={workspaceSparseDraftError ? styles.detailError : styles.detailMuted}>
-              {workspaceSparseDraftError ??
-                (count === 1
-                  ? translate(
-                      'tasks.workspaceTrustDrawers.directories_one',
-                      '{{count}} directory',
-                      { count }
-                    )
-                  : translate(
-                      'tasks.workspaceTrustDrawers.directories_other',
-                      '{{count}} directories',
-                      { count }
-                    ))}
-            </Text>
-          </View>
-          <View style={styles.drawerActionRow}>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryActionButton, pressed && pressedStyle]}
-              disabled={workspaceSparseSaving}
-              onPress={() => setWorkspaceSparseDraft(null)}
-            >
-              <Text style={styles.secondaryActionText}>{translate('common.cancel', 'Cancel')}</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryActionButton,
-                !canSaveWorkspaceSparseDraft ? styles.fieldButtonDisabled : undefined,
-                pressed && pressedStyle
-              ]}
-              disabled={!canSaveWorkspaceSparseDraft}
-              onPress={() => void saveWorkspaceSparsePreset()}
-            >
-              {workspaceSparseSaving ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : null}
-              <Text style={styles.primaryActionText}>{translate('common.save', 'Save')}</Text>
-            </Pressable>
-          </View>
+          <SheetHeader
+            title={
+              workspaceSparseDraft.mode === 'new'
+                ? t('tasks.workspaceTrustDrawers.newSparsePreset', 'New Sparse Preset')
+                : t('tasks.workspaceTrustDrawers.editSparsePreset', 'Edit Sparse Preset')
+            }
+            leading={{
+              label: t('common.cancel', 'Cancel'),
+              onPress: () => setWorkspaceSparseDraft(null),
+              disabled: workspaceSparseSaving
+            }}
+            trailing={{
+              label: t('common.save', 'Save'),
+              onPress: () => void saveWorkspaceSparsePreset(),
+              disabled: !canSaveWorkspaceSparseDraft,
+              busy: workspaceSparseSaving
+            }}
+          />
+          <ListGroup style={groupFieldStyles.underHeader}>
+            <TextField
+              key="name"
+              value={workspaceSparseDraft.name}
+              onChangeText={(name) => setWorkspaceSparseDraft({ ...workspaceSparseDraft, name })}
+              placeholder={t('tasks.workspaceTrustDrawers.nameLabel', 'Name')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={80}
+              style={groupFieldStyles.line}
+            />
+            <MessageBox
+              key="directories"
+              value={workspaceSparseDraft.directoriesText}
+              onChangeText={(directoriesText) =>
+                setWorkspaceSparseDraft({ ...workspaceSparseDraft, directoriesText })
+              }
+              placeholder={'src/renderer\npackages/ui'}
+              accessibilityLabel={t('tasks.workspaceTrustDrawers.directoriesLabel', 'Directories')}
+              autoCapitalize="none"
+              autoCorrect={false}
+              monospace
+              style={groupFieldStyles.lines}
+            />
+          </ListGroup>
+          <SettingsNote error={workspaceSparseDraftError != null}>
+            {workspaceSparseDraftError ??
+              (count === 1
+                ? t('tasks.workspaceTrustDrawers.directories_one', '{{count}} directory', {
+                    count
+                  })
+                : t('tasks.workspaceTrustDrawers.directories_other', '{{count}} directories', {
+                    count
+                  }))}
+          </SettingsNote>
         </View>
       ) : null}
     </BottomDrawer>
@@ -120,7 +105,16 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
 }
 
 export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationModel) {
-  const { createWorkspace, creatingKey, setSetupPrompt, setupPrompt, taskUiReady } = model
+  const {
+    colors,
+    createWorkspace,
+    creatingKey,
+    setSetupPrompt,
+    setupPrompt,
+    styles,
+    t,
+    taskUiReady
+  } = model
   return (
     <BottomDrawer
       visible={taskUiReady && setupPrompt != null}
@@ -131,10 +125,10 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
         <View>
           <View style={styles.sheetHeader}>
             <Text style={styles.sheetTitle}>
-              {translate('tasks.workspaceTrustDrawers.setupTitle', 'Run Setup Script?')}
+              {t('tasks.workspaceTrustDrawers.setupTitle', 'Run Setup Script?')}
             </Text>
             <Text style={styles.sheetSubtitle}>
-              {translate(
+              {t(
                 'tasks.workspaceTrustDrawers.setupSubtitle',
                 '{{name}} requires a setup choice before creating this workspace.',
                 {
@@ -156,11 +150,8 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
               key="action-1"
               title={
                 creatingKey === setupPrompt.item.key
-                  ? translate('tasks.workspaceTrustDrawers.creating', 'Creating...')
-                  : translate(
-                      'tasks.workspaceTrustDrawers.runSetupAndCreate',
-                      'Run setup and create'
-                    )
+                  ? t('tasks.workspaceTrustDrawers.creating', 'Creating...')
+                  : t('tasks.workspaceTrustDrawers.runSetupAndCreate', 'Run setup and create')
               }
               leading={<Check size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
@@ -180,10 +171,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
             />
             <ListRow
               key="action-2"
-              title={translate(
-                'tasks.workspaceTrustDrawers.skipSetupAndCreate',
-                'Skip setup and create'
-              )}
+              title={t('tasks.workspaceTrustDrawers.skipSetupAndCreate', 'Create without setup')}
               leading={<X size={16} color={colors.textPrimary} />}
               disabled={creatingKey === setupPrompt.item.key}
               onPress={() =>
@@ -207,8 +195,12 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
   )
 }
 
+// Prompts already acted on: callbacks delivered before the busy render must not act twice.
+const actedPrompts = new WeakSet<OrcaYamlTrustPrompt>()
+
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
+    client,
     createWorkspace,
     creatingKey,
     orcaYamlTrustPrompt,
@@ -217,153 +209,91 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     setOrcaYamlTrustPrompt,
     taskUiReady
   } = model
+  const createWithSetup = (prompt: OrcaYamlTrustPrompt, setup?: CreateSetupApproval) =>
+    createWorkspace(
+      prompt.item,
+      prompt.repoIdOverride,
+      setup ? 'run' : 'skip',
+      prompt.agentOverride,
+      prompt.workspaceNameOverride,
+      prompt.noteOverride,
+      prompt.baseBranchOverride,
+      prompt.branchNameOverride,
+      prompt.sparseCheckoutOverride,
+      { setup, hostedStartPoint: prompt.hostedStartPoint }
+    )
+  const approve = (alwaysTrust: boolean) => {
+    const prompt = orcaYamlTrustPrompt
+    // One choice per prompt: a second tap or a decline while this runs must not act again.
+    if (!prompt || prompt.approving || actedPrompts.has(prompt)) {
+      return
+    }
+    actedPrompts.add(prompt)
+    setOrcaYamlTrustPrompt({ ...prompt, approving: true })
+    void (async () => {
+      let notice: string | undefined
+      try {
+        const setupApproval = await persistSetupHookTrust(prompt, alwaysTrust)
+        if (prompt.created) {
+          notice = client
+            ? await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
+            : createdSetupRunFailed()
+          return
+        }
+        setOrcaYamlTrustPrompt(null)
+        if (setupApproval) {
+          await createWithSetup(prompt, setupApproval)
+        }
+      } catch (err) {
+        if (prompt.created) {
+          notice = createdSetupRunFailed()
+          return
+        }
+        // The prompt stays up after a failed save, so it may be approved again.
+        actedPrompts.delete(prompt)
+        setOrcaYamlTrustPrompt(prompt)
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('tasks.workspaceTrustDrawers.trustFailed', 'Failed to trust setup script.')
+        )
+      } finally {
+        // The workspace exists either way; opening it ends the review and frees its item.
+        if (prompt.created) {
+          setOrcaYamlTrustPrompt(null)
+          prompt.created.open(notice)
+        }
+      }
+    })()
+  }
+  // Declining a created workspace's setup leaves it as is and opens it.
+  const decline = (create: boolean) => {
+    const prompt = orcaYamlTrustPrompt
+    if (!prompt || prompt.approving || actedPrompts.has(prompt)) {
+      return
+    }
+    actedPrompts.add(prompt)
+    setOrcaYamlTrustPrompt(null)
+    if (prompt.created) {
+      prompt.created.open()
+    } else if (create) {
+      void createWithSetup(prompt)
+    }
+  }
   return (
-    <BottomDrawer
+    <OrcaHookTrustDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}
-      onClose={() => setOrcaYamlTrustPrompt(null)}
+      prompt={orcaYamlTrustPrompt}
+      busy={
+        orcaYamlTrustPrompt != null &&
+        (orcaYamlTrustPrompt.approving === true ||
+          (!orcaYamlTrustPrompt.created && creatingKey === orcaYamlTrustPrompt.item.key))
+      }
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
-    >
-      {orcaYamlTrustPrompt ? (
-        <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {orcaYamlTrustPrompt.previouslyApproved
-                ? translate(
-                    'tasks.workspaceTrustDrawers.setupChangedTitle',
-                    "{{name}}'s setup script changed",
-                    { name: orcaYamlTrustPrompt.repoName }
-                  )
-                : translate(
-                    'tasks.workspaceTrustDrawers.runSetupTitle',
-                    'Run setup from {{name}}?',
-                    { name: orcaYamlTrustPrompt.repoName }
-                  )}
-            </Text>
-            <Text style={styles.sheetSubtitle}>
-              {translate(
-                'tasks.workspaceTrustDrawers.trustSubtitle',
-                "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository."
-              )}
-            </Text>
-          </View>
-
-          <View style={styles.setupPromptBox}>
-            <View style={styles.detailSectionHeader}>
-              <Text style={styles.detailSectionTitle}>
-                {orcaYamlTrustPrompt.previouslyApproved
-                  ? translate('tasks.workspaceTrustDrawers.newSetupScript', 'New setup script')
-                  : translate('tasks.workspaceTrustDrawers.setupScript', 'Setup script')}
-              </Text>
-            </View>
-            <Text style={styles.setupPromptCommand}>{orcaYamlTrustPrompt.scriptContent}</Text>
-          </View>
-
-          <ListGroup separatorInset={LIST_LEADING_INSET}>
-            <ListRow
-              key="action-3"
-              title={translate('tasks.workspaceTrustDrawers.runHooks', 'Run hooks')}
-              leading={<Check size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      false
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : translate(
-                            'tasks.workspaceTrustDrawers.trustFailed',
-                            'Failed to trust setup script.'
-                          )
-                    )
-                  }
-                })()
-              }
-            />
-            <ListRow
-              key="action-4"
-              title={translate(
-                'tasks.workspaceTrustDrawers.alwaysTrustAndRun',
-                'Always trust and run'
-              )}
-              leading={<Check size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      true
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : translate(
-                            'tasks.workspaceTrustDrawers.trustFailed',
-                            'Failed to trust setup script.'
-                          )
-                    )
-                  }
-                })()
-              }
-            />
-            <ListRow
-              key="action-5"
-              title={translate('tasks.workspaceTrustDrawers.dontRun', "Don't run")}
-              leading={<X size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() => {
-                const prompt = orcaYamlTrustPrompt
-                setOrcaYamlTrustPrompt(null)
-                void createWorkspace(
-                  prompt.item,
-                  prompt.repoIdOverride,
-                  'skip',
-                  prompt.agentOverride,
-                  prompt.workspaceNameOverride,
-                  prompt.noteOverride,
-                  prompt.baseBranchOverride,
-                  prompt.branchNameOverride,
-                  prompt.sparseCheckoutOverride
-                )
-              }}
-            />
-          </ListGroup>
-        </View>
-      ) : null}
-    </BottomDrawer>
+      onRunOnce={() => approve(false)}
+      onAlwaysTrust={() => approve(true)}
+      onDontRun={() => decline(true)}
+      onClose={() => decline(false)}
+    />
   )
 }

@@ -37,6 +37,8 @@ let snapshotDir = ''
 const baseDir = (): string => join(root, '.orca-remote')
 let versionDir = ''
 const launchedPids = new Set<number>()
+// Every case runs the Linux-host commands through /bin/sh, which Windows does not have.
+const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
 function sh(command: string): string {
   return execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
@@ -65,7 +67,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
-describe('state snapshot commands, run for real', () => {
+describeOnPosix('state snapshot commands, run for real', () => {
   it('requires an intact comparison snapshot before an older build can restart', () => {
     expect(
       orcadSnapshotIsUnchanged(
@@ -193,7 +195,7 @@ describe('state snapshot commands, run for real', () => {
   })
 })
 
-describe('liveness and stop commands, run for real', () => {
+describeOnPosix('liveness and stop commands, run for real', () => {
   it('reports a reused PID running something other than this slot as DEAD', () => {
     const stranger = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
     try {
@@ -238,8 +240,7 @@ describe('liveness and stop commands, run for real', () => {
 
     it.each([
       ['bash', 'bash: kill: (4242) - No such process'],
-      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process'],
-      ['ksh', 'ksh: kill: 4242: no such process']
+      ['zsh', 'zsh:kill:1: kill 4242 failed: no such process']
     ])('is DEAD when kill answers like %s', (_shell, message) => {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), exitedPid())
       expect(

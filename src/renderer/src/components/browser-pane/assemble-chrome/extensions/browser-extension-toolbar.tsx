@@ -73,7 +73,7 @@ function ExtensionIcon({ action }: { action: BrowserExtensionToolbarAction }): R
       className={cn('size-4 shrink-0', !action.enabled && 'opacity-40 grayscale')}
     />
   ) : (
-    <Puzzle className="size-4 shrink-0 text-muted-foreground" />
+    <Puzzle className="size-3.5 shrink-0 text-muted-foreground" />
   )
 }
 
@@ -114,9 +114,9 @@ function PinnedActionButton({
         <ContextMenuTrigger asChild>
           <TooltipTrigger asChild>
             <Button
-              size="icon"
-              variant="ghost"
-              className="relative h-7 w-7"
+              size="icon-xs"
+              variant="muted-field-icon"
+              className="relative"
               aria-label={action.title}
               aria-disabled={!action.enabled}
               data-browser-extension-pinned={pinnedButtonKey(browserPageId, action.extensionId)}
@@ -255,7 +255,7 @@ export function BrowserExtensionsMenuSub({
       }}
     >
       <DropdownMenuSubTrigger>
-        <Puzzle className="mr-2 size-3.5" />
+        <Puzzle className="size-3.5" />
         {t('browser.extensions.menu', 'Extensions')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-64" data-browser-page-menu-id={browserPageId}>
@@ -287,7 +287,7 @@ export function BrowserExtensionsMenuSub({
         <DropdownMenuItem
           // Why this profile: an install from the store page lands where the store was opened.
           onSelect={() =>
-            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.profileId).then(
+            void openBrowserProfileTab(CHROME_WEB_STORE_HOME_URL, state.browserProfileId).then(
               (opened) => {
                 if (opened) {
                   trackBrowserExtensionsWebStoreOpened('toolbar_menu')

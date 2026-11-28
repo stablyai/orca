@@ -21,7 +21,7 @@ export const CONSUMERS = new Map([
     {
       coldPaths: new Set(['rebuildFromSnapshot']),
       helpers: { rebuildFromSnapshot: ['advance'] },
-      imports: new Set(['structuredAgentSessionPaneKey', 'isStructuredTab', 'readTabMapChanges'])
+      imports: new Set(['chatPaneKey', 'isStructuredTab', 'readTabMapChanges', 'readTabRowChanges'])
     }
   ],
   [
@@ -30,6 +30,8 @@ export const CONSUMERS = new Map([
       coldPaths: new Set(['reconcileFromSnapshot']),
       helpers: {
         getStructuredAgentSessionTabs: ['reconcileFromSnapshot'],
+        // A bot's tabless sessions plus every tab: the same whole-map walk.
+        withBotSessions: ['reconcileFromSnapshot'],
         reconcileFromSnapshot: ['reconcile']
       },
       imports: new Set([
@@ -44,6 +46,8 @@ export const CONSUMERS = new Map([
         'structuredAgentSessionStatusFeedKey',
         'getStructuredAgentSessionTabs',
         'getStructuredAgentSessionTabsInWorkspace',
+        // An index lookup per closed conversation, never a tab-map walk.
+        'structuredTabsShowingConversation',
         'readTabMapChanges',
         'createTabOwnerCache',
         'ownerInputChanged',
@@ -52,7 +56,13 @@ export const CONSUMERS = new Map([
         'createStructuredSessionStatusBurst',
         'sameCapturedInput',
         'sameStatusInput',
-        'sameSemanticTab'
+        'sameSemanticTab',
+        'readBotBackgroundSessionTabs',
+        'subscribeBotBackgroundSessionTabs',
+        'withBotSessions',
+        // Read only the named sessions' members, never a tab map.
+        'subscribeHostGroupStatus',
+        'sessionMembers'
       ])
     }
   ],
@@ -61,7 +71,7 @@ export const CONSUMERS = new Map([
     {
       coldPaths: new Set(),
       helpers: { getStructuredAgentSessionTabs: [] },
-      imports: new Set(['structuredAgentSessionPaneKey'])
+      imports: new Set(['chatPaneKey'])
     }
   ]
 ])
@@ -69,8 +79,8 @@ const ENUMERATING_CALLS = new Set(['keys', 'values', 'entries'])
 
 /** Shared tab-map writers wired to the seam: a raw record literal for these fields bypasses provenance. */
 export const WRITERS = [
-  'src/renderer/src/runtime/web-session-tabs-sync/scoped-patch-annotation.ts',
-  'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/scoped-patch-annotation.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/snapshots/store-patch.ts',
   'src/renderer/src/runtime/workspace-layout/frames/workspace-layout-frame-sync.ts',
   'src/renderer/src/store/slices/browser/pages/browser-page-state-actions.ts',
   'src/renderer/src/store/slices/editor/file-ids/hydrated-editor-file-ids.ts',

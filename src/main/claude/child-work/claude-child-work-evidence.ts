@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { taskText, taskUsageTotalTokens } from '../background-tasks/claude-background-task-frames'
 import type { ClaudeSession } from '../structured/claude-structured-session-state'
-import type { ClaudeStructuredSessionEvent } from '../structured/claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../structured/lifecycle/claude-structured-session-event'
 import { deriveToolInputPreview } from '../../../shared/agent-hook-listener/tool-input-preview'
 import {
   claudeRecord,
@@ -37,6 +37,11 @@ export type DecodedClaudeTask = {
   parentTaskId?: string
   /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
   awaitsAgents?: true
+  /** A foreground command still live after the call that waited on it ended: maybe running, maybe
+   *  its ending was lost. A later live frame from the provider clears it. */
+  uncertain?: true
+  /** The tool call that started it has had its result: a foreground command must have ended by then. */
+  answered?: true
 }
 
 export function claudeChildWorkObservation(
@@ -65,7 +70,13 @@ export function claudeChildWorkObservation(
     ...(task.parentTaskId ? { ownerId: task.parentTaskId } : {}),
     kind: task.kind,
     residency: task.backgrounded ? 'background' : 'foreground',
-    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
+    state: waiting
+      ? 'waiting'
+      : task.uncertain
+        ? 'unverifiable'
+        : task.running || task.kind !== 'monitor'
+          ? 'working'
+          : 'monitoring',
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
@@ -211,11 +222,13 @@ export function drainClaudeChildWork(
   }
   // Recheck cards and answer state so waits end when a card closes or its answer starts.
   session.childWork.observeWaiting(claudeWaitingChildIds(session))
-  return [
-    ...withClaudeChildWorkOwners(
-      session.childWork.drain(observedAt),
-      session.translator?.childToolOwner
-    ),
-    ...(message ? claudeChildOperation(message, session.translator?.childActivity, observedAt) : [])
-  ]
+  const drained = withClaudeChildWorkOwners(
+    session.childWork.drain(observedAt),
+    session.translator?.childToolOwner
+  )
+  const operation = message
+    ? claudeChildOperation(message, session.translator?.childActivity, observedAt)
+    : []
+  // Runs per streamed frame, which almost always has neither.
+  return operation.length === 0 ? drained : [...drained, ...operation]
 }

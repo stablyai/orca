@@ -1,8 +1,9 @@
-import { lstat, opendir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat } from 'node:fs/promises'
+import { posix } from 'node:path'
 import { DirectoryListingBudget } from '../../file-listing/directory-listing-budget'
 import { ProcessTableCaptureError } from '../tables/process-table-snapshot'
 import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
+import { openDirectory } from '../../open-directory'
 
 type DarwinTerminalNameDeps = {
   openDirectory: (path: string) => Promise<AsyncIterable<{ name: string }>>
@@ -10,7 +11,7 @@ type DarwinTerminalNameDeps = {
 }
 
 const deviceFilesystem: DarwinTerminalNameDeps = {
-  openDirectory: (path) => opendir(path),
+  openDirectory: (path) => openDirectory(path),
   readDevice: (path) => lstat(path, { bigint: true })
 }
 
@@ -56,7 +57,7 @@ function deviceKey(rdev: bigint): string | null {
 
 async function readDeviceKey(deps: DarwinTerminalNameDeps, name: string): Promise<string | null> {
   try {
-    const stat = await deps.readDevice(join('/dev', name)).catch(() => null)
+    const stat = await deps.readDevice(posix.join('/dev', name)).catch(() => null)
     return stat?.isCharacterDevice() ? deviceKey(stat.rdev) : null
   } catch {
     return null

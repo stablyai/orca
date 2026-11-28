@@ -26,10 +26,18 @@ import {
 } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { adoptWslHostLoginEnvironmentLogged } from '../orcad/host-runtime/orcad-wsl-host-login-environment'
 import { createOrcadStartupTiming } from '../orcad/diagnostics/orcad-startup-timing'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import { installOrcadConnectorHost } from '../orcad/orcad-orca-account'
+import {
+  attachOrcadRuntimeServices,
+  publishOrcadRuntimeGraph,
+  registerOrcadRuntimeShutdownSteps,
+  repairOrcadDuplicatePtyPanes,
+  startOrcadHostSearchAndModels,
+  startOrcadManagedRuntimeReleases
+} from '../orcad/host-runtime/orcad-runtime-attachments'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -67,7 +75,7 @@ export async function activateBackendRuntime(
   const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
-  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
+  const { startOrcadAgentHookServer, startOrcadManagedAgentHooks, stopOrcadAgentListeners } =
     await import('../orcad/host-runtime/orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/terminal/identity/agent-status-observed-pane-identity')
@@ -79,7 +87,7 @@ export async function activateBackendRuntime(
   let uninstallObservedStatusIdentity = (): void => {}
   // Cleanups run in reverse: RPC, then recovery and watchers, then the final flush; the daemon
   // disconnect, registered above, runs last.
-  registerCleanup(() => agentHookServer.stop())
+  registerCleanup(() => stopOrcadAgentListeners(agentHookServer))
   registerCleanup(() => uninstallHookStatusRepublish())
   registerCleanup(() => uninstallObservedStatusIdentity())
   registerCleanup(profileShutdown.finalize)
@@ -103,6 +111,8 @@ export async function activateBackendRuntime(
     createOrcadProfileStateStartup(runtimeUserDataPath)
   )
   profileShutdown.store = profileStore
+  const { installOrcadUsageService } = await import('../orcad/host-runtime/orcad-usage-service')
+  const usageClients = installOrcadUsageService(profileStore, runtimeUserDataPath, registerCleanup)
   registerCleanup(() => worktreeRemovalLifetime.close())
   await timed('worktree-removals', () => prepareWorktreeRemovalsForStore(profileStore))
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
@@ -135,7 +145,6 @@ export async function activateBackendRuntime(
 
   // Runtime constructor callbacks use this index only after it is installed.
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
-
   const { orcadCodexAccountHomes } =
     await import('../orcad/account-launch/orcad-codex-account-homes')
   const codexAccountHomes = orcadCodexAccountHomes(
@@ -154,7 +163,6 @@ export async function activateBackendRuntime(
     registerCleanup,
     clientCodexHomes: codexAccountHomes
   })
-
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')
   const { createOrcadPairedEnvironmentOptions } =
@@ -191,44 +199,22 @@ export async function activateBackendRuntime(
     }
   })
   profileShutdown.paneGrids = runtime
+  profileShutdown.paintLedger = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
-
-  accountLaunch?.attachToRuntime(runtime)
-  const { wireGitHubIssueLinkTitleFill } =
-    await import('../github/workspace-links/github-issue-link-title-wiring')
-  registerCleanup(wireGitHubIssueLinkTitleFill(profileStore, runtime))
-  const { installOrcadEmulatorBridge } = await import('../orcad/host-runtime/orcad-emulator-bridge')
-  installOrcadEmulatorBridge(runtime, registerCleanup)
-
+  const relay = await attachOrcadRuntimeServices({
+    runtime,
+    store: profileStore,
+    registerCleanup,
+    attachAccounts: () => accountLaunch?.attachToRuntime(runtime)
+  })
   // Restore prior desktop-pushed account selection before automations or CLI launches.
   const { restoreOrcadHostAccountLaunchEnv } =
     await import('../orcad/account-launch/orcad-host-account-launch-env-store')
   restoreOrcadHostAccountLaunchEnv(runtime, runtimeUserDataPath)
   featureReadiness.open('accounts')
-
-  const { installOrcadSessionSearchService } =
-    await import('../orcad/host-runtime/orcad-session-search')
-  sessionSearch = await installOrcadSessionSearchService({
-    userDataPath: runtimeUserDataPath,
-    getSettings: () => profileStore.getSettings()
-  })
-  getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
+  sessionSearch = await startOrcadHostSearchAndModels(profileStore, runtimeUserDataPath)
   featureReadiness.open('sessionSearch')
-
-  const { startAgentStateRulesLiveUpdates } =
-    await import('../runtime/agent-state-rules/agent-state-rules-live-update')
-  startAgentStateRulesLiveUpdates(profileStore, (rules) =>
-    console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
-  )
-  // Paired phones dictate through this host; keep its model loaded the same way the desktop does.
-  const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
-  startSpeechModelWarmup(profileStore)
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const { repairDuplicatePtyPanesOnStart } =
-      await import('../runtime/terminal/identity/moved-pane-owner-rekey')
-    // Wait behind earlier writes and persist repair before reconciliation/RPC admission.
-    await repairDuplicatePtyPanesOnStart(profileStore, runtime)
-  }
+  await repairOrcadDuplicatePtyPanes(profileStore, runtime)
 
   // Status changes must republish session.tabs to paired clients.
   uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
@@ -257,23 +243,15 @@ export async function activateBackendRuntime(
   runtime.agentTransitions.seedRestoredRows()
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
-  // Run after RPC stops; later dismissal records save synchronously until exit.
-  registerCleanup(() => runtime.closeNotificationDismissals())
-  // Stop recovery retries before final profile flush.
-  registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
+  registerOrcadRuntimeShutdownSteps(runtime, registerCleanup)
 
   // Recovery establishes terminal/dispatch identities before fencing observations.
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   agentHookServer.setClaudePermissionHolds(runtime.terminalWorkerApprovals)
-  // First RPC clients must see a fully published graph.
-  const { publishHeadlessRuntimeGraph } =
-    await import('../runtime/session-graph/headless-runtime-graph')
-  publishHeadlessRuntimeGraph(runtime)
-  // Only the runtime can identify running shells and install deferred migrated history.
-  void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
-    console.error('[orcad-migration] installing pending shell history failed:', error)
-  })
+  await publishOrcadRuntimeGraph(runtime)
+
+  const connector = await installOrcadConnectorHost(runtime, profileStore, registerCleanup)
 
   const bindHost = resolveOrcadBindHost(options.bind)
   bindOrcadStopTerminalAdmission(runtime.terminalUpdateAdmission)
@@ -284,7 +262,9 @@ export async function activateBackendRuntime(
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
   worktreeRemovalLifetime.resume(() => runtime.finishInterruptedWorktreeRemovals())
-  startOrcadSchedulers(runtime, profileStore, registerCleanup)
+  startOrcadSchedulers(runtime, profileStore, usageClients, registerCleanup)
+  connector.connect()
+  relay.start(rpc)
   startOrcadDesktopPushService(runtime, rpc)
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
@@ -302,11 +282,8 @@ export async function activateBackendRuntime(
 
   await new ServeReadinessPublisher().publish(readiness, servePublishMode(options))
   // Background chat-journal maintenance, CI-line watches and runtime release reclaim start once this host is serving.
-  chatJournal.serving()
-  runtime.startPullRequestWatches({ admit: true })
-  const { reclaimManagedRuntimeReleasesAtLaunch } =
-    await import('../runtime/rpc/methods/host-management/managed-runtime-install')
-  reclaimManagedRuntimeReleasesAtLaunch(runtime)
+  chatJournal.serving(runtime)
+  await startOrcadManagedRuntimeReleases(runtime)
   reportStartupTiming()
   managedAgentHooks.readinessPublished()
 

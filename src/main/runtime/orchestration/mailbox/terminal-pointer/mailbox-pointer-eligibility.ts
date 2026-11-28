@@ -40,29 +40,53 @@ export type OrchestrationPointerBatch = {
 /** Both delivery lanes share this synchronous SQL selection; unfiltered waiters preempt all pointers.
  * Concrete waiter types are excluded byte-exactly in SQL; no JavaScript post-filter is needed.
  * An unacked batch defers rather than drops: only mail it does not hold is eligible, once each. */
-export function selectOrchestrationPointerBatch(input: {
+type PointerSelection = {
   db: OrchestrationDb
   mailboxHandle: string
   waiters: ReadonlySet<OrchestrationMessageWaiter> | undefined
   reservedTypes: ReadonlySet<string> | undefined
   /** A terminal's own mailbox leaves rows a Run owns undelivered for routing to move. */
   excludeRunOwnedDirect?: boolean
-}): OrchestrationPointerBatch {
-  if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
-    return { messages: [], heldDeliveryId: undefined }
-  }
+  newestFirst?: boolean
+}
+
+function pointerExclusions(input: PointerSelection, excludeIds?: readonly string[]) {
   const excludedTypes = new Set(input.reservedTypes)
   for (const waiter of input.waiters ?? []) {
     for (const type of waiter.typeFilter ?? []) {
       excludedTypes.add(type)
     }
   }
+  return {
+    excludeTypes: [...excludedTypes],
+    excludeIds,
+    excludeRunOwnedDirect: input.excludeRunOwnedDirect
+  }
+}
+
+export function selectOrchestrationPointerSequence(input: PointerSelection): number | undefined {
+  return hasUnfilteredOrchestrationWaiter(input.waiters)
+    ? undefined
+    : input.db.getUndeliveredUnreadSequence(
+        input.mailboxHandle,
+        pointerExclusions(
+          input,
+          input.db.getOutstandingMailboxDelivery?.(input.mailboxHandle)?.messageIds
+        )
+      )
+}
+
+export function selectOrchestrationPointerBatch(
+  input: PointerSelection
+): OrchestrationPointerBatch {
+  if (hasUnfilteredOrchestrationWaiter(input.waiters)) {
+    return { messages: [], heldDeliveryId: undefined }
+  }
   const held = input.db.getOutstandingMailboxDelivery?.(input.mailboxHandle)
   return {
     messages: input.db.getUndeliveredUnreadMessages(input.mailboxHandle, undefined, {
-      excludeTypes: [...excludedTypes],
-      excludeIds: held?.messageIds,
-      excludeRunOwnedDirect: input.excludeRunOwnedDirect,
+      ...pointerExclusions(input, held?.messageIds),
+      newestFirst: input.newestFirst,
       limit: ORCHESTRATION_DELIVERY_BATCH_LIMIT
     }),
     heldDeliveryId: held?.id

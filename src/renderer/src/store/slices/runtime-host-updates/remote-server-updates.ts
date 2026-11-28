@@ -12,7 +12,8 @@ import {
   runRemoteServerUpdate,
   type RemoteServerUpdateEntry,
   type RemoteServerUpdateTransport
-} from '@/runtime/hosts/updates/remote-server-update-coordinator'
+} from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
+import { remoteServerUpdateErrorMessage } from '@/runtime/hosts/updates/remote-server-update-errors'
 import { runRemoteServerUpdateBatch } from '@/runtime/hosts/updates/remote-server-update-batch'
 
 const MAX_CONCURRENT_REMOTE_SERVER_UPDATES = 2
@@ -29,9 +30,9 @@ function callRemoteUpdater<TResult>(
 }
 
 const transport: RemoteServerUpdateTransport = {
-  getRuntimeStatus: (environmentId, timeoutMs) =>
+  getRuntimeStatus: (environmentId, timeoutMs, options) =>
     window.api.runtimeEnvironments
-      .getStatus({ selector: environmentId, timeoutMs })
+      .getStatus({ selector: environmentId, timeoutMs, ...options })
       .then((response) => unwrapRuntimeRpcResult<RuntimeStatus>(response)),
   getUpdaterStatus: (environmentId, timeoutMs) =>
     callRemoteUpdater<RemoteServerUpdaterSnapshot>(
@@ -45,7 +46,8 @@ const transport: RemoteServerUpdateTransport = {
   download: (environmentId) =>
     callRemoteUpdater<RemoteServerUpdaterSnapshot>(environmentId, 'updater.download'),
   install: (environmentId) => callRemoteUpdater(environmentId, 'updater.install'),
-  wait: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+  wait: (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds)),
+  describeError: remoteServerUpdateErrorMessage
 }
 
 export type RemoteServerUpdatesSlice = {

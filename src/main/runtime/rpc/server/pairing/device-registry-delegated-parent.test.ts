@@ -1,9 +1,10 @@
 // Removing a desktop on disk (or by any path short of revokeRuntimeAccess) must also stop the
 // phones it delegated: their rows can outlive it, so auth checks the parent.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -16,7 +17,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers()
-  rmSync(dir, { recursive: true, force: true })
+  removeTreeSync(dir)
 })
 
 function removeOnDisk(deviceId: string): void {
@@ -94,4 +95,36 @@ describe('delegated phone auth follows its parent desktop', () => {
       expect(registry.getDevice(fork.deviceId)).not.toBeNull()
     }
   )
+})
+
+describe('a delegated phone row stored without its token', () => {
+  it('gets a new token the phone can sign in with, keeping its row', () => {
+    const { desktop, child } = delegatedRegistry()
+    const path = join(dir, DEVICE_REGISTRY_FILENAME)
+    const rows: Record<string, unknown>[] = JSON.parse(readFileSync(path, 'utf8'))
+    writeFileSync(
+      path,
+      JSON.stringify(
+        rows.map((row) => {
+          if (row.deviceId !== child.deviceId) {
+            return row
+          }
+          // As a build that stored token hashes left it.
+          const { token: _token, ...rest } = row
+          return { ...rest, tokenHash: 'stored-hash', callerFingerprint: 'phone-fingerprint' }
+        })
+      )
+    )
+    const registry = new DeviceRegistry(dir)
+
+    const [synced] = registry.upsertDelegatedMobileDevices(desktop, [
+      { phoneKey: 'phone-1', name: 'Pixel' }
+    ])
+
+    expect(synced?.deviceId).toBe(child.deviceId)
+    expect(typeof synced?.token).toBe('string')
+    expect(synced?.credentialRevision).toBe(1)
+    expect(synced?.callerFingerprint).toBe('phone-fingerprint')
+    expect(registry.validateToken(synced!.token)?.deviceId).toBe(child.deviceId)
+  })
 })

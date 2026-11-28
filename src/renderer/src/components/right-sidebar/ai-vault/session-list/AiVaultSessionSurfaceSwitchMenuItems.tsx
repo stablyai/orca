@@ -3,7 +3,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
 
 /** History opens a new tab; active-tab controls switch surfaces. */
@@ -40,10 +40,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
                 'Resume in New Chat'
               )
-            : t(
-                'components.tab.bar.SortableTabContextMenu.switchToChatView',
-                'Continue in Chat UI'
-              )}
+            : t('components.tab.bar.SortableTabContextMenu.switchToChatView', 'Continue in chat')}
         </Item>
       ) : null}
       {onResumeInNewCli ? (
@@ -62,7 +59,7 @@ export function AiVaultSessionSurfaceSwitchMenuItems({
                   )
                 : t(
                     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
-                    'Continue with Terminal Agent'
+                    'Continue in terminal'
                   )}
             </Item>
           </TooltipTrigger>

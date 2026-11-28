@@ -1,3 +1,4 @@
+import { readPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type {
   TaskResumeState,
@@ -8,11 +9,6 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
-import {
-  sanitizeAcknowledgedAgentsByPaneKey,
-  sanitizeActivityClearedAtByPaneKey,
-  sanitizePaneKeyTimestampRecord
-} from './ui-slice-hydration-sanitizers'
 
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
   'all',
@@ -142,11 +138,13 @@ export function mergeContextualTourSeenIds(
   return [...merged]
 }
 
-/** One-shot notices set when shown: only an explicit true counts as seen. */
+/** One-shot notices: only an explicit true counts as seen or dismissed. */
 export function hydrateOneShotNoticesSeen(
   ui: PersistedUIState
 ): Pick<
   UISlice,
+  | 'usageEmptyStateDismissed'
+  | 'pluginsAlphaNoticeDismissed'
   | 'codexTerminalServerIsolationNoticeSeen'
   | 'codexSharedSettingsNoticeSeen'
   | 'worktreeCardsUpdateNoticeSeen'
@@ -154,6 +152,9 @@ export function hydrateOneShotNoticesSeen(
   | 'claudeDiffPanelNoticeSeen'
 > {
   return {
+    // Default false so existing users still see the usage CTA.
+    usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
+    pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
     codexTerminalServerIsolationNoticeSeen: ui.codexTerminalServerIsolationNoticeSeen === true,
     codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
     worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
@@ -162,7 +163,7 @@ export function hydrateOneShotNoticesSeen(
   }
 }
 
-/** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */
+// Keep all valid input until verified aliases have had a chance to move.
 export function hydrateAgentReadState(
   ui: PersistedUIState
 ): Pick<
@@ -170,10 +171,8 @@ export function hydrateAgentReadState(
   'acknowledgedAgentsByPaneKey' | 'activityClearedAtByPaneKey' | 'manuallyUnreadTurnsByPaneKey'
 > {
   return {
-    acknowledgedAgentsByPaneKey: sanitizeAcknowledgedAgentsByPaneKey(
-      ui.acknowledgedAgentsByPaneKey
-    ),
-    activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+    acknowledgedAgentsByPaneKey: readPaneKeyTimestampRecord(ui.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: readPaneKeyTimestampRecord(ui.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: readPaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
   }
 }

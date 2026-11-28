@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionCommandsResult } from '../../../../../../shared/agent-session/agent-session-wire'
-import { startAgentSessionCommandMenuQuery } from '../../../../../../shared/agent-session/agent-session-command-menu-query'
+import { startAgentSessionCommandMenuQuery } from '../../../../../../shared/agent-session/requests/agent-session-command-menu-query'
 import { getStructuredAgentSessionReadOwner } from '../../session/structured/read/structured-agent-session-read-owner'
 
 const CHECKING_SHOWN_AFTER_MS = 150

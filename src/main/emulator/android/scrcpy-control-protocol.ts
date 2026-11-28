@@ -4,7 +4,10 @@
 export const SCRCPY_CONTROL_MSG_TYPE = {
   INJECT_KEYCODE: 0,
   INJECT_TEXT: 1,
-  INJECT_TOUCH_EVENT: 2
+  INJECT_TOUCH_EVENT: 2,
+  SET_CLIPBOARD: 9,
+  UHID_CREATE: 12,
+  UHID_INPUT: 13
 } as const
 
 export type ScrcpyKeyAction = 'down' | 'up'
@@ -14,6 +17,8 @@ export type ScrcpyTouchAction = 'down' | 'up' | 'move'
 export const SCRCPY_POINTER_ID_GENERIC_FINGER = BigInt.asUintN(64, -2n)
 // The official client caps one inject-text message at this many UTF-8 bytes.
 export const SCRCPY_INJECT_TEXT_MAX_BYTES = 300
+// CONTROL_MSG_CLIPBOARD_TEXT_MAX_LENGTH: the server's 256 KiB message buffer minus the header.
+export const SCRCPY_CLIPBOARD_TEXT_MAX_BYTES = (1 << 18) - 14
 
 // AKEY_EVENT_ACTION_* / AMOTION_EVENT_ACTION_* codes the server forwards to Android.
 const KEY_ACTION_CODE: Record<ScrcpyKeyAction, number> = { down: 0, up: 1 }
@@ -105,4 +110,41 @@ export function encodeInjectText(text: string): Buffer {
   buf.writeUInt32BE(payload.length, 1)
   payload.copy(buf, 5)
   return buf
+}
+
+/**
+ * Sets the device clipboard and, with `paste`, injects KEYCODE_PASTE. Sequence 0 asks for no
+ * acknowledgement, which keeps this a one-way message like the inject events.
+ */
+export function encodeSetClipboard(text: string, paste: boolean): Buffer {
+  const payload = Buffer.from(text, 'utf8')
+  if (payload.length > SCRCPY_CLIPBOARD_TEXT_MAX_BYTES) {
+    throw new RangeError('scrcpy clipboard text exceeds the server message limit')
+  }
+  const buf = Buffer.alloc(14 + payload.length)
+  buf.writeUInt8(SCRCPY_CONTROL_MSG_TYPE.SET_CLIPBOARD, 0)
+  buf.writeBigUInt64BE(0n, 1)
+  buf.writeUInt8(paste ? 1 : 0, 9)
+  buf.writeUInt32BE(payload.length, 10)
+  payload.copy(buf, 14)
+  return buf
+}
+
+// UHID_CREATE and UHID_INPUT share one layout: type, u16 device id, u16-prefixed bytes.
+function encodeUhidMessage(type: number, id: number, data: Buffer): Buffer {
+  const buf = Buffer.alloc(5 + data.length)
+  buf.writeUInt8(type, 0)
+  buf.writeUInt16BE(id, 1)
+  buf.writeUInt16BE(data.length, 3)
+  data.copy(buf, 5)
+  return buf
+}
+
+/** Creates a HID device from its report descriptor; it lasts as long as the server. */
+export function encodeUhidCreate(id: number, reportDescriptor: Buffer): Buffer {
+  return encodeUhidMessage(SCRCPY_CONTROL_MSG_TYPE.UHID_CREATE, id, reportDescriptor)
+}
+
+export function encodeUhidInput(id: number, report: Buffer): Buffer {
+  return encodeUhidMessage(SCRCPY_CONTROL_MSG_TYPE.UHID_INPUT, id, report)
 }

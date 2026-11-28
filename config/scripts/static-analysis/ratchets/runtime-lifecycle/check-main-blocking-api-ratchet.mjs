@@ -5,7 +5,8 @@ import { createGatedCallCollector } from '../../process-boundaries/gated-call-us
 import { countSqliteCalls } from '../../process-boundaries/sqlite-call-use-collector.mjs'
 import { isMainBlockingSource } from '../../process-boundaries/main-blocking-source-paths.mjs'
 import { propertyName } from '../../module-requests/static-module-specifiers.mjs'
-import { readTrackedSources, runCountRatchet } from '../../ratchet-baseline/ratchet-baseline.mjs'
+import { runCountRatchet } from '../../ratchet-baseline/ratchet-baseline.mjs'
+import { readEventLoopSources } from '../../process-boundaries/main-blocking-import-graph.mjs'
 
 export const OFF_MAIN_ADVICE =
   'Move CPU or SQL work to a worker, utility process or the backend; async is right only for real I/O waits. Use asynchronous requests and replies for IPC.'
@@ -61,17 +62,17 @@ export function countBlockingApis(sources) {
     if (!isMainBlockingSource(file)) {
       continue
     }
+    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
     for (const [category, collector] of collectors) {
-      const { count } = collector.collectUses(file, contents)
+      const { count } = collector.collectUses(file, contents, source)
       if (count) {
         counts.get(category).set(file, count)
       }
     }
-    const sql = countSqliteCalls(file, contents)
+    const sql = countSqliteCalls(file, contents, source)
     if (sql) {
       counts.get('sqlite').set(file, sql)
     }
-    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
     let ipc = 0
     function visit(node) {
       if (
@@ -102,10 +103,8 @@ export function countBlockingApis(sources) {
   return counts
 }
 
-export function main(root = process.cwd(), arg = undefined) {
-  const counts = countBlockingApis(
-    readTrackedSources(root, ['src/main', 'src/shared', 'src/preload'], isMainBlockingSource)
-  )
+export async function main(root = process.cwd(), arg = undefined, sources = undefined) {
+  const counts = countBlockingApis(sources ?? (await readEventLoopSources(root)))
   let status = 0
   for (const [category, current] of counts) {
     const result = runCountRatchet(
@@ -114,7 +113,7 @@ export function main(root = process.cwd(), arg = undefined) {
         baselinePath: `config/main-blocking-${category}-baseline.txt`,
         header: [
           `# Legacy synchronous ${category} uses per file; counts may only go DOWN.`,
-          '# Only explicit worker/utility entry files are exempt; their imports remain guarded.'
+          '# Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.'
         ],
         collect: () => current,
         pruneCommand:
@@ -131,5 +130,5 @@ export function main(root = process.cwd(), arg = undefined) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  process.exitCode = main(process.cwd(), process.argv[2])
+  process.exitCode = await main(process.cwd(), process.argv[2])
 }

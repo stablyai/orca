@@ -4,7 +4,7 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
 } from '../../../../shared/workspace/identity/floating-workspace-worktree'
-import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
+import { resolveFloatingTerminalCwd } from '../../../ipc/worktrees/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
   type ExecutionHostId,
@@ -25,6 +25,7 @@ import {
   parseWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { launchTargetGitSelector } from '../../workspaces/catalog/launch-target-git-selector'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -136,7 +137,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -154,7 +155,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace,
     checkPath = true
@@ -177,7 +178,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       selector,
       options,
       resolvedFolder,
-      checkPath
+      // A read must not touch the disk: a WSL UNC path would start its distro.
+      checkPath && !options.readOnly
     )
     if (folderScope) {
       return {
@@ -186,9 +188,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
       }
     }
 
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    const worktreeSelector = parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
+    const worktreeSelector = launchTargetGitSelector(selector) ?? selector
     const worktree =
       resolvedWorktree ??
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
@@ -202,7 +202,8 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
     triggerTerminalSpawnPushTargetMaterialization(
       worktree.path,
-      worktree.pushTarget,
+      // A read must not add remotes or fetch; only a spawn prepares the push target.
+      options.readOnly ? undefined : worktree.pushTarget,
       repo,
       this.store,
       worktree.repoId,

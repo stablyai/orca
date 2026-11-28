@@ -1,7 +1,8 @@
 import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-message-edit-transport'
+import { useNativeChatViewGuardRef } from '../../pane/ownership/native-chat-view-memory'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
@@ -17,7 +18,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../../../shared/agent-session/view/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt
@@ -39,7 +40,7 @@ import { useStructuredAgentSessionContextUsage } from '../../usage/use-structure
 import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
-import { pendingSendsOutsideQueuedCards } from '../../queue/structured-agent-session-sending-queued-cards'
+import { useStructuredAgentSessionTranscriptPending } from './delivery/use-structured-agent-session-transcript-pending'
 import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
@@ -83,7 +84,9 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     sessionId,
     transportEnabled && args.isVisible !== false
   )
-  const commandPending = useRef(false)
+  // Kept with the tab: a command still in flight from a released view refuses a second one here.
+  // Kept with the chat tab for this conversation and deleted when it settles, so replacements never pile up.
+  const commandPending = useNativeChatViewGuardRef('command-pending', false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const journalItems = transportState.journalItems
@@ -199,10 +202,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     send,
     agent
   })
-  const transcriptPending = useMemo(
-    () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
-    [isWorking, pending, queuedMessageIds]
-  )
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
   // Project since the latest /clear and add a notice only for cut turns without an explaining row.
   const transcriptItems = useMemo(
@@ -211,7 +210,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   )
   const messages = useStructuredAgentSessionMessages(
     transcriptItems,
-    transcriptPending,
+    useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking),
     transportState.submissions
   )
   const editTransport = useQueuedMessageEditTransport(target, sessionId, write)
@@ -220,6 +219,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: queueCapability === 'supported' && transportState.fence !== null,
     hasPendingPrompt: prompts.length > 0,
     isWorking,
+    stopping: stopControl.stopping,
+    transcriptShown: messages.length > 0,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
     sending: pending,
     composerScopeKey: args.composerScopeKey,
@@ -288,6 +289,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     workingStartedAt: transportState.turnTiming.workingStartedAt,
     settledTurns: transportState.turnTiming.settledTurns,
     turnActivity: transportState.turnActivity,
+    promptSuggestion: transportState.promptSuggestion,
     backgroundTasks: transportState.backgroundTasks,
     turnId: transportState.turnId,
     ...structuredAgentSessionStopControl({
@@ -303,9 +305,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     /** A plain send would queue: the host takes it, the setting or a waiting command asks, and no unanswerable prompt blocks it. */
     sendsQueue: structuredAgentSessionSendQueues(queue),
     /** What a plain send does now, and whether its alternate would send any differently. */
-    sendFollowUp: nativeChatSendFollowUp((alternate) =>
-      structuredAgentSessionSendQueues(queue, alternate)
-    ),
+    sendFollowUp: nativeChatSendFollowUp((alt) => structuredAgentSessionSendQueues(queue, alt)),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
     stopBackgroundTask: (taskId?: string) =>

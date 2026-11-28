@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { removeTreeSync } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import * as secureFile from '../../../../../shared/secure-storage/secure-file'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
@@ -17,7 +18,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
-  rmSync(dir, { recursive: true, force: true })
+  removeTreeSync(dir)
 })
 
 function registryPath(): string {

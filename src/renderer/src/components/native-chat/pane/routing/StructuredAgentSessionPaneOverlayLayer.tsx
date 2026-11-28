@@ -1,5 +1,6 @@
-import { Activity, memo, useCallback, useMemo } from 'react'
+import { Activity, memo, Suspense, useCallback, useId, useLayoutEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store'
 import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
@@ -7,12 +8,20 @@ import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
-import NativeChatView from '../../NativeChatView'
+import { ActivityPortalContainer } from '@/components/ui/activity-portal-container'
+import { RetainedPaneHost } from '../../../tab-group/retained-pane/RetainedPaneHost'
 import { NativeChatComposerEditorOwner } from '../../composer/editor/native-chat-composer-editor-owner'
 import { NativeChatHostOutageOwner } from '../../host-access/native-chat-host-outage-owner'
 import { NativeChatPaneLifetime } from '../ownership/native-chat-pane-lifetime'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { NativeChatViewTabContext } from '../ownership/native-chat-view-memory'
+import { chatViewRetention, useRetainedChatViewKey } from './native-chat-view-retention'
+import { forgetChatLayer, reportChatLayerTabs } from './native-chat-closed-tab-release'
+
+const NativeChatView = lazy(() => import('../../NativeChatView'))
+const BotGroupChat = lazy(() =>
+  import('../../../bots/BotGroupChat').then((module) => ({ default: module.BotGroupChat }))
+)
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -43,6 +52,10 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const owner = useAppStore((state) => structuredAgentSessionOwnerForTab(state, tab))
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const effectsConnected = isActive || preparingHandoff
+  const viewTab = useMemo(
+    () => ({ tabId: tab.id, worktreeId: tab.worktreeId, conversation: `${owner}:${tab.entityId}` }),
+    [tab.id, tab.worktreeId, owner, tab.entityId]
+  )
   const backdropActive = useWindowBackdropActive()
   if (!target) {
     return null
@@ -56,24 +69,65 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       data-structured-agent-session-overlay-tab-id={tab.id}
       onFocusOwningGroup={onFocusOwningGroup}
     >
-      <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
-        <NativeChatHostOutageOwner target={target}>
-          <NativeChatComposerEditorOwner>
-            <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
-              <NativeChatView
-                mode="structured"
-                tabId={tab.id}
-                groupId={groupId}
-                sessionId={tab.entityId}
-                agent={tab.agentSessionAgent}
-                isVisible={isActive}
-                isFocusedGroup={isFocusedGroup}
-                target={target}
-              />
-            </Activity>
-          </NativeChatComposerEditorOwner>
-        </NativeChatHostOutageOwner>
-      </NativeChatPaneLifetime>
+      <NativeChatViewTabContext value={viewTab}>
+        <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
+          <NativeChatHostOutageOwner target={target}>
+            <NativeChatComposerEditorOwner>
+              <ActivityPortalContainer visible={isActive}>
+                <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
+                  <Suspense fallback={null}>
+                    <NativeChatView
+                      mode="structured"
+                      tabId={tab.id}
+                      groupId={groupId}
+                      sessionId={tab.entityId}
+                      agent={tab.agentSessionAgent}
+                      isVisible={isActive}
+                      isFocusedGroup={isFocusedGroup}
+                      target={target}
+                    />
+                  </Suspense>
+                </Activity>
+              </ActivityPortalContainer>
+            </NativeChatComposerEditorOwner>
+          </NativeChatHostOutageOwner>
+        </NativeChatPaneLifetime>
+      </NativeChatViewTabContext>
+    </RetainedPaneHost>
+  )
+})
+
+/** A bot group's room: retained like a chat so switching tabs never remounts it. */
+const RoomOverlaySlot = memo(function RoomOverlaySlot({
+  tab,
+  isActive,
+  isFocusedGroup,
+  hasSplitGroups,
+  onFocusOwningGroup
+}: {
+  tab: Tab
+  isActive: boolean
+  isFocusedGroup: boolean
+  hasSplitGroups: boolean
+  onFocusOwningGroup: (groupId: string) => void
+}): React.JSX.Element {
+  const backdropActive = useWindowBackdropActive()
+  return (
+    <RetainedPaneHost
+      groupId={tab.groupId}
+      isVisible={isActive}
+      dimmed={hasSplitGroups && !isFocusedGroup && !backdropActive}
+      data-room-overlay-tab-id={tab.id}
+      onFocusOwningGroup={onFocusOwningGroup}
+    >
+      <Suspense fallback={null}>
+        <BotGroupChat
+          roomId={tab.entityId}
+          tabId={tab.id}
+          isVisible={isActive}
+          isFocusedGroup={isFocusedGroup}
+        />
+      </Suspense>
     </RetainedPaneHost>
   )
 })
@@ -113,10 +167,48 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       () => unifiedTabs.filter((tab): tab is StructuredAgentSessionTab => isStructuredTab(tab)),
       [unifiedTabs]
     )
+    const roomTabs = useMemo(
+      () => unifiedTabs.filter((tab) => tab.contentType === 'room'),
+      [unifiedTabs]
+    )
+    const isActive = (tab: Tab) =>
+      Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)
+    const layerId = useId()
+    const tabIndexById = useMemo(
+      () => new Map(structuredTabs.map((tab, index) => [tab.id, index] as const)),
+      [structuredTabs]
+    )
+    // Why: walk groups and the few retained chats, not every tab: an eviction re-renders background layers.
+    const shownKey =
+      isWorktreeActive || preparingHandoff
+        ? groups
+            .map((group) => group.activeTabId)
+            .filter((id): id is string => id !== null && tabIndexById.has(id))
+            .join('\n')
+        : ''
+    useLayoutEffect(() => {
+      chatViewRetention.show(layerId, shownKey ? shownKey.split('\n') : [])
+    }, [layerId, shownKey])
+    useLayoutEffect(() => () => chatViewRetention.show(layerId, []), [layerId])
+    // Keyed by the ids, so a tab's title or status change doesn't resubscribe every owned tab.
+    const ownedKey = structuredTabs.map((tab) => tab.id).join('\n')
+    const ownedTabIds = useMemo(() => new Set(ownedKey ? ownedKey.split('\n') : []), [ownedKey])
+    useLayoutEffect(() => {
+      reportChatLayerTabs(layerId, worktreeId, ownedTabIds)
+    }, [layerId, ownedTabIds, worktreeId])
+    // A removed workspace unmounts its layer without a tab-set change.
+    useLayoutEffect(() => () => forgetChatLayer(layerId, worktreeId), [layerId, worktreeId])
+    // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
+    const retainedKey = useRetainedChatViewKey(ownedTabIds)
+    const mountedTabs = [...new Set([...shownKey.split('\n'), ...retainedKey.split('\n')])]
+      .map((id) => tabIndexById.get(id))
+      .filter((index): index is number => index !== undefined)
+      .sort((a, b) => a - b)
+      .map((index) => structuredTabs[index]!)
 
     return (
       <>
-        {structuredTabs.map((tab) => (
+        {mountedTabs.map((tab) => (
           <StructuredAgentSessionOverlaySlot
             key={tab.id}
             tab={tab}
@@ -128,6 +220,16 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
+            hasSplitGroups={groups.length > 1}
+            onFocusOwningGroup={focusOwningGroup}
+          />
+        ))}
+        {roomTabs.map((tab) => (
+          <RoomOverlaySlot
+            key={tab.id}
+            tab={tab}
+            isActive={isActive(tab)}
+            isFocusedGroup={isActive(tab) && tab.groupId === activeGroupId}
             hasSplitGroups={groups.length > 1}
             onFocusOwningGroup={focusOwningGroup}
           />

@@ -1,5 +1,5 @@
 import { constants, accessSync, lstatSync, mkdirSync } from 'node:fs'
-import { mkdir, lstat, open, opendir, rename, unlink } from 'node:fs/promises'
+import { mkdir, lstat, open, rename, unlink } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { hostname } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -8,42 +8,53 @@ import { z } from 'zod'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import { readPosixProcessRow, providerOwnerPidAbsent } from './provider-process-row-read'
+import { proveProviderOwnershipBeforeLaunch } from './provider-ownership-launch-proof'
 import {
-  proveProviderProcessIdentity,
   sweepOrphanedProviderGroup,
   providerGroupAbsent,
   providerOwnershipAbsent,
-  retireProviderWatcher,
   type ProviderGroupIdentity
 } from './provider-group-orphan-guard'
 import { PROVIDER_GROUP_REAP_TIMEOUT_MS } from './provider-process-supervisor'
 import { terminateProviderFaultDescendants } from './provider-fault-ownership'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
+import { openDirectory } from '../../shared/open-directory'
 
-const row = z.object({
-  pid: z.number().int().min(2),
-  ppid: z.number().int().min(0),
-  pgid: z.number().int().min(1),
-  startedAt: z.string().min(1).max(255),
-  startResolution: z.enum(['clock-tick', 'microsecond', 'second'])
-})
-const recordSchema = z.object({
-  version: z.literal(1),
-  nonce: z.string().uuid(),
-  hostname: z.string().max(255),
-  statePath: z.string().max(4096),
-  bootId: z.string().min(1).max(255),
-  owner: row,
-  leader: row,
-  watcher: row,
-  pgid: z.number().int().min(2)
-})
+const row = lazyZodSchema(() =>
+  z.object({
+    pid: z.number().int().min(2),
+    ppid: z.number().int().min(0),
+    pgid: z.number().int().min(1),
+    startedAt: z.string().min(1).max(255),
+    startResolution: z.enum(['clock-tick', 'microsecond', 'second'])
+  })
+)
+const recordSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.literal(1),
+    nonce: z.string().uuid(),
+    hostname: z.string().max(255),
+    statePath: z.string().max(4096),
+    bootId: z.string().min(1).max(255),
+    owner: row,
+    leader: row,
+    watcher: row,
+    pgid: z.number().int().min(2)
+  })
+)
 const startups = new Map<string, Promise<void>>()
 const MAX_RECORD_BYTES = 16_384
 const availableDirectories = new Map<string, string | null>()
-let ownerIdentity: ReturnType<typeof proveProviderProcessIdentity> | undefined
+
+let installedDirectory: string | null = null
+
+/** The terminal daemon owns its relayed agents, so it journals them beside its own runtime state. */
+export function installProviderOwnershipDirectory(directory: string): void {
+  installedDirectory = directory
+}
 
 export function providerOwnershipDirectory(): string {
-  return join(getAppEnvironment().getPath('userData'), 'provider-processes')
+  return installedDirectory ?? join(getAppEnvironment().getPath('userData'), 'provider-processes')
 }
 
 /** This synchronous launch seam checks host capability once, never once per chat. */
@@ -114,9 +125,8 @@ export async function waitForProviderOwnershipReap(
     ) {
       return false
     }
-    if ((await retireProviderWatcher(identity, { signal: proof.signal })) === 'refused') {
-      return false
-    }
+    // The watcher stops the CLI's detached tools after the group and exits by itself; killing it
+    // here could strand them, so an unfinished watcher just keeps the record for a later pass.
     return (
       !proof.signal.aborted &&
       (await waitForProviderGroupReap(
@@ -156,7 +166,7 @@ async function scanOwnership(directory: string, bootId: string): Promise<void> {
   }
   const owners = new Map<string, ReturnType<typeof readPosixProcessRow>>()
   const localHostname = hostname()
-  const dir = await opendir(directory)
+  const dir = await openDirectory(directory)
   for await (const entry of dir) {
     if (!entry.isFile() || !entry.name.endsWith('.json')) {
       continue
@@ -253,28 +263,11 @@ export async function publishProviderOwnership(
   parentPid = process.pid
 ) {
   await recoverProviderOwnership(directory, bootId)
-  ownerIdentity ??= proveProviderProcessIdentity(process.pid)
-  // Orphans reparent to an existing reaper, so the leader's ppid alone proves our parent is live.
-  const [owner, leader, watcher] = await Promise.all([
-    ownerIdentity,
-    proveProviderProcessIdentity(leaderPid),
-    proveProviderProcessIdentity(watcherPid)
-  ])
-  if (!owner) {
-    ownerIdentity = undefined
-  }
-  if (
-    !owner ||
-    !leader ||
-    !watcher ||
-    leader.ppid !== parentPid ||
-    leader.pgid !== leaderPid ||
-    watcher.ppid !== leaderPid ||
-    watcher.pgid !== watcherPid ||
-    watcherPid === leaderPid
-  ) {
-    throw new Error('Cannot establish provider process ownership before launch')
-  }
+  const { owner, leader, watcher } = await proveProviderOwnershipBeforeLaunch(
+    leaderPid,
+    watcherPid,
+    parentPid
+  )
   const identity: ProviderGroupIdentity = { leader, watcher, pgid: leaderPid }
   const nonce = randomUUID()
   const path = join(directory, `${nonce}.json`)

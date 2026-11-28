@@ -1,13 +1,13 @@
 import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY as INSTALL } from '../../../../../../shared/agent-launch/installation/managed-runtime-install'
+import { registeredAgentChatInstallable } from '../../../../../../shared/agent-session/agent-discovery/agent-session-registered-agents'
 import {
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY as CATALOG,
   STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY
-} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentSessionChatProgram } from '../../../../../../shared/agent-session/agent-session-agent-availability'
+import type { AgentSessionChatProgram } from '../../../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import { chatProviderAgents } from '../../../../runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
   resolveAgentLaunchRoute,
@@ -16,9 +16,11 @@ import {
 import {
   buildAgentLaunchRouteInput,
   resolveAgentLaunchHost,
+  routeHostStatuses,
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace
 } from '../routing/agent-launch-route-input'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import {
   readHostStructuredAgentAvailability,
   subscribeHostStructuredAgentAvailability
@@ -38,15 +40,14 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/sessi
 import { getResolvedExecutionHostIdForWorktree } from '../../../workspace/ownership/resolved-worktree-execution-host'
 
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
-type HostFactsStore = Pick<AgentLaunchRouteStore, 'runtimeStatusByEnvironmentId'>
 
 function hostContext(
-  store: HostFactsStore,
+  statuses: RuntimeStatuses,
   host: { executionHostId: string; hostCapabilities: readonly string[] | null }
 ) {
   const parsed = parseExecutionHostId(host.executionHostId)
   const environmentId = parsed?.kind === 'runtime' ? parsed.environmentId : undefined
-  const entry = environmentId ? store.runtimeStatusByEnvironmentId?.get(environmentId) : undefined
+  const entry = environmentId ? statuses.get(environmentId) : undefined
   const runtimeId = parsed?.kind === 'local' ? null : lastVerifiedRuntimeStatus(entry)?.runtimeId
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const identity = JSON.stringify([host.executionHostId, runtimeId, pairingRevision])
@@ -75,19 +76,19 @@ export function resolveChatProgramContext(
     ? getResolvedExecutionHostIdForWorktree(store, workspace.worktreeId)
     : null
   return hostContext(
-    store,
+    routeHostStatuses(store),
     owner === null ? { ...host, executionHostId: proven?.startsWith('ssh:') ? proven : '' } : host
   )
 }
 
 /** Only absent publication uses older-host inference; present unknown wins. */
 export function readChatProgram(
-  store: HostFactsStore,
+  statuses: RuntimeStatuses,
   agent: TuiAgent,
   host: { executionHostId: string; hostCapabilities: readonly string[] | null },
   detected: readonly TuiAgent[] | null
 ): ChatProgramObservation {
-  const context = hostContext(store, host)
+  const context = hostContext(statuses, host)
   const { executionHostId, runtimeId, pairingRevision, hostCapabilities: capabilities } = context
   const snapshot = readHostStructuredAgentAvailability(executionHostId, runtimeId, pairingRevision)
   const published = snapshot.state === 'received' ? snapshot.byAgent.get(agent) : undefined
@@ -107,8 +108,7 @@ export function readChatProgram(
     ? 'unlearned'
     : detected?.includes(agent)
       ? 'available'
-      : catalog?.some((row) => row.agent === agent && row.managedRuntime) &&
-          capabilities.includes(INSTALL)
+      : registeredAgentChatInstallable(catalog, agent, capabilities)
         ? 'installable'
         : !catalog && capabilities.includes(CATALOG)
           ? hostStructuredAgentsReadFailed(executionHostId, runtimeId)
@@ -133,7 +133,7 @@ export function readAgentLaunchChoice(
 ) {
   const context = resolveChatProgramContext(store, workspace)
   const input = buildAgentLaunchRouteInput(store, { agent, workspace, preferredSurface })
-  const program = readChatProgram(store, agent, context, detected)
+  const program = readChatProgram(routeHostStatuses(store), agent, context, detected)
   const support = structuredAgentLaunchSupport(input)
   const catalogReady =
     context.hostCapabilities !== null &&
@@ -183,7 +183,7 @@ export function agentsOfferedForLaunch(
   preferredChatAgent?: TuiAgent
 ): TuiAgent[] {
   const { executionHostId } = resolveChatProgramContext(store, workspace)
-  const chats = chatProviderAgents(executionHostId, store.runtimeStatusByEnvironmentId)
+  const chats = chatProviderAgents(executionHostId, routeHostStatuses(store))
   const opens = chats.filter((agent) =>
     agentChoiceOpensAsChat(
       store,

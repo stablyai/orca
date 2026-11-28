@@ -26,6 +26,7 @@ import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { deployOrcad } from '../install/orcad-remote-deploy'
+import { holdWslForSshUpgrade } from '../../wsl/execution/wsl-ssh-upgrade-hold'
 import {
   adoptRunningOrcadVersion,
   type OrcadRunningAdoption
@@ -180,6 +181,21 @@ async function deployOwnOrcad(
   localOrcadDir: string,
   args: { force?: boolean; signal?: AbortSignal }
 ): Promise<DeployedOrcad | OrcadManagedDeferral> {
+  // Windows can idle out a loopback WSL distro mid-upload; keep it running for this deploy.
+  const hold = await holdWslForSshUpgrade(context, args.signal)
+  try {
+    return await deployHeldOrcad(context, slot, localOrcadDir, args)
+  } finally {
+    hold?.release()
+  }
+}
+
+async function deployHeldOrcad(
+  context: OrcadRemoteContext<SshTarget>,
+  slot: ReturnType<typeof managedOrcadSlot>,
+  localOrcadDir: string,
+  args: { force?: boolean; signal?: AbortSignal }
+): Promise<DeployedOrcad | OrcadManagedDeferral> {
   const appVersion = getAppEnvironment().getVersion()
   const deployResult = await deployOrcad({
     ...slot,
@@ -196,7 +212,7 @@ async function deployOwnOrcad(
       code: deployResult.code,
       reason: deployResult.reason,
       forceable:
-        isForceableOrcadDeferral(deployResult.code) ||
+        isForceableOrcadDeferral(deployResult) ||
         deployResult.code === ORCAD_ACTIVATION_POLICY_REFUSED_CODE
     }
   }

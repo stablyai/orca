@@ -7,8 +7,8 @@ import {
   type AgentStatusStructuredSessionSubject
 } from '../../../shared/agent-status/contracts/agent-status-subject'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
+  structuredAgentSessionTabId,
+  chatPaneKey
 } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
@@ -21,6 +21,7 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import { childWorkBackgroundCommands } from '../../../shared/agent-status/lifecycle/agent-background-wait'
 import { AgentHookServerIngestTerminal } from './server-ingest-terminal'
 
 export abstract class AgentHookServerIngestStructured extends AgentHookServerIngestTerminal {
@@ -91,12 +92,16 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
     }
     const priorStatus = previous?.status
     // Read canonical children; the summary's task list loses information.
+    const childWork = this.canonicalStatusStore.getChildren(parsed)
     const agentStatus = structuredAgentSessionAgentStatus({
       status: summary.status,
-      childWork: this.canonicalStatusStore.getChildren(parsed),
+      childWork,
       turnOutcome: summary.turnOutcome,
       ...(summary.stopping ? { stopping: summary.stopping } : {}),
-      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {})
+      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {}),
+      ...(summary.attentionAsksOnlyQuestions
+        ? { attentionAsksOnlyQuestions: summary.attentionAsksOnlyQuestions }
+        : {})
     })
     const { state, workingMode } = agentStatus
     // Journal dates preserve main-agent continuity across republishing after restart.
@@ -106,7 +111,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       summary.updatedAt
     )
     const tabId = structuredAgentSessionTabId(parsed.sessionId)
-    const paneKey = structuredAgentSessionPaneKey(tabId, parsed.sessionId)
+    const paneKey = chatPaneKey(parsed.sessionId)
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }
@@ -121,6 +126,9 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
       state,
       ...(workingMode ? { workingMode } : {}),
+      ...(workingMode === 'monitoring'
+        ? { backgroundCommands: childWorkBackgroundCommands(childWork) }
+        : {}),
       mainAgent,
       // Older readers use interrupted instead of mainAgent.
       interrupted: mainAgentTurnInterrupted(mainAgent),

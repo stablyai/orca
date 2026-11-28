@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../../store/index'
 import { useDaemonActions } from '../../shared/useDaemonActions'
@@ -36,6 +36,9 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
+import { useStatusBarAppMemory } from './use-status-bar-app-memory'
+import { isStatusBarMemoryShown } from '../../../../../shared/diagnostics/status-bar-memory-settings'
+import { trackResourceManagerOpen } from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
 
 let lastSelectedResourceTab: 'resources' | 'ptys' = 'resources'
@@ -58,6 +61,7 @@ export function useResourceUsageStatusController() {
 
   const [open, setOpen] = useState(false)
   const [selectedTab, setSelectedTabState] = useState(lastSelectedResourceTab)
+  useEffect(() => (open ? trackResourceManagerOpen() : undefined), [open])
   const setSelectedTab = (tab: string): void => {
     if (tab !== 'resources' && tab !== 'ptys') {
       return
@@ -70,6 +74,10 @@ export function useResourceUsageStatusController() {
   const ptyViewActive = windowVisible && open && selectedTab === 'ptys'
   const viewActive = resourceViewActive || ptyViewActive
   const fetchSnapshot = useResourceMemorySnapshot(resourceViewActive)
+  const showStatusBarMemory = useAppStore(
+    (s) => s.settings != null && isStatusBarMemoryShown(s.settings)
+  )
+  const appMemoryBytes = useStatusBarAppMemory(showStatusBarMemory)
   const localPtyInventory = useResourceSessionInventory(workspaceSessionReady, ptyViewActive, true)
   const ptyActions = useResourcePtyActions(localPtyInventory)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
@@ -80,6 +88,7 @@ export function useResourceUsageStatusController() {
     sessionInventory,
     observedAt: resourcesObservedAt,
     sessionsError,
+    rereading: sessionsRereading,
     refreshSessions,
     clearSessionsError,
     removeSession,
@@ -95,9 +104,9 @@ export function useResourceUsageStatusController() {
       lastSeenScannedAt: workspaceSpaceScannedAt
     })
   )
-  // Why: tab titles churn on every keystroke; subscribe to those maps only while open so closed badges don't rerender.
+  // Why: tab titles churn on every keystroke; only the PTYs tab reads the whole map. Resource rows watch their own title.
   const runtimePaneTitlesByTabId = useAppStore((s) =>
-    getResourceUsageRuntimePaneTitlesByTabId(s, viewActive)
+    getResourceUsageRuntimePaneTitlesByTabId(s, ptyViewActive)
   )
   const repos = useAppStore((s) => getResourceUsageRepos(s, viewActive))
   const gitWorktrees = useAppStore((s) => getResourceUsageAllWorktrees(s, viewActive))
@@ -218,7 +227,6 @@ export function useResourceUsageStatusController() {
     runtimeHostResources,
     sessions,
     resourceSessionBindings,
-    runtimePaneTitlesByTabId,
     repos,
     allWorktrees,
     projectGroups,
@@ -226,14 +234,15 @@ export function useResourceUsageStatusController() {
     workspaceSessionReady,
     sessionCount: resourcesObservedAt === null ? null : sessionInventory.count,
     sessionsError,
+    sessionsRereading,
     memorySnapshotError,
     snapshot,
-    spaceScanReady
+    spaceScanReady,
+    appMemoryBytes
   })
   const actions = useResourceUsageActions({
     setCollapsedRepos,
     setCollapsedWorktrees,
-    tabsByWorktree,
     setOpen,
     setActiveView,
     openModal,
@@ -244,6 +253,7 @@ export function useResourceUsageStatusController() {
     sessions,
     resourceSessionBindings,
     workspaceSessionReady,
+    sessionsRereading,
     killConfirm,
     setKillConfirm,
     setKilling,

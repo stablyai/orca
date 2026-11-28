@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionInvokeResult } from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   BrowserExtensionApiError,
+  ensureBrowserExtensionNamespacesRegistered,
   extensionHasNamespacePermission,
   getBrowserExtensionNamespace,
   type BrowserExtensionCaller,
@@ -16,22 +18,24 @@ import {
   type WorkerContext
 } from './browser-extension-contexts'
 
-const invokeRequestSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('call'),
-    namespace: z.string(),
-    method: z.string(),
-    args: z.array(z.unknown())
-  }),
-  z.object({
-    type: z.literal('listen'),
-    namespace: z.string(),
-    event: z.string(),
-    active: z.boolean(),
-    /** Every listener's filter (webRequest); omitted when one listener takes all events. */
-    filters: z.array(z.unknown()).optional()
-  })
-])
+const invokeRequestSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('call'),
+      namespace: z.string(),
+      method: z.string(),
+      args: z.array(z.unknown())
+    }),
+    z.object({
+      type: z.literal('listen'),
+      namespace: z.string(),
+      event: z.string(),
+      active: z.boolean(),
+      /** Every listener's filter (webRequest); omitted when one listener takes all events. */
+      filters: z.array(z.unknown()).optional()
+    })
+  ])
+)
 
 export type BrowserExtensionListenTarget =
   | { kind: 'worker'; context: WorkerContext }
@@ -64,6 +68,7 @@ export async function handleBrowserExtensionApiRequest(
       throw new BrowserExtensionApiError('Malformed extension API request')
     }
     const request = parsed.data
+    await ensureBrowserExtensionNamespacesRegistered()
     const namespace = getBrowserExtensionNamespace(request.namespace)
     if (!namespace) {
       throw new BrowserExtensionApiError(`chrome.${request.namespace} is not available`)

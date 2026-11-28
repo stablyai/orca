@@ -24,6 +24,8 @@ export type InflightPR = {
   generation: number
   lookupHintKey: string
   reason?: GitHubPRRefreshReason
+  /** A poll's flight, refused by an idle-stopped WSL host: a counted read must not join it. */
+  background?: boolean
   superseded?: boolean
   outcome?: PRSnapshotReply
 }
@@ -38,7 +40,7 @@ export type InflightChecks = {
   wakeWslDistro?: boolean
 }
 export type InflightComments = {
-  promise: Promise<PRComment[]>
+  promise: Promise<PRComment[] | null>
   reply?: Promise<PRComment[]>
   requestId: number
   postedComments: PRComment[]
@@ -92,19 +94,6 @@ export function ownsInflightRequest<T extends { requestId: number }>(
   requestId: number
 ): boolean {
   return registry.get(key)?.requestId === requestId
-}
-
-export function _getGitHubPRRequestGenerationCountForTest(): number {
-  return prRequestGenerations.size
-}
-
-export function _getGitHubPRRefreshStartedEntryCountForTest(): number {
-  return prRefreshStartedHostedReviewEntries.size
-}
-
-export function _clearGitHubPRRefreshStartedEntriesForTest(): void {
-  prRefreshStartedHostedReviewEntries.clear()
-  prRefreshStartedLinkedReviewScopes.clear()
 }
 
 const PROVIDER_REQUEST_CONCURRENCY = 8

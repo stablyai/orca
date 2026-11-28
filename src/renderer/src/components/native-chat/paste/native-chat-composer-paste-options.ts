@@ -1,6 +1,9 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-chat-attachment-owner'
-import type { NativeChatReservedAttachment } from '../attachments/intake/native-chat-session-attachment-drop'
+import type {
+  NativeChatPendingAttachmentChips,
+  NativeChatReservedAttachment
+} from '../attachments/intake/native-chat-session-attachment-drop'
 
 export type UseNativeChatComposerPasteArgs = {
   targetKey?: string
@@ -11,7 +14,6 @@ export type UseNativeChatComposerPasteArgs = {
   caret: number
   /** Resolve at paste time so remote images save where the agent can read them. */
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
-  attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   /** Files a file manager copied attach through the composer's drop route. */
   attachCopiedFiles: (paths: string[], options?: { focus?: boolean }) => void
   captureExternalPaths?: () => (paths: string[]) => void | Promise<void>
@@ -25,7 +27,7 @@ export type UseNativeChatComposerPasteArgs = {
     pendingName?: string,
     serverOwned?: boolean
   ) => string | null
-  resolvePendingImageAttachment: (id: string, path: string, connectionId?: string | null) => void
+  resolvePendingImageAttachment: NativeChatPendingAttachmentChips['resolve']
   /** Supplies a pending chip's thumbnail. */
   revealPendingImageAttachment?: (id: string, previewUrl?: string) => void
   dropPendingImageAttachment: (id: string) => void

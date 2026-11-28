@@ -1,343 +1,250 @@
+import type { ReactNode } from 'react'
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { translate } from '../../i18n/mobile-i18n'
-import { isBrokenCheck } from '../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
-import { View, Text, Pressable } from 'react-native'
-import { colors, pressedStyle } from '../../theme/mobile-theme'
-import { openExternalLink } from '../../platform/external-links/external-link'
-import { ExternalLink } from 'lucide-react-native'
-import { TextField } from '../../components/composer-input/TextField'
-import { styles, getGitLabPipelineStatusStyle } from '../mobile-tasks-legacy-styles'
 import {
-  taskKindLabel,
-  formatDurationSeconds,
-  discussionSummary
-} from './mobile-tasks-item-comments'
-import {
-  SHOW_MOBILE_DETAIL_LABEL_CHIPS,
-  SHOW_MOBILE_DETAIL_REVIEW_PANELS,
-  SHOW_MOBILE_LINEAR_DETAIL_TOOLS
-} from '../task-list/mobile-tasks-options'
+  getProviderChecksOutcome,
+  summarizeProviderChecks
+} from '../../../../src/shared/source-control/checks/provider-check-summary'
+import { Text, View } from 'react-native'
+import { CircleCheck, FolderKanban, Gauge, ListChecks, Tag, Users } from 'lucide-react-native'
+import { spacing, type MobilePalette } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { stylesSheet as legacyStylesSheet } from '../mobile-tasks-legacy-styles'
+import { discussionSummary } from './mobile-tasks-item-comments'
 import {
   renderMobileTasksItemBodyEditor,
   renderMobileTasksItemReviewPanel,
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
-import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
+import {
+  LIST_LEADING_INSET,
+  ListGroup,
+  ListRow,
+  SectionHeader
+} from '../../components/list/ListGroup'
 import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
-import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
-import type { DetailPayload } from '../mobile-tasks-provider-detail-types'
+import type { DetailPayload, GitHubDetailCheck } from '../mobile-tasks-provider-detail-types'
 
-function pipelineJobsSummary(count: number): string {
-  return count === 1
-    ? translate('tasks.itemDetailContent.pipelineJobs_one', '{{count}} jobs', { count })
-    : translate('tasks.itemDetailContent.pipelineJobs_other', '{{count}} jobs', { count })
+export type MobileTasksDetailSubpage = 'checks' | 'subIssues'
+
+/** What a PR's checks say in one word, from the shared summary the list row's tone also reads. */
+function checksValue(
+  checks: readonly GitHubDetailCheck[],
+  t: Translate,
+  colors: MobilePalette
+): { text: string; color?: string } {
+  const summary = summarizeProviderChecks(checks)
+  switch (getProviderChecksOutcome(summary)) {
+    case 'failure':
+      return {
+        text: t('tasks.itemDetailContent.checksFailing', '{{count}} failing', {
+          count: summary.failed - (summary.cancelled ?? 0)
+        }),
+        color: colors.statusRed
+      }
+    case 'pending':
+      return {
+        text: t('tasks.itemDetailContent.checksPending', '{{count}} pending', {
+          count: summary.pending
+        })
+      }
+    case 'cancelled':
+      return { text: t('tasks.itemDetailContent.checksCancelled', 'Cancelled') }
+    case 'success':
+      return {
+        text: t('tasks.itemDetailContent.checksPassed', 'All passed'),
+        color: colors.statusGreen
+      }
+    case 'neutral':
+    case 'none':
+      return { text: t('tasks.itemDetailContent.checksUnresolved', 'Unresolved') }
+  }
 }
 
-type DetailRow = { label: string; value: string }
+type FactRow = {
+  key: string
+  icon: ReactNode
+  title: string
+  value: string
+  valueColor?: string
+  onPress?: () => void
+}
 
-function detailRows(item: ActionableTaskItem, payload: DetailPayload): DetailRow[] {
-  const rows: DetailRow[] = [
-    { label: translate('tasks.itemDetailContent.type', 'Type'), value: taskKindLabel(item) },
-    { label: translate('tasks.itemDetailContent.status', 'Status'), value: item.status }
-  ]
-  const assignee = translate('tasks.itemDetailContent.assignee', 'Assignee')
-  const project = translate('tasks.itemDetailContent.project', 'Project')
-  if (payload.provider === 'linear') {
-    if (payload.assignee) {
-      rows.push({ label: assignee, value: payload.assignee })
-    }
-    if (payload.project) {
-      rows.push({ label: project, value: payload.project.name })
-    }
-  }
-  if (payload.provider === 'jira') {
-    if (payload.assignee) {
-      rows.push({ label: assignee, value: payload.assignee })
-    }
-    if (payload.priorityName) {
-      rows.push({
-        label: translate('tasks.itemDetailContent.priority', 'Priority'),
-        value: payload.priorityName
-      })
-    }
-    if (payload.projectName) {
-      rows.push({ label: project, value: payload.projectName })
-    }
-  }
-  if (
-    (payload.provider === 'github' || payload.provider === 'gitlab') &&
-    payload.assignees.length
-  ) {
+function factRows(
+  payload: DetailPayload,
+  isPullRequest: boolean,
+  openSubpage: (page: MobileTasksDetailSubpage) => void,
+  t: Translate,
+  colors: MobilePalette
+): FactRow[] {
+  const icon = (Icon: typeof Users) => (
+    <Icon size={18} color={colors.textSecondary} strokeWidth={2} />
+  )
+  const rows: FactRow[] = []
+  const assignees =
+    payload.provider === 'github' || payload.provider === 'gitlab'
+      ? payload.assignees
+      : payload.assignee
+        ? [payload.assignee]
+        : []
+  if (assignees.length > 0) {
     rows.push({
-      label: translate('tasks.itemDetailContent.assignees', 'Assignees'),
-      value: payload.assignees.join(', ')
+      key: 'assignees',
+      icon: icon(Users),
+      title: t('tasks.itemDetailContent.assignees', 'Assignees'),
+      value: assignees.join(', ')
+    })
+  }
+  if (payload.labels.length > 0) {
+    rows.push({
+      key: 'labels',
+      icon: icon(Tag),
+      title: t('tasks.itemDetailContent.labels', 'Labels'),
+      value: payload.labels.join(', ')
+    })
+  }
+  if (payload.provider === 'jira' && payload.priorityName) {
+    rows.push({
+      key: 'priority',
+      icon: icon(Gauge),
+      title: t('tasks.itemDetailContent.priority', 'Priority'),
+      value: payload.priorityName
+    })
+  }
+  const project =
+    payload.provider === 'linear'
+      ? payload.project?.name
+      : payload.provider === 'jira'
+        ? payload.projectName
+        : undefined
+  if (project) {
+    rows.push({
+      key: 'project',
+      icon: icon(FolderKanban),
+      title: t('tasks.itemDetailContent.project', 'Project'),
+      value: project
+    })
+  }
+  if (payload.provider === 'github' && isPullRequest && payload.checks.length > 0) {
+    const checks = checksValue(payload.checks, t, colors)
+    rows.push({
+      key: 'checks',
+      icon: icon(CircleCheck),
+      title: t('tasks.itemDetailContent.checks', 'Checks'),
+      value: checks.text,
+      valueColor: checks.color,
+      onPress: () => openSubpage('checks')
+    })
+  }
+  if (payload.provider === 'linear' && payload.children.length > 0) {
+    rows.push({
+      key: 'subIssues',
+      icon: icon(ListChecks),
+      title: t('tasks.itemDetailContent.subIssues', 'Sub-issues'),
+      value: String(payload.children.length),
+      onPress: () => openSubpage('subIssues')
     })
   }
   return rows
 }
 
-export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
+/** The facts as one grouped list, then the description and the discussion. */
+export function MobileTasksItemDetailContent({
+  model,
+  openSubpage
+}: {
+  model: ConnectionPresentationModel
+  openSubpage: (page: MobileTasksDetailSubpage) => void
+}) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const legacyStyles = useThemedStyles(legacyStylesSheet)
+  const t = useMobileTranslation()
   const {
     actionItem,
     addHostedItemComment,
     addLinearComment,
     commentSendNotice,
-    createLinearSubIssue,
     detailCommentGroups,
     detailError,
     detailLoading,
     detailPayload,
     itemCommentDraft,
     linearCommentDraft,
-    linearSubIssueTitle,
     mutatingStatus,
-    openLinearSubIssue,
-    refreshGitHubChecks,
     renderCommentComposer,
     renderDetailCommentGroup,
-    rerunGitHubChecks,
     setDetailRefreshSeq,
     setItemCommentDraft,
-    setLinearCommentDraft,
-    setLinearSubIssueTitle
+    setLinearCommentDraft
   } = model
   if (!actionItem) {
     return null
   }
-  return detailLoading ? (
-    <MobileStateView
-      loading
-      title={translate('tasks.itemDetailContent.loading', 'Loading details…')}
-    />
-  ) : detailError ? (
-    <MobileLoadErrorState
-      error={detailError}
-      onRetry={() => setDetailRefreshSeq((current) => current + 1)}
-    />
-  ) : detailPayload ? (
+  if (detailLoading) {
+    return (
+      <MobileStateView loading title={t('tasks.itemDetailContent.loading', 'Loading details…')} />
+    )
+  }
+  if (detailError) {
+    return (
+      <MobileLoadErrorState
+        error={detailError}
+        onRetry={() => setDetailRefreshSeq((current) => current + 1)}
+      />
+    )
+  }
+  if (!detailPayload) {
+    return null
+  }
+  const isPullRequest =
+    (actionItem.provider === 'github' && actionItem.source.type === 'pr') ||
+    (actionItem.provider === 'gitlab' && actionItem.source.type === 'mr')
+  const facts = factRows(detailPayload, isPullRequest, openSubpage, t, colors)
+  return (
     <>
-      <SectionHeader title={translate('tasks.itemDetailContent.details', 'Details')} />
-      <ListGroup>
-        {detailRows(actionItem, detailPayload).map((row) => (
-          <ListRow key={row.label} title={row.label} value={row.value} />
-        ))}
-      </ListGroup>
-
-      {SHOW_MOBILE_DETAIL_LABEL_CHIPS && detailPayload.labels.length > 0 ? (
-        <View style={styles.chipRow}>
-          {detailPayload.labels.map((label) => (
-            <View key={label} style={styles.detailChip}>
-              <Text style={styles.detailChipText}>{label}</Text>
-            </View>
+      {facts.length > 0 ? (
+        <ListGroup separatorInset={LIST_LEADING_INSET} style={styles.group}>
+          {facts.map((row) => (
+            <ListRow
+              key={row.key}
+              leading={row.icon}
+              title={row.title}
+              value={row.value}
+              valueColor={row.valueColor}
+              navigates={row.onPress !== undefined}
+              onPress={row.onPress}
+            />
           ))}
-        </View>
+        </ListGroup>
       ) : null}
 
-      <SectionHeader title={translate('tasks.itemDetailContent.description', 'Description')} />
-      <View style={styles.itemSectionBody}>{renderMobileTasksItemBodyEditor(model)}</View>
+      <SectionHeader title={t('tasks.itemDetailContent.description', 'Description')} />
+      <View style={styles.body}>{renderMobileTasksItemBodyEditor(model)}</View>
 
       {renderMobileTasksItemFieldEditors(model)}
-
       {renderMobileTasksItemReviewPanel(model)}
-
-      {SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
-      detailPayload.provider === 'github' &&
-      actionItem.provider === 'github' &&
-      actionItem.source.type === 'pr' ? (
-        <View>
-          <SectionHeader
-            title={translate('tasks.itemDetailContent.checks', 'Checks')}
-            trailing={
-              <View style={styles.inlineActionRow}>
-                <Pressable
-                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
-                  disabled={mutatingStatus}
-                  onPress={() => void refreshGitHubChecks(actionItem)}
-                >
-                  <Text style={styles.inlineSaveText}>
-                    {translate('common.refresh', 'Refresh')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
-                  disabled={mutatingStatus || !detailPayload.checks.some(isBrokenCheck)}
-                  onPress={() => void rerunGitHubChecks(actionItem, true)}
-                >
-                  <Text style={styles.inlineSaveText}>
-                    {translate('tasks.rerunUnsuccessful', 'Retry checks')}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
-                  disabled={mutatingStatus || detailPayload.checks.length === 0}
-                  onPress={() => void rerunGitHubChecks(actionItem, false)}
-                >
-                  <Text style={styles.inlineSaveText}>
-                    {translate('tasks.itemDetailContent.rerunAll', 'Rerun all')}
-                  </Text>
-                </Pressable>
-              </View>
-            }
-          />
-          <View style={styles.itemSectionBody}>
-            {detailPayload.checks.length === 0 ? (
-              <Text style={styles.detailMuted}>
-                {translate('tasks.itemDetailContent.noChecks', 'No checks found.')}
-              </Text>
-            ) : (
-              detailPayload.checks.map((check) => (
-                <Pressable
-                  key={`${check.name}:${check.status}:${check.url ?? ''}`}
-                  style={({ pressed }) => [
-                    styles.fileActionRow,
-                    pressed && { backgroundColor: colors.translucentFill }
-                  ]}
-                  disabled={!check.url}
-                  onPress={() => {
-                    if (check.url) {
-                      void openExternalLink(check.url)
-                    }
-                  }}
-                >
-                  <Text style={styles.detailLine} numberOfLines={2}>
-                    {check.name} · {check.conclusion ?? check.status}
-                  </Text>
-                  {check.url ? <ExternalLink size={14} color={colors.textSecondary} /> : null}
-                </Pressable>
-              ))
-            )}
-          </View>
-        </View>
-      ) : null}
-
       {renderMobileTasksItemFiles(model)}
 
-      {SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
-      detailPayload.provider === 'gitlab' &&
-      actionItem.provider === 'gitlab' &&
-      actionItem.source.type === 'mr' ? (
-        <View>
-          <SectionHeader
-            title={translate('tasks.itemDetailContent.pipeline', 'Pipeline')}
-            trailing={
-              detailPayload.pipelineJobs.length
-                ? pipelineJobsSummary(detailPayload.pipelineJobs.length)
-                : translate('tasks.itemDetailContent.none', 'None')
-            }
-          />
-          <View style={styles.itemSectionBody}>
-            {detailPayload.pipelineJobs.length === 0 ? (
-              <Text style={styles.detailMuted}>
-                {translate(
-                  'tasks.itemDetailContent.noPipelineRuns',
-                  'No pipeline runs for this MR.'
-                )}
-              </Text>
-            ) : (
-              detailPayload.pipelineJobs.map((job) => {
-                const duration = formatDurationSeconds(job.duration)
-                return (
-                  <Pressable
-                    key={`${job.id ?? job.stage}:${job.name}`}
-                    style={({ pressed }) => [styles.fileCard, pressed && pressedStyle]}
-                    disabled={!job.webUrl}
-                    onPress={() => {
-                      if (job.webUrl) {
-                        void openExternalLink(job.webUrl)
-                      }
-                    }}
-                  >
-                    <View style={styles.fileActionRow}>
-                      <Text style={styles.detailLine} numberOfLines={2}>
-                        {job.name}
-                      </Text>
-                      <View
-                        style={[
-                          styles.pipelineStatusChip,
-                          getGitLabPipelineStatusStyle(job.status)
-                        ]}
-                      >
-                        <Text style={styles.pipelineStatusText}>{job.status}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.detailMuted}>
-                      {[job.stage, duration].filter(Boolean).join(' · ')}
-                    </Text>
-                  </Pressable>
-                )
-              })
-            )}
-          </View>
-        </View>
-      ) : null}
-
-      {SHOW_MOBILE_LINEAR_DETAIL_TOOLS &&
-      detailPayload.provider === 'linear' &&
-      actionItem.provider === 'linear' ? (
-        <View>
-          <SectionHeader
-            title={translate('tasks.itemDetailContent.subIssues', 'Sub-issues')}
-            trailing={String(
-              detailPayload.children.length || translate('tasks.itemDetailContent.none', 'None')
-            )}
-          />
-          <View style={styles.itemSectionBody}>
-            {detailPayload.children.length === 0 ? (
-              <Text style={styles.detailMuted}>
-                {translate('tasks.itemDetailContent.noSubIssues', 'No sub-issues.')}
-              </Text>
-            ) : (
-              detailPayload.children.map((child) => (
-                <Pressable
-                  key={child.id}
-                  style={({ pressed }) => [
-                    styles.fileActionRow,
-                    pressed && { backgroundColor: colors.translucentFill }
-                  ]}
-                  disabled={mutatingStatus}
-                  onPress={() => void openLinearSubIssue(child, actionItem.source.workspaceId)}
-                >
-                  <Text style={styles.detailLine}>
-                    {child.identifier} · {child.title}
-                  </Text>
-                  <Text style={styles.detailSectionMeta}>{translate('common.open', 'Open')}</Text>
-                </Pressable>
-              ))
-            )}
-            <TextField
-              style={styles.stackedInput}
-              value={linearSubIssueTitle}
-              onChangeText={setLinearSubIssueTitle}
-              placeholder={translate('tasks.itemDetailContent.subIssueTitle', 'Sub-issue title')}
-            />
-            <Pressable
-              style={({ pressed }) => [styles.inlineSaveButton, pressed && pressedStyle]}
-              disabled={mutatingStatus || linearSubIssueTitle.trim().length === 0}
-              onPress={() => void createLinearSubIssue(actionItem)}
-            >
-              <Text style={styles.inlineSaveText}>
-                {translate('tasks.itemDetailContent.addSubIssue', 'Add sub-issue')}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
-
       <SectionHeader
-        title={translate('tasks.itemDetailContent.discussion', 'Discussion')}
-        trailing={discussionSummary(detailPayload.comments.length)}
+        title={t('tasks.itemDetailContent.discussion', 'Discussion')}
+        trailing={
+          detailPayload.comments.length > 0 ? String(detailPayload.comments.length) : undefined
+        }
       />
-      <View style={styles.itemSectionBody}>
+      <View style={styles.body}>
         {detailPayload.comments.length === 0 ? (
-          <Text style={styles.detailMuted}>
-            {translate('tasks.itemDetailContent.noComments', 'No comments.')}
+          <Text style={legacyStyles.detailMuted}>
+            {discussionSummary(t, detailPayload.comments.length)}
           </Text>
         ) : (
           detailCommentGroups.map(renderDetailCommentGroup)
         )}
         {commentSendNotice ? (
-          <Text style={styles.detailError}>{commentSendNotice.text}</Text>
+          <Text style={legacyStyles.detailError}>{commentSendNotice.text}</Text>
         ) : null}
         {(detailPayload.provider === 'github' && actionItem.provider === 'github') ||
         (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab')
@@ -358,5 +265,10 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
           : null}
       </View>
     </>
-  ) : null
+  )
 }
+
+const stylesSheet = themedStyleSheet((colors) => ({
+  group: { backgroundColor: colors.bgPanel, marginTop: spacing.lg },
+  body: { paddingHorizontal: spacing.lg, gap: spacing.sm }
+}))

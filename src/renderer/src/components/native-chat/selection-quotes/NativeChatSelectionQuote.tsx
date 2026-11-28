@@ -3,9 +3,9 @@ import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import {
   formatNativeChatQuote,
-  readNativeChatQuotableSelection,
-  readNativeChatTranscriptSelection
-} from './native-chat-quote-selection'
+  readNativeChatQuotableSelection
+} from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
+import { readNativeChatTranscriptSelection } from './native-chat-transcript-selection'
 import { SelectionAddToChatPopover } from './SelectionAddToChatPopover'
 
 function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
@@ -19,13 +19,26 @@ function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
   }
 }
 
+/** A box a selection is quoted into: chat's composer, or an item's comment box. */
+export type NativeChatQuoteTarget = Pick<NativeChatComposerHandle, 'acceptsText' | 'appendText'>
+
+/** The quote target of a box built on chat's composer. */
+export function composerQuoteTarget(
+  composer: RefObject<NativeChatComposerHandle | null>
+): NativeChatQuoteTarget {
+  return {
+    acceptsText: () => composer.current?.acceptsText() === true,
+    appendText: (text, options) => composer.current?.appendText(text, options)
+  }
+}
+
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
   enabled
 }: {
   rootRef: RefObject<HTMLElement | null>
-  composerRef: RefObject<NativeChatComposerHandle | null>
+  composerRef: RefObject<NativeChatQuoteTarget | null>
   enabled: boolean
 }): React.JSX.Element {
   return (

@@ -2,7 +2,7 @@ import {
   agentSessionConversationCommandFields,
   type AgentSessionConversationCommand,
   type AgentSessionConversationCommandResult
-} from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+} from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
@@ -76,7 +76,7 @@ export async function dispatchMobileStructuredCommand(input: {
     ...input.controller,
     runConversationCommand: async (command, instructions) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
-        mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
+        mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold), translate)
       // A command on its way is the agent's work in flight.
       if (input.pending.current) {
         return { accepted: false, error: held('working') }

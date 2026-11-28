@@ -4,11 +4,16 @@ import {
 } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { fitInteractivePrompt } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { parseAskFromToolInput } from '../../../../../shared/native-chat/input/native-chat-ask'
+import {
+  isOmpAskFormInput,
+  OMP_ASK_TOOL
+} from '../../../../../shared/native-chat/input/questions/omp-ask-form-input'
 import type {
   NativeChatBlock,
   NativeChatSubagentState
 } from '../../../../../shared/native-chat/native-chat-types'
 import { boundSubagentEntryId } from '../../../../native-chat/subagent-entry-id-bounds'
+import { sliceAtCodeUnitLimit } from '../../../../../shared/text/surrogate-safe-text-slice'
 import type { RpcContext } from '../../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
@@ -23,7 +28,7 @@ const MOBILE_SUBAGENT_CAP = 64
 const TRUNCATION_MARKER = '\n… (truncated)'
 
 function clip(text: string, cap: number): string {
-  return text.length > cap ? text.slice(0, cap) + TRUNCATION_MARKER : text
+  return text.length > cap ? sliceAtCodeUnitLimit(text, cap) + TRUNCATION_MARKER : text
 }
 
 export function sanitizeNativeChatRpcBlock(
@@ -88,16 +93,20 @@ function fitAskToolInput(block: Extract<NativeChatBlock, { type: 'tool-call' }>)
   if (typeof input === 'string' && input.length <= MOBILE_BLOCK_CHAR_CAP) {
     return input
   }
-  if (!parseAskFromToolInput(name, input)) {
+  const ask = parseAskFromToolInput(name, input)
+  if (!ask) {
     return input
   }
   const encoded = typeof input === 'string' ? input : JSON.stringify(input)
   if (encoded.length <= MOBILE_BLOCK_CHAR_CAP) {
     return input
   }
-  const fitted = fitInteractivePrompt(encoded, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
+  // OMP's html form cannot be shortened; its questions[] shape can, and the `ask` reader falls back to it.
+  const htmlForm = name === OMP_ASK_TOOL && isOmpAskFormInput(input)
+  const shortenable = htmlForm ? JSON.stringify({ questions: ask.questions }) : encoded
+  const fitted = fitInteractivePrompt(shortenable, (text) => text.length <= MOBILE_BLOCK_CHAR_CAP)
   if (fitted === null) {
-    return input
+    return htmlForm ? { questions: ask.questions } : input
   }
   return typeof input === 'string' ? fitted : JSON.parse(fitted)
 }
@@ -114,7 +123,7 @@ function sanitizeToolInput(
   if (typeof value === 'string') {
     const length = Math.min(value.length, budget.remaining)
     budget.remaining -= length
-    return length < value.length ? `${value.slice(0, length)}… (truncated)` : value
+    return length < value.length ? `${sliceAtCodeUnitLimit(value, length)}… (truncated)` : value
   }
   if (!value || typeof value !== 'object' || depth >= 5) {
     return value && typeof value === 'object' ? '… (truncated)' : value
@@ -138,7 +147,7 @@ function sanitizeToolInput(
       result['…'] = 'truncated'
       break
     }
-    let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
+    let boundedKey = sliceAtCodeUnitLimit(key, Math.min(budget.remaining, 128))
     // Suffix colliding bounded keys so shared long prefixes cannot silently lose sibling fields.
     if (Object.hasOwn(result, boundedKey)) {
       boundedKey = `${boundedKey}~${count}`

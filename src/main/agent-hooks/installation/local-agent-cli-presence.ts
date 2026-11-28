@@ -10,7 +10,13 @@ import {
 } from '../../../shared/agent-launch/installation/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import {
+  getTuiAgentDetectCommands,
+  TUI_AGENT_CONFIG
+} from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
+import { normalizePathEntry } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   hydrateShellPath,
   mergePathSegments
@@ -20,15 +26,16 @@ import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-me
 import {
   isUnderWindowsDriveMount,
   readGuestWindowsDriveMounts
-} from '../../ipc/wsl-guest-windows-drive-path'
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
-export type LocalCliPresenceByAgent = Partial<
-  Record<
-    AgentHookTarget,
-    { state: 'found'; executablePath: string } | { state: Exclude<LocalCliPresenceState, 'found'> }
-  >
+type LocalCliPresence =
+  | { state: 'found'; executablePath: string }
+  | { state: Exclude<LocalCliPresenceState, 'found'> }
+export type LocalCliPresenceByAgent<K extends string = AgentHookTarget> = Partial<
+  Record<K, LocalCliPresence>
 >
+type CliPresenceTarget<K extends string> = Omit<ManagedAgentHookTarget, 'agent'> & { agent: K }
 
 type FileProbe = {
   isExecutableFile: (filePath: string) => Promise<boolean>
@@ -76,8 +83,15 @@ async function isExecutableFile(filePath: string, platform: NodeJS.Platform): Pr
   }
 }
 
-function pathEntries(pathEnv: string, delimiter: string): string[] {
-  return [...new Set(pathEnv.split(delimiter).filter(Boolean))]
+function pathEntries(pathEnv: string, delimiter: string, platform: NodeJS.Platform): string[] {
+  return [
+    ...new Set(
+      pathEnv
+        .split(delimiter)
+        .map((entry) => normalizePathEntry(platform, entry))
+        .filter(Boolean)
+    )
+  ]
 }
 
 function windowsPathExts(value: string | undefined): string[] {
@@ -107,7 +121,7 @@ function candidateFileNames(
 
 function overrideTokenForAgent(
   settings: CommandOverrideSettings,
-  target: ManagedAgentHookTarget,
+  target: Pick<ManagedAgentHookTarget, 'tuiAgent'>,
   platform: NodeJS.Platform
 ): string | null {
   return extractExecutableToken(settings?.agentCmdOverrides?.[target.tuiAgent], { platform })
@@ -189,16 +203,16 @@ async function resolveSearchPath(
   return env[resolvePathEnvKey(env, platform)] ?? ''
 }
 
-export async function detectLocalManagedAgentCliPresence(
-  targets: readonly ManagedAgentHookTarget[],
+export async function detectLocalManagedAgentCliPresence<K extends string = AgentHookTarget>(
+  targets: readonly CliPresenceTarget<K>[],
   settings: CommandOverrideSettings,
   options: DetectOptions = {}
-): Promise<LocalCliPresenceByAgent> {
+): Promise<LocalCliPresenceByAgent<K>> {
   await maybeHydrateShellPath(options)
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
+  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter, platform).filter(
     (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
   )
   const homeDir = options.homeDir ?? homedir()
@@ -228,7 +242,7 @@ export async function detectLocalManagedAgentCliPresence(
       found.set(uniqueCandidates[index], executablePath)
     }
   }
-  const result: LocalCliPresenceByAgent = {}
+  const result: LocalCliPresenceByAgent<K> = {}
   for (const target of targets) {
     const override = overrideTokenForAgent(settings, target, platform)
     if (override && hasPathSeparatorToken(override)) {
@@ -251,4 +265,21 @@ export async function detectLocalManagedAgentCliPresence(
       : { state: 'missing' }
   }
   return result
+}
+
+/** Probes TUI agents that have no managed hook target by the same PATH and override rule. */
+export function detectLocalTuiAgentCliPresence<K extends TuiAgent>(
+  agents: readonly K[],
+  settings: CommandOverrideSettings,
+  options: DetectOptions = {}
+): Promise<LocalCliPresenceByAgent<K>> {
+  return detectLocalManagedAgentCliPresence(
+    agents.map((agent) => ({
+      agent,
+      tuiAgent: agent,
+      executableCandidates: getTuiAgentDetectCommands(TUI_AGENT_CONFIG[agent])
+    })),
+    settings,
+    options
+  )
 }

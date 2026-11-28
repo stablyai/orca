@@ -31,6 +31,7 @@ import {
 } from '../pane-moves/pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { loadPaneChange } from './pane-admission-change'
 import {
   editorViewsOfModel,
   type PartitionEditorViews
@@ -50,6 +51,8 @@ export type PaneLayoutChange<T> = {
   views?: PartitionEditorViews
   /** Run after persistence; never expose effects in replies. */
   effects?: LayoutEffects
+  /** The workspaces whose layout the change replaced; absent means any. */
+  workspaces?: ReadonlySet<string>
 }
 
 /** Runtime facts unavailable from stored layout. */
@@ -64,12 +67,17 @@ export function admitPaneToSession(
   admission: TerminalPaneAdmission
 ): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
   const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
-  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
+  const { loaded, write } = loadPaneChange(hostId, session, {
+    workspace: admission.workspace,
+    tabId: admission.tabId,
+    leafIds: admission.type === 'createTerminalTab' ? [leafId] : [admission.leafId, leafId],
+    groupId: admission.type === 'createTerminalTab' ? admission.groupId : undefined
+  })
   const workspace = loaded.layout.workspaces[admission.workspace]
   if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
     return { value: 'exists', session: null }
   }
-  const change = applyToSession(loaded, admission, false, {}, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, admission, false, {}, write)
   return { ...change, value: change.value.ok ? 'admitted' : change.value.code }
 }
 
@@ -78,17 +86,13 @@ export function withdrawPaneFromSession(
   session: WorkspaceSessionState,
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
-  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
-  const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
+  const { loaded, write } = loadPaneChange(hostId, session, {
+    workspace: pane.workspace,
+    tabId: pane.tabId,
+    leafIds: [pane.leafId]
+  })
+  const change = applyToSession(loaded, pane, false, {}, write)
   return { ...change, value: change.value.ok ? null : change.value.code }
-}
-
-/** Main-owned layouts patch changed records; window-owned builds rewrite the partition. */
-function touchedRecordsWrite(
-  session: WorkspaceSessionState,
-  loaded: LoadedWorkspaceLayout
-): ((after: WorkspaceSessionState) => WorkspaceSessionState | null) | undefined {
-  return ORCA_LAYOUT_OWNER_IS_MAIN ? (after) => touchedRecords(session, loaded, after) : undefined
 }
 
 function touchedRecords(
@@ -117,15 +121,21 @@ export function applyCommandToSession(
   if (taken) {
     return { value: taken, session: null }
   }
-  return applyToSession(loaded, command, views !== undefined, live, (after) => {
+  let prunedElsewhere = false
+  const change = applyToSession(loaded, command, views !== undefined, live, (after) => {
     const patched = touchedRecords(session, loaded, after)
-    return patched
-      ? followRemoteSessionAfterPaneDetach(
-          command,
-          followRemoteSessionAfterPaneClose(command, session, prunedOnRecord(command, patched))
-        )
-      : null
+    if (!patched) {
+      return null
+    }
+    const pruned = prunedOnRecord(command, patched)
+    prunedElsewhere = pruned.pruned
+    return followRemoteSessionAfterPaneDetach(
+      command,
+      followRemoteSessionAfterPaneClose(command, session, pruned.session)
+    )
   })
+  // Pruned closed-tab records can belong to any workspace.
+  return prunedElsewhere ? { ...change, workspaces: undefined } : change
 }
 
 /** Apply renames on one partition load; return each refused rename and code. */
@@ -150,7 +160,8 @@ export function applyRenamesToSession(
     session:
       layout === loaded.layout
         ? null
-        : touchedRecords(session, loaded, saveWorkspaceLayout({ ...loaded, layout }))
+        : touchedRecords(session, loaded, saveWorkspaceLayout({ ...loaded, layout })),
+    workspaces: replacedWorkspaces(loaded.layout, layout)
   }
 }
 
@@ -180,24 +191,42 @@ function applyToSession(
         value: { ok: true, result: applied.result },
         session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
         effects: applied.effects,
+        workspaces: replacedWorkspaces(loaded.layout, applied.model),
         ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
     : { value: { ok: false, code: applied.code }, session: null }
 }
 
+/** Commands share untouched workspaces with the loaded model, so a replaced object is a written workspace. */
+function replacedWorkspaces(
+  before: WorkspaceLayoutModel,
+  after: WorkspaceLayoutModel
+): Set<string> {
+  const keys = new Set<string>()
+  for (const key of new Set([
+    ...Object.keys(before.workspaces),
+    ...Object.keys(after.workspaces)
+  ])) {
+    if (before.workspaces[key] !== after.workspaces[key]) {
+      keys.add(key)
+    }
+  }
+  return keys
+}
+
 function prunedOnRecord(
   command: LayoutCommand,
   session: WorkspaceSessionState
-): WorkspaceSessionState {
-  return command.type === 'closeTabs' && command.recordClose
-    ? {
-        ...session,
-        closedTerminalTabTombstonesByTabId: pruneClosedTerminalTabTombstones(
-          session.closedTerminalTabTombstonesByTabId,
-          Date.now()
-        )
-      }
-    : session
+): { session: WorkspaceSessionState; pruned: boolean } {
+  if (command.type !== 'closeTabs' || !command.recordClose) {
+    return { session, pruned: false }
+  }
+  const records = session.closedTerminalTabTombstonesByTabId
+  const kept = pruneClosedTerminalTabTombstones(records, Date.now())
+  return {
+    session: { ...session, closedTerminalTabTombstonesByTabId: kept },
+    pruned: Object.keys(kept).length !== Object.keys(records ?? {}).length
+  }
 }
 
 function closedIds(

@@ -1,6 +1,7 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
 import { useTranslate } from '@/i18n/use-translate'
@@ -45,6 +46,8 @@ const WORKTREE_SIDEBAR_SCROLL_STYLE: React.CSSProperties = {
   overflowAnchor: 'none'
 }
 
+const EMPTY_DRAG_UNITS_BY_ROW: ReadonlyMap<number, { identity: string }> = new Map()
+
 export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewport(
   props: VirtualizedWorktreeViewportProps
 ) {
@@ -70,7 +73,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const projectHeaderHostContexts = useProjectHeaderHostContexts({
     rows,
     visibleProjectRepoIdsBySection: props.visibleProjectRepoIdsBySection,
@@ -163,7 +166,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     worktreeMap,
     worktreeLineageById,
-    worktreeDragGroups: session.worktreeDragGroups,
+    getWorktreeDragGroups: session.getWorktreeDragGroups,
     keepsFolderParent: rowGeometry.keepsFolderParent,
     captureFolderRetention: rowGeometry.captureFolderRetention
   })
@@ -337,7 +340,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
-    dragUnitsByRow: rowGeometry.ranges.byRow,
+    dragUnitsByRow:
+      runtime.worktreeDragState.previewOffsetsByWorktreeId.size > 0
+        ? rowGeometry.getRanges().byRow
+        : EMPTY_DRAG_UNITS_BY_ROW,
     hiddenDragRanges,
     props: rowProps,
     projection,

@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -26,10 +27,15 @@ import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { isWslHostOffForForge, withForgeHostOffSkip } from '../repositories/wsl-host-off-forge'
-import { cachedPRCandidateFields } from './pr-refresh-cached-candidate-fields'
+import {
+  cachedPRCandidateFields,
+  prReadRpcOptions,
+  refetchPRByBranch
+} from './pr-refresh-cached-candidate-fields'
 import { lookupPRForBranchOverIpc } from './pr-for-branch-ipc-fallback'
 import { setGitHubPRResultCaches, shouldPreserveExistingPRForFallbackMiss } from './pr-result-cache'
 import { findWorktreeById, isStaleExactLinkedPRLookup } from '../refresh/worktree-refresh'
+import { getWorktreeGitHubPRUrl } from '../../../../../shared/worktree/github-linked-item-url'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
@@ -85,7 +91,10 @@ export function startPullRequestLookup(args: {
         }
         return cached?.data ?? null
       }
-      const checkContract = capturePRCheckContract(get, runtimeRepo?.target ?? { kind: 'local' })
+      const checkContract = capturePRCheckContract(
+        readAppRuntimeStatuses,
+        runtimeRepo?.target ?? { kind: 'local' }
+      )
       const candidateWorktree = options?.worktreeId
         ? findWorktreeById(get(), options.worktreeId, executionHostId)
         : null
@@ -94,6 +103,10 @@ export function startPullRequestLookup(args: {
           ? captureLinkedReviewClearScope(get(), options?.worktreeId, repo)
           : undefined
       const requestHeadOid = candidateWorktree?.head ?? null
+      const linkedPRUrl =
+        candidateWorktree?.linkedPR === linkedPRNumber
+          ? getWorktreeGitHubPRUrl(candidateWorktree, linkedPRNumber)
+          : undefined
       let transportFailed = false
       const response = runtimeRepo
         ? callRuntimeRpc<PRSnapshotReply | PRInfo | null>(
@@ -103,6 +116,7 @@ export function startPullRequestLookup(args: {
               repo: runtimeRepo.repo.id,
               branch,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               currentHeadOid: requestHeadOid,
               ...(options?.reason ? { reason: options.reason } : {}),
               ...(options?.reason === 'swr'
@@ -118,7 +132,7 @@ export function startPullRequestLookup(args: {
                 ? { fallbackPRNumber, acceptMergedFallbackPR: fallbackPRSource !== null }
                 : {})
             },
-            { timeoutMs: 30_000, signal: options?.signal, ...checkContract.sourceRpcOptions }
+            { ...prReadRpcOptions(options), ...checkContract.sourceRpcOptions }
           ).then((result) =>
             isPRRevalidationOnly(result) ? result : normalizeGitHubPRForBranchOutcome(result)
           )
@@ -132,6 +146,7 @@ export function startPullRequestLookup(args: {
               worktreeId: options?.worktreeId,
               currentHeadOid: requestHeadOid,
               linkedPRNumber,
+              ...(linkedPRUrl ? { linkedPRUrl } : {}),
               fallbackPRNumber,
               fallbackPRSource,
               connectionId: repo?.connectionId ?? null,
@@ -248,16 +263,7 @@ export function startPullRequestLookup(args: {
             true
           )
           // Re-resolve by branch now so Checks recover this refresh instead of serving the stale linked PR.
-          void get()
-            .fetchPRForBranch(repoPath, branch, {
-              force: true,
-              repoId,
-              repoOwnerExecutionHostId: executionHostId,
-              worktreeId: options.worktreeId,
-              reason: options.reason,
-              ...(options.userRefresh === true ? { userRefresh: true } : {})
-            })
-            .catch((err) => console.warn('Branch-scoped PR refetch skipped:', err))
+          refetchPRByBranch(get(), repoPath, branch, options, { repoId, executionHostId })
         }
       }
       if (

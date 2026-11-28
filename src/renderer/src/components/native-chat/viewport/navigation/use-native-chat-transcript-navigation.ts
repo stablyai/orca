@@ -1,7 +1,13 @@
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import {
+  useBotLinkItemTarget,
+  consumeBotLinkItem
+} from '@/lib/agent-session/open/bot-link-item-target'
 // One navigation at a time — a rail pick or a diff reveal — pinned until it lands; rail picks and a subagent view's history page through one cancellable history loop.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { latestAgentSessionContextClearSequence } from '../../../../../../shared/agent-session/agent-session-context-clear'
+import { latestAgentSessionContextClearSequence } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type {
@@ -13,19 +19,23 @@ import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat
 import type { NativeChatRailItem } from '../rail/native-chat-message-rail-items'
 import type { NativeChatOlderPageResult } from '../history/native-chat-pagination'
 import { nativeChatSubagentHistoryStep } from '../../subagents/native-chat-subagent-history'
-import { nativeChatSlotIndexOf } from '../../conversation/slots/native-chat-transcript-slot-selection'
+import {
+  nativeChatSlotIndexOf,
+  nativeChatSlotKeyAt
+} from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import { nativeChatRailJumpStep, useNativeChatHistoryJump } from './use-native-chat-history-jump'
 import { useNativeChatRailJumpLanding } from './use-native-chat-rail-jump-landing'
+import { useNativeChatReadingPosition } from './use-native-chat-reading-position'
 import type { NativeChatAlignEdge } from '../virtualization/use-native-chat-viewport-align'
 
 type NavigationRequest =
   | { kind: 'diff'; target: NativeChatDiffReveal }
-  | { kind: 'rail'; messageId: string; requestId: number }
+  | { kind: 'rail'; messageId: string; requestId: number; fromLink?: true; offset?: number }
 
 export type NativeChatNavigationRequest = {
   revealedDiff: NativeChatDiffReveal | null
-  railJump: { messageId: string; requestId: number } | null
+  railJump: { messageId: string; requestId: number; fromLink?: true; offset?: number } | null
   /** The one slot the window keeps mounted until the request lands. */
   revealIndex: number
   issue: (request: NavigationRequest | null) => void
@@ -33,6 +43,20 @@ export type NativeChatNavigationRequest = {
 }
 
 /** Read before the window mounts rows, so the request's slot stays drawn. */
+/** A waiting message's drawn row: those rows sit after the window, unindexed. */
+function waitingRowOf(
+  container: HTMLElement | null,
+  waitingSlots: readonly NativeChatTranscriptSlot[],
+  messageId: string
+): HTMLElement | null {
+  const index = waitingSlots.findIndex(
+    (_, at) => nativeChatSlotKeyAt(waitingSlots, at) === messageId
+  )
+  return index === -1
+    ? null
+    : (container?.querySelector<HTMLElement>(`[data-native-chat-waiting-index="${index}"]`) ?? null)
+}
+
 export function useNativeChatNavigationRequest(
   slots: readonly NativeChatTranscriptSlot[]
 ): NativeChatNavigationRequest {
@@ -58,23 +82,31 @@ export function useNativeChatNavigation({
   request,
   rail,
   slots,
+  waitingSlots,
   conversation,
   subagentRows,
   roster,
   journalItems,
   subagentId,
   sessionKey,
+  transcriptKey,
+  sessionId,
+  ready = true,
   isVisible,
   loadEarlier,
   holdHistory,
+  releaseHistory,
   scrollRef,
   scrollMessageToTop,
   readerLeavesEnd,
+  readerAtEnd,
   scrollToBottom
 }: {
   request: NativeChatNavigationRequest
   rail: { items: readonly NativeChatRailItem[]; onActivate: (id: string) => void }
   slots: readonly NativeChatTranscriptSlot[]
+  /** Rows held behind the running turn, drawn after the window. */
+  waitingSlots: readonly NativeChatTranscriptSlot[]
   conversation: readonly NativeChatMessage[]
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   roster: StructuredAgentSubagentRoster | undefined
@@ -82,13 +114,19 @@ export function useNativeChatNavigation({
   /** A subagent's view, which pages older history until the agent's spawn is loaded. */
   subagentId: string | null
   sessionKey: string
+  /** This transcript within its chat tab: session, subagent and conversation. */
+  transcriptKey: string
+  sessionId?: string | null
+  ready?: boolean
   isVisible: boolean
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** Keeps paged history loaded while the reader stays at the end. */
   holdHistory: () => void
+  releaseHistory: () => void
   scrollRef: React.RefObject<HTMLDivElement | null>
-  scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
+  scrollMessageToTop: (element: HTMLElement, edge?: NativeChatAlignEdge, inset?: number) => void
   readerLeavesEnd: () => void
+  readerAtEnd: () => boolean
   scrollToBottom: () => void
 }) {
   const { issue, nextRequestId } = request
@@ -100,6 +138,45 @@ export function useNativeChatNavigation({
   )
   const historyJump = useNativeChatHistoryJump({
     step: (target) => {
+      if (target.kind === 'item') {
+        const pending = journalItems?.find((item) => item.itemId === target.id)?.body
+        if (
+          (pending?.kind === 'approval' || pending?.kind === 'question') &&
+          pending.resolution.state === 'pending'
+        ) {
+          return 'landed'
+        }
+        const index = nativeChatSlotIndexOf(slots, target.id)
+        const waiting =
+          index < 0 && target.offset !== undefined
+            ? waitingRowOf(scrollRef.current, waitingSlots, target.id)
+            : null
+        if (waiting) {
+          readerLeavesEnd()
+          scrollMessageToTop(waiting, 'start', target.offset)
+          return 'landed'
+        }
+        // A returning reader's row inside a collapsed turn is loaded but drawn by nothing; don't page for it.
+        if (
+          index < 0 &&
+          target.offset !== undefined &&
+          conversation.some((message) => message.id === target.id)
+        ) {
+          return 'stop'
+        }
+        if (index < 0) {
+          holdHistory()
+          return 'page'
+        }
+        issue({
+          kind: 'rail',
+          messageId: target.id,
+          requestId: nextRequestId(),
+          fromLink: true,
+          offset: target.offset
+        })
+        return 'landed'
+      }
       if (target.kind === 'rail') {
         return nativeChatRailJumpStep(rail.items, target.id, requestRailJump)
       }
@@ -142,11 +219,70 @@ export function useNativeChatNavigation({
     },
     [beginNavigation, issue, nextRequestId, readerLeavesEnd]
   )
+  const restoring = useNativeChatReadingPosition({
+    positionKey: transcriptKey,
+    isVisible,
+    ready,
+    scrollRef,
+    readerAtEnd,
+    messageIdAt: (index) => nativeChatSlotKeyAt(slots, index),
+    waitingMessageIdAt: (index) => nativeChatSlotKeyAt(waitingSlots, index),
+    jumpTo: ({ messageId, offset }, settled, budget) =>
+      startHistoryJump({ kind: 'item', id: messageId, offset, budget }, (result) => {
+        if (result === 'missing' || result === 'failed') {
+          releaseHistory()
+          if (subagentId === null) {
+            scrollToBottom()
+          } else {
+            startHistoryJump({ kind: 'subagent', agentId: subagentId })
+          }
+        }
+        settled(result)
+      }),
+    onGiveUp: () => {
+      if (subagentId !== null) {
+        startHistoryJump({ kind: 'subagent', agentId: subagentId })
+      }
+    }
+  })
   useEffect(() => {
-    if (subagentId !== null && isVisible) {
+    // A returning reader's own row lies past the subagent's spawn, so its restore pages far enough.
+    if (subagentId !== null && isVisible && !restoring()) {
       startHistoryJump({ kind: 'subagent', agentId: subagentId })
     }
-  }, [isVisible, startHistoryJump, subagentId])
+  }, [isVisible, restoring, startHistoryJump, subagentId])
+  const linkTarget = useBotLinkItemTarget((state) => state.target)
+  useEffect(() => {
+    if (isVisible && ready && linkTarget && linkTarget.sessionId === sessionId) {
+      const itemId = linkTarget.itemId
+      if (itemId === undefined) {
+        consumeBotLinkItem(linkTarget)
+        beginNavigation()
+        scrollToBottom()
+        return
+      }
+      startHistoryJump({ kind: 'item', id: itemId }, (result) => {
+        if (useBotLinkItemTarget.getState().target !== linkTarget) {
+          return
+        }
+        consumeBotLinkItem(linkTarget)
+        if (result === 'missing' || result === 'failed') {
+          releaseHistory()
+          scrollToBottom()
+          toast.info(translate('nativeChat.linkedMessageMissing', "Couldn't find that message."))
+        }
+      })
+    }
+  }, [
+    isVisible,
+    ready,
+    linkTarget,
+    sessionId,
+    startHistoryJump,
+    beginNavigation,
+    releaseHistory,
+    scrollToBottom
+  ])
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()
@@ -157,6 +293,7 @@ export function useNativeChatNavigation({
     scrollRef,
     scrollMessageToTop,
     onActivate: rail.onActivate,
+    onScroll: request.railJump?.fromLink ? readerLeavesEnd : undefined,
     release: issue
   })
   return {

@@ -52,7 +52,3 @@ export function getWindowsRemoteWriteCapabilities(
   }
   return rememberCapabilityCache(key, cache)
 }
-
-export function clearWindowsRemoteWriteCapabilitiesForTests(): void {
-  capabilitiesByExecutionHost.clear()
-}

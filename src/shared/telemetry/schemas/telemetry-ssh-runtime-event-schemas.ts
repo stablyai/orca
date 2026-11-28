@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 // Measure runtime compatibility with closed enums; hostnames, users, paths and loader errors would identify machines.
 
@@ -75,20 +76,22 @@ export const SSH_RUNTIME_DURATION_BUCKETS = ['lt_5s', '5s_15s', '15s_60s', 'gte_
 
 export const SSH_RUNTIME_OUTCOME_VALUES = ['resolved', 'unverifiable', 'failed'] as const
 
-export const sshRemoteRuntimeResolvedSchema = z
-  .object({
-    rung: z.enum(['a', 'b', 'c', 'd', 'legacy']),
-    host_os: z.enum(['linux', 'darwin', 'win32']),
-    host_arch: z.enum(['x64', 'arm64']),
-    host_libc: z.enum(['glibc', 'musl', 'none', 'unknown']),
-    glibc_minor: z.enum(SSH_RUNTIME_GLIBC_MINOR_VALUES),
-    first_refusal: z.enum(SSH_RUNTIME_REFUSAL_VALUES),
-    self_test: z.enum(['passed', 'refused', 'failed', 'unverifiable', 'not_run']),
-    runtime_transfer: z.enum(['uploaded', 'cached', 'none']),
-    // Rung C only: the one rung whose behavior depends on the host's own Node.
-    host_node_major: z.enum(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES).optional(),
-    duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
-    // Failed or unverifiable self-tests settle no rung; include them to avoid measuring only successes.
-    outcome: z.enum(SSH_RUNTIME_OUTCOME_VALUES)
-  })
-  .strict()
+export const sshRemoteRuntimeResolvedSchema = lazyZodSchema(() =>
+  z
+    .object({
+      rung: z.enum(['a', 'b', 'c', 'd', 'legacy']),
+      host_os: z.enum(['linux', 'darwin', 'win32']),
+      host_arch: z.enum(['x64', 'arm64']),
+      host_libc: z.enum(['glibc', 'musl', 'none', 'unknown']),
+      glibc_minor: z.enum(SSH_RUNTIME_GLIBC_MINOR_VALUES),
+      first_refusal: z.enum(SSH_RUNTIME_REFUSAL_VALUES),
+      self_test: z.enum(['passed', 'refused', 'failed', 'unverifiable', 'not_run']),
+      runtime_transfer: z.enum(['uploaded', 'cached', 'none']),
+      // Rung C only: the one rung whose behavior depends on the host's own Node.
+      host_node_major: z.enum(SSH_RUNTIME_HOST_NODE_MAJOR_VALUES).optional(),
+      duration_bucket: z.enum(SSH_RUNTIME_DURATION_BUCKETS),
+      // Failed or unverifiable self-tests settle no rung; include them to avoid measuring only successes.
+      outcome: z.enum(SSH_RUNTIME_OUTCOME_VALUES)
+    })
+    .strict()
+)

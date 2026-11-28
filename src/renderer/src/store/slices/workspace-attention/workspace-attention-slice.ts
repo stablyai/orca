@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand'
+import { chatPaneAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentAttentionUnreadReason } from '@/attention/agent-attention-contract'
 import type { AppState } from '../../types'
 import type { WorkspaceAttentionSlice } from './workspace-attention-contract'
@@ -27,10 +28,11 @@ import {
   type HostScopedWorktreeKey
 } from '../../../../../shared/worktree/host-qualified-identity'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
-import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
@@ -42,7 +44,7 @@ export const createWorkspaceAttentionSlice: StateCreator<
   [],
   [],
   WorkspaceAttentionSlice
-> = (set, get) => {
+> = (set, get, api) => {
   const markTabUnread = (tabId: string, reason: AgentAttentionUnreadReason): void => {
     const state = get()
     if (state.unreadTerminalTabs[tabId]) {
@@ -75,17 +77,18 @@ export const createWorkspaceAttentionSlice: StateCreator<
   /** Removes every marker of the tabs and dismisses their panes' notifications. */
   const removeAndDismiss = (
     tabIds: Iterable<string>,
-    paneKeys?: ReadonlySet<string>,
+    panes?: { keys: ReadonlySet<string> } | { ofTabs: Iterable<string> },
     notificationPaneKeys?: (keys: Iterable<string>) => Set<string>
   ): RemovedAttention | null => {
     const before = get()
     set((s) => {
-      const next = paneKeys
-        ? {
-            unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, new Set(tabIds)),
-            ...removePanesAttention(s, paneKeys)
-          }
-        : removeTabsAttention(s, tabIds)
+      const next =
+        panes && 'keys' in panes
+          ? {
+              unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, new Set(tabIds)),
+              ...removePanesAttention(s, panes.keys)
+            }
+          : removeTabsAttention(s, tabIds, panes?.ofTabs)
       return sameMarkers(s, next) ? s : next
     })
     const removed = collectRemovedAttention(before, get())
@@ -130,7 +133,13 @@ export const createWorkspaceAttentionSlice: StateCreator<
         return
       }
       // Why here too: the bell's marker is written before its delayed banner reaches the attention policy.
-      if (isWorkspaceNotificationMutedBySidebarFilters(get(), worktreeId)) {
+      if (
+        isWorkspaceNotificationMutedBySidebarFilters(
+          get(),
+          runtimeStatusSubscriptionsFor(api).readStatuses(),
+          worktreeId
+        )
+      ) {
         return
       }
       markWorkspaceUnreadFlag(set, get, worktreeId)
@@ -183,7 +192,15 @@ export const createWorkspaceAttentionSlice: StateCreator<
       }
       // Agent acknowledgement may already have removed this scan's completion markers.
       if (
-        removeAndDismiss(targets.map((target) => target.tabId)) !== null ||
+        removeAndDismiss(
+          targets.map((target) => target.tabId),
+          {
+            // A chat's pane markers sit under its conversation address; its tab id may be another's.
+            ofTabs: targets.map((target) =>
+              target.sessionId === undefined ? target.tabId : chatPaneAddressTabId(target.sessionId)
+            )
+          }
+        ) !== null ||
         markersRead ||
         screenArrived
       ) {
@@ -217,10 +234,12 @@ export const createWorkspaceAttentionSlice: StateCreator<
         workspaceMarkerPaneKeysForHost(before, worktreeId, executionHostId, keys)
       const removed = removeAndDismiss(
         workspaceMarkerTabIdsForHost(before, worktreeId, executionHostId),
-        hostPanes([
-          ...Object.keys(before.unreadTerminalPanes),
-          ...Object.keys(before.unreadAgentCompletionPanes)
-        ]),
+        {
+          keys: hostPanes([
+            ...Object.keys(before.unreadTerminalPanes),
+            ...Object.keys(before.unreadAgentCompletionPanes)
+          ])
+        },
         hostPanes
       )
       void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })

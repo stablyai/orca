@@ -109,11 +109,3 @@ export function reloadWslMoveWindowWithWritesHeld(onReloaded: () => void = () =>
     }
   })
 }
-
-export function resetWslMoveWindowWriteHoldForTests(): void {
-  held = false
-  reloadOwed = false
-  commitPending = false
-  getWindow = () => null
-  landOnReload = () => {}
-}

@@ -1,7 +1,10 @@
 import type { AppState } from '../../types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import {
+  chatPaneAddressTabId,
+  chatPaneKey
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { getAgentPaneExecutionHost } from '../agent-status/pane-authority/agent-pane-execution-host'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   completionPaneKeysByTabId,
@@ -45,7 +48,7 @@ export function markerTabPaneKey(state: Pick<AppState, 'terminalLayoutsByTabId'>
   const cacheKey = `${tab.id}\n${tab.sessionId}`
   let paneKey = structuredPaneKeys.get(cacheKey)
   if (paneKey === undefined) {
-    paneKey = structuredAgentSessionPaneKey(tab.id, tab.sessionId)
+    paneKey = chatPaneKey(tab.sessionId)
     structuredPaneKeys.set(cacheKey, paneKey)
     if (structuredPaneKeys.size > 4096) {
       structuredPaneKeys.delete(structuredPaneKeys.keys().next().value!)
@@ -113,7 +116,13 @@ export function workspaceMarkerPaneKeysForHost(
   executionHostId: ExecutionHostId | undefined,
   paneKeys: Iterable<string>
 ): Set<string> {
-  const tabs = new Map(workspaceMarkerTabs(state, workspaceId).map((tab) => [tab.id, tab]))
+  // Keyed as pane keys name each tab: a chat by its conversation's address.
+  const tabs = new Map(
+    workspaceMarkerTabs(state, workspaceId).map((tab) => [
+      tab.sessionId === null ? tab.id : chatPaneAddressTabId(tab.sessionId),
+      tab
+    ])
+  )
   const index = indexWorkspaceTabs(state, workspaceId)
   return new Set(
     [...paneKeys].filter((key) => {
@@ -146,8 +155,8 @@ export function workspaceHasLiveMarkerForHost(
   const liveKeys = workspaceMarkerTabs(state, workspaceId).flatMap((tab) =>
     tab.sessionId === null
       ? [...(completions.get(tab.id) ?? [])]
-      : state.unreadAgentCompletionPanes[structuredAgentSessionPaneKey(tab.id, tab.sessionId)]
-        ? [structuredAgentSessionPaneKey(tab.id, tab.sessionId)]
+      : state.unreadAgentCompletionPanes[chatPaneKey(tab.sessionId)]
+        ? [chatPaneKey(tab.sessionId)]
         : []
   )
   return (

@@ -16,6 +16,7 @@ import {
   readCachedPluginAppTheme
 } from './app-shell/appearance/document-theme'
 import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
+import { installFocusedHostGestureWake } from './runtime/rpc/calls/focused-host-gesture-wake'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -24,12 +25,16 @@ import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root
 import './lib/pane-manager/terminal-rendering/pane-webgl-renderer'
 import { primeTerminalWebglAddon } from './lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'
 import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
-import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
-import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
+import { installBrowserClientPageRenderer } from './components/browser-pane/host-guest/client-pages/browser-client-page-renderer-installation'
+import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/host-guest/client-pages/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
+import {
+  trackPageFocusLossForTerminalIme,
+  trackWindowActivationForTerminalDragRegions
+} from './components/terminal-pane/input/focus/regular-terminal-focus-ownership'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -38,8 +43,12 @@ import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installFocusedHostGestureWake()
 installAppKeyboardRouter()
 installAutomationHostDiagnostic()
+// Track from startup: a browser page can take focus before the lazy terminal chunk mounts.
+trackPageFocusLossForTerminalIme()
+trackWindowActivationForTerminalDragRegions()
 
 if (
   import.meta.env.DEV &&

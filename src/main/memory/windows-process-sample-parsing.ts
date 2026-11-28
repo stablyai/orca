@@ -1,3 +1,4 @@
+import { executableBasename } from './process-index'
 import {
   iterateProcessOutputLines,
   PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS
@@ -9,11 +10,15 @@ export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\Working Set',
   '\\Process(*)\\Private Bytes'
 ] as const
+/** Requested only while agent trees are sampled, which need start order. */
+export const TYPEPERF_START_COUNTER = '\\Process(*)\\Elapsed Time'
+// Elapsed seconds become start order within one sample, so a reused parent PID is detectable.
+const TYPEPERF_START_ORIGIN_TICKS = 10n ** 17n
 
 const TYPEPERF_MAX_INSTANCES = 4_096
-// Derive fields from counter count so adding counters cannot silently reduce supported processes.
-const TYPEPERF_MAX_FIELDS = 1 + TYPEPERF_COUNTERS.length * TYPEPERF_MAX_INSTANCES
-const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
+// Derive both caps from counter count so adding counters cannot silently reduce supported processes.
+const TYPEPERF_MAX_FIELDS = 1 + (TYPEPERF_COUNTERS.length + 1) * TYPEPERF_MAX_INSTANCES
+const TYPEPERF_MAX_LINE_CHARS = (TYPEPERF_COUNTERS.length + 1) * 256 * 1024
 
 export type WindowsProcessResourceRow = {
   pid: number
@@ -24,6 +29,8 @@ export type WindowsProcessResourceRow = {
   memory: number
   /** Committed bytes, including paged-out memory; absent when unavailable. */
   privateMemory?: number
+  name?: string
+  startTicks?: bigint
 }
 
 export type WindowsCpuTimes = {
@@ -37,10 +44,12 @@ export type ParsedWindowsProcessSample = {
 }
 
 type TypeperfProcessFields = {
+  name?: string
   pid?: number
   ppid?: number
   memory?: number
   privateMemory?: number
+  elapsedSeconds?: number
 }
 
 export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {
@@ -58,12 +67,16 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
       continue
     }
     const privateMemory = parseCimPageFileBytes(fields[6])
+    const name = executableBasename(fields[7])
+    const startTicks = parseUnsignedBigInt(fields[5])
     rows.push({
       pid,
       ppid,
       cpu: 0,
       memory: Number.isFinite(memory) && memory > 0 ? memory : 0,
-      ...(privateMemory === null ? {} : { privateMemory })
+      ...(privateMemory === null ? {} : { privateMemory }),
+      ...(name ? { name } : {}),
+      ...(startTicks ? { startTicks } : {})
     })
 
     const kernelTicks = parseUnsignedBigInt(fields[3])
@@ -86,7 +99,7 @@ function parseCimTabFields(line: string): string[] {
   if (line.length > PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS) {
     return []
   }
-  return line.split('\t', 7).map((field) => field.trim())
+  return line.split('\t', 8).map((field) => field.trim())
 }
 
 /** PageFileUsage reports KiB; missing values must remain distinct from measured zero. */
@@ -102,7 +115,10 @@ export function parseWindowsProcessOutput(stdout: string): WindowsProcessResourc
   return parseWindowsProcessSample(stdout).rows
 }
 
-export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResourceRow[] {
+export function parseTypeperfProcessOutput(
+  stdout: string,
+  withNames = false
+): WindowsProcessResourceRow[] {
   let headers: string[] | null = null
   let values: string[] | null = null
 
@@ -135,7 +151,10 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
     if (!Number.isFinite(value)) {
       continue
     }
-    const row = byInstance.get(path.instance) ?? {}
+    // Instances are `<exe without .exe>#<n>` when names repeat.
+    const row =
+      byInstance.get(path.instance) ??
+      (withNames ? { name: executableBasename(path.instance.replace(/#\d+$/, '')) } : {})
     if (path.counter === 'ID Process') {
       row.pid = Math.trunc(value)
     } else if (path.counter === 'Creating Process ID') {
@@ -144,6 +163,8 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
       row.memory = value
     } else if (path.counter === 'Private Bytes') {
       row.privateMemory = value
+    } else if (path.counter === 'Elapsed Time') {
+      row.elapsedSeconds = value
     }
     byInstance.set(path.instance, row)
   }
@@ -160,6 +181,13 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
       memory: row.memory !== undefined && row.memory > 0 ? row.memory : 0,
       ...(row.privateMemory !== undefined && row.privateMemory >= 0
         ? { privateMemory: row.privateMemory }
+        : {}),
+      ...(row.name ? { name: row.name } : {}),
+      ...(row.elapsedSeconds !== undefined && row.elapsedSeconds >= 0 && row.elapsedSeconds < 1e9
+        ? {
+            startTicks:
+              TYPEPERF_START_ORIGIN_TICKS - BigInt(Math.round(row.elapsedSeconds * 10_000_000))
+          }
         : {})
     })
   }

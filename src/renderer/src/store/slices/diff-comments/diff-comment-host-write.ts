@@ -1,4 +1,5 @@
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { DiffCommentBaseMutation } from '../../../../../shared/file-review/diff-comment-mutation'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { DiffCommentOwner } from './diff-comment-owner'
@@ -7,11 +8,11 @@ import { callHostRoute } from '@/runtime/rpc/calls/host-route-call'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
-/** Writes a workspace's whole review-note list to the host that owns it. */
+/** Persist a review-note change on its owning host and return the authoritative notes. */
 export async function writeDiffCommentsToHost(
   owner: DiffCommentOwner,
-  diffComments: DiffComment[]
-): Promise<void> {
+  updates: { diffComments?: DiffComment[] } & DiffCommentBaseMutation
+): Promise<DiffComment[] | undefined> {
   const worktreeId = owner.worktreeId
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type === 'folder' && owner.kind === 'folder') {
@@ -25,18 +26,18 @@ export async function writeDiffCommentsToHost(
               at: 'local'
             }),
             'folderWorkspace.update',
-            { folderWorkspaceId: scope.folderWorkspaceId, updates: { diffComments } },
+            { folderWorkspaceId: scope.folderWorkspaceId, updates },
             { timeoutMs: 15_000 }
           )
         ).folderWorkspace
       : await window.api.folderWorkspaces.update({
           folderWorkspaceId: scope.folderWorkspaceId,
-          updates: { diffComments }
+          updates
         })
-    if (!updated?.diffComments) {
+    if (!updated || (updates.diffComments !== undefined && !updated.diffComments)) {
       throw new Error('Failed to persist folder workspace review notes')
     }
-    return
+    return updated.diffComments ?? []
   }
   if (owner.kind !== 'worktree') {
     throw new Error('The workspace host is unresolved; review notes were not saved.')
@@ -47,18 +48,47 @@ export async function writeDiffCommentsToHost(
     const meta = await window.api.worktrees.updateMeta({
       worktreeId,
       executionHostId: at,
-      updates: { diffComments }
+      updates
     })
     // Why: main answers null when it refuses or drops the write; reporting success would lose the notes.
     if (!meta) {
       throw new Error('This computer did not save the review notes.')
     }
-    return
+    return meta.diffComments ?? []
   }
-  await callRuntimeRpc(
+  const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
     { kind: 'environment', environmentId: endpoint.environmentId },
     'worktree.set',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      ...updates
+    },
     { timeoutMs: 15_000 }
   )
+  return worktree && (worktree.diffComments ?? [])
+}
+
+/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
+export async function readDiffCommentsFromHost(
+  owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
+): Promise<DiffComment[]> {
+  const { endpoint, at } = owner.authority
+  if (endpoint.kind === 'self') {
+    const meta = await window.api.worktrees.updateMeta({
+      worktreeId: owner.worktreeId,
+      executionHostId: at,
+      updates: {}
+    })
+    if (!meta) {
+      throw new Error('This computer did not answer with the review notes.')
+    }
+    return meta.diffComments ?? []
+  }
+  const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
+    { kind: 'environment', environmentId: endpoint.environmentId },
+    'worktree.show',
+    { worktree: toRuntimeWorktreeSelector(owner.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+  return worktree?.diffComments ?? []
 }

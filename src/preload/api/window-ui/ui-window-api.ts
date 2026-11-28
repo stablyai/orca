@@ -2,14 +2,20 @@ import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agen
 import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
 import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
+import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
 } from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
-  /** The clipboard's HTML when it may carry links; empty otherwise. */
-  readClipboardLinkHtml: () => Promise<string>
+  /** One clipboard read for a whole paste: text, copied files, link HTML and image presence. */
+  readClipboardPasteContent: (
+    options?: ReadClipboardPasteContentOptions
+  ) => Promise<ClipboardPasteContent>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null
@@ -19,6 +25,8 @@ export type UiWindowApi = {
     forNativeChatDraft?: boolean
     /** With `forNativeChatDraft`: a structured chat on this machine, whose sends claim its pastes. */
     forStructuredChat?: boolean
+    /** Web client only: the paste event's picture, since insecure origins have no async clipboard. */
+    eventImage?: Blob
   }) => Promise<string | null>
   /** Saves paste text on the execution host so the agent can read it. */
   savePastedTextAsFile: (args: {
@@ -27,8 +35,6 @@ export type UiWindowApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   }) => Promise<string>
   clipboardHasImage: () => Promise<boolean | null>
-  /** Empty if no files were copied or the host cannot list them. */
-  readClipboardFilePaths: () => Promise<string[]>
   /** Only files inside Orca's paste folder count as kept. */
   restoreNativeChatPastes: (
     paths: string[]
@@ -38,6 +44,8 @@ export type UiWindowApi = {
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
+  /** For a secret: cleared after a minute if it's still there; clearsLater false where that isn't promised. */
+  writeSecretClipboardText: (text: string) => Promise<{ clearsLater: boolean }>
   writeSelectionClipboardText: (text: string) => Promise<void>
   writeClipboardImage: (dataUrl: string) => Promise<void>
   performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void

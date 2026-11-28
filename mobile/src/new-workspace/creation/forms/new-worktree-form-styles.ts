@@ -1,8 +1,8 @@
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { LIST_ROW_PADDING } from '../../../components/list/ListGroup'
 
-export const newWorktreeFormStyles = themedStyleSheet(() => ({
+export const newWorktreeFormStylesSheet = themedStyleSheet((colors) => ({
   header: {
     marginTop: -spacing.xs
   },
@@ -14,11 +14,12 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     fontSize: 15
   },
-  // A field's own label inside a section, lined up with the field's text.
+  // A field's own label, set like a SectionHeader so it lines up with the field's text.
   fieldLabel: {
     fontSize: 13,
+    fontWeight: '500',
     color: colors.textSecondary,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: LIST_ROW_PADDING,
     marginBottom: 6
   },
   options: {
@@ -121,37 +122,15 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.md
+    paddingHorizontal: spacing.md,
+    marginBottom: 6
   },
   setupLabel: {
     fontSize: 13,
     color: colors.textSecondary
   },
-  sourceBadge: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2
-  },
-  sourceBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    letterSpacing: 0.5
-  },
-  setupStack: {
-    gap: spacing.sm
-  },
-  codeBlock: {
-    backgroundColor: colors.sheetGroup,
-    borderRadius: radii.surface,
-    paddingHorizontal: LIST_ROW_PADDING,
-    paddingVertical: spacing.md
-  },
-  code: {
+  setupSource: {
     fontSize: 13,
-    lineHeight: 19,
-    fontFamily: typography.monoFamily,
-    color: colors.textPrimary
+    color: colors.textMuted
   }
 }))

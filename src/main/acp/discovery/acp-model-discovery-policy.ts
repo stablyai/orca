@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 /** Model discovery never authenticates interactively. */
@@ -25,17 +25,44 @@ export type AcpModelDiscovery =
   | AcpSessionModelDiscovery
   | { kind: 'unavailable'; reason: string }
 
-/** Requires a chat folder and session deletion or disposable storage to avoid persistent history. */
+/** Needs session deletion, disposable storage or `discardSession` to leave no history behind. */
 export type AcpSessionModelDiscovery = {
   kind: 'session'
   listingNamesConfiguredModel: boolean
   sessionFolderArgs?(folder: string): string[]
+  /** Models follow the account, not the project, so the session runs in a private folder. */
+  inPrivateFolder?: true
+  /** Starting the agent is heavy, so it lists only when a picker asks, never in warm-up. */
+  listsOnDemand?: true
+  /** Removes a listing session, after its process exits, from an agent that can't delete sessions
+   *  over ACP. */
+  discardSession?(session: AcpListingSession): Promise<void>
+  /** A session in the chat's folder still reports the commands that chat gets, so a resting chat
+   *  reads them there (current clients ask when a `/` menu opens). */
+  listsCommandsInChatFolder?: true
+}
+
+export type AcpListingSession = {
+  sessionId: string
+  cwd: string
+  accountHomePath: string
+  /** Runs the agent's own CLI with the listing's binary, account and environment. */
+  runAgent(args: readonly string[]): Promise<string>
 }
 
 export function acpListingNeedsChatFolder(discovery: AcpModelDiscovery): boolean {
   return (
-    discovery.kind === 'session' ||
+    (discovery.kind === 'session' && !discovery.inPrivateFolder) ||
     (discovery.kind === 'command' && discovery.otherReleasesListInSession === true)
+  )
+}
+
+/** Whether a resting chat's `/` menu can read the agent's commands from a throwaway session in
+ *  its folder. */
+export function acpListsCommandsAtRest(discovery: AcpModelDiscovery): boolean {
+  return (
+    acpListingNeedsChatFolder(discovery) ||
+    (discovery.kind === 'session' && discovery.listsCommandsInChatFolder === true)
   )
 }
 

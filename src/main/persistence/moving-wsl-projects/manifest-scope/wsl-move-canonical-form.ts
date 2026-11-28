@@ -1,5 +1,9 @@
 // Normalize host/path identities for comparison; preserve user text and terminal output byte for byte.
 import type { WslMoveProjectionScope } from './wsl-move-state-projection'
+import {
+  toWslDistroUncPath,
+  wslMappedDriveFileUrlToLinux
+} from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 
 export const WSL_MOVE_FREE_TEXT_KEYS: ReadonlySet<string> = new Set([
   'dirtyDraftContent',
@@ -41,9 +45,12 @@ export function parseEditorFileId(value: string): [string, string, string] | nul
 }
 
 export function createWslMoveStringNormalizer(
-  scope: Pick<WslMoveProjectionScope, 'distro' | 'hostAliases'>
+  scope: Pick<WslMoveProjectionScope, 'distro' | 'hostAliases' | 'mappedDrives'>
 ): (value: string) => string {
   const distro = escapeRegExp(scope.distro)
+  const mappedDrives = scope.mappedDrives ?? []
+  // A mapped-drive identity, in the same shape: `W:\x`, `repoId::W:\x`, `worktree:repoId::W:\x`.
+  const driveIdentity = /^((?:worktree:)?(?:[^\s\\/]*::)?)([A-Za-z]:(?:[\\/][^\\/:]*)+)(::.*)?$/
   // Match distro UNC identities; colons delimit worktree suffixes rather than path segments.
   const uncIdentity = new RegExp(
     `^((?:worktree:)?(?:[^\\s\\\\/]*::)?)(?:\\\\\\\\|//)(?:wsl\\.localhost|wsl\\$)[\\\\/]${distro}((?:[\\\\/][^\\\\/:]*)*)(::.*)?$`,
@@ -66,6 +73,15 @@ export function createWslMoveStringNormalizer(
     }
     if (fileUrl.test(value)) {
       return value.replace(fileUrl, 'file:///')
+    }
+    const driveUrl = wslMappedDriveFileUrlToLinux(value, scope.distro, mappedDrives)
+    if (driveUrl !== null) {
+      return driveUrl
+    }
+    const drive = mappedDrives.length > 0 ? driveIdentity.exec(value) : null
+    const share = drive ? toWslDistroUncPath(drive[2], mappedDrives) : null
+    if (drive && share !== drive[2]) {
+      return normalize(`${drive[1]}${share}${drive[3] ?? ''}`)
     }
     const unc = uncIdentity.exec(value)
     if (!unc) {

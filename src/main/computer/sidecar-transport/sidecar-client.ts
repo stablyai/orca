@@ -15,7 +15,10 @@ import {
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from '../action-contracts/computer-sidecar-paste-validation'
 import { RuntimeClientError } from '../runtime-client-error'
+import { assertTeamAllowsComputerUse } from '../computer-team-policy'
 import { getForkedChildEntryPath } from '../../worker-threads/forked-child-entry-path'
+import { getAppEnvironment, hasAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { COMPUTER_SIDECAR_DEV_BUILD_ENV } from './computer-sidecar-dev-build-env'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
 export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
@@ -103,12 +106,8 @@ export async function callComputerSidecarAction(
   )
 }
 
-export function resetComputerSidecarForTest(): void {
-  sidecar?.shutdown()
-  sidecar = null
-}
-
 function getComputerSidecar(): ComputerSidecarProcess {
+  assertTeamAllowsComputerUse()
   if (!sidecar) {
     sidecar = new ComputerSidecarProcess(getForkedChildEntryPath(COMPUTER_SIDECAR_ENTRY_FILENAME))
   }
@@ -223,7 +222,9 @@ class ComputerSidecarProcess {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        ORCA_COMPUTER_SIDECAR: '1'
+        ORCA_COMPUTER_SIDECAR: '1',
+        [COMPUTER_SIDECAR_DEV_BUILD_ENV]:
+          hasAppEnvironment() && !getAppEnvironment().isPackaged() ? '1' : '0'
       },
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })

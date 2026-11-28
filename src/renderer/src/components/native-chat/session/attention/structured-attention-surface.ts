@@ -6,17 +6,25 @@ import type {
   AgentAttentionSurfaceAdmission,
   AgentAttentionSurfaceSubject
 } from '@/attention/agent-attention-contract'
-import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
-import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
+  findTabByChatPaneKey,
+  isStructuredTab
+} from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { readBotBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
-  return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
+  return [
+    ...(state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab),
+    // A bot's tabless sessions still notify; only a group member's open room shows one.
+    ...readBotBackgroundSessionTabs().filter((tab) => tab.worktreeId === workspaceId)
+  ]
 }
 
 /** Resolve a subject only while its tab still owns that session; rebound tabs reject old keys. */
@@ -25,14 +33,8 @@ function findSubjectTab(
   workspaceId: string,
   surfaceKey: string
 ): StructuredTab | null {
-  const parsed = parsePaneKey(surfaceKey)
-  if (!parsed) {
-    return null
-  }
-  const tab = structuredTabsIn(state, workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
-  if (!tab || structuredAgentSessionPaneKey(tab.id, tab.entityId) !== surfaceKey) {
+  const tab = findTabByChatPaneKey(structuredTabsIn(state, workspaceId), surfaceKey)
+  if (!tab || chatPaneKey(tab.entityId) !== surfaceKey) {
     return null
   }
   return tab
@@ -42,17 +44,11 @@ function admitStructuredSession(
   state: StoreSnapshot,
   subject: AgentAttentionSurfaceSubject
 ): AgentAttentionSurfaceAdmission {
-  const parsed = parsePaneKey(subject.surfaceKey)
-  if (!parsed) {
-    return { admitted: false, cause: 'unknown-surface' }
-  }
-  const tab = structuredTabsIn(state, subject.workspaceId).find(
-    (candidate) => candidate.id === parsed.tabId
-  )
+  const tab = findTabByChatPaneKey(structuredTabsIn(state, subject.workspaceId), subject.surfaceKey)
   if (!tab) {
     return { admitted: false, cause: 'unknown-surface' }
   }
-  return structuredAgentSessionPaneKey(tab.id, tab.entityId) === subject.surfaceKey
+  return chatPaneKey(tab.entityId) === subject.surfaceKey
     ? { admitted: true, groupId: tab.id }
     : { admitted: false, cause: 'superseded-surface' }
 }
@@ -81,14 +77,14 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
     isWorkspaceViewed: (workspaceId) => isWorkspaceOnScreen(state, workspaceId),
     isWorkspaceActive: (workspaceId) => state.activeWorktreeId === workspaceId,
     isWorkspaceMuted: (workspaceId) =>
-      isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
+      isWorkspaceNotificationMutedBySidebarFilters(state, readRuntimeStatuses(), workspaceId),
     resolveViewedSubjectKey: (groupId) => {
-      const tab = Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .find((candidate) => candidate.id === groupId)
-      return tab && isStructuredTab(tab)
-        ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
-        : null
+      // A stand-in is viewed through the room that shows its session.
+      const tab = [
+        ...Object.values(state.unifiedTabsByWorktree).flat(),
+        ...readBotBackgroundSessionTabs()
+      ].find((candidate) => candidate.id === groupId)
+      return tab && isStructuredTab(tab) ? chatPaneKey(tab.entityId) : null
     }
   }
 }

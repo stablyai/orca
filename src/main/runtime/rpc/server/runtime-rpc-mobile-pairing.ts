@@ -7,7 +7,10 @@ import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pa
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './pairing/network/network-exposure-guidance'
 import { createOwnerPairingOffer } from './pairing/pairing-offer-requests'
-import type { PairingOffersRpcContext } from '../core'
+import { createDelegatedPhoneServerOffer } from './pairing/delegated-phone-server-offers'
+import type { DeviceEntry } from './pairing/device-entry'
+import type { RuntimePairingReach } from '../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import type { PairingOffersRpcContext, RpcContext } from '../core'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
@@ -23,7 +26,25 @@ const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
-    return { create: (params) => createOwnerPairingOffer(this, params) }
+    return {
+      create: async (params, createdByDeviceId, createdByClientInstanceId) => {
+        const offer = await createOwnerPairingOffer(this, params, undefined, createdByDeviceId)
+        if (offer.available && createdByClientInstanceId) {
+          this.deviceRegistry?.setOriginClientInstance(offer.deviceId, createdByClientInstanceId)
+        }
+        return offer
+      }
+    }
+  }
+
+  protected override delegatedPhoneServerOffers(
+    device: DeviceEntry
+  ): RpcContext['delegatedPhoneServerOffers'] {
+    // Only a phone a paired desktop relays here; its own pairings chain to that row.
+    if (device.scope !== 'mobile' || !device.parentDeviceId) {
+      return undefined
+    }
+    return { create: (params) => createDelegatedPhoneServerOffer(this, device, params) }
   }
 
   async createMobilePairingOffer(args: {
@@ -32,10 +53,16 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     name?: string
     rotate?: boolean
     offerTtlMs?: number
+    createdByDeviceId?: string
+    reach?: RuntimePairingReach
+    // 'as-bound': advertise only what the listener answers now and never widen it.
+    exposure?: 'widen' | 'as-bound'
   }): Promise<MobilePairingOffer> {
     // Network pairing opts into LAN exposure: widen before advertising QR endpoints; failed widening stays unavailable on loopback (STA-2370).
     try {
-      await this.ensureNetworkExposure()
+      if (args.exposure !== 'as-bound') {
+        await this.ensureNetworkExposure()
+      }
     } catch (error) {
       console.error(
         '[runtime] Network exposure failed while creating a mobile pairing offer:',
@@ -53,6 +80,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     if (
       inFlight?.generation === this.mobilePairingOfferGeneration &&
       inFlight.address === address &&
+      inFlight.createdByDeviceId === args.createdByDeviceId &&
       (inFlight.rotate || !rotate)
     ) {
       return inFlight.request
@@ -68,7 +96,13 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       () => undefined,
       () => undefined
     )
-    this.mobileRelayPairingOfferInFlight = { generation, address, rotate, request }
+    this.mobileRelayPairingOfferInFlight = {
+      generation,
+      address,
+      rotate,
+      createdByDeviceId: args.createdByDeviceId,
+      request
+    }
     void request.then(
       () => {
         if (this.mobileRelayPairingOfferInFlight?.request === request) {
@@ -91,6 +125,8 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       name?: string
       rotate?: boolean
       offerTtlMs?: number
+      createdByDeviceId?: string
+      reach?: RuntimePairingReach
     },
     generation: number
   ): Promise<MobilePairingOffer> {
@@ -100,14 +136,23 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
     for (const expired of this.deviceRegistry?.listExpiredPairingOffers('mobile') ?? []) {
       this.discardPendingMobilePairingDevice(expired.deviceId)
     }
-    const pending = this.deviceRegistry?.getPendingDevice('mobile', args.offerTtlMs)
+    const pending = this.deviceRegistry?.getPendingDevice(
+      'mobile',
+      args.offerTtlMs,
+      [],
+      args.createdByDeviceId
+    )
     // Rotate when connection policy changes so old QR credentials retain no new-policy authority.
     const switchingPendingMode =
       pending != null &&
       this.deviceRegistry?.getMobilePairingConnectionMode(pending.deviceId) !== connectionMode
     if (args.rotate || switchingPendingMode) {
       // Durably enqueue cloud revocation for every offer rotation drops, or old invites outlive the QR.
-      for (const offer of this.deviceRegistry?.listPendingDevices('mobile') ?? []) {
+      // A paired client's rotation drops only its own offers, never the owner's QR.
+      for (const offer of this.deviceRegistry?.listPendingDevices(
+        'mobile',
+        args.createdByDeviceId
+      ) ?? []) {
         if (offer.relayBinding && !this.queueRelayDeviceRevoke(offer.relayBinding)) {
           return pairingUnavailable(
             'device_registry_unavailable',
@@ -172,7 +217,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
       return refuseAutomaticWithoutRelay({
         code: 'relay_provider_unavailable',
         stage: 'provider_missing',
-        message: 'Orca Relay is not available on this desktop'
+        message: 'Orca Relay is not available on this host'
       })
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)
@@ -258,7 +303,7 @@ export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   }
 
   /** Drop a never-scanned mobile pending credential after a failed Anywhere mint. */
-  protected discardPendingMobilePairingDevice(deviceId: string): void {
+  discardPendingMobilePairingDevice(deviceId: string): void {
     const device = this.deviceRegistry?.getDevice(deviceId)
     if (!device || device.scope !== 'mobile' || device.lastSeenAt !== 0) {
       return

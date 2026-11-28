@@ -1,5 +1,8 @@
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import {
+  isOrcadUncountedTerminalsDeferral,
+  ORCAD_UPDATE_TERMINALS_RUNNING_CODE
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
@@ -11,7 +14,11 @@ import { computeLocalOrcadBuildHash } from '../install/orcad-local-build-hash'
 
 import type { OrcadHostTarget } from '../install/orcad-host-transport'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
-import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-managed-update-decision'
+import {
+  admitConfirmedIncumbent,
+  admitOrcadRecordForIntent,
+  type OrcadUpdateIntent
+} from './orcad-managed-update-decision'
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
@@ -47,12 +54,19 @@ export function requireManagedOrcadTargetStore() {
   return targetStore
 }
 
+export const WSL_HOST_SERVER_ACTION_MESSAGE =
+  'Orca runs this server in a WSL distro for you. To stop it, remove the WSL host in Orca; to remove the host without contacting its distro, run `orca environment forget --environment <name> --yes`.'
+
 export async function requireManagedOrcadEnvironment(
   userDataPath: string,
   selector: string
 ): Promise<{ environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink }> {
   const environment = await resolveEnvironment(userDataPath, selector)
   const deployment = getOrcadSshDeployment(environment)
+  // #49180: a WSL host's server is stopped by removing the host, not by these SSH actions.
+  if (environment.orcadDeployment?.kind === 'wsl') {
+    throw new Error(WSL_HOST_SERVER_ACTION_MESSAGE)
+  }
   if (!deployment || environment.connectionDependency !== 'ssh-tunnel') {
     throw new Error('This server is not managed through an orcad SSH deployment.')
   }
@@ -127,7 +141,9 @@ export function probeManagedOrcadReadiness(
 export function managedOrcadDeployPolicy(
   context: Pick<OrcadRemoteContext<OrcadHostTarget>, 'activationRecord'>,
   appVersion: string,
-  intent: OrcadUpdateIntent
+  intent: OrcadUpdateIntent,
+  /** Update anyway's confirmed incumbent: a build activated since then is refused. */
+  confirmed?: { incumbentVersion: string | null }
 ): {
   census: OrcadTerminalCensus
   recountCensus: () => Promise<OrcadTerminalCensus>
@@ -145,11 +161,19 @@ export function managedOrcadDeployPolicy(
     releaseIncumbentAdmission: async () => {},
     censusRecord: context.activationRecord,
     // Only the fenced read can reject newer migrated state or rolled-back builds on this unlinked path.
-    admitRecord: admitOrcadRecordForIntent(intent, appVersion)
+    admitRecord: confirmed
+      ? admitConfirmedIncumbent(
+          admitOrcadRecordForIntent(intent, appVersion),
+          confirmed.incumbentVersion
+        )
+      : admitOrcadRecordForIntent(intent, appVersion)
   }
 }
 
-// Force can override live terminal counts, never unknown census or protocol deferrals.
-export function isForceableOrcadDeferral(code: string): boolean {
-  return code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE
+// Force can override live terminal counts, and an answered uncounted census once the planner proves no daemon is running.
+export function isForceableOrcadDeferral(deferral: { code: string; forceable?: true }): boolean {
+  return (
+    deferral.code === ORCAD_UPDATE_TERMINALS_RUNNING_CODE ||
+    (deferral.forceable === true && isOrcadUncountedTerminalsDeferral(deferral.code))
+  )
 }

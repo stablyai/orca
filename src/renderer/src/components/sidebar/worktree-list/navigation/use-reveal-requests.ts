@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { Crosshair } from 'lucide-react'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
@@ -14,6 +13,8 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
+import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 function workspacePassesFilters(
   worktree: Worktree,
@@ -126,6 +127,11 @@ export function useSidebarRevealRequests(args: {
       if (!currentSidebarWorktreeId) {
         return
       }
+      // Bots rows, and what no section lists, are not this list's to reveal: no filter
+      // dialog, no filter or group change, no pending reveal that could never land.
+      if (readSidebarRevealTarget().section !== 'projects') {
+        return
+      }
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
@@ -145,23 +151,22 @@ export function useSidebarRevealRequests(args: {
           return
         }
         confirmationPending.current = true
-        let confirmed: boolean
-        try {
-          confirmed = await confirm({
-            icon: Crosshair,
-            initialFocus: 'confirm',
-            cancelVariant: 'ghost',
-            title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
-            description: translate(
-              'sidebar.revealFiltered.description',
-              'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
-            ),
-            confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust filters and reveal'),
-            cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
-          })
-        } finally {
-          confirmationPending.current = false
-        }
+        const confirmed = await runWithFinally(
+          () =>
+            confirm({
+              initialFocus: 'confirm',
+              title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
+              description: translate(
+                'sidebar.revealFiltered.description',
+                'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
+              ),
+              confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
+              cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
+            }),
+          () => {
+            confirmationPending.current = false
+          }
+        )
         const latest = latestArgs.current
         // A workspace switch while the dialog is open must not clear filters for a stale target.
         if (

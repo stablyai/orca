@@ -3,6 +3,7 @@ import {
   textGenerationFailureCodeFields
 } from '../../../../shared/text-generation/text-generation-failure-copy'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -17,7 +18,7 @@ import { getPullRequestDraftContext } from '../../../text-generation/pull-reques
 import { prepareLocalCommitMessageAgentEnv } from '../../../text-generation/execution/commit-message-agent-environment'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { withLinkedIssueDraftContext } from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssueMeta } from '../../source-control/source-control-ai-linked-issue'
@@ -31,10 +32,11 @@ import {
 } from './filesystem-source-control-ai-targets'
 
 export function registerFilesystemGitPullRequestGenerationHandlers(
-  context: FilesystemHandlerContext
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
   const { store, commitMessageAgentEnv } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:generatePullRequestFields',
     async (
       _event,
@@ -154,7 +156,7 @@ export function registerFilesystemGitPullRequestGenerationHandlers(
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'git:cancelGeneratePullRequestFields',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {

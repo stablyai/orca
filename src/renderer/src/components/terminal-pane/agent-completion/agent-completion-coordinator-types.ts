@@ -36,7 +36,7 @@ export type AgentCompletionCoordinatorOptions = {
   getExpectedIncarnationId?: () => string | null
   inspectProcess: (
     ptyId: string,
-    options?: { expectedIncarnationId?: string; steadyState?: boolean }
+    options?: { expectedIncarnationId?: string; steadyState?: boolean; jobMembershipOnly?: boolean }
   ) => Promise<RuntimeTerminalProcessInspection>
   /** Rechecks a local exit candidate without trusting the inspection's cached process name. */
   confirmForegroundProcess?: (ptyId: string) => Promise<string | null>
@@ -65,6 +65,8 @@ export type AgentCompletionCoordinatorOptions = {
   shouldPollNoEvidenceProcessCadence?: () => boolean
   // Relax costly no-evidence scans (Windows or remote host reads); output/title/hooks re-arm hot cadence.
   isProcessInspectionCostly?: () => boolean
+  /** False when this pane does not consume host facts, so a host-watched exit could never reach it. */
+  receivesForegroundExitNotices?: () => boolean
 }
 
 export type AgentCompletionCoordinator = {
@@ -72,6 +74,12 @@ export type AgentCompletionCoordinator = {
   observeClassifiedTitleCompletion: (title: string) => void
   observeTitleWorking: () => void
   observeOutputActivity: () => void
+  /** Main dropped output for this hidden pane; it reports again at most once per notice window. */
+  observeHiddenOutputActivity: () => void
+  /** The host saw the foreground process exit or an agent appear; read the foreground as after output. */
+  observeForegroundChange: () => void
+  /** Accepted input can start a command that prints nothing (`read -s -n1; run-agent`); read as after output. */
+  observeInputActivity: () => void
   observeHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   seedHookStatus: (payload: AgentCompletionStatusSnapshot) => void
   startProcessTracking: () => void

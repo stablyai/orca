@@ -1,9 +1,9 @@
 import { useContext, useEffect, useState } from 'react'
 import { Image, Pressable, StyleSheet, Text } from 'react-native'
 import { MarkdownLinkHandlerContext } from '../links/markdown-link-handler'
-import { styles as markdownStyles } from '../mobile-markdown-styles'
+import { stylesSheet } from '../mobile-markdown-styles'
 import { pressedStyle } from '../../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type Size = { width: number; height: number }
 
@@ -18,7 +18,7 @@ export function MobileMarkdownRemoteImage({
   alt: string
   width?: number
 }) {
-  useMobileColorScheme()
+  const markdownStyles = useThemedStyles(stylesSheet)
   const [size, setSize] = useState<Size | 'failed' | null>(null)
   const onOpenLink = useContext(MarkdownLinkHandlerContext)
   useEffect(() => {
@@ -35,7 +35,7 @@ export function MobileMarkdownRemoteImage({
   }, [uri])
   if (size === 'failed') {
     return (
-      <Text style={markdownStyles.link} onPress={() => onOpenLink(uri)}>
+      <Text style={[markdownStyles.paragraph, markdownStyles.link]} onPress={() => onOpenLink(uri)}>
         {alt || uri}
       </Text>
     )

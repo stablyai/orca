@@ -217,10 +217,3 @@ export async function markBrowserIdentityMigrationNoticePending(
   notifySnapshotListeners(store.snapshot)
   return true
 }
-
-export function resetBrowserIdentityModeStoreForTests(): void {
-  modeStore = null
-  snapshotListeners.clear()
-  migrationNoticeDegraded = false
-  launchMigrationNoticePending = false
-}

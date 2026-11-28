@@ -2,7 +2,7 @@ import type { RuntimeAccountController } from '../../agent-session/environment/r
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   agentLaunchQuotingShell,
   remoteExecutionPlatform,
@@ -37,7 +37,7 @@ import {
 import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
-import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { assertTuiAgentLaunchEnabled } from '../../../agent-launch/disabled-agent-launch-refusal'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
 
 /** No launch command could be built for a requested `startupAgent`. */
@@ -110,9 +110,7 @@ export async function resolveAgentTerminalCreateOptions(
     if (!store) {
       throw new Error('runtime_unavailable')
     }
-    if (!isTuiAgentEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)) {
-      throw new Error(`Agent ${opts.startupAgent} is disabled. Choose an enabled agent.`)
-    }
+    assertTuiAgentLaunchEnabled(opts.startupAgent, store.getSettings().disabledTuiAgents)
   }
   if (!launchAgent || !store) {
     return opts
@@ -293,14 +291,14 @@ export async function prepareHostAgentTerminalLaunch(
   resolvedLaunch: TerminalCreateOptions,
   accounts: Pick<RuntimeAccountController, 'prepareHostAgentLaunch' | 'hostLaunchEnvFor'>
 ): Promise<TerminalCreateOptions> {
-  const launch = applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   // An SSH workspace's shell runs on that machine, where this distro's account paths mean nothing.
   if (workspace.connectionId) {
-    return launch
+    return applyRemoteViewerLaunchEnv(resolvedLaunch, opts.terminalImageViewerSupported)
   }
-  if (launch.launchAgent) {
-    await accounts.prepareHostAgentLaunch(launch.launchAgent)
+  if (resolvedLaunch.launchAgent) {
+    await accounts.prepareHostAgentLaunch(resolvedLaunch.launchAgent)
   }
-  const hostLaunchEnv = accounts.hostLaunchEnvFor(launch.launchAgent)
-  return withHostAccountLaunchEnv(opts, launch, hostLaunchEnv)
+  const hostLaunchEnv = accounts.hostLaunchEnvFor(resolvedLaunch.launchAgent)
+  const launch = withHostAccountLaunchEnv(opts, resolvedLaunch, hostLaunchEnv)
+  return applyRemoteViewerLaunchEnv(launch, opts.terminalImageViewerSupported)
 }

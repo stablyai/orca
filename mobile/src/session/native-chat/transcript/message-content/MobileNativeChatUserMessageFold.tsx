@@ -4,18 +4,12 @@ import {
   NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES,
   nativeChatUserMessageFolds
 } from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-user-message-fold'
-import { styles as markdownStyles } from '../../../../components/markdown/mobile-markdown-styles'
-import { colors, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { CHAT_PROSE_SCALE } from '../messages/mobile-native-chat-message-styles'
+import { stylesSheet } from '../../../../components/markdown/mobile-markdown-styles'
+import { spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import type { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-
-const FOLDED_HEIGHT =
-  NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
-  markdownStyles.paragraph.lineHeight *
-  CHAT_PROSE_SCALE
 
 export function MobileNativeChatUserMessageFold({
   text,
@@ -35,11 +29,17 @@ export function MobileNativeChatUserMessageFold({
   status?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const markdownStyles = useThemedStyles(stylesSheet)
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const longText = useMemo(() => nativeChatUserMessageFolds(text), [text])
   const [height, setHeight] = useState<number | null>(null)
-  const clip = FOLDED_HEIGHT * fontScale
+  const { textScale, lineSpacing } = useNativeChatProseText(fontScale, true)
+  const clip =
+    NATIVE_CHAT_USER_MESSAGE_MAX_UNFOLDED_LINES *
+    markdownStyles.paragraph.lineHeight *
+    textScale *
+    lineSpacing
   // Native clips measure at the folded height; use >= with rounding tolerance or expanding to measure would loop.
   const folds = longText && (height === null || height >= clip - 1)
   return (
@@ -68,10 +68,7 @@ export function MobileNativeChatUserMessageFold({
             {open
               ? t('chat.nativeChatUserMessageFold.showLess', 'Show less')
               : recovery?.load === 'failed'
-                ? t(
-                    'chat.nativeChatUserMessageFold.loadFailed',
-                    "Show full message — couldn't load, tap to retry"
-                  )
+                ? t('chat.nativeChatUserMessageFold.loadFailed', 'Retry full message')
                 : t('chat.nativeChatUserMessageFold.showFullMessage', 'Show full message')}
           </Text>
         </Pressable>
@@ -81,7 +78,7 @@ export function MobileNativeChatUserMessageFold({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   toggle: {
     alignSelf: 'flex-end',
     paddingTop: spacing.xs

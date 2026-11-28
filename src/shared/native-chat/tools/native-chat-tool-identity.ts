@@ -9,6 +9,8 @@ export type NativeChatToolMetadata = {
   exitCode?: number
   durationMs?: number
   webSearchResults?: NativeChatWebSearchResult[]
+  /** Host attachment-store paths of images the tool returned; the bytes never ride the journal. */
+  outputImagePaths?: string[]
 }
 
 export function toolExecutionMetadata(item: Record<string, unknown>): NativeChatToolMetadata {

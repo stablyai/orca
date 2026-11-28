@@ -17,7 +17,6 @@ import { isSyntheticAgentPermissionTitle } from '../../agent-status/title/synthe
 import { resolveRuntimePaneTitleLeafId } from '../../workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../agent-status/title/agent-title-core'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
-import type { Worktree } from '../../worktree/types'
 
 import type { AgentStateHistoryEntry } from '../../agent-status/lifecycle/agent-state-history'
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
@@ -171,7 +170,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
     }
   }
 
-  return { cls: bestCls, attentionTimestamp: bestTs }
+  return bestCls === 5 && bestTs === 0 ? IDLE : { cls: bestCls, attentionTimestamp: bestTs }
 }
 
 /** Index entries by parsed tab ID once per sort, avoiding a full agent-map scan for each worktree. */
@@ -196,16 +195,21 @@ export function buildExplicitEntriesByTabId(
   for (const entry of agentStatusValues(agentStatusByPaneKey)) {
     pushEntry(entry)
   }
-  for (const entry of Object.values(migrationUnsupportedByPtyId ?? {})) {
-    const agentEntry = migrationUnsupportedToAgentStatusEntry(entry)
-    if (agentEntry) {
-      pushEntry(agentEntry)
+  if (migrationUnsupportedByPtyId) {
+    for (const ptyId in migrationUnsupportedByPtyId) {
+      if (!Object.hasOwn(migrationUnsupportedByPtyId, ptyId)) {
+        continue
+      }
+      const agentEntry = migrationUnsupportedToAgentStatusEntry(migrationUnsupportedByPtyId[ptyId])
+      if (agentEntry) {
+        pushEntry(agentEntry)
+      }
     }
   }
   return byTab
 }
 
-function buildExplicitEntriesByWorktreeId(
+export function buildExplicitEntriesByWorktreeId(
   agentStatusByPaneKey: AgentStatusRows | undefined
 ): Map<string, AgentStatusEntry[]> {
   const byWorktree = new Map<string, AgentStatusEntry[]>()
@@ -242,27 +246,37 @@ export function collectTabPaneInputs(
   sources: TabPaneInputSources,
   now: number
 ): PaneInput[] {
-  const panes: PaneInput[] = []
+  const tabEntries = sources.entriesByTabId.get(tab.id)
   const hasLivePty = tabHasLivePty(sources.ptyIdsByTabId, tab.id)
+  if (!hasLivePty && (!tabEntries || tabEntries.length === 0)) {
+    return []
+  }
+  const panes: PaneInput[] = []
   // Why: leaves covered by a hook entry skip the title fallback so we don't double-count them.
-  const hookLeafIds = new Set<string>()
+  let hookLeafIds: Set<string> | undefined
   // Stale hooks still suppress one-shot permission titles, matching worktree and tab status dots.
-  const permissionHookLeafIds = new Set<string>()
-  for (const entry of sources.entriesByTabId.get(tab.id) ?? []) {
-    panes.push({ kind: 'hook', entry, hasLivePty })
-    const leafId = leafIdFromPaneKey(entry.paneKey)
-    if (leafId !== null) {
-      permissionHookLeafIds.add(leafId)
-    }
-    // Why: restored rows own their co-restored title without asserting live state.
-    if (
-      !entry.restoredUnconfirmed &&
-      !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
-    ) {
-      continue
-    }
-    if (leafId !== null) {
-      hookLeafIds.add(leafId)
+  let permissionHookLeafIds: Set<string> | undefined
+  if (tabEntries) {
+    for (let i = 0; i < tabEntries.length; i += 1) {
+      const entry = tabEntries[i]
+      panes.push({ kind: 'hook', entry, hasLivePty })
+      if (!hasLivePty) {
+        continue
+      }
+      const leafId = leafIdFromPaneKey(entry.paneKey)
+      if (leafId !== null) {
+        ;(permissionHookLeafIds ??= new Set()).add(leafId)
+      }
+      // Why: restored rows own their co-restored title without asserting live state.
+      if (
+        !entry.restoredUnconfirmed &&
+        !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      ) {
+        continue
+      }
+      if (leafId !== null) {
+        ;(hookLeafIds ??= new Set()).add(leafId)
+      }
     }
   }
 
@@ -272,11 +286,12 @@ export function collectTabPaneInputs(
   }
 
   const paneTitles = sources.runtimePaneTitlesByTabId[tab.id]
-  if (!paneTitles || Object.keys(paneTitles).length === 0) {
+  const paneTitleEntries = paneTitles ? Object.entries(paneTitles) : undefined
+  if (!paneTitleEntries || paneTitleEntries.length === 0) {
     const coveredLeafIds = isSyntheticAgentPermissionTitle(tab.title)
       ? permissionHookLeafIds
       : hookLeafIds
-    if (coveredLeafIds.size === 0) {
+    if (!coveredLeafIds || coveredLeafIds.size === 0) {
       // Why: unmounted tabs (restored-but-unvisited) expose only the legacy tab title.
       panes.push({
         kind: 'title',
@@ -289,68 +304,18 @@ export function collectTabPaneInputs(
 
   // Why: split-pane tabs host multiple agents, one title each; mirrors getWorkingAgentsPerWorktree precedence.
   const tabLayout = sources.terminalLayoutsByTabId?.[tab.id]
-  const paneTitleEntries = Object.entries(paneTitles)
-  for (const [runtimePaneId, title] of paneTitleEntries) {
+  for (let i = 0; i < paneTitleEntries.length; i += 1) {
+    const [runtimePaneId, title] = paneTitleEntries[i]
     const coveredLeafIds = isSyntheticAgentPermissionTitle(title)
       ? permissionHookLeafIds
       : hookLeafIds
     const leafId = resolveRuntimePaneTitleLeafId(tabLayout, runtimePaneId)
     const hasSingleUnmappedHook =
-      leafId === null && coveredLeafIds.size === 1 && paneTitleEntries.length === 1
-    if ((leafId !== null && coveredLeafIds.has(leafId)) || hasSingleUnmappedHook) {
+      leafId === null && coveredLeafIds?.size === 1 && paneTitleEntries.length === 1
+    if ((leafId !== null && coveredLeafIds?.has(leafId)) || hasSingleUnmappedHook) {
       continue
     }
     panes.push({ kind: 'title', status: detectAgentStatusFromTitle(title), worktreeLastActivityAt })
   }
   return panes
-}
-
-/** Resolve attention once per workspace with per-pane hook authority and live-PTY-gated title fallbacks. */
-export function buildAttentionByWorktree(
-  worktrees: readonly Pick<Worktree, 'id' | 'lastActivityAt'>[],
-  tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
-  agentStatusByPaneKey: AgentStatusRows | undefined,
-  runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
-  ptyIdsByTabId: Record<string, string[]>,
-  now: number,
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
-): Map<string, WorktreeAttention> {
-  const byTab = buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId)
-  const byAttributedWorktree = buildExplicitEntriesByWorktreeId(agentStatusByPaneKey)
-  const mirroredTabIds = new Set<string>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      mirroredTabIds.add(tab.id)
-    }
-  }
-  const paneSources: TabPaneInputSources = {
-    entriesByTabId: byTab,
-    ptyIdsByTabId,
-    runtimePaneTitlesByTabId,
-    terminalLayoutsByTabId
-  }
-  const result = new Map<string, WorktreeAttention>()
-
-  for (const worktree of worktrees) {
-    const tabs = tabsByWorktree?.[worktree.id] ?? []
-    // Why: hook stamps can precede tab mirroring; once mirrored, live tab ownership wins so both worktrees aren't promoted.
-    const panes: PaneInput[] = (byAttributedWorktree.get(worktree.id) ?? [])
-      .filter((entry) => {
-        const parsed = parsePaneKey(entry.paneKey)
-        return parsed !== null && !mirroredTabIds.has(parsed.tabId)
-      })
-      // No mirrored tab means no renderer live-PTY evidence to hold these hooks above Idle.
-      .map((entry) => ({ kind: 'hook' as const, entry, hasLivePty: false }))
-    if (tabs.length === 0) {
-      result.set(worktree.id, resolveAttention(panes, now))
-      continue
-    }
-    for (const tab of tabs) {
-      panes.push(...collectTabPaneInputs(tab, worktree.lastActivityAt, paneSources, now))
-    }
-    result.set(worktree.id, resolveAttention(panes, now))
-  }
-
-  return result
 }

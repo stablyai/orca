@@ -5,6 +5,8 @@ import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
+import { findUnrecoveredStall } from './unrecovered-stall-selection'
+import { finalHangMarkerPath, mergeFinalHangMarker } from './hang-final-marker'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
@@ -19,6 +21,7 @@ import {
   mergeHangObservations,
   type HangObservation
 } from './hang-observations'
+import { hangObservationUnresponsiveMs, isHangTierObservation } from './hang-observation-schema'
 
 function previousMarkerPath(userDataPath: string): string {
   return `${hangDetectionMarkerPath(userDataPath)}.previous`
@@ -31,13 +34,17 @@ export function preservePreviousHangDetection(userDataPath: string): void {
   }
   try {
     const currentPath = hangDetectionMarkerPath(userDataPath)
+    const finalPath = finalHangMarkerPath(currentPath)
     const pendingPath = previousMarkerPath(userDataPath)
-    const current = asHangObservations(readAvailableHangDetectionMarker(currentPath))
-    if (!current) {
+    const [currentMarker, finalMarker, pending] = [currentPath, finalPath, pendingPath].map(
+      (path) => readAvailableHangDetectionMarker(path)
+    )
+    // An unreadable .final may hold the clean-quit state: keep every file and retry next launch.
+    if (finalMarker === undefined || pending === undefined) {
       return
     }
-    const pending = readAvailableHangDetectionMarker(pendingPath)
-    if (pending === undefined) {
+    const current = mergeFinalHangMarker(asHangObservations(currentMarker), finalMarker)
+    if (!current) {
       return
     }
     const merged = mergeHangObservations(
@@ -45,7 +52,9 @@ export function preservePreviousHangDetection(userDataPath: string): void {
       current
     )
     writeHangDetectionMarker(pendingPath, merged)
-    rmSync(currentPath, { force: true })
+    for (const path of [currentPath, finalPath]) {
+      rmSync(path, { force: true })
+    }
   } catch {
     // Missing or inaccessible markers must not prevent startup; retain any earlier pending note.
   }
@@ -64,7 +73,9 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
         : 'unknown',
     cause: 'unknown',
     cpuScope: 'process-all-threads',
-    machineEvidence: record.machine ? 'sampled' : 'unknown'
+    machineEvidence: record.machine ? 'sampled' : 'unknown',
+    watchdogTickAt: record.watchdogTickAt ?? null,
+    ...(record.appVersion ? { observedAppVersion: record.appVersion } : {})
   }
   if (record.mainJs) {
     Object.assign(details, hangCaptureDetails('mainJs', record.mainJs))
@@ -73,11 +84,13 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
     Object.assign(details, hangCaptureDetails('native', record.native))
   }
   if (record.kind === 'heartbeat-stall') {
-    details.unresponsiveMs =
-      latestHangMarker({ version: 1, observations: [record], omitted: 0 })?.unresponsiveMs ??
-      record.durationMs
+    details.unresponsiveMs = hangObservationUnresponsiveMs(record)
     details.detectedUnresponsiveMs = record.durationMs
     details.selfRecovered = record.selfRecovered
+    details.tier = isHangTierObservation(record) ? 'hang' : 'stall'
+    if (record.escalatedAt !== undefined) {
+      details.escalatedAfterDetectionMs = Math.max(0, record.escalatedAt - record.detectedAt)
+    }
   } else {
     details.watchdogGapMs = record.durationMs
     details.preGapCpuDeltaUs = null
@@ -114,6 +127,15 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
       details[`machine_${key}`] = value
     }
   }
+  for (const [index, send] of (record.workerSends ?? []).entries()) {
+    details[`workerSend${index}_role`] = send.role
+    details[`workerSend${index}_kind`] = send.kind
+    details[`workerSend${index}_items`] = send.items
+    details[`workerSend${index}_bytes`] = send.bytes
+    details[`workerSend${index}_depth`] = send.depth
+    details[`workerSend${index}_agoMs`] = send.agoMs
+    details[`workerSend${index}_heapUsedMB`] = send.heapUsedMB
+  }
   if (record.watchdogGap) {
     details.overlappingWatchdogGapMs = record.watchdogGap.durationMs
     details.overlappingWatchdogGapAt = record.watchdogGap.observedAt
@@ -133,21 +155,33 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
   return details
 }
 
-export function reportPreviousHangDetection(userDataPath: string): HangDetectionMarker | null {
+export type PreviousHangDetection = {
+  marker: HangDetectionMarker | null
+  unrecoveredStall: HangObservation | null
+}
+
+export function reportPreviousHangDetection(userDataPath: string): PreviousHangDetection {
   reportPreviousRendererHangs(userDataPath)
   if (!resolveObservabilityConsent().localFileEnabled || !hasActiveTraceSink()) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   const marker = consumeHangDetectionMarker(previousMarkerPath(userDataPath))
   const collection = asHangObservations(marker)
   if (!collection) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   for (const record of collection.observations) {
     recordDurableCrashBreadcrumb(
-      record.kind === 'heartbeat-stall' ? 'main_thread_hang_detected' : 'main_thread_watchdog_gap',
+      record.kind === 'watchdog-gap'
+        ? 'main_thread_watchdog_gap'
+        : isHangTierObservation(record)
+          ? 'main_thread_hang_detected'
+          : 'main_thread_stall_detected',
       observationDetails(record, collection.omitted)
     )
   }
-  return latestHangMarker(collection)
+  return {
+    marker: latestHangMarker(collection),
+    unrecoveredStall: findUnrecoveredStall(collection.observations)
+  }
 }

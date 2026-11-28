@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordEntrySummary,
@@ -197,7 +197,7 @@ function BrowserPasswordsProfile({
       title: t('common.delete', 'Delete'),
       description: t(
         'settings.browser.passwords.deleteAllConfirmDescription',
-        'Every saved password in the {{profile}} profile is permanently deleted. This can’t be undone.',
+        'All saved passwords, notes, and never-save sites in the {{profile}} profile will be permanently deleted. This can’t be undone.',
         { profile: profileLabel }
       ),
       confirmLabel: t('common.delete', 'Delete'),

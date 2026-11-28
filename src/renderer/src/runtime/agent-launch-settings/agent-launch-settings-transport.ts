@@ -1,8 +1,9 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
+import { normalizeDefaultTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { usableAgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { useAppStore } from '@/store'
-import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-permission-modes-capability'
+import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/options/permissions/agent-session-permission-modes-capability'
 import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation,
@@ -69,7 +70,8 @@ export function hostAgentLaunchSettingsSource(
   const permission = snapshot.agentPermission
   const choices = snapshot.agentChoices
   return {
-    defaultTuiAgent: snapshot.defaultTuiAgent,
+    // An older host can still report a removed agent (Gemini CLI) as its default.
+    defaultTuiAgent: normalizeDefaultTuiAgent(snapshot.defaultTuiAgent),
     disabledTuiAgents: snapshot.disabledTuiAgents,
     agentCmdOverrides: snapshot.agentCmdOverrides,
     ...migrateAgentPermissionChoice(
@@ -108,7 +110,7 @@ export async function readHostAgentStartupSettings(
   }
   const settings = result.settings
   const platform = lastVerifiedRuntimeStatus(
-    useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+    readRuntimeStatuses().get(owner.environmentId)
   )?.hostPlatform
   return { ...settings, ...migrateAgentPermissionChoice(settings, platform) }
 }
@@ -125,7 +127,7 @@ export async function readHostAgentLaunchDefaults(
   })
   if (usableAgentPickerDefaultSettings(snapshot)) {
     const platform = lastVerifiedRuntimeStatus(
-      useAppStore.getState().runtimeStatusByEnvironmentId.get(owner.environmentId)
+      readRuntimeStatuses().get(owner.environmentId)
     )?.hostPlatform
     return { settings: hostAgentLaunchSettingsSource(snapshot, platform), structuredKnown: false }
   }

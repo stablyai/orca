@@ -4,7 +4,7 @@ import {
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionAdapterStop } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-stop'
-import { answerClaudePrompt, cancelClaudeTurn } from '../claude-structured-control-actions'
+import { answerClaudePrompt, cancelClaudeTurn } from '../turns/claude-structured-control-actions'
 import { leaveClaudePlanModeOnApproval } from '../permissions/claude-plan-approval-mode'
 import type { ClaudeLateDispatchSettlement } from '../turns/claude-replay-turn-resolution'
 import { buildClaudePromptReply, claudePromptDismissal } from './claude-structured-prompt-replies'
@@ -12,6 +12,7 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 import { CLAUDE_STOP_GRACE_MS } from '../turns/claude-request-end-wait'
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
+import { askKeptBypassLeavingPlan } from '../../relay/claude-kept-permission'
 
 type CancelInput = Parameters<StructuredAgentSessionAdapter['cancelTurn']>[0]
 type AnswerInput = Parameters<StructuredAgentSessionAdapter['answerPrompt']>[0]
@@ -162,7 +163,9 @@ export async function answerClaudeStructuredPrompt(input: {
     ) {
       throw new AgentSessionPromptUnavailableError(request.itemId)
     }
-    leaveClaudePlanModeOnApproval(session, claim.found.prompt, reply)
+    leaveClaudePlanModeOnApproval(session, claim.found.prompt, reply, () =>
+      askKeptBypassLeavingPlan(session, undefined)
+    )
     await answerClaudePrompt(session, claim, reply)
   } catch (error) {
     session.prompts.releaseClaim(claim)

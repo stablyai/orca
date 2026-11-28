@@ -1,4 +1,9 @@
 import { setBrowserGuestVisible } from '../browser-guest-activity'
+import { OFFSCREEN_ANIMATION_ATTRIBUTE } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  getBrowserPageChromeInsetHeight,
+  rememberBrowserPageChromeInsetHeight
+} from './browser-page-chrome-inset-heights'
 
 // Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
 import { retireBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
@@ -28,14 +33,14 @@ export type BrowserPageViewportScrollState = {
 
 const browserPageViewports = new Map<string, BrowserPageViewport>()
 
-// Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
-const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
 // An agent's size outlives pane remounts until the page's next load or a user preset clears it.
 const browserPageAgentViewportSizes = new Map<string, { width: number; height: number }>()
-const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
+
+/** Set on a workspace's slot root; page boxes leave this much room on their right. */
+export const BROWSER_SIDE_PANEL_WIDTH_VARIABLE = '--browser-side-panel-width'
 
 function retireViewportGuests(root: HTMLElement): void {
   for (const webview of root.querySelectorAll<Electron.WebviewTag>('webview')) {
@@ -126,13 +131,15 @@ export function ensureBrowserPageViewport(
   const chromeInset = document.createElement('div')
   chromeInset.dataset.browserPageChromeInset = ''
   chromeInset.className = 'shrink-0'
-  const rememberedInsetHeight = browserPageChromeInsetHeights.get(browserPageId)
-  if (rememberedInsetHeight !== undefined) {
+  const rememberedInsetHeight = getBrowserPageChromeInsetHeight(browserPageId)
+  if (rememberedInsetHeight !== null) {
     chromeInset.style.height = `${rememberedInsetHeight}px`
   }
 
   const devToolsSplit = document.createElement('div')
   devToolsSplit.className = BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME
+  // Room for an extension side panel, which the workspace slot sets while one shows.
+  devToolsSplit.style.marginRight = `var(${BROWSER_SIDE_PANEL_WIDTH_VARIABLE}, 0px)`
 
   const container = document.createElement('div')
   container.dataset.browserPageContainer = ''
@@ -163,8 +170,8 @@ export function ensureBrowserPageViewport(
 export const BROWSER_PAGE_PRESET_VIEWPORT_CLASS_NAME = 'browser-page-preset-viewport'
 
 // CDP presets use window DIP while UI zoom changes CSS pixels; divide the host box to avoid unpainted strips.
-function applyViewportPresetSizeStyles(
-  viewport: BrowserPageViewport,
+export function applyViewportPresetSizeStyles(
+  viewport: Pick<BrowserPageViewport, 'content' | 'scroller'>,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
@@ -241,13 +248,9 @@ export function scrollBrowserPageViewport(
   scroller.scrollTop += deltaY
 }
 
-export function getBrowserPageViewportScrollState(
-  browserPageId: string
-): BrowserPageViewportScrollState | null {
-  const scroller = browserPageViewports.get(browserPageId)?.scroller
-  if (!scroller) {
-    return null
-  }
+export function readBrowserPageViewportScrollState(
+  scroller: HTMLElement
+): BrowserPageViewportScrollState {
   return {
     scrollLeft: Math.max(0, scroller.scrollLeft),
     scrollTop: Math.max(0, scroller.scrollTop),
@@ -304,20 +307,14 @@ export function applyBrowserPageViewportLayout(
   }
   viewport.shell.style.display = 'flex'
   viewport.shell.style.opacity = layout.active ? '1' : '0'
+  // At opacity 0 its loops (the agent glow) would still draw every frame.
+  viewport.shell.toggleAttribute(OFFSCREEN_ANIMATION_ATTRIBUTE, !layout.active)
   viewport.shell.style.pointerEvents = layout.active ? 'auto' : 'none'
   viewport.shell.style.zIndex = layout.active ? '1' : '0'
 }
 
 export function syncBrowserPageChromeInset(browserPageId: string, heightPx: number): void {
-  const insetHeight = Math.max(0, heightPx)
-  browserPageChromeInsetHeights.set(browserPageId, insetHeight)
-  while (browserPageChromeInsetHeights.size > MAX_REMEMBERED_BROWSER_PAGE_INSETS) {
-    const oldest = browserPageChromeInsetHeights.keys().next()
-    if (oldest.done) {
-      break
-    }
-    browserPageChromeInsetHeights.delete(oldest.value)
-  }
+  const insetHeight = rememberBrowserPageChromeInsetHeight(browserPageId, heightPx)
   const viewport = browserPageViewports.get(browserPageId)
   if (!viewport) {
     return

@@ -1,4 +1,5 @@
 import { readCommandBody } from '../arguments/command-body-input'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -11,6 +12,7 @@ import {
   LINEAR_WRITE_BODY_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear/agent-access'
+import { LINEAR_PRIORITY_LABELS } from '../../shared/linear/priority-label'
 import { isLinearUuid } from '../../shared/linear/uuid'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -20,13 +22,9 @@ import {
 } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 
-const LINEAR_PRIORITY_VALUES = new Map([
-  ['none', 0],
-  ['urgent', 1],
-  ['high', 2],
-  ['medium', 3],
-  ['low', 4]
-])
+const LINEAR_PRIORITY_VALUES = new Map<string, number>(
+  Object.entries(LINEAR_PRIORITY_LABELS).map(([priority, label]) => [label, Number(priority)])
+)
 
 export function buildAssigneeSetRequest(
   flags: Map<string, string | boolean>,
@@ -87,13 +85,7 @@ export function getDueDateFlag(flags: Map<string, string | boolean>, name: strin
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new RuntimeClientError('invalid_argument', `--${name} must use YYYY-MM-DD`)
   }
-  const [year, month, day] = value.split('-').map(Number)
-  const date = new Date(Date.UTC(year, month - 1, day))
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day
-  ) {
+  if (hasImpossibleLeadingDate(value)) {
     throw new RuntimeClientError('invalid_argument', `--${name} must be a real calendar date`)
   }
   return value

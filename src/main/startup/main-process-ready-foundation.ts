@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { configureMacMenuDeadKeyGuard } from '../menu/macos-menu-dead-key'
 import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
@@ -13,60 +14,46 @@ import {
 } from '../browser/guest-lifecycle/manager/browser-manager'
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
+import { initializeTeamCapabilities } from '../orca-profiles/cloud-auth/initialize-team-capabilities'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-answers-file'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
-import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
-import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
+import { wslHostsGateOpen } from '../wsl/host-lifecycle/wsl-host-gate'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
-import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
-import { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
 import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
 import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
-import {
-  shouldSuppressDevEducation,
-  suppressDevEducationForStore
-} from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
-import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
-import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
-import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
-import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
+import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
+import { registerLazyDocPreviewGrantHandlers } from '../ipc/register-lazy-doc-preview-grant-handlers'
 import {
   initializeBrowserSessionsForApp,
   whenBrowserSessionsReadyForRestoredTabs
 } from '../browser/sessions/browser-session-startup'
-import {
-  initializeBrowserExtensionSupport,
-  switchBrowserExtensionSupport
-} from '../browser/extensions/browser-extension-startup'
+import { initializeBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { createStoreNativeSettingsProjection } from '../core-desktop/native-settings-projection'
+import { followNativeSettingChanges } from './native-setting-subscriptions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
-import {
-  logWslCliReconciliationResults,
-  reconcileManagedWslCliRegistrations
-} from '../cli/wsl/wsl-cli-registration-reconciliation'
-import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
-import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
+  configureMacMenuDeadKeyGuard()
   // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
   applyBackgroundActivationPolicy({
     serveWithoutDesktopWindow: state.isServeMode,
@@ -111,47 +98,69 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Post-ready naming preserves packaged Keychain identity; dev already renamed before ready.
   app.setName(identity.appName)
+  // Older builds put an unread count on the dock icon; clear any that is still showing.
+  if (process.platform === 'darwin') {
+    app.dock?.setBadge('')
+  }
   updateGpuAccelerationAboutPanel()
   if (state.isServeMode) {
     // Profile loading can decrypt and hang; fence unreachable keychains first.
+    const { withholdUnreachableKeychainForServe } = await import('../host/serve-keychain-guard')
     await withholdUnreachableKeychainForServe({
       usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
     })
   }
   // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
-  state.managedWslCliReconciliationStatus = 'pending'
-  state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations({
-    isPackaged: app.isPackaged,
-    userDataPath: canonicalUserDataPath,
-    appVersion: app.getVersion()
-  })
-    .then((results) => {
-      logWslCliReconciliationResults(results)
-      state.managedWslCliReconciliationStatus = 'settled'
-    })
-    .catch((error) => {
-      state.managedWslCliReconciliationStatus = 'failed'
-      console.warn(
-        '[wsl-cli] Managed registration reconciliation discovery failed:',
-        error instanceof Error ? error.message : String(error)
-      )
-    })
-  state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
-    state.managedWslCliReconciliationReady
-  )
+  if (process.platform === 'win32' && app.isPackaged) {
+    state.managedWslCliReconciliationStatus = 'pending'
+    state.managedWslCliReconciliationReady =
+      import('../cli/wsl/wsl-cli-registration-reconciliation')
+        .then(async ({ logWslCliReconciliationResults, reconcileManagedWslCliRegistrations }) => {
+          const results = await reconcileManagedWslCliRegistrations({
+            isPackaged: app.isPackaged,
+            userDataPath: canonicalUserDataPath,
+            appVersion: app.getVersion()
+          })
+          logWslCliReconciliationResults(results)
+          state.managedWslCliReconciliationStatus = 'settled'
+        })
+        .catch((error) => {
+          state.managedWslCliReconciliationStatus = 'failed'
+          console.warn(
+            '[wsl-cli] Managed registration reconciliation discovery failed:',
+            error instanceof Error ? error.message : String(error)
+          )
+        })
+    const { createWslCliReconciliationStartupBarrier } =
+      await import('./wsl-startup/wsl-cli-reconciliation-startup-barrier')
+    state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
+      state.managedWslCliReconciliationReady
+    )
+  } else {
+    state.managedWslCliReconciliationStatus = 'settled'
+    state.managedWslCliReconciliationReady = Promise.resolve()
+    state.managedWslCliStartupBarrierReady = Promise.resolve()
+  }
   const profile = ensureActiveOrcaProfile()
   state.activeOrcaProfile = profile
+  await initializeTeamCapabilities(getProfileUserDataPath(), profile.profile)
   // Read durable browser hosting ID before window argv stamps it or renderer and lease ownership diverge.
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves
   // nothing to fence.
-  await runPendingWslDriveUncConversions({
-    userDataPath: getAppEnvironment().getPath('userData'),
-    profileUserDataPath: getProfileUserDataPath(),
-    profileId: profile.profile.id
-  })
+  if (wslHostsGateOpen()) {
+    const { runPendingWslDriveUncConversions } =
+      await import('../wsl/filesystem/wsl-drive-unc-conversion-startup')
+    await runPendingWslDriveUncConversions({
+      userDataPath: getAppEnvironment().getPath('userData'),
+      profileUserDataPath: getProfileUserDataPath(),
+      profileId: profile.profile.id
+    })
+  }
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
+  // Saved drive answers first: the fence and the move prune read them and never a drive.
+  await loadWslMappedDriveAnswers(getAppEnvironment().getPath('userData'))
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
   const profileState = await createProfileStateStoreForStartup({
     userDataPath: getProfileUserDataPath(),
@@ -172,10 +181,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
-  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
+  const nativeSettings = createStoreNativeSettingsProjection(store)
+  state.nativeSettings = nativeSettings
+  hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
-    preloadSsh2()
+    void import('../ssh/authentication/ssh2-module-load').then(({ preloadSsh2 }) => preloadSsh2())
   }
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   // Main-process-ready waits on interrupted moves being reset or finished, bounded.
@@ -184,7 +195,9 @@ export async function initializeReadyFoundation(): Promise<void> {
     store
   )
   // Publish proxy readiness before guarding default-session requests; network awaits it, while window creation can proceed.
-  state.initialProxyApplicationReady = applyElectronProxySettings(store.getSettings()).then(
+  state.initialProxyApplicationReady = applyElectronProxySettings(
+    nativeSettings.getSettings()
+  ).then(
     (result) => {
       if (result.source === 'invalid-settings') {
         // STA-3442: log invalid configured proxies so DIRECT fallback is diagnosable.
@@ -196,8 +209,12 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   installElectronProxyRequestGuard(session.defaultSession)
-  if (!state.isServeMode) {
-    void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
+  if (!state.isServeMode && process.platform === 'win32') {
+    void state.initialProxyApplicationReady.then(async () => {
+      const { startWslHostsPolicyLiveUpdates } =
+        await import('../wsl/host-lifecycle/wsl-hosts-policy-live-update')
+      startWslHostsPolicyLiveUpdates()
+    })
   }
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({
@@ -211,42 +228,44 @@ export async function initializeReadyFoundation(): Promise<void> {
   initOrcadHeldFenceTokenFile(profile.dataFile)
   // Neutralize legacy shims before PTY handlers, including headless serve which never opens a main window.
   neutralizeLegacyTerminalShimDir(app.getPath('userData'))
-  const windowsShellPathHydration = createWindowsShellPathHydration()
-  state.windowsShellPathHydration = windowsShellPathHydration
-  configureWindowsHostGitEnvironmentReadiness(
-    process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
-  )
-  if (process.platform === 'win32') {
-    const settings = store.getSettings()
-    if (app.isPackaged) {
-      void windowsShellPathHydration.hydrate(
-        settings.terminalWindowsShell,
-        settings.terminalWindowsPowerShellImplementation
-      )
-    } else {
-      windowsShellPathHydration.configure(
-        settings.terminalWindowsShell,
-        settings.terminalWindowsPowerShellImplementation
-      )
+  const applyWindowsShellPath = (settings: ReturnType<typeof store.getSettings>): void => {
+    const hydration = state.windowsShellPathHydration
+    if (!hydration) {
+      return
     }
+    const { terminalWindowsShell: shell, terminalWindowsPowerShellImplementation: ps } = settings
+    if (app.isPackaged) {
+      void hydration.hydrate(shell, ps)
+    } else {
+      hydration.configure(shell, ps)
+    }
+  }
+  if (process.platform === 'win32') {
+    const { createWindowsShellPathHydration } =
+      await import('./shell-environment/windows-shell-path-hydration')
+    const windowsShellPathHydration = createWindowsShellPathHydration()
+    state.windowsShellPathHydration = windowsShellPathHydration
+    configureWindowsHostGitEnvironmentReadiness(windowsShellPathHydration.whenReady)
+    applyWindowsShellPath(store.getSettings())
+  } else {
+    state.windowsShellPathHydration = null
+    configureWindowsHostGitEnvironmentReadiness(null)
   }
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Refresh the tiny pre-ready marker so next launch avoids reparsing settings.
   writeHttp1CompatibilityMarker(
     canonicalUserDataPath,
-    store.getSettings().electronHttp1CompatibilityMode === true,
+    nativeSettings.getSettings().electronHttp1CompatibilityMode === true,
     profile.profile.id
   )
   setDefaultWslDistroOverride(store.getSettings().terminalWindowsWslDistro ?? null)
+  followNativeSettingChanges(nativeSettings, {
+    canonicalUserDataPath,
+    profileId: profile.profile.id,
+    hangWatchdog
+  })
   store.onSettingsChanged((updates, settings) => {
-    if ('electronHttp1CompatibilityMode' in updates) {
-      writeHttp1CompatibilityMarker(
-        canonicalUserDataPath,
-        settings.electronHttp1CompatibilityMode === true,
-        profile.profile.id
-      )
-    }
     if ('terminalWindowsWslDistro' in updates) {
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
@@ -254,25 +273,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
       process.platform === 'win32'
     ) {
-      if (app.isPackaged) {
-        void windowsShellPathHydration.hydrate(
-          settings.terminalWindowsShell,
-          settings.terminalWindowsPowerShellImplementation
-        )
-      } else {
-        windowsShellPathHydration.configure(
-          settings.terminalWindowsShell,
-          settings.terminalWindowsPowerShellImplementation
-        )
-      }
-    }
-    if ('browserExtensionsEnabled' in updates) {
-      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
-    }
-    if ('showMenuBarIcon' in updates) {
-      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
-      // Store owns settings mutations; sync every menu-bar toggle through this listener.
-      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+      applyWindowsShellPath(settings)
     }
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
@@ -284,24 +285,25 @@ export async function initializeReadyFoundation(): Promise<void> {
       }
     }
   })
-  applyAppIcon(store.getSettings().appIcon)
-  if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
-    suppressDevEducationForStore(store)
+  applyAppIcon(nativeSettings.getSettings().appIcon)
+  if (!app.isPackaged) {
+    const { shouldSuppressDevEducation, suppressDevEducationForStore } =
+      await import('./profile-startup/dev-education-suppression')
+    if (shouldSuppressDevEducation({ isDev: true })) {
+      suppressDevEducationForStore(store)
+    }
   }
   // Install the proxy resolver before partitions materialize.
-  setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Protocol-scoped preview handlers must exist before webview attachment.
-  installMediaPreviewProtocolHandler()
-  installJiraImageProtocolHandler()
-  installDocPreviewProtocolHandler()
-  registerDocPreviewGrantHandlers()
+  setBrowserNetworkProxySettingsResolver(() => nativeSettings.getSettings())
+  installPreviewProtocolHandlers()
+  registerLazyDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().browserExtensionsEnabled !== false,
+    enabled: nativeSettings.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.
-  initializeBrowserSessionsForApp({
+  await initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,
     profileDirectory: profile.profileDirectory,
     // Sweep against current SSH targets or live target cookie jars look orphaned.
@@ -314,7 +316,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       return currentStore.getSshTargets().map((target) => target.id)
     }
   })
-  browserSiteDisplayController.followZoomSettings(store)
+  browserSiteDisplayController.followZoomSettings(nativeSettings)
   browserManager.setSiteDisplayController(browserSiteDisplayController)
   await whenBrowserSessionsReadyForRestoredTabs()
 }

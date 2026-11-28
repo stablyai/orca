@@ -96,9 +96,3 @@ export function observeRuntimeHostStatusForPendingRemovals(
     readyEnvironments.delete(environmentId)
   }
 }
-
-export function resetPendingRuntimeRepoRemovalReplayForTests(): void {
-  readyEnvironments.clear()
-  replayingEnvironments.clear()
-  readyDuringReplay.clear()
-}

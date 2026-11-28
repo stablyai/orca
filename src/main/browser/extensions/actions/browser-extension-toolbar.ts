@@ -1,12 +1,11 @@
 import { recordBrowserExtensionUsed } from '../../../telemetry/browser-extensions-banner'
+import { browserExtensionSourceProfileId } from '../profile-sessions/browser-extension-route-profiles'
 import { webContents } from 'electron'
 import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 import type { BrowserExtensionActionResult } from '../../../../shared/browser/extensions/browser-extension-types'
 import {
-  BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL,
   BROWSER_EXTENSION_TOOLBAR_CHANGED_CHANNEL,
   type BrowserExtensionAnchorRect,
-  type BrowserExtensionPopupRequest,
   type BrowserExtensionToolbarAction,
   type BrowserExtensionToolbarState
 } from '../../../../shared/browser/extensions/browser-extension-toolbar-types'
@@ -30,11 +29,15 @@ import {
 } from './browser-extension-action-state'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { BrowserExtensionApiError } from '../api-runtime/browser-extension-namespace-registry'
+import { toggleBrowserExtensionSidePanelFromAction } from '../side-panel/browser-extension-side-panel-open'
 import {
   consumeBrowserExtensionPopupToggle,
-  getOpenBrowserExtensionPopup,
   openBrowserExtensionPopup
 } from './browser-extension-popup-host'
+import {
+  requestBrowserExtensionPopup,
+  resolvePendingPopupRequest
+} from './browser-extension-popup-request'
 import {
   describeBrowserExtensionTab,
   getActiveBrowserTabId,
@@ -50,7 +53,6 @@ import {
 } from '../../../../shared/browser/extensions/browser-extension-url'
 
 const TOOLBAR_CHANGED_DELAY_MS = 50
-const POPUP_REQUEST_TIMEOUT_MS = 3_000
 
 type ToolbarPage = {
   contents: Electron.WebContents
@@ -63,7 +65,7 @@ function liveContents(id: number | null): Electron.WebContents | null {
   return contents && !contents.isDestroyed() ? contents : null
 }
 
-/** A browser page whose session runs extensions (a local browser profile), else null. */
+/** A browser page whose session runs extensions, else null. */
 function resolveToolbarPage(browserPageId: string): ToolbarPage | null {
   const contents = liveContents(browserManager.getGuestWebContentsId(browserPageId))
   const profileId = contents ? getBrowserExtensionProfileIdForSession(contents.session) : null
@@ -112,7 +114,11 @@ export async function getBrowserExtensionToolbarState(
   const rank = (action: BrowserExtensionToolbarAction): number =>
     action.pinned ? pinOrder.indexOf(action.extensionId) : Number.MAX_SAFE_INTEGER
   actions.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
-  return { profileId: page.profileId, actions }
+  return {
+    profileId: page.profileId,
+    browserProfileId: browserExtensionSourceProfileId(page.profileId),
+    actions
+  }
 }
 
 function openPopupForPage(
@@ -185,6 +191,13 @@ export function activateBrowserExtensionAction(args: {
     if (!details.enabled && !args.popupOnly) {
       return { ok: true }
     }
+    if (
+      !args.popupOnly &&
+      toggleBrowserExtensionSidePanelFromAction(page.profileId, extension, page.contents.id)
+    ) {
+      recordBrowserExtensionUsed()
+      return { ok: true }
+    }
     if (!args.popupOnly) {
       noteBrowserExtensionUserGesture(page.session, extension.id)
       grantBrowserExtensionActiveTab(extension, page.contents.id)
@@ -203,68 +216,6 @@ export function activateBrowserExtensionAction(args: {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
-}
-
-const pendingPopupRequests = new Map<string, Set<(error?: Error) => void>>()
-
-function popupRequestKey(profileId: string, extensionId: string): string {
-  return `${profileId}\0${extensionId}`
-}
-
-function resolvePendingPopupRequest(profileId: string, extensionId: string): void {
-  const key = popupRequestKey(profileId, extensionId)
-  const pending = pendingPopupRequests.get(key)
-  pendingPopupRequests.delete(key)
-  for (const settle of pending ?? []) {
-    settle()
-  }
-}
-
-/**
- * action.openPopup and the _execute_action command: the renderer knows where the button is, so
- * main asks the toolbar of `tabId`'s page (by default the active one) to open the popup there.
- */
-export function requestBrowserExtensionPopup(
-  sess: Electron.Session,
-  extensionId: string,
-  tabId = getActiveBrowserTabId()
-): Promise<void> {
-  const profileId = getBrowserExtensionProfileIdForSession(sess)
-  const tab = liveContents(tabId)
-  if (!profileId || !tab || tab.session !== sess) {
-    return Promise.reject(new BrowserExtensionApiError('No active tab to show the popup on'))
-  }
-  const browserPageId = browserManager.getTabIdForWebContentsId(tab.id)
-  const mainWindow = getBrowserExtensionMainWindow()
-  // Why: only Orca's own tabs have a toolbar; a popout, like Chrome's popup windows, has none.
-  if (!browserPageId || !mainWindow) {
-    return Promise.reject(new BrowserExtensionApiError('This window has no toolbar for the popup'))
-  }
-  const open = getOpenBrowserExtensionPopup()
-  if (open?.profileId === profileId && open.extensionId === extensionId) {
-    return Promise.resolve()
-  }
-  return new Promise<void>((resolve, reject) => {
-    const key = popupRequestKey(profileId, extensionId)
-    const settle = (error?: Error): void => {
-      clearTimeout(timer)
-      pendingPopupRequests.get(key)?.delete(settle)
-      if (error) {
-        reject(error)
-      } else {
-        resolve()
-      }
-    }
-    const timer = setTimeout(
-      () => settle(new BrowserExtensionApiError('Could not show the popup')),
-      POPUP_REQUEST_TIMEOUT_MS
-    )
-    const pending = pendingPopupRequests.get(key) ?? new Set()
-    pending.add(settle)
-    pendingPopupRequests.set(key, pending)
-    const request: BrowserExtensionPopupRequest = { browserPageId, extensionId }
-    mainWindow.webContents.send(BROWSER_EXTENSION_POPUP_REQUEST_CHANNEL, request)
-  })
 }
 
 /**
@@ -290,7 +241,7 @@ export async function runBrowserExtensionToolbarAction(
     return
   }
   const details = getBrowserExtensionActionState(profileId, extension).get(tabId)
-  if (!details.enabled) {
+  if (!details.enabled || toggleBrowserExtensionSidePanelFromAction(profileId, extension, tabId)) {
     return
   }
   grantBrowserExtensionActiveTab(extension, tabId)

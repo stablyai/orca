@@ -1,5 +1,8 @@
 import type { BridgeTerminalToolbar } from '../bridge/native-capabilities/bridge-terminal-key'
-import { readBridgeExternalLinkUrl } from '../bridge/protocol/bridge-caps'
+import {
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
+  readBridgeExternalLinkUrl
+} from '../bridge/protocol/bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -12,6 +15,7 @@ import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../bridge/native-capabilities/brid
 import { bridgeNotifyRefusal } from '../bridge/protocol/bridge-notify-grants'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../bridge/page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../bridge/page-lifecycle/bridge-page-location'
+import { BRIDGE_SWAP_SAFE_NOTIFY } from '../bridge/page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../bridge/page-lifecycle/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from '../bridge/page-lifecycle/bridge-route-update'
 import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from '../bridge/native-capabilities/bridge-terminal-key'
@@ -50,6 +54,10 @@ export function createBridgeNotifyForwarder(args: {
       options.onPageLocation(message.href)
       return
     }
+    if (message.name === BRIDGE_SWAP_SAFE_NOTIFY) {
+      options.onPageSwapSafe?.(message.safe, message.round)
+      return
+    }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
       // Forward Back claims to the screen that owns the native key; this host serves only its document.
       args.onBackClaim(message.claimed)
@@ -81,7 +89,7 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
       // Pass the same normalized URL the envelope checked to the device handler; raw spelling could otherwise differ from the parsed target. Both use the same rule, so null is unreachable.
-      const target = readBridgeExternalLinkUrl(message.url)
+      const target = readBridgeExternalLinkUrl(message.url, BRIDGE_MAX_EXTERNAL_LINK_CHARS)
       if (target !== null) {
         options.onExternalLink(target)
       }

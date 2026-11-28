@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import '../../../shared/worktree/identity'
 import {
   composeWorktreeHostIdentity,
@@ -10,6 +9,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import type { Store } from '../../persistence/loading-store/store'
 import {
+  closeTestStores,
   createStore,
   makeRepo,
   readDataFile,
@@ -32,7 +32,8 @@ describe('host-qualified worktree metadata', () => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-worktree-identity-'))
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   it('reloads host-specific metadata without collapsing it to the legacy locator', () => {
@@ -57,7 +58,7 @@ describe('host-qualified worktree metadata', () => {
       displayName: 'Legacy feature'
     })
     seed.flush()
-    const legacy = readDataFile() as PersistedState
+    const legacy = readDataFile()
     delete legacy.worktreeMeta[worktreeId]?.instanceId
     delete legacy.worktreeMetaByIdentity
     delete legacy.worktreeIdentityAliases
@@ -74,7 +75,7 @@ describe('host-qualified worktree metadata', () => {
     expect(first?.instanceId).toBeTruthy()
     expect(second?.instanceId).toBe(first?.instanceId)
     expect(store.getWorktreeMetaForHost(worktreeId, 'local')?.comment).toBe('after migration')
-    const migrated = readDataFile() as PersistedState
+    const migrated = readDataFile()
     expect(migrated.worktreeMeta[worktreeId]?.hostId).toBe('local')
     expect(Object.keys(migrated.worktreeMetaByIdentity ?? {})).toHaveLength(1)
   })
@@ -93,9 +94,7 @@ describe('host-qualified worktree metadata', () => {
     expect(store.getWorktreeMetaForHost(worktreeId, 'local')?.displayName).toBe('Local feature')
     expect(store.getWorktreeMetaForHost(worktreeId, 'ssh:build-box')).toBeUndefined()
     store.flush()
-    expect(
-      Object.keys((readDataFile() as PersistedState).worktreeMetaByIdentity ?? {})
-    ).toHaveLength(1)
+    expect(Object.keys(readDataFile().worktreeMetaByIdentity ?? {})).toHaveLength(1)
   })
 
   it('drops every host identity row once each host removes its copy', () => {
@@ -115,7 +114,7 @@ describe('host-qualified worktree metadata', () => {
     store.removeWorktreeMeta(hostWorktreeTarget({ id: worktreeId, hostId: 'ssh:build-box' }))
 
     store.flush()
-    const persisted = readDataFile() as PersistedState
+    const persisted = readDataFile()
     expect(persisted.worktreeMetaByIdentity ?? {}).toEqual({})
     expect(persisted.worktreeIdentityAliases ?? {}).toEqual({})
   })
@@ -128,7 +127,7 @@ describe('host-qualified worktree metadata', () => {
       displayName: 'Remote feature'
     })
     seed.flush()
-    const persisted = readDataFile() as PersistedState
+    const persisted = readDataFile()
     const oldAlias = composeWorktreeHostIdentity(oldHostId, worktreeId)
     const oldKey = persisted.worktreeIdentityAliases?.[oldAlias]?.[0]
     expect(oldKey).toBeTruthy()
@@ -139,7 +138,7 @@ describe('host-qualified worktree metadata', () => {
     store.reassignSshTargetId('old-target', 'new-target')
     store.flush()
 
-    const repaired = readDataFile() as PersistedState
+    const repaired = readDataFile()
     const newAlias = composeWorktreeHostIdentity(newHostId, worktreeId)
     const newKey = repaired.worktreeIdentityAliases?.[newAlias]?.[0]
     expect(repaired.worktreeIdentityAliases?.[oldAlias]).toBeUndefined()
@@ -171,7 +170,7 @@ describe('host-qualified worktree metadata', () => {
     )
     expect(store.getWorktreeMeta(worktreeId)?.hostId).toBe(oldHostId)
     store.flush()
-    const persisted = readDataFile() as PersistedState
+    const persisted = readDataFile()
     expect(
       persisted.worktreeIdentityAliases?.[composeWorktreeHostIdentity(oldHostId, worktreeId)]
     ).toHaveLength(1)

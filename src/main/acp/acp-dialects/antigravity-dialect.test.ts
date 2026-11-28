@@ -1,50 +1,41 @@
-import { describe, expect, it } from 'vitest'
-import { ANTIGRAVITY_ACP_DIALECT } from './antigravity-dialect'
+import { expect, it } from 'vitest'
+import { antigravityListedFamilySelection } from './antigravity-dialect'
+import { parseAgyModelListing } from '../../antigravity/antigravity-model-listing'
 
-// Shape captured from the server's ask_question when the client advertises form elicitation.
-const question = { type: 'string', title: 'Pick a color', oneOf: [{ const: '1', title: 'Red' }] }
-const writeIn = { type: 'string', title: 'Other', description: 'Optional free-form answer' }
-const form = (message: string, properties: Record<string, unknown>) => ({
-  sessionId: 's1',
-  toolCallId: 'call_1',
-  mode: 'form',
-  message,
-  requestedSchema: { type: 'object', properties }
+// `agy models` 1.5.14: gemini-3.5-flash is a model itself, so its levels stay their own rows.
+const LISTED = parseAgyModelListing(
+  [
+    'gemini-4-argon-high\tGemini 4 Argon (High)',
+    'gemini-4-argon-medium\tGemini 4 Argon (Medium)',
+    'gemini-4-argon-low\tGemini 4 Argon (Low)',
+    'gemini-3.5-flash-medium\tGemini 3.5 Flash (Medium)',
+    'gemini-3.5-flash\tGemini 3.5 Flash (High)',
+    'gemini-3.5-flash-low\tGemini 3.5 Flash (Low)',
+    'gpt-oss-120b-medium\tGPT-OSS 120B (Medium)'
+  ].join('\n')
+)
+
+it('folds only a level id the listing groups into its family', () => {
+  const pick = (model: string, effort?: string) =>
+    antigravityListedFamilySelection({ model, ...(effort ? { effort } : {}) }, LISTED)
+  expect(pick('gemini-4-argon-medium', 'medium')).toEqual({
+    model: 'gemini-4-argon',
+    effort: 'medium'
+  })
+  expect(pick('gemini-4-argon-medium')).toEqual({ model: 'gemini-4-argon', effort: 'medium' })
+  expect(pick('gemini-4-argon-medium', 'high')).toEqual({ model: 'gemini-4-argon', effort: 'high' })
+  expect(pick('gemini-4-argon-medium', 'xhigh')).toBeNull()
+  expect(pick('gemini-3.5-flash-medium', 'medium')).toBeNull()
+  expect(pick('gpt-oss-120b-medium', 'medium')).toBeNull()
 })
-const present = (params: unknown) => ANTIGRAVITY_ACP_DIALECT.request?.('elicitation/create', params)
 
-describe('Antigravity ask_question forms', () => {
-  it('shows the question with a write-in field and returns typed text as the answer', () => {
-    const presentation = present(
-      form('The agent has a question.', { q1: question, q1_other: writeIn })
-    )
-    expect(presentation?.body).toMatchObject({
-      kind: 'question',
-      question: 'Pick a color',
-      options: [{ id: 'o1', label: 'Red' }],
-      freeTextQuestionId: 'q1'
-    })
-    expect(
-      presentation?.reply({
-        kind: 'answers',
-        answers: [{ questionId: 'q1', optionIds: [], other: 'Green please' }]
-      })
-    ).toEqual({ action: 'accept', content: { q1_other: 'Green please' } })
-    expect(presentation?.reply({ kind: 'option', optionId: 'o1' })).toEqual({
-      action: 'accept',
-      content: { q1: '1' }
-    })
-    expect(presentation?.reply(null)).toEqual({ action: 'cancel' })
-  })
-
-  it('keeps the question as the heading of a lone multi-select card', () => {
-    const toppings = { type: 'array', title: 'Pick toppings', items: { anyOf: question.oneOf } }
-    expect(present(form('The agent has a question.', { q1: toppings }))?.body).toMatchObject({
-      question: 'Pick toppings'
-    })
-  })
-
-  it('leaves other forms, such as forwarded MCP requests, to the shared presentation', () => {
-    expect(present(form('Choose a deployment target', { q1: question }))).toBeUndefined()
-  })
+it('keeps a listed level id even when its family row offers that level', () => {
+  // A live ACP menu with gemini-3.5-flash current gives that row the session's level picker.
+  const argon = LISTED.find((model) => model.id === 'gemini-4-argon')
+  const live = LISTED.map((model) =>
+    model.id === 'gemini-3.5-flash' ? { ...model, efforts: argon?.efforts ?? [] } : model
+  )
+  expect(
+    antigravityListedFamilySelection({ model: 'gemini-3.5-flash-medium', effort: 'medium' }, live)
+  ).toBeNull()
 })

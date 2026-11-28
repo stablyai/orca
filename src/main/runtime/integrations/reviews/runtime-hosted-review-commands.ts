@@ -8,6 +8,7 @@ import type {
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import type { HostPROutcomeRecorder } from '../../../github/pull-requests/refresh/host-pr-cache-backfill'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import {
@@ -53,6 +54,7 @@ type RuntimeHostedReviewCommandsDeps = {
     admissionTier?: GitAdmissionTier
   ) => HostedReviewExecutionOptions | undefined
   recordCreated: (repoId: string, number: number, url: string) => void
+  recordPROutcome?: HostPROutcomeRecorder
 }
 
 export class RuntimeHostedReviewCommands {
@@ -88,7 +90,8 @@ export class RuntimeHostedReviewCommands {
     clientKind?: DeviceScope,
     signal?: AbortSignal,
     acceptRevalidationOnly = false,
-    selected = false
+    selected = false,
+    linkedPRUrl?: string
   ): Promise<PRSnapshotReply> {
     const deadline = Date.now() + HOSTED_PR_COMPLETION_WAIT_MS
     const repo = await this.deps.resolveRepo(repoSelector)
@@ -96,6 +99,7 @@ export class RuntimeHostedReviewCommands {
       if ('kind' in outcome && outcome.kind === 'found') {
         this.deps.recordCreated(repo.id, outcome.pr.number, outcome.pr.url)
       }
+      this.deps.recordPROutcome?.(repo, branch, outcome, { linkedPRNumber, currentHeadOid })
       return outcome
     }
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -115,6 +119,9 @@ export class RuntimeHostedReviewCommands {
     }
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
+    }
+    if (linkedPRUrl) {
+      lookupOptions.linkedPRUrl = linkedPRUrl
     }
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
     // Legacy phone reads retain their narrower thirty-second reuse contract.
@@ -140,6 +147,7 @@ export class RuntimeHostedReviewCommands {
       connectionId,
       currentHeadOid: lookupOptions.currentHeadOid ?? null,
       linkedPRNumber: linkedPRNumber ?? null,
+      ...(linkedPRUrl ? { linkedPRUrl } : {}),
       fallbackPRNumber: linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
       localGitOptions: lookupOptions.localGitExecOptions,
       isSelected: reason === 'swr' && userRefresh !== true && selected
@@ -225,6 +233,7 @@ export class RuntimeHostedReviewCommands {
           linkedBitbucketPR: args.linkedBitbucketPR ?? null,
           linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
           linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
           ...executionOptions
         }),
       {

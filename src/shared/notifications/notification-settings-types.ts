@@ -2,12 +2,13 @@ import {
   type StructuredAttentionRead,
   type StructuredAttentionOrigin,
   isStructuredAttentionRead
-} from '../agent-session/agent-session-attention'
+} from '../agent-session/view/agent-session-attention'
 import {
   isAgentSessionExecutionLocation,
   type AgentSessionExecutionLocation
 } from '../agent-session/lifecycle/agent-session-record'
 import type { AgentStatusState, AgentType } from '../agent-status/contracts/agent-status-types'
+import type { AgentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
 import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { NotificationSourceId } from './notification-source'
@@ -39,6 +40,12 @@ export type NotificationSettings = {
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
 }
+
+/** The switches a host applies to its own phone pushes; sounds and per-source mutes stay with each client. */
+export type HostNotificationSettings = Pick<
+  NotificationSettings,
+  'enabled' | 'agentTaskComplete' | 'agentNeedsInput' | 'terminalBell'
+>
 
 export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
   return !!soundId && soundId !== 'system' && soundId !== 'none'
@@ -99,8 +106,12 @@ export type NotificationDispatchRequest = {
   agentToolName?: string
   agentToolInput?: string
   agentLastAssistantMessage?: string
+  /** The chat answers a Slack thread, so its reply is written in Slack's markup. */
+  agentRepliesInSlack?: true
   /** The verdict on the turn this notification reports, which picks its wording. */
   agentTurnOutcome?: AgentTurnOutcome
+  /** Why a failed turn failed, typed: its body says so instead of the last message. */
+  agentFailure?: AgentSessionFailureFact
   /** Click-routing lane; absence means terminal, preserving pre-structured-chat senders. */
   surface?: 'terminal' | 'agent-session'
   /** Producer-owned once-only news identity bypasses workspace burst dedupe so distinct events survive. */

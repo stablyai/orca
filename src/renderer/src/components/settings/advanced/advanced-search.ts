@@ -68,7 +68,7 @@ export const getAdvancedSearchEntry = createLocalizedCatalog(
         title: translate('settings.uninstall.title', 'Uninstall Orca'),
         description: translate(
           'settings.uninstall.searchDescription',
-          'Remove agent hooks, the orca command, the background service and SSH host files.'
+          'Remove agent hooks, the orca command, the orca serve server and hooks on SSH hosts.'
         ),
         keywords: [
           ...translateSearchKeyword('settings.uninstall.keywords.uninstall', 'uninstall'),

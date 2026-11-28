@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
+import type { ConfirmationDialogContextValue } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
@@ -8,6 +8,10 @@ import {
   type AgentSessionRewindInput
 } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import { sayNativeChatRewind } from './native-chat-rewind-copy'
+import {
+  useNativeChatViewGuard,
+  useNativeChatViewGuardRef
+} from '../../pane/ownership/native-chat-view-memory'
 import type {
   CaptureStructuredAgentSessionPresentation,
   StructuredAgentSessionWriteOutcome
@@ -28,9 +32,18 @@ export type RewindInput = Omit<
   }) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>
 }
 
+// Kept with the chat tab and its conversation: a view released mid-rewind returns still refusing sends, and a
+// late reply for a replaced conversation never blocks the new one.
 const useAgentSessionRewind = createAgentSessionRewindHook(
   { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState },
-  sayNativeChatRewind
+  sayNativeChatRewind,
+  {
+    useGuardRef: (name, initial) => useNativeChatViewGuardRef(`rewind-${name}`, initial),
+    useGuardState: (name, initial) => {
+      const [value, set] = useNativeChatViewGuard(`rewind-${name}`, initial)
+      return [value, set]
+    }
+  }
 )
 const notify = { error: toast.error, message: toast.message }
 
@@ -66,8 +79,7 @@ export function useNativeChatRewind(input: RewindInput) {
           ),
           confirmLabel: translate('components.native-chat.rewind.confirm', 'Rewind'),
           cancelLabel: translate('components.native-chat.rewind.cancel', 'Cancel'),
-          confirmVariant: 'destructive',
-          cancelVariant: 'ghost'
+          confirmVariant: 'destructive'
         })
       ),
     [sharedRequest]

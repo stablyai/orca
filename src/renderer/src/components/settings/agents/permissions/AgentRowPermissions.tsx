@@ -37,9 +37,11 @@ export function AgentPermissionExceptionBadge({
         agent: label,
         mode: text
       })}
-      className="rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="flex rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
-      <SettingsBadge tone="accent">{text}</SettingsBadge>
+      <SettingsBadge tone="accent" className="max-w-full">
+        <span className="truncate">{text}</span>
+      </SettingsBadge>
     </button>
   )
   if (mode !== 'mixed') {

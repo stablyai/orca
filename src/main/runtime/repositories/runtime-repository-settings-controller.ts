@@ -1,11 +1,11 @@
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
-import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { SetupAgentStartupPolicy } from '../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
-import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../workspaces/removal/owned-session-teardown-policy'
@@ -63,6 +63,8 @@ type RepositoryUpdates = Partial<
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */
   ghAccount?: GhAccountBinding | null
   browserProfileId?: string | null
+  /** Changes this one hook setting, keeping the rest of the saved row's. */
+  setupAgentStartupPolicy?: SetupAgentStartupPolicy
 }
 
 // Main computes each row's `visible` from these over cached raw Git scans, so re-list without rescanning.
@@ -124,7 +126,8 @@ export class RuntimeRepositorySettingsController {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const sanitizedUpdates = omitUndefined(updates)
+    const { setupAgentStartupPolicy, ...rowUpdates } = updates
+    const sanitizedUpdates = omitUndefined(rowUpdates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }
@@ -140,18 +143,37 @@ export class RuntimeRepositorySettingsController {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
+    const buildSetupHookSettings = setupAgentStartupPolicy
+      ? (await import('../../../shared/workspace-setup/repo-hook-settings-defaults'))
+          .buildSetupAgentStartupHookSettings
+      : null
     const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
       assertWslMoveRepoWritable(store, repo)
-      return store.updateRepo(repo, { ...sanitizedUpdates, ...proven })
+      // Why read here: the caller's copy of the row may predate a script another device just saved.
+      const saved = store.getRepoForHost?.(repo.id, getRepoExecutionHostId(repo)) ?? repo
+      const hookSettings =
+        setupAgentStartupPolicy && buildSetupHookSettings
+          ? {
+              hookSettings: buildSetupHookSettings(
+                sanitizedUpdates.hookSettings ?? saved.hookSettings,
+                setupAgentStartupPolicy
+              )
+            }
+          : {}
+      return store.updateRepo(repo, { ...sanitizedUpdates, ...hookSettings, ...proven })
     }
     const updated =
       sanitizedUpdates.kind === 'git' && isFolderRepo(repo)
-        ? await commitProvenRepoKindChange(store, repo, write, true)
+        ? await (
+            await import('../../workspaces/catalog/folder-repo-git-conversion')
+          ).commitProvenRepoKindChange(store, repo, write, true)
         : write({})
     if (!updated) {
       throw new Error('repo_not_found')
     }
     if ('worktreeBasePath' in updates) {
+      const { prepareLocalWorktreeRootForRepo } =
+        await import('../../workspaces/creation/worktree-root-preparation')
       await prepareLocalWorktreeRootForRepo(store, updated)
       invalidateAuthorizedRootsCache()
     }

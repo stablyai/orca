@@ -19,7 +19,11 @@ import {
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
-import { buildCrossStoreParentRef } from './cross-store-parent-ref'
+import { buildCrossStoreParentRef, isBotHomeParent } from './cross-store-parent-ref'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatusStore
+} from '../../runtime-status/views/runtime-status-subscriptions'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.
 async function refreshWorktreeLineageBestEffort(
@@ -131,9 +135,10 @@ export function createAssignWorktreeParent(
  * ids. Every ref is built first, so a refusal (an older Orca, an unconfirmed parent) writes nothing. */
 export function createAssignCrossStoreWorktreeParent(
   set: WorktreeSliceSet,
-  get: WorktreeSliceGet
+  get: WorktreeSliceGet,
+  store: RuntimeStatusStore
 ): WorktreeSlice['assignCrossStoreWorktreeParent'] {
-  return async (children, parent) => {
+  return async (children, parent, options) => {
     const routes = children.map((child) => ({
       child,
       target: hostRouteForWorktreeOwner(get(), child.id, child.hostId).target
@@ -142,7 +147,12 @@ export function createAssignCrossStoreWorktreeParent(
       const prepared = await Promise.all(
         routes.map(async (route) => ({
           ...route,
-          crossStoreParent: await buildCrossStoreParentRef(get(), route.target, parent)
+          crossStoreParent: await buildCrossStoreParentRef(
+            get(),
+            runtimeStatusSubscriptionsFor(store).readStatuses(),
+            route.target,
+            parent
+          )
         }))
       )
       await Promise.all(
@@ -150,7 +160,14 @@ export function createAssignCrossStoreWorktreeParent(
           callRuntimeRpc(
             target,
             'worktree.set',
-            { worktree: toRuntimeWorktreeSelector(child.id), crossStoreParent },
+            {
+              worktree: toRuntimeWorktreeSelector(child.id),
+              crossStoreParent,
+              ...(isBotHomeParent(get(), parent) ? { crossStoreParentIsBotHome: true } : {}),
+              ...(options?.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: options.ifParentWorkspace }
+                : {})
+            },
             { timeoutMs: 15_000 }
           )
         )

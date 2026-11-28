@@ -12,8 +12,15 @@ import {
   XTERM_ENGINE_CSS
 } from './terminal-webview-engine-css.generated'
 import terminalNerdFontUrl from '../../../assets/fonts/SymbolsNerdFontMono-Regular.woff2'
-import { terminalNerdFontCss } from '../fonts/terminal-font-face-css.mjs'
+import jetBrainsMonoLatinUrl from '../../../assets/fonts/JetBrainsMono-Latin.woff2'
+import jetBrainsMonoLatinExtUrl from '../../../assets/fonts/JetBrainsMono-LatinExt.woff2'
+import firaCodeLatinUrl from '../../../assets/fonts/FiraCode-Latin.woff2'
+import firaCodeLatinExtUrl from '../../../assets/fonts/FiraCode-LatinExt.woff2'
+import geistMonoLatinUrl from '../../../assets/fonts/GeistMono-Latin.woff2'
+import geistMonoLatinExtUrl from '../../../assets/fonts/GeistMono-LatinExt.woff2'
+import { terminalBundledFontCss, terminalNerdFontCss } from '../fonts/terminal-font-face-css.mjs'
 import { createTerminalDocument } from './create-terminal-document'
+import { SIDEBAR_SWIPE_OWNER_ATTRIBUTE } from './surface-input/sidebar-swipe-handoff'
 import type { TerminalWebViewCommand } from '../webview/terminal-webview-messages'
 
 // Mount the native document factory with page-owned seams and fresh scope so overlapping terminals cannot share state.
@@ -39,8 +46,23 @@ function ensureDocumentStyle() {
   const prefix = `.${HOST_CLASS}`
   const engine = scopeStyleToHost(XTERM_ENGINE_CSS, prefix)
   const elements = scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)
-  style.textContent = `${terminalNerdFontCss(terminalNerdFontUrl)}\n${TERMINAL_SYMBOLS_FONT_CSS}\n${engine}\n${elements}\n${hostFrameStyle(prefix)}`
+  style.textContent = `${terminalNerdFontCss(terminalNerdFontUrl)}\n${TERMINAL_SYMBOLS_FONT_CSS}\n${bundledFontCss()}\n${engine}\n${elements}\n${hostFrameStyle(prefix)}`
   document.head.appendChild(style)
+}
+
+// Browsers fetch a face only once text uses it, so the unpicked fonts cost nothing.
+function bundledFontCss() {
+  return [
+    terminalBundledFontCss('jetbrains-mono', {
+      latin: jetBrainsMonoLatinUrl,
+      latinExt: jetBrainsMonoLatinExtUrl
+    }),
+    terminalBundledFontCss('fira-code', { latin: firaCodeLatinUrl, latinExt: firaCodeLatinExtUrl }),
+    terminalBundledFontCss('geist-mono', {
+      latin: geistMonoLatinUrl,
+      latinExt: geistMonoLatinExtUrl
+    })
+  ].join('\n')
 }
 
 // Use the terminal host as overlay containing block; fixed positioning would include the app header.
@@ -67,6 +89,8 @@ export function mountTerminalWebDocument(
 ): TerminalWebDocument {
   ensureDocumentStyle()
   host.classList.add(HOST_CLASS)
+  // The terminal decides its own swipes and hands the page a sidebar swipe; the page leaves its touches alone.
+  host.setAttribute(SIDEBAR_SWIPE_OWNER_ATTRIBUTE, '')
   host.innerHTML = TERMINAL_DOCUMENT_MARKUP
   const viewport = pageViewport(host)
   const started = startDocumentOrGiveTheHostBack(host, receive, start, viewport)
@@ -80,6 +104,7 @@ export function mountTerminalWebDocument(
       started.stop()
       host.innerHTML = ''
       host.classList.remove(HOST_CLASS)
+      host.removeAttribute(SIDEBAR_SWIPE_OWNER_ATTRIBUTE)
     }
   }
 }
@@ -173,6 +198,8 @@ function startPageDocument(
     installHostTransport: () => () => {},
 
     hasEngine: () => true,
+
+    handsSwipesToPage: true,
 
     start: () => start,
 

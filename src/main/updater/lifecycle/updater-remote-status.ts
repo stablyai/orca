@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { translateMain } from '../../i18n/main-i18n'
 import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
@@ -8,7 +9,7 @@ import type {
 import { hasServeUpdateSupervisor } from '../serve-update-handoff'
 import { getLinuxPackageType } from '../linux-package/linux-update-package-type'
 import { UpdaterNudge } from '../nudges/updater-nudge'
-import type { UpdateInstallMode } from './updater-state'
+import type { UpdateInstallMode, UpdateInstallTrigger } from './updater-state'
 
 export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   protected getUpdateStatus(): UpdateStatus {
@@ -66,12 +67,14 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     options?: UpdateCheckOptions
   ): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
+    this.assertRemoteUpdaterIdle()
     this.checkForUpdatesFromMenu(options)
     return this.getRemoteServerUpdaterSnapshot(runtimeId)
   }
 
   protected downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
+    this.assertRemoteUpdaterIdle()
     if (this.currentStatus.state !== 'available') {
       throw new Error('remote_update_not_available')
     }
@@ -81,18 +84,39 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
 
   protected installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
     this.assertRemoteServerUpdateAvailable()
+    this.assertRemoteUpdaterIdle()
     if (this.currentStatus.state !== 'downloaded') {
       throw new Error('remote_update_not_downloaded')
     }
     const targetVersion = this.currentStatus.version
+    if (this.holdUpdateForTeamPolicy(targetVersion)) {
+      throw new Error('remote_update_not_available')
+    }
     const result: RemoteServerUpdateInstallResult = {
       accepted: true,
       fromVersion: app.getVersion(),
       targetVersion,
       runtimeId
     }
-    this.quitAndInstall()
+    // No local window asked, so main must back up editors and save state before the restart.
+    this.quitAndInstall('remote')
     return result
+  }
+
+  private assertRemoteUpdaterIdle(): void {
+    if (
+      this.macInstallerStagingVersion !== null ||
+      this.currentStatus.state === 'downloading' ||
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress
+    ) {
+      throw new Error(
+        translateMain(
+          'updates.remoteUpdateBusy',
+          'This server is already updating. Check again once it finishes.'
+        )
+      )
+    }
   }
 
   protected resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {
@@ -103,5 +127,5 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
   }
 
   protected abstract downloadUpdate(): void
-  protected abstract quitAndInstall(): void
+  protected abstract quitAndInstall(trigger: UpdateInstallTrigger): void
 }

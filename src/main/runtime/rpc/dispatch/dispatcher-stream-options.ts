@@ -20,11 +20,13 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'capabilitySource'
   | 'updateClientCapabilities'
   | 'pairing'
+  | 'pairingDirectEndpoints'
   | 'pairingOffers'
   | 'deviceSelf'
   | 'mobileRelayHosts'
   | 'peerDesktops'
   | 'delegatedMobileDevices'
+  | 'delegatedPhoneServerOffers'
   | 'sendBinary'
   | 'registerBinaryStreamHandler'
   | 'registerBinaryMessageHandler'
@@ -71,16 +73,19 @@ export function rpcContextFromTransport(
     caller: resolveRpcCallerIdentity(options),
     plugin: options?.plugin,
     clientKind: options?.clientKind,
+    callerScope: options?.callerScope,
     clientCapabilities: options?.clientCapabilities,
     capabilitySource: options?.capabilitySource,
     updateClientCapabilities: options?.updateClientCapabilities,
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
     pairing: options?.pairing,
+    pairingDirectEndpoints: options?.pairingDirectEndpoints,
     pairingOffers: options?.pairingOffers,
     deviceSelf: options?.deviceSelf,
     mobileRelayHosts: options?.mobileRelayHosts,
     peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,
+    delegatedPhoneServerOffers: options?.delegatedPhoneServerOffers,
     sendBinary: options?.sendBinary,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,

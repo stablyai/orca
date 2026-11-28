@@ -2,7 +2,7 @@
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
-import { usageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { usageLimitStopWithdrawal } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -180,7 +180,7 @@ export function mutateWithChatStop<TValue>(
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
     // Capture once on the lane; the acceptance receipt owns the exact-cut withdrawal.
     if (turnId === undefined) {
-      withdrawnCut = usageLimitContinueIdentity(await ctx.journal.reads.usageLimitCut())
+      withdrawnCut = usageLimitStopWithdrawal(await ctx.journal.reads.usageLimitCut())
     }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)

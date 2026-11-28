@@ -10,7 +10,7 @@ import {
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  isGrokRotatingWorkingTitle
+  grokFrameTitleStatus
 } from './agent-title-core'
 import {
   isOpenCodeNativeTitle,
@@ -123,9 +123,6 @@ function collectVendorMarkers(segments: readonly string[]): TerminalAgent[] {
   const markers = new Set<TerminalAgent>()
   for (const segment of segments) {
     // Only a leading identity-position sigil counts; the same glyph inside task text is decoration.
-    if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
-      markers.add('gemini')
-    }
     if (
       segment.startsWith(`${CLAUDE_IDLE} `) ||
       segment === CLAUDE_IDLE ||
@@ -178,6 +175,9 @@ function collectAnchoredNames(
     const synthetic = agentForSyntheticTitle(segment)
     if (synthetic) {
       anchored.add(synthetic)
+    }
+    if (grokFrameTitleStatus(segment)) {
+      anchored.add('grok')
     }
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
@@ -255,12 +255,13 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
   } else if (piBrand || isLegacyPiCompatibleTitle(segment)) {
     agent = piBrand === 'OMP' ? 'omp' : 'pi'
   } else if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
-    agent = 'gemini'
+    // Qoder and DSH were matched above; a bare Gemini-family glyph names no supported agent.
+    agent = null
   } else if (genericClaude) {
     agent = agentForNativeFrame(segment) === 'claude' ? 'claude' : null
   } else {
     agent =
-      (isGrokRotatingWorkingTitle(segment) ? 'grok' : null) ??
+      (grokFrameTitleStatus(segment) ? 'grok' : null) ??
       (isDeepSeekBuildWorkingTitle(segment) ||
       (!segment.includes('|') && isDeepSeekBuildTerminalTitle(segment))
         ? 'dsb'

@@ -6,9 +6,11 @@ type MobileNativeChatListRow = { item: NativeChatMessage; index: number }
 export function mobileNativeChatListFooter(
   liveStatus: ReactElement | null,
   waitingRows: readonly MobileNativeChatListRow[],
-  renderRow: (row: MobileNativeChatListRow) => ReactElement
+  renderRow: (row: MobileNativeChatListRow) => ReactElement,
+  /** Other agents' waiting mail, last: it is not part of the turn (it draws nothing when none waits). */
+  agentMail?: ReactElement | null
 ): ReactElement | null {
-  if (waitingRows.length === 0) {
+  if (waitingRows.length === 0 && !agentMail) {
     return liveStatus
   }
   return (
@@ -17,6 +19,7 @@ export function mobileNativeChatListFooter(
       {waitingRows.map((row) => (
         <Fragment key={row.item.id}>{renderRow(row)}</Fragment>
       ))}
+      {agentMail}
     </>
   )
 }

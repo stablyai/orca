@@ -26,20 +26,31 @@ export function matchSkillSigil(before: string): string | null {
   return !/[a-z]/.test(name) && COMMON_ENV_VARS.has(name.toUpperCase()) ? null : query
 }
 
-/** Replace the trigger with the agent-native item token, regardless of which sigil opened the menu. */
+/** Replace the trigger and the rest of its name with the agent-native item token. */
 export function applyPickerSuggestion(
   draft: string,
   caret: number,
   item: NativeChatPickerItem
-): { draft: string; caret: number; insertedToken: string } {
+): { draft: string; caret: number; insertedToken: string; replacedEnd: number } {
   const before = draft.slice(0, caret)
-  const after = draft.slice(caret)
   const slashMatch = before.match(LEADING_SLASH_TRIGGER) ?? before.match(MID_PROMPT_SLASH_TRIGGER)
   const query = slashMatch?.[1] ?? (item.kind === 'skill' ? matchSkillSigil(before) : null)
   if (query === null) {
-    return { draft, caret, insertedToken: '' }
+    return { draft, caret, insertedToken: '', replacedEnd: caret }
   }
   const tokenStart = before.length - query.length - 1
+  // Absorb the rest of a typed name the picked name or alias contains, plus one space.
+  const names = [item.token.slice(1), ...(item.kind === 'command' ? (item.aliases ?? []) : [])]
+  const rest = draft.slice(caret).match(/^[\w:-]*/)?.[0] ?? ''
+  const typedName = `${query}${rest}`.toLowerCase()
+  const completesName = query !== '' && names.some((name) => name.toLowerCase().includes(typedName))
+  const nameEnd = caret + (completesName ? rest.length : 0)
+  const replacedEnd = nameEnd + (draft[nameEnd] === ' ' ? 1 : 0)
   const nextBefore = `${before.slice(0, tokenStart)}${item.token} `
-  return { draft: nextBefore + after, caret: nextBefore.length, insertedToken: item.token }
+  return {
+    draft: nextBefore + draft.slice(replacedEnd),
+    caret: nextBefore.length,
+    insertedToken: item.token,
+    replacedEnd
+  }
 }

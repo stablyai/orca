@@ -6,12 +6,12 @@ import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host/execution-host'
+import type { HiddenProjects } from '../project/catalog/hidden-projects'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 
 import {
-  getLaneHostWorktreeCounts,
-  getLaneHostWorktreeIds,
+  getLaneHostWorktreeScope,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
 } from './hosts/host-labels'
@@ -87,6 +87,8 @@ export type SidebarRowPlanInputs = {
   defaultHostId: ExecutionHostId
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   filterRepoIds: readonly string[]
+  /** A hidden project's rows reach the plan only under a folder workspace; they never make its section. */
+  hiddenProjects?: HiddenProjects
 }
 
 /** Plans the sidebar's sections once; `render` emits rows for a collapse state. */
@@ -130,7 +132,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
-  const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces)
+  const folders = getSidebarFolderOccurrences(renderableFolderWorkspaces, inputs.hiddenProjects)
   const lineageChildren = nestLineage
     ? getSidebarLineageChildren(
         worktrees,
@@ -142,13 +144,13 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       )
     : new Map<string, Worktree[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
-    rows: [...worktrees, ...folders.rows],
+    rows: folders.withPlacedRows(worktrees, lineageChildren),
     identityOf: getWorktreeHostIdentity,
     childrenByParentIdentity: lineageChildren,
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
-    owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+    owningSectionKeyOf: (worktree) =>
+      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex).key,
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const folderBound =
@@ -156,7 +158,7 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
           ? folders.boundRowsByGroupId(natural, displayRootByIdentity, lineageChildren)
           : null
       // Rows under a folder still count in their own projects; only their display moves.
-      const naturalWorktrees = natural.filter((row) => !folders.isFolder(row))
+      const naturalWorktrees = folders.projectRows(natural, groupBy === 'repo')
       const groups: OrderedGroupEntry[] =
         groupBy === 'none'
           ? [[ALL_GROUP_KEY, { label: '', items: naturalWorktrees, repoIds: new Set() }]]
@@ -247,23 +249,19 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
+        const { hostWorktreeCounts, hostWorktreeIds } = getLaneHostWorktreeScope(
+          naturalWorktrees,
+          renderableFolderWorkspaces,
+          repoOf,
+          defaultHostId
+        )
         result.push({
           type: 'header',
           key: ALL_GROUP_KEY,
           count: naturalWorktrees.length + renderableFolderWorkspaces.length,
           icon: { kind: 'all' },
-          hostWorktreeCounts: getLaneHostWorktreeCounts(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
-          hostWorktreeIds: getLaneHostWorktreeIds(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
+          hostWorktreeCounts,
+          hostWorktreeIds,
           worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {

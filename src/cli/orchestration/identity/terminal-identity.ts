@@ -2,6 +2,7 @@ import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/fla
 import type { RuntimeClient } from '../../runtime/client'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { getTerminalHandle } from '../../terminals/terminal-selector'
+import { wasForeignTerminalHandleDropped } from '../../runtime/connection/runtime-source-fence'
 import { hasStructuredSessionMarker } from '../../../shared/agent-launch/environment/structured-session-marker'
 import {
   injectedSessionAddress,
@@ -201,12 +202,23 @@ function structuredSessionRefusal(flagName: 'from' | 'terminal'): RuntimeClientE
     'no_active_sender_terminal',
     `This chat session has no orchestration identity of its own, so --${flagName} cannot be inferred, ` +
       `and no terminal handle names it — every live handle belongs to a different pane, and passing one ` +
-      `would consume that pane's mailbox. Drive a worker directly instead: create a worktree with ` +
-      `--agent to launch one in its first terminal, then use terminal send and terminal read.`
+      `would consume that pane's mailbox. To start other work, put its task in --prompt on ` +
+      `agent launch or worktree create --agent and follow it with agent read; otherwise tell the ` +
+      `user this chat cannot send Orca mail.`
   )
 }
 
 export function throwNoActiveSenderTerminal(flagName: 'from' | 'terminal' = 'from'): never {
+  // A dropped foreign handle is not an env filter's doing; say which Orca the terminal belongs to.
+  if (wasForeignTerminalHandleDropped()) {
+    throw new RuntimeClientError(
+      'no_active_sender_terminal',
+      'This terminal was opened by a different Orca than the one this command reached (for example, ' +
+        'a WSL shell started from a Windows Orca pane), so its terminal handle means nothing here. ' +
+        `Run the command from a terminal of the Orca you want to reach, or pass --${flagName} with ` +
+        "your own terminal's handle on that Orca."
+    )
+  }
   // Lifecycle sends can refuse before the structured guard; distinguish missing identity from stale handles.
   if (hasStructuredSessionMarker() && !process.env.ORCA_TERMINAL_HANDLE) {
     throw structuredSessionRefusal(flagName)

@@ -1,4 +1,5 @@
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler
@@ -46,6 +47,10 @@ export class JsonlRpcTimelineLane {
 
   get openTurnId(): string | null {
     return this.assembler.openTurnId
+  }
+
+  get openTurnIdentity(): AgentJournalItemIdentity | null {
+    return this.assembler.openTurnIdentity
   }
 
   beginCommand(command: StructuredAgentSessionCommandRun): void {

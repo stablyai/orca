@@ -58,7 +58,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     }
     setGithubProjectError('')
     setGithubProjectPartialFailures([])
-    const reply = await githubProjectListRead.request(client, { host: 'github.com' })
+    const reply = await githubProjectListRead.request(client, {})
     const result = githubProjectListRead.interpret(reply)
     if (!result.ok) {
       throw new Error(result.error.message)
@@ -292,7 +292,8 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     void repoListReload().catch(() => {})
     void loadTasks({ silent: true })
   }, [loadTasks, repoListReload])
-  return Object.assign(model, {
+  return {
+    ...model,
     loadGitHubProjects,
     loadGitHubProjectViews,
     loadGitHubProjectTable,
@@ -300,7 +301,7 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     selectGitHubProject,
     resolveGitHubProjectFromInput,
     refreshTasks
-  })
+  }
 }
 
 export type ProjectLoadingActionsModel = ReturnType<typeof useMobileTasksProjectLoadingActions>

@@ -12,7 +12,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionMessageSource } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentSessionMessageSource } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   refuse,
   type AgentSessionWireRefusal,
@@ -173,12 +173,17 @@ export async function performSend(
       fence: ctx.fence,
       handoverRecorded: true as const
     }
-    await (ctx.forkInstall
-      ? ctx.journal.write({ kind: 'submission', input: submission }, () => ({
-          receipt: ctx.operationReceipt,
-          forkInstall: ctx.forkInstall
-        }))
-      : ctx.journal.appendSubmission(submission, undefined, ctx.operationReceipt))
+    const sending = ctx.journal.holdSending()
+    try {
+      await (ctx.forkInstall
+        ? ctx.journal.write({ kind: 'submission', input: submission }, () => ({
+            receipt: ctx.operationReceipt,
+            forkInstall: ctx.forkInstall
+          }))
+        : ctx.journal.appendSubmission(submission, undefined, ctx.operationReceipt))
+    } finally {
+      sending()
+    }
   } catch (error) {
     forgetNativeChatPrompt(ctx.journal, input.clientMessageId)
     return agentSessionAdmissionWriteRefusal(ctx, error)

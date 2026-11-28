@@ -5,7 +5,6 @@ import { createRelayedBrowserTab } from './relayed-browser-tab-create'
 import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-items/work-item-target'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
-import type { DelegatedMobileDeviceSyncParams } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   failure,
@@ -16,14 +15,16 @@ import {
   type OpenedRelayLink,
   type RelayedPhone
 } from './mobile-desktop-relay-link'
-import { DelegatedPhoneGrantCache } from './delegated-phone-grant-cache'
+import { DelegatedPhoneGrantCache, type ListRelayedPhones } from './delegated-phone-grant-cache'
+import type { RelayedPhoneServers } from './relayed-phone-servers'
 import { localHostedBrowserPageRequest } from './hosted-browser-page-route'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { RELAYED_STREAM_CARRIERS } from './relayed-stream-carriers'
 import {
   declareRelayedPhoneCapabilities,
   rewriteRelayedPhoneRequest,
-  withRelayedLaunchChatDefault
+  withRelayedDesktopDefaults,
+  type RelayedDesktopDefaults
 } from './relayed-phone-frames'
 
 const RELAY_CONNECT_TIMEOUT_MS = PHONE_RELAY_CONNECT_BUDGET_MS
@@ -37,16 +38,19 @@ export class MobileDesktopRelay {
   private readonly stopRetirementWatch: () => void
 
   constructor(
-    private readonly options: {
+    private readonly options: RelayedDesktopDefaults & {
       hosts: MobileDesktopRelayHosts
-      listPhones: () => DelegatedMobileDeviceSyncParams['phones']
+      listPhones: ListRelayedPhones
+      relayedPhoneServers: RelayedPhoneServers
       allocateStreamId: () => number
-      /** Whether this desktop's settings open `agent` as a chat. */
-      nativeChatDefault: (agent: string) => boolean
       prepareBrowserHost?: (host: MobileDesktopRelayHost) => Promise<string | null>
     }
   ) {
-    this.grants = new DelegatedPhoneGrantCache(options.hosts, options.listPhones)
+    this.grants = new DelegatedPhoneGrantCache(
+      options.hosts,
+      options.listPhones,
+      options.relayedPhoneServers
+    )
     this.stopRetirementWatch = options.hosts.onEnvironmentRetired((environmentId) =>
       this.retireEnvironment(environmentId)
     )
@@ -57,7 +61,7 @@ export class MobileDesktopRelay {
     for (const link of this.links.values()) {
       this.endLink(link, unavailable('The paired desktop stopped relaying.'))
     }
-    this.grants.clear()
+    this.grants.dispose()
   }
 
   localRequestFor(request: RpcRequest, environmentId: string): RpcRequest | null {
@@ -104,10 +108,12 @@ export class MobileDesktopRelay {
         if (!this.isCurrent(link)) {
           return
         }
-        const outgoing = withRelayedLaunchChatDefault(
+        const outgoing = withRelayedDesktopDefaults(
           rewriteRelayedPhoneRequest(frame, phone.deviceToken, hostToken),
           request.method,
-          this.options.nativeChatDefault
+          environmentId,
+          phone.deviceId,
+          this.options
         )
         try {
           if (request.method === 'status.get') {
@@ -215,19 +221,7 @@ export class MobileDesktopRelay {
   }
 
   phonesChanged(): void {
-    for (const environmentId of this.grants.environmentIds()) {
-      this.grants.delete(environmentId)
-      void this.resync(environmentId)
-    }
-  }
-
-  private async resync(environmentId: string): Promise<void> {
-    try {
-      const host = await this.options.hosts.resolve(environmentId)
-      if (host) {
-        await this.grants.get(host, null)
-      }
-    } catch {}
+    this.grants.phonesChanged()
   }
 
   // The request that opens a link decides whether it may wake a recipe VM behind the server.

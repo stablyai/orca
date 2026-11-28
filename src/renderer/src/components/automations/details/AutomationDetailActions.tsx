@@ -1,5 +1,5 @@
 import React from 'react'
-import { Loader2, MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
+import { Copy, Link, Loader2, MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,8 +12,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationTargetAvailability } from '../hosts/automation-target-availability-types'
 import { useTranslate } from '@/i18n/use-translate'
+import { COMPACT_HEADER_WIDTH_PX } from '../AutomationsPageFrame'
 
-/** Header actions for one automation; `compact` folds Pause/Resume and Edit into the menu. */
+// Copy URL adds ~110 px to the header's actions, so they fold that much sooner.
+export const COPY_URL_COMPACT_HEADER_WIDTH_PX = COMPACT_HEADER_WIDTH_PX + 128
+
+/** Header actions for one automation; `compact` folds Copy URL, Pause/Resume and Edit into the menu. */
 export function AutomationDetailActions({
   automation,
   compact,
@@ -22,7 +26,8 @@ export function AutomationDetailActions({
   onRunNow,
   onEdit,
   onToggle,
-  onDelete
+  onDelete,
+  onCopyUrl
 }: {
   automation: Automation
   compact: boolean
@@ -33,6 +38,8 @@ export function AutomationDetailActions({
   onEdit: (automation: Automation) => void
   onToggle: (automation: Automation) => void
   onDelete: (automation: Automation) => void
+  /** Set for an automation a webhook starts. */
+  onCopyUrl: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
   const unavailable = runNowAvailability?.canRunNow === false
@@ -41,6 +48,7 @@ export function AutomationDetailActions({
     : t('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')
   const ToggleIcon = automation.enabled ? Pause : Play
   const editLabel = t('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')
+  const copyUrlLabel = t('bots.webhooks.copyUrl', 'Copy URL')
   const menuLabel = t(
     'auto.components.automations.AutomationListLocalRows.c92c9463c6',
     'Automation actions'
@@ -49,6 +57,12 @@ export function AutomationDetailActions({
     <>
       {compact ? null : (
         <>
+          {onCopyUrl ? (
+            <Button type="button" variant="outline" size="sm" onClick={onCopyUrl}>
+              <Copy className="size-4" />
+              {copyUrlLabel}
+            </Button>
+          ) : null}
           <Button type="button" variant="outline" size="sm" onClick={() => onToggle(automation)}>
             <ToggleIcon className="size-4" />
             {toggleLabel}
@@ -102,6 +116,12 @@ export function AutomationDetailActions({
         <DropdownMenuContent align="end" className="w-48">
           {compact ? (
             <>
+              {onCopyUrl ? (
+                <DropdownMenuItem onSelect={onCopyUrl}>
+                  <Link className="size-3.5" />
+                  {copyUrlLabel}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onSelect={() => onToggle(automation)}>
                 <ToggleIcon className="size-3.5" />
                 {toggleLabel}

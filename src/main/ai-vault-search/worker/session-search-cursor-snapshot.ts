@@ -9,6 +9,14 @@ export abstract class SessionSearchCursorSnapshot {
   files() {
     return [...this.committed.values()]
   }
+  /** The stat of a file indexed through its end; quiet files can reuse it instead of a restat. */
+  committedStat(path: string): SessionSearchSnapshotRow | undefined {
+    const row = this.committed.get(path)
+    // A file that grew during its read commits an offset past its recorded size; restat it.
+    return row?.state === 'current' && row.sizeBytes !== null && row.byteOffset === row.sizeBytes
+      ? row
+      : undefined
+  }
   protected row(path: string, identity: SessionSearchFileIdentity, speculative = true) {
     if (!this.acceptingReads) {
       return null
@@ -57,7 +65,7 @@ export abstract class SessionSearchCursorSnapshot {
       row.byteOffset !== null &&
       row.byteOffset > 0 &&
       typeof file.sizeBytes === 'number' &&
-      row.byteOffset < file.sizeBytes
+      row.byteOffset <= file.sizeBytes
       ? { byteOffset: row.byteOffset, prefixHash: row.prefixHash }
       : null
   }

@@ -14,6 +14,7 @@ import { automationLaunchChoices } from '../../../../../shared/automations/launc
 import { mergeExtraAgentArgs } from '../../../../../shared/agent-launch/startup/automation-extra-agent-args'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { automationChatSupport } from './automation-launch-surface'
+import { keptSetupCatalog } from '../../../../../shared/agent-launch/picker/agent-launch-kept-setup-catalog'
 
 type Projection = { signature: unknown[]; entry: AgentPickerEntry; draft: AgentPickerDraft }
 
@@ -50,6 +51,7 @@ export function useAutomationAgentPickerEntries(
     }
     const projected: AgentPickerEntry = {
       ...entry,
+      catalog: keptSetupCatalog(entry.agent, entry.catalog),
       label,
       surfaces: chat ? ['chat', 'terminal'] : ['terminal'],
       defaultSurface,

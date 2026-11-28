@@ -15,6 +15,12 @@ export type AgentSessionAttachmentSweepFacts = {
   markForSweep: (uploadId: string, now: number) => boolean | Promise<boolean>
   finishSweep: (uploadId: string) => void | Promise<void>
   pruneClaims: () => void | Promise<void>
+  /** Uploads waiting for a durable item mail recipient to claim them. */
+  retention?: {
+    isUnclaimed: (uploadId: string) => boolean | Promise<boolean>
+    /** Null means a store that can retain uploads could not be read; keep every upload. */
+    uploads: () => Promise<ReadonlySet<string> | null>
+  }
   onUploadRemoved?: (uploadDir: string) => void
 }
 
@@ -26,6 +32,7 @@ export async function sweepAgentSessionAttachments(
   now = Date.now()
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
+  let retained: ReadonlySet<string> | null | undefined
   const remove = async (uploadDir: string): Promise<void> => {
     await removeQuietly(uploadDir)
     facts.onUploadRemoved?.(uploadDir)
@@ -44,14 +51,28 @@ export async function sweepAgentSessionAttachments(
     )
     const ageMs = now - (await modifiedAt(uploadDir))
     if (!stored) {
-      if (ageMs > ABANDONED_PART_MAX_AGE_MS) {
+      // Recheck after the awaits: a content write may have reused this folder meanwhile.
+      if (ageMs > ABANDONED_PART_MAX_AGE_MS && !store.isUploadInFlight(uploadId)) {
         await remove(uploadDir)
         removed.push(uploadDir)
       }
       continue
     }
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
-    if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS || !(await facts.markForSweep(uploadId, now))) {
+    if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS) {
+      continue
+    }
+    if (retained === undefined && facts.retention) {
+      if (!(await facts.retention.isUnclaimed(uploadId))) {
+        continue
+      }
+      retained = await facts.retention.uploads()
+    }
+    if (
+      retained === null ||
+      retained?.has(uploadId) ||
+      !(await facts.markForSweep(uploadId, now))
+    ) {
       continue
     }
     await remove(uploadDir)

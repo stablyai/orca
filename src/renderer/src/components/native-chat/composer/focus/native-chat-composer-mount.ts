@@ -1,5 +1,6 @@
 import { useLayoutEffect } from 'react'
 import type { NativeChatComposerInput } from '../editor/native-chat-composer-input'
+import { noteComposerLeavingWithDraft } from '../../prompts/native-chat-prompt-card-draft-handoff'
 
 type MountedComposer = {
   input: NativeChatComposerInput
@@ -48,6 +49,10 @@ export function useNativeChatComposerMount(
     owners.add(owner)
     notifyNativeChatComposerState()
     return () => {
+      // Layout cleanup runs before React removes the editor, so focus is still readable.
+      if (input.contains?.(document.activeElement)) {
+        noteComposerLeavingWithDraft(document.activeElement, input.value)
+      }
       owners.delete(owner)
       if (owners.size === 0) {
         inputs.delete(scopeKey)

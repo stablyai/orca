@@ -82,7 +82,7 @@ export function useMobileTasksLinearItemActions<
   )
 
   const openLinearSubIssue = useCallback(
-    async (child: LinearIssueChild, workspaceId?: string): Promise<void> => {
+    async (child: LinearIssueChild, parentKey: string, workspaceId?: string): Promise<void> => {
       if (!client) {
         return
       }
@@ -101,7 +101,9 @@ export function useMobileTasksLinearItemActions<
         if (!issue) {
           throw new Error('Sub-issue not found')
         }
-        setActionItem(createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>)
+        const opened = createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
+        // Only while the parent is still open; Back out of it while this read ran must not reopen a page.
+        setActionItem((current) => (current?.key === parentKey ? opened : current))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load Linear sub-issue')
       } finally {
@@ -166,7 +168,7 @@ export function useMobileTasksLinearItemActions<
     },
     [client, linearSubIssueTitle, tryBeginMutation]
   )
-  return Object.assign(model, { addLinearComment, openLinearSubIssue, createLinearSubIssue })
+  return { ...model, addLinearComment, openLinearSubIssue, createLinearSubIssue }
 }
 
 export type LinearItemActionsModel = GithubReplyMergeActionsModel &

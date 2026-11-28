@@ -1,6 +1,11 @@
 import type { ProjectRepositoryResolutionModel } from '../project-board/use-mobile-tasks-project-repository-resolution'
 import type { GitHubProjectSettings } from '../project-board/github-project-reference'
-import { persistSetupHookTrustApproval } from '../../new-workspace/creation/setup-hook-trust'
+import {
+  approvedCreateSetup,
+  persistSetupHookTrustApproval,
+  type CreateSetupApproval
+} from '../../new-workspace/creation/setup-hook-trust'
+import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import { useCallback, useLayoutEffect, useState } from 'react'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
 import type { GitHubPreset, TaskResumeState } from '../mobile-tasks-view-state-types'
@@ -13,10 +18,10 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const {
     client,
     clientRef,
+    repos,
     githubProjectFieldVisibilityScope,
     hostId,
     setDefaultGitHubPreset,
-    setGithubCurrentPage,
     setGithubPages,
     setGithubProjectHiddenFieldIdsByView,
     setGithubProjectSettings,
@@ -81,7 +86,6 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   const resetGitHubItemsState = useCallback(() => {
     setGithubRepoSources({})
     setGithubPages([])
-    setGithubCurrentPage(0)
     setGithubCountedTotalPages(null)
     setGithubSourceErrors([])
     setGithubSourceFallbacks([])
@@ -203,21 +207,26 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
   )
 
   const persistSetupHookTrust = useCallback(
-    async (repoId: string, contentHash: string, alwaysTrust: boolean): Promise<void> => {
+    async (
+      prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash'>,
+      alwaysTrust: boolean
+    ): Promise<CreateSetupApproval | null> => {
       if (!client) {
-        return
+        return null
       }
       const trusted = await persistSetupHookTrustApproval({
         client,
         trust: trustedOrcaHooks,
-        repoId,
-        contentHash,
+        repos,
+        repoId: prompt.repoId,
+        contentHash: prompt.contentHash,
         alwaysTrust
       })
       setTrustedOrcaHooks(trusted)
       keepUi({ trustedOrcaHooks: trusted })
+      return approvedCreateSetup(repos, prompt, alwaysTrust)
     },
-    [client, keepUi, trustedOrcaHooks]
+    [client, keepUi, repos, trustedOrcaHooks]
   )
 
   const resetWorkspaceCreateState = useCallback((): void => {
@@ -253,7 +262,8 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     setSetupPrompt(null)
     setOrcaYamlTrustPrompt(null)
   }, [])
-  return Object.assign(model, {
+  return {
+    ...model,
     keepSettings,
     resetGitHubItemsState,
     boundClient,
@@ -265,7 +275,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
     persistGitHubProjectSettings,
     persistSetupHookTrust,
     resetWorkspaceCreateState
-  })
+  }
 }
 
 export type ClientSettingsActionsModel = ReturnType<typeof useMobileTasksClientSettingsActions>

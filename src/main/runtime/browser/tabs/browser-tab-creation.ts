@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
@@ -14,10 +15,12 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
   createBrowserClientPage,
-  createBrowserPageOnPairedHost,
-  openBrowserUrlOnClient
+  createBrowserPageOnPairedHost
 } from '../client-pages/browser-client-page-opening'
-import { opensOnPairedDesktop } from '../client-pages/server-agent-tab-placement'
+import {
+  openBrowserUrlOnClient,
+  opensOnPairedDesktop
+} from '../client-pages/server-agent-tab-placement'
 
 type BrowserTabCreateRequest = {
   url?: string
@@ -37,6 +40,8 @@ type BrowserTabCreateCaller = {
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
   opensPageLink?: boolean
+  /** Only screens showing this terminal tab follow the new tab; the rest just list it. */
+  followsFromTabId?: string
   signal?: AbortSignal
 }
 
@@ -51,9 +56,9 @@ export class RuntimeBrowserTabCreation {
       | 'getBrowserHostRequestRegistry'
       | 'getPairedDeviceName'
       | 'getRuntimeBrowserPageRegistry'
-      | 'getAvailableAuthoritativeWindow'
+      | 'getAvailableAuthoritativeWindowId'
       | 'getOffscreenBrowserBackend'
-      | 'getAuthoritativeWindow'
+      | 'getAuthoritativeWindowId'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'serveBrowserTabs'
@@ -65,9 +70,16 @@ export class RuntimeBrowserTabCreation {
   ) {}
 
   async browserTabCreate(
-    params: BrowserTabCreateRequest,
+    requested: BrowserTabCreateRequest,
     caller?: BrowserTabCreateCaller
   ): Promise<{ browserPageId: string }> {
+    // A host with no window has no layout to split: its tab opens plain, here or on a paired desktop.
+    const params =
+      requested.split &&
+      requested.placement?.kind !== 'client' &&
+      this.host.getAvailableAuthoritativeWindowId() === null
+        ? { ...requested, split: undefined, splitFromTabId: undefined }
+        : requested
     const url = params.url ?? 'about:blank'
     const focus = resolveBrowserTabCreateFocus({
       activate: params.activate,
@@ -87,10 +99,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Why reject rather than ignore: a caller asking for a split pane should learn it got none.
-    if (
-      params.split &&
-      (params.placement?.kind === 'client' || !this.host.getAvailableAuthoritativeWindow())
-    ) {
+    if (params.split && params.placement?.kind === 'client') {
       throw new BrowserError(
         'invalid_argument',
         'Opening a browser tab in a split pane needs an Orca desktop window on this host.'
@@ -108,7 +117,7 @@ export class RuntimeBrowserTabCreation {
       )
     }
     // Headless hosts use offscreen WebContents because no renderer webview exists.
-    if (!this.host.getAvailableAuthoritativeWindow()) {
+    if (this.host.getAvailableAuthoritativeWindowId() === null) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       const createOffscreen = async (): Promise<{ browserPageId: string }> => {
         if (!offscreen) {
@@ -130,7 +139,7 @@ export class RuntimeBrowserTabCreation {
     }
     const { browserPageId } = await createBrowserTabInRenderer(
       this.host,
-      url,
+      redactKagiSessionToken(url),
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
@@ -159,13 +168,15 @@ export class RuntimeBrowserTabCreation {
       targetGroupId: params.targetGroupId
     })
 
-    // The webview starts at about:blank; bridge navigation preserves registered ownership.
     if (url && url !== 'about:blank') {
       const navigate = async (): Promise<void> => {
         // Nobody reads a new tab's effects, so its first load skips the settle.
-        const result = await bridge.goto(url, worktreeId, browserPageId, { reportEffects: false })
+        const result = await bridge.goto(url, worktreeId, browserPageId, {
+          reportEffects: false,
+          awaitFirstLoad: true
+        })
         this.targets.notifyRendererNavigation(browserPageId, result.url, result.title)
-        if (!this.host.getAvailableAuthoritativeWindow() && worktreeId) {
+        if (this.host.getAvailableAuthoritativeWindowId() === null && worktreeId) {
           this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
         }
       }
@@ -214,6 +225,7 @@ export class RuntimeBrowserTabCreation {
       focus,
       ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
       ...(caller?.opensPageLink ? { opensPageLink: true } : {}),
+      ...(caller?.followsFromTabId ? { followsFromTabId: caller.followsFromTabId } : {}),
       targetGroupId: params.targetGroupId
     })
     return { browserPageId: created.browserPageId }
@@ -223,9 +235,27 @@ export class RuntimeBrowserTabCreation {
     params: {
       url: string
       worktree: string
+      fromTabId?: string
     },
     options?: { signal?: AbortSignal }
   ): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params, options?.signal)
+    const { url, worktree, fromTabId } = params
+    // Phone-only servers have no desktop for BROWSER opens such as login links (#48645).
+    // Only screens on the terminal that opened it follow, so a dev server's --open pulls nobody off another tab.
+    const serverPage =
+      this.host.getAvailableAuthoritativeWindowId() === null &&
+      this.host.getOffscreenBrowserBackend()
+        ? () =>
+            this.browserTabCreate(
+              {
+                url,
+                worktree,
+                placement: { kind: 'server' },
+                ...(fromTabId ? { activate: true, navigation: 'clients' as const } : {})
+              },
+              { signal: options?.signal, ...(fromTabId ? { followsFromTabId: fromTabId } : {}) }
+            )
+        : undefined
+    return openBrowserUrlOnClient(this.host, params, options?.signal, serverPage)
   }
 }

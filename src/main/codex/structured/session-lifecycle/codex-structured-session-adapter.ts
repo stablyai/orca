@@ -3,7 +3,7 @@ import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -11,7 +11,6 @@ import type {
   StructuredAgentSessionAdapter as SessionAdapter,
   StructuredAgentSessionSetOptionInput
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
@@ -47,16 +46,20 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import { approveCodexAutoReviewDenial } from './codex-auto-review-approval'
 import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
+import { CodexComposerPredictions } from '../turns/codex-composer-predictions'
+import { codexHoldsLiveProviderProcess } from './codex-live-provider-process'
 
 export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
+  private readonly predictions = new CodexComposerPredictions(this.sessions, () => this.deps)
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
@@ -86,6 +89,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
   manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
+  approveAutoReviewDenial = approveCodexAutoReviewDenial(this.sessions)
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -102,6 +106,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     })
 
   permissionModeRequiresAcquisition = permission.codexNativeResumeRequirement(this.sessions)
+  runningPermissionMode = permission.codexRunningPermissionMode(this.sessions)
 
   settlePermissionTransition = permission.createCodexPermissionTransition(this.sessions, this)
 
@@ -123,8 +128,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       throw codexAcquireFailure(error)
     })
 
-  open = (input: StructuredAgentSessionProviderOpenInput) =>
-    openCodexStart(this.acquisitions, input)
+  open: SessionAdapter['open'] = (input) => openCodexStart(this.acquisitions, input)
+
+  promptSuggestionInterestChanged = this.predictions.interestChanged
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(
@@ -168,6 +174,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
       startCodexTerminalStopProbe(this.sessions, event.sessionId, session, this.deps)
+      this.predictions.observe(session, event)
     }
     requestEndWait.settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
@@ -197,22 +204,10 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
 
-  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
-    this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
+  relayOpenWork = backgroundStops.codexRelayOpenWork(this.sessions)
+  heldSends = (id: string) => this.sessions.get(id)?.dispatchEchoes.heldSends()
 
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    const starting = this.acquisitions.get(sessionId)
-    if (starting?.acquisitionGeneration === acquisitionGeneration) {
-      return !starting.exitProven && starting.window.connection?.pid !== undefined
-    }
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      !session.ended &&
-      session.exitObservedAt === undefined
-    )
-  }
+  holdsLiveProviderProcess = codexHoldsLiveProviderProcess(this.sessions, this.acquisitions)
 
   backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
     backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
@@ -341,6 +336,5 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   hasOwnedAcquisition = (sessionId: string): boolean =>
     this.acquisitions.get(sessionId) !== undefined || this.sessions.has(sessionId)
 
-  private session = (sessionId: string): CodexSession =>
-    requireLiveCodexSession(this.sessions, sessionId)
+  private session = (id: string): CodexSession => requireLiveCodexSession(this.sessions, id)
 }

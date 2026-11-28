@@ -1,5 +1,6 @@
 import type { BrowserExtensionsBannerAssignmentReply } from '../../../shared/browser/extensions/browser-extensions-banner'
 import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
+import type { PerfNoticeSignals } from '../../../shared/diagnostics/perf-notice-signals'
 import type { TelemetryConsentState } from '../../../shared/telemetry/telemetry-consent-types'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 
@@ -34,6 +35,10 @@ export type DiagnosticsUploadPayload =
 
 export type MemoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
+  /** Bytes held by Orca's own app processes; null where there is no local app (web client). */
+  getAppMemoryTotal: () => Promise<number | null>
+  readPerfNoticeSignals: () => Promise<PerfNoticeSignals | null>
+  countHiddenBrowserPages: (hiddenForMs: number) => Promise<number>
   resourceWindowVisible: () => Promise<boolean>
   onResourceWindowVisibility: (callback: (visible: boolean) => void) => () => void
 }

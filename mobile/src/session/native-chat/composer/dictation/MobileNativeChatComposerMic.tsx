@@ -9,11 +9,13 @@ import {
 import { useMobileDictationCancelDrop } from '../../../../dictation/use-mobile-dictation-cancel-drop'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { keepHeldPressThroughLongPress } from '../../../../platform/held-press-long-press'
+import { useKeyboardPersistingTaps } from '../../../../platform/keyboard/keyboard-persisting-taps'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
-  composerInputStyles as inputStyles
+  composerInputStylesSheet as inputStylesSheet
 } from '../../../../components/composer-input/composer-input-styles'
 import { MobileNativeChatControlSwap } from '../../input/mobile-native-chat-control-swap'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export type MobileNativeChatMicProps = {
   onMicPress?: () => void
@@ -37,28 +39,41 @@ export function MobileNativeChatComposerMic({
   onMicPressIn,
   onMicPressOut,
   cancelRef,
-  disabled
+  disabled,
+  filled = false
 }: MobileNativeChatMicProps & {
   disabled: boolean
+  /** On the control fill, like + beside it; a comment box's mic stays bare. */
+  filled?: boolean
   // The composer's ✕ that a held mic may be released over.
   cancelRef?: RefObject<HostInstance | null>
 }): React.JSX.Element {
-  useMobileTranslation()
+  const inputStyles = useThemedStyles(inputStylesSheet)
+  const t = useMobileTranslation()
   const live = useContext(MobileDictationLiveContext)
   const release = useMobileDictationCancelDrop(cancelRef, live?.cancel, onMicPressOut)
+  // Focus taken from the field closes the keyboard, and the mic's blur ends a held press.
+  const keepsField = useKeyboardPersistingTaps('always')
   if (live?.failureReason != null) {
     return <MobileDictationRetryButton onRetry={live.retry} labelled />
   }
   return (
     <Pressable
+      ref={keepsField}
       accessibilityRole="button"
       aria-busy={micStarting || micProcessing}
-      accessibilityLabel={dictationControlsCopy.mic({
-        starting: micStarting,
-        active: micActive,
-        processing: micProcessing
-      })}
-      style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
+      accessibilityLabel={dictationControlsCopy.mic(
+        {
+          starting: micStarting,
+          active: micActive,
+          processing: micProcessing
+        },
+        t
+      )}
+      style={({ pressed }) => [
+        filled ? inputStyles.controlButton : inputStyles.ghostButton,
+        pressed && inputStyles.pressed
+      ]}
       // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
       onPress={dictationMode === 'hold' ? undefined : onMicPress}
       onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}

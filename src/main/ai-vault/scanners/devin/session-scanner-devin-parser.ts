@@ -17,6 +17,7 @@ import {
 } from '../../transcripts/session-decoded-message'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { extractString } from '../../../../shared/text/trimmed-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 
@@ -81,11 +82,12 @@ function parseDevinSessionRecord(
 function decodeDevinStepMessage(
   step: Record<string, unknown>,
   role: 'user' | 'assistant',
-  includeTools: boolean
+  includeTools: boolean,
+  timestamp: string | null
 ): DecodedSessionMessage | null {
   const wrapped = asRecord(step.message)
   for (const content of [wrapped ? wrapped.content : step.message, step.text, step.content]) {
-    const message = decodeSessionMessage(role, content, null, { includeTools })
+    const message = decodeSessionMessage(role, content, timestamp, { includeTools })
     if (message.blocks.some((block) => ('text' in block ? block.text.trim().length > 0 : true))) {
       return message
     }
@@ -133,17 +135,20 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
     return
   }
   const metadata = asRecord(stepRecord.metadata)
-  updateTimeline(
+  const timestamp = updateTimeline(
     accumulator,
     extractString(stepRecord.timestamp) ?? extractString(metadata?.created_at)
   )
   const metrics = asRecord(metadata?.metrics)
   const extra = asRecord(stepRecord.extra)
-  accumulator.model ??=
-    extractString(stepRecord.model_name) ??
-    extractString(extra?.generation_model) ??
-    extractString(metadata?.generation_model) ??
-    extractString(metrics?.generation_model)
+  if (!accumulator.model) {
+    const model =
+      extractString(stepRecord.model_name) ??
+      extractString(extra?.generation_model) ??
+      extractString(metadata?.generation_model) ??
+      extractString(metrics?.generation_model)
+    accumulator.model = model && ownRetainedString(model)
+  }
   accumulator.totalTokens += devinStepTokenTotal(metadata, metrics, asRecord(stepRecord.metrics))
   // System steps contribute usage but must not become messages, titles or previews.
   const source = extractString(stepRecord.source)
@@ -162,7 +167,8 @@ export function consumeDevinSessionStep(accumulator: SessionAccumulator, step: u
   const message = decodeDevinStepMessage(
     stepRecord,
     isUser ? 'user' : 'assistant',
-    accumulator.messages.active
+    accumulator.messages.active,
+    timestamp
   )
   if (!message) {
     return

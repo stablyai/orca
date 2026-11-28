@@ -1,11 +1,14 @@
 import { editorTabRetirement } from '../editor/tabs/editor-tab-retirement'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   landsOnEmptiedWorktree,
   emptiedWorktreeLandingPatch,
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
-import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
+import { retireNativeChatTab } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
+import { releaseRemovedChatTabsLater } from '@/components/native-chat/session/native-chat-removed-tab-releaser'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
+import { anotherChatTabInWorktree, closedChatPaneTabIds } from './closed-chat-pane-ownership'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
@@ -33,7 +36,10 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
-import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
+import {
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../record-transitions/keyed-record-transitions'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -69,7 +75,16 @@ export function createTabsCloseActions(
       const dedupedGroupOrder = dedupeTabOrder(groupOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0
-      if (tab.contentType === 'agent-session') {
+      const retainedChatView =
+        tab.contentType === 'agent-session' &&
+        opts?.preserveAgentSession &&
+        anotherChatTabInWorktree(
+          state,
+          tab,
+          worktreeId,
+          (other) => other.executionHostId === tab.executionHostId
+        )
+      if (tab.contentType === 'agent-session' && !retainedChatView) {
         const provisional =
           shouldRetainStructuredAgentSessionLaunchTab(worktreeId, tab.entityId) ||
           hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, tab.entityId)
@@ -125,11 +140,13 @@ export function createTabsCloseActions(
       const closeHere = (): void =>
         settleAttentionRemovedBy(set, get, () =>
           set((current) => {
+            let closed: Tab | undefined
             const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
-              if (item.id === tabId) {
-                retireRemovedNativeChatTabs([item], [])
+              if (item.id !== tabId) {
+                return true
               }
-              return item.id !== tabId
+              closed = item
+              return false
             })
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
@@ -137,7 +154,9 @@ export function createTabsCloseActions(
               : current.unreadTerminalTabs
             // Why: a structured chat tab owns its markers directly; nothing else retires them.
             const structuredAttention =
-              tab.contentType === 'agent-session' ? removeTabsAttention(current, [tabId]) : null
+              tab.contentType === 'agent-session'
+                ? removeTabsAttention(current, [tabId], closedChatPaneTabIds(current, tab))
+                : null
             let nextGroups = (current.groupsByWorktree[worktreeId] ?? []).map((candidate) =>
               candidate.id === group?.id
                 ? {
@@ -169,6 +188,10 @@ export function createTabsCloseActions(
             const nextUnifiedTabsByWorktree = replaceTabBuckets(current.unifiedTabsByWorktree, [
               [worktreeId, nextTabs]
             ])
+            if (closed?.contentType === 'agent-session') {
+              retireNativeChatTab(closed, nextUnifiedTabsByWorktree)
+              releaseRemovedChatTabsLater([closed])
+            }
             const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
               [worktreeId, nextGroups]
             ])
@@ -224,7 +247,11 @@ export function createTabsCloseActions(
                   settleAttentionRemovedBy(
                     set,
                     get,
-                    () => set((current) => removeTabsAttention(current, [tabId])),
+                    // The tab is gone by now, so its chat's pane address is named here.
+                    () =>
+                      set((current) =>
+                        removeTabsAttention(current, [tabId], closedChatPaneTabIds(current, tab))
+                      ),
                     { tabsBefore: state }
                   )
               }

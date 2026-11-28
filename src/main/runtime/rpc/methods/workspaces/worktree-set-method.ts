@@ -61,6 +61,9 @@ export const WORKTREE_SET_METHOD = defineMethod({
       ...(params.diffCommentsBase !== undefined
         ? { diffCommentsBase: params.diffCommentsBase }
         : {}),
+      ...(params.deliveredDiffCommentSnapshots !== undefined
+        ? { deliveredDiffCommentSnapshots: params.deliveredDiffCommentSnapshots }
+        : {}),
       mobileDiffReview: params.mobileDiffReview,
       lineage:
         params.parentWorktree || params.crossStoreParent || params.noParent === true
@@ -68,7 +71,11 @@ export const WORKTREE_SET_METHOD = defineMethod({
               parentWorktree: params.parentWorktree,
               matchFolderWorkspaces: params.matchFolderWorkspaces === true,
               ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
-              noParent: params.noParent === true
+              ...(params.crossStoreParentIsBotHome ? { crossStoreParentIsBotHome: true } : {}),
+              noParent: params.noParent === true,
+              ...(params.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: params.ifParentWorkspace }
+                : {})
             }
           : undefined
     })

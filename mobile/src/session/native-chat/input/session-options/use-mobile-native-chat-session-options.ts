@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import {
   useCallback,
   useEffect,
@@ -28,12 +28,16 @@ import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-cache'
+import { createNativeChatSessionOptionRecord } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
 import {
-  createNativeChatSessionOptionRecord,
-  matchNativeChatCatalogModelId
-} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
-import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+  takeNativeChatStatusReport,
+  type NativeChatStatusReportMemory
+} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-status-session-options'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
+import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
+import { mobileNativeChatSessionOptionSay } from './native-chat-session-option-copy'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -65,6 +69,8 @@ type HookArgs = {
   agent: string | null
   scopeKey: string | null
   reportedModel: string | null
+  reportedEffort?: string
+  reportingSessionId?: string
   discoveredModels?: CatalogModel[] | null
   modelSwitchCommand?: string
   dispatchCommand: (
@@ -80,8 +86,8 @@ const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
 const subscribeEmpty = (): (() => void) => () => {}
 const getEmptySnapshot = (): SessionOptionDescriptor[] => EMPTY_SNAPSHOT
 
-// Kept across remounts: a repeated hook model is not fresh evidence, and reapplying it would revert a newer pick.
-const appliedReportByScope = new Map<string, string>()
+// Kept across remounts: the same session repeating its model and effort is not fresh evidence, and reapplying it would revert a newer pick.
+const appliedReportByScope: NativeChatStatusReportMemory = new Map()
 
 /** A tab that runs another agent starts over: a new session there carries none of the old one's picks. */
 function startScopeOverForAgent(scopeKey: string, agent: string): void {
@@ -99,6 +105,7 @@ function createMobileSurfaceEntry(args: {
   canSwitchOmpModel: boolean
   latest: { readonly current: HookArgs }
   activeIdentity: { readonly current: string | null }
+  t: Translate
 }): SurfaceEntry | null {
   const { agent, identity, latest, activeIdentity } = args
   const midSession = getAgentSessionOptionCatalog(agent)?.modelApply.midSession
@@ -109,7 +116,7 @@ function createMobileSurfaceEntry(args: {
     agent,
     scopeKey: args.scopeKey,
     mode: 'live',
-    modelLabel: sayMobileNativeChatSessionOption('model'),
+    modelLabel: mobileNativeChatSessionOptionSay(args.t)('model'),
     canSwitchOmpModel: args.canSwitchOmpModel,
     dispatchCommand: async (command, options) => {
       // One controller serves every tab: a queued pick must not reach the tab opened since.
@@ -163,10 +170,12 @@ function createMobileSurfaceEntry(args: {
 export function useMobileNativeChatSessionOptions(
   args: HookArgs
 ): MobileNativeChatSessionOptionsController {
-  const { agent, scopeKey, reportedModel, discoveredModels } = args
+  const { agent, scopeKey, reportedModel, reportedEffort, reportingSessionId, discoveredModels } =
+    args
   const catalog = agent ? getAgentSessionOptionCatalog(agent) : null
   const identity = agent && scopeKey && catalog ? `${scopeKey}\0${agent}` : null
   const canSwitchOmpModel = args.modelSwitchCommand === 'orca-model'
+  const t = useMobileTranslation()
   const latest = useRef(args)
   const activeIdentityRef = useRef(identity)
   const [pending, setPending] = useState<PendingOperation | null>(null)
@@ -203,13 +212,14 @@ export function useMobileNativeChatSessionOptions(
       identity,
       canSwitchOmpModel,
       latest,
-      activeIdentity: activeIdentityRef
+      activeIdentity: activeIdentityRef,
+      t
     })
     if (created) {
       setBoundedScopeCacheEntry(surfaces, scopeKey, created)
     }
     return created
-  }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces])
+  }, [agent, canSwitchOmpModel, identity, scopeKey, surfaces, t])
   const surface = entry?.surface ?? null
 
   useEffect(() => {
@@ -220,25 +230,31 @@ export function useMobileNativeChatSessionOptions(
   }, [discoveredModels, entry])
 
   useEffect(() => {
-    if (!surface || !scopeKey || !catalog || !reportedModel) {
+    if (!surface || !scopeKey || !agent || !catalog || !reportedModel) {
       return
     }
-    // Phone-only: desktop reads Claude's model from its terminal screen, which the phone cannot see, so Claude keeps the hook model too.
-    // OMP reports exact selectors, including models absent from cached discovery.
-    const matched =
-      agent === 'omp'
-        ? reportedModel.trim()
-        : matchNativeChatCatalogModelId(
-            { ...catalog, models: discoveredModels ?? catalog.models },
-            reportedModel,
-            { allowUnlisted: agent === 'codex' }
-          )
-    if (!matched || appliedReportByScope.get(scopeKey) === matched) {
-      return
+    // A restarted session reports afresh, even the same model and effort.
+    const report = takeNativeChatStatusReport(
+      appliedReportByScope,
+      scopeKey,
+      agent,
+      catalog,
+      discoveredModels ?? catalog.models,
+      { model: reportedModel, providerSession: { id: reportingSessionId, effort: reportedEffort } }
+    )
+    if (report) {
+      surface.reportSessionOptions(report.values, report.forNewModel)
     }
-    setBoundedScopeCacheEntry(appliedReportByScope, scopeKey, matched)
-    surface.reportSessionOptions({ model: matched })
-  }, [agent, catalog, discoveredModels, reportedModel, scopeKey, surface])
+  }, [
+    agent,
+    catalog,
+    discoveredModels,
+    reportedEffort,
+    reportedModel,
+    reportingSessionId,
+    scopeKey,
+    surface
+  ])
 
   const snapshot = useSyncExternalStore(
     surface?.subscribe ?? subscribeEmpty,
@@ -273,8 +289,19 @@ export function useMobileNativeChatSessionOptions(
     [track]
   )
   const recordCommand = useCallback(
-    (command: string) => surface?.recordOutgoingCommand(command),
-    [surface]
+    (command: string) => {
+      surface?.recordOutgoingCommand(command)
+      // Why: later chat sends would be typed into the TUI screen this command opened; a send that lands after the phone moved to another chat or agent must not switch that one.
+      if (
+        agent &&
+        latest.current.scopeKey === scopeKey &&
+        latest.current.agent === agent &&
+        nativeChatCommandOpensTerminal(agent, command)
+      ) {
+        latest.current.onAgentPicker?.()
+      }
+    },
+    [agent, scopeKey, surface]
   )
   const pendingId = pending && pending.identity === identity ? pending.id : null
 

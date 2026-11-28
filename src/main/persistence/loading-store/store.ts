@@ -1,12 +1,9 @@
 import { dirname } from 'node:path'
-import {
-  setMigrationUnsupportedPty,
-  setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { setMigrationUnsupportedPtyPersistenceListener } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
-import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
+import { moveChatReadMarksAtLoad } from '../restoring-sessions/chat-read-mark-move-at-load'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
@@ -35,6 +32,7 @@ import {
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
+import { registerLoadedPaneIdentity } from './profile-loading/register-loaded-pane-identity'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
@@ -127,7 +125,8 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    let initialState = normalized.state
+    const movedReadMarks = moveChatReadMarksAtLoad(normalized.state)
+    let initialState = movedReadMarks
     // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
     if (options.initializeHomeWorkspace && !profileDocumentExisted) {
       initialState = createInitialHomeWorkspaceState(initialState)
@@ -152,20 +151,7 @@ export class Store {
     if (!imported) {
       // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.
       this.domains.orcadMigrationBlobInstalls.installPendingOrcadMigrationReceivedBlobs()
-      for (const entry of initial?.unboundPaneAliases ?? []) {
-        agentHookServer.registerPaneKeyAlias(
-          entry.legacyPaneKey,
-          entry.stablePaneKey,
-          undefined,
-          entry.updatedAt
-        )
-      }
-      for (const entry of normalized.migrationUnsupportedEntries) {
-        setMigrationUnsupportedPty(entry)
-      }
-      for (const entry of normalized.legacyPaneKeyAliasEntries) {
-        registerPersistedPaneKeyAlias(entry)
-      }
+      registerLoadedPaneIdentity(normalized, initial?.unboundPaneAliases ?? [])
       setMigrationUnsupportedPtyPersistenceListener((entries) => {
         this.state.migrationUnsupportedPtyEntries = entries
         scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])
@@ -181,13 +167,15 @@ export class Store {
         sweptRepoIds.length > 0
       ) {
         scheduleFullProfileSave(this.domains.scheduling)
+      } else if (movedReadMarks !== normalized.state) {
+        scheduleSave(this.domains.scheduling, ['ui'])
       }
     }
   }
 
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
-  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
-    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+  async migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): Promise<void> {
+    if (await migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
       scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
@@ -266,7 +254,7 @@ export class Store {
     }
     return enqueuePrimaryStateOperation(this.domains.writes, async () => {
       this.runtime.dirtyProfileStateDomains = null
-      if (!(await writeToDiskAsync(this.domains.writes))) {
+      if (!(await writeToDiskAsync(this.domains.writes, { wholeSessions: true }))) {
         throw new Error('Profile state changed while preparing its export')
       }
       return exportState(authority)

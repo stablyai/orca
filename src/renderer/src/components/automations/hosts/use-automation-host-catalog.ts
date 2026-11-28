@@ -2,7 +2,7 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useAppStore } from '@/store/index'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
-import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
@@ -54,6 +54,8 @@ export type AutomationHostCatalogView = {
   catalog: AutomationHostCatalog
   entries: readonly AutomationHostCatalogEntry[]
   resolution: AutomationHostFilterResolution
+  /** The server this client's local transport reaches (a paired web client); null on a desktop. */
+  desktopAliasEnvironmentId: string | null
   rows: AutomationHostListRows
   loadCounts: AutomationHostLoadCounts
   selectHost: (filter: AutomationHostFilter) => void
@@ -257,6 +259,7 @@ export function useAutomationHostCatalog(
     catalog,
     entries: catalog.entries,
     resolution,
+    desktopAliasEnvironmentId: sourceState.desktopAliasEnvironmentId ?? null,
     rows,
     loadCounts: useMemo(() => automationHostLoadCounts(catalog), [catalog]),
     selectHost: setAutomationHostFilter,

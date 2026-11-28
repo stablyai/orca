@@ -37,9 +37,18 @@ export function applyLayoutRenames(
             ]
           : []
       )
+      const writtenWorkspaces = new Map(
+        changes.flatMap(({ hostId, change }) =>
+          change.workspaces ? [[hostId, change.workspaces] as const] : []
+        )
+      )
       return restores.length === 0
-        ? { value: refused, persist: false }
-        : { value: refused, rollback: () => restores.forEach((restore) => restore()) }
+        ? { value: refused, persist: false, writtenWorkspaces }
+        : {
+            value: refused,
+            rollback: () => restores.forEach((restore) => restore()),
+            writtenWorkspaces
+          }
     },
     // Per-tab refusals do not reject the remaining write.
     () => undefined

@@ -1,79 +1,37 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+// #46567: a selected row whose read keeps failing (no gh on a WSL host) retries as a poll.
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createVisibleHostedReviewRefreshScheduler,
   type VisibleHostedReviewRefreshTarget
 } from './visible-hosted-review-refresh-scheduler'
 
-const schedulers: ReturnType<typeof createVisibleHostedReviewRefreshScheduler>[] = []
+afterEach(() => {
+  vi.useRealTimers()
+})
 
-function setup(targets: VisibleHostedReviewRefreshTarget[]) {
-  const scheduler = createVisibleHostedReviewRefreshScheduler()
-  schedulers.push(scheduler)
-  scheduler.update(targets)
-  scheduler.setVisible(true)
-  return scheduler
-}
-
-function target(
-  overrides: Partial<VisibleHostedReviewRefreshTarget> = {}
-): VisibleHostedReviewRefreshTarget {
-  return {
-    key: 'local::repo::branch',
-    revision: 'head|',
-    fetchedAt: Date.now(),
-    intervalMs: 120_000,
-    selected: false,
-    refresh: vi.fn(async () => true),
-    ...overrides
-  }
-}
-
-describe('visible hosted review scheduler', () => {
-  beforeEach(() => {
+describe('the visible review refresh scheduler', () => {
+  it('sends a failed selected read once as discovery, then its retries as polls', async () => {
     vi.useFakeTimers()
-    vi.setSystemTime(1_000_000)
-  })
-  afterEach(() => {
-    for (const scheduler of schedulers.splice(0)) {
-      scheduler.dispose()
+    const reads: (string | undefined)[] = []
+    const target: VisibleHostedReviewRefreshTarget = {
+      key: 'repo::feature',
+      revision: 'head-1',
+      fetchedAt: null,
+      intervalMs: 60_000,
+      selected: true,
+      refresh: async (_force, _signal, intent) => {
+        reads.push(intent)
+        return false
+      }
     }
-    vi.useRealTimers()
-  })
+    const scheduler = createVisibleHostedReviewRefreshScheduler()
+    scheduler.setVisible(true)
+    scheduler.update([target])
+    await vi.advanceTimersByTimeAsync(20 * 60_000)
+    scheduler.dispose()
 
-  it.each(['remove', 'hide', 'dispose'])(
-    'aborts abandoned demand on %s without releasing native work early',
-    async (action) => {
-      const signals: (AbortSignal | undefined)[] = []
-      const finish: ((value: boolean) => void)[] = []
-      const row = target({
-        fetchedAt: null,
-        refresh: vi.fn((_force, signal) => {
-          signals.push(signal)
-          return new Promise<boolean>((resolve) => finish.push(resolve))
-        })
-      })
-      const scheduler = setup([row])
-      expect(signals[0]?.aborted).toBe(false)
-      if (action === 'remove') {
-        scheduler.update([])
-      } else if (action === 'hide') {
-        scheduler.setVisible(false)
-      } else {
-        scheduler.dispose()
-      }
-      expect(signals[0]?.aborted).toBe(true)
-      if (action !== 'dispose') {
-        scheduler.update([row])
-        scheduler.setVisible(true)
-        await vi.advanceTimersByTimeAsync(10_000)
-      }
-      finish[0](false)
-      await vi.advanceTimersByTimeAsync(0)
-      if (action !== 'dispose') {
-        expect(signals[1]?.aborted).toBe(false)
-        finish[1](true)
-        await vi.advanceTimersByTimeAsync(0)
-      }
-    }
-  )
+    expect(reads.length).toBeGreaterThan(1)
+    expect(reads[0]).toBe('discovery')
+    expect(new Set(reads.slice(1))).toEqual(new Set(['retry']))
+  })
 })

@@ -4,7 +4,7 @@ import type {
   AgentSessionMcpResult,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../agent-session-mcp'
+} from '../options/protocol/agent-session-mcp'
 
 export type AgentSessionMcpRequest = (
   operation: AgentSessionMcpOperation
@@ -12,13 +12,46 @@ export type AgentSessionMcpRequest = (
 
 export type AgentSessionMcpPanelState = {
   /** null while the first read is in flight. */
-  result: Exclude<AgentSessionMcpResult, { status: 'ok' }> | { status: 'ok' } | null
+  result:
+    | Exclude<AgentSessionMcpResult, { status: 'ok' | 'not-running' }>
+    | { status: 'ok' | 'not-running' }
+    | null
   servers: readonly AgentSessionMcpServer[]
   /** The action in flight, one at a time. */
   pending: Exclude<AgentSessionMcpOperation, { action: 'status' }> | null
   signIn: AgentSessionMcpSignIn | null
   /** The last action's refusal, as the agent worded it; null message means no detail. */
-  failure: { server: string; message: string | null } | null
+  failure: AgentSessionMcpFailure | null
+}
+
+export type AgentSessionMcpFailure = {
+  server: string
+  message: string | null
+  /** A reconnect that left the server failed: the row says so even when the reason is unchanged. */
+  stillFailing?: true
+}
+
+/** A reconnect the agent ran that left the server failed, or that it refused with a reason. */
+function reconnectStillFailing(
+  operation: AgentSessionMcpOperation,
+  reply: AgentSessionMcpResult
+): AgentSessionMcpFailure | null {
+  if (operation.action !== 'reconnect') {
+    return null
+  }
+  if (reply.status === 'failed') {
+    return reply.message === null
+      ? null
+      : { server: operation.server, message: reply.message, stillFailing: true }
+  }
+  const row =
+    reply.status === 'ok'
+      ? reply.servers.find((server) => server.name === operation.server)
+      : undefined
+  // The status line gives the reason, which may change while the note stands.
+  return row?.status === 'failed'
+    ? { server: operation.server, message: null, stillFailing: true }
+    : null
 }
 
 const POLL_MS = 2_000
@@ -26,7 +59,8 @@ const MAX_POLL_MS = 15_000
 // Agents close their sign-in callback after five minutes.
 const SIGN_IN_WINDOW_MS = 5 * 60_000
 
-/** State for the `/mcp` panel; `openUrl` opens a sign-in page in the device's browser. */
+/** State for the `/mcp` panel; `openUrl` opens a sign-in page in the device's browser, and a new
+ *  `refreshKey` (the agent starting or stopping, `/mcp` run again) re-reads the servers. */
 export function createAgentSessionMcpPanelHook({
   useCallback,
   useEffect,
@@ -35,7 +69,10 @@ export function createAgentSessionMcpPanelHook({
 }: Pick<typeof React, 'useCallback' | 'useEffect' | 'useRef' | 'useState'>) {
   return function useAgentSessionMcpPanel(
     request: AgentSessionMcpRequest,
-    openUrl: (url: string) => void
+    openUrl: (url: string) => void,
+    refreshKey?: unknown,
+    /** `reconnectFeedback`: a reconnect that leaves the server failed says so (hosts with MCP servers on). */
+    { reconnectFeedback = false }: { reconnectFeedback?: boolean } = {}
   ) {
     const [state, setState] = useState<AgentSessionMcpPanelState>({
       result: null,
@@ -46,9 +83,15 @@ export function createAgentSessionMcpPanelHook({
     })
     const busy = useRef(false)
     const reading = useRef(false)
+    // A read asked for mid-read may follow a change the one in flight missed.
+    const readAgain = useRef(false)
     // Bumped as each action starts and ends, so a read that overlapped one can't show older state.
     const actions = useRef(0)
     const mounted = useRef(true)
+    const feedback = useRef(reconnectFeedback)
+    feedback.current = reconnectFeedback
+    const stillFailing = (operation: AgentSessionMcpOperation, reply: AgentSessionMcpResult) =>
+      feedback.current ? reconnectStillFailing(operation, reply) : null
     useEffect(() => {
       mounted.current = true
       return () => {
@@ -70,10 +113,24 @@ export function createAgentSessionMcpPanelHook({
             if (!server && reply.status === 'failed' && current.result?.status === 'ok') {
               return current
             }
-            // A failed action keeps the list; a failed first read replaces it.
+            // A failed action keeps the list; a failed first read replaces it. An agent at rest
+            // lists what its host knows its next start gets.
             return server && reply.status === 'failed'
-              ? { ...current, pending, failure: { server, message: reply.message } }
-              : { ...current, pending, result: reply, servers: [], signIn: null }
+              ? {
+                  ...current,
+                  pending,
+                  failure: stillFailing(operation, reply) ?? {
+                    server,
+                    message: reply.message
+                  }
+                }
+              : {
+                  ...current,
+                  pending,
+                  result: reply.status === 'not-running' ? { status: 'not-running' } : reply,
+                  servers: (reply.status === 'not-running' && reply.servers) || [],
+                  signIn: null
+                }
           }
           const signIn =
             reply.signIn ??
@@ -88,7 +145,8 @@ export function createAgentSessionMcpPanelHook({
             servers: reply.servers,
             pending,
             signIn,
-            failure: operation.action === 'status' ? current.failure : null
+            failure:
+              operation.action === 'status' ? current.failure : stillFailing(operation, reply)
           }
         })
       },
@@ -97,19 +155,23 @@ export function createAgentSessionMcpPanelHook({
 
     const read = useCallback(async () => {
       if (reading.current) {
+        readAgain.current = true
         return
       }
       reading.current = true
-      const operation = { action: 'status' } as const
-      const started = actions.current
-      const reply = await request(operation).catch((): AgentSessionMcpResult => ({
-        status: 'failed',
-        message: null
-      }))
+      do {
+        readAgain.current = false
+        const operation = { action: 'status' } as const
+        const started = actions.current
+        const reply = await request(operation).catch((): AgentSessionMcpResult => ({
+          status: 'failed',
+          message: null
+        }))
+        if (actions.current === started) {
+          apply(reply, operation)
+        }
+      } while (readAgain.current && mounted.current)
       reading.current = false
-      if (actions.current === started) {
-        apply(reply, operation)
-      }
     }, [apply, request])
 
     const run = useCallback(
@@ -146,7 +208,7 @@ export function createAgentSessionMcpPanelHook({
 
     useEffect(() => {
       void read()
-    }, [read])
+    }, [read, refreshKey])
 
     // Nothing reports when an agent finishes a callback sign-in or a server settles from
     // connecting; re-read with backoff, and stop at the agents' own five-minute window.

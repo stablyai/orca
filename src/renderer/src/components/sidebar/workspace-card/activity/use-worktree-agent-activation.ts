@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
+import { chatPaneAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getPtyExecutionHost } from '../../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
@@ -18,21 +19,29 @@ import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-
 export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
     (tabId: string, paneKey: string) =>
-      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId),
+      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId, {
+        revealInSidebar: false
+      }),
     [worktreeId, executionHostId]
   )
 }
 
-/** Open an agent's pane the way its sidebar row does, including before its tab hydrates. */
+/** Open an agent's pane the way its sidebar row does, including before its tab hydrates.
+ * A row passes revealInSidebar: false: it opens its own card, which is on screen. */
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
   paneKey: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  options?: { revealInSidebar?: boolean }
 ): void {
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
-  if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {
+  // A row names a chat by its pane key's conversation address, not its tab id.
+  if (
+    nativeTab?.worktreeId === worktreeId &&
+    (nativeTab.id === tabId || chatPaneAddressTabId(nativeTab.entityId) === tabId)
+  ) {
     const target = structuredAgentSessionTargetForTab(state, nativeTab)
     const owner = structuredAgentSessionOwnerForTab(state, nativeTab)
     if (
@@ -45,10 +54,11 @@ export function activateWorktreeAgentPane(
     }
     if (
       activateAndRevealWorkspace(worktreeId, {
+        ...options,
         executionHostId: executionHostId ?? owner ?? undefined
       }) !== false
     ) {
-      activateStructuredAgentSessionTab({ worktreeId, tabId, target })
+      activateStructuredAgentSessionTab({ worktreeId, tabId: nativeTab.id, target })
     }
     return
   }
@@ -79,7 +89,7 @@ export function activateWorktreeAgentPane(
     return
   }
   // Use shared activation for cross-repo reveal and navigation history.
-  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+  if (activateAndRevealWorkspace(worktreeId, { ...options, executionHostId }) === false) {
     return
   }
   const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []

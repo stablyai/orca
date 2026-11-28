@@ -15,9 +15,9 @@ import {
   runUserInitiatedUpdateCheck,
   sendOpenCrashReport,
   sendOpenFeatureTour,
-  sendOpenSetupGuide
+  sendOpenSetupGuide,
+  sendOpenWorktreePalette
 } from './main-window-actions'
-import { ensureAutoUpdaterConfigured } from '../../updater/lifecycle/main-window-updater'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 
@@ -32,7 +32,6 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     appMenuLabel: state.devInstanceIdentity?.name ?? app.name,
     ...getAppMenuQuitHandlers(),
     onCheckForUpdates: (options) => {
-      ensureAutoUpdaterConfigured()
       runUserInitiatedUpdateCheck(options)
     },
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -42,6 +41,8 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     onOpenSettings: openSettingsFromSystemMenu,
+    onOpenWorktreePalette: (targetWindow) =>
+      sendOpenWorktreePalette(targetWindow instanceof BrowserWindow ? targetWindow : null),
     toggleFocusedPageDevTools: (focused) => browserManager.toggleDevToolsOfFocusedPage(focused),
     onOpenSetupGuide: (targetWindow) => {
       recordCrashBreadcrumb('setup_guide_opened')
@@ -97,6 +98,6 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
         statusBarVisible: ui.statusBarVisible !== false
       }
     },
-    getKeybindings: () => state.keybindings?.getOverrides()
+    getKeybindings: () => state.core.keybindings?.getOverrides()
   })
 }

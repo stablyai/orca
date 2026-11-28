@@ -1,7 +1,9 @@
+import { nativeChatPathBase } from '../../../../../../shared/native-chat/file-access/native-chat-path-base'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '../../../../store/types'
 import type { WorktreeRuntimeOwnerState } from '../../../../lib/workspace/ownership/worktree-runtime-owner-state'
 import {
+  resolveNativeChatSessionFolder,
   resolveNativeChatTabDirectory,
   type NativeChatTabDirectoryState
 } from '../../pane/routing/native-chat-tab-directory'
@@ -17,6 +19,9 @@ export type NativeChatFileLinkContext = {
   runtimeEnvironmentId: string | null
   /** The chat's own tab (terminal or agent-session); editor opens place beside its group. */
   sourceTabId?: string
+  /** Where relative paths resolve when not worktreePath: a group member's own folder, or the
+   *  sub-folder an adopted chat runs in. Opens stay in worktreeId. */
+  pathBase?: string
 }
 
 export type NativeChatFileLinkState = Pick<
@@ -111,10 +116,15 @@ export function resolveNativeChatFileLinkContextForOwner(
     return null
   }
 
+  const pathBase = nativeChatPathBase(
+    worktreePath,
+    resolveNativeChatSessionFolder(state, terminalTabId, worktreeId)
+  )
   return {
     worktreeId,
     worktreePath,
     runtimeEnvironmentId: runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
-    sourceTabId: terminalTabId
+    sourceTabId: terminalTabId,
+    ...(pathBase ? { pathBase } : {})
   }
 }

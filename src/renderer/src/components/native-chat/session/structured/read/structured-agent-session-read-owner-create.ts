@@ -5,10 +5,12 @@ import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
   type StructuredAgentSessionAction
-} from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { startStructuredAgentSessionReadTransport } from './structured-agent-session-read-transport'
+import { withDocumentSavesOnly } from './document-viewer-visibility'
 import { createStructuredAgentSessionPRLinkObserver } from './structured-agent-session-pr-link-observer'
+import { nativeChatShowsPromptSuggestions } from '../../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 
 import { createStructuredAgentSessionReadActivity } from './structured-agent-session-read-activity'
 import { createStructuredAgentSessionOlderPageLoader } from './structured-agent-session-older-page-loader'
@@ -45,7 +47,8 @@ export function createReadOwner(
   let disposed = false
   const activity = createStructuredAgentSessionReadActivity(
     () => !disposed,
-    () => snapshot.state
+    () => snapshot.state,
+    () => deleteIfUnused()
   )
   const observePRLinks = target
     ? createStructuredAgentSessionPRLinkObserver(sessionId, target)
@@ -141,6 +144,8 @@ export function createReadOwner(
       apply({ type: 'loading' })
     }
     const transport = startStructuredAgentSessionReadTransport({
+      showsPromptSuggestions: nativeChatShowsPromptSuggestions(effects.getState().settings),
+      replyText,
       subscribeRetryNow: effects.subscribeRetryNow,
       applyRequests: apply,
       applyEvent: (event, options) => {
@@ -175,6 +180,23 @@ export function createReadOwner(
       transport.dispose()
       stopActiveRun = null
       markStale()
+    }
+  }
+
+  // Tool-step and prompt readers share the read but draw no reply text, so they take no live text.
+  const replyTextListeners = new Set<() => void>()
+  const replyTextShown = (): boolean =>
+    [...activations.values()].some((effects) => effects.showsReplyText === true)
+  const replyText = withDocumentSavesOnly(sessionId, {
+    shown: replyTextShown,
+    subscribe: (changed: () => void) => {
+      replyTextListeners.add(changed)
+      return () => replyTextListeners.delete(changed)
+    }
+  })
+  const noteReaders = (before: boolean): void => {
+    if (replyTextShown() !== before) {
+      replyTextListeners.forEach((changed) => changed())
     }
   }
 
@@ -224,12 +246,16 @@ export function createReadOwner(
       // Remounts and StrictMode re-run setup on an owner whose cleanup just forgot it.
       adoptStructuredReadOwner(key, owner)
       const token = Symbol(sessionId)
+      const before = replyTextShown()
       activations.set(token, effects)
       if (activations.size === 1) {
         start(effects)
       }
+      noteReaders(before)
       return () => {
+        const wasShown = replyTextShown()
         activations.delete(token)
+        noteReaders(wasShown)
         if (activations.size === 0) {
           stopActiveRun?.()
           deleteIfUnused()

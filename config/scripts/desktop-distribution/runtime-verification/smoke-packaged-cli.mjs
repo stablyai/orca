@@ -49,32 +49,30 @@ try {
       timeout: 30_000
     })
 
-  await run(['--help'])
-  const list = JSON.parse((await run(['skills', 'list', '--json'])).stdout)
+  const [
+    ,
+    listResult,
+    orcaCliResult,
+    orcaComputerUseResult,
+    computerUseResult,
+    installResult,
+    updateResult
+  ] = await Promise.all([
+    run(['--help']),
+    run(['skills', 'list', '--json']),
+    run(['skills', 'get', 'orca-cli']),
+    run(['skills', 'get', 'orca-computer-use']),
+    run(['skills', 'get', 'computer-use']),
+    run(['skills', 'install', '--skill', 'orca-cli', '--agent', 'codex', '--dry-run', '--json']),
+    run(['skills', 'update', '--skill', 'orca-cli', '--dry-run', '--json'])
+  ])
+  const list = JSON.parse(listResult.stdout)
   assert(list.topics.some((topic) => topic.name === 'orca-cli'))
-  assert.match((await run(['skills', 'get', 'orca-cli'])).stdout, /name: orca-cli/)
-  assert.match(
-    (await run(['skills', 'get', 'orca-computer-use'])).stdout,
-    /name: orca-computer-use/
-  )
-  assert.match((await run(['skills', 'get', 'computer-use'])).stdout, /name: orca-computer-use/)
-  const install = JSON.parse(
-    (
-      await run([
-        'skills',
-        'install',
-        '--skill',
-        'orca-cli',
-        '--agent',
-        'codex',
-        '--dry-run',
-        '--json'
-      ])
-    ).stdout
-  )
-  const update = JSON.parse(
-    (await run(['skills', 'update', '--skill', 'orca-cli', '--dry-run', '--json'])).stdout
-  )
+  assert.match(orcaCliResult.stdout, /name: orca-cli/)
+  assert.match(orcaComputerUseResult.stdout, /name: orca-computer-use/)
+  assert.match(computerUseResult.stdout, /name: orca-computer-use/)
+  const install = JSON.parse(installResult.stdout)
+  const update = JSON.parse(updateResult.stdout)
   assert.equal(install.executed, false)
   assert.equal(update.executed, false)
   console.log(`[packaged-cli-smoke] help and skills commands passed via ${cliPath}`)

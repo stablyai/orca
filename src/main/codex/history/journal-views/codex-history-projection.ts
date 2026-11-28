@@ -10,7 +10,7 @@ import type {
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import { codexItemRunState } from '../../structured/items/codex-item-run-state'
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
-import { generatedImageBlocks } from '../../../../shared/native-chat/native-chat-generated-image'
+import { generatedImageBlocks } from '../../../../shared/native-chat/transcript/images/native-chat-generated-image'
 
 export function preserveSavedHistoryPayload(
   item: CodexThreadItem,
@@ -37,7 +37,9 @@ export function preserveSavedHistoryPayload(
         item.status == null
           ? old
           : state === 'completed'
-            ? { kind: 'diff', path: patch.path, patch: patch.patch }
+            ? old.kind === 'diff'
+              ? old
+              : { kind: 'diff', path: patch.path, patch: patch.patch }
             : {
                 kind: 'tool-call',
                 name: 'Diff',

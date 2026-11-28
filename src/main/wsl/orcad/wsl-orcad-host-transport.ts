@@ -27,6 +27,7 @@ import {
   WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
+import { pinnedWslHostLinuxUser } from './wsl-orcad-host-user'
 
 export type WslOrcadHostTransport = OrcadHostTransport & {
   getTarget(): WslOrcadHostTarget
@@ -44,6 +45,8 @@ type WslOrcadHostTransportOptions = {
   commandLoops?: boolean
   /** Test seam; production shares the deploy's own registry read (no extra reg.exe). */
   readDistroRegistryId?: (distro: string) => Promise<string | null>
+  /** Overrides the host's pinned account; null runs as the distro's default user. */
+  user?: string | null
   /** Once aborted, no wsl.exe starts and running ones end, so a late step can't boot a stopped distro. */
   signal?: AbortSignal
 }
@@ -56,7 +59,10 @@ export function createWslOrcadHostTransport(
   const { target } = options
   const spawnWsl = (shellArgs: string[]) => {
     const program = resolveWslExecutablePath()
-    const args = buildWslExecArgs(target.distro, shellArgs)
+    const args = buildWslExecArgs(target.distro, shellArgs, {
+      user:
+        options.user === null ? undefined : (options.user ?? pinnedWslHostLinuxUser(target.distro))
+    })
     if (commandLineLength([program, ...args]) > MAX_COMMAND_LINE_CHARS) {
       throw new Error('WSL command exceeds the Windows command-line limit')
     }
@@ -79,64 +85,74 @@ export function createWslOrcadHostTransport(
           spawnLoop: (marker) =>
             spawnWsl(['sh', '-c', WSL_COMMAND_LOOP_SCRIPT, WSL_COMMAND_LOOP_ARGV0, marker])
         })
-  const transport: WslOrcadHostTransport = {
-    // wrapCommand is SSH-only; WSL starts sh directly without a login shell.
-    async exec(command: string, execOptions?: SshExecOptions): Promise<RemoteCommandChannel> {
-      if (execOptions?.signal?.aborted || options.signal?.aborted) {
-        throw createSshOperationAbortError()
-      }
-      const child = spawnWsl(['sh', '-c', command])
-      const channel = wrapWslCommandProcess(child)
-      const endOnAbort = (): void => {
-        channel.destroy(createSshOperationAbortError())
-      }
-      options.signal?.addEventListener('abort', endOnAbort, { once: true })
-      channel.once('close', () => options.signal?.removeEventListener('abort', endOnAbort))
-      // Reject spawn failure while opening the channel, matching SSH, rather than as a later stream error.
-      const spawnError = (error: Error): void => {
-        channel.destroy(error)
-      }
-      channel.on('error', spawnError)
-      try {
-        await once(child, 'spawn')
-      } finally {
-        channel.off('error', spawnError)
-      }
-      return channel
-    },
-    async execWithClosedStdin(command, execOptions) {
-      return (
-        (await loops?.run(command, execOptions?.signal)) ?? transport.exec(command, execOptions)
-      )
-    },
-    dispose: () => loops?.dispose(),
-    // Without systemd, nohup children die with wsl.exe; launch orcad in a new session.
-    orcadLaunchDetach: 'setsid',
-    // D1b-2: bind launches to the registration the guest cannot read itself.
-    // An idle orcad alone keeps the distro running, so it exits sooner here than on SSH.
-    orcadLaunchEnv: async () => {
-      const id = await (options.readDistroRegistryId ?? readWslDistroRegistryIdShared)(
-        target.distro
-      )
-      return [
-        ...(id ? [[ORCAD_WSL_DISTRO_GUID_ENV, id] as const] : []),
-        [ORCAD_IDLE_TIMEOUT_ENV, String(WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS)]
-      ]
-    },
-    usesSystemSshTransport: () => false,
-    // One transport, one wsl.exe lane: nothing underneath is ever replaced.
-    getConnectGeneration: () => 0,
-    getTarget: () => target,
-    writeFile: (remotePath, contents, fileOptions) =>
-      writeStringViaExecStdin(transport, remotePath, contents, { signal: fileOptions?.signal }),
-    uploadDirectory: (localDir, remoteDir, fileOptions) =>
-      uploadDirectoryIntoWsl(
-        transport,
-        localDir,
-        options.uploadSource === 'guest-mount' ? wslGuestSourcePath(localDir, target.distro) : null,
-        remoteDir,
-        { signal: fileOptions?.signal }
-      )
+  // A fence runs before every guest command of a derived transport; the loops stay shared.
+  const build = (fence: string | null): WslOrcadHostTransport => {
+    const fenced = (command: string): string => (fence ? `${fence} ${command}` : command)
+    const transport: WslOrcadHostTransport = {
+      // wrapCommand is SSH-only; WSL starts sh directly without a login shell.
+      async exec(command: string, execOptions?: SshExecOptions): Promise<RemoteCommandChannel> {
+        if (execOptions?.signal?.aborted || options.signal?.aborted) {
+          throw createSshOperationAbortError()
+        }
+        const child = spawnWsl(['sh', '-c', fenced(command)])
+        const channel = wrapWslCommandProcess(child)
+        const endOnAbort = (): void => {
+          channel.destroy(createSshOperationAbortError())
+        }
+        options.signal?.addEventListener('abort', endOnAbort, { once: true })
+        channel.once('close', () => options.signal?.removeEventListener('abort', endOnAbort))
+        // Reject spawn failure while opening the channel, matching SSH, rather than as a later stream error.
+        const spawnError = (error: Error): void => {
+          channel.destroy(error)
+        }
+        channel.on('error', spawnError)
+        try {
+          await once(child, 'spawn')
+        } finally {
+          channel.off('error', spawnError)
+        }
+        return channel
+      },
+      async execWithClosedStdin(command, execOptions) {
+        return (
+          (await loops?.run(fenced(command), execOptions?.signal)) ??
+          transport.exec(command, execOptions)
+        )
+      },
+      // The base transport owns the loops; a fenced one shares them.
+      dispose: () => (fence ? undefined : loops?.dispose()),
+      withCommandFence: (next) => build(next),
+      // Without systemd, nohup children die with wsl.exe; launch orcad in a new session.
+      orcadLaunchDetach: 'setsid',
+      // D1b-2: bind launches to the registration the guest cannot read itself.
+      // An idle orcad alone keeps the distro running, so it exits sooner here than on SSH.
+      orcadLaunchEnv: async () => {
+        const id = await (options.readDistroRegistryId ?? readWslDistroRegistryIdShared)(
+          target.distro
+        )
+        return [
+          ...(id ? [[ORCAD_WSL_DISTRO_GUID_ENV, id] as const] : []),
+          [ORCAD_IDLE_TIMEOUT_ENV, String(WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS)]
+        ]
+      },
+      usesSystemSshTransport: () => false,
+      // One transport, one wsl.exe lane: nothing underneath is ever replaced.
+      getConnectGeneration: () => 0,
+      getTarget: () => target,
+      writeFile: (remotePath, contents, fileOptions) =>
+        writeStringViaExecStdin(transport, remotePath, contents, { signal: fileOptions?.signal }),
+      uploadDirectory: (localDir, remoteDir, fileOptions) =>
+        uploadDirectoryIntoWsl(
+          transport,
+          localDir,
+          options.uploadSource === 'guest-mount'
+            ? wslGuestSourcePath(localDir, target.distro)
+            : null,
+          remoteDir,
+          { signal: fileOptions?.signal }
+        )
+    }
+    return transport
   }
-  return transport
+  return build(null)
 }

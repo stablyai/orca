@@ -1,4 +1,5 @@
-import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import { structuredModelEfforts } from '../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 import type {
   AgentModelCatalogListing,
   AgentModelCatalogConfiguredDefault,
@@ -28,7 +29,12 @@ export function mergedAgentModelCatalogModels(
     // Coarser probe menus must not discard a chat-confirmed effort unless a newer chat menu does.
     const keepsChatMenu =
       older === live && !offersConfigured(model.efforts) && offersConfigured(olderEfforts)
-    const { efforts: keptEfforts, effortsKnown } = modelSpecificEfforts
+    // Chat-only levels belong to the menu they came with.
+    const {
+      efforts: keptEfforts,
+      effortsKnown,
+      chatEfforts
+    } = modelSpecificEfforts
       ? model.effortsKnown === false && olderModel
         ? olderModel
         : model
@@ -36,7 +42,7 @@ export function mergedAgentModelCatalogModels(
         ? model.effortsKnown === false
           ? olderModel
           : model
-        : model.efforts.length > 0 && !keepsChatMenu
+        : structuredModelEfforts(model).length > 0 && !keepsChatMenu
           ? model
           : (olderModel ?? model)
     // An unobserved per-model menu is another model's; older builds saved such copies.
@@ -51,10 +57,12 @@ export function mergedAgentModelCatalogModels(
       defaultEffort: _own,
       declaredDefaultEffort: _declaration,
       effortsKnown: _known,
+      chatEfforts: _newerChatEfforts,
       ...rest
     } = model
     return {
       ...rest,
+      ...(chatEfforts && efforts === keptEfforts ? { chatEfforts } : {}),
       // Efforts stay unknown only when neither listing knows this model's menu.
       ...(effortsKnown === false ? { effortsKnown } : {}),
       // Without discovery/configuration, live flags are the only available default evidence.

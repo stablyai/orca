@@ -1,6 +1,10 @@
-import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatAppearanceSettings } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
+import {
+  runtimeStatusSubscriptionsFor,
+  type RuntimeStatuses
+} from '../runtime-status/views/runtime-status-subscriptions'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { toast } from 'sonner'
 import {
@@ -152,11 +156,11 @@ async function persistSettingsUpdates(
 /** Every known host has a recorded status entry, and no entry survives for a host that is gone. */
 function hasCompleteRuntimeStatusCoverage(
   runtimeEnvironments: AppState['runtimeEnvironments'],
-  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+  statuses: RuntimeStatuses
 ): boolean {
   return (
-    new Set(runtimeEnvironments.map(({ id }) => id)).size === runtimeStatusByEnvironmentId.size &&
-    runtimeEnvironments.every(({ id }) => runtimeStatusByEnvironmentId.has(id))
+    new Set(runtimeEnvironments.map(({ id }) => id)).size === statuses.size &&
+    runtimeEnvironments.every(({ id }) => statuses.has(id))
   )
 }
 
@@ -166,7 +170,8 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   }
   const response = await window.api.runtimeEnvironments.getStatus({
     selector: environmentId,
-    timeoutMs: 15_000
+    timeoutMs: 15_000,
+    force: true
   })
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)
@@ -174,7 +179,11 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   markRuntimeEnvironmentCompatible(environmentId, status)
 }
 
-export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
+export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (
+  set,
+  get,
+  store
+) => ({
   settings: null,
   worktreeVisibilityDefaultsByHost: {},
   worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
@@ -183,12 +192,14 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
 
   fetchSettings: async (options) => {
     await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
-    const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
-      get()
+    const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments } = get()
     // Probe all hosts only for incomplete/stale coverage; a recorded null still counts as checked.
     if (
       !runtimeEnvironmentCatalogHydrated ||
-      !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
+      !hasCompleteRuntimeStatusCoverage(
+        runtimeEnvironments,
+        runtimeStatusSubscriptionsFor(store).readStatuses()
+      ) ||
       // Why: coverage is blind to catalog edits from another client or the orca CLI.
       isRuntimeCatalogListingStale()
     ) {

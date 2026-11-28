@@ -19,31 +19,31 @@ import {
   savedCredentialUnreadable
 } from '../credentials/saved-credential-readability'
 import { clearMiniMaxSessionCookieJar } from '../rate-limits/providers/minimax/minimax-request-context'
-import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
+import { refreshAfterCredentialChange } from '../ipc/accounts/credential-change-rate-limit-refresh'
 import { getMainHttpClient } from '../network/http-client'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { MiniMaxCredentialsStatus } from '../../shared/agent-accounts/usage-credentials/minimax-credentials-status'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateMiniMaxCredentialState'>
 
-export function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
-  const cookieConfigured = hasMiniMaxSessionCookie()
-  const apiKeyConfigured = hasMiniMaxApiKey()
+export async function getMiniMaxCredentialsStatus(): Promise<MiniMaxCredentialsStatus> {
+  const cookieConfigured = await hasMiniMaxSessionCookie()
+  const apiKeyConfigured = await hasMiniMaxApiKey()
   return {
     configured: cookieConfigured || apiKeyConfigured,
     cookieConfigured,
     apiKeyConfigured,
-    cookieProtection: cookieConfigured ? getMiniMaxSessionCookieProtection() : null,
-    apiKeyProtection: apiKeyConfigured ? getMiniMaxApiKeyProtection() : null,
+    cookieProtection: cookieConfigured ? await getMiniMaxSessionCookieProtection() : null,
+    apiKeyProtection: apiKeyConfigured ? await getMiniMaxApiKeyProtection() : null,
     sessionCookieSupported: getMainHttpClient().partitionSession !== undefined,
-    cookieUnreadable: cookieConfigured ? cookieUnreadable() : undefined,
+    cookieUnreadable: cookieConfigured ? await cookieUnreadable() : undefined,
     apiKeyUnreadable: apiKeyConfigured
-      ? savedCredentialUnreadable(miniMaxApiKeyEnvelopeFile())
+      ? await savedCredentialUnreadable(miniMaxApiKeyEnvelopeFile())
       : undefined
   }
 }
 
-function cookieUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
+async function cookieUnreadable(): Promise<ReturnType<typeof savedCredentialUnreadable>> {
   return savedCredentialUnreadable({
     path: getMiniMaxCookiePath(),
     envelopePrefix: COOKIE_ENVELOPE_PREFIX,
@@ -52,11 +52,13 @@ function cookieUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
 }
 
 /** Refuse unreadable saved credentials; forgetting remains available. */
-export function assertMiniMaxCredentialOpensHere(credential: 'apiKey' | 'cookie'): void {
+export async function assertMiniMaxCredentialOpensHere(
+  credential: 'apiKey' | 'cookie'
+): Promise<void> {
   const unreadable =
     credential === 'apiKey'
-      ? savedCredentialUnreadable(miniMaxApiKeyEnvelopeFile())
-      : cookieUnreadable()
+      ? await savedCredentialUnreadable(miniMaxApiKeyEnvelopeFile())
+      : await cookieUnreadable()
   if (unreadable === 'sealed-elsewhere') {
     refuseCredentialSealedElsewhere(
       credential === 'apiKey' ? 'MiniMax API key' : 'MiniMax session cookie'
@@ -72,10 +74,10 @@ function refreshAfterChange(rateLimits: UsageRefresher | null, action: 'save' | 
   )
 }
 
-export function saveMiniMaxSessionCookieCredential(
+export async function saveMiniMaxSessionCookieCredential(
   rateLimits: UsageRefresher | null,
   cookie: unknown
-): MiniMaxCredentialsStatus {
+): Promise<MiniMaxCredentialsStatus> {
   // IPC/RPC values remain untrusted despite the declared type.
   if (typeof cookie !== 'string') {
     throw new Error('MiniMax session cookie must be a string')
@@ -86,7 +88,7 @@ export function saveMiniMaxSessionCookieCredential(
       'MiniMax session cookies need the Orca desktop app on this computer. Save an API key instead.'
     )
   }
-  saveMiniMaxSessionCookie(cookie)
+  await saveMiniMaxSessionCookie(cookie)
   refreshAfterChange(rateLimits, 'save')
   return getMiniMaxCredentialsStatus()
 }
@@ -94,7 +96,7 @@ export function saveMiniMaxSessionCookieCredential(
 export async function clearMiniMaxSessionCookieCredential(
   rateLimits: UsageRefresher | null
 ): Promise<MiniMaxCredentialsStatus> {
-  clearMiniMaxSessionCookie()
+  await clearMiniMaxSessionCookie()
   try {
     await clearMiniMaxSessionCookieJar()
   } catch (error) {
@@ -104,22 +106,22 @@ export async function clearMiniMaxSessionCookieCredential(
   return getMiniMaxCredentialsStatus()
 }
 
-export function saveMiniMaxApiKeyCredential(
+export async function saveMiniMaxApiKeyCredential(
   rateLimits: UsageRefresher | null,
   key: unknown
-): MiniMaxCredentialsStatus {
+): Promise<MiniMaxCredentialsStatus> {
   if (typeof key !== 'string') {
     throw new Error('MiniMax API key must be a string')
   }
-  saveMiniMaxApiKey(key)
+  await saveMiniMaxApiKey(key)
   refreshAfterChange(rateLimits, 'save')
   return getMiniMaxCredentialsStatus()
 }
 
-export function clearMiniMaxApiKeyCredential(
+export async function clearMiniMaxApiKeyCredential(
   rateLimits: UsageRefresher | null
-): MiniMaxCredentialsStatus {
-  clearMiniMaxApiKey()
+): Promise<MiniMaxCredentialsStatus> {
+  await clearMiniMaxApiKey()
   refreshAfterChange(rateLimits, 'clear')
   return getMiniMaxCredentialsStatus()
 }

@@ -1,4 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -10,7 +11,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 
 export type NativeChatHostCommandTerminal = {
   opening: boolean
-  open: (command: string) => Promise<boolean>
+  open: (command: string, env?: Record<string, string>) => Promise<boolean>
 }
 
 /** Opens a visible terminal on the chat's own host running a setup command; null without a workspace. */
@@ -21,15 +22,14 @@ export function useNativeChatHostCommandTerminal(input: {
 }): NativeChatHostCommandTerminal | null {
   const { worktreeId, groupId } = input
   const environmentId = input.target.kind === 'environment' ? input.target.environmentId : null
-  const [opening, setOpening] = useState(false)
-  // Why a ref: a notice and a transcript row can both press, and state lags a double press.
-  const openingRef = useRef(false)
+  // Kept with the chat tab, read synchronously: a notice and a transcript row can both press, and a view that
+  // replaced a released one must not open a second terminal.
+  const [opening, setOpening, readOpening] = useNativeChatViewGuard('host-command-terminal', false)
   const open = useCallback(
-    (command: string) => {
-      if (!worktreeId || openingRef.current) {
+    (command: string, env?: Record<string, string>) => {
+      if (!worktreeId || readOpening()) {
         return Promise.resolve(false)
       }
-      openingRef.current = true
       setOpening(true)
       return (async () => {
         if (environmentId) {
@@ -42,6 +42,7 @@ export function useNativeChatHostCommandTerminal(input: {
               environmentId,
               targetGroupId: groupId,
               command,
+              ...(env && { env }),
               viewMode: 'terminal',
               activate: true
             },
@@ -54,7 +55,7 @@ export function useNativeChatHostCommandTerminal(input: {
         } else {
           const store = useAppStore.getState()
           const tab = store.createTab(worktreeId, groupId, undefined, {
-            pendingStartup: { command },
+            pendingStartup: { command, ...(env && { env }) },
             viewMode: 'terminal'
           })
           store.setActiveTabType('terminal', worktreeId)
@@ -71,12 +72,9 @@ export function useNativeChatHostCommandTerminal(input: {
           )
           return false
         })
-        .finally(() => {
-          openingRef.current = false
-          setOpening(false)
-        })
+        .finally(() => setOpening(false))
     },
-    [worktreeId, groupId, environmentId]
+    [worktreeId, groupId, environmentId, readOpening, setOpening]
   )
   return useMemo(() => (worktreeId ? { opening, open } : null), [worktreeId, opening, open])
 }

@@ -1,13 +1,32 @@
 import ts from 'typescript-api'
 import { propertyName, unwrap } from '../module-requests/static-module-specifiers.mjs'
 
-const METHODS = new Set(['prepare', 'run', 'get', 'all', 'iterate', 'exec'])
+// pragma() and transaction() run SQL too: a durability pragma or BEGIN/COMMIT blocks like any statement.
+const TRANSACTION_MODES = new Set(['immediate', 'deferred', 'exclusive'])
+const METHODS = new Set([
+  'prepare',
+  'run',
+  'get',
+  'all',
+  'iterate',
+  'exec',
+  'pragma',
+  'transaction'
+])
 const SQLITE_MODULE =
   /^(?:node:sqlite|better-sqlite3)$|(?:^|\/)(?:sync-database|sqlite-statement)(?:\.[cm]?[jt]s)?$/
 
+export function countSqliteCalls(file, contents, source) {
+  return collectSqliteCallSites(file, contents, source).length
+}
+
 // Local syntax only: imported SQLite types, typed receivers, constructors and prepare() results.
-export function countSqliteCalls(file, contents) {
-  const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
+/** Start offsets of each synchronous SQLite call. */
+export function collectSqliteCallSites(
+  file,
+  contents,
+  source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, true)
+) {
   if (source.parseDiagnostics.length) {
     throw new Error(`Cannot parse ${file}; SQLite ratchet must not skip it.`)
   }
@@ -131,9 +150,32 @@ export function countSqliteCalls(file, contents) {
     }
     return false
   }
+  // `const insertMany = db.transaction(fn)`: each insertMany() call runs BEGIN/COMMIT; its result is not a database.
+  const transactionCalls = new Set()
+  const transactionWrapper = (node) => {
+    node = unwrap(node)
+    return (
+      !!node &&
+      ts.isCallExpression(node) &&
+      (ts.isPropertyAccessExpression(node.expression) ||
+        ts.isElementAccessExpression(node.expression)) &&
+      propertyName(node.expression) === 'transaction' &&
+      instance(node.expression.expression)
+    )
+  }
   for (let changed = true; changed;) {
     changed = false
     for (const node of declarations) {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        !transactionCalls.has(node.name.text) &&
+        transactionWrapper(node.initializer)
+      ) {
+        transactionCalls.add(node.name.text)
+        changed = true
+        continue
+      }
       if (!ts.isIdentifier(node.name) || !(sqliteType(node.type) || instance(node.initializer))) {
         continue
       }
@@ -149,18 +191,31 @@ export function countSqliteCalls(file, contents) {
       }
     }
   }
-  return calls.filter((node) => {
-    const target = unwrap(node.expression)
-    if (ts.isNewExpression(node)) {
-      return constructor(target)
-    }
-    if (callableConstructors.has(key(target))) {
-      return true
-    }
-    return (
-      (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
-      METHODS.has(propertyName(target)) &&
-      instance(target.expression)
-    )
-  }).length
+  return calls
+    .filter((node) => {
+      const target = unwrap(node.expression)
+      if (ts.isNewExpression(node)) {
+        return constructor(target)
+      }
+      if (
+        callableConstructors.has(key(target)) ||
+        transactionCalls.has(key(target)) ||
+        transactionWrapper(target)
+      ) {
+        return true
+      }
+      if (
+        (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
+        TRANSACTION_MODES.has(propertyName(target)) &&
+        transactionCalls.has(key(target.expression))
+      ) {
+        return true
+      }
+      return (
+        (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target)) &&
+        METHODS.has(propertyName(target)) &&
+        instance(target.expression)
+      )
+    })
+    .map((node) => node.getStart(source))
 }

@@ -289,10 +289,7 @@ export function MobileHeroPairingStep({
           >
             <CollapsibleTrigger asChild>
               <button type="button" className="mp-disclosure-trigger">
-                {t(
-                  'auto.components.mobile.MobileHero.directAddressDisclosure',
-                  'Also use a faster local path'
-                )}
+                {t('auto.components.mobile.MobileHero.directAddressDisclosure', 'Local connection')}
                 <ChevronDown
                   className={cn(
                     'size-3.5 transition-transform',

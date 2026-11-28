@@ -11,7 +11,6 @@ import {
   deleteInstalledAgentSkillDiscoveryCache,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
-  resetInstalledAgentSkillDiscoveryCacheForTests,
   writeInstalledAgentSkillDiscoveryCache
 } from './installed-agent-skill-discovery-cache'
 
@@ -58,13 +57,6 @@ export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
       }
     }
   }
-}
-
-export function resetSkillDiscoveryCacheForTests(): void {
-  invalidateInstalledAgentSkillDiscovery()
-  resetInstalledAgentSkillDiscoveryCacheForTests()
-  pendingDiscoveryByTarget = new Map()
-  pendingDiscoverySatisfiesForcedRefreshByTarget = new Map()
 }
 
 function normalizeSkillDiscoveryTarget(

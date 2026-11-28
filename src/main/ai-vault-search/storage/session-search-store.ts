@@ -24,6 +24,7 @@ import {
   SessionSearchOrphanCleanup
 } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
+import { seedSessionSearchDeletedRows } from './session-search-index-compaction'
 
 export class SessionSearchStore {
   private readonly db: SyncDatabase
@@ -43,6 +44,7 @@ export class SessionSearchStore {
   ) {
     this.db = openSessionSearchDatabase(path)
     ensureSessionSearchQuerySchema(this.db)
+    seedSessionSearchDeletedRows(this.db)
     this.orphanCleanup = new SessionSearchOrphanCleanup(
       this.db,
       () => this.closed,
@@ -111,7 +113,7 @@ export class SessionSearchStore {
     }
   }
 
-  /** A current cursor with bytes past it, and the hash a replacement read must reproduce to append there. */
+  /** A current cursor within the file and the hash a replacement read must reproduce to append there; at EOF an unchanged reread appends nothing. */
   resumableCursor(candidate: SessionFileCandidate): SessionSearchResumableCursor | null {
     const file = candidate.file
     if (this.closed || typeof file.sizeBytes !== 'number') {
@@ -124,7 +126,7 @@ export class SessionSearchStore {
           .prepare(
             `SELECT byte_offset AS byteOffset, prefix_hash AS prefixHash FROM files
              WHERE path = ? AND state = 'current' AND prefix_hash IS NOT NULL
-             AND byte_offset > 0 AND byte_offset < ?
+             AND byte_offset > 0 AND byte_offset <= ?
              AND (? IS NULL OR (CAST(dev AS REAL) = ? AND CAST(ino AS REAL) = ?))`
           )
           .get(
@@ -268,6 +270,7 @@ export class SessionSearchStore {
   removeFile(path: string): void {
     try {
       this.writer.removeFile(path)
+      this.orphanCleanup.checkCompaction()
     } catch (error) {
       this.onError(error)
     }

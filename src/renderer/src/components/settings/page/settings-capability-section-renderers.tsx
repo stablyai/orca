@@ -1,3 +1,4 @@
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { AccountsPane } from '../accounts/AccountsPane'
 import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { AgentsPane } from '../agents/AgentsPane'
@@ -7,12 +8,13 @@ import { LinearAgentSkillPane } from '../skills/linear/LinearAgentSkillPane'
 import { OrchestrationPane } from '../orchestration/OrchestrationPane'
 import { VoicePane } from '../voice/VoicePane'
 import { SettingsSection } from '../section-layout/SettingsSection'
+import { McpServersSettings } from '../mcp-servers/McpServersSettings'
 import { SettingsHostScopeUnavailableNotice } from '../host-scope/SettingsHostScopePicker'
 import { LOCAL_SETTINGS_HOST_SCOPE } from '../host-scope/settings-host-scope'
 import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsRenderContext } from './settings-render-context'
+import { getSettingsHostServerName, type SettingsRenderContext } from './settings-render-context'
 
 export function renderAgentsSettingsSection(
   context: SettingsRenderContext,
@@ -31,13 +33,19 @@ export function renderAgentsSettingsSection(
     >
       {view.isSectionMounted('agents') ? (
         <div className="space-y-8">
-          {model.settingsHostScope.target.kind === 'local' ? (
-            <AgentDefaultSurfaceSection settings={model.settings} />
+          {/* A web page's server is set from a desktop; its caption names "this computer". */}
+          {model.showDesktopOnlySettings || model.settingsHostScope.target.kind === 'local' ? (
+            <AgentDefaultSurfaceSection
+              key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
+              settings={model.settings}
+              hostScope={model.settingsHostScope}
+            />
           ) : null}
           <AgentsPane
             settings={model.settings}
             updateSettings={model.updateSettings}
             hostScope={model.settingsHostScope}
+            showDeleteAgentHistory
             wslSupportedPlatform={terminal.localWslSupportedPlatform}
             wslAvailable={terminal.localWindowsRuntimeCapabilities.wslAvailable}
             wslDistros={terminal.localWindowsRuntimeCapabilities.wslDistros}
@@ -45,6 +53,37 @@ export function renderAgentsSettingsSection(
           />
         </div>
       ) : null}
+    </SettingsSection>
+  )
+}
+
+export function renderMcpServersSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="mcp-servers"
+      title={t('settings.mcpServers.title', 'MCP servers')}
+      description={t(
+        'settings.mcpServers.description',
+        'Servers your agents can use. Changes apply to new sessions.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('mcp-servers')}
+      // A server's page draws its own header: its logo, name and address.
+      hideHeader={model.mcpServerSubPage !== null}
+    >
+      {!view.isSectionMounted('mcp-servers') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : (
+        <McpServersSettings
+          key={runtimeTargetEnvironmentId(model.settingsHostScope.target) ?? 'local'}
+          target={model.settingsHostScope.target}
+          subPage={model.mcpServerSubPage}
+          onSubPage={model.setMcpServerSubPage}
+        />
+      )}
     </SettingsSection>
   )
 }
@@ -153,6 +192,7 @@ export function renderDesktopCapabilitySettingsSections(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const serverName = getSettingsHostServerName(model, t)
   return model.showDesktopOnlySettings ? (
     <>
       <SettingsSection
@@ -170,10 +210,15 @@ export function renderDesktopCapabilitySettingsSections(
       <SettingsSection
         id="voice"
         title={t('auto.components.settings.Settings.5063bb47a5', 'Voice')}
-        description={t(
-          'components.settings.voice.pageDescription',
-          'Talk instead of typing in any pane.'
-        )}
+        description={
+          serverName === null
+            ? t('components.settings.voice.pageDescription', 'Talk instead of typing in any pane.')
+            : t(
+                'components.settings.voice.localOnlyNotice',
+                'Talk instead of typing in any pane. These settings apply to this computer only; {{host}} keeps its own.',
+                { host: serverName }
+              )
+        }
         searchEntries={navigation.getSectionSearchEntries('voice')}
       >
         {view.isSectionMounted('voice') ? (

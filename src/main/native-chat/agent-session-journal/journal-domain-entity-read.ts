@@ -11,6 +11,8 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
+import { readJournalStoredItem } from './journal-stored-output-rows'
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -35,6 +37,8 @@ export type JournalDomainEntityRead = Extract<
   }
 >
 
+const NEWEST_TURN_SCAN_LIMIT = 64
+
 /** Named identities and fixed-size head facts come from the ready current epoch. */
 export function readJournalDomainEntity(
   scope: JournalSqlScope,
@@ -51,14 +55,49 @@ export function readJournalDomainEntity(
   switch (operation.kind) {
     case 'provider-turn-in-namespace': {
       const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
+      // Codex rows name their thread in columns and an accepted send proves Codex saw the thread.
+      const named =
+        db
+          .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
+          WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL
+          AND turn_id>=? AND turn_id<?
+          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_codex_turn
+          WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
+          UNION ALL SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
+          WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND codex_thread_id=?
+          LIMIT 1`)
+          .get(
+            ...prefix,
+            prefixKey,
+            `${prefixKey.slice(0, -1)};`,
+            ...prefix,
+            operation.namespace,
+            ...prefix,
+            operation.namespace
+          ) !== undefined
+      // A provider turn row whose opener is Orca's own send names no thread; fences only grow, so
+      // the newest one shows whether a turn ran since `sinceFence`. Orca's `/compact` command turns
+      // don't count; past a bounded run of them, nothing is proven unexchanged.
+      const { sinceFence } = operation
+      const newestTurns =
+        named || sinceFence === undefined
+          ? []
+          : db
+              .prepare(`SELECT owner_fence,turn_id FROM journal_items INDEXED BY journal_items_kind
+          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn'
+          ORDER BY ordinal DESC LIMIT ?`)
+              .all(...prefix, NEWEST_TURN_SCAN_LIMIT)
+      const newestProviderTurn = newestTurns.find(
+        (row) => !String(row.turn_id).startsWith('compact:')
+      )
       return {
         kind: operation.kind,
         present:
-          db
-            .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
-          WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL
-          AND turn_id>=? AND turn_id<? LIMIT 1`)
-            .get(...prefix, prefixKey, `${prefixKey.slice(0, -1)};`) !== undefined
+          named ||
+          (sinceFence !== undefined &&
+            (newestProviderTurn
+              ? Number(newestProviderTurn.owner_fence) >= sinceFence
+              : newestTurns.length === NEWEST_TURN_SCAN_LIMIT))
       }
     }
     case 'saved-item-ids':
@@ -104,10 +143,12 @@ export function readJournalDomainEntity(
         }
       }
       const row = db
-        .prepare(`SELECT payload_json FROM journal_items
+        .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
         .get(...prefix, operation.itemId)
-      const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null
+      const item: AgentJournalRenderItem | null = row
+        ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json'))
+        : null
       return { kind: operation.kind, item }
     }
     case 'submission': {
@@ -126,7 +167,8 @@ export function readJournalDomainEntity(
         body: readJournalDomainSubmissionBody(
           db,
           { sessionId: scope.sessionId, epoch: scope.epoch },
-          operation.clientMessageId
+          operation.clientMessageId,
+          operation.family
         )
       }
     case 'acceptance': {

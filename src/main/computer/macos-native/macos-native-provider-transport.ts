@@ -10,6 +10,7 @@ import {
   type MacOSProviderProcessOwner
 } from './macos-native-provider-process-reaping'
 import { RuntimeClientError } from '../runtime-client-error'
+import { COMPUTER_SIDECAR_DEV_BUILD_ENV } from '../sidecar-transport/computer-sidecar-dev-build-env'
 
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
 
@@ -20,9 +21,10 @@ export type StartedMacOSProviderSocket = {
   socketToken: string
 }
 
-export function isMacOS14OrNewer(): boolean {
+// Darwin 22 is macOS 13; Orca.app's own 13.4 minimum already rules out 13.0-13.3.
+export function isMacOS13OrNewer(): boolean {
   const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
-  return Number.isFinite(darwinMajor) && darwinMajor >= 23
+  return Number.isFinite(darwinMajor) && darwinMajor >= 22
 }
 
 // Suppress stale socket errors without retaining the client or crashing the process.
@@ -142,11 +144,12 @@ function spawnProvider(
   socketPath: string,
   socketTokenPath: string
 ): ChildProcess {
-  const provider = spawn(
-    helperExecutablePath,
-    ['--agent', socketPath, '--token-file', socketTokenPath],
-    { detached: true, stdio: 'ignore' }
-  )
+  const args = ['--agent', socketPath, '--token-file', socketTokenPath]
+  // Why: a dev helper is not nested in Orca.app, so TCC must judge the helper, not the dev spawner.
+  if (process.env[COMPUTER_SIDECAR_DEV_BUILD_ENV] === '1') {
+    args.push('--self-responsible')
+  }
+  const provider = spawn(helperExecutablePath, args, { detached: true, stdio: 'ignore' })
   provider.unref()
   return provider
 }

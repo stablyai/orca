@@ -14,8 +14,10 @@ import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import {
   abortMerge,
   abortRebase,
-  detectConflictOperation
+  detectConflictOperation,
+  readRebaseAutoStash
 } from '../../git/source-control/mutations/git-conflict-operation'
+import { continueRebase } from '../../git/source-control/mutations/rebase-continue'
 import {
   bulkDiscardChanges,
   discardChanges
@@ -33,6 +35,7 @@ import { getBranchCompare } from '../../git/source-control/comparisons/branch-co
 import { getCommitCompare } from '../../git/source-control/comparisons/commit-compare'
 import { getCommitDiff } from '../../git/source-control/comparisons/commit-diff'
 import { getDiff } from '../../git/source-control/diffs/file-diff'
+import { getBlame } from '../../git/source-control/blame/git-blame-read'
 import { getStagedCommitContext } from '../../git/source-control/mutations/staged-commit-context'
 import { getStatus } from '../../git/source-control/status/status-read'
 import { getSubmoduleStatus } from '../../git/source-control/submodules/submodule-status'
@@ -87,8 +90,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       createBranch(worktreePath, name, startPoint, interactive),
     applyCommit: (worktreePath, operation, commitId) =>
       applyCommit(worktreePath, operation, commitId, interactive),
-    recoverSequencer: (worktreePath, operation, action) =>
-      recoverSequencer(worktreePath, operation, action, interactive),
+    recoverSequencer: (worktreePath, operation, action, request) =>
+      recoverSequencer(worktreePath, operation, action, interactive, request),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
     getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
@@ -96,6 +99,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...interactive,
         ...(oldPath ? { oldPath } : {})
       }),
+    getBlame: (worktreePath, filePath, knownHeadOid) =>
+      getBlame(worktreePath, filePath, base, knownHeadOid),
     stageFile: (worktreePath, filePath) => stageFile(worktreePath, filePath, interactive),
     resolveConflict: (worktreePath, filePath, resolution) =>
       resolveConflict(worktreePath, filePath, resolution, interactive),
@@ -116,8 +121,11 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     bulkDiscardChanges: (worktreePath, filePaths) =>
       bulkDiscardChanges(worktreePath, filePaths, interactive),
     detectConflictOperation: (worktreePath) => detectConflictOperation(worktreePath, base),
-    abortMerge: (worktreePath) => abortMerge(worktreePath, interactive),
-    abortRebase: (worktreePath) => abortRebase(worktreePath, interactive),
+    abortMerge: (worktreePath, request) => abortMerge(worktreePath, interactive, request),
+    abortRebase: (worktreePath, request) => abortRebase(worktreePath, interactive, request),
+    continueRebase: (worktreePath, action, request) =>
+      continueRebase(worktreePath, action, { ...interactive, ...request }),
+    readRebaseAutoStash: (worktreePath) => readRebaseAutoStash(worktreePath, base),
     checkoutBranch: (worktreePath, branch, creation, detached) =>
       checkoutBranch(
         worktreePath,

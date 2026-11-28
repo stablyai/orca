@@ -1,7 +1,7 @@
 import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { useAppStore } from '@/store'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { agentChildWorkLiveness } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { structuredAgentSessionLaunchHasRetainedInput } from '@/lib/agent-session/launch/structured-agent-session-launch-input'
@@ -12,6 +12,7 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import type { StructuredAgentSessionAdmission } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-contract'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type {
   AgentSessionStatusSummary,
   AgentSessionHistoryResult
@@ -37,9 +38,7 @@ export function admitStructuredAgentSession(
   const pairing = (): number | undefined =>
     environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const runtime = (): string | undefined =>
-    environmentId
-      ? useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId
-      : undefined
+    environmentId ? readRuntimeStatuses().get(environmentId)?.status?.runtimeId : undefined
   const identity = (item: Tab | undefined) => [
     item?.worktreeId,
     item?.contentType,
@@ -55,9 +54,7 @@ export function admitStructuredAgentSession(
     ).every((value, index) => value === captured[index])
   const localBusy = (): boolean | undefined => {
     const state = useAppStore.getState()
-    const status = state.agentStatusByPaneKey.get(
-      structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    )?.state
+    const status = state.agentStatusByPaneKey.get(chatPaneKey(tab.entityId))?.state
     const launch = getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId)
     const feed = target && getStructuredAgentSessionStatusFeed(target)
     const summary = feed?.getSnapshot().get(tab.entityId)

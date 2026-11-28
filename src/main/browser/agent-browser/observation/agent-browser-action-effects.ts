@@ -1,3 +1,4 @@
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { WebContents } from 'electron'
 import type { BrowserActionEffects } from '../../../../shared/browser/runtime/runtime-browser-contracts'
@@ -28,6 +29,8 @@ export type ActionEffectsHost = {
   /** The page's workspace tabs by page id, with each url, or null when the caller may not read it. */
   tabUrls: () => Map<string, string | null>
   loadError: () => string | null
+  /** True while the page may show text the agent must never read; effects then carry no `page`. */
+  withholdsPageText: () => boolean
   /** False until this helper session has a `snapshot --delta` baseline to diff against. */
   hasDeltaBaseline: () => boolean
   forgetDeltaBaseline: () => void
@@ -143,15 +146,15 @@ async function settle(
     const url = current.getURL()
     const title = current.getTitle()
     if (url !== start.url) {
-      effects.url = clip(url, URL_CHARS)
+      effects.url = clip(redactKagiSessionToken(url), URL_CHARS)
     }
     if (url !== start.url || title !== start.title) {
-      effects.title = clip(title)
+      effects.title = clip(redactKagiSessionToken(title))
     }
     const replaced = current.id !== start.guestId
     const stillLoading = loading || (replaced && isLoadingMainFrame(current))
     // A replacement guest was never admitted for this caller, so only the original is read.
-    if (!replaced) {
+    if (!replaced && !host.withholdsPageText()) {
       try {
         const reply = await host.snapshotDelta()
         host.admit(current.id)
@@ -178,21 +181,25 @@ async function settle(
     // The agent did not see this reading, so the next action must not diff against it.
     host.forgetDeltaBaseline()
   }
-  effects.newTabs = firstItems(matchRequestedTabs().map((tab) => ({ ...tab, url: clip(tab.url) })))
+  effects.newTabs = firstItems(
+    matchRequestedTabs().map((tab) => ({ ...tab, url: clip(redactKagiSessionToken(tab.url)) }))
+  )
   const popups = events.flatMap((event) =>
-    event.kind === 'popup' ? [{ action: event.action, origin: clip(event.origin) }] : []
+    event.kind === 'popup'
+      ? [{ action: event.action, origin: clip(redactKagiSessionToken(event.origin)) }]
+      : []
   )
   effects.popups = firstItems(popups)
   effects.downloads = firstItems(
     events.flatMap((event) =>
       event.kind === 'download'
-        ? [{ filename: clip(event.filename), origin: clip(event.origin) }]
+        ? [{ filename: clip(event.filename), origin: clip(redactKagiSessionToken(event.origin)) }]
         : []
     )
   )
   const print = events.find((event) => event.kind === 'print')
   if (print) {
-    effects.blockedPrint = { origin: clip(print.origin) }
+    effects.blockedPrint = { origin: clip(redactKagiSessionToken(print.origin)) }
   }
   effects.consoleErrors = firstItems(watch.consoleErrors.map((error) => clip(error)))
   return effects

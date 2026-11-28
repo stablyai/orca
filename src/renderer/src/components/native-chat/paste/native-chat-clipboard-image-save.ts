@@ -1,4 +1,4 @@
-import { stageNativeChatPendingImage } from '../drafts/native-chat-draft-attachment-staging'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { translate } from '@/i18n/i18n'
 import { setNativeChatPasteFailure } from '../composer/controls/native-chat-composer-notice'
 import { nativeChatLocalAttachmentUnsupportedNotice } from '../attachments/intake/native-chat-attachment-notices'
@@ -8,6 +8,10 @@ import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-ch
 type ClipboardImageOwner =
   | Extract<NativeChatAttachmentOwner, { kind: 'local' | 'runtime-session' }>
   | { kind: 'remote'; clipboardImageEnvironmentId: string }
+
+export function nativeChatImagePasteFailedNotice(): string {
+  return translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
+}
 
 /** Owners whose attachment path is a file this client can write right now. */
 export function ownerAcceptsClipboardImage(
@@ -63,6 +67,8 @@ export async function saveNativeChatClipboardImage(
     ) => void
     /** The image has somewhere to go, now that any server it goes to has said it takes one. */
     ready?: () => void
+    /** The paste event's picture; saved instead of re-reading the clipboard. */
+    eventImage?: Blob
   }
 ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> {
   if (!ownerAcceptsClipboardImage(owner)) {
@@ -76,7 +82,11 @@ export async function saveNativeChatClipboardImage(
       return { status: 'failed' }
     }
     report.ready?.()
-    const tempPath = await window.api.ui.saveClipboardImageAsTempFile(target.args)
+    // Electron IPC cannot clone a Blob; desktop reads the native clipboard instead.
+    const eventImage = isWebClientLocation() ? report.eventImage : undefined
+    const tempPath = await window.api.ui.saveClipboardImageAsTempFile(
+      eventImage ? { ...target.args, eventImage } : target.args
+    )
     return tempPath ? { status: 'saved', tempPath } : { status: 'empty' }
   } catch (error) {
     // Report failed saves; silent SSH disconnects would look like a broken paste.
@@ -87,25 +97,26 @@ export async function saveNativeChatClipboardImage(
         }
       },
       error,
-      translate('components.native-chat.composer.imagePasteFailed', 'Image paste failed.')
+      nativeChatImagePasteFailedNotice()
     )
     return { status: 'failed' }
   }
 }
 
 /** With accompanying text, quietly omit image upload on unsupported servers while preserving the text paste. */
-export async function saveNativeChatPastedClipboardImage(
+export function saveNativeChatPastedClipboardImage(
   owner: NativeChatAttachmentOwner,
   paste: {
-    pendingId: string | null
     besideText: boolean
     canNotify: () => boolean
     setNotice: (notice: string, errorText?: string) => void
     ready?: () => void
+    eventImage?: Blob
   }
 ): ReturnType<typeof saveNativeChatClipboardImage> {
-  const saved = await saveNativeChatClipboardImage(owner, {
+  return saveNativeChatClipboardImage(owner, {
     ready: paste.ready,
+    eventImage: paste.eventImage,
     setNotice: (notice, cause, errorText) => {
       if ((cause === 'serverTooOld' && paste.besideText) || !paste.canNotify()) {
         return
@@ -117,10 +128,4 @@ export async function saveNativeChatPastedClipboardImage(
       }
     }
   })
-  return saved.status === 'saved' &&
-    owner.kind === 'local' &&
-    owner.stagingScope &&
-    !stageNativeChatPendingImage(owner.stagingScope, paste.pendingId, saved.tempPath)
-    ? { status: 'empty' }
-    : saved
 }

@@ -21,14 +21,17 @@ export function buildClaudeStatusPayload(
     stateName: AgentStatusState
     workingMode?: AgentWorkingMode
     updateToolSnapshot: boolean
+    /** A new prompt_id opened the turn on this event, ahead of its prompt event. */
+    opensTurn?: boolean
     sessionBoundary?: boolean
     claudeTaskWakeupPending?: ParsedAgentStatusPayload['claudeTaskWakeupPending']
   }
 ): ParsedAgentStatusPayload | null {
+  const newTurn = options.opensTurn === true || isNewTurnEvent('claude', eventName)
   // Roster refreshes read cached tool state without clearing live cards or previews.
   const snapshot = options.updateToolSnapshot
     ? resolveToolState(state, paneKey, extractToolFields('claude', eventName, hookPayload), {
-        resetOnNewTurn: isNewTurnEvent('claude', eventName)
+        resetOnNewTurn: newTurn
       })
     : (state.lastToolByPaneKey.get(paneKey) ?? {})
 
@@ -41,7 +44,7 @@ export function buildClaudeStatusPayload(
     claudeTaskWakeupPending: options.claudeTaskWakeupPending,
     // Only lead events reset prompt labels; child refreshes retain them.
     prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: options.updateToolSnapshot && isNewTurnEvent('claude', eventName)
+      resetOnNewTurn: options.updateToolSnapshot && newTurn
     }),
     agentType: 'claude',
     model: mainAgentRecord?.model,
@@ -54,6 +57,11 @@ export function buildClaudeStatusPayload(
     sessionBoundary: options.sessionBoundary,
     turnCompletedAt: mainAgentRecord?.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
+    // Only a row its background shells hold open names them; a turn in progress does not.
+    backgroundCommands:
+      options.workingMode === 'monitoring'
+        ? state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
+        : undefined,
     mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })
 }

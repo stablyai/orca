@@ -8,8 +8,8 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -72,7 +72,8 @@ function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagent
     if (
       subagent.id !== other.id ||
       subagent.name !== other.name ||
-      subagent.dotState !== other.dotState
+      subagent.dotState !== other.dotState ||
+      subagent.failed !== other.failed
     ) {
       return false
     }
@@ -180,6 +181,9 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   if (a.type === 'emoji') {
     return a.emoji === (b as typeof a).emoji
   }
+  if (a.type === 'letters') {
+    return a.text === (b as typeof a).text
+  }
   const image = b as typeof a
   return a.src === image.src && a.source === image.source && a.label === image.label
 }
@@ -285,7 +289,7 @@ export const AgentKanbanCard = memo(
                     key={subagent.id}
                     className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
                   >
-                    <AgentStateDot state={subagent.dotState} />
+                    <AgentStateDot state={subagent.failed ? 'failed' : subagent.dotState} />
                     <span className="truncate">{subagent.name}</span>
                   </div>
                 ))}

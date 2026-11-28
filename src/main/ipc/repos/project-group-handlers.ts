@@ -23,8 +23,22 @@ import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
-import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import type { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
+import { runtimeVisibleProjectGroups } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
+
+type NestedRepoScanIpcModule = {
+  activeNestedRepoScans: typeof activeNestedRepoScans
+  runNestedRepoScanForIpc: typeof runNestedRepoScanForIpc
+}
+
+let nestedRepoScanModulePromise: Promise<NestedRepoScanIpcModule> | null = null
+
+function loadNestedRepoScanModule(): Promise<NestedRepoScanIpcModule> {
+  if (!nestedRepoScanModulePromise) {
+    nestedRepoScanModulePromise = import('./nested-repo-scan-ipc')
+  }
+  return nestedRepoScanModulePromise
+}
 
 export function registerProjectGroupHandlers(
   mainWindow: BrowserWindow,
@@ -39,7 +53,7 @@ export function registerProjectGroupHandlers(
     )
     return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
   })
-  ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
+  ipcMain.handle('projectGroups:list', () => runtimeVisibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(
@@ -127,21 +141,29 @@ export function registerProjectGroupHandlers(
         rawArgs,
         'invalid_project_group_scan_nested_args'
       )
-      return runNestedRepoScanForIpc(event, args)
+      const { runNestedRepoScanForIpc: runScan } = await loadNestedRepoScanModule()
+      return runScan(event, args)
     }
   )
 
-  ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
-    const args = parseProjectGroupIpcArgs(
-      ProjectGroupCancelNestedScanArgs,
-      rawArgs,
-      'invalid_project_group_cancel_nested_scan_args'
-    )
-    const controller = activeNestedRepoScans.get(args.scanId)
-    if (!controller) {
-      return false
+  ipcMain.handle(
+    'projectGroups:cancelNestedScan',
+    async (_event, rawArgs: unknown): Promise<boolean> => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectGroupCancelNestedScanArgs,
+        rawArgs,
+        'invalid_project_group_cancel_nested_scan_args'
+      )
+      if (!nestedRepoScanModulePromise) {
+        return false
+      }
+      const { activeNestedRepoScans: activeScans } = await nestedRepoScanModulePromise
+      const controller = activeScans.get(args.scanId)
+      if (!controller) {
+        return false
+      }
+      controller.abort()
+      return true
     }
-    controller.abort()
-    return true
-  })
+  )
 }

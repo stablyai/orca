@@ -26,8 +26,8 @@ import {
   registerTerminalSideEffectFactConsumer
 } from '../../pty-transport/output/terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from '../../notifications/dispatch-terminal-notification'
-import { hasPendingHookLaneCompletion } from '@/hooks/agent-hook-completion-notifications'
-import { hookLaneTitleTurnEndEvidence } from '@/hooks/agent-hook-turn-end-ownership'
+import { hasPendingHookLaneCompletion } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-completion-notifications'
+import { hookLaneTitleTurnEndEvidence } from '@/components/terminal-pane/agent-completion/hook-lane/agent-hook-turn-end-ownership'
 import { acquireHiddenRendererPtyDeliveryClaim } from '../../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
@@ -142,12 +142,10 @@ export function startParkedTerminalByteWatcher(
   // Byte mode and fact mode share policy so switching authority preserves behavior.
   const sideEffectCallbacks = {
     onTitleChange: (title: string): void => {
-      const state = useAppStore.getState()
       wroteRuntimeTitleSlot = true
-      state.setRuntimePaneTitle(tabId, paneId, title)
-      if (drivesTabTitle) {
-        state.updateTabTitle(tabId, title)
-      }
+      useAppStore
+        .getState()
+        .setRuntimePaneTitle(tabId, paneId, title, { alsoTabTitle: drivesTabTitle })
     },
     onBell: (): void => {
       useAppStore.getState().markTerminalBell({ worktreeId, tabId, paneKey })

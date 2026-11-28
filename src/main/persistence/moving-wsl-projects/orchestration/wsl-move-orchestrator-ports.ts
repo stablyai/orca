@@ -1,6 +1,7 @@
 /** What the move orchestrator (D3a) reads and drives, so tests and production share one shape. */
 import type {
   WslMovePreview,
+  WslMoveRequest,
   WslMoveResult
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveUseLocallyResult } from '../../../../shared/wsl-move/wsl-moved-project'
@@ -9,6 +10,18 @@ import type {
   WslMoveOrchestratorTrigger
 } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-transitions'
+
+/** The sidecar's read; `unreadable` may hide a decline, so nothing moves on its own or saves. */
+export type WslMoveOrchestratorLoad =
+  | { kind: 'missing' }
+  | {
+      kind: 'readable'
+      records: Map<string, WslMoveOrchestratorRecord>
+      unknownKeys: ReadonlySet<string>
+      /** An unparseable file was set aside and the distros it may have declined are not listed yet. */
+      holdDistrosOnceListed?: boolean
+    }
+  | { kind: 'unreadable' }
 
 export type WslMoveHostReadiness = 'ready' | 'not-running' | 'unverifiable' | 'failed'
 
@@ -42,7 +55,12 @@ export type WslMoveOrchestratorPorts = {
    * Runs the move. `stillWanted` turns false once the user released or snoozed the distro; the
    * port checks it after its own waits (the window's panes) and refuses rather than start.
    */
-  start: (distro: string, stillWanted: () => boolean) => Promise<WslMoveResult>
+  start: (
+    distro: string,
+    stillWanted: () => boolean,
+    /** The preview's mapped drives (refused if they map elsewhere by now) and what it showed moving. */
+    fromPreview: Pick<WslMoveRequest, 'mappedDrives' | 'previewMoving'>
+  ) => Promise<WslMoveResult>
   finishedMove: (distro: string) => WslMoveFinishedMove | null
   /** R38: reads the registry and, when ready, the host's catalog; never boots the distro. */
   checkMovedDistro: (distro: string, move: WslMoveFinishedMove) => Promise<WslMovedDistroVerdict>
@@ -54,8 +72,14 @@ export type WslMoveOrchestratorPorts = {
     distro: string,
     unsavedWorkspaceIds: readonly string[]
   ) => Promise<WslMoveUseLocallyResult>
-  load: () => Map<string, WslMoveOrchestratorRecord>
-  save: (records: ReadonlyMap<string, WslMoveOrchestratorRecord>) => void
+  load: () => WslMoveOrchestratorLoad
+  /** Throws on failure; never called before a load succeeded. */
+  save: (
+    records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
+    holdDistrosOnceListed?: boolean
+  ) => void
+  /** The distros installed now (the WSL registry); null when it cannot be read. */
+  listKnownDistros: () => Promise<readonly string[] | null>
   /** Returns the cancel. */
   schedule: (delayMs: number, run: () => void) => () => void
   /** One row per state change; `cause` is the preview or result behind it. */

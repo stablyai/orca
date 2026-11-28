@@ -10,6 +10,7 @@ import { sortNativeChatSessionOptions } from '../../../../../../../shared/native
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
+  type SessionOptionsCliUpdate,
   type SessionOptionsSurface,
   type SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -29,6 +30,7 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { useNativeChatViewGuard } from '../../../pane/ownership/native-chat-view-memory'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
@@ -41,6 +43,7 @@ export type NativeChatSessionOptionPickersProps = {
 
 /** A descriptor write in flight; its value shows until it settles. */
 type PendingPick = { id: string; value?: SessionOptionValue }
+const NO_PENDING_PICKS: ReadonlyMap<string, PendingPick> = new Map()
 
 // Show pending picks in place while open; refusal restores the host snapshot.
 function withPendingValue(
@@ -78,7 +81,10 @@ function pillAccessibleName(title: string, value: string, t: Translate = transla
       })
 }
 
-function PickerTrigger(props: {
+function PickerTrigger({
+  triggerRef,
+  ...props
+}: {
   modelLabel: string
   /** The options' values, shown after the model; empty when there are none to show. */
   optionsLabel: string
@@ -96,7 +102,7 @@ function PickerTrigger(props: {
       <TooltipTrigger asChild>
         <PopoverTrigger asChild>
           <Button
-            ref={props.triggerRef}
+            ref={triggerRef}
             type="button"
             variant="ghost"
             size="xs"
@@ -147,6 +153,7 @@ function PickerTrigger(props: {
 
 function SessionOptionPopover(props: {
   demandModelCatalog?: () => void
+  cliUpdate?: SessionOptionsCliUpdate
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
   isWorking: boolean
@@ -218,10 +225,11 @@ function SessionOptionPopover(props: {
     if (descriptor.id === 'effort') {
       setOpen(false)
     }
+    // During a provider fallback, picking the saved model is a real change.
     if (
       descriptor.valueSource === 'unknown' ||
       descriptor.valueSource === 'default' ||
-      descriptor.kind.currentValue !== value
+      (descriptor.fallbackModel ?? descriptor.kind.currentValue) !== value
     ) {
       props.onSet(descriptor, value)
     }
@@ -303,11 +311,12 @@ function SessionOptionPopover(props: {
         {model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}
-            currentValue={model.kind.currentValue}
+            currentValue={model.fallbackModel ?? model.kind.currentValue}
             readOnly={!model.settable}
             readOnlyReason={modelReason}
             busy={pendingIds.has(model.id)}
             onSelect={(value) => set(model, value)}
+            cliUpdate={props.cliUpdate}
           />
         ) : (
           <NativeChatSessionOptionWriteGroup
@@ -349,7 +358,8 @@ function NativeChatSessionOptionPickersInner({
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   useUiLanguageRevision()
-  const [pending, setPending] = useState<ReadonlyMap<string, PendingPick>>(() => new Map())
+  // Kept with the chat tab: a view released while a pick is being set returns still showing it pending.
+  const [pending, setPending] = useNativeChatViewGuard('session-option-picks', NO_PENDING_PICKS)
   // Consume requests even without a usable picker so composer remounts cannot reopen them.
   useEffect(() => pickerRequest?.consume(), [pickerRequest])
   const reportedModel = snapshot.find((descriptor) => descriptor.category === 'model')
@@ -369,7 +379,8 @@ function NativeChatSessionOptionPickersInner({
       } else {
         next.set(id, pick)
       }
-      return next
+      // Back at the empty default, the kept entry is deleted.
+      return next.size === 0 ? NO_PENDING_PICKS : next
     })
   }
 
@@ -377,6 +388,7 @@ function NativeChatSessionOptionPickersInner({
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
       <SessionOptionPopover
         demandModelCatalog={surface.demandModelCatalog}
+        cliUpdate={surface.cliUpdate}
         model={model}
         options={options}
         isWorking={isWorking}

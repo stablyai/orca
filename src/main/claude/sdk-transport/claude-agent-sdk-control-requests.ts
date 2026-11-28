@@ -31,7 +31,23 @@ export class ClaudeControlRequestTimeoutError extends Error {
 }
 
 // Exact SDK error used to distinguish query closure from CLI rejection.
-const QUERY_CLOSED_MESSAGE = 'Query closed before response received'
+export const QUERY_CLOSED_MESSAGE = 'Query closed before response received'
+
+/** What the control surface asks of a query: the SDK's own, or a kept agent's over the relay. */
+export type ClaudeControlQuery = Pick<
+  Query,
+  | 'setModel'
+  | 'setPermissionMode'
+  | 'applyFlagSettings'
+  | 'stopTask'
+  | 'backgroundTasks'
+  | 'supportedModels'
+  | 'mcpServerStatus'
+  | 'initializationResult'
+  | 'getContextUsage'
+  | 'reconnectMcpServer'
+  | 'toggleMcpServer'
+>
 
 export function isClaudeQueryClosed(error: unknown): boolean {
   return error instanceof Error && error.message === QUERY_CLOSED_MESSAGE
@@ -40,7 +56,9 @@ export function isClaudeQueryClosed(error: unknown): boolean {
 // The SDK implements getSettings but omits it from Query's declaration.
 type ClaudeQuerySettingsReader = { getSettings?: () => Promise<unknown> }
 
-export function claudeQuerySettingsReader(query: Query): (() => Promise<unknown>) | null {
+export function claudeQuerySettingsReader(
+  query: ClaudeControlQuery
+): (() => Promise<unknown>) | null {
   const reader = (query as unknown as ClaudeQuerySettingsReader).getSettings
   return typeof reader === 'function' ? reader.bind(query) : null
 }
@@ -49,7 +67,7 @@ export function claudeQuerySettingsReader(query: Query): (() => Promise<unknown>
 type ClaudeQueryAsyncCanceller = { cancelAsyncMessage?: (uuid: string) => Promise<unknown> }
 
 export function claudeQueryAsyncCanceller(
-  query: Query
+  query: ClaudeControlQuery
 ): ((uuid: string) => Promise<unknown>) | null {
   const cancel = (query as unknown as ClaudeQueryAsyncCanceller).cancelAsyncMessage
   return typeof cancel === 'function' ? cancel.bind(query) : null
@@ -58,7 +76,7 @@ export function claudeQueryAsyncCanceller(
 // renameSession sends `rename_session` with source 'host' (the CLI's user rename) but is absent
 // from Query's declaration.
 export function claudeQuerySessionRenamer(
-  query: Query
+  query: ClaudeControlQuery
 ): ((title: string, sessionId: string) => unknown) | null {
   const rename = 'renameSession' in query ? query.renameSession : null
   return typeof rename === 'function'
@@ -136,7 +154,9 @@ function readClaudeMcpAuthentication(reply: unknown): ClaudeMcpAuthentication {
 
 // mcpAuthenticate and mcpSubmitOAuthCallbackUrl exist at runtime but are absent from Query's
 // declaration.
-function claudeQueryMcpAuthenticator(query: Query): ((name: string) => unknown) | null {
+function claudeQueryMcpAuthenticator(
+  query: ClaudeControlQuery
+): ((name: string) => unknown) | null {
   const authenticate = 'mcpAuthenticate' in query ? query.mcpAuthenticate : null
   return typeof authenticate === 'function'
     ? (name): unknown => authenticate.call(query, name)
@@ -144,7 +164,7 @@ function claudeQueryMcpAuthenticator(query: Query): ((name: string) => unknown) 
 }
 
 function claudeQueryMcpCallbackSubmitter(
-  query: Query
+  query: ClaudeControlQuery
 ): ((name: string, callbackUrl: string) => unknown) | null {
   const submit = 'mcpSubmitOAuthCallbackUrl' in query ? query.mcpSubmitOAuthCallbackUrl : null
   return typeof submit === 'function'
@@ -155,7 +175,7 @@ function claudeQueryMcpCallbackSubmitter(
 const missingClaudeControl = (subtype: string): Promise<never> =>
   Promise.reject(new ClaudeControlRequestError(subtype, `this SDK exposes no ${subtype} request`))
 
-function createClaudeMcpControls(query: Query): ClaudeMcpControls {
+function createClaudeMcpControls(query: ClaudeControlQuery): ClaudeMcpControls {
   const authenticate = claudeQueryMcpAuthenticator(query)
   const submitCallback = claudeQueryMcpCallbackSubmitter(query)
   return {
@@ -202,6 +222,7 @@ export type ClaudeControlSurface = {
   /** The blocking subagent or command started by `toolUseId` returns at once and keeps running. */
   backgroundTask: (toolUseId: string, options?: ClaudeControlOptions) => Promise<boolean>
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
+  mcpServerStatus: () => ReturnType<Query['mcpServerStatus']>
   /** Initialization is untimed; child exit closes the query. */
   initializationResult: () => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
@@ -211,6 +232,8 @@ export type ClaudeControlSurface = {
   renameSession: (title: string, sessionId: string, options?: ClaudeControlOptions) => Promise<void>
   /** The `/mcp` panel's requests; test connections leave it out. */
   mcp?: ClaudeMcpControls
+  /** Stops or restarts the CLI generating prompt suggestions; a new process starts unpaused. */
+  setPromptSuggestionsPaused?: (paused: boolean, options?: ClaudeControlOptions) => Promise<void>
 }
 
 type InterruptingQuery = {
@@ -219,7 +242,7 @@ type InterruptingQuery = {
   }) => Promise<SDKControlInterruptResponse | undefined>
 }
 
-export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
+export function createClaudeControlSurface(query: ClaudeControlQuery): ClaudeControlSurface {
   return {
     mcp: createClaudeMcpControls(query),
     interrupt: (options) =>
@@ -265,10 +288,16 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       ),
     supportedModels: (options) =>
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
+    mcpServerStatus: () => runClaudeControl('mcp_status', () => query.mcpServerStatus()),
     initializationResult: () =>
       runClaudeControl('initialize', () => query.initializationResult(), null),
     getContextUsage: (options) =>
-      runClaudeControl('get_context_usage', () => query.getContextUsage(), options?.timeoutMs),
+      runClaudeControl(
+        'get_context_usage',
+        // 'full' makes one token-count API call per category on each fresh CLI; CLIs before 2.1.257 ignore detail.
+        () => query.getContextUsage({ detail: 'summary' }),
+        options?.timeoutMs
+      ),
     renameSession: (title, sessionId, options) => {
       const rename = claudeQuerySessionRenamer(query)
       return rename
@@ -281,6 +310,22 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
             new ClaudeControlRequestError(
               'rename_session',
               'this SDK exposes no rename_session request'
+            )
+          )
+    },
+    setPromptSuggestionsPaused: (paused, options) => {
+      // Sends `set_prompt_suggestions_paused` but is absent from Query's declaration.
+      const pause = 'setPromptSuggestionsPaused' in query ? query.setPromptSuggestionsPaused : null
+      return typeof pause === 'function'
+        ? runClaudeControl(
+            'set_prompt_suggestions_paused',
+            () => Promise.resolve(pause.call(query, paused)),
+            options?.timeoutMs
+          ).then(() => {})
+        : Promise.reject(
+            new ClaudeControlRequestError(
+              'set_prompt_suggestions_paused',
+              'this SDK exposes no set_prompt_suggestions_paused request'
             )
           )
     },

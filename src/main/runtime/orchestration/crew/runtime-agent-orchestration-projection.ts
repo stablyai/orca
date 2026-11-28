@@ -1,10 +1,6 @@
 import type { OrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import { composeOrchestrationDispatch } from './orchestration-dispatch-context'
 import { orchestrationProjectionFacts } from './orchestration-projection-facts'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -20,6 +16,7 @@ import { createOrchestrationProjectionScope } from './runtime-agent-orchestratio
 import { isRecentPresentationDispatch } from '../db/dispatch-context/dispatch-presentation'
 import type { DispatchContextRow } from '../db/orchestration-records'
 import type { PtyPaneOf } from '../../terminal/surface/pty-pane-query'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   createDispatchSessionLivenessReader,
   type DispatchSessionObserver
@@ -53,6 +50,9 @@ export type DispatchProjectionOptions = {
   observeSession?: DispatchSessionObserver
   deferAttention?: boolean
 }
+
+// Projections read evidence activity and clock only; resolving each binding's Dispatch composed every row twice.
+const withoutDispatchBinding = (): undefined => undefined
 
 export class RuntimeAgentOrchestrationProjection {
   constructor(private readonly deps: RuntimeAgentOrchestrationDependencies) {}
@@ -107,9 +107,7 @@ export class RuntimeAgentOrchestrationProjection {
                 row.assignee_orca_session_id ? [scope.resolve(row.assignee_orca_session_id)] : []
               )
             ])
-          ].flatMap((pane) =>
-            this.deps.getAgentStatusForPaneKey!(pane, (key) => this.identityContext(key, db, scope))
-          )
+          ].flatMap((pane) => this.deps.getAgentStatusForPaneKey!(pane, withoutDispatchBinding))
         : this.deps.getAgentStatusSnapshot()
     const evidenceByPaneKey = new Map(
       statuses.map((evidence) => [evidence.activity.paneKey, evidence])
@@ -193,9 +191,8 @@ export class RuntimeAgentOrchestrationProjection {
     const db = source?.view ?? raw
     const scope = createOrchestrationProjectionScope(db, this.deps)
     const statuses =
-      this.deps.getAgentStatusForPaneKey?.(paneKey, (key) =>
-        this.identityContext(key, db, scope)
-      ) ?? this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
+      this.deps.getAgentStatusForPaneKey?.(paneKey, withoutDispatchBinding) ??
+      this.deps.getAgentStatusSnapshot().filter((entry) => entry.activity.paneKey === paneKey)
     const options = {
       paneKey,
       evidence: statuses.at(-1),
@@ -217,7 +214,7 @@ export class RuntimeAgentOrchestrationProjection {
       return undefined
     }
     const session = parsed.tabId.slice(prefix.length)
-    if (structuredAgentSessionPaneKey(structuredAgentSessionTabId(session), session) !== paneKey) {
+    if (chatPaneKey(session) !== paneKey) {
       return undefined
     }
     const ids = new Set([session])
@@ -245,17 +242,6 @@ export class RuntimeAgentOrchestrationProjection {
           options,
           scope
         )
-      : undefined
-  }
-
-  private identityContext(
-    paneKey: string,
-    db: OrchestrationDb,
-    scope: ReturnType<typeof createOrchestrationProjectionScope>
-  ) {
-    const handle = this.deps.getHandleForPaneKey(paneKey)
-    return handle
-      ? this.getForHandle(handle, db, { paneKey, deferAttention: true }, scope)
       : undefined
   }
 

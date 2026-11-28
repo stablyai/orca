@@ -1,4 +1,4 @@
-import { createLocalPtyStartupPromises } from './local-startup-promises'
+import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -106,6 +106,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:moveLeafToNewTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:killFenced')
+  ipcMain.removeHandler('pty:sleepAdmitted')
   ipcMain.removeHandler('pty:listSessions')
   ipcMain.removeHandler('pty:hasPty')
   ipcMain.removeHandler('pty:hasChildProcesses')

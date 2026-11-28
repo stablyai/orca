@@ -7,27 +7,29 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../../composition/status-bar-context-menu-policy'
 
+export function focusResourceManagerTrigger(): void {
+  document.querySelector<HTMLElement>('[data-resource-manager-trigger]')?.focus()
+}
+
 export function renderResourceUsageStatusTrigger(
   {
     daemonUnreachable,
     resourceManagerAriaLabel,
     spaceScanReady,
-    iconOnly,
     commitToneClass,
-    memBadgeLabel,
     triggerSessionCount,
     orphanCount,
-    resourceManagerTooltipLines
+    resourceManagerTooltipLines,
+    appMemoryLabel
   }: {
     daemonUnreachable: boolean
     resourceManagerAriaLabel: string
     spaceScanReady: boolean
-    iconOnly: boolean
     commitToneClass: string | null
-    memBadgeLabel: string
     triggerSessionCount: number | null
     orphanCount: number
     resourceManagerTooltipLines: { id: string; text: string; emphasized: boolean }[]
+    appMemoryLabel: string | null
   },
   t: Translate = translate
 ): React.JSX.Element {
@@ -37,6 +39,7 @@ export function renderResourceUsageStatusTrigger(
         <PopoverTrigger asChild>
           <button
             type="button"
+            data-resource-manager-trigger=""
             {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
             className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
             aria-label={
@@ -55,34 +58,22 @@ export function renderResourceUsageStatusTrigger(
                 aria-hidden="true"
               />
             ) : null}
-            <MemoryStick className="size-3 text-muted-foreground" />
-            {!iconOnly && (
-              <>
-                {/* Tint only: the number stays the resident sum it has always been,
-                    and the tooltip names the commit figure that raised the tone. */}
-                <span
-                  className={cn(
-                    'text-[11px] font-medium tabular-nums',
-                    commitToneClass ?? 'text-muted-foreground'
-                  )}
-                >
-                  {memBadgeLabel}
-                </span>
-                <span className="text-muted-foreground/50">·</span>
-                <Terminal className="size-3 text-muted-foreground" />
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {triggerSessionCount}
-                  {orphanCount > 0 && (
-                    <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
-                  )}
-                </span>
-              </>
-            )}
-            {iconOnly && triggerSessionCount !== null && triggerSessionCount > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {triggerSessionCount}
+            <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
+            {appMemoryLabel !== null && (
+              // Why: min width keeps neighbours still as the value moves between MB and GB.
+              <span className="min-w-[6ch] text-[11px] tabular-nums text-foreground">
+                {appMemoryLabel}
               </span>
             )}
+            <Terminal
+              className={cn('size-3 text-muted-foreground', appMemoryLabel !== null && 'ml-2.5')}
+            />
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {triggerSessionCount}
+              {orphanCount > 0 && (
+                <span className="ml-0.5 text-status-warning-text">({orphanCount})</span>
+              )}
+            </span>
             {daemonUnreachable && (
               <AlertTriangle
                 className="size-3 text-yellow-500"

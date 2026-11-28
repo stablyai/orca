@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -8,16 +8,17 @@ import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownershi
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   completionPaneKeysByTabId,
+  markerTabAddressId,
   paneKeyTabId,
   workspaceMarkerTabs
 } from '@/store/slices/workspace-attention/workspace-live-markers'
-import { recordChangeReaches } from '@/store/keyed-record-change-reads'
+import { recordChangeReaches } from '@/store/record-transitions/keyed-record-change-reads'
 import { markerTabPaneKey } from '@/store/slices/workspace-attention/workspace-marker-host'
 import {
   workspaceUnreadTarget,
   workspaceUnreadTargetsOutsideAgentRows,
   type SlotTarget
-} from '../../worktree-card-slot-targets'
+} from '../slots/worktree-card-slot-targets'
 
 /**
  * Exactly what `workspaceUnreadTargetsOutsideAgentRows` reads for this workspace, so an agent
@@ -92,16 +93,17 @@ function collectWorkspaceUnreadInputs(
   for (const tab of workspaceMarkerTabs(state, worktree.id)) {
     hasStructuredTab ||= tab.sessionId !== null
     const paneKey = markerTabPaneKey(state, tab)
-    const completionKeys = completions.get(tab.id) ?? []
+    const addressId = markerTabAddressId(tab)
+    const completionKeys = completions.get(addressId) ?? []
     const statuses = [paneKey, ...completionKeys].map((key) => {
       const entry = state.agentStatusByPaneKey.get(key)
       keys?.statuses.set(key, entry)
       return entry
     })
-    keys?.tabIds.add(tab.id)
+    keys?.tabIds.add(tab.id).add(addressId)
     inputs.push(
       state.unreadTerminalTabs[tab.id],
-      completions.get(tab.id),
+      completions.get(addressId),
       // Host resolution for this tab: its layout, pty ids, and status entry.
       state.terminalLayoutsByTabId[tab.id],
       state.ptyIdsByTabId[tab.id],

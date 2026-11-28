@@ -1,5 +1,5 @@
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   registerAgentSubjectReadCapture,
@@ -21,7 +21,6 @@ import { acknowledgeStructuredAgentSessionAttention } from '@/runtime/native-cha
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   dispatchStructuredPromptAttention,
   dispatchStructuredTurnCompletionAttention
@@ -30,6 +29,11 @@ import {
   getStructuredAgentSessionTabs,
   type StructuredTab
 } from '../status/structured-agent-session-tabs'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  readBotBackgroundSessionTabs,
+  subscribeBotBackgroundSessionTabs
+} from '../../../bots/bot-background-sessions'
 
 /** Subscribe per open tab: attention needs that tab’s surface/liveness, and reading it retires its host-pushed phone alerts. */
 function StructuredAgentSessionAttention({
@@ -52,7 +56,7 @@ function StructuredAgentSessionOwnedAttention({
 }): null {
   const feed = useMemo(() => getStructuredAgentSessionTurnCompletionFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   const readFrontier = useRef<StructuredSubjectRead | undefined>(undefined)
   // Where the newest edge this tab was handed sits in the journal: what lit its row.
   const surfaced = useRef<AgentJournalCursor | undefined>(undefined)
@@ -253,11 +257,23 @@ export function StructuredAgentSessionAttentionBridge(): React.JSX.Element {
   const tabs = useAppStore(
     useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
   )
+  const background = useSyncExternalStore(
+    subscribeBotBackgroundSessionTabs,
+    readBotBackgroundSessionTabs,
+    readBotBackgroundSessionTabs
+  )
+  const seen = new Set<string>()
   return (
     <>
-      {tabs.map((tab) => (
-        <StructuredAgentSessionAttention key={`${tab.id}:${tab.entityId}`} tab={tab} />
-      ))}
+      {/* A bot's thread or run has no tab until it is opened, and still notifies. One bridge per
+          conversation: its read capture is registered under the conversation's pane key. */}
+      {[...tabs, ...background].map((tab) => {
+        if (seen.has(tab.entityId)) {
+          return null
+        }
+        seen.add(tab.entityId)
+        return <StructuredAgentSessionAttention key={`${tab.id}:${tab.entityId}`} tab={tab} />
+      })}
     </>
   )
 }

@@ -115,6 +115,8 @@ export type CliStatusResult = {
     running: boolean
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
+    /** Set while the app is down for an update or relaunch it announced; retry shortly. */
+    restarting?: { reason: 'update' | 'relaunch'; since: string; overdue?: true }
   }
   runtime: {
     state: CliRuntimeState
@@ -180,6 +182,8 @@ export type RuntimeSyncWindowGraph = {
   activeGroupByWorkspace?: Record<string, string | null>
   /** The sender publication this window last applied; main answers "unchanged" while it holds. */
   agentSenderBase?: AgentSenderRevision
+  /** The orchestration revision this window last applied; main omits an unchanged projection. */
+  agentOrchestrationBase?: number
   /** The sidebar's Project grouping inputs for paired phones; sent only when they changed. */
   projectSectionCatalog?: MobileProjectSectionCatalog
 }
@@ -199,6 +203,8 @@ export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
   /** Sent instead of the publication when the window's base is still current. */
   agentSenderRevision?: AgentSenderRevision
   agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+  /** Equal to the window's base when the projection is unchanged; an absent projection is then kept, not cleared. */
+  agentOrchestrationRevision?: number
   nativeChatLaunchDraftResolutions?: RuntimeNativeChatLaunchDraftResolution[]
   mobileSessionResyncWorktrees?: string[]
 }

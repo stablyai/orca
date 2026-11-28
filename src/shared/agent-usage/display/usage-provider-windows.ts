@@ -1,5 +1,7 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../rate-limits/rate-limit-types'
 
+export const WEEKLY_WINDOW_MINUTES = 10_080
+
 // Structural so mobile's decoded snapshot, whose provider id is any string, fits too.
 type ProviderUsageWindows = {
   provider: string
@@ -21,10 +23,8 @@ export type UsageWindowSection =
 const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   claude: 'Claude',
   codex: 'Codex',
-  gemini: 'Gemini',
   'opencode-go': 'OpenCode Go',
   kimi: 'Kimi',
-  antigravity: 'Antigravity',
   minimax: 'MiniMax',
   grok: 'Grok',
   zcode: 'ZCode',
@@ -52,6 +52,16 @@ export function hasUsageData(provider: ProviderUsageWindows): boolean {
 /** The usage windows a provider shows, in order; session and weekly stay as null placeholders. */
 export function getUsageWindowSections(p: ProviderUsageWindows): UsageWindowSection[] {
   if (p.buckets?.length) {
+    // Drop the rollup only when it repeats a listed weekly pool.
+    const { weekly } = p
+    const weeklyDuplicatesBucket =
+      weekly !== null &&
+      p.buckets.some(
+        (bucket) =>
+          bucket.windowMinutes === WEEKLY_WINDOW_MINUTES &&
+          bucket.usedPercent === weekly.usedPercent &&
+          bucket.resetsAt === weekly.resetsAt
+      )
     return [
       ...p.buckets.map((bucket) => ({
         kind: 'bucket' as const,
@@ -67,7 +77,7 @@ export function getUsageWindowSections(p: ProviderUsageWindows): UsageWindowSect
             }
           ]
         : []),
-      { kind: 'weekly', window: p.weekly }
+      ...(weeklyDuplicatesBucket ? [] : [{ kind: 'weekly' as const, window: p.weekly }])
     ]
   }
   const sections: UsageWindowSection[] = [

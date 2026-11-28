@@ -1,13 +1,16 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpDialect } from './acp-dialect'
 
-const copilotToolResultSchema = z.looseObject({
-  content: z.string(),
-  contents: z
-    .array(z.looseObject({ type: z.string(), exitCode: z.number().int().optional() }))
-    .optional()
-})
+const copilotToolResultSchema = lazyZodSchema(() =>
+  z.looseObject({
+    content: z.string(),
+    contents: z
+      .array(z.looseObject({ type: z.string(), exitCode: z.number().int().optional() }))
+      .optional()
+  })
+)
 
 const SHELL_EXIT_TRAILER = /\n?<shellId: [^>\n]+ completed with exit code -?\d+>\s*$/u
 
@@ -34,8 +37,13 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
   }
 }
 
+// Copilot lists skills among its commands, each with this input hint whatever its own.
+const SKILL_INPUT_HINT = 'instructions for the skill'
+
 export const COPILOT_ACP_DIALECT: AcpDialect = {
   normalizeToolUpdate,
+  skillDescription: ({ description, input }) =>
+    input?.hint === SKILL_INPUT_HINT ? description : null,
   // These switch Copilot to approving everything itself, behind the chat's permission mode.
   withheldCommands: ['allow-all', 'permissions', 'autopilot']
 }
