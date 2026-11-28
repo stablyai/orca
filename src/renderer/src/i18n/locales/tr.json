@@ -22029,6 +22029,7 @@
         "needsAccess": "Erişim gerekiyor:",
         "needsNewerOrca": "Bu istek için Orca'nın daha yeni bir sürümü gerekiyor.",
         "plan": {
+          "expand": "Planı genişlet",
           "file": "Plan dosyası",
           "reviewTitle": "Önerilen planı incele",
           "refineHint": "Planı iyileştir seçeneği, değişiklik isteklerinizi gönderebilmeniz için incelemeyi kapatır."

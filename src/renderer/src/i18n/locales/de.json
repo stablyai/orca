@@ -22041,6 +22041,7 @@
           "title": "{{value0}} wartet im Terminal auf eine Auswahl"
         },
         "plan": {
+          "expand": "Plan vergrößern",
           "file": "Plandatei",
           "reviewTitle": "Vorgeschlagenen Plan prüfen",
           "refineHint": "„Plan verfeinern“ schließt das Review, damit Änderungswünsche gesendet werden können."

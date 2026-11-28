@@ -21706,6 +21706,7 @@
         "reasonSentAsMessage": "Raison, envoyée sous forme de message",
         "needsAccess": "Nécessite l'accès à",
         "plan": {
+          "expand": "Agrandir le plan",
           "file": "Dossier de planification",
           "reviewTitle": "Examiner le plan proposé",
           "refineHint": "Affiner le plan ferme l’examen pour que vous puissiez indiquer ce qui doit changer."

@@ -22888,6 +22888,7 @@
         "reason": "Motivo",
         "reasonSentAsMessage": "Motivo, enviado como mensagem",
         "plan": {
+          "expand": "Ampliar plano",
           "file": "Arquivo do plano",
           "reviewTitle": "Revisar plano proposto",
           "refineHint": "Refinar plano fecha a revisão para que você possa enviar o que deseja alterar."
