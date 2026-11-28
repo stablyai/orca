@@ -68,6 +68,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
     'Secondary chat text: tool rows, status lines, timestamps and hunk headers',
   '--chat-inline-code': 'Inline code in chat; may be translucent, it paints over the chat',
   '--chat-inline-code-foreground': 'Inline code text in chat',
+  '--chat-inline-code-border': 'Border around inline code in chat; `transparent` removes it',
   '--chat-code-block':
     'Code blocks, tool output and diffs in chat; may be translucent, it paints over the chat',
   '--chat-selection': 'Selected text in chat; may be translucent, it paints over the chat',
@@ -109,6 +110,7 @@ const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
   '--chat-muted-foreground': '`--muted-foreground` as chat paints it',
   '--chat-inline-code': '`--foreground` mixed lightly into the chat background',
   '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',
+  '--chat-inline-code-border': '`--foreground` at 9% light and 8% dark over the chat',
   '--chat-code-block': '`--foreground` mixed lightly into the chat background',
   '--chat-selection':
     "`--text-link` (else Orca's link blue) mixed into the chat background, up to 30% light and 40% dark, as deep as keeps selected text 4.5:1 (never under 15%)",

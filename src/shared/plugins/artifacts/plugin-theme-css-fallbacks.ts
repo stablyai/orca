@@ -65,6 +65,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   },
   '--chat-code-foreground': { mixForeground: 85, into: '--chat-canvas' },
   '--chat-inline-code-foreground': ['--chat-code-foreground'],
+  '--chat-inline-code-border': tint('--foreground', 9, 8),
   '--chat-inline-code': {
     light: { mixForeground: 4, into: '--chat-canvas' },
     dark: { tint: '--foreground', percent: 6 }
