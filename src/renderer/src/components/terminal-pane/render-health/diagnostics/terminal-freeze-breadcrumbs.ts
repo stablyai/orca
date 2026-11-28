@@ -9,6 +9,7 @@ import {
   recordTerminalWebglDiagnostic,
   setTerminalWebglDiagnosticRecorder
 } from '../../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
+import { noteAtlasFontProbeMismatch } from '../terminal-atlas-font-probe-recovery'
 import { maybeStartTerminalRenderDesyncSentinel } from '../terminal-render-desync-trigger'
 
 const rendererDeliveryBreadcrumbs = createPtyDeliveryBreadcrumbRing()
@@ -60,6 +61,7 @@ type AtlasFontProbeMismatch = { desired?: string; actual?: string }
     desired: mismatch?.desired ?? null,
     actual: mismatch?.actual ?? null
   })
+  noteAtlasFontProbeMismatch()
 }
 
 export function getTerminalFreezeBreadcrumbs(): PtyDeliveryBreadcrumb[] {

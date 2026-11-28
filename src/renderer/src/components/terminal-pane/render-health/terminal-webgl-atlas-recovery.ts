@@ -19,7 +19,7 @@ function resetAtlasesAndRefreshPanes(reason: string): void {
   }
 }
 
-function scheduleAtlasRecoveryBurst(reason: string): void {
+export function scheduleWebglAtlasRecoveryBurst(reason: string): void {
   scheduleNextFrame(() => resetAtlasesAndRefreshPanes(reason))
   for (const delayMs of ATLAS_RECOVERY_DELAYS_MS) {
     globalThis.setTimeout(() => resetAtlasesAndRefreshPanes(reason), delayMs)
@@ -28,5 +28,5 @@ function scheduleAtlasRecoveryBurst(reason: string): void {
 
 export function scheduleImagePasteWebglAtlasRecovery(): void {
   // Image chips can repaint after paste parsing; cover that short window with bounded immediate atlas recovery.
-  scheduleAtlasRecoveryBurst('image-paste')
+  scheduleWebglAtlasRecoveryBurst('image-paste')
 }
