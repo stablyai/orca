@@ -1,7 +1,10 @@
 // `orca bot create --offer`: shows the owner a card proposing a new bot, which creates nothing until
-// they press Create bot. Creating a bot is the owner's, in Orca.
+// they press Create bot. Without --offer, creates the bot directly when the local host opts in
+// (desktop Settings › Bots or `orca serve --allow-cli-bot-create`).
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { BOT_TEMPLATES, botTemplate } from '../../shared/bots/bot-templates'
+import { BOT_AGENTS, isBotAgent, type BotAgent } from '../../shared/bot-types'
+import { proposalCreateParams, type BotProposal } from '../../shared/bots/bot-proposal'
+import { BOT_TEMPLATES, botTemplate, type BotTemplate } from '../../shared/bots/bot-templates'
 import type { HandedWorkspace } from '../../shared/bots/bot-made-for-workspaces'
 import type {
   RuntimeWorktreePsSummary,
@@ -60,11 +63,19 @@ async function worktreesOf(client: RuntimeClient, selectors: string[]): Promise<
   return found
 }
 
-async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
-  const callerSessionId = readInjectedAgentSessionId()
-  if (!callerSessionId) {
-    throw new RuntimeClientError('invalid_argument', "Run this from a bot's chat.")
-  }
+type ResolvedBotSpec = {
+  name: string
+  purpose: string
+  watches?: string
+  does?: string
+  reports?: string
+  template: BotTemplate | null
+}
+
+function resolveBotSpec(
+  flags: Map<string, string | boolean>,
+  options: { offer: boolean }
+): ResolvedBotSpec {
   const templateId = getOptionalStringFlag(flags, 'template')
   const template = templateId === undefined ? null : botTemplate(templateId)
   if (templateId !== undefined && !template) {
@@ -77,21 +88,45 @@ async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Pr
   if (!purpose) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--offer needs --purpose: what the bot is for, in one sentence.'
+      options.offer
+        ? '--offer needs --purpose: what the bot is for, in one sentence.'
+        : 'Missing required --purpose: what the bot is for, in one sentence (or pass --template).'
     )
   }
   const field = (name: 'watches' | 'does' | 'reports') =>
     getOptionalStringFlag(flags, name) ?? template?.[name]
-  const worktrees = await worktreesOf(client, getRepeatedStringFlag(flags, 'worktree'))
   const watches = field('watches')
   const does = field('does')
   const reports = field('reports')
-  const result = await callBots<{ offered: boolean; message: string }>(client, 'bots.createOffer', {
-    callerSessionId,
+  return {
     name:
       getOptionalStringFlag(flags, 'name') ??
       template?.name ??
       getRequiredStringFlag(flags, 'name'),
+    purpose,
+    ...(watches ? { watches } : {}),
+    ...(does ? { does } : {}),
+    ...(reports ? { reports } : {}),
+    template
+  }
+}
+
+async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
+  if (getOptionalStringFlag(flags, 'agent') !== undefined) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      '--agent applies only when creating a bot directly without --offer.'
+    )
+  }
+  const callerSessionId = readInjectedAgentSessionId()
+  if (!callerSessionId) {
+    throw new RuntimeClientError('invalid_argument', "Run this from a bot's chat.")
+  }
+  const { name, purpose, watches, does, reports, template } = resolveBotSpec(flags, { offer: true })
+  const worktrees = await worktreesOf(client, getRepeatedStringFlag(flags, 'worktree'))
+  const result = await callBots<{ offered: boolean; message: string }>(client, 'bots.createOffer', {
+    callerSessionId,
+    name,
     purpose,
     ...(watches ? { watches } : {}),
     ...(does ? { does } : {}),
@@ -102,15 +137,48 @@ async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Pr
   printResult(result, json, (value) => value.message)
 }
 
+/** Without --offer: creates the bot outright. Only a host with local CLI bot creation enabled
+ *  (desktop Settings › Bots or `orca serve --allow-cli-bot-create`) accepts it, and only from its
+ *  own machine's CLI; anywhere else `bots.create` refuses with the propose-one message. */
+async function create({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
+  if (client.isRemote) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      "Direct `orca bot create` only runs against this machine's local Orca; a paired CLI cannot create bots directly. Use `--environment local` on that machine or propose one with `--offer`."
+    )
+  }
+  const explicitAgent = getOptionalStringFlag(flags, 'agent')
+  if (explicitAgent !== undefined && !isBotAgent(explicitAgent)) {
+    throw new RuntimeClientError('invalid_argument', `--agent is one of: ${BOT_AGENTS.join(', ')}`)
+  }
+  const { name, purpose, watches, does, reports, template } = resolveBotSpec(flags, {
+    offer: false
+  })
+  const worktrees = await worktreesOf(client, getRepeatedStringFlag(flags, 'worktree'))
+  const agent: BotAgent =
+    explicitAgent ??
+    (await callBots<{ defaultAgent: BotAgent }>(client, 'bots.agentChoices')).result.defaultAgent
+  const proposal: BotProposal = {
+    name,
+    purpose,
+    ...(watches ? { watches } : {}),
+    ...(does ? { does } : {}),
+    ...(reports ? { reports } : {}),
+    ...(template ? { templateId: template.id, mascot: template.mascot } : {}),
+    ...(worktrees.length ? { worktrees } : {})
+  }
+  const result = await callBots<{ bot: { id: string; name: string; folder: string } }>(
+    client,
+    'bots.create',
+    proposalCreateParams(proposal, agent, { templatePackages: true })
+  )
+  printResult(result, json, ({ bot }) => `Created ${bot.name} (${bot.id}) in ${bot.folder}`)
+}
+
 export const BOT_CREATE_HANDLERS: Record<string, CommandHandler> = {
   'bot create': async (context) => {
-    // Only the owner creates a bot, in Orca; from the CLI a bot can only propose one.
-    if (!context.flags.has('offer')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'A bot can’t create a bot. Propose one with --offer; your owner creates it from the card.'
-      )
-    }
-    await offer(context)
+    // A bot only proposes one (--offer); the owner creates it in Orca, or this machine's own CLI
+    // does when enabled via Settings › Bots or `orca serve --allow-cli-bot-create`.
+    await (context.flags.has('offer') ? offer(context) : create(context))
   }
 }

@@ -33,6 +33,12 @@ export function sanitizeRendererSettingsUpdate(
   ) {
     delete sanitizedArgs.browserPasswordsFillRequiresReauth
   }
+  if (
+    'allowCliBotCreate' in sanitizedArgs &&
+    typeof sanitizedArgs.allowCliBotCreate !== 'boolean'
+  ) {
+    delete sanitizedArgs.allowCliBotCreate
+  }
   for (const key of Object.values(NEW_TAB_MENU_LAYOUT_SETTING)) {
     if (key in sanitizedArgs) {
       sanitizedArgs[key] = normalizeNewTabMenuLayout(sanitizedArgs[key])

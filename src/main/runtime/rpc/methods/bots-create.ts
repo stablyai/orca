@@ -4,7 +4,8 @@ import { BotCreate } from '../../../../shared/rpc-contract/bots-params'
 import { botFirstKickoff } from '../../../../shared/bots/bot-import'
 import { botMadeForWorkspacesKickoff } from '../../../../shared/bots/bot-made-for-workspaces'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
-import { ownerOnly } from './bots-caller-gates'
+import { isCliBotCreateAllowed } from '../../../bots/bot-cli-create'
+import { botCreateCaller } from './bots-caller-gates'
 import { createBotFromShare } from '../../../bots/sharing/bot-share-create'
 import { botTemplateCreation, createBotFromTemplate } from '../../../bots/bot-template-create'
 import { botShareCreateDeps } from './bots-share-create-deps'
@@ -14,17 +15,13 @@ export const BOT_CREATE_METHOD = defineMethod({
   name: 'bots.create',
   permission: 'workspace',
   params: BotCreate,
-  handler: async (
-    { handOff, takingOver, fromOffer, fromShare, fromTemplate, ...params },
-    context
-  ) => {
+  handler: async (input, context) => {
     const { runtime } = context
     runtime.bots.assertEnabled()
-    // A bot proposes new bots (`bot create --offer`); only its owner creates one, in Orca.
-    ownerOnly(
-      context,
-      'A bot can’t create a bot. Propose one with `orca bot create --offer`; your owner creates it from the card.'
-    )
+    // A bot proposes new bots (`bot create --offer`); only its owner creates one, in Orca, unless the
+    // host allows local CLI creation (Settings › Bots or `orca serve --allow-cli-bot-create`).
+    botCreateCaller(context, input, isCliBotCreateAllowed(runtime.requireStore().getSettings()))
+    const { handOff, takingOver, fromOffer, fromShare, fromTemplate, ...params } = input
     let bot
     if (fromShare) {
       bot = await createBotFromShare(botShareCreateDeps(runtime), { ...params, fromShare })

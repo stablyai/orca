@@ -190,6 +190,7 @@ export type RuntimeStore = {
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
     botsEnabled?: GlobalSettings['botsEnabled']
+    allowCliBotCreate?: GlobalSettings['allowCliBotCreate']
     worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']

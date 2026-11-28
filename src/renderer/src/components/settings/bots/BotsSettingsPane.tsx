@@ -53,6 +53,15 @@ export function BotsSettingsPane({
             updateSettings({ skipNewHomeChatConfirm: !settings.skipNewHomeChatConfirm })
           }
         />
+        <SettingsSwitchRow
+          label={t('settings.bots.allowCliCreate', 'Allow local CLI to create bots')}
+          description={t(
+            'settings.bots.allowCliCreateDescription',
+            'Lets `orca bot create` on this computer create bots directly without a confirmation card. Off by default; any terminal or agent running on this computer can then create bots.'
+          )}
+          checked={settings.allowCliBotCreate === true}
+          onChange={() => updateSettings({ allowCliBotCreate: !settings.allowCliBotCreate })}
+        />
       </div>
       <div className="space-y-6">
         {accounts.map((account) => (

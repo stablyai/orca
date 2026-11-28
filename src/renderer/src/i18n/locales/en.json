@@ -1826,6 +1826,8 @@
       },
       "askNewHomeChat": "Ask before a new Home Chat",
       "askNewHomeChatDescription": "Confirm before New Home Chat replaces the conversation a bot carries.",
+      "allowCliCreate": "Allow local CLI to create bots",
+      "allowCliCreateDescription": "Lets `orca bot create` on this computer create bots directly without a confirmation card. Off by default; any terminal or agent running on this computer can then create bots.",
       "tidyUp": {
         "readChats": "read {{count}} chats",
         "took": "took {{value}} min",
