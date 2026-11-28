@@ -22,7 +22,14 @@ function rings(fit: RailRingStackFit, count: number): { top: number; labelBottom
 describe('railRingStackFit', () => {
   it('leaves a full gap between each percent label and the next ring', () => {
     const fit = railRingStackFit({ ...base, count: 5, room: 400 })
-    expect(fit).toEqual({ paddingTop: 12, gap: 17, paddingBottom: 21, height: null, pitch: 58 })
+    expect(fit).toEqual({
+      paddingTop: 12,
+      clearGap: 12,
+      gap: 17,
+      paddingBottom: 21,
+      height: null,
+      pitch: 58
+    })
     const laid = rings(fit, 5)
     for (let index = 1; index < laid.length; index++) {
       expect(laid[index].top - laid[index - 1].labelBottom).toBe(12)
@@ -35,7 +42,14 @@ describe('railRingStackFit', () => {
   it('tightens the gaps before cutting any ring, and never below the minimum', () => {
     // 12 + 5*46 + 4*9 + 2 = 280
     const fit = railRingStackFit({ ...base, count: 5, room: 280 })
-    expect(fit).toEqual({ paddingTop: 12, gap: 14, paddingBottom: 7, height: null, pitch: 55 })
+    expect(fit).toEqual({
+      paddingTop: 12,
+      clearGap: 9,
+      gap: 14,
+      paddingBottom: 7,
+      height: null,
+      pitch: 55
+    })
     const laid = rings(fit, 5)
     expect(laid[1].top - laid[0].labelBottom).toBe(9)
     expect(laid[4].labelBottom + fit.paddingBottom - base.overhang).toBeLessThanOrEqual(280)
@@ -44,7 +58,14 @@ describe('railRingStackFit', () => {
   it('shows only whole rings, labels included, cut in the gap after the last one', () => {
     const fit = railRingStackFit({ ...base, count: 5, room: 200 })
     // Three rings at pitch 54 end their labels at 12 + 2*54 + 46 = 166; a fourth would need 220 + peek.
-    expect(fit).toEqual({ paddingTop: 12, gap: 13, paddingBottom: 17, height: 179, pitch: 54 })
+    expect(fit).toEqual({
+      paddingTop: 12,
+      clearGap: 8,
+      gap: 13,
+      paddingBottom: 17,
+      height: 179,
+      pitch: 54
+    })
     const laid = rings(fit, 5)
     expect(laid[1].top - laid[0].labelBottom).toBe(8)
     expect(fit.height!).toBeLessThanOrEqual(200)
@@ -64,5 +85,41 @@ describe('railRingStackFit', () => {
     const laid = rings(fit, 5)
     expect(laid[4].labelBottom + fit.paddingBottom - base.overhang).toBeLessThanOrEqual(274)
     expect(laid[1].top - laid[0].labelBottom).toBeGreaterThanOrEqual(base.minGap)
+  })
+
+  it('keeps even clear gaps with a leading Items button and tightens before scrolling', () => {
+    // Natural fit: 12 + 41 + 5*46 + 5*12 + 16 = 359
+    const natural = railRingStackFit({ ...base, count: 5, room: 400, leadingHeight: 41 })
+    expect(natural).toEqual({
+      paddingTop: 12,
+      clearGap: 12,
+      gap: 17,
+      paddingBottom: 21,
+      height: null,
+      pitch: 58
+    })
+
+    // Tightened fit on folded-split Duo: 12 + 41 + 5*46 + 5*9 + 2 = 330
+    const tight = railRingStackFit({ ...base, count: 5, room: 330, leadingHeight: 41 })
+    expect(tight).toEqual({
+      paddingTop: 12,
+      clearGap: 9,
+      gap: 14,
+      paddingBottom: 7,
+      height: null,
+      pitch: 55
+    })
+
+    // Cut/scroll: fixed header takes 12 + 41 + 8 = 61; remaining 200 - 61 = 139 fits 2 whole rings + peek.
+    const cut = railRingStackFit({ ...base, count: 5, room: 200, leadingHeight: 41 })
+    expect(cut).toEqual({
+      paddingTop: 12,
+      clearGap: 8,
+      gap: 13,
+      paddingBottom: 7,
+      height: 113,
+      pitch: 54
+    })
+    expect(12 + 41 + cut.clearGap + cut.height!).toBeLessThanOrEqual(200)
   })
 })

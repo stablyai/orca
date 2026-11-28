@@ -15,6 +15,7 @@ import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { listRailUsage } from './rail-usage-model'
 import { RailUsageStack, STANDALONE_RING_DIAMETER } from './RailUsageStack'
+import { useHostRailBotsSource } from './use-host-rail-bots'
 import {
   setTabletUsageRailExpanded,
   useTabletUsageRailExpanded
@@ -25,6 +26,7 @@ const EXPANDED_WIDTH = STANDALONE_RING_DIAMETER + spacing.md * 2
 const COLLAPSED_WIDTH = 44
 
 export type TabletUsageRailState = {
+  hostId: string
   snapshot: AccountsSnapshot | null
   expanded: boolean
   /** 0 while the rail is hidden. */
@@ -63,6 +65,7 @@ export function useTabletUsageRail(
   const width =
     room && listRailUsage(snapshot).length > 0 ? (expanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH) : 0
   return {
+    hostId,
     snapshot,
     expanded,
     width,
@@ -83,6 +86,7 @@ export function TabletUsageRail({
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
+  const bots = useHostRailBotsSource(rail.width > 0 && rail.expanded ? rail.hostId : null)
   if (rail.width === 0) {
     return null
   }
@@ -118,7 +122,7 @@ export function TabletUsageRail({
       >
         <Icon size={18} color={colors.textSecondary} strokeWidth={2} />
       </Pressable>
-      {rail.expanded ? <RailUsageStack snapshot={rail.snapshot} standalone /> : null}
+      {rail.expanded ? <RailUsageStack snapshot={rail.snapshot} bots={bots} standalone /> : null}
     </View>
   )
 }
