@@ -27,6 +27,7 @@ const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   kimi: 'Kimi',
   minimax: 'MiniMax',
   grok: 'Grok',
+  antigravity: 'Antigravity',
   zcode: 'ZCode',
   cursor: 'Cursor',
   muse: 'Muse'

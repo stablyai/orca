@@ -68,7 +68,8 @@ export type ZcodePlanResolvedConfig = {
 
 export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
-export type ActiveRateLimitProvider = ProviderRateLimits['provider']
+// Antigravity usage arrives only from agy's status line; it is never fetched or polled.
+export type ActiveRateLimitProvider = Exclude<ProviderRateLimits['provider'], 'antigravity'>
 export type ActiveProviderState = {
   provider: ActiveRateLimitProvider
   limits: ProviderRateLimits | null
@@ -109,6 +110,7 @@ export type InternalRateLimitState = {
   codex: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null

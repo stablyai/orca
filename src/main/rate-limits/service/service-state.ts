@@ -30,6 +30,7 @@ export abstract class RateLimitServiceState {
     codex: null,
     opencodeGo: null,
     kimi: null,
+    antigravity: null,
     minimax: null,
     grok: null,
     cursor: null,
