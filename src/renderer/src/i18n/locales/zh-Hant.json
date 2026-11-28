@@ -664,6 +664,26 @@
       "statusAriaLabel": "Git Blame：{{summary}}",
       "openCommitHint": "按一下以開啟提交",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "從磁碟重新載入 · 自動重新載入已暫停",
+      "ariaLabelPaused": "從磁碟重新載入，自動重新載入已暫停",
+      "noChanges": "磁碟上沒有變更",
+      "readFailed": "無法讀取 {{value0}}",
+      "retry": "重試",
+      "fileDeleted": "檔案已從磁碟刪除",
+      "cannotCheckDirty": "有未儲存的編輯時無法與磁碟比較",
+      "changedOnDisk": "磁碟上已變更",
+      "editsKept": "{{value0}} 中未儲存的編輯已保留",
+      "openTab": "開啟分頁",
+      "paletteTitle": "從磁碟重新載入檔案",
+      "paletteDescription": "從磁碟讀取目前的檔案，若有變更則重新載入。",
+      "verbs": {
+        "reloadFile": "重新載入檔案",
+        "reloadFromDisk": "從磁碟重新載入",
+        "refreshFile": "重新整理檔案",
+        "revertFile": "還原檔案"
+      }
     }
   },
   "githubChecks": {

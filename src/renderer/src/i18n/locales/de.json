@@ -690,6 +690,26 @@
       "statusAriaLabel": "Git Blame: {{summary}}",
       "openCommitHint": "Klicken, um den Commit zu öffnen",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Von Datenträger neu laden · automatisches Neuladen pausiert",
+      "ariaLabelPaused": "Von Datenträger neu laden, automatisches Neuladen pausiert",
+      "noChanges": "Keine Änderungen auf dem Datenträger",
+      "readFailed": "{{value0}} konnte nicht gelesen werden",
+      "retry": "Erneut versuchen",
+      "fileDeleted": "Datei auf dem Datenträger gelöscht",
+      "cannotCheckDirty": "Vergleich mit dem Datenträger nicht möglich, solange Änderungen ungespeichert sind",
+      "changedOnDisk": "Auf dem Datenträger geändert",
+      "editsKept": "Ungespeicherte Änderungen in {{value0}} bleiben erhalten",
+      "openTab": "Tab öffnen",
+      "paletteTitle": "Datei von Datenträger neu laden",
+      "paletteDescription": "Liest die aktive Datei vom Datenträger und lädt sie neu, falls sie sich geändert hat.",
+      "verbs": {
+        "reloadFile": "datei neu laden",
+        "reloadFromDisk": "von datenträger neu laden",
+        "refreshFile": "datei aktualisieren",
+        "revertFile": "datei zurücksetzen"
+      }
     }
   },
   "githubChecks": {

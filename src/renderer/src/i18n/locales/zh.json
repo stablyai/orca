@@ -24292,6 +24292,26 @@
       "title": "文件过大，无法显示差异",
       "detail": "此文件的某个版本超过 10 MB，因此 Orca 不会加载它来显示文本差异",
       "connectionDetail": "此差异过大，无法通过远程连接打开"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "从磁盘重新加载 · 自动重新加载已暂停",
+      "ariaLabelPaused": "从磁盘重新加载，自动重新加载已暂停",
+      "noChanges": "磁盘上没有更改",
+      "readFailed": "无法读取 {{value0}}",
+      "retry": "重试",
+      "fileDeleted": "文件已从磁盘删除",
+      "cannotCheckDirty": "有未保存的编辑时无法与磁盘比较",
+      "changedOnDisk": "磁盘上已更改",
+      "editsKept": "{{value0}} 中未保存的编辑已保留",
+      "openTab": "打开标签页",
+      "paletteTitle": "从磁盘重新加载文件",
+      "paletteDescription": "从磁盘读取当前文件，如有更改则重新加载。",
+      "verbs": {
+        "reloadFile": "重新加载文件",
+        "reloadFromDisk": "从磁盘重新加载",
+        "refreshFile": "刷新文件",
+        "revertFile": "还原文件"
+      }
     }
   },
   "featureTips": {

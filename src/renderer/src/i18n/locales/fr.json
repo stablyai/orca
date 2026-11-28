@@ -24808,6 +24808,26 @@
       "statusAriaLabel": "Git blame : {{summary}}",
       "openCommitHint": "Cliquez pour ouvrir le commit",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Recharger depuis le disque · rechargement automatique en pause",
+      "ariaLabelPaused": "Recharger depuis le disque, rechargement automatique en pause",
+      "noChanges": "Aucune modification sur le disque",
+      "readFailed": "Impossible de lire {{value0}}",
+      "retry": "Réessayer",
+      "fileDeleted": "Fichier supprimé du disque",
+      "cannotCheckDirty": "Impossible de comparer avec le disque tant que des modifications ne sont pas enregistrées",
+      "changedOnDisk": "Modifié sur le disque",
+      "editsKept": "Les modifications non enregistrées de {{value0}} sont conservées",
+      "openTab": "Ouvrir l'onglet",
+      "paletteTitle": "Recharger le fichier depuis le disque",
+      "paletteDescription": "Lit le fichier actif depuis le disque et le recharge s'il a changé.",
+      "verbs": {
+        "reloadFile": "recharger le fichier",
+        "reloadFromDisk": "recharger depuis le disque",
+        "refreshFile": "actualiser le fichier",
+        "revertFile": "rétablir le fichier"
+      }
     }
   },
   "checksPanel": {

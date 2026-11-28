@@ -801,6 +801,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Нажмите, чтобы открыть коммит",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Перезагрузить с диска · автоперезагрузка приостановлена",
+      "ariaLabelPaused": "Перезагрузить с диска, автоперезагрузка приостановлена",
+      "noChanges": "На диске нет изменений",
+      "readFailed": "Не удалось прочитать {{value0}}",
+      "retry": "Повторить",
+      "fileDeleted": "Файл удалён с диска",
+      "cannotCheckDirty": "Нельзя сравнить с диском, пока есть несохранённые изменения",
+      "changedOnDisk": "Изменено на диске",
+      "editsKept": "Несохранённые изменения в {{value0}} не потеряны",
+      "openTab": "Открыть вкладку",
+      "paletteTitle": "Перезагрузить файл с диска",
+      "paletteDescription": "Читает активный файл с диска и перезагружает его, если он изменился.",
+      "verbs": {
+        "reloadFile": "перезагрузить файл",
+        "reloadFromDisk": "перезагрузить с диска",
+        "refreshFile": "обновить файл",
+        "revertFile": "вернуть файл"
+      }
     }
   },
   "githubChecks": {

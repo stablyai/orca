@@ -746,6 +746,26 @@
       "statusAriaLabel": "Git blame: {{summary}}",
       "openCommitHint": "Commit’i açmak için tıklayın",
       "statusBarItem": "Git blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "Diskten yeniden yükle · otomatik yeniden yükleme duraklatıldı",
+      "ariaLabelPaused": "Diskten yeniden yükle, otomatik yeniden yükleme duraklatıldı",
+      "noChanges": "Diskte değişiklik yok",
+      "readFailed": "{{value0}} okunamadı",
+      "retry": "Yeniden dene",
+      "fileDeleted": "Dosya diskten silindi",
+      "cannotCheckDirty": "Kaydedilmemiş düzenlemeler varken diskle karşılaştırılamaz",
+      "changedOnDisk": "Diskte değişti",
+      "editsKept": "{{value0}} içindeki kaydedilmemiş düzenlemeler korunur",
+      "openTab": "Sekmeyi Aç",
+      "paletteTitle": "Dosyayı Diskten Yeniden Yükle",
+      "paletteDescription": "Etkin dosyayı diskten okur ve değiştiyse yeniden yükler.",
+      "verbs": {
+        "reloadFile": "dosyayı yeniden yükle",
+        "reloadFromDisk": "diskten yeniden yükle",
+        "refreshFile": "dosyayı yenile",
+        "revertFile": "dosyayı geri al"
+      }
     }
   },
   "githubChecks": {
