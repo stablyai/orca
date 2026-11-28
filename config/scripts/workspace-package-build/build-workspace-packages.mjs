@@ -92,11 +92,9 @@ function writeStamp(packageDir, inputs) {
 function runPackageBuild(name) {
   // Why not @orca/process-host: this builds it, so its dist may not exist yet.
   const { command, prefixArgs, shell } = resolvePnpmCliInvocation()
-  const result = spawnSync(command, [...prefixArgs, '--filter', name, 'build'], {
-    cwd: root,
-    stdio: 'inherit',
-    shell
-  })
+  // Postinstall calls this builder; a nested install would enter it again.
+  const args = [...prefixArgs, '--config.verifyDepsBeforeRun=false', '--filter', name, 'build']
+  const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', shell })
   if (result.error) {
     throw result.error
   }
