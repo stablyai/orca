@@ -4,7 +4,6 @@ import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contrac
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
 import { prepareSessionRecipient } from '../messaging/session-recipient'
-import { refuseLegacyAttachedRecipient } from '../messaging/legacy-attachment-recipient-refusal'
 
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 
@@ -63,8 +62,6 @@ export async function storePeerMailForAgent<R>(
     )
     return null
   }
-  // Its mailbox is its Dispatch, which only its Run home writes to.
-  refuseLegacyAttachedRecipient(runtime, db, recipient.to, 'Nothing was delivered.')
   // Before storing, as a local send does: a waiter the arrival resolves is gone by the time the receipt reads.
   const takenByWaiter = runtime.hasMessageWaiterFor(recipient.to, params.type ?? 'status')
   const stored = db.insertPeerMailMessage({

@@ -30,6 +30,7 @@ import {
 import { lookupOrcaAgentSession } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
+import { legacyAttachmentRefusal } from './legacy-attachment-recipient-refusal'
 
 // Session senders resolve against the session records, which a restart leaves uninstalled until asked.
 export async function ensureSenderRecords(
@@ -149,7 +150,10 @@ function reachableSender(
     })
   } catch (error) {
     if (error instanceof OrchestrationError) {
-      return senderLineageUnproven(request.from_handle) ? 'unverified' : 'gone'
+      // A sender working another Orca's Task reads its own mail again once that Task settles.
+      const from = request.from_handle
+      const attached = legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))
+      return attached || senderLineageUnproven(from) ? 'unverified' : 'gone'
     }
     throw error
   }
