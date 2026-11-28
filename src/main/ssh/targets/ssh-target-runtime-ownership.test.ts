@@ -47,5 +47,32 @@ describe('decideManagedHostRemoval', () => {
     expect(decideManagedHostRemoval({ orcadFence: { environmentId: '' } }, new Set())).toEqual({
       kind: 'refuse'
     })
+    expect(
+      decideManagedHostRemoval(
+        {
+          orcadFence: { environmentId: '' },
+          orcadProvisioning: { requestId: GONE, name: 'box' }
+        },
+        new Set()
+      )
+    ).toEqual({ kind: 'refuse' })
+    expect(
+      decideManagedHostRemoval(
+        {
+          orcadFence: { environmentId: '   ' },
+          orcadProvisioning: { requestId: GONE, name: 'box' }
+        },
+        new Set()
+      )
+    ).toEqual({ kind: 'refuse' })
+    expect(
+      decideManagedHostRemoval(
+        {
+          orcadFence: { environmentId: GONE },
+          orcadProvisioning: { requestId: '', name: 'box' }
+        },
+        new Set()
+      )
+    ).toEqual({ kind: 'refuse' })
   })
 })

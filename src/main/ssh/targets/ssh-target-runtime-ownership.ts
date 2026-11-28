@@ -37,21 +37,29 @@ export function decideManagedHostRemoval(
     return { kind: 'refuse' }
   }
   const ids = referencedManagedEnvironmentIds(target)
-  if (ids.length === 0 || ids.some((id) => knownEnvironmentIds.has(id))) {
+  if (ids === 'blank' || ids.length === 0 || ids.some((id) => knownEnvironmentIds.has(id))) {
     return { kind: 'refuse' }
   }
   return { kind: 'clear-dangling-reference' }
 }
 
-function referencedManagedEnvironmentIds(target: ManagedHostReference): string[] {
+function referencedManagedEnvironmentIds(target: ManagedHostReference): string[] | 'blank' {
   const ids: string[] = []
-  const fenceId = target.orcadFence?.environmentId
-  if (fenceId) {
+  if (target.orcadFence !== undefined) {
+    const fenceId = target.orcadFence.environmentId
+    if (typeof fenceId !== 'string' || fenceId.trim() === '') {
+      return 'blank'
+    }
     ids.push(fenceId)
   }
-  const requestId = target.orcadProvisioning?.requestId
-  if (requestId && !ids.includes(requestId)) {
-    ids.push(requestId)
+  if (target.orcadProvisioning !== undefined) {
+    const requestId = target.orcadProvisioning.requestId
+    if (typeof requestId !== 'string' || requestId.trim() === '') {
+      return 'blank'
+    }
+    if (!ids.includes(requestId)) {
+      ids.push(requestId)
+    }
   }
   return ids
 }
