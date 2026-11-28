@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import * as z from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type {
   WebhookCallRow as WebhookCallRowSchema,
   WebhookView
@@ -14,55 +15,63 @@ import {
 } from '../../../shared/connector-webhook-contract'
 import { isMissingFileError } from '../../runtime/rpc/server/pairing/device-registry-corruption'
 
-export const LocalHook = z.object({
-  hookId: z.string().regex(WEBHOOK_HOOK_ID_PATTERN),
-  automationId: z.string().min(1),
-  botId: z.string().min(1),
-  state: z.enum(['live', 'paused']),
-  epoch: z.number().int().nonnegative(),
-  keyGeneration: z.number().int().nonnegative(),
-  key: z.string().min(1),
-  previousKey: z.string().min(1).optional(),
-  previousKeyExpiresAt: z.number().nullable(),
-  mintOperationId: z.string().min(1),
-  rotateOperationId: z.string().optional(),
-  rotateCancelled: z.number().int().nonnegative().optional(),
-  lastCall: z.object({ at: z.number(), state: z.enum(WEBHOOK_CALL_STATES) }).nullable()
-})
+export const LocalHook = lazyZodSchema(() =>
+  z.object({
+    hookId: z.string().regex(WEBHOOK_HOOK_ID_PATTERN),
+    automationId: z.string().min(1),
+    botId: z.string().min(1),
+    state: z.enum(['live', 'paused']),
+    epoch: z.number().int().nonnegative(),
+    keyGeneration: z.number().int().nonnegative(),
+    key: z.string().min(1),
+    previousKey: z.string().min(1).optional(),
+    previousKeyExpiresAt: z.number().nullable(),
+    mintOperationId: z.string().min(1),
+    rotateOperationId: z.string().optional(),
+    rotateCancelled: z.number().int().nonnegative().optional(),
+    lastCall: z.object({ at: z.number(), state: z.enum(WEBHOOK_CALL_STATES) }).nullable()
+  })
+)
 export type LocalHook = z.infer<typeof LocalHook>
 
-export const LocalCall = z.object({
-  callId: z.string().min(1),
-  hookId: z.string().min(1),
-  receivedAt: z.number(),
-  state: z.enum(WEBHOOK_CALL_STATES),
-  // The hook's epoch when the call came in; a pause since then refuses it.
-  epoch: z.number().int().nonnegative().optional(),
-  subject: z.string().optional(),
-  sample: z.literal(true).optional(),
-  sampleOperationId: z.string().optional(),
-  runId: z.string().optional(),
-  reason: z.string().optional(),
-  hasEnvelope: z.boolean()
-})
+export const LocalCall = lazyZodSchema(() =>
+  z.object({
+    callId: z.string().min(1),
+    hookId: z.string().min(1),
+    receivedAt: z.number(),
+    state: z.enum(WEBHOOK_CALL_STATES),
+    // The hook's epoch when the call came in; a pause since then refuses it.
+    epoch: z.number().int().nonnegative().optional(),
+    subject: z.string().optional(),
+    sample: z.literal(true).optional(),
+    sampleOperationId: z.string().optional(),
+    runId: z.string().optional(),
+    reason: z.string().optional(),
+    hasEnvelope: z.boolean()
+  })
+)
 export type LocalCall = z.infer<typeof LocalCall>
 
-const Counter = z.object({
-  hookId: z.string().min(1),
-  kind: z.enum(['refused', 'over_budget', 'duplicate']),
-  minute: z.number(),
-  count: z.number().int().positive()
-})
+const Counter = lazyZodSchema(() =>
+  z.object({
+    hookId: z.string().min(1),
+    kind: z.enum(['refused', 'over_budget', 'duplicate']),
+    minute: z.number(),
+    count: z.number().int().positive()
+  })
+)
 export type LocalCounterKind = z.infer<typeof Counter>['kind']
 type LocalCounter = z.infer<typeof Counter>
 type WebhookCallRow = z.infer<typeof WebhookCallRowSchema>
 
-export const StoredLocalWebhooks = z.object({
-  hooks: z.array(LocalHook),
-  calls: z.array(LocalCall),
-  counters: z.array(Counter),
-  deliveries: z.array(z.object({ hookId: z.string(), id: z.string(), at: z.number() }))
-})
+export const StoredLocalWebhooks = lazyZodSchema(() =>
+  z.object({
+    hooks: z.array(LocalHook),
+    calls: z.array(LocalCall),
+    counters: z.array(Counter),
+    deliveries: z.array(z.object({ hookId: z.string(), id: z.string(), at: z.number() }))
+  })
+)
 export type StoredLocalWebhooks = z.infer<typeof StoredLocalWebhooks>
 
 const ALPHANUMERIC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
