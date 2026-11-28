@@ -7,6 +7,8 @@ export type ServeOrcaAppArgs = {
   noPairing?: boolean
   mobilePairing?: boolean
   grantDesktopControl?: boolean
+  /** This machine's own `orca` CLI may create bots (`orca bot create` without --offer). */
+  allowCliBotCreate?: boolean
   allowPublic?: boolean
   refusePublic?: boolean
   recipeJson?: boolean
@@ -27,6 +29,7 @@ export function serveOptionArgs(args: ServeOrcaAppArgs, prefix: '--' | '--serve-
     ...(args.noPairing ? [`${prefix}no-pairing`] : []),
     ...(args.mobilePairing ? [`${prefix}mobile-pairing`] : []),
     ...(args.grantDesktopControl ? [`${prefix}grant-desktop-control`] : []),
+    ...(args.allowCliBotCreate ? [`${prefix}allow-cli-bot-create`] : []),
     ...(args.allowPublic ? [`${prefix}allow-public`] : []),
     ...(args.refusePublic ? [`${prefix}refuse-public`] : []),
     ...(args.recipeJson && args.projectRoot

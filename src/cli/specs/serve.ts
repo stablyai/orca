@@ -6,7 +6,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve'],
     summary: 'Start an Orca runtime server without opening a desktop window',
     usage:
-      'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
+      'orca serve [--port <port>] [--bind <ip>] [--pairing-address <host>] [--allow-public | --refuse-public] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--allow-cli-bot-create] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'port',
@@ -17,6 +17,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'mobile-pairing',
       'no-pairing',
       'grant-desktop-control',
+      'allow-cli-bot-create',
       'project-root',
       'recipe-json',
       'supervise',
@@ -36,6 +37,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
       'Each start prints a new link and retires the unused one the previous start printed.',
       'On a packaged macOS app serve runs Electron, which needs a desktop login; over SSH with nobody logged in, set ORCA_SERVE_RUNTIME=orcad to run the Node server instead (it has no in-app updater).',
       "Without --grant-desktop-control, Orca won't drive this machine's desktop (orca computer) for a paired client. Anything with a terminal here can, and a paired client can open terminals.",
+      "--allow-cli-bot-create lets this machine's own `orca` CLI create bots outright (`orca bot create --name … --purpose …`, no card), for a host provisioned from a checkout. Off, only the owner's Orca or phone creates a bot. A paired CLI never can, and anything with a terminal here could then make bots.",
       'When the web client bundle is available, the server also prints a browser URL with the pairing data embedded.',
       'Exits with code 3, without starting anything, when another Orca already serves this profile or cannot be shown to have stopped.',
       "--reclaim-stale-lock starts nothing. When a start refuses because this profile's lock may belong to an Orca on another machine sharing this home (for example after a reboot, on a network home), it checks that the lock was written on a host with this name in an earlier boot, was last written or refreshed at least 5 minutes ago, and that nothing answers on this machine at its holder's endpoints. Those checks cannot rule out another machine with the same host name, so it then only prints what it found (exit 2); add --yes, once you are sure no other machine sharing this home runs Orca for this profile, to clear it (exit 0). It exits 1 when a check fails and 4 when there is no lock. --data-root names the data root the refusal printed. --json prints the status (none, eligible, refused or reclaimed). Linux only.",

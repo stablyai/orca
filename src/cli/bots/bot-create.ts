@@ -102,15 +102,26 @@ async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Pr
   printResult(result, json, (value) => value.message)
 }
 
+/** Without --offer: creates the bot outright. Only a host served with --allow-cli-bot-create takes
+ *  it, from its own machine's CLI; anywhere else `bots.create` refuses with the propose-one message. */
+async function create({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
+  const agent = getOptionalStringFlag(flags, 'agent')
+  const result = await callBots<{ bot: { id: string; name: string; folder: string } }>(
+    client,
+    'bots.create',
+    {
+      name: getRequiredStringFlag(flags, 'name'),
+      ...(agent ? { agent } : {}),
+      seed: { purpose: getRequiredStringFlag(flags, 'purpose') }
+    }
+  )
+  printResult(result, json, ({ bot }) => `Created ${bot.name} (${bot.id}) in ${bot.folder}`)
+}
+
 export const BOT_CREATE_HANDLERS: Record<string, CommandHandler> = {
   'bot create': async (context) => {
-    // Only the owner creates a bot, in Orca; from the CLI a bot can only propose one.
-    if (!context.flags.has('offer')) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'A bot can’t create a bot. Propose one with --offer; your owner creates it from the card.'
-      )
-    }
-    await offer(context)
+    // A bot only proposes one (--offer); the owner creates it in Orca, or the host's own CLI does when
+    // served with --allow-cli-bot-create.
+    await (context.flags.has('offer') ? offer(context) : create(context))
   }
 }

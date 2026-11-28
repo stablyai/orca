@@ -26,6 +26,7 @@ export const CLI_BOOLEAN_FLAGS = new Set([
   'enter',
   'focus',
   'grant-desktop-control',
+  'allow-cli-bot-create',
   'force',
   'fresh',
   'full',

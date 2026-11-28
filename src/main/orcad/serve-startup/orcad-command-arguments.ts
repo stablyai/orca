@@ -28,6 +28,7 @@ Options:
   --mobile-pairing         Create a mobile-scoped pairing offer with a QR code.
   --grant-desktop-control  Allow desktop control in the default runtime offer;
                            cannot combine with --no-pairing or --mobile-pairing.
+  --allow-cli-bot-create   Let this machine's own orca CLI create bots (no card).
   --recipe-json            Print only the VM recipe line; requires --project-root.
   --project-root <dir>     Existing absolute project directory for --recipe-json.
   --web-client-root <dir>  Serve the browser client from this directory (holds web-index.html).
@@ -70,6 +71,8 @@ export function parseArgs(argv: string[]): OrcadCommandArguments {
       options.mobilePairing = true
     } else if (arg === '--grant-desktop-control') {
       options.grantDesktopControl = true
+    } else if (arg === '--allow-cli-bot-create') {
+      options.allowCliBotCreate = true
     } else if (arg === '--recipe-json') {
       options.recipeJson = true
     } else if (arg === '--project-root') {
