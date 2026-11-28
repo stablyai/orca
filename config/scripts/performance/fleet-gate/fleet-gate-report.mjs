@@ -62,7 +62,7 @@ export function compareRuns(runs, scenarios) {
           metric.store &&
           missing.every(
             (run) =>
-              run.storeBreakpoints === 0 &&
+              run.storeMeasured === false &&
               run.windows[scenario]?.metrics &&
               !run.windows[scenario].undriven
           )

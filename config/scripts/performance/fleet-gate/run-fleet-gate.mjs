@@ -355,7 +355,8 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     }
     const renderer = await installRendererProbe(page)
     result.storeBreakpoints = renderer.breakpoints
-    if (result.storeBreakpoints === 0) {
+    result.storeMeasured = renderer.storeMeasured
+    if (!result.storeMeasured) {
       result.notes.push(`${arm} store pubs/wakeups: not measured (probe could not attach)`)
     }
     console.log(
@@ -413,7 +414,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
         elapsedMs: elapsed,
         metrics: windowMetrics(
           main,
-          renderer.breakpoints > 0
+          result.storeMeasured
             ? rendererSnapshot
             : { ...rendererSnapshot, pubs: Number.NaN, noop: Number.NaN, wakeups: Number.NaN },
           elapsed

@@ -42,27 +42,36 @@ describe('fleet gate store probe', () => {
     ])
   })
 
-  it('skips comparisons for an unavailable store probe and still requires other metrics', () => {
-    const metrics = Object.fromEntries(
-      METRICS.map(({ key, store }) => [key, store ? Number.NaN : 1])
-    )
-    const runs = [
-      { arm: 'old', storeBreakpoints: 0, windows: { streaming: { metrics } } },
-      {
-        arm: 'new',
-        storeBreakpoints: 1,
-        windows: {
-          streaming: {
-            metrics: { ...metrics, pubsPerSec: 20, noopPubsPerSec: 0, wakeupsPerSec: 400 }
+  it.each([0, 1])(
+    'skips unavailable store metrics with %i installed breakpoints',
+    (breakpoints) => {
+      const metrics = Object.fromEntries(
+        METRICS.map(({ key, store }) => [key, store ? Number.NaN : 1])
+      )
+      const runs = [
+        {
+          arm: 'old',
+          storeBreakpoints: breakpoints,
+          storeMeasured: false,
+          windows: { streaming: { metrics } }
+        },
+        {
+          arm: 'new',
+          storeBreakpoints: 1,
+          storeMeasured: true,
+          windows: {
+            streaming: {
+              metrics: { ...metrics, pubsPerSec: 20, noopPubsPerSec: 0, wakeupsPerSec: 400 }
+            }
           }
         }
-      }
-    ]
-    const report = () => formatTable({ rows: compareRuns(runs, ['streaming']), notes: [] })
-    expect(report().result).toBe('PASS')
-    expect(report().text).toContain('not measured')
+      ]
+      const report = () => formatTable({ rows: compareRuns(runs, ['streaming']), notes: [] })
+      expect(report().result).toBe('PASS')
+      expect(report().text).toContain('not measured')
 
-    metrics.rendererHeapMb = Number.NaN
-    expect(report().result).toBe('INCOMPLETE')
-  })
+      metrics.rendererHeapMb = Number.NaN
+      expect(report().result).toBe('INCOMPLETE')
+    }
+  )
 })

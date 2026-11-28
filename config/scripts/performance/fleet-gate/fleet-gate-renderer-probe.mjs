@@ -60,9 +60,16 @@ export async function installRendererProbe(page) {
   await page.evaluate(installPageCounters)
   const cdp = await page.context().newCDPSession(page)
   const scripts = []
-  cdp.on('Debugger.scriptParsed', (event) => scripts.push(event))
-  await cdp.send('Debugger.enable')
-  await new Promise((resolve) => setTimeout(resolve, 1_000))
+  const onScriptParsed = (event) => scripts.push(event)
+  cdp.on('Debugger.scriptParsed', onScriptParsed)
+  let attachmentFailed = await cdp.send('Debugger.enable').then(
+    () => false,
+    () => true
+  )
+  if (!attachmentFailed) {
+    await new Promise((resolve) => setTimeout(resolve, 1_000))
+  }
+  cdp.off('Debugger.scriptParsed', onScriptParsed)
   let breakpoints = 0
   for (const script of scripts) {
     // A split renderer chunk can contain just the store factory and its React bindings.
@@ -72,7 +79,11 @@ export async function installRendererProbe(page) {
     const scriptContents = await cdp
       .send('Debugger.getScriptSource', { scriptId: script.scriptId })
       .catch(() => null)
-    const scriptSource = scriptContents?.scriptSource
+    if (!scriptContents) {
+      attachmentFailed = true
+      continue
+    }
+    const { scriptSource } = scriptContents
     if (!scriptSource) {
       continue
     }
@@ -88,6 +99,7 @@ export async function installRendererProbe(page) {
         .catch(() => null)
       const location = possible?.locations[0]
       if (!location) {
+        attachmentFailed = true
         continue
       }
       const breakpoint = await cdp
@@ -98,11 +110,18 @@ export async function installRendererProbe(page) {
         .catch(() => null)
       if (breakpoint) {
         breakpoints += 1
+      } else {
+        attachmentFailed = true
       }
     }
   }
+  const storeMeasured = breakpoints > 0 && !attachmentFailed
+  if (!storeMeasured && breakpoints > 0) {
+    await cdp.send('Debugger.disable').catch(() => {})
+  }
   return {
     breakpoints,
+    storeMeasured,
     async reset() {
       await page.evaluate(() => globalThis.__fleetGateRenderer.reset())
     },
