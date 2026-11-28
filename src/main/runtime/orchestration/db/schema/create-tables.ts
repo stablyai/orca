@@ -44,10 +44,22 @@ export function createTables(this: OrchestrationDb): void {
     ['remote_placements', 'creator_pane_key'],
     ['remote_dispatches', 'creator_orca_session_id'],
     ['remote_dispatches', 'creator_pane_key'],
+    ['remote_placements', 'creator_handle'],
+    ['remote_placements', 'creator_turn_source'],
+    ['remote_dispatches', 'creator_handle'],
+    ['remote_dispatches', 'creator_turn_source'],
     ['remote_dispatches', 'worktree_id']
   ] as const) {
     if (!this.hasColumn(table, column)) {
       this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+    }
+  }
+  for (const [table, column] of [
+    ['remote_placements', 'asker_unproven'],
+    ['remote_dispatches', 'asker_proven']
+  ] as const) {
+    if (!this.hasColumn(table, column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 0`)
     }
   }
   // After the columns exist: a chat's tree finds its remote Dispatches as it finds its local ones.

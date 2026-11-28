@@ -19,11 +19,8 @@ import {
   recordRemoteDispatchReport,
   recordRemoteDispatchState
 } from './remote-dispatch-records'
-import {
-  adoptRemoteAttempt,
-  currentRemoteAttempt,
-  noteRemoteRunLinkPeerRun
-} from './remote-placements'
+import { adoptRemoteAttempt, currentRemoteAttempt } from './remote-placements'
+import { noteRemoteRunLinkPeerRun } from './remote-placement-hold'
 import { recordMessageSenderDispatch } from '../messages/message-sender-dispatch'
 import { workerReportSignInMessage } from '../../workers/launch/worker-agent-computer-words'
 import {

@@ -1,6 +1,7 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { TaskStatus } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
+import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 
 export type RemotePlacementRow = {
   task_id: string
@@ -13,8 +14,73 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+  asker_unproven: number
+} & RemoteCreatorColumns
+
+/** Who started a server's attempt, as a local Dispatch records its creator. */
+export type RemoteCreatorColumns = {
   creator_orca_session_id: string | null
   creator_pane_key: string | null
+  creator_handle: string | null
+  creator_turn_source: 'connector' | null
+}
+
+export function getRemotePlacement(
+  db: OrchestrationDb,
+  taskId: string
+): RemotePlacementRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
+  return db.db.prepare('SELECT * FROM remote_placements WHERE task_id = ?').get(taskId) as
+    | RemotePlacementRow
+    | undefined
+}
+
+export function noteRemoteRunLinkPeerRun(
+  db: OrchestrationDb,
+  conversationId: string,
+  peerRunId: string
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_run_links SET peer_run_id = ? WHERE conversation_id = ? AND peer_run_id IS NULL`
+    )
+    .run(peerRunId, conversationId)
+}
+
+/** A same-key retry sends again. When nothing under the key left this Orca, it is the first ask the
+ *  server will see, so the placement names who asks now. Otherwise the server may already hold, or
+ *  have forgotten, the first send: its next answer proves the first asker only if they ask again. */
+export function resendRemoteReservation(
+  db: OrchestrationDb,
+  existing: RemotePlacementRow,
+  creator: DispatchCreator
+): void {
+  const asker = recordedCreatorIdentity(creator)
+  if (existing.never_sent_at !== null) {
+    db.db
+      .prepare(
+        `UPDATE remote_placements SET creator_orca_session_id = ?, creator_pane_key = ?,
+           creator_handle = ?, creator_turn_source = ?, asker_unproven = 0 WHERE task_id = ?`
+      )
+      .run(
+        asker.creatorOrcaSessionId,
+        asker.creatorPaneKey,
+        asker.creatorHandle,
+        asker.creatorTurnSource,
+        existing.task_id
+      )
+  } else if (
+    asker.creatorOrcaSessionId !== existing.creator_orca_session_id ||
+    asker.creatorHandle !== existing.creator_handle ||
+    asker.creatorTurnSource !== existing.creator_turn_source
+  ) {
+    db.db
+      .prepare('UPDATE remote_placements SET asker_unproven = 1 WHERE task_id = ?')
+      .run(existing.task_id)
+  }
+  db.db
+    .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
+    .run(existing.task_id)
 }
 
 /**

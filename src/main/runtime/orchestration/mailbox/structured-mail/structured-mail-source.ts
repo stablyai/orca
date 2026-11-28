@@ -18,6 +18,7 @@ import {
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
 import { readMessageSenderDispatch } from '../../db/messages/message-sender-dispatch'
+import { startOutcomeReportId } from '../../workers/turn-stops/start-outcome-report'
 import type { WorkerIdentity } from '../../workers/identity/worker-identity'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
@@ -86,14 +87,16 @@ export function structuredMailSource(input: {
         group[0]!.recorded
       )
     const relations = new Map<string, Lineage | undefined>()
-    const values = group.map(({ message, report }) => {
+    const values = group.map(({ message, report, recorded }) => {
+      const startOutcome = orcaStartOutcome(message, recorded)
       // Sender and DB are fixed by this group/invocation; every varying evidence field is keyed.
       const key = JSON.stringify([
         input.mailboxHandle,
         input.dispatchId,
         message.run_id,
         message.type,
-        report
+        report,
+        startOutcome ?? null
       ])
       if (!relations.has(key)) {
         relations.set(
@@ -108,7 +111,8 @@ export function structuredMailSource(input: {
                 reportedDispatchId:
                   recordedDispatchId ?? (report.kind === 'valid' ? report.dispatchId : undefined),
                 recipientDispatchId: input.dispatchId,
-                messageType: message.type
+                messageType: message.type,
+                ...(startOutcome ? { startOutcomeDispatchId: startOutcome } : {})
               })
         )
       }
@@ -236,6 +240,19 @@ function withConversationNote(
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+}
+
+/** The Dispatch whose start outcome this is when Orca itself wrote it: only the runtime mints that
+ *  id, and the Dispatch is the one recorded when the mail was filed, not one the mail claims. */
+function orcaStartOutcome(
+  message: MailSourceMessage,
+  recorded: WorkerIdentity | null
+): string | undefined {
+  return message.type === 'escalation' &&
+    recorded &&
+    message.id === startOutcomeReportId(recorded.dispatchId)
+    ? recorded.dispatchId
+    : undefined
 }
 
 /** The worker this mail was recorded from when it was written. */

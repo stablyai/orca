@@ -19,23 +19,20 @@ import {
   getRemoteDispatch,
   isRemoteDispatchActive,
   isRemoteDispatchTerminal,
+  markRemoteAskerProven,
   type RemoteDispatchRow
 } from './remote-dispatch-records'
 import { getOpenRemoteRunLink, type RemoteRunLinkRow } from './remote-run-links'
-import { getLiveRemotePlacement, type RemotePlacementRow } from './remote-placement-hold'
+import {
+  getLiveRemotePlacement,
+  getRemotePlacement,
+  noteRemoteRunLinkPeerRun,
+  resendRemoteReservation,
+  type RemotePlacementRow
+} from './remote-placement-hold'
 import { writtenRow } from './written-row'
 import { ensureRemoteDispatchRecord, type RemoteDispatchIdentity } from './remote-dispatch-identity'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
-
-export function getRemotePlacement(
-  db: OrchestrationDb,
-  taskId: string
-): RemotePlacementRow | undefined {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table returns exactly its row shape.
-  return db.db.prepare('SELECT * FROM remote_placements WHERE task_id = ?').get(taskId) as
-    | RemotePlacementRow
-    | undefined
-}
 
 type TaskCreation = Omit<Parameters<OrchestrationDb['createTask']>[0], 'id' | 'runId'>
 
@@ -75,9 +72,7 @@ export function reserveRemotePlacement(
       existing?.request_key === params.requestKey &&
       existing.conversation_id === link.conversation_id
     ) {
-      db.db
-        .prepare('UPDATE remote_placements SET never_sent_at = NULL WHERE task_id = ?')
-        .run(params.taskId)
+      resendRemoteReservation(db, existing, params.creator)
       commitLifecycleWriteTransaction(db.db, transaction)
       return {
         placement: { ...existing, never_sent_at: null },
@@ -103,15 +98,17 @@ export function reserveRemotePlacement(
       .prepare(
         `INSERT INTO remote_placements (
            task_id, run_id, environment_id, conversation_id, state, request_key, prior_task_status,
-           dispatch_id, creator_orca_session_id, creator_pane_key
-         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?)
+           dispatch_id, creator_orca_session_id, creator_pane_key, creator_handle,
+           creator_turn_source
+         ) VALUES (?, ?, ?, ?, 'reserved', ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(task_id) DO UPDATE SET
            run_id = excluded.run_id, environment_id = excluded.environment_id,
            conversation_id = excluded.conversation_id, state = 'reserved',
            request_key = excluded.request_key, prior_task_status = excluded.prior_task_status,
            dispatch_id = excluded.dispatch_id, never_sent_at = NULL,
            creator_orca_session_id = excluded.creator_orca_session_id,
-           creator_pane_key = excluded.creator_pane_key`
+           creator_pane_key = excluded.creator_pane_key, creator_handle = excluded.creator_handle,
+           creator_turn_source = excluded.creator_turn_source, asker_unproven = 0`
       )
       .run(
         task.id,
@@ -123,7 +120,9 @@ export function reserveRemotePlacement(
         // An attempt that ran here is not the server's, so a refusal there leaves no placement.
         retriesAttemptHere ? null : (retryOf ?? null),
         creator.creatorOrcaSessionId,
-        creator.creatorPaneKey
+        creator.creatorPaneKey,
+        creator.creatorHandle,
+        creator.creatorTurnSource
       )
     transitionLifecycleWithDb(db.db, {
       entity: 'task',
@@ -212,6 +211,10 @@ export function recordRemoteStart(
       placement?.conversation_id === params.conversationId &&
       (placement.request_key === params.requestKey || placement.dispatch_id === params.dispatchId)
     const record = link && ours ? adoptRemoteAttempt(db, link, params) : undefined
+    // This Orca's own receipt of the start it sent: its asker is the attempt's, as a local creator.
+    if (record && placement?.request_key === params.requestKey && !placement.asker_unproven) {
+      markRemoteAskerProven(db, record.dispatch_id, placement)
+    }
     if (record && params.peerRunId) {
       noteRemoteRunLinkPeerRun(db, params.conversationId, params.peerRunId)
     }
@@ -260,18 +263,6 @@ export function adoptRemoteAttempt(
     })
   }
   return record
-}
-
-export function noteRemoteRunLinkPeerRun(
-  db: OrchestrationDb,
-  conversationId: string,
-  peerRunId: string
-): void {
-  db.db
-    .prepare(
-      `UPDATE remote_run_links SET peer_run_id = ? WHERE conversation_id = ? AND peer_run_id IS NULL`
-    )
-    .run(peerRunId, conversationId)
 }
 
 /**

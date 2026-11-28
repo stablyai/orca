@@ -96,10 +96,11 @@ export function agentMessageSender(
   }
 }
 
-function senderParty(
+/** Who an address speaks as, as delivery reads it; Orca's start-outcome report reads it the same way. */
+export function senderParty(
   address: string,
   db: OrchestrationDb | null,
-  sentAt: string | undefined
+  sentAt?: string
 ): AgentMessageSender['party'] {
   if (address.startsWith('dispatch:')) {
     const id = address.slice(9)

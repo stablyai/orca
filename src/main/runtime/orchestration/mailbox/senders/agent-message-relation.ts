@@ -5,6 +5,8 @@ import type { DispatchContextRow } from '../../db/orchestration-records'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
 import { resolveOrchestrationParty } from '../../addressing/orchestration-party'
 import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
+import { isOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { getRemoteDispatch } from '../../db/remote-owned/remote-dispatch-records'
 
 type Party = Pick<AgentMessageSender['party'], 'terminalHandle' | 'orcaSessionId'>
 
@@ -23,7 +25,7 @@ function localDispatch(dispatch: DispatchContextRow): boolean {
 /** How a sender relates to its recipient, and, for a worker, the Dispatch that proves it. */
 export type Lineage = {
   relation: AgentMessageSender['relation']
-  workerDispatch?: DispatchContextRow
+  workerDispatch?: Pick<DispatchContextRow, 'creator_turn_source'>
 }
 
 const UNKNOWN: Lineage = { relation: undefined }
@@ -31,6 +33,30 @@ const UNKNOWN: Lineage = { relation: undefined }
 // What Orca mails as a local worker's dispatch that is that worker's result: its failed start, its
 // loss, mail it never got. Its questions and setup status are not (they stay where they were asked).
 const LOCAL_DISPATCH_RESULTS: ReadonlySet<string> = new Set(['escalation', 'worker_done'])
+
+/** Whether `sender` speaks as this Dispatch's own worker, as a local coordinator decides it: a
+ *  federated worker as its Dispatch, Orca writing a local Dispatch's result as it, or the bound
+ *  assignee of a Dispatch on this machine. Who started the Dispatch is the caller's question. */
+export function sendsAsDispatchWorker(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  sender: Party & { address?: string },
+  messageType: string | undefined
+): boolean {
+  if (sender.address === `dispatch:${dispatch.id}`) {
+    return (
+      Boolean(db.getFederatedDispatch(dispatch.id)) ||
+      (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(messageType ?? ''))
+    )
+  }
+  return (
+    localDispatch(dispatch) &&
+    sameParty(sender, {
+      terminalHandle: dispatch.assignee_handle,
+      orcaSessionId: dispatch.assignee_orca_session_id
+    })
+  )
+}
 
 /** A federated worker mails as its dispatch, and so does Orca for a local one: 'worker' only when
  *  that dispatch, in the Run, was created by the recipient, and for a local one only its results;
@@ -45,8 +71,12 @@ function dispatchWorkerLineage(
   const dispatch = db.getDispatchContextById(dispatchId)
   const known =
     dispatch &&
-    (db.getFederatedDispatch(dispatchId) ||
-      (localDispatch(dispatch) && LOCAL_DISPATCH_RESULTS.has(args.messageType ?? '')))
+    sendsAsDispatchWorker(
+      db,
+      dispatch,
+      { address: `dispatch:${dispatchId}`, terminalHandle: null, orcaSessionId: null },
+      args.messageType
+    )
   const creator = known && dispatch.run_id === runId ? dispatch : null
   return creator &&
     sameParty(
@@ -54,6 +84,31 @@ function dispatchWorkerLineage(
       recipient
     )
     ? { relation: 'worker', workerDispatch: creator }
+    : UNKNOWN
+}
+
+/** A paired server's worker for this Run (worker-start --on): 'worker' when this Orca's own receipt
+ *  of the start names the recipient as its asker, as a local Dispatch's creator does. */
+function remoteWorkerLineage(
+  db: OrchestrationDb,
+  dispatchId: string,
+  runId: string,
+  recipient: Party
+): Lineage {
+  const record = getRemoteDispatch(db, dispatchId)
+  return record?.run_id === runId &&
+    record.asker_proven === 1 &&
+    sameParty(
+      {
+        terminalHandle: record.creator_handle,
+        orcaSessionId:
+          record.creator_orca_session_id && isOrcaSessionId(record.creator_orca_session_id)
+            ? record.creator_orca_session_id
+            : null
+      },
+      recipient
+    )
+    ? { relation: 'worker', workerDispatch: { creator_turn_source: record.creator_turn_source } }
     : UNKNOWN
 }
 
@@ -66,6 +121,8 @@ type RelationArgs = {
   recipientDispatchId: string | null
   /** The mail's type: a local dispatch's own mail is lineage only for its results. */
   messageType?: string
+  /** A start outcome Orca wrote for this Dispatch, proven by its runtime-minted id. */
+  startOutcomeDispatchId?: string
 }
 
 /** Delivery-time evidence only; missing, ambiguous or foreign lineage is unknown. */
@@ -95,6 +152,10 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
       args.recipient === `run:${runId}`
         ? runCoordinatorKey(run)
         : resolveOrchestrationParty(args.recipient, db)
+    // A paired server's worker has no Dispatch here: only Orca's own report of its start counts.
+    if (args.startOutcomeDispatchId && !db.getDispatchContextById(args.startOutcomeDispatchId)) {
+      return remoteWorkerLineage(db, args.startOutcomeDispatchId, runId, recipient)
+    }
     if (sender.address.startsWith('dispatch:')) {
       return dispatchWorkerLineage(db, sender.address.slice('dispatch:'.length), args, recipient)
     }
@@ -110,11 +171,12 @@ export function agentMessageLineage(args: RelationArgs): Lineage {
         Boolean(
           row &&
           row.run_id === runId &&
-          localDispatch(row) &&
-          sameParty(party, {
-            terminalHandle: row.assignee_handle,
-            orcaSessionId: row.assignee_orca_session_id
-          })
+          sendsAsDispatchWorker(
+            db,
+            row,
+            { terminalHandle: party.terminalHandle, orcaSessionId: party.orcaSessionId },
+            args.messageType
+          )
         )
       )
       return matches.length === 1 ? matches[0] : undefined

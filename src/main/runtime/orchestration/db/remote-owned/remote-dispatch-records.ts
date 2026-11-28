@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import type { RemoteRunLinkRow } from './remote-run-links'
 import { writtenRow } from './written-row'
+import type { RemoteCreatorColumns } from './remote-placement-hold'
 
 export type RemoteDispatchRow = {
   dispatch_id: string
@@ -23,10 +24,9 @@ export type RemoteDispatchRow = {
   task_settled_here: number
   created_at: string
   updated_at: string
-  creator_orca_session_id: string | null
-  creator_pane_key: string | null
+  asker_proven: number
   worktree_id: string | null
-}
+} & RemoteCreatorColumns
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
 /** `task_settled_here` for an attempt abandoned here, which a retry may follow at once. */
@@ -101,6 +101,28 @@ export function countRemoteDispatches(db: OrchestrationDb, runId: string | undef
       : db.db.prepare('SELECT COUNT(*) AS count FROM remote_dispatches WHERE run_id = ?').get(runId)
   ) as { count: number }
   return row.count
+}
+
+/** This Orca's own receipt of the start proves its placement's asker asked for the attempt, when
+ *  the attempt's record names that asker: only then does its start outcome report where it was
+ *  asked. Adoption alone proves no one. */
+export function markRemoteAskerProven(
+  db: OrchestrationDb,
+  dispatchId: string,
+  placement: RemoteCreatorColumns
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_dispatches SET asker_proven = 1
+       WHERE dispatch_id = ? AND creator_orca_session_id IS ? AND creator_handle IS ?
+         AND creator_turn_source IS ?`
+    )
+    .run(
+      dispatchId,
+      placement.creator_orca_session_id,
+      placement.creator_handle,
+      placement.creator_turn_source
+    )
 }
 
 /** The server's state for the Dispatch, applied in its queue order. A terminal state sends any stop owed at once: its receipt is now the proof. */

@@ -45,7 +45,12 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   never_sent_at      TEXT,
   -- Who placed it, as a local Dispatch records its creator; each Dispatch adopted for it takes these.
   creator_orca_session_id TEXT,
-  creator_pane_key   TEXT
+  creator_pane_key   TEXT,
+  creator_handle     TEXT,
+  -- 'connector' when a connector conversation woke the turn that placed it.
+  creator_turn_source TEXT,
+  -- 1 after a same-key resend once the server had answered: its next answer proves no asker.
+  asker_unproven     INTEGER NOT NULL DEFAULT 0
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
@@ -79,6 +84,11 @@ CREATE TABLE IF NOT EXISTS remote_dispatches (
   -- Its placement's creator, so it lists under the chat or pane that started it as a local one does.
   creator_orca_session_id TEXT,
   creator_pane_key   TEXT,
+  creator_handle     TEXT,
+  creator_turn_source TEXT,
+  -- 1 when this Orca's own receipt of the start named that creator as its asker; a creator copied
+  -- by adoption alone is 0, so only the start's answer lets its outcome report where it was asked.
+  asker_proven       INTEGER NOT NULL DEFAULT 0,
   -- The server's workspace the start created, when its answer named one.
   worktree_id        TEXT
 );

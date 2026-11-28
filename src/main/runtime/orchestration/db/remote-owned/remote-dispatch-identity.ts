@@ -4,6 +4,10 @@ import type { RemoteRunLinkRow } from './remote-run-links'
 import { getRemoteDispatch, type RemoteDispatchRow } from './remote-dispatch-records'
 import { writtenRow } from './written-row'
 
+// The asker's terminal and turn come only from the placement, and never change once proven.
+const NO_ASKER = `remote_dispatches.creator_handle IS NULL
+  AND remote_dispatches.creator_turn_source IS NULL AND remote_dispatches.asker_proven = 0`
+
 /** What names a server's Dispatch here. `earlierDispatchId`: the server's Dispatch it continues (a
  *  follow-up) or whose worker started it (a helper). */
 export type RemoteDispatchIdentity = {
@@ -36,12 +40,17 @@ export function ensureRemoteDispatchRecord(
        chosen AS (
          SELECT session, pane FROM creator WHERE session IS NOT NULL OR pane IS NOT NULL
          ORDER BY rank LIMIT 1
+       ),
+       asker AS (
+         SELECT creator_handle AS handle, creator_turn_source AS turn
+         FROM remote_placements WHERE task_id = ?5 AND conversation_id = ?2
        )
        INSERT INTO remote_dispatches (
          dispatch_id, conversation_id, run_id, environment_id, task_id, agent,
-         creator_orca_session_id, creator_pane_key, worktree_id
+         creator_orca_session_id, creator_pane_key, creator_handle, creator_turn_source, worktree_id
        )
-       SELECT ?1, ?2, ?3, ?4, ?5, ?6, (SELECT session FROM chosen), (SELECT pane FROM chosen), ?7
+       SELECT ?1, ?2, ?3, ?4, ?5, ?6, (SELECT session FROM chosen), (SELECT pane FROM chosen),
+         (SELECT handle FROM asker), (SELECT turn FROM asker), ?7
        WHERE true
        ON CONFLICT(dispatch_id) DO UPDATE SET
          agent = COALESCE(remote_dispatches.agent, excluded.agent),
@@ -53,7 +62,11 @@ export function ensureRemoteDispatchRecord(
          creator_pane_key = CASE
            WHEN remote_dispatches.creator_orca_session_id IS NULL
              AND remote_dispatches.creator_pane_key IS NULL
-           THEN excluded.creator_pane_key ELSE remote_dispatches.creator_pane_key END`
+           THEN excluded.creator_pane_key ELSE remote_dispatches.creator_pane_key END,
+         creator_handle = CASE WHEN ${NO_ASKER}
+           THEN excluded.creator_handle ELSE remote_dispatches.creator_handle END,
+         creator_turn_source = CASE WHEN ${NO_ASKER}
+           THEN excluded.creator_turn_source ELSE remote_dispatches.creator_turn_source END`
     )
     .run(
       identity.dispatchId,
