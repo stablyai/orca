@@ -4,6 +4,8 @@ import {
   type AgentHookInstallStatus,
   type AgentHookTarget
 } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import type { AgentHookConsent } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 
 type Calls = { installed: string[]; refreshed: string[]; removed: string[]; present: Set<string> }
@@ -121,11 +123,15 @@ describe('agent hook consent', () => {
   it('offers an undecided agent and a decline never leaves hooks, with a class-backed store', async () => {
     // Why a class: the real Store reads `this`, which a detached method reference loses.
     class Store {
-      private settings = { ...settings, agentHookConsent: {} }
+      private settings: GlobalSettings = {
+        ...getDefaultSettings('/home'),
+        ...settings,
+        agentHookConsent: {}
+      }
       getSettings() {
         return this.settings
       }
-      updateSettings(updates: Partial<typeof settings>) {
+      updateSettings(updates: Partial<GlobalSettings>) {
         this.settings = { ...this.settings, ...updates }
       }
     }

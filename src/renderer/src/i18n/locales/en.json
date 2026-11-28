@@ -31571,6 +31571,7 @@
       "installed": "Installed",
       "notInstalled": "Not installed",
       "remove": "Remove"
-    }
+    },
+    "declineFailed": "Couldn’t save your choice"
   }
 }
