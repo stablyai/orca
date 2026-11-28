@@ -92,7 +92,9 @@ export function TopActivityOverflowMenuContent({
                 aria-current={active ? 'page' : undefined}
                 aria-label={activityItemAriaLabel(item, status, t)}
               >
-                <Icon size={14} />
+                {/* Why 15: menu rows draw glyphs at 15px in CSS, and an image icon takes only
+                    the size it is given. */}
+                <Icon size={15} />
                 <span>{item.title}</span>
                 {status && status !== 'neutral' ? (
                   <span

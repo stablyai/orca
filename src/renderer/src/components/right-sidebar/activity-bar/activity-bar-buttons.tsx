@@ -244,11 +244,12 @@ export function ActivityBarButton({
                 : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
             )
           : cn(
-              'shrink-0 [&>svg]:transition-opacity',
+              // Why img too: a plugin panel's image icon dims and lights up like a glyph.
+              'shrink-0 [&>:is(svg,img)]:transition-opacity',
               isTop ? 'h-[36px] w-9' : 'w-10 h-10',
               active
                 ? 'text-foreground'
-                : 'text-muted-foreground [&>svg]:opacity-60 hover:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100'
+                : 'text-muted-foreground [&>:is(svg,img)]:opacity-60 hover:[&>:is(svg,img)]:opacity-100 forced-colors:[&>:is(svg,img)]:opacity-100'
             )
       )}
       // Enter and Space fire click with detail 0.

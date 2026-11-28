@@ -486,7 +486,7 @@
           ]
         },
         "icon": {
-          "description": "Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. Either a built-in name, or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`\"0 0 W H\"`, W and H from 1 to 1024; default `\"0 0 24 24\"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in `.svg`, shows `puzzle` with a warning; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Example: `{ \"path\": \"M4 4h16v16H4z\", \"mode\": \"stroke\" }`.",
+          "description": "Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. One of three forms. A built-in name. Or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`\"0 0 W H\"`, W and H from 1 to 1024; default `\"0 0 24 24\"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Or (manifest format 2, needs `engines.orca` `>=1.4.279`) an object with one key, `image`: a file in the plugin that Orca draws in its own colors, in the same box as a built-in icon and dimmed like one while the panel isn't selected. PNG, WEBP, static, at least 128×128, square, at most 256 KB. It may be the plugin `icon` file. Leave a transparent margin of about 1/12 to match the built-in icons, and use a mark that reads on light and dark sidebars. Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path or image icon, or a string ending in `.svg`, shows `puzzle` with a warning; an image file that is missing or breaks the image rules fails validation and install, like other plugin images; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Examples: `{ \"path\": \"M4 4h16v16H4z\", \"mode\": \"stroke\" }`, `{ \"image\": \"assets/panel.png\" }`.",
           "x-orca-since": "1.4.160",
           "examples": [
             "database"
@@ -611,6 +611,23 @@
               ],
               "additionalProperties": false,
               "x-orca-since": "1.4.274"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "image": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024,
+                  "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$",
+                  "description": "Image file drawn in its own colors on the panel's button. PNG, WEBP, static, at least 128×128, square, at most 256 KB."
+                }
+              },
+              "required": [
+                "image"
+              ],
+              "additionalProperties": false,
+              "x-orca-since": "1.4.279"
             }
           ]
         },

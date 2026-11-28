@@ -16,6 +16,9 @@ export type PluginHostPanel = {
   /** Inline SVG path icon, defaults applied. Absent on older hosts; older clients ignore it and
    *  show `puzzle`, which is why it does not reuse `icon`. */
   iconPath?: ResolvedPluginPanelPathIcon
+  /** `orca-plugin-image:` URL of the panel's image icon, drawn in its own colors. Absent on older
+   *  hosts; older clients ignore it and show `puzzle`. */
+  iconImage?: string
   tabKey: `plugin:${string}`
 }
 

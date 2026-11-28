@@ -8,6 +8,7 @@ import {
 import { parsePluginVmRecipeArtifact } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
 import { PLUGIN_IMAGE_RULES } from '../../../shared/plugins/images/plugin-image-fields'
 import { PLUGIN_NEW_FILE_TEMPLATE_MAX_BYTES } from '../../../shared/plugins/contributions/plugin-new-file-contribution'
+import { pluginPanelImageIconPath } from '../../../shared/plugins/contributions/plugin-panel-image-icon'
 import { validatePluginImageArtifacts } from '../media/plugin-image-artifact-validation'
 import { validatePluginFontArtifacts } from '../media/plugin-font-files'
 import { PLUGIN_FONT_FILE_MAX_BYTES } from '../../../shared/plugins/contributions/plugin-font-contribution'
@@ -50,9 +51,14 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
         ]
       : []),
     ...declaredFile('worker entry', manifest.main, PLUGIN_WORKER_ENTRY_MAX_BYTES),
-    ...c.panels.flatMap((panel) =>
-      declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES)
-    ),
+    ...c.panels.flatMap((panel) => [
+      ...declaredFile(`panel "${panel.id}" entry`, panel.entry, PLUGIN_PANEL_ENTRY_MAX_BYTES),
+      ...declaredFile(
+        `panel "${panel.id}" icon`,
+        pluginPanelImageIconPath(panel.icon),
+        PLUGIN_IMAGE_RULES.icon.maxBytes
+      )
+    ]),
     ...c.customEditors.flatMap((editor) => [
       ...declaredFile(
         `custom editor "${editor.id}" entry`,

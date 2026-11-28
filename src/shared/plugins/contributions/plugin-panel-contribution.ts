@@ -5,6 +5,7 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginPathFieldDoc,
   pluginFieldDoc,
+  PLUGIN_PANEL_IMAGE_ICON_SINCE,
   PLUGIN_PANEL_PATH_ICON_SINCE,
   PLUGIN_PANEL_UI_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
@@ -16,6 +17,8 @@ import {
   PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX,
   pluginPanelPathIconSchema
 } from './plugin-panel-path-icon'
+import { pluginPanelImageIconSchema } from './plugin-panel-image-icon'
+import { PLUGIN_ICON_RULE_TEXT } from '../images/plugin-image-fields'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const PLUGIN_PANEL_LIMIT = 64
@@ -105,9 +108,10 @@ export const PLUGIN_PANEL_UI_KINDS = ['html', 'components'] as const
 export type PluginPanelUi = (typeof PLUGIN_PANEL_UI_KINDS)[number]
 const COMPONENTS_PANEL_ENTRY = /\.(?:m?js|tsx?|mts|jsx)$/i
 
-/** A built-in icon name, or (format 2) one inline SVG path drawn in the theme color. */
+/** A built-in icon name, or (format 2) one inline SVG path drawn in the theme color, or (format
+ *  2) a PNG or WebP image drawn in its own colors. */
 export const pluginPanelIconSchema = lazyZodSchema(() =>
-  z.union([z.enum(PLUGIN_PANEL_ICONS), pluginPanelPathIconSchema])
+  z.union([z.enum(PLUGIN_PANEL_ICONS), pluginPanelPathIconSchema, pluginPanelImageIconSchema])
 )
 
 export const pluginPanelContributionSchema = z
@@ -126,7 +130,7 @@ export const pluginPanelContributionSchema = z
     ),
     icon: pluginPanelIconSchema.optional().meta({
       ...pluginFieldDoc(
-        `Icon shown in the right-sidebar activity bar. Defaults to \`puzzle\`. Either a built-in name, or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_PATH_ICON_SINCE}\`) an object with inline SVG path data that Orca draws in the theme color: \`path\` (required; up to ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters of SVG path data starting with \`M\`, separated only by spaces, tabs, line breaks and commas), \`viewBox\` (\`"0 0 W H"\`, W and H from 1 to 1024; default \`"${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}"\`) and \`mode\` (\`stroke\`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above ${PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX}; \`fill\` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in \`.svg\`, shows \`puzzle\` with a warning; any other value (a misspelled name, \`null\`, an array, a number or a boolean) is a manifest error. Format 1 shows \`puzzle\` with a warning for any icon that isn't a built-in name. Orca draws a single \`<path>\`: for an icon made of several \`<path>\` elements or other shapes (\`<circle>\`, \`<rect>\`, \`<line>\`), convert each shape to path commands and join every \`d\` into one \`path\`. Example: \`{ "path": "M4 4h16v16H4z", "mode": "stroke" }\`.`,
+        `Icon shown in the right-sidebar activity bar. Defaults to \`puzzle\`. One of three forms. A built-in name. Or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_PATH_ICON_SINCE}\`) an object with inline SVG path data that Orca draws in the theme color: \`path\` (required; up to ${PLUGIN_PANEL_PATH_ICON_MAX_LENGTH} characters of SVG path data starting with \`M\`, separated only by spaces, tabs, line breaks and commas), \`viewBox\` (\`"0 0 W H"\`, W and H from 1 to 1024; default \`"${PLUGIN_PANEL_PATH_ICON_DEFAULT_VIEW_BOX}"\`) and \`mode\` (\`stroke\`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above ${PLUGIN_PANEL_PATH_ICON_STROKE_VIEW_BOX_MAX}; \`fill\` fills the shape). Orca draws a single \`<path>\`: for an icon made of several \`<path>\` elements or other shapes (\`<circle>\`, \`<rect>\`, \`<line>\`), convert each shape to path commands and join every \`d\` into one \`path\`. Or (manifest format 2, needs \`engines.orca\` \`>=${PLUGIN_PANEL_IMAGE_ICON_SINCE}\`) an object with one key, \`image\`: a file in the plugin that Orca draws in its own colors, in the same box as a built-in icon and dimmed like one while the panel isn't selected. ${PLUGIN_ICON_RULE_TEXT} It may be the plugin \`icon\` file. Leave a transparent margin of about 1/12 to match the built-in icons, and use a mark that reads on light and dark sidebars. Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path or image icon, or a string ending in \`.svg\`, shows \`puzzle\` with a warning; an image file that is missing or breaks the image rules fails validation and install, like other plugin images; any other value (a misspelled name, \`null\`, an array, a number or a boolean) is a manifest error. Format 1 shows \`puzzle\` with a warning for any icon that isn't a built-in name. Examples: \`{ "path": "M4 4h16v16H4z", "mode": "stroke" }\`, \`{ "image": "assets/panel.png" }\`.`,
 
         PLUGIN_SCHEMA_SINCE_V1,
         ['database']

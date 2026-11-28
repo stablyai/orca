@@ -21,8 +21,9 @@ export function pluginShaImageUrl(sha256: string): string {
 }
 
 /** `slot` is `icon`, `cover`, `screenshot-<index>`, a contribution's icon: `editor-<index>`
- *  (custom editors) or `new-file-<index>` (new files), an app theme's background: `theme-<index>`
- *  or its video `theme-<index>-video`, or a font file: `font-<family index>-<face index>`. */
+ *  (custom editors), `new-file-<index>` (new files) or `panel-<index>` (panels), an app theme's
+ *  background: `theme-<index>` or its video `theme-<index>-video`, or a font file:
+ *  `font-<family index>-<face index>`. */
 export function pluginInstalledImageUrl(
   pluginKey: string,
   contentHash: string,
@@ -53,13 +54,24 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
     contentHash &&
     slot &&
     /^(?:[0-9a-f]{64}|[0-9a-f]{32}|dev)$/.test(contentHash) &&
-    /^(?:icon|cover|(?:screenshot|editor|new-file)-\d{1,2}|theme-(?:0|[1-9]\d{0,2})(?:-video)?|font-\d-\d)$/.test(
+    /^(?:icon|cover|(?:screenshot|editor|new-file|panel)-\d{1,2}|theme-(?:0|[1-9]\d{0,2})(?:-video)?|font-\d-\d)$/.test(
       slot
     )
   ) {
-    return { kind: 'installed', pluginKey: decodeURIComponent(key), contentHash, slot }
+    const pluginKey = decodedPluginKey(key)
+    return pluginKey ? { kind: 'installed', pluginKey, contentHash, slot } : null
   }
   return null
+}
+
+/** Why null on a bad escape: the renderer parses URLs a paired host sends, and `%` alone would
+ *  throw while it builds the activity bar instead of falling back to `puzzle`. */
+function decodedPluginKey(key: string): string | null {
+  try {
+    return decodeURIComponent(key)
+  } catch {
+    return null
+  }
 }
 
 /** Only the images main serves over the plugin image scheme. Why: entries can come from a paired

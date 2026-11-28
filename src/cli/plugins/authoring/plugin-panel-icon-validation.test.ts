@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -8,7 +8,11 @@ import {
   isInvalidDiscoveredPlugin
 } from '../../../main/plugins/discovery/plugin-discovery'
 import { pluginManifestWarnings } from '../../../shared/plugins/installation/plugin-file-validation'
-import { PLUGIN_PANEL_PATH_ICON_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
+import {
+  PLUGIN_PANEL_IMAGE_ICON_SINCE,
+  PLUGIN_PANEL_PATH_ICON_SINCE
+} from '../../../shared/plugins/manifest/plugin-schema-field-docs'
+import { pngHeader } from '../../../main/runtime/sidebar-inputs/repo-icons/testing/repo-icon-image-fixture'
 import { createPluginFromTemplate } from './plugin-create'
 import { validatePluginTarget } from './plugin-folder-validation'
 
@@ -191,6 +195,50 @@ it(
   60_000
 )
 
+it(
+  'checks a panel image icon like other plugin images, at its own release',
+  async () => {
+    const image = { image: 'assets/panel.png' }
+    const imageFloor = { engines: { orca: `>=${PLUGIN_PANEL_IMAGE_ICON_SINCE}` } }
+    await mkdir(join(dir, 'assets'))
+    await writeFile(join(dir, 'assets/panel.png'), pngHeader(128, 128))
+    await writeManifest(image, imageFloor)
+    const report = await validatePluginTarget(dir)
+    expect(report.errors).toEqual([])
+    expect(report.warnings).toBeUndefined()
+    expect(await discoveredIcon()).toEqual(image)
+
+    // Why errors, not puzzle: like editor icons, a bad file is a broken plugin to fix.
+    await writeFile(join(dir, 'assets/panel.png'), pngHeader(64, 64))
+    expect((await validatePluginTarget(dir)).errors.join('\n')).toContain('assets/panel.png')
+    await rm(join(dir, 'assets/panel.png'))
+    expect((await validatePluginTarget(dir)).errors.join('\n')).toContain('assets/panel.png')
+    await writeFile(join(dir, 'assets/panel.png'), pngHeader(128, 128))
+
+    for (const [icon, reason] of [
+      [{ image: 5 }, 'icon.image'],
+      [{ image: '../panel.png' }, 'icon.image'],
+      [{ ...image, mode: 'fill' }, 'unknown key "mode"']
+    ] as const) {
+      await writeManifest(icon, imageFloor)
+      const dropped = await validatePluginTarget(dir)
+      expect(dropped.valid, JSON.stringify(icon)).toBe(true)
+      expect(dropped.warnings, JSON.stringify(icon)).toEqual([expect.stringContaining(reason)])
+      expect(await discoveredIcon()).toBeUndefined()
+    }
+
+    // Why dropped icons too: the author means an image, so the floor must not hide behind a typo.
+    for (const icon of [image, { image: 5 }]) {
+      await writeManifest(icon, { engines: { orca: `>=${PLUGIN_PANEL_PATH_ICON_SINCE}` } })
+      expect((await validatePluginTarget(dir)).errors.join('\n'), JSON.stringify(icon)).toContain(
+        `must be at least >=${PLUGIN_PANEL_IMAGE_ICON_SINCE}, because contributes.panels[0].icon needs Orca ${PLUGIN_PANEL_IMAGE_ICON_SINCE}`
+      )
+    }
+  },
+  // Each case writes a plugin and runs full validation and discovery, slow on a loaded runner.
+  60_000
+)
+
 it('reports icon warnings through validate:plugin', async () => {
   await writeManifest({ path: 'M0 0L1' })
   const raw = JSON.parse(await readFile(join(dir, 'orca-plugin.json'), 'utf8'))
@@ -209,6 +257,7 @@ it(
   async () => {
     for (const [icon, reason] of [
       [{ path: 'M0 0' }, 'path icons require manifest format 2'],
+      [{ image: 'x.png' }, 'image icons require manifest format 2'],
       ['x.svg', 'file icons are not supported'],
       ['databse', "isn't a built-in icon name"]
     ] as const) {

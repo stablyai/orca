@@ -79,7 +79,12 @@ export function resolvePluginPanelPathIcon(value: unknown): ResolvedPluginPanelP
 
 /** Why an icon is unusable, or null when it is a valid path icon. */
 export function pluginPanelPathIconIssue(value: unknown): string | null {
-  const parsed = pluginPanelPathIconSchema.safeParse(value)
+  return pluginPanelObjectIconIssue(pluginPanelPathIconSchema, value)
+}
+
+/** Why `value` fails an object icon schema, on one line, or null when it fits. */
+export function pluginPanelObjectIconIssue(schema: z.ZodType, value: unknown): string | null {
+  const parsed = schema.safeParse(value)
   if (parsed.success) {
     return null
   }

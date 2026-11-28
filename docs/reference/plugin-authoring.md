@@ -663,7 +663,8 @@ allowed to do and its content hash.
 This runs the manifest checks Orca runs, strictly: unknown keys, limits, contributions beyond the
 execution profile, an `engines.orca` too low for the fields used, and that every file the
 manifest names (icon, panel and editor entries, themes, syntaxes, translations, templates)
-exists inside the plugin and fits its size limit. On a catalog it also
+exists inside the plugin and fits its size limit. Images, including a panel's `{ "image" }` icon,
+must also meet their format, size and shape rules. On a catalog it also
 checks that listed images exist and fit. It warns when the manifest still declares the deprecated
 `publisher`, and, in a Git repository, when that value is not the owner of the `origin` remote.
 Warnings do not fail the check. Run it in CI for the plugin and catalog repositories.

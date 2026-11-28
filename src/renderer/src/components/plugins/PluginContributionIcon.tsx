@@ -8,11 +8,14 @@ import { parsePluginImageUrl } from '../../../../shared/plugins/images/plugin-im
 export function PluginContributionIcon({
   url,
   fallback,
-  className
+  className,
+  size
 }: {
   url: string | undefined
   fallback: LucideIcon | React.ReactElement
   className: string
+  /** Box side in CSS pixels, for callers that size icons by a number like Lucide's `size`. */
+  size?: number
 }): React.JSX.Element {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   if (!url || failedUrl === url || !parsePluginImageUrl(url)) {
@@ -28,6 +31,10 @@ export function PluginContributionIcon({
       draggable={false}
       decoding="async"
       className={cn('object-contain', className)}
+      // Why a style too: preflight's `height: auto` would override the height attribute.
+      {...(size === undefined
+        ? {}
+        : { width: size, height: size, style: { width: size, height: size } })}
       onError={() => setFailedUrl(url)}
     />
   )
