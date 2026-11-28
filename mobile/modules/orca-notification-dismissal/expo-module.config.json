@@ -1,7 +1,10 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["OrcaNotificationDismissalModule"],
     "appDelegateSubscribers": ["OrcaNotificationDismissalSubscriber"]
+  },
+  "android": {
+    "modules": ["expo.modules.orcanotificationdismissal.OrcaNotificationReplyPresentationModule"]
   }
 }

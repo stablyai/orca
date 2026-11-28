@@ -10,6 +10,7 @@ import { readNativeNotificationData } from '../payload-identity/native-notificat
 import { loadHosts } from '../../host-catalog/host-store'
 import { sendNotificationReply } from './notification-reply-delivery'
 import { completeNativeReply } from './notification-reply-native'
+import { showAndroidReplySent } from './android-reply-presentation'
 import { translate } from '../../i18n/mobile-i18n'
 import { loadMobileNativeChatDrafts } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 import {
@@ -134,6 +135,7 @@ async function deliver(
     return true
   }
   await AsyncStorage.setItem(key, JSON.stringify({ state: 'sent', at: Date.now() }))
+  await showAndroidReplySent(response).catch(() => {})
   await Notifications.dismissNotificationAsync(response.notification.request.identifier).catch(
     () => {}
   )

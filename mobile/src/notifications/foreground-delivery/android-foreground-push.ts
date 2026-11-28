@@ -5,7 +5,8 @@ import { readOrcaPushPayload } from '../payload-identity/push-payload'
 
 export async function presentForegroundPush(
   identifier: string,
-  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data' | 'sound'>,
+  content: Pick<Notifications.NotificationContent, 'title' | 'body' | 'data' | 'sound'> &
+    Partial<Pick<Notifications.NotificationContent, 'categoryIdentifier'>>,
   prepare: () => boolean | Promise<boolean> = () => true,
   isCurrent: () => boolean = () => true
 ): Promise<void> {
@@ -24,6 +25,7 @@ export async function presentForegroundPush(
       title: content.title,
       body: content.body,
       data: content.data,
+      categoryIdentifier: content.categoryIdentifier ?? undefined,
       sound: content.sound === 'default' ? 'default' : false
     },
     trigger:
