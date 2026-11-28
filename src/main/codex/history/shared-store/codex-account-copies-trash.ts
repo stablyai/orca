@@ -22,6 +22,25 @@ import {
 // Sync file calls on purpose: this runs on the copies cleanup's own worker thread.
 
 /**
+ * The copy's full key just after its rename, only if nothing but the rename touched it: any doubt
+ * (a write landed, or it can't be read) leaves no key, and the recheck puts the copy back.
+ */
+function keyAfterMove(target: string, before: BigIntStats): string | undefined {
+  try {
+    const moved = lstatOrNull(target)
+    return moved?.isFile() &&
+      moved.dev === before.dev &&
+      moved.ino === before.ino &&
+      moved.size === before.size &&
+      moved.mtimeNs === before.mtimeNs
+      ? fileKey(moved)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Moves each copy the open check just cleared into the home's trash, while Codex's lock
  * coordination is held in `lockFolders` (by the caller), only when no Codex holds the thread and
  * both files are exactly as their comparison saw them. A move loses no bytes, so one that ends
@@ -108,10 +127,7 @@ export function moveCheckedCopiesToTrash(
       renameSync(copy.copy, target)
       tally.trashed += 1
       tally.bytesTrashed += Number(stats.size)
-      const moved = lstatOrNull(target)
-      if (moved) {
-        entry.movedKey = fileKey(moved)
-      }
+      entry.movedKey = keyAfterMove(target, stats)
     } catch (error) {
       // Windows: a handle opened without delete sharing, which a writer's could be.
       tally[busyOnWindows(error) ? 'open' : 'error'] += 1

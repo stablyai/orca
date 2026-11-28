@@ -82,6 +82,8 @@ export function compareWalkPaths(a: string[], b: string[]): number {
 }
 
 export type WalkedCopy = { root: CopyRoot; copy: string; segments: string[] }
+/** Set when the deadline stopped the walk: the first folder it didn't list (home-relative). */
+export type WalkStop = { at?: string }
 
 /**
  * Rollouts under `folder` in walk order, lazily; with `after`, only those past it, skipping whole
@@ -93,10 +95,13 @@ function* sortedRolloutFiles(
   segments: string[],
   after: string[] | null,
   listed: Map<string, Dirent[]>,
-  deadline: number
+  deadline: number,
+  stop: WalkStop
 ): Generator<WalkedCopy> {
   // Checked before each listing too: a tree of folders with no rollouts mustn't outrun it.
-  if (Date.now() > deadline) {
+  // Everything before this folder was walked, so the next launch resumes inside it.
+  if (stop.at !== undefined || Date.now() > deadline) {
+    stop.at ??= segments.join('/')
     return
   }
   let entries = listed.get(folder)
@@ -125,7 +130,7 @@ function* sortedRolloutFiles(
     }
     const path = join(folder, entry.name)
     if (entry.isDirectory()) {
-      yield* sortedRolloutFiles(root, path, next, from, listed, deadline)
+      yield* sortedRolloutFiles(root, path, next, from, listed, deadline, stop)
     } else if (entry.isFile() && ROLLOUT_FILE.test(entry.name)) {
       yield { root, copy: path, segments: next }
     }
@@ -140,7 +145,8 @@ export function* walkCopies(
   accountHome: string,
   storeHome: string,
   after: string | undefined,
-  deadline = Infinity
+  deadline = Infinity,
+  stop: WalkStop = {}
 ): Generator<WalkedCopy> {
   const cursor = after ? after.split('/') : null
   const listed = new Map<string, Dirent[]>()
@@ -156,7 +162,8 @@ export function* walkCopies(
         segments,
         order === 0 ? cursor : null,
         listed,
-        deadline
+        deadline,
+        stop
       )
     }
   }
@@ -164,7 +171,15 @@ export function* walkCopies(
     return
   }
   for (const { root, segments } of roots) {
-    for (const item of sortedRolloutFiles(root, root.root, segments, null, listed, deadline)) {
+    for (const item of sortedRolloutFiles(
+      root,
+      root.root,
+      segments,
+      null,
+      listed,
+      deadline,
+      stop
+    )) {
       if (compareWalkPaths(item.segments, cursor) > 0) {
         return
       }

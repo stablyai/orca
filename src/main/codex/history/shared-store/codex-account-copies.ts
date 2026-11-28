@@ -1,7 +1,7 @@
 import type { BigIntStats } from 'node:fs'
 import { basename, dirname, relative } from 'node:path'
 import { COMPRESSED_ROLLOUT_SUFFIX } from '../rollouts/codex-rollout-compressed-twin'
-import { findOriginal, sharedSince, walkCopies } from './codex-account-copy-roots'
+import { findOriginal, sharedSince, walkCopies, type WalkStop } from './codex-account-copy-roots'
 import { originalHoldsCopy } from './codex-account-copy-content'
 import {
   readCursor,
@@ -29,7 +29,8 @@ export const homeName = (accountHome: string, path: string): string =>
   relative(accountHome, path).split(/[\\/]/).join('/')
 // What one launch's move phase can get through; the rest is verified again next launch.
 const MAX_VERIFIED_PER_HOME = 5_000
-// What the first oversized pair may read and take each launch, even past the launch's budget.
+// What the first oversized pair may read (both files together) and take each launch, even past
+// the launch's budget, unless the launch already has its 5,000.
 const OVERSIZED_SLICE_BYTES = 256 * 1024 ** 2
 const OVERSIZED_SLICE_MS = 20_000
 
@@ -131,11 +132,13 @@ export async function verifyCodexAccountCopies(args: {
   // Each launch starts after the copy the last one stopped at, so a walk the deadline cuts short
   // still reaches every copy over a few launches; folders before it are skipped unread.
   let lastVisited: string | undefined
+  const walkStop: WalkStop = {}
   for (const { root, copy, segments } of walkCopies(
     args.accountHome,
     args.storeHome,
     cursor.walkAfter,
-    args.budget.deadline
+    args.budget.deadline,
+    walkStop
   )) {
     const name = segments.join('/')
     if (Date.now() > args.budget.deadline || verified.length >= MAX_VERIFIED_PER_HOME) {
@@ -221,14 +224,19 @@ export async function verifyCodexAccountCopies(args: {
       tally.error += 1
     }
   }
-  // A walk the deadline or cap cut short stopped at a directory, not a copy: still unfinished.
-  outOfTime ||= Date.now() > args.budget.deadline
+  // A walk the deadline stopped before a folder is unfinished too: it resumes inside that folder.
+  if (walkStop.at !== undefined) {
+    outOfTime = true
+    tally.deferred += 1
+  }
+  // With 5,000 verified this launch has no room for more, oversized or not.
+  const full = verified.length >= MAX_VERIFIED_PER_HOME
   for (const [index, candidate] of oversized.entries()) {
     // Whatever the rest left; progress is saved, so each launch gets further.
     let allowance = Math.floor((args.budget.maxBytes - bytesRead - 1) / 2)
     let deadline = args.budget.deadline
-    if (outOfTime || allowance <= 0 || Date.now() > deadline) {
-      if (index > 0) {
+    if (full || outOfTime || allowance <= 0 || Date.now() > deadline) {
+      if (index > 0 || full) {
         tally.deferred += 1
         if (progress[candidate.name]?.key === candidate.key) {
           nextProgress[candidate.name] = progress[candidate.name]
@@ -236,7 +244,7 @@ export async function verifyCodexAccountCopies(args: {
         continue
       }
       // The first still gets a slice of its own, so oversized pairs progress every launch.
-      allowance = OVERSIZED_SLICE_BYTES
+      allowance = Math.floor((OVERSIZED_SLICE_BYTES - 1) / 2)
       deadline = Date.now() + OVERSIZED_SLICE_MS
     }
     bytesRead += allowance * 2 + 1
@@ -274,6 +282,7 @@ export async function verifyCodexAccountCopies(args: {
   // Only what can't become deletable in this streak: a differing, open or orphaned copy could.
   const settled =
     stamp !== null &&
+    !outOfTime &&
     verified.length === 0 &&
     tally.deferred +
       tally.changed +
@@ -295,7 +304,7 @@ export async function verifyCodexAccountCopies(args: {
   )
   writeCursor(args.accountHome, {
     ...cursor,
-    walkAfter: outOfTime ? (lastVisited ?? cursor.walkAfter) : undefined,
+    walkAfter: outOfTime ? (walkStop.at ?? lastVisited ?? cursor.walkAfter) : undefined,
     retryAfter: turn.next
   })
   return { verified, tally, bytesRead }

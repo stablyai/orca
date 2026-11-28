@@ -103,7 +103,7 @@ export function recheckTrashedCopies(args: {
         changed = true
         continue
       }
-      const before = JSON.stringify([entry.progress, entry.passed])
+      const { progress: progressBefore, passed: passedBefore } = entry
       let reason: keyof CopiesTally | null
       try {
         reason = recheckOne(args, entry, list.name, path, stats, {
@@ -114,7 +114,10 @@ export function recheckTrashedCopies(args: {
       } catch {
         reason = 'error'
       }
-      changed ||= JSON.stringify([entry.progress, entry.passed]) !== before
+      changed ||=
+        entry.passed !== passedBefore ||
+        entry.progress?.key !== progressBefore?.key ||
+        entry.progress?.matched !== progressBefore?.matched
       if (reason === null) {
         // Listed until its delete.
         next.push(entry)
