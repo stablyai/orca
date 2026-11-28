@@ -9,7 +9,7 @@ import {
   defineRpcOperation
 } from '../../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../../transport/rpc/rpc-operation-result-reader'
-import type { MobileNativeChatController } from '../../mobile-native-chat-controller-contract'
+import type { useMobileNativeChatMessageSend } from '../../transcript/sending/use-mobile-native-chat-message-send'
 import { worktreeStatusWrite } from '../../../../host-screen/workspace-actions/workspace-row-menu-operations'
 
 // Undefined: the host did not say, so the status is left alone.
@@ -98,31 +98,26 @@ export function reopenDoneWorkspaceAfterChatSend(
     .finally(() => pending.delete(worktreeId))
 }
 
-type ChatSends = Pick<
-  MobileNativeChatController,
-  'handleNativeChatSend' | 'handleNativeChatSendWithOutcome'
->
+type AcceptTerminalSend = Parameters<typeof useMobileNativeChatMessageSend>[0]['acceptSend']
 
-/** The chat's Send, offline queue and attachments all go through these two. */
+/** Chat messages only, as on desktop: a terminal chat's accepted chat send (picked skills included) and
+ *  a structured chat's accepted message; slash commands and goal changes never reopen. */
 export function useReopenDoneWorkspaceOnChatSend(
   client: RpcClient | null,
   worktreeId: string,
-  sendWithOutcome: ChatSends['handleNativeChatSendWithOutcome']
-): ChatSends {
-  const handleNativeChatSendWithOutcome = useCallback<ChatSends['handleNativeChatSendWithOutcome']>(
-    async (...args) => {
-      const outcome = await sendWithOutcome(...args)
-      if (outcome === 'accepted') {
-        reopenDoneWorkspaceAfterChatSend(client, worktreeId)
-      }
-      return outcome
+  acceptSend: AcceptTerminalSend
+): { acceptTerminalSend: AcceptTerminalSend; reopenAfterMessage: () => void } {
+  const reopenAfterMessage = useCallback(
+    () => reopenDoneWorkspaceAfterChatSend(client, worktreeId),
+    [client, worktreeId]
+  )
+  // The terminal send calls this only for an accepted send its classification reads as chat.
+  const acceptTerminalSend = useCallback<AcceptTerminalSend>(
+    (...args) => {
+      acceptSend(...args)
+      reopenAfterMessage()
     },
-    [client, sendWithOutcome, worktreeId]
+    [acceptSend, reopenAfterMessage]
   )
-  // Same answer as both chats' own boolean Send; reopening follows the outcome, so an unconfirmed send does not.
-  const handleNativeChatSend = useCallback<ChatSends['handleNativeChatSend']>(
-    async (text, images) => (await handleNativeChatSendWithOutcome(text, images)) !== 'rejected',
-    [handleNativeChatSendWithOutcome]
-  )
-  return { handleNativeChatSend, handleNativeChatSendWithOutcome }
+  return { acceptTerminalSend, reopenAfterMessage }
 }

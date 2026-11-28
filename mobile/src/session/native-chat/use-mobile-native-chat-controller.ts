@@ -189,6 +189,7 @@ export function useMobileNativeChatController(args: {
 
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
+  const reopenOnSend = useReopenDoneWorkspaceOnChatSend(client, worktreeId, acceptSend)
   const terminalSend = useMobileNativeChatMessageSend({
     client,
     enabled: inputSendable && !activeChatStructured,
@@ -200,7 +201,7 @@ export function useMobileNativeChatController(args: {
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
-    acceptSend,
+    acceptSend: reopenOnSend.acceptTerminalSend,
     holdUnconfirmedSend,
     onSendError
   })
@@ -213,14 +214,9 @@ export function useMobileNativeChatController(args: {
     clearDraftForSend,
     restoreRejectedDraft,
     holdUnconfirmed: structuredNativeChat.holdUnconfirmed,
-    onSendError
+    onSendError,
+    onMessageAccepted: reopenOnSend.reopenAfterMessage
   })
-
-  const chatSends = useReopenDoneWorkspaceOnChatSend(
-    client,
-    worktreeId,
-    (activeChatStructured ? structuredSend : terminalSend).sendWithOutcome
-  )
 
   const { nativeChatSessionOptions, recordCommand: recordNativeChatSessionOptionCommand } =
     useMobileNativeChatSessionOptionController({
@@ -306,7 +302,10 @@ export function useMobileNativeChatController(args: {
     nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
-    ...chatSends,
+    handleNativeChatSend: activeChatStructured ? structuredSend.send : terminalSend.send,
+    handleNativeChatSendWithOutcome: activeChatStructured
+      ? structuredSend.sendWithOutcome
+      : terminalSend.sendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     ...nativeChatLane.controllerFields,
