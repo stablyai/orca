@@ -70,22 +70,30 @@ function isRunnableFile(candidate) {
   }
 }
 
-// A login shell can put this launcher ahead of the session's own CLI on PATH; run the one the session
-// names. ORCA_CLI_HANDOFF marks the hop so the named CLI never hands back. Windows shells keep the
-// session's directory first, and a .cmd target would need cmd.exe.
+// A login shell can put this launcher ahead of the session's own CLI of the same name on PATH; run
+// the one the session names. Runs by path or with a dev profile/entry stay here: handing those to a
+// release session's CLI writes to the real app. ORCA_CLI_HANDOFF marks the hop so the named CLI
+// never hands back. Windows shells keep the session's directory first, and a .cmd target would
+// need cmd.exe.
 function handOffToSessionCli() {
   const sessionCli = process.env.ORCA_CLI_COMMAND
+  const invokedAs = path.basename(process.argv[1] ?? '')
   const handOff =
     process.platform !== 'win32' &&
     sessionCli &&
     path.isAbsolute(sessionCli) &&
     process.env.ORCA_CLI_HANDOFF !== sessionCli &&
+    invokedAs === path.basename(sessionCli) &&
+    !process.env.ORCA_DEV_USER_DATA_PATH &&
+    !process.env.ORCA_DEV_PROFILE &&
+    !process.env.ORCA_DEV_CLI_ENTRY_PATH &&
     isRunnableFile(sessionCli) &&
     realpathSync(sessionCli) !== scriptPath
   delete process.env.ORCA_CLI_HANDOFF
   if (!handOff) {
     return
   }
+  console.error(`${invokedAs}: running this session's CLI, ${sessionCli}`)
   const result = spawnSync(sessionCli, process.argv.slice(2), {
     stdio: 'inherit',
     env: { ...process.env, ORCA_CLI_HANDOFF: sessionCli }
