@@ -242,7 +242,9 @@ function McpServerRow({
           numberOfLines={1}
         >
           {copying
-            ? t('chat.mcp.status.openInBrowser', 'Open in browser')
+            ? signingIn.finish === 'external'
+              ? '' // Three buttons leave no room; the line under the row says what to do.
+              : t('chat.mcp.status.openInBrowser', 'Open in browser')
             : signingIn
               ? signingIn.finish === 'external'
                 ? t('chat.mcp.status.finishOnPage', 'Finish on the page that opened')
@@ -303,6 +305,14 @@ function McpServerRow({
           </>
         )}
       </View>
+      {copying && signingIn.finish === 'external' ? (
+        <Text style={styles.rowHint}>
+          {t(
+            'chat.mcp.finishInBrowser',
+            'Open the copied link in your browser, finish there, then tap Done.'
+          )}
+        </Text>
+      ) : null}
       {linkCopy.copyFailed ? (
         <Text style={styles.rowFailure} accessibilityLiveRegion="polite">
           {t('chat.mcp.copyFailed', 'Couldn’t copy the link.')}
@@ -311,10 +321,15 @@ function McpServerRow({
       {refusal ? (
         <Text style={styles.rowFailure} accessibilityLiveRegion="polite">
           {refusal.kind === 'signInUnfinished'
-            ? t(
-                'chat.mcp.signInUnfinished',
-                "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done."
-              )
+            ? copying
+              ? t(
+                  'chat.mcp.signInUnfinishedInBrowser',
+                  "Sign-in isn't finished yet. Finish it in your browser, then tap Done."
+                )
+              : t(
+                  'chat.mcp.signInUnfinished',
+                  "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done."
+                )
             : refusal.kind === 'stillFailing'
               ? t('chat.mcp.stillFailing', 'Still failing after reconnecting.')
               : (refusal.message ?? t('chat.mcp.actionFailed', "Couldn't do that. Try again."))}

@@ -3933,6 +3933,8 @@
       "openAgain": "Open again",
       "copyLink": "Copy link",
       "copyFailed": "Couldn’t copy the link.",
+      "finishInBrowser": "Open the copied link in your browser, finish there, then tap Done.",
+      "signInUnfinishedInBrowser": "Sign-in isn't finished yet. Finish it in your browser, then tap Done.",
       "pastePlaceholder": "Paste address",
       "pasteLabel": "Sign-in page address",
       "finish": "Finish",
