@@ -9,6 +9,10 @@ export function deferredAnswerRetryMs(attempt: number, failure?: ConnectorFailur
   return Math.max(delay, Math.min(failure?.retryAfterMs ?? 0, CONNECTOR_MAX_RETRY_AFTER_MS))
 }
 
+export function parkPreparedAnswer(failure?: ConnectorFailure): boolean {
+  return failure?.status === 400 || failure?.status === 413
+}
+
 /** Random doubling from 1 s to 30 s (or maxMs); a cloud's Retry-After wins when longer, up to 10 minutes. */
 export function connectorRetryDelayMs(
   failures: number,
@@ -133,8 +137,7 @@ export class ConnectorOutbox<T> {
     const ready: T[] = []
     const deferred: T[] = []
     for (const item of this.items) {
-      const target =
-        this.deferredItems.has(item) || this.parkedItems.has(item) ? deferred : ready
+      const target = this.deferredItems.has(item) || this.parkedItems.has(item) ? deferred : ready
       target.push(item)
     }
     this.items = [...ready, ...deferred]
@@ -178,10 +181,13 @@ export class ConnectorOutbox<T> {
       waiting.add(held.answer)
       this.notify()
       if (!held.untilChange && !this.deferredRetry) {
-        this.deferredRetry = setTimeout(() => {
-          this.retryDeferred()
-          this.options.deferredReady?.()
-        }, deferredAnswerRetryMs(this.deferredRetries++, failure))
+        this.deferredRetry = setTimeout(
+          () => {
+            this.retryDeferred()
+            this.options.deferredReady?.()
+          },
+          deferredAnswerRetryMs(this.deferredRetries++, failure)
+        )
         this.deferredRetry.unref?.()
       }
       return null

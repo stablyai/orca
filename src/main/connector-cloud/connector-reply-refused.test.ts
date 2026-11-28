@@ -364,9 +364,12 @@ it.each([
     h.poll([])
     await settle(12_000)
     expect(rows.has('d1')).toBe(true)
-    expect(h.fake.events).toContainEqual(
-      expect.objectContaining({ turnId: preparedEnd.turnId, stateOnly: true })
+    const stateOnly = h.fake.events.find(
+      (item) => isRecord(item) && item.turnId === preparedEnd.turnId && item.stateOnly
     )
+    expect(stateOnly).toBeDefined()
+    expect(stateOnly).not.toHaveProperty('presentation')
+    expect(stateOnly).not.toHaveProperty('lastAssistantMessage')
     const work = () => ({
       reads,
       direct: direct.length,

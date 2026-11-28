@@ -8,6 +8,7 @@ import {
 import type { ConversationWatchListener } from '../external-conversations/external-conversation-events'
 import type { ConnectorFailure } from './connector-cloud-request'
 import type { ConnectorTurnEvents } from './connector-turn-events'
+import { answerFor, takesPreparedEvent } from './connector-event-wire'
 
 /** A hello's event watch and protocol fence; rejected audience batches are rebuilt, never downgraded. */
 export class ConnectorEventRequests {
@@ -56,18 +57,20 @@ export class ConnectorEventRequests {
   }
 
   async post(
-    events: ConnectorEvent[],
+    queued: ConnectorEvent[],
     helloRev: number,
     seq: number
   ): Promise<ConnectorFailure | null> {
-    const v = this.deps.events.requestVersion(helloRev)
-    const presentedTurnEnd = events.some(
-      (event) => event.kind === 'turn-ended' && event.presentation
-    )
-    const presentedReply =
-      !presentedTurnEnd && events.some((event) => event.kind === 'reply' && event.presentation)
-    const presented = presentedTurnEnd || presentedReply
-    if (presented && !this.deps.events.takesPresentedEvents(presentedTurnEnd)) {
+    const { features, presentationGeneration } = this.deps.events
+    // Refuse an unsupported prepared body before projection can strip it and acknowledge the debt.
+    if (
+      queued.some(
+        (event) =>
+          (event.kind === 'turn-ended' || event.kind === 'reply') &&
+          event.presentation &&
+          !takesPreparedEvent(features, event.kind === 'turn-ended')
+      )
+    ) {
       return {
         ok: false,
         status: 400,
@@ -75,6 +78,14 @@ export class ConnectorEventRequests {
         retryAfterMs: null
       }
     }
+    const events = queued.map((event) => answerFor(event, features))
+    const v = this.deps.events.requestVersion(helloRev)
+    const presentedTurnEnd = events.some(
+      (event) => event.kind === 'turn-ended' && event.presentation
+    )
+    const presentedReply =
+      !presentedTurnEnd && events.some((event) => event.kind === 'reply' && event.presentation)
+    const presented = presentedTurnEnd || presentedReply
     const body = {
       v: presentedTurnEnd
         ? SLACK_PRESENTATION_TURN_END_VERSION
@@ -85,7 +96,6 @@ export class ConnectorEventRequests {
       seq,
       events
     }
-    const generation = this.deps.events.presentationGeneration
     let failure = await this.deps.post(body, helloRev, events, presented)
     if ((failure?.status === 400 || failure?.status === 413) && presented && events.length === 1) {
       const compatible = await this.deps.post(
@@ -101,9 +111,9 @@ export class ConnectorEventRequests {
     }
     if (failure?.status === 400) {
       // An older receiver rejects the version before it can apply any event.
-      if (presented && this.presentationRehelloGeneration !== generation) {
+      if (presented && this.presentationRehelloGeneration !== presentationGeneration) {
         if (this.rehello(helloRev, failure)) {
-          this.presentationRehelloGeneration = generation
+          this.presentationRehelloGeneration = presentationGeneration
         }
       } else if (
         !presented &&

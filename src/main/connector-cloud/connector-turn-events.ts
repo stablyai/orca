@@ -17,10 +17,7 @@ import {
   type ConnectorConversation,
   type ConnectorEvent
 } from '../../shared/connectors/connector-cloud-contract'
-import {
-  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
-  takesSlackAnswerPresentation
-} from '../../shared/connectors/slack-answer-presentation'
+import { takesSlackAnswerPresentation } from '../../shared/connectors/slack-answer-presentation'
 import type {
   ConversationEvent,
   ConversationSnapshot
@@ -34,7 +31,7 @@ import {
   type ConnectorSnapshotExpectation
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
-import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
+import { answerTextFor, toConnectorEvent } from './connector-event-wire'
 import { slackReplyBody } from './connector-slack-text'
 import { installedLeaveLines } from '../external-conversations/external-conversation-leave-lines'
 import type { ConnectorCallObserver } from './connector-transport'
@@ -208,11 +205,8 @@ export class ConnectorTurnEvents {
     this.replies.presentationTransportChanged()
   }
 
-  takesPresentedEvents(turnEnd: boolean): boolean {
-    return (
-      takesSlackAnswerPresentation(this.cloudFeatures) &&
-      (!turnEnd || this.cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE))
-    )
+  get features(): ReadonlySet<string> {
+    return this.cloudFeatures
   }
 
   /** A hello's stamped version never downgrades a retained audience batch. */
@@ -330,10 +324,7 @@ export class ConnectorTurnEvents {
   }
 
   next(helloRev: number): ConnectorOutboxHead<ConnectorEvent> | null {
-    const head = this.outbox.next(helloRev)
-    return (
-      head && { ...head, batch: head.batch.map((event) => answerFor(event, this.cloudFeatures)) }
-    )
+    return this.outbox.next(helloRev)
   }
 
   accepted(stamp: ConnectorStamp): void {

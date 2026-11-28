@@ -18,9 +18,18 @@ import { capAnswer, jsonBytes, unsupported } from './connector-snapshot'
 import { redactLocalPaths } from '../../shared/connectors/slack-local-paths'
 import { isSlackConversation } from './connector-slack-text'
 import {
+  CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE,
   SLACK_PRESENTATION_UNCONFIRMED,
-  slackAnswerText
+  slackAnswerText,
+  takesSlackAnswerPresentation
 } from '../../shared/connectors/slack-answer-presentation'
+
+export function takesPreparedEvent(cloudFeatures: ReadonlySet<string>, turnEnd: boolean): boolean {
+  return (
+    takesSlackAnswerPresentation(cloudFeatures) &&
+    (!turnEnd || cloudFeatures.has(CONNECTOR_SLACK_PRESENTATION_TURN_END_FEATURE))
+  )
+}
 
 /** Within the per-event cap. */
 function promptEvent(event: Extract<ConnectorEvent, { kind: 'prompt' }>): ConnectorEvent {
@@ -164,7 +173,7 @@ export function answerFor(
   if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
     if (event.presentation) {
       const text = slackAnswerText(event.presentation)
-      if (redactLocalPaths(text) === text) {
+      if (takesPreparedEvent(cloudFeatures, true) && redactLocalPaths(text) === text) {
         return { ...event, lastAssistantMessage: text }
       }
       const { presentation: _, ...plain } = event
@@ -186,6 +195,7 @@ export function answerFor(
     const prose = answerTextFor(said, cloudFeatures)
     if (
       event.presentation &&
+      takesPreparedEvent(cloudFeatures, false) &&
       isSlackConversation(event.conversation) &&
       said === slackAnswerText(event.presentation)
     ) {

@@ -10,6 +10,7 @@ import {
 } from '../../shared/connectors/slack-answer-presentation'
 import { jsonBytes } from './connector-snapshot'
 import type { ConnectorFailure } from './connector-cloud-request'
+import { parkPreparedAnswer } from './connector-outbox'
 
 const MAX_TURN_ENDS = 200
 // Live events past this are dropped oldest first; a fresh hello and snapshot then restate them.
@@ -42,10 +43,6 @@ export const isPreparedTurnEnd = (
 ): event is TurnEnded & {
   presentation: NonNullable<TurnEnded['presentation']>
 } => isTurnEnded(event) && event.presentation !== undefined
-
-export function parkPreparedAnswer(failure?: ConnectorFailure): boolean {
-  return failure?.status === 400 || failure?.status === 413
-}
 
 export function deferPreparedTurnEnd(event: ConnectorEvent, failure?: ConnectorFailure) {
   if (!isPreparedTurnEnd(event)) {
