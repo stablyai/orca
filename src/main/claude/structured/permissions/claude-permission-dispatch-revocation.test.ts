@@ -4,6 +4,7 @@ import { ClaudeControlRequestTimeoutError } from '../../sdk-transport/claude-age
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { applyClaudeMessageOptions } from '../launch/claude-structured-message-options'
 import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
+import { revokeClaudePermissionDispatch } from './claude-permission-dispatch-authority'
 import {
   finishPermissionCatchUp,
   openPermissionTestSession,
@@ -90,4 +91,25 @@ it('starts no Full access fallback from a root init that arrives after the child
 
   expect(writes).toEqual([])
   expect(rows).toEqual([])
+})
+
+it('cuts only the exact child: a later acquisition under the same chat keeps its writes', async () => {
+  const old = permissionTestSession('auto')
+  const next = permissionTestSession('auto')
+  next.session.acquisitionGeneration = 'next'
+  next.session.fence = 2
+  const sessions = new Map([['chat', old.session]])
+  const revokeChild = revokeClaudePermissionDispatch(sessions)
+  revokeChild('chat', 1, 'process')
+  expect(old.session.permissionDispatchRevoked).toBe(true)
+
+  sessions.set('chat', next.session)
+  // The slept or replaced child's cut, arriving late, names the old acquisition.
+  revokeChild('chat', 1, 'process')
+  await openPermissionTestSession(next.session, 'auto')
+  finishPermissionCatchUp(next.session)
+  next.session.reportedOptions.reportedPermissionMode = 'plan'
+  approvePlan(next.session)
+  await setImmediate()
+  expect(next.writes).toEqual(['auto'])
 })
