@@ -72,7 +72,10 @@ function queueClaudeRestarts(ptyIds: string[]): void {
 }
 
 /** Answers the open dialog. "Don't ask again" only turns restarts on, as native chat's resume prompt does. */
-export const answerClaudeAccountSwitchPrompt: AccountSwitchPromptAnswer = (answer, options = {}) => {
+export const answerClaudeAccountSwitchPrompt: AccountSwitchPromptAnswer = (
+  answer,
+  options = {}
+) => {
   const request = promptStore.get()
   if (!request) {
     return

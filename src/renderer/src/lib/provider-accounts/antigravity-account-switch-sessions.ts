@@ -17,7 +17,11 @@ import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-acc
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { antigravityAccountSwitchCopy } from './account-switch-copy'
-import { announceAccountRestart, announceHostAccountMove } from './account-switch-toasts'
+import {
+  announceAccountRestart,
+  announceHostAccountMove,
+  dismissHostAskToast
+} from './account-switch-toasts'
 import {
   createAccountSwitchPromptStore,
   currentPtyIds,
@@ -212,8 +216,12 @@ function moveUnheldTerminals(
     { timeoutMs: 30_000 }
   ).then(
     (move) =>
-      announceHostAccountMove(antigravityAccountSwitchCopy(), move ?? undefined, labels, () =>
-        answerHostAsk(local, change.accountId)
+      announceHostAccountMove(
+        antigravityAccountSwitchCopy(),
+        move ?? undefined,
+        labels,
+        () => answerHostAsk(local, change.accountId),
+        replaceHostAsk(local)
       ),
     (error: unknown) =>
       console.warn(
@@ -270,6 +278,16 @@ export function handleRunningAntigravityTerminalsAfterSelect(args: {
       previous: savedAccountLabel(args.previous, args.previous?.selectedAccountId ?? null),
       next: savedAccountLabel(next, accountId)
     },
-    () => answerHostAsk(owner, accountId, target)
+    () => answerHostAsk(owner, accountId, target),
+    replaceHostAsk(owner)
   )
+}
+
+/** One host Ask toast per host: each switch there replaces the last one's. */
+function replaceHostAsk(owner: RuntimeClientTarget): string {
+  const toastId = `antigravity-account-switch-host-ask:${
+    owner.kind === 'local' ? 'local' : `environment:${owner.environmentId}`
+  }`
+  dismissHostAskToast(toastId)
+  return toastId
 }
