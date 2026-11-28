@@ -5,6 +5,22 @@ import type { HomeBots } from '../home/bots/home-bot-rows'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { homeRailBotsSource } from './rail-bot-targets'
 
+function fakeClient(): RpcClient {
+  return {
+    sendRequest: async () => {
+      throw new Error('unused')
+    },
+    subscribe: () => () => {},
+    updateTerminalSubscriptionViewport: () => {},
+    getState: () => 'connected',
+    getReconnectAttempt: () => 0,
+    getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
+    notifyForeground: () => {},
+    close: () => {}
+  }
+}
+
 function fakeBot(id: string, name: string): PhoneBot {
   return {
     id,
@@ -42,8 +58,8 @@ function fakeBot(id: string, name: string): PhoneBot {
 
 describe('homeRailBotsSource', () => {
   it('combines enabled bots across paired computers and carries the Needs you count', () => {
-    const clientA = { id: 'a' } as unknown as RpcClient
-    const clientB = { id: 'b' } as unknown as RpcClient
+    const clientA = fakeClient()
+    const clientB = fakeClient()
     const bots: HomeBots = {
       rows: [],
       needsYou: 3,
