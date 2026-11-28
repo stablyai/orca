@@ -29555,14 +29555,13 @@
         "serverPr": "PR ainda não exibido para trabalho em servidor"
       },
       "menu": {
-        "waiting": "Aguardando…",
-        "cancel": "Cancelar",
-        "done": "Concluído"
+        "waiting": "Aguardando…"
       },
       "loading": "Carregando itens…",
       "row": {
-        "more": "Mais",
+        "cancel": "Cancelar",
         "done": "Concluído",
+        "more": "Mais",
         "select": "Selecionar {{title}}"
       },
       "snooze": {
