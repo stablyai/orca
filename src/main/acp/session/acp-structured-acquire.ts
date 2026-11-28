@@ -112,15 +112,7 @@ export async function acquireAcpStructuredSession(input: {
   }
   const fullAccess = launchPermission.permission === 'full-access'
   // The last wait before the synchronous spawn.
-  const spawning = await currentAcpLaunchAccount(launch, closedBeforeSpawn).catch(
-    (error: unknown) => {
-      // Nothing spawned (a sign-in step never relays), so this launch's caller names no one.
-      if (!relayed) {
-        sharedTools?.discard()
-      }
-      throw error
-    }
-  )
+  const spawning = await shared.beforeSpawn(currentAcpLaunchAccount(launch, closedBeforeSpawn))
   const connection = shared.connecting(connect)(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec),

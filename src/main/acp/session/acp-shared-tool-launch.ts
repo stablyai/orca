@@ -24,6 +24,8 @@ export function acpSharedToolLaunch<
   take: (reattached: boolean) => SharedToolProcessSession | null
   /** `create`, for the connection that owns the taken session; a failure before it exists drops it. */
   connecting: <A extends unknown[], C>(create: (...args: A) => C) => (...args: A) => C
+  /** A last wait before the spawn; its failure drops the taken session, as `connecting`'s does. */
+  beforeSpawn: <T>(wait: Promise<T>) => Promise<T>
 } {
   // Until the process exits, only its session's tools can name the chat.
   const launched = SharedToolProcessSession.forLaunch(launch.spec, launch.env, launch.version)
@@ -60,6 +62,11 @@ export function acpSharedToolLaunch<
       unowned = () => restored.discard()
       return restored
     },
+    beforeSpawn: (wait) =>
+      wait.catch((error: unknown) => {
+        unowned()
+        throw error
+      }),
     connecting:
       (create) =>
       (...args) => {
