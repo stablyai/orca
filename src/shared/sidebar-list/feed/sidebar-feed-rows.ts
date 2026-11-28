@@ -50,7 +50,7 @@ import { planSidebarRows } from '../sidebar-row-plan'
 import type { FeedLineagePolicy } from './sidebar-feed-lineage-parents'
 import type { WorkspaceSortBy as SortBy } from '../../workspace-view/workspace-row-sort'
 import {
-  selectVisibleSidebarWorktrees,
+  selectVisibleSidebarWorktreesMarkingHidden,
   withoutBotListedFolderWorkspaces,
   withoutBotListedWorktrees
 } from '../selection/visible-worktrees'
@@ -94,6 +94,7 @@ export type SidebarFeedRows = {
 
 export type SidebarFeedPlan = {
   visibleWorktrees: Worktree[]
+  filterHiddenIdentities: ReadonlySet<string>
   plan: ReturnType<typeof planSidebarRows>
   worktreeMap: Map<string, Worktree>
   lineageById: Record<string, WorktreeLineage>
@@ -144,36 +145,38 @@ export function planSidebarFeedRows(
   const pairedDeviceIdsByEnvironment = feedPairedDeviceIdsByEnvironment(domains)
   const hiddenProjects = indexHiddenProjects(repos, defaultHostId)
 
-  const visibleWorktrees = selectVisibleSidebarWorktrees({
-    rows: withoutBotListedWorktrees(allWorktrees, extras.botListedWorktreeIdentities),
-    ancestorByIdentity,
-    rankOf: (worktree) => rankByIdentity.get(getWorktreeHostIdentity(worktree)),
-    filters: view.filters,
-    facts: {
-      isArchived: (worktree) => worktree.isArchived,
-      ...hiddenProjectRowFacts(hiddenProjects),
-      isFolderWorkspace: () => false,
-      repoId: (worktree) => worktree.repoId,
-      hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
-      isOtherClient: (worktree) =>
-        isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
-      isDefaultBranch: (worktree) => factsOf(worktree)?.defaultBranch === true,
-      isAutomationCreated: (worktree) => factsOf(worktree)?.automationCreated === true,
-      isCliCreated: (worktree) => factsOf(worktree)?.cliCreated === true,
-      isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
-      isMainWorktree: (worktree) => worktree.isMainWorktree,
-      isSleeping: (worktree) => {
-        const identity = getWorktreeHostIdentity(worktree)
-        const activity = domains.activity.get(identity)
-        return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
-      }
-    },
-    worktreeLineageById: lineageById,
-    lineageParentIdentities: index.lineageParentIdentities,
-    filterRepoIds: view.filters.filterRepoIds,
-    preserveLineageParentOrder: view.sortBy === 'manual',
-    forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds
-  })
+  const { worktrees: visibleWorktrees, filterHiddenIdentities } =
+    selectVisibleSidebarWorktreesMarkingHidden({
+      rows: withoutBotListedWorktrees(allWorktrees, extras.botListedWorktreeIdentities),
+      ancestorByIdentity,
+      rankOf: (worktree) => rankByIdentity.get(getWorktreeHostIdentity(worktree)),
+      filters: view.filters,
+      facts: {
+        isArchived: (worktree) => worktree.isArchived,
+        ...hiddenProjectRowFacts(hiddenProjects),
+        isFolderWorkspace: () => false,
+        repoId: (worktree) => worktree.repoId,
+        hostId: (worktree) => feedWorktreeHostId(index, worktree, defaultHostId),
+        isOtherClient: (worktree) =>
+          isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIdsByEnvironment),
+        isDefaultBranch: (worktree) => factsOf(worktree)?.defaultBranch === true,
+        isAutomationCreated: (worktree) => factsOf(worktree)?.automationCreated === true,
+        isCliCreated: (worktree) => factsOf(worktree)?.cliCreated === true,
+        isDetachedHead: (worktree) => factsOf(worktree)?.detachedHead === true,
+        isMainWorktree: (worktree) => worktree.isMainWorktree,
+        isSleeping: (worktree) => {
+          const identity = getWorktreeHostIdentity(worktree)
+          const activity = domains.activity.get(identity)
+          return !retained.has(identity) && (!activity || isIdleWorkspaceActivity(activity))
+        }
+      },
+      worktreeLineageById: lineageById,
+      lineageParentIdentities: index.lineageParentIdentities,
+      filterRepoIds: view.filters.filterRepoIds,
+      preserveLineageParentOrder: view.sortBy === 'manual',
+      forcedVisibleWorktreeIds: extras.forcedVisibleWorktreeIds,
+      forcedVisibleWorktreeIdentities: extras.forcedVisibleWorktreeIdentities
+    })
 
   const visibleHostIdSet = getVisibleSidebarHostIdSet(
     view.visibleWorkspaceHostIds,
@@ -243,6 +246,7 @@ export function planSidebarFeedRows(
   })
   return {
     visibleWorktrees,
+    filterHiddenIdentities,
     plan,
     worktreeMap,
     lineageById,

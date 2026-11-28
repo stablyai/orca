@@ -1647,6 +1647,8 @@
       "children_other": "{{count}} untergeordnete Arbeitsbereiche",
       "unsavedName": "Nicht gespeicherter Name: {{name}}",
       "folder": "Ordner",
+      "filterHidden": "Ausgeblendet",
+      "filterHiddenHint": "Durch Seitenleistenfilter ausgeblendet",
       "project": "Projekt {{repo}}",
       "remoteHost": "Remote-Host"
     },

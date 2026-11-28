@@ -1643,6 +1643,8 @@
       "children_other": "하위 {{count}}개",
       "unsavedName": "저장되지 않은 이름: {{name}}",
       "folder": "폴더",
+      "filterHidden": "숨김",
+      "filterHiddenHint": "사이드바 필터로 숨겨짐",
       "project": "프로젝트 {{repo}}",
       "remoteHost": "원격 호스트"
     },

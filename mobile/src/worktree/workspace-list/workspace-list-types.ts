@@ -72,6 +72,8 @@ export type WorktreeRowView = WorktreeHostContextView & {
   botChatLine?: MobileBotChatLineFacts
   /** Drawn faded, as a paused bot and its workspaces are. */
   dimmed?: true
+  /** A search match the filters hide; the row shows a Hidden tag. */
+  filterHidden?: true
 }
 
 export type WorkspaceListItem = { row: Worktree; view: WorktreeRowView }

@@ -140,8 +140,7 @@ const WorktreeSection = memo(
           onOpen={() => {
             activateAndRevealWorktree(id, {
               navigationIntent: 'user-open',
-              executionHostId: owner.executionHostId,
-              clearSidebarFilters: false
+              executionHostId: owner.executionHostId
             })
           }}
           actionsSlotRef={setActionsSlot}

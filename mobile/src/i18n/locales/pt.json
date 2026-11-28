@@ -1701,6 +1701,8 @@
       "children_other": "{{count}} filhos",
       "unsavedName": "Nome não salvo: {{name}}",
       "folder": "Pasta",
+      "filterHidden": "Oculto",
+      "filterHiddenHint": "Oculto pelos filtros da barra lateral",
       "project": "Projeto {{repo}}",
       "remoteHost": "Host remoto"
     },

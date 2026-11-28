@@ -113,6 +113,10 @@
       "confirm": "Anpassen und anzeigen",
       "cancel": "Filter beibehalten"
     },
+    "filterHidden": {
+      "label": "Ausgeblendet",
+      "hint": "Durch Seitenleistenfilter ausgeblendet"
+    },
     "revealCurrent": {
       "label": "Aktuelles anzeigen",
       "noWorkspace": "Nichts ist geöffnet",
@@ -3138,9 +3142,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Rezepte mit bereitgestelltem Stammverzeichnis unterstützen keinen Sparse-Checkout."
-      },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "Dieser Worktree wird durch Seitenleistenfilter ausgeblendet. Der Arbeitsbereich wurde geöffnet, wird aber unter „Arbeitsbereiche“ nicht angezeigt."
       },
       "file": {
         "preview": {

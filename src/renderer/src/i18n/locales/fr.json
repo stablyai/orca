@@ -2793,9 +2793,6 @@
         "chatOpenShowDetails": "Afficher les détails",
         "chatOpenHideDetails": "Masquer les détails"
       },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "Cet arbre de travail est masqué par les filtres de la barre latérale. L'espace de travail a été ouvert, mais il n'est pas affiché dans Spaces."
-      },
       "file": {
         "preview": {
           "webClientUnavailable": "Les aperçus de documents ne sont pas disponibles dans le client web."
@@ -25005,6 +25002,10 @@
       "description": "L'espace de travail actif est masqué dans la barre latérale. Le révéler ajustera uniquement les filtres qui le cachent.",
       "confirm": "Ajuster et afficher",
       "cancel": "Conserver les filtres"
+    },
+    "filterHidden": {
+      "label": "Masqué",
+      "hint": "Masqué par les filtres de la barre latérale"
     },
     "revealCurrent": {
       "label": "Afficher l’élément actuel",

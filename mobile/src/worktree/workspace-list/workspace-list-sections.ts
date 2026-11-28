@@ -46,7 +46,11 @@ import {
   isRepoHidden,
   withoutHiddenFilterRepoIds
 } from '../../../../src/shared/project/catalog/hidden-projects'
-import { filterWorktrees, isPhoneRowInHiddenProject } from './workspace-row-filtering'
+import {
+  filterWorktreesForSearch,
+  withFilterHiddenTags,
+  isPhoneRowInHiddenProject
+} from './workspace-row-filtering'
 import { buildSectionRepoMap } from './section-repo-map'
 import { keepHiddenRowsBelowFolders } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
@@ -129,7 +133,7 @@ export function buildMobileWorkspacePlan(
     lineageStores,
     listedFilterIds
   )
-  const filtered = filterWorktrees(
+  const { rows: filtered, filterHiddenIdentities } = filterWorktreesForSearch(
     worktrees,
     filters,
     search,
@@ -285,7 +289,10 @@ export function buildMobileWorkspacePlan(
         const listed = placeInProjectGroupTree(
           {
             ...section,
-            data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
+            data: withFilterHiddenTags(
+              getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf),
+              filterHiddenIdentities
+            )
           },
           groupTreePlacements.get(section.key),
           collapsed

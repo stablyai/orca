@@ -2387,9 +2387,6 @@
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root 配方不支持稀疏检出"
       },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "此工作树已被侧边栏筛选条件隐藏，工作区已打开，但不会显示在“空间”中"
-      },
       "file": {
         "preview": {
           "webClientUnavailable": "文档预览在 Web 客户端中不可用"
@@ -24118,6 +24115,10 @@
       "description": "当前工作区已在侧边栏中隐藏，将其显示会清除侧边栏筛选条件",
       "confirm": "调整并显示",
       "cancel": "保留筛选条件"
+    },
+    "filterHidden": {
+      "label": "已隐藏",
+      "hint": "已被侧边栏筛选条件隐藏"
     },
     "revealCurrent": {
       "label": "显示当前项",

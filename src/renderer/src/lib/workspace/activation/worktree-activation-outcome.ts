@@ -25,13 +25,9 @@ export type WorkspaceRevealOptions = WorktreeActivationSurfaceSelection & {
   sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
   revealInSidebar?: boolean
   showWorkspaceList?: boolean
-  clearSidebarFilters?: boolean
 }
 
-export type FolderWorkspaceActivationOptions = Omit<
-  WorkspaceRevealOptions,
-  'clearSidebarFilters'
-> & {
+export type FolderWorkspaceActivationOptions = WorkspaceRevealOptions & {
   setup?: WorktreeSetupLaunch
   backendStartupTerminalSpawned?: boolean
   startup?: WorktreeStartupPayload

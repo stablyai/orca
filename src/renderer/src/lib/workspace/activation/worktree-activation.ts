@@ -30,10 +30,7 @@ import {
   type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import {
-  isWorktreeInHiddenProject,
-  liftSidebarFiltersHidingWorktree
-} from './worktree-activation-sidebar-filters'
+import { isWorktreeInHiddenProject } from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
@@ -263,11 +260,8 @@ export function activateAndRevealWorktreeWithOutcome(
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
-  // No sidebar card to reveal; lifting filters for it would only discard the user's.
+  // No sidebar card to reveal. Filters stay as set: the active row is listed anyway, marked hidden.
   const inHiddenProject = isWorktreeInHiddenProject(wt)
-  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
-    liftSidebarFiltersHidingWorktree(wt)
-  }
 
   if (opts?.revealInSidebar !== false && !inHiddenProject) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {

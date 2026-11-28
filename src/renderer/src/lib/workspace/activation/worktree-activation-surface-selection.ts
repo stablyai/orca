@@ -34,8 +34,6 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   backendStartupTerminalSpawned?: boolean
   /** Install a preserved fallback startup beside setup/default terminals already seeded. */
   createNewTerminalForStartup?: boolean
-  /** Keep sidebar filters intact when navigating to a hidden target. */
-  clearSidebarFilters?: boolean
 }
 
 /** Create-time only: an agent selection suppresses the shell its own surface will replace. */

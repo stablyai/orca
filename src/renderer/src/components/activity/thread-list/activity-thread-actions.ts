@@ -93,8 +93,7 @@ export function createActivityThreadActions({
       !isFloatingTerminal &&
       activateAndRevealWorkspace(thread.worktree.id, {
         executionHostId,
-        revealInSidebar: false,
-        clearSidebarFilters: false
+        revealInSidebar: false
       }) === false
     ) {
       return

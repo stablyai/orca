@@ -97,6 +97,10 @@
       "confirm": "Ayarla ve göster",
       "cancel": "Filtreleri koru"
     },
+    "filterHidden": {
+      "label": "Gizli",
+      "hint": "Kenar çubuğu filtreleriyle gizlendi"
+    },
     "revealCurrent": {
       "label": "Geçerli olanı göster",
       "noWorkspace": "Açık bir şey yok",
@@ -3138,9 +3142,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Sağlanmış kök tarifleri sparse checkout'u desteklemez."
-      },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "Bu worktree, kenar çubuğu filtreleri tarafından gizleniyor. Çalışma alanı açıldı, ancak Alanlar'da gösterilmiyor."
       },
       "file": {
         "preview": {

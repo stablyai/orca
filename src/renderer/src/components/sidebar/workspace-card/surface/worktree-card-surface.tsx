@@ -9,6 +9,8 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
 import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+import { useIsRowHiddenBySidebarFilters } from '../../worktree-list/listing/filter-hidden-rows-context'
+import { FilterHiddenBadge } from '../../filter-hidden-badge'
 
 /** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
 export const WORKTREE_CARD_SURFACE_CLASS_NAME =
@@ -47,6 +49,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     contentIndent
   } = card
   const isSleeping = useIsSleepingWorktree(worktree.id)
+  const hiddenByFilters = useIsRowHiddenBySidebarFilters(worktree)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
@@ -88,7 +91,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         titleRenaming && '!border-transparent !bg-transparent !shadow-none !ring-0',
         isDeleting && 'opacity-50 grayscale cursor-not-allowed',
         // Dim disconnected runtimes only; ancestor opacity would make the SSH control’s error tint/spinner illegible.
-        isRuntimeDisconnected && !isDeleting && 'opacity-60'
+        isRuntimeDisconnected && !isDeleting && 'opacity-60',
+        // Listed only because it is active; the dashed edge and badge say the filters hide it.
+        hiddenByFilters && 'border-dashed'
       )}
       data-worktree-card-surface="true"
       data-worktree-card-single-line={titleOnlyCard || undefined}
@@ -99,6 +104,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
+      data-worktree-filter-hidden={hiddenByFilters || undefined}
       data-worktree-card-menu-open={card.detailsHoverControl.contextMenuOpen ? 'true' : undefined}
       onClick={handleClick}
       onPointerDown={affiliateListMode ? undefined : handlePointerDown}
@@ -130,6 +136,11 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         parentCardContent
       )}
+      {hiddenByFilters ? (
+        <div className="flex px-2 pt-1">
+          <FilterHiddenBadge withTooltip />
+        </div>
+      ) : null}
 
       {lineageChildren ? (
         <div

@@ -307,6 +307,19 @@ function WorktreeListRowComponent({
                   </Text>
                 </View>
               )}
+              {view.filterHidden && (
+                <View
+                  style={styles.folderBadge}
+                  accessibilityLabel={t(
+                    'components.worktreeListRow.filterHiddenHint',
+                    'Hidden by sidebar filters'
+                  )}
+                >
+                  <Text style={styles.folderBadgeText}>
+                    {t('components.worktreeListRow.filterHidden', 'Hidden')}
+                  </Text>
+                </View>
+              )}
               <WorktreeMetaGlyphs
                 presence={{
                   ...getWorktreeMetaGlyphPresence(item, cardDetails),

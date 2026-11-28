@@ -150,6 +150,26 @@ export function filterWorkspaceRows<Row>(
   return rows.filter(buildWorkspaceRowPredicate(filters, read))
 }
 
+/** One pass: the rows the filters keep, and those only the filters keep out (archived rows and
+ *  hidden projects are neither). Desktop Cmd+J and the phone's search tag the second as hidden. */
+export function partitionWorkspaceRowsByFilters<Row>(
+  rows: readonly Row[],
+  filters: WorkspaceRowFilters,
+  read: WorkspaceRowFactReader<Row>
+): { visible: Row[]; hiddenByFilters: Row[] } {
+  const passes = buildWorkspaceRowPredicate(filters, read)
+  const visible: Row[] = []
+  const hiddenByFilters: Row[] = []
+  for (const row of rows) {
+    if (passes(row)) {
+      visible.push(row)
+    } else if (!read.isArchived(row) && !read.isInHiddenProject(row)) {
+      hiddenByFilters.push(row)
+    }
+  }
+  return { visible, hiddenByFilters }
+}
+
 /** The filters `target` sets differently from `current`; the exemption's absence means on. */
 export function changedWorkspaceRowFilters(
   current: WorkspaceRowFilters,

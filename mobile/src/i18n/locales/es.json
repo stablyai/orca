@@ -1699,6 +1699,8 @@
       "children_other": "{{count}} secundarios",
       "unsavedName": "Nombre sin guardar: {{name}}",
       "folder": "Carpeta",
+      "filterHidden": "Oculto",
+      "filterHiddenHint": "Oculto por los filtros de la barra lateral",
       "project": "Proyecto {{repo}}",
       "remoteHost": "Host remoto"
     },

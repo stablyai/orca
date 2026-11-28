@@ -1734,6 +1734,8 @@
       "children_other": "{{count}} 个子工作区",
       "unsavedName": "未保存的名称：{{name}}",
       "folder": "文件夹",
+      "filterHidden": "已隐藏",
+      "filterHiddenHint": "已被侧边栏筛选条件隐藏",
       "project": "项目 {{repo}}",
       "remoteHost": "远程主机"
     },

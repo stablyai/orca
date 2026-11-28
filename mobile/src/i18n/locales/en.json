@@ -1548,6 +1548,8 @@
     },
     "worktreeListRow": {
       "folder": "Folder",
+      "filterHidden": "Hidden",
+      "filterHiddenHint": "Hidden by sidebar filters",
       "remoteHost": "Remote host",
       "project": "Project {{repo}}",
       "child": "Child",

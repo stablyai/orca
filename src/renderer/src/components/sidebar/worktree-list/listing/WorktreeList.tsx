@@ -38,6 +38,7 @@ import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
+import { SidebarFilterHiddenRowsContext } from './filter-hidden-rows-context'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
@@ -140,7 +141,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
-  const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = useSidebarListModel({
+  const listModel = useSidebarListModel({
     filterState,
     sortBy,
     groupBy,
@@ -162,6 +163,7 @@ const WorktreeList = React.memo(function WorktreeList({
     prCache,
     agentSendTargetWorktreeId
   })
+  const { visibleWorktrees, visibleScope, externalWorktreeCards, rowModel } = listModel
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
     [rowModel.occurrencePlan]
@@ -293,7 +295,7 @@ const WorktreeList = React.memo(function WorktreeList({
   }
 
   return (
-    <>
+    <SidebarFilterHiddenRowsContext.Provider value={listModel.filterHiddenIdentities}>
       {projectsCollapseTarget && projectCollapseKeys.length > 0
         ? createPortal(
             <ProjectsCollapseAllButton
@@ -405,7 +407,7 @@ const WorktreeList = React.memo(function WorktreeList({
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
       />
-    </>
+    </SidebarFilterHiddenRowsContext.Provider>
   )
 })
 

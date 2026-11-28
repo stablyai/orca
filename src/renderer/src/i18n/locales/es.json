@@ -2432,9 +2432,6 @@
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Las recetas con raíz aprovisionada no admiten sparse checkout."
       },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "Este árbol de trabajo está oculto por los filtros de la barra lateral. El espacio de trabajo se abrió, pero no se muestra en Spaces."
-      },
       "file": {
         "preview": {
           "webClientUnavailable": "Las vistas previas de documentos no están disponibles en el cliente web."
@@ -25367,6 +25364,10 @@
       "description": "El espacio de trabajo activo está oculto en la barra lateral. Mostrarlo solo ajustará los filtros que lo ocultan.",
       "confirm": "Ajustar y mostrar",
       "cancel": "Mantener filtros"
+    },
+    "filterHidden": {
+      "label": "Oculto",
+      "hint": "Oculto por los filtros de la barra lateral"
     },
     "revealCurrent": {
       "label": "Mostrar actual",

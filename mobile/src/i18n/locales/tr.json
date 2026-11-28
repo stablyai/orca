@@ -1781,6 +1781,8 @@
       "children_one": "{{count}} alt çalışma alanı",
       "children_other": "{{count}} alt çalışma alanı",
       "folder": "Klasör",
+      "filterHidden": "Gizli",
+      "filterHiddenHint": "Kenar çubuğu filtreleriyle gizlendi",
       "project": "{{repo}} projesi",
       "remoteHost": "Uzak sunucu",
       "unsavedName": "Kaydedilmemiş ad: {{name}}"

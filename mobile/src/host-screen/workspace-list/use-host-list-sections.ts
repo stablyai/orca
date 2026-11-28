@@ -25,6 +25,7 @@ import {
   buildHostFeedSections,
   buildPreFeedSections
 } from '../sidebar-feed/host-sidebar-feed-sections'
+import { useSearchHiddenRows } from '../sidebar-feed/host-feed-search-hidden-rows'
 import { useHostRepoIconDataUrls } from '../catalog/use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from '../sidebar-feed/use-host-sidebar-feed'
 import type { HostScreenState } from '../use-host-screen-state'
@@ -181,16 +182,18 @@ function useFeedHostListSections({
       }),
     [state.view, projectOrderBy, domains, hostPlatform]
   )
+  const searchHidden = useSearchHiddenRows(displayWorktrees, state, catalog, botListedIdentities)
   const built = useMemo(
     // The phone keeps nesting by an older server's edges without instance ids, as it always has.
     () =>
       domains
         ? buildSidebarFeedRows(domains, catalog, view, {
             ...PHONE_FEED_LINEAGE,
-            botListedWorktreeIdentities: botListedIdentities
+            botListedWorktreeIdentities: botListedIdentities,
+            forcedVisibleWorktreeIdentities: searchHidden.forcedIdentities
           })
         : null,
-    [domains, catalog, view, botListedIdentities]
+    [domains, catalog, view, botListedIdentities, searchHidden]
   )
   // Fall back only after an unreadable feed; before the first read, wait or retain the installed feed to avoid flashing a different list shape.
   const preFeed = feed?.kind === 'reopen'
@@ -203,7 +206,8 @@ function useFeedHostListSections({
             liveRows: displayWorktrees,
             hostContextOf,
             repoHostIdByRepoId: state.repoHostIdByRepoId,
-            search: state.search
+            search: state.search,
+            filterHiddenIdentities: searchHidden.filterHiddenIdentities
           })
         : preFeed
           ? buildPreFeedSections({
@@ -218,6 +222,7 @@ function useFeedHostListSections({
           : NO_SECTIONS,
     [
       built,
+      searchHidden,
       preFeed,
       catalog,
       displayWorktrees,

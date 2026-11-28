@@ -1644,6 +1644,8 @@
       "children_other": "{{count}} 個子工作區",
       "unsavedName": "未儲存的名稱：{{name}}",
       "folder": "資料夾",
+      "filterHidden": "已隱藏",
+      "filterHiddenHint": "已被側邊欄篩選條件隱藏",
       "project": "專案 {{repo}}",
       "remoteHost": "遠端主機"
     },

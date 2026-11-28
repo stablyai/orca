@@ -2395,9 +2395,6 @@
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "프로비저닝된 루트 레시피는 스파스 체크아웃을 지원하지 않습니다."
       },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "이 워크트리는 사이드바 필터에 의해 숨겨져 있습니다. 워크스페이스가 열렸지만 Spaces에 표시되지 않습니다."
-      },
       "file": {
         "preview": {
           "webClientUnavailable": "문서 미리보기는 웹 클라이언트에서 사용할 수 없습니다."
@@ -24388,6 +24385,10 @@
       "description": "활성 워크스페이스는 사이드바에 숨겨져 있습니다. 이를 표시하면 이를 숨기는 필터만 조정됩니다.",
       "confirm": "조정 후 표시",
       "cancel": "필터 유지"
+    },
+    "filterHidden": {
+      "label": "숨김",
+      "hint": "사이드바 필터로 숨겨짐"
     },
     "revealCurrent": {
       "label": "현재 항목 표시",
