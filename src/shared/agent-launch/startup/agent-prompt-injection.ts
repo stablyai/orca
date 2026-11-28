@@ -10,8 +10,17 @@ import { isTuiAgent, TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+/** Ctrl+Enter as a CSI-u sequence, for a TUI whose `input.submit` bind no longer includes Enter. */
+export const AGENT_PROMPT_CTRL_ENTER_SUBMIT = '\x1b[13;5u'
 /** Claude may leave a draft unsent when paste-end and Enter share a write; send Enter separately after this delay. */
 export const AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS = 50
+
+/** The bytes that submit a prompt to `agent`: its catalog `submitInput`, else Enter (#51649). */
+export function resolveAgentPromptSubmitInput(agent: TerminalAgent | null | undefined): string {
+  return isTuiAgent(agent) && TUI_AGENT_CONFIG[agent].submitInput === 'ctrl-enter'
+    ? AGENT_PROMPT_CTRL_ENTER_SUBMIT
+    : AGENT_PROMPT_SUBMIT
+}
 
 /** Unknown agents retain Claude's lead; known non-Claude TUIs need it separately because Codex drops typed text sharing the paste write (STA-8200). */
 export function agentPromptTakesLeadLine(agent: TerminalAgent | null | undefined): boolean {

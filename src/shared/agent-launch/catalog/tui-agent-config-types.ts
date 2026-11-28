@@ -78,6 +78,9 @@ export type TuiAgentConfig = {
   windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
+  /** Keystroke that submits a prompt to this agent's TUI composer; defaults to CR. Exists for a
+   *  TUI whose submit is not Enter, so a pasted prompt is not left in the composer. */
+  submitInput?: 'enter' | 'ctrl-enter'
 }
 
 /** Authoring form: `launchCmd` and `expectedProcess` default to `detectCmd` (true for most agents). */

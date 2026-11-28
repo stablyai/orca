@@ -15,12 +15,12 @@ import type {
 
 import {
   AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS,
-  AGENT_PROMPT_SUBMIT,
   agentPromptSubmitJoinsPasteFrame,
   getAgentPromptHeldSubmitBudgetMs,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs,
-  resolveAgentPromptSubmitDelayForAgent
+  resolveAgentPromptSubmitDelayForAgent,
+  resolveAgentPromptSubmitInput
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 
 import {
@@ -120,7 +120,8 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
       )
       // Claude can lose the start of a large bracketed paste split across writes; send the whole frame together.
       renderGate?.arm()
-      const initialWrite = submitWithPaste ? pastePayload + AGENT_PROMPT_SUBMIT : pastePayload
+      const submitInput = resolveAgentPromptSubmitInput(this.getPtyAgent(ptyId))
+      const initialWrite = submitWithPaste ? pastePayload + submitInput : pastePayload
       assertTerminalInputAdmitted(this, ptyId, options.inputSource)
       if (!this.ptyController?.write(ptyId, initialWrite, options.inputKind)) {
         throw new Error('terminal_not_writable')
@@ -171,7 +172,7 @@ export abstract class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntim
         this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
       }
       if (!submitWithPaste && !withheldFor) {
-        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+        if (!this.ptyController?.write(ptyId, submitInput, options.inputKind)) {
           throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
         }
         enteredAt = Date.now()

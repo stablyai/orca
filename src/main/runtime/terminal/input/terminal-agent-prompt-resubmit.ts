@@ -1,9 +1,9 @@
 import { OrcaRuntimeWithTitlelessPaneAgentIdentity } from '../wait/titleless-pane-agent-identity'
 import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-options'
 import {
-  AGENT_PROMPT_SUBMIT,
   isHeldAgentPromptDraft,
-  openCodeCollapsesPaste
+  openCodeCollapsesPaste,
+  resolveAgentPromptSubmitInput
 } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import type { AgentPromptActivity } from './agent-prompt-submission-verification'
 import {
@@ -175,7 +175,9 @@ export abstract class OrcaRuntimeWithResubmitHeldAgentPrompt extends OrcaRuntime
         if (await agentPromptSettledWithin(held, 0, options.signal)) {
           return resubmits
         }
-        if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, options.inputKind)) {
+        if (
+          !this.ptyController?.write(ptyId, resolveAgentPromptSubmitInput(agent), options.inputKind)
+        ) {
           return resubmits
         }
         resubmits += 1

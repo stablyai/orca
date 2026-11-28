@@ -97,6 +97,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     submitRetryBudgetMs: 1000,
     // Why: OpenCode decodes CSI-u Ctrl+Enter without local ConPTY kitty negotiation (#25372).
     ctrlEnterEncoding: 'csi-u',
+    // Why: #51649 remaps `input.submit` (often to Ctrl+Enter, keeping Enter for newlines); a bare CR
+    // then only inserts a newline and the pasted worker prompt is never submitted. OpenCode decodes
+    // CSI-u Ctrl+Enter itself, so this reaches it unmodified. Costs one thing: with OpenCode's
+    // default keybinds (Ctrl+Enter = newline) a worker prompt gains a leading newline — the draft
+    // check still reads submitted, since OpenCode ignores leading whitespace.
+    submitInput: 'ctrl-enter',
     composerReadyCaptures: [
       'opencode-1-18-32-timed-boot-slow',
       'opencode-1-18-32-timed-boot-hidden-pane',
