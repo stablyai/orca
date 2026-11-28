@@ -60,7 +60,7 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
   func accept(_ command: Command) {
     if command.type == "ping", let id = command.id, id > 0 {
-      // A common-mode UI probe remains serviceable while a native menu tracks.
+      // Orca's event-driven liveness probe: answered on the UI thread, even while a menu tracks.
       RunLoop.main.perform(inModes: [.common]) { emit(["type": "pong", "id": id]) }
       CFRunLoopWakeUp(CFRunLoopGetMain())
     } else if command.type == "state", command.id != nil, command.snapshot != nil {
@@ -129,7 +129,7 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
     guard item.isEnabled, let action = item.representedObject as? String, actions.contains(action) else { return }
     // The click went to the helper, so it hands activation to Orca (macOS 14 cooperative activation).
     // QA-hook invocations carry no user click and must not take focus.
-    if !invokingForQA, action != "quit", action != "quit-completely",
+    if !invokingForQA, action != "quit",
       let parent = NSRunningApplication(processIdentifier: getppid()) {
       if #available(macOS 14.0, *) {
         NSApp.yieldActivation(to: parent)
@@ -177,25 +177,6 @@ private final class MenuBar: NSObject, NSApplicationDelegate, NSMenuDelegate {
   }
 }
 
-// The parent keeps no idle timer; a UI thread stuck in an AppKit scene wait exits here so Orca can replace it.
-private var uiBeat: UInt64 = 0
-private let beatLock = NSLock()
-private let uiWatchdog = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-private var lastSeenBeat: UInt64 = .max
-uiWatchdog.schedule(deadline: .now() + 15, repeating: 15, leeway: .seconds(5))
-uiWatchdog.setEventHandler {
-  beatLock.lock()
-  let beat = uiBeat
-  beatLock.unlock()
-  if beat == lastSeenBeat { _exit(3) }
-  lastSeenBeat = beat
-  DispatchQueue.main.async {
-    beatLock.lock()
-    uiBeat &+= 1
-    beatLock.unlock()
-  }
-}
-uiWatchdog.resume()
 
 signal(SIGPIPE, SIG_IGN)
 guard fcntl(STDOUT_FILENO, F_SETFL, fcntl(STDOUT_FILENO, F_GETFL) | O_NONBLOCK) != -1 else { _exit(1) }

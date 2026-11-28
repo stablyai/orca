@@ -2,7 +2,9 @@ import { app } from 'electron'
 import { cachedRolloutConfig, resolveRolloutFlag } from '../updater/rollout/rollout-flags'
 
 /** Which process owns the macOS menu-bar item; null while none is shown. */
-export type MenuBarHost = 'helper' | 'in-process'
+export type MenuBarHost = 'helper' | 'in-process' | 'in-process-fallback' | 'helper-gave-up'
+/** Who owns the icon for this launch; 'off' after started helpers kept failing. */
+export type LaunchMenuBarHost = 'helper' | 'in-process' | 'off'
 
 let listener: ((host: MenuBarHost | null) => void) | null = null
 let current: MenuBarHost | null = null
@@ -21,10 +23,10 @@ export function reportMenuBarHost(host: MenuBarHost | null): void {
   listener?.(host)
 }
 
-let launchHost: MenuBarHost | null = null
+let launchHost: LaunchMenuBarHost | null = null
 
 /** Decided once per launch from the last saved rollout block, so a hide/show keeps the same owner. */
-export function launchMacMenuBarHost(installId: string | null): MenuBarHost {
+export function launchMacMenuBarHost(installId: string | null): LaunchMenuBarHost {
   launchHost ??= resolveRolloutFlag('mac-menu-bar-helper', {
     config: cachedRolloutConfig(),
     appVersion: app.getVersion(),
@@ -36,8 +38,8 @@ export function launchMacMenuBarHost(installId: string | null): MenuBarHost {
 }
 
 /** After the helper failed this launch, later hide/show cycles use the in-process icon at once. */
-export function markMacMenuBarHelperUnavailable(): void {
-  launchHost = 'in-process'
+export function markMacMenuBarHelperUnavailable(next: 'in-process' | 'off'): void {
+  launchHost = next
 }
 
 // The startup `tray-created` milestone fires once, whichever caller created the icon first.

@@ -60,7 +60,9 @@ export const mainThreadHangDetectedSchema = lazyZodSchema(() =>
         .optional(),
       menu_bar_icon: z.boolean().nullable().optional(),
       // Which process owned the macOS menu-bar item; splits the AppKit scene deadlock group by host.
-      menu_bar_host: z.enum(['helper', 'in-process']).optional(),
+      menu_bar_host: z
+        .enum(['helper', 'in-process', 'in-process-fallback', 'helper-gave-up'])
+        .optional(),
       // The launch that reports a hang may run another version than the one that hung.
       detected_app_version: z.string().max(64).optional()
     })

@@ -209,7 +209,7 @@ function prepareMacDevElectronApp() {
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
   const hash = createHash('sha1')
     .update(
-      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${menuBar.menuBarBuildIdentity(repoRoot)}`
+      `${sourceAppPath}\0${electronVersion ?? ''}\0${title}\0${identityKey}\0${bundleLayoutVersion}\0${process.env.ORCA_DEV_MENU_BAR_HELPER === '1' ? menuBar.menuBarBuildIdentity(repoRoot) : ''}`
     )
     .digest('hex')
     .slice(0, 12)
@@ -346,7 +346,10 @@ function prepareMacDevElectronApp() {
 
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
   try {
-    menuBar.buildDevMenuBarApp(appPath, bundleId)
+    // Opt-in: dev versions use the in-process icon unless a rollout file turns the helper on.
+    if (process.env.ORCA_DEV_MENU_BAR_HELPER === '1') {
+      menuBar.buildDevMenuBarApp(appPath, bundleId)
+    }
   } catch (error) {
     // The app falls back to its in-process icon when the helper can't start.
     console.warn('[dev] menu-bar helper build failed; continuing without it', error)

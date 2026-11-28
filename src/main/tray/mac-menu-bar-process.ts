@@ -10,9 +10,8 @@ import {
   type MenuBarQACommand,
   type MenuBarSnapshot
 } from './mac-menu-bar-protocol'
+import { MenuBarReplyDeadline } from './mac-menu-bar-reply-deadline'
 import { MenuBarRestartPolicy } from './mac-menu-bar-restart-policy'
-// Only an outstanding reply arms a deadline, so an idle helper costs main no timer; the helper exits itself on a UI stall.
-const REPLY_TIMEOUT = 15_000
 type Generation = {
   child: ChildProcessWithoutNullStreams
   exited: Promise<void>
@@ -22,7 +21,7 @@ type Generation = {
   sentRevision: number
   appliedRevision: number
   sequence: number
-  awaiting: boolean
+  probe: number | null
   started: number
 }
 
@@ -31,8 +30,8 @@ type Options = {
   onCreated?: () => void
   /** True once a helper shows the icon, false when that helper exits. */
   onOwnerChange?: (owned: boolean) => void
-  /** Helpers keep failing before showing the icon; the caller should use another owner. */
-  onUnavailable?: () => void
+  /** 'fallback': the helper can't start, use the in-process icon; 'off': started helpers keep failing. */
+  onUnavailable?: (reason: 'fallback' | 'off') => void
   spawn?: typeof spawnProcess
   qa?: boolean
   executable?: string
@@ -44,9 +43,11 @@ export class MacMenuBarProcess {
   private desired: MenuBarSnapshot | null = null
   private revision = 0
   private created = false
+  private probeId = 0
   private readonly restarts = new MenuBarRestartPolicy()
   private timer: ReturnType<typeof setTimeout> | null = null
-  private suspended = false
+  /** Paused across system sleep (the tray wires powerMonitor) so a sleeping helper isn't killed. */
+  readonly deadline = new MenuBarReplyDeadline()
   private stopped = false
   private readonly qa = new MenuBarQARequest()
 
@@ -64,15 +65,15 @@ export class MacMenuBarProcess {
     this.flush()
   }
 
-  suspend(): void {
-    this.suspended = true
-  }
-
-  resume(): void {
-    this.suspended = false
-    if (this.current?.awaiting) {
-      this.arm(this.current)
+  /** Called on user-visible events (window focus, app activation) to replace a hung helper without polling. */
+  probe(): void {
+    const generation = this.current
+    if (!generation?.ready || generation.retired || this.deadline.armed || this.deadline.paused) {
+      return
     }
+    generation.probe = ++this.probeId
+    this.write(generation, { type: 'ping', id: generation.probe })
+    this.arm(generation)
   }
 
   destroy(): Promise<void> {
@@ -104,7 +105,7 @@ export class MacMenuBarProcess {
       child = spawnMenuBarChild(this.options.spawn, this.options.qa, this.options.executable)
     } catch (error) {
       console.warn('[menu-bar] helper could not start', error)
-      this.afterFailedGeneration(false, performance.now())
+      this.afterFailedGeneration(false, 0)
       return
     }
     let observeExit!: () => void
@@ -119,7 +120,7 @@ export class MacMenuBarProcess {
       sentRevision: 0,
       appliedRevision: 0,
       sequence: 0,
-      awaiting: false,
+      probe: null,
       started: performance.now()
     }
     this.current = generation
@@ -149,7 +150,7 @@ export class MacMenuBarProcess {
       if (this.stopped) {
         return
       }
-      this.afterFailedGeneration(generation.appliedRevision > 0, generation.started)
+      this.afterFailedGeneration(generation.ready, performance.now() - generation.started)
     }
     child.once('exit', finish)
     const fault = (): void => {
@@ -184,15 +185,24 @@ export class MacMenuBarProcess {
         }
         if (message.type === 'ready' && !generation.ready) {
           generation.ready = true
-          this.disarm(generation)
+          this.deadline.disarm()
           this.flush()
+        } else if (message.type === 'pong' && message.id === generation.probe) {
+          generation.probe = null
+          if (generation.sentRevision === generation.appliedRevision) {
+            this.deadline.disarm()
+          }
         } else if (message.type === 'deferred' && message.id === generation.sentRevision) {
-          // The menu is open; the helper applies on close and its own watchdog covers a stall.
-          this.disarm(generation)
+          // The menu is open and its UI thread answered; the helper applies on close.
+          if (generation.probe === null) {
+            this.deadline.disarm()
+          }
         } else if (message.type === 'applied' && message.id === generation.sentRevision) {
           const first = generation.appliedRevision === 0
           generation.appliedRevision = message.id
-          this.disarm(generation)
+          if (generation.probe === null) {
+            this.deadline.disarm()
+          }
           if (first) {
             this.options.onOwnerChange?.(true)
             if (!this.created) {
@@ -263,21 +273,9 @@ export class MacMenuBarProcess {
     }
   }
 
+  // retire() ignores a generation that already ended.
   private arm(generation: Generation): void {
-    generation.awaiting = true
-    this.clearTimer()
-    this.timer = setTimeout(() => {
-      this.timer = null
-      if (this.current === generation && generation.awaiting && !this.suspended) {
-        void this.retire(generation)
-      }
-    }, REPLY_TIMEOUT)
-    this.timer.unref()
-  }
-
-  private disarm(generation: Generation): void {
-    generation.awaiting = false
-    this.clearTimer()
+    this.deadline.arm(() => void this.retire(generation))
   }
 
   private schedule(delay: number): void {
@@ -294,15 +292,15 @@ export class MacMenuBarProcess {
     this.timer.unref()
   }
 
-  private afterFailedGeneration(showedIcon: boolean, started: number): void {
-    const delay = this.restarts.next(showedIcon, performance.now() - started)
-    if (delay === null) {
-      console.warn('[menu-bar] helper keeps failing; falling back to the in-process icon')
-      this.stopped = true
-      this.options.onUnavailable?.()
+  private afterFailedGeneration(reachedReady: boolean, livedMs: number): void {
+    const next = this.restarts.next(reachedReady, livedMs)
+    if (typeof next === 'number') {
+      this.schedule(next)
       return
     }
-    this.schedule(delay)
+    console.warn(`[menu-bar] helper keeps failing (${next})`)
+    this.stopped = true
+    this.options.onUnavailable?.(next)
   }
 
   private retire(generation: Generation): Promise<void> {
@@ -316,8 +314,10 @@ export class MacMenuBarProcess {
     return generation.exited
   }
 
+  // Restart timer and any reply deadline; called when the generation ends or the owner stops.
   private clearTimer(): void {
     clearTimeout(this.timer ?? undefined)
     this.timer = null
+    this.deadline.disarm()
   }
 }

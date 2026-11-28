@@ -30,7 +30,13 @@ export function prepareStandaloneDevMenuBar(
   } = {}
 ) {
   delete env.ORCA_DEV_MENU_BAR_EXECUTABLE
-  if (!enabled || platform !== 'darwin' || env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE === '1') {
+  // Dev versions keep the in-process icon unless asked, so don't build the helper by default.
+  if (
+    !enabled ||
+    platform !== 'darwin' ||
+    env.ORCA_DEV_MENU_BAR_HELPER !== '1' ||
+    env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE === '1'
+  ) {
     return
   }
   const cacheRoot = path.join(root, 'native/menu-bar-macos/.build/dev')

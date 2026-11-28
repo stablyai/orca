@@ -44,3 +44,11 @@ it('keeps a saved kill switch when the next entry is unreadable, and drops it on
   expect(parseRolloutConfig(payload(undefined), off)).toEqual({})
   expect(parseRolloutConfig({ id: 'campaign' }, off)).toBeNull()
 })
+
+it('narrows only stable builds with a percentage; prerelease keeps the helper', () => {
+  const config = flags({ state: 'on', percent: 0 })
+  const resolve = (appVersion: string) =>
+    resolveRolloutFlag('mac-menu-bar-helper', { config, appVersion, installId: 'install' })
+  expect(resolve('1.4.290')).toBe(false)
+  expect(resolve('1.4.290-rc.3')).toBe(true)
+})

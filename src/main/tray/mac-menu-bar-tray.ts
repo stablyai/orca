@@ -23,8 +23,10 @@ export class MacMenuBarTray {
   private image: NativeImage
   private tooltip = ''
   private menu: TrayMenuItem[] = []
-  private readonly suspend = (): void => this.owner.suspend()
-  private readonly resume = (): void => this.owner.resume()
+  private readonly suspend = (): void => this.owner.deadline.suspend()
+  private readonly resume = (): void => this.owner.deadline.resume()
+  // Liveness is checked only when the user comes back to Orca, never on a timer.
+  private readonly probe = (): void => this.owner.probe()
 
   constructor(
     image: NativeImage,
@@ -42,6 +44,8 @@ export class MacMenuBarTray {
     })
     powerMonitor.on('suspend', this.suspend)
     powerMonitor.on('resume', this.resume)
+    app.on('browser-window-focus', this.probe)
+    app.on('did-become-active', this.probe)
     void this.predecessor.then(() => {
       if (this.destroyed) {
         return
@@ -74,6 +78,8 @@ export class MacMenuBarTray {
     this.destroyed = true
     powerMonitor.off('suspend', this.suspend)
     powerMonitor.off('resume', this.resume)
+    app.off('browser-window-focus', this.probe)
+    app.off('did-become-active', this.probe)
     // Rapid off/on must join even a predecessor still awaiting observed exit.
     retirement = Promise.all([this.predecessor, this.owner.destroy()]).then(() => {})
     return retirement

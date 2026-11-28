@@ -1,4 +1,15 @@
 import type { MenuBarHost } from '../tray/mac-menu-bar-host'
+
+const MENU_BAR_HOSTS: ReadonlySet<string> = new Set<MenuBarHost>([
+  'helper',
+  'in-process',
+  'in-process-fallback',
+  'helper-gave-up'
+])
+
+function isMenuBarHost(value: unknown): value is MenuBarHost {
+  return typeof value === 'string' && MENU_BAR_HOSTS.has(value)
+}
 import { basename } from 'node:path/posix'
 import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
 import { redactString } from '../../shared/observability/redactor'
@@ -130,8 +141,7 @@ export function parseNativeHangArtifact(value: unknown): NativeHangArtifact | nu
     capturedAt: value.capturedAt,
     pid: value.pid,
     showMenuBarIcon: value.showMenuBarIcon,
-    ...('menuBarHost' in value &&
-    (value.menuBarHost === 'helper' || value.menuBarHost === 'in-process')
+    ...('menuBarHost' in value && isMenuBarHost(value.menuBarHost)
       ? { menuBarHost: value.menuBarHost }
       : {}),
     process: {

@@ -98,7 +98,8 @@ export function resolveRolloutFlag(name: RolloutFlagName, context: RolloutFlagCo
     return false
   }
   const percent = entry.percent ?? 100
-  if (percent >= 100) {
+  // A stable percentage narrows stable builds only; prerelease builds keep dogfooding.
+  if (percent >= 100 || baked) {
     return true
   }
   // Why baked without an id: an unbucketable install must not join every cohort at once.

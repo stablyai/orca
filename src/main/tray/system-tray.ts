@@ -170,6 +170,9 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
   if (tray && !tray.isDestroyed()) {
     return tray
   }
+  if (process.platform === 'darwin' && launchMacMenuBarHost(opts.installId) === 'off') {
+    return null
+  }
 
   devIndicator = opts.isDevInstance ? { label: opts.devInstanceLabel } : null
 
@@ -193,7 +196,8 @@ export function createSystemTray(opts: SystemTrayOptions): SystemTray | null {
     const helperTray: MacMenuBarTray = new MacMenuBarTray(baseTrayImage, {
       onCreated: () => markMacIconShown(true),
       onOwnerChange: (owned) => reportMenuBarHost(owned ? 'helper' : null),
-      onUnavailable: () => deferAppKitSceneMutation(() => fallBackToInProcessTray(helperTray))
+      onUnavailable: (reason) =>
+        deferAppKitSceneMutation(() => replaceFailedHelperTray(helperTray, reason))
     })
     tray = helperTray
   } else {
@@ -225,14 +229,21 @@ function createNativeTray(image: NativeImage, opts: SystemTrayOptions): Tray {
   return nativeTray
 }
 
-// A helper that can't show the icon must not leave the user without one for the whole launch.
-function fallBackToInProcessTray(failed: MacMenuBarTray): void {
+// A helper that can't start falls back to the in-process icon; one that starts and keeps hanging
+// would hang main the same way in-process, so the icon stays off for this launch instead.
+function replaceFailedHelperTray(failed: MacMenuBarTray, reason: 'fallback' | 'off'): void {
   if (tray !== failed || !trayOptions || !baseTrayImage) {
     return
   }
-  markMacMenuBarHelperUnavailable()
+  markMacMenuBarHelperUnavailable(reason === 'fallback' ? 'in-process' : 'off')
   void failed.destroy()
+  if (reason === 'off') {
+    tray = null
+    reportMenuBarHost('helper-gave-up')
+    return
+  }
   tray = createNativeTray(baseTrayImage, trayOptions)
+  reportMenuBarHost('in-process-fallback')
   setTrayMenu(trayOptions)
   applyTrayImage()
 }

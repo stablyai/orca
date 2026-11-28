@@ -1,20 +1,33 @@
-// Consecutive helpers that never showed the icon before main falls back to the in-process tray.
-const MAX_FAILED_STARTS = 3
+// Three strikes, counted separately for helpers that never start and helpers that keep dying after starting.
+const MAX_STRIKES = 3
 const MAX_RETRY_DELAY = 60_000
+
+export type MenuBarRestart = number | 'fallback' | 'off'
 
 /** Back-off for replacing a helper, and when to stop trying. */
 export class MenuBarRestartPolicy {
-  private failedStarts = 0
+  private neverStarted = 0
+  private diedAfterStart = 0
   private delay = 1_000
 
-  /** Delay before the next helper, or null to give up on the helper for this launch. */
-  next(showedIcon: boolean, livedMs: number): number | null {
-    this.failedStarts = showedIcon ? 0 : this.failedStarts + 1
-    if (this.failedStarts >= MAX_FAILED_STARTS) {
-      return null
-    }
-    // A helper that dies soon after showing the icon keeps backing off.
-    if (livedMs > MAX_RETRY_DELAY) {
+  /**
+   * Delay before the next helper; 'fallback' when the helper can't start at all (in-process is safe),
+   * 'off' when started helpers keep hanging or dying (the in-process icon would hang main the same way).
+   */
+  next(reachedReady: boolean, livedMs: number): MenuBarRestart {
+    if (!reachedReady) {
+      this.neverStarted++
+      if (this.neverStarted >= MAX_STRIKES) {
+        return 'fallback'
+      }
+    } else if (livedMs < MAX_RETRY_DELAY) {
+      this.diedAfterStart++
+      if (this.diedAfterStart >= MAX_STRIKES) {
+        return 'off'
+      }
+    } else {
+      this.neverStarted = 0
+      this.diedAfterStart = 0
       this.delay = 1_000
     }
     const delay = this.delay

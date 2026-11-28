@@ -125,17 +125,16 @@ it.each(['pipe', 'oversized'])(
   }
 )
 
-it('keeps no timer while an idle helper shows the icon and replaces one that misses a reply', () => {
+it('replaces a helper that misses a state reply, not while asleep', () => {
   const { process } = owner()
   const helper = helpers[0]
   helper.send({ type: 'ready' })
   helper.send({ type: 'applied', id: helper.requests[0].id })
-  expect(vi.getTimerCount()).toBe(0)
-  process.suspend()
+  process.deadline.suspend()
   process.update({ ...snapshot, tooltip: 'during sleep' })
   vi.advanceTimersByTime(60_000)
   expect(helper.kill).not.toHaveBeenCalled()
-  process.resume()
+  process.deadline.resume()
   vi.advanceTimersByTime(15_000)
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
@@ -151,8 +150,25 @@ it('keeps a helper whose open menu defers an update', () => {
   expect(helper.kill).not.toHaveBeenCalled()
 })
 
-it('gives up after three helpers fail before showing the icon', () => {
-  const onUnavailable = vi.fn()
+it('replaces a hung helper on the next probe and keeps no timer while idle', () => {
+  const { process } = owner()
+  const helper = helpers[0]
+  helper.send({ type: 'ready' })
+  helper.send({ type: 'applied', id: helper.requests[0].id })
+  vi.advanceTimersByTime(60 * 60_000)
+  expect(vi.getTimerCount()).toBe(0)
+  expect(helper.requests.some((request) => request.type === 'ping')).toBe(false)
+  process.probe()
+  const ping = helper.requests.at(-1)!
+  expect(ping.type).toBe('ping')
+  helper.send({ type: 'pong', id: ping.id })
+  expect(vi.getTimerCount()).toBe(0)
+  process.probe()
+  vi.advanceTimersByTime(15_000)
+  expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
+})
+
+function failingOwner(onUnavailable: (reason: 'fallback' | 'off') => void) {
   const spawn = vi.fn(() => {
     const helper = new Helper()
     helpers.push(helper)
@@ -166,13 +182,33 @@ it('gives up after three helpers fail before showing the icon', () => {
   })
   owners.push(process)
   process.update(snapshot)
+  return spawn
+}
+
+it('falls back in-process only when helpers never start', () => {
+  const onUnavailable = vi.fn()
+  const spawn = failingOwner(onUnavailable)
   for (let attempt = 0; attempt < 3; attempt++) {
     helpers.at(-1)!.exit()
     vi.advanceTimersByTime(60_000)
   }
   expect(spawn).toHaveBeenCalledTimes(3)
-  expect(onUnavailable).toHaveBeenCalledOnce()
+  expect(onUnavailable.mock.calls).toEqual([['fallback']])
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('turns the icon off, never in-process, when started helpers keep hanging', () => {
+  const onUnavailable = vi.fn()
+  failingOwner(onUnavailable)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const helper = helpers.at(-1)!
+    helper.send({ type: 'ready' })
+    vi.advanceTimersByTime(15_000)
+    expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
+    helper.exit()
+    vi.advanceTimersByTime(60_000)
+  }
+  expect(onUnavailable.mock.calls).toEqual([['off']])
 })
 
 it('forces its owned child during immediate parent exit without waiting for helper execution', async () => {
