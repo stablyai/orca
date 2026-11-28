@@ -235,17 +235,22 @@ export function writesHostTabList(methodName: string): boolean {
 /** A tab list read names: `'owner'` or a teammate by account. Absent, the caller's own (`tabOwnerOf`). */
 export type TabListPerson = 'owner' | { accountId: string }
 
-/** The list a read of `person`'s tabs names in a workspace: a teammate's own in the agent's Home, the
- *  host's for the owner and everywhere else (one shared list). */
+/** The list a read of `person`'s tabs names in a workspace: the host's for the owner, a teammate's own
+ *  in the Home of an agent shared with them. Null for anyone else: a teammate has no list outside
+ *  that Home, and the caller is refused rather than shown another list under their name. */
 export function viewedTabListOf(
   worktreeId: string,
   person: TabListPerson,
-  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
-): 'host' | TeammateTabListKey {
+  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId' | 'shares'>[]
+): 'host' | TeammateTabListKey | null {
+  if (person === 'owner') {
+    return 'host'
+  }
   const home = bots.find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
-  return home && person !== 'owner'
-    ? teammateTabListKey({ botId: home.id, accountId: person.accountId })
-    : 'host'
+  const shared = home?.shares?.some(
+    (share) => share.kind === 'account' && share.accountId === person.accountId
+  )
+  return home && shared ? teammateTabListKey({ botId: home.id, accountId: person.accountId }) : null
 }
 
 // ── 6. Read marks ───────────────────────────────────────────────────────────────────────────────

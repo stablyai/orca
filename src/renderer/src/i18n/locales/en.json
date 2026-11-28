@@ -31048,7 +31048,8 @@
       "untitled": "This document isn’t saved yet.",
       "home": "{{name}}’s Home",
       "chatNotInTabs": "Not open in {{name}}’s tabs. Read only.",
-      "chatOfUnknownPerson": "Can’t tell whose chat this is. Read only."
+      "chatOfUnknownPerson": "Can’t tell whose chat this is. Read only.",
+      "olderHost": "Their tabs need a newer Orca on the agent’s computer. Read only."
     }
   },
   "plugins": {

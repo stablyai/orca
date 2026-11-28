@@ -244,22 +244,25 @@ export function ViewedTabListSurface({
   )
 }
 
-/** A chat whose person this window can't tell (the host didn't say, or couldn't be read): shown to
- *  read over this window's own tabs, never placed in them, until × goes back to them. */
-export function UnknownPersonChatSurface({
+/** A chat shown to read over this window's own tabs, never placed in them, until × goes back to
+ *  them: one whose person this window can't tell, or another person's on a host that can't show
+ *  their tabs. `note` says which. */
+export function ReadAloneChatSurface({
   bot,
   homeKey,
-  sessionId
+  sessionId,
+  note
 }: {
   bot: Bot
   homeKey: string
   sessionId: string
+  note: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <div
       className="absolute inset-0 z-30 flex flex-col bg-background"
-      data-viewed-tab-list="unknown"
+      data-viewed-tab-list="read-alone"
     >
       <div className="relative flex h-8 flex-none items-center border-b border-foreground/20 bg-card px-1.5">
         <div className="pointer-events-none absolute inset-0 bg-foreground/5" />
@@ -273,15 +276,7 @@ export function UnknownPersonChatSurface({
           <X />
         </Button>
       </div>
-      <ViewedReadOnlyChat
-        bot={bot}
-        homeKey={homeKey}
-        sessionId={sessionId}
-        note={t(
-          'bots.teammateTabs.chatOfUnknownPerson',
-          'Can’t tell whose chat this is. Read only.'
-        )}
-      />
+      <ViewedReadOnlyChat bot={bot} homeKey={homeKey} sessionId={sessionId} note={note} />
       <div className="pointer-events-none absolute inset-0 z-40 ring-1 ring-foreground/15 ring-inset" />
     </div>
   )

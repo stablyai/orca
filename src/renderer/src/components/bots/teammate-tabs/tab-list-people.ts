@@ -1,6 +1,9 @@
 // The people whose tabs a shared agent's Home holds, as the person filters name them: the viewer first.
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostOrcaAccount } from '@/lib/bot-host-orca-account'
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_TAB_LIST_VIEWS_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botPeoplePicker, type BotChatPersonPick } from '../../../../../shared/bots/bot-chat-people'
 import { sameTabListPerson, type TabListPerson } from './viewed-tab-list'
@@ -32,11 +35,19 @@ export function viewedListOfPick(
   return person && !sameTabListPerson(person, viewerTabListPerson(bot)) ? person : null
 }
 
-/** Null for an agent shared with no one: there is no one else's list to show. */
+/** Whether the agent's host can show another person's list; an older one would answer with this
+ *  viewer's own, so no one else's tabs show there. */
+export function useTabListViews(bot: Pick<Bot, 'hostId'> | null): boolean {
+  const has = useBotHostHas(bot?.hostId ?? LOCAL_EXECUTION_HOST_ID, BOTS_TAB_LIST_VIEWS_CAPABILITY)
+  return bot !== null && has
+}
+
+/** Null for an agent shared with no one, or on a host that can't show their lists. */
 export function useTabListPeople(bot: Bot | null): TabListPeople | null {
   const t = useTranslate()
   const account = useBotHostOrcaAccount(bot?.hostId ?? 'local')
-  if (!bot) {
+  const views = useTabListViews(bot)
+  if (!bot || !views) {
     return null
   }
   const ownName =

@@ -23,6 +23,11 @@ import type { PersonTabListRead } from './use-person-tab-list'
 import type * as BotHosts from '@/lib/bot-hosts'
 import type * as BotCatalog from '@/lib/bot-catalog'
 import type * as FolderRecords from '../../../store/folder-workspaces/folder-workspace-record-index'
+import { useAppStore } from '@/store'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { BOTS_TAB_LIST_VIEWS_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { useTabListPeople } from './tab-list-people'
 
 // The host and the window's own tabs: what a click must leave alone for another person's chat.
 const host = vi.hoisted(() => {
@@ -59,7 +64,13 @@ vi.mock(
 )
 // Mate's list as the host streams it: one terminal, active on their side.
 let theirList: PersonTabListRead = { state: 'loading' }
-vi.mock('./use-person-tab-list', () => ({ usePersonTabList: () => theirList }))
+const readsTheirList = vi.hoisted(() => vi.fn())
+vi.mock('./use-person-tab-list', () => ({
+  usePersonTabList: (...args: unknown[]) => {
+    readsTheirList(...args)
+    return theirList
+  }
+}))
 // The chat and terminal views themselves, by what they were asked to show.
 vi.mock('@/components/native-chat/NativeChatView', () => ({
   default: (props: { sessionId: string; readOnly?: true }) => (
@@ -116,6 +127,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   viewTabList(HOME, null)
+  useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
   vi.clearAllMocks()
 })
 
@@ -285,4 +297,57 @@ it('shows their active tab next when the chat picked from Chats is closed in the
     reason: 'user',
     person: { accountId: MATE.accountId }
   })
+})
+
+/** Mate's copy, on a paired host whose Orca has (or, older, lacks) the view of others' lists. */
+function matesCopyOn(capabilities: string[]): Bot {
+  const environmentId = `env-${capabilities.length}`
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        environmentId,
+        runtimeEnvironmentStatusFromSnapshot({
+          environmentId,
+          pairingRevision: 0,
+          sequence: 1,
+          checkedAt: 1,
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the capability check reads only these.
+          status: { runtimeId: environmentId, capabilities } as RuntimeStatus,
+          verification: 'verified',
+          transport: 'ready'
+        })
+      ]
+    ])
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a paired host's copy, as the host catalog lists it (Bot types only this app's own).
+  return { ...matesCopy, hostId: `runtime:${environmentId}` } as unknown as Bot
+}
+
+it('shows no one else’s tabs on a host too old to name whose list it answers with', () => {
+  const newer = matesCopyOn([BOTS_TAB_LIST_VIEWS_CAPABILITY])
+  expect(renderHook(() => useTabListPeople(newer)).result.current?.others).toHaveLength(1)
+  const older = matesCopyOn([])
+  host.bots = [older]
+  // The avatar menu and the row's entry list no one.
+  expect(renderHook(() => useTabListPeople(older)).result.current).toBeNull()
+  // The owner's chat reads alone; their list is never asked for.
+  openBotChatRow(older, chat({ chatId: 'owner-side' }))
+  render(<ViewedTabListOverlay worktreeId={HOME} />)
+  expect(document.querySelector('[data-chat="owner-side"]')?.getAttribute('data-read-only')).toBe(
+    'true'
+  )
+  expect(screen.queryByRole('tab')).toBeNull()
+  expect(readsTheirList).not.toHaveBeenCalled()
+  expect(host.activate).not.toHaveBeenCalled()
+  // Chats lists the owner's chats by its own filter, showing no list.
+  act(() => viewTabList(HOME, null))
+  const { result } = renderHook(() =>
+    useChatsPersonPick(older, [
+      { pick: { kind: 'owner' } },
+      { pick: { kind: 'person', person: MATE } }
+    ])
+  )
+  act(() => result.current.setPick({ kind: 'owner' }))
+  expect(result.current.pick).toEqual({ kind: 'owner' })
+  expect(viewed()).toBeNull()
 })
