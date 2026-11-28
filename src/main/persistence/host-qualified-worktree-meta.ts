@@ -11,6 +11,7 @@ import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/metadata/local-
 import type { Repo } from '../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -48,10 +49,11 @@ export function readAllWorktreeMetaForHost<
   }
   const projected: Record<string, TMeta> = {}
   const allMeta = store.getAllWorktreeMeta()
+  const repoPrefix = repoId !== undefined ? `${repoId}${WORKTREE_ID_SEPARATOR}` : undefined
   for (const worktreeId in allMeta) {
     if (
       !Object.hasOwn(allMeta, worktreeId) ||
-      (repoId !== undefined && getRepoIdFromWorktreeId(worktreeId) !== repoId)
+      (repoId !== undefined && !worktreeId.startsWith(repoPrefix!) && worktreeId !== repoId)
     ) {
       continue
     }
