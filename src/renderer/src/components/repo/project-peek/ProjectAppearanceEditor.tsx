@@ -44,7 +44,8 @@ export function ProjectAppearanceEditor({
   autoColor: string
   /** Changes on Reset and Undo, which supersede any preview or fetch still pending. */
   appearanceEpoch: number
-  updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => void
+  /** Settles once the write is applied; writes for one repo apply in order. */
+  updateRepo: (repoId: string, updates: RepoAppearanceUpdate) => Promise<unknown>
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = useRepositoryIconActions(repo, updateRepo)
@@ -52,18 +53,30 @@ export function ProjectAppearanceEditor({
   const suggestedLetters = useSuggestedMonogram(repo)
   // Why: opening Letters previews a suggestion; browsing away untouched must give the old icon back.
   const previewedFromRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
+  // Why: the repo prop lags queued writes, so tab switches read the icon this card last wrote.
+  const queuedIconRef = React.useRef<{ icon: RepoIcon | null; epoch: number } | null>(null)
+  const intendedIcon = (): RepoIcon | null => {
+    const queued = queuedIconRef.current
+    return queued && queued.epoch === appearanceEpoch ? queued.icon : (repo.repoIcon ?? null)
+  }
   const setIcon = (repoIcon: RepoIcon | null): void => {
     previewedFromRef.current = null
-    updateRepo(repo.id, { repoIcon })
+    const write = { icon: repoIcon, epoch: appearanceEpoch }
+    queuedIconRef.current = write
+    void updateRepo(repo.id, { repoIcon }).finally(() => {
+      if (queuedIconRef.current === write) {
+        queuedIconRef.current = null
+      }
+    })
   }
 
   const chooseStyle = (next: IconStyle): void => {
     setStyle(next)
+    const current = intendedIcon()
     // Letters need no further input, so switching to them previews the smart pick right away.
-    if (next === 'letters' && repo.repoIcon != null && repo.repoIcon.type !== 'letters') {
-      const previous = repo.repoIcon ?? null
+    if (next === 'letters' && current != null && current.type !== 'letters') {
       setIcon({ type: 'letters', text: suggestedLetters })
-      previewedFromRef.current = { icon: previous, epoch: appearanceEpoch }
+      previewedFromRef.current = { icon: current, epoch: appearanceEpoch }
       return
     }
     const previewed = previewedFromRef.current

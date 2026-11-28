@@ -207,8 +207,8 @@ export function ProjectPeek({
   const remote = getProjectRemoteDisplay(repo)
   // Same-ID repos can exist on several hosts; write to the owner of this card's repo.
   const updateRepo = React.useCallback(
-    (repoId: string, updates: RepoAppearanceUpdate) =>
-      void storeUpdateRepo(repoId, updates, { hostId }),
+    (repoId: string, updates: RepoAppearanceUpdate): Promise<boolean> =>
+      storeUpdateRepo(repoId, updates, { hostId }),
     [storeUpdateRepo, hostId]
   )
   const openRepoSettings = React.useCallback(() => {
