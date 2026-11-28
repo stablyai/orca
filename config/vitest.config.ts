@@ -11,7 +11,7 @@ import {
 } from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
 import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/vitest-shared-worker-files.mjs'
-import { gitSigningOffEnv } from './scripts/test-runtime/environment/vitest-git-signing-env.mjs'
+import { gitFixtureConfigEnv } from './scripts/test-runtime/environment/vitest-git-fixture-config-env.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
@@ -25,7 +25,7 @@ const nodeRuntimeInclude = process.versions.bun
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 // An Orca terminal publishes its WSL hosts gate to children; empty reads as unset, so tests resolve their own.
-const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
+const gitEnv = { ...gitFixtureConfigEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const patchedNoTestFoundLoggers = new WeakSet<object>()
