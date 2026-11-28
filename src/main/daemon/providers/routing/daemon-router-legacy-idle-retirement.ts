@@ -15,7 +15,7 @@ const RECHECK_MAX_MS = 30 * 60_000
 /** A hung decision must not hold reattaches; the generation's own fence still refuses them. */
 const DECISION_FENCE_MAX_MS = 2_000
 /** A held generation closes as it retires; its endpoint is proven gone within a few of these. */
-const RETIRED_CONFIRM_DELAYS_MS = [100, 250, 500, 1_000, 2_000]
+const RETIRED_CONFIRM_DELAYS_MS = [50, 100, 250, 500, 1_000]
 
 type Timer = ReturnType<typeof setTimeout>
 
@@ -98,12 +98,19 @@ export class DaemonRouterLegacyIdleRetirement {
   }
 
   /** After a spawn failed: true when a held generation retired under it (already forgotten, or now). */
-  async settleHeldRetirements(error: unknown, generationsAtStart: number): Promise<boolean> {
+  async settleHeldRetirements(
+    error: unknown,
+    generationsAtStart: number,
+    target: DaemonPtyAdapter | undefined
+  ): Promise<boolean> {
     if (!mayComeFromRetirement(error)) {
       return false
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
-    const settled = await Promise.all(held.map((adapter) => this.confirmRetired(adapter, true)))
+    // Only the generation the spawn reached can have refused it before its close arrives.
+    const settled = await Promise.all(
+      held.map((adapter) => this.confirmRetired(adapter, adapter === target))
+    )
     return settled.includes(true) || this.options.legacy().length < generationsAtStart
   }
 

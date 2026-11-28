@@ -43,18 +43,23 @@ export class DaemonRouterSpawn {
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const generations = this.state.legacy.length
+    const attempt: { target?: DaemonPtyAdapter } = {}
     try {
-      return await this.spawnOnce(opts)
+      return await this.spawnOnce(opts, attempt)
     } catch (error) {
       // An older generation that retired under this spawn owned nothing; route again without it.
-      if (!(await this.legacyIdle.settleHeldRetirements(error, generations))) {
+      const { target } = attempt
+      if (!(await this.legacyIdle.settleHeldRetirements(error, generations, target))) {
         throw error
       }
-      return await this.spawnOnce(opts)
+      return await this.spawnOnce(opts, {})
     }
   }
 
-  private async spawnOnce(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+  private async spawnOnce(
+    opts: PtySpawnOptions,
+    attempt: { target?: DaemonPtyAdapter }
+  ): Promise<PtySpawnResult> {
     const { retirement, sessionAdapters } = this.state
     // Only a known or routed session can reach an older generation; other fresh ones start on current.
     const mayReachLegacy =
@@ -76,6 +81,7 @@ export class DaemonRouterSpawn {
         (opts.sessionId ? sessionAdapters.get(opts.sessionId) : undefined) ??
         (await findLegacySessionOwner(opts, current, this.state.legacy, this.state.exitProof))
       const target = await routeSpawnOrHold(opts, adapter, current, ownerResolver)
+      attempt.target = target
       const result = await target.spawn(opts)
       if (!result.exitedBeforeSpawnReply) {
         ownerResolver.recordRoute(result.id, target, result.incarnationId)
