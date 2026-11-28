@@ -181,7 +181,7 @@ export function MobileBotToolAddedCard({
               <MobileNativeChatNoticePill
                 label={
                   signIn.copied
-                    ? t('bots.tools.signIn.copied', 'Copied')
+                    ? t('common.copied', 'Copied')
                     : t('bots.tools.signIn.copyLink', 'Copy link')
                 }
                 Icon={Copy}

@@ -45,10 +45,8 @@ export const BRIDGE_LEGACY_EXTERNAL_LINK_CHARS = BRIDGE_MAX_ROUTE_HREF_CHARS
 
 // Parse absolute URLs without a base; relative targets belong to navigate. Forward the normalized href so device handling sees the same URL that passed the scheme check.
 // Normalize rather than rejecting changed spellings: bare origins gain a slash, while WHATWG strips controls/space before interpreting schemes.
-export function readBridgeExternalLinkUrl(
-  url: string,
-  maxChars: number = BRIDGE_MAX_EXTERNAL_LINK_CHARS
-): string | null {
+// maxChars is the receiving shell's: a page passes its shell's, the shell its own BRIDGE_MAX_EXTERNAL_LINK_CHARS.
+export function readBridgeExternalLinkUrl(url: string, maxChars: number): string | null {
   // Bound before parsing, then bound normalized output too because percent-encoding can expand it.
   if (url.length > maxChars) {
     return null
@@ -66,7 +64,7 @@ export function readBridgeExternalLinkUrl(
 }
 
 export function isBridgeExternalLinkUrl(url: string): boolean {
-  return readBridgeExternalLinkUrl(url) !== null
+  return readBridgeExternalLinkUrl(url, BRIDGE_MAX_EXTERNAL_LINK_CHARS) !== null
 }
 export const BRIDGE_MAX_PAGE_ROUTES = 64
 

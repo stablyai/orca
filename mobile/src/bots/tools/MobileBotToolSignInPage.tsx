@@ -111,7 +111,7 @@ export function MobileBotToolSignInPage(props: {
             leading={<Copy size={18} color={colors.accentBlue} />}
             accent
             title={t('bots.tools.signIn.copyLink', 'Copy link')}
-            value={signIn.copied ? t('bots.tools.signIn.copied', 'Copied') : undefined}
+            value={signIn.copied ? t('common.copied', 'Copied') : undefined}
             accessibilityRole="button"
             onPress={signIn.copyLink}
           />

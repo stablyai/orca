@@ -10,21 +10,19 @@ export type SignInLinkCopy = {
   copyLink: () => void
   /** The page's link is on the clipboard. */
   copied: boolean
+  /** The last copy of this link failed. */
+  copyFailed: boolean
 }
 
-export function useSignInLinkCopy(
-  url: string | null,
-  /** Each copy's outcome, for the page's error line. */
-  onCopy: (copied: boolean) => void
-): SignInLinkCopy {
+export function useSignInLinkCopy(url: string | null): SignInLinkCopy {
   const opensHere = useMemo(() => url === null || canOpenExternalLink(url), [url])
   const clipboard = useClipboardWriter()
-  const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
-  // The copied link goes with its attempt, including one a late copy reported after it ended.
-  if (copiedUrl !== null && copiedUrl !== url) {
-    setCopiedUrl(null)
+  // The last copy's link and outcome; both go with their attempt.
+  const [copy, setCopy] = useState<{ url: string; copied: boolean } | null>(null)
+  if (copy !== null && copy.url !== url) {
+    setCopy(null)
   }
-  // A copy that settles after its attempt ended reports nothing: the error line is the next attempt's.
+  // A copy that settles after its attempt ended reports nothing.
   const latest = useRef(url)
   useEffect(() => {
     latest.current = url
@@ -35,16 +33,19 @@ export function useSignInLinkCopy(
     }
     const settled = (copied: boolean) => {
       if (latest.current === url) {
-        if (copied) {
-          setCopiedUrl(url)
-        }
-        onCopy(copied)
+        setCopy({ url, copied })
       }
     }
     void clipboard.writeText(url).then(
       () => settled(true),
       () => settled(false)
     )
-  }, [clipboard, url, onCopy])
-  return { opensHere, copyLink, copied: url !== null && copiedUrl === url }
+  }, [clipboard, url])
+  const shown = copy !== null && copy.url === url ? copy : null
+  return {
+    opensHere,
+    copyLink,
+    copied: shown?.copied === true,
+    copyFailed: shown?.copied === false
+  }
 }
