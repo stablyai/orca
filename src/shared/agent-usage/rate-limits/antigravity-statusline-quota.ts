@@ -1,3 +1,4 @@
+import { readClaudeStatusLineForm } from './claude-statusline-rate-limits'
 import type { ProviderRateLimits, RateLimitBucket, RateLimitWindow } from './rate-limit-types'
 
 // agy pipes its own quota to statusLine.command; Orca reads it instead of running agy (#50402).
@@ -98,4 +99,14 @@ export function readAntigravityStatusLineQuota(
       usageMetadata: { source: 'live-session' }
     }
   }
+}
+
+/** Reads the status-line form the managed script posts: `payload` carries agy's JSON. */
+export function readAntigravityStatusLinePost(
+  body: unknown,
+  receivedAt: number
+): AntigravityStatusLineReading | null {
+  const form = readClaudeStatusLineForm(body)
+  const payload = form && 'payload' in form.fields ? form.fields.payload : null
+  return typeof payload === 'string' ? readAntigravityStatusLineQuota(payload, receivedAt) : null
 }

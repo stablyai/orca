@@ -19,6 +19,7 @@ import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/servic
 import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
+import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { releaseIdleChatsOnOtherAccount } from '../../native-chat/agent-session-wire/host/structured-agent-session-account-switch'
@@ -36,6 +37,9 @@ export function createProviderAccountServices(
   options: {
     codexAccountLifecycle?: ConstructorParameters<typeof CodexAccountService>[3]
     setClaudeStatusLineListener: (listener: (event: ClaudeStatusLineRateLimits) => void) => void
+    setAntigravityStatusLineListener: (
+      listener: (reading: AntigravityStatusLineReading) => void
+    ) => void
   }
 ): ProviderAccountServices {
   const agentView = getClaudeAgentViewService()
@@ -127,6 +131,10 @@ export function createProviderAccountServices(
   // Live statusLine usage avoids OAuth endpoint polling and its 429s.
   options.setClaudeStatusLineListener((event) => {
     rateLimits.ingestLiveClaudeRateLimits(event)
+  })
+  // agy's status line is the only Antigravity usage source; Orca never runs agy for it.
+  options.setAntigravityStatusLineListener((reading) => {
+    rateLimits.ingestAntigravityStatusLine(reading)
   })
   rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()

@@ -12,6 +12,7 @@ import type {
   AgentHookStatusChangeEntry,
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload,
+  ServerAntigravityStatusLineListener,
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
@@ -115,6 +116,11 @@ export abstract class AgentHookServerListeners extends AgentHookServerAgentIdent
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ): void {
     this.onClaudeStatusLine = listener
+  }
+
+  // Antigravity's status line carries quota windows for RateLimitService, not agent status.
+  setAntigravityStatusLineListener(listener: ServerAntigravityStatusLineListener): void {
+    this.onAntigravityStatusLine = listener
   }
 
   subscribeStatusChanges(listener: (statuses: AgentHookStatusChangeEntry[]) => void): () => void {

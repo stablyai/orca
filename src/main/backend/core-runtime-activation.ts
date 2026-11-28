@@ -160,6 +160,8 @@ export async function activateBackendRuntime(
     store: profileStore,
     setClaudeStatusLineListener: (listener) =>
       agentHookServer.setClaudeStatusLineListener(listener),
+    setAntigravityStatusLineListener: (listener) =>
+      agentHookServer.setAntigravityStatusLineListener(listener),
     registerCleanup,
     clientCodexHomes: codexAccountHomes
   })

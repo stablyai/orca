@@ -1,5 +1,6 @@
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 import type { RowAgentIdentity } from '../identity/pane-agent-identities'
+import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { PersistedAgentExitEvidence } from './agent-exit-evidence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -188,4 +189,7 @@ export type NormalizedLocalHook = {
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null
+export type ServerAntigravityStatusLineListener =
+  | ((reading: AntigravityStatusLineReading) => void)
+  | null
 export type ServerAgentStatusListener = ((payload: EnrichedAgentHookEventPayload) => void) | null

@@ -9,6 +9,7 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'
@@ -50,6 +51,9 @@ export function createOrcadAccountServices(args: {
   setClaudeStatusLineListener: (
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ) => void
+  setAntigravityStatusLineListener: (
+    listener: ((reading: AntigravityStatusLineReading) => void) | null
+  ) => void
   registerCleanup: (cleanup: BackendServiceCleanup) => void
   /** Client-provided account homes override host selection, as for PTYs. */
   clientCodexHomes: {
@@ -63,11 +67,13 @@ export function createOrcadAccountServices(args: {
   }
   const { store, clientCodexHomes } = args
   const services = createProviderAccountServices(store, {
-    setClaudeStatusLineListener: args.setClaudeStatusLineListener
+    setClaudeStatusLineListener: args.setClaudeStatusLineListener,
+    setAntigravityStatusLineListener: args.setAntigravityStatusLineListener
   })
   args.registerCleanup(() => {
     services.rateLimits.stop()
     args.setClaudeStatusLineListener(null)
+    args.setAntigravityStatusLineListener(null)
   })
   const { codexRuntimeHome } = services
   const prepareCodexHome = createCodexRuntimeHomeLaunchPreparation({

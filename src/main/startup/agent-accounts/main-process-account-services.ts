@@ -37,7 +37,10 @@ export async function initializeMainProcessAccountServices(
   )
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: core.codexSessionMigration.requestRun },
-    setClaudeStatusLineListener: (listener) => agentHookServer.setClaudeStatusLineListener(listener)
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    setAntigravityStatusLineListener: (listener) =>
+      agentHookServer.setAntigravityStatusLineListener(listener)
   })
   core.rateLimits = services.rateLimits
   core.codexRuntimeHome = services.codexRuntimeHome
