@@ -242,12 +242,13 @@ export function useConfirmBotAccess(): (
         details: <AccessFacts key={opened} grant={grant} />,
         confirmLabel: translate('bots.access.confirm', BOT_ACCESS_COPY.confirm),
         confirmVariant: 'destructive',
+        // The gesture that opened it (a held Enter on Add or Review…, a double-click) answers
+        // neither button: only a fresh press does.
+        ignoresOpeningGesture: 'buttons',
         ...(onReject
           ? {
               cancelLabel: translate('bots.access.reject', BOT_ACCESS_COPY.reject),
-              onCancelClicked: onReject,
-              // Both buttons answer: a held Enter or a double-click on Review… must answer neither.
-              ignoresOpeningGesture: 'buttons' as const
+              onCancelClicked: onReject
             }
           : {})
       })

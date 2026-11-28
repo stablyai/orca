@@ -100,9 +100,26 @@ export function ConfirmationDialogSurface({
 
   const openingGesture = displayedRequest?.options.ignoresOpeningGesture
   const guarded = openingGesture === true || openingGesture === 'buttons'
+  // Keys pressed on this prompt's buttons since it opened. A Space released without one was pressed
+  // before it opened; its release is withheld, since a button can act on Space's release. A
+  // defense in depth: Chromium and WebKit don't click on such a release anyway. Clicks themselves
+  // (pointer, assistive tech) keep the usual rule.
+  const keysDown = useRef(new Set<string>())
+  useLayoutEffect(() => {
+    keysDown.current = new Set()
+  }, [activeRequestId])
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
   const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
     if (guarded && event.repeat) {
+      event.preventDefault()
+      return
+    }
+    keysDown.current.add(event.key)
+  }
+  const ignoreStrayRelease = (event: React.KeyboardEvent): void => {
+    const pressedHere = keysDown.current.delete(event.key)
+    // Enter acts on press (its repeats are withheld above); Space acts on release.
+    if (guarded && !pressedHere && event.key === ' ') {
       event.preventDefault()
     }
   }
@@ -195,6 +212,7 @@ export function ConfirmationDialogSurface({
             <DialogCancel
               ref={cancelButtonRef}
               onKeyDown={ignoreRepeatedKey}
+              onKeyUp={ignoreStrayRelease}
               onClick={(event) => {
                 event.preventDefault()
                 if (!isFreshClick(event)) {
@@ -214,6 +232,7 @@ export function ConfirmationDialogSurface({
             size="sm"
             variant={options?.confirmVariant ?? 'default'}
             onKeyDown={ignoreRepeatedKey}
+            onKeyUp={ignoreStrayRelease}
             onClick={(event) => {
               if (isFreshClick(event)) {
                 settle(true)

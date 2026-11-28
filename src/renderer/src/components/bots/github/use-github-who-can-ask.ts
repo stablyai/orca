@@ -1,14 +1,25 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
-import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types'
 import { gitHubLinkedAccounts } from '../../../../../shared/connector-bot-github-contract'
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
+import type { WhoCanAskIdentityLedger } from '../who-can-ask-identity-ledger'
 import { botGitHubErrorMessage } from './bot-github-copy'
+import { gitHubSearchTerm, gitHubWhoCanAskSession } from './github-who-can-ask-session'
+import {
+  gitHubPeopleScope,
+  type GitHubPeopleScope
+} from '../../../../../shared/bots/github-people-scope'
 
 /** A bot's GitHub row › People with access: the GitHub users the owner lets ask it, saved by numeric id.
  *  `linked`: linked and installed, so the bot is reachable on GitHub. `installationId`: one org's row. */
@@ -28,15 +39,62 @@ export function useGitHubWhoCanAsk(
     logins[0]
   const ownerId = shown?.userId ?? null
   const ownerName = shown?.login ?? null
-  const otherOwnerIds = useMemo(
-    () =>
-      (github ? gitHubLinkedAccounts(github) : [])
-        .filter((entry) => entry.userId !== ownerId)
-        .map((entry) => entry.userId),
-    [github, ownerId]
+  // Everything below is keyed by content: a state refresh hands over equal new objects, which
+  // must not rebuild the service, restart the search or drop what it has read.
+  const otherOwnersKey = logins
+    .filter((entry) => entry.userId !== ownerId)
+    .map((entry) => entry.userId)
+    .join('\n')
+  // One list is read for every row, so it is keyed by the first linked login, not this row's.
+  const rosterOwner = logins[0]?.login ?? null
+  const linkedKey = logins.map((entry) => entry.login).join('\n')
+  const linkedLogins = useMemo(() => (linkedKey === '' ? [] : linkedKey.split('\n')), [linkedKey])
+  const installations = github ? github.installations : null
+  // The picker lists the people of every connected repository, for every bot row: a host reads
+  // that list once per app run, so it asks for all of it, whichever installation's row this is.
+  // Keyed by content: a state refresh hands over new objects, which must not restart the search.
+  // Until the GitHub state is read, no scope is sent: unknown, not "nothing connected".
+  const scopeKey = useMemo(
+    () => (installations === null ? null : JSON.stringify(gitHubPeopleScope(installations))),
+    [installations]
   )
-  return useMemo(
-    (): BotWhoCanAskService => ({
+  const scope = useMemo(
+    (): GitHubPeopleScope | undefined => (scopeKey === null ? undefined : JSON.parse(scopeKey)),
+    [scopeKey]
+  )
+  const withOrganizations = (scope?.owners.length ?? 0) > 0
+  // One search session per picker open, rebuilt only when what it reads for changes (host, scope,
+  // linked logins). Presentation stays out of it: the module translator always speaks the current
+  // language, and the host's display name is used only when an error is drawn, so a language or
+  // label change, a refresh, or a change of who is the owner keeps the session and its Try again.
+  const session = useCallback(
+    (ledger?: WhoCanAskIdentityLedger) =>
+      gitHubWhoCanAskSession(
+        botGitHubCalls(hostId),
+        {
+          scope,
+          ownerLogin: rosterOwner,
+          linkedLogins,
+          // Routing, not a friendly name, decides whose Orca holds the list: this window's own
+          // computer only for a local bot outside a paired web window.
+          producer:
+            hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
+          t: translate
+        },
+        ledger
+      ),
+    [hostId, scope, rosterOwner, linkedLogins]
+  )
+  const search = useCallback<BotWhoCanAskService['search']>(
+    (query) => session().search(query),
+    [session]
+  )
+  const errorMessage = useCallback(
+    (code: string) => botGitHubErrorMessage(code, hostName),
+    [hostName]
+  )
+  return useMemo((): BotWhoCanAskService => {
+    return {
       listed: (members) =>
         installationId === undefined
           ? botMembersFrom(members, 'github')
@@ -46,22 +104,31 @@ export function useGitHubWhoCanAsk(
           ? { source: 'github' }
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
-      search: (query) => botGitHubCalls(hostId).users({ query }),
-      errorMessage: (code) => botGitHubErrorMessage(code, hostName),
-      searchPlaceholder: t('bots.github.whoCanAsk.search', 'Search by GitHub username'),
+      search,
+      // One roster read per picker open, filtered as the owner types.
+      begin: session,
+      errorMessage,
+      searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
+      normalizeQuery: gitHubSearchTerm,
+      checkingStatus: t('bots.github.whoCanAsk.checkingUsername', 'Checking a username…'),
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
+      scopedHeading: withOrganizations
+        ? t('bots.github.whoCanAsk.foundInReposAndOrgs', 'Found in your repos and orgs')
+        : t('bots.github.whoCanAsk.foundInRepos', 'Found in your repos'),
+      outsideHeading: t('bots.github.whoCanAsk.elsewhere', 'Elsewhere on GitHub'),
+      outsideTag: withOrganizations
+        ? t('bots.github.whoCanAsk.notFoundInReposOrOrgs', 'Not found in your repos or orgs')
+        : t('bots.github.whoCanAsk.notFoundInRepos', 'Not found in your repos'),
       noMatch: (query) => ({
-        title: t('bots.github.whoCanAsk.noUser', 'No GitHub user named “{{query}}”', {
-          query
-        }),
-        detail: t('bots.github.whoCanAsk.exactOnly', 'GitHub finds people by their exact username.')
+        title: t('bots.github.whoCanAsk.noPerson', 'No one found for “{{query}}”', { query }),
+        detail: t('bots.github.whoCanAsk.checkedWhere', 'Searched your repos and exact usernames.')
       }),
       idleHint: {
-        title: t('bots.github.whoCanAsk.typeUsername', 'Type a GitHub username'),
-        detail: t('bots.github.whoCanAsk.exactOnly', 'GitHub finds people by their exact username.')
+        title: t('bots.github.whoCanAsk.findPeople', 'Find people'),
+        detail: t('bots.github.whoCanAsk.findHow', 'Teammates by name, others by exact username.')
       },
       ownerId,
-      otherOwnerIds,
+      otherOwnerIds: otherOwnersKey === '' ? [] : otherOwnersKey.split('\n'),
       ownerName,
       kind: 'github',
       connector: 'GitHub',
@@ -76,7 +143,17 @@ export function useGitHubWhoCanAsk(
         'bots.github.whoCanAsk.needsSetup',
         'Finish setup to link your GitHub account, then pick people here.'
       )
-    }),
-    [hostId, hostName, linked, installationId, ownerId, otherOwnerIds, ownerName, t]
-  )
+    }
+  }, [
+    errorMessage,
+    linked,
+    installationId,
+    ownerId,
+    otherOwnersKey,
+    ownerName,
+    session,
+    search,
+    withOrganizations,
+    t
+  ])
 }

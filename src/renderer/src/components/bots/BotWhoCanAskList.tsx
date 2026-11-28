@@ -14,15 +14,47 @@ import { BotAccessWarningLine } from './BotAccessWarningLine'
 import type { BotAccessConnector } from '../../../../shared/bots/bot-access-reach'
 import { AttentionDot } from './AttentionDot'
 import { BotWhoCanAskPicker } from './BotWhoCanAskPicker'
+import type { WhoCanAskIdentityLedger } from './who-can-ask-identity-ledger'
 import { OrcaCloudSignInLine } from './orca-cloud-sign-in'
 import { accessRequestPerson } from '../../../../shared/bots/bot-access-request'
 import { requestLine, useBotWhoCanAsk } from './use-bot-who-can-ask'
 
 /** complete is false when the service's people are too many to read whole. */
 export type BotWhoCanAskFound = {
-  /** `app`: another Slack app's bot user, offered beside people. */
-  members: { id: string; name: string; handle?: string; avatarUrl?: string; app?: true }[]
+  /** `group`: where a service that searches its people's scope first found them: `scoped` in that
+   *  scope, `outside` shown not to be in it; absent, unknown, under `peopleHeading`. */
+  members: {
+    id: string
+    name: string
+    handle?: string
+    avatarUrl?: string
+    /** Another Slack app's bot user, offered beside people. */
+    app?: true
+    group?: 'scoped' | 'outside'
+    /** Muted in the real-name slot, saying why this person's source is uncertain. */
+    tag?: string
+  }[]
   complete: boolean
+  /** What this search could not cover, shown in place of the generic incomplete line. */
+  note?: string
+  /** What an empty result says, when the search knows better than the service's `noMatch`. */
+  empty?: { title: string; detail: string }
+  /** Part of this search failed and can be asked again in place (BotWhoCanAskSession.retry). */
+  retryable?: boolean
+  /** Headings and tags naming where this search actually looked, over the service's defaults. */
+  labels?: { scoped?: string; outsideTag?: string }
+  /** Part of the search is still out, so an empty result isn't final yet. */
+  pending?: true
+}
+
+/** One picker open's search. `onUpdate` keeps one listener (the picker's current query), told
+ *  each time more of the search arrives (a list or a username check landing), so the picker can
+ *  ask again; it returns the unsubscribe. */
+export type BotWhoCanAskSession = {
+  search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  onUpdate?: (listener: () => void) => () => void
+  /** Forget what failed in the last search (only when the owner asks), so asking again retries. */
+  retry?: () => void
 }
 
 /** One connector's people: who is listed, how to find more, and what the card says around them. */
@@ -33,13 +65,26 @@ export type BotWhoCanAskService = {
   /** How many people this connector takes, within the bot's BOT_MAX_MEMBERS overall. */
   max: number
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
+  /** Called once per picker open (and context) for a search that keeps what it read across
+   *  keystrokes; its username checks go into `ledger`, which outlives the session. */
+  begin?: (ledger: WhoCanAskIdentityLedger) => BotWhoCanAskSession
+  /** Shown while a username check that could change who a row or pick is is still out. */
+  checkingStatus?: string
   errorMessage: (code: string) => string
   searchPlaceholder: string
+  /** What a search matches people by, from what was typed (GitHub drops a leading @). */
+  normalizeQuery?: (query: string) => string
   /** The picker's heading over found people, e.g. "People in Globex". */
   peopleHeading: string
+  /** The heading over `scoped` people, e.g. "People in your repositories". */
+  scopedHeading?: string
+  /** The heading over `outside` people, kept apart so a stranger never reads as a teammate. */
+  outsideHeading?: string
+  /** Muted beside each `outside` person, so one alone in the results still reads as a stranger. */
+  outsideTag?: string
   /** What an empty search says, naming the query and where it looked. */
   noMatch: (query: string) => { title: string; detail: string }
-  /** Shown instead of people while the search box is empty, for a service that can't list them. */
+  /** Shown while the search box is empty and the service suggests nobody. */
   idleHint?: { title: string; detail: string }
   /** The owner's own account here, listed as the owner rather than offered; null when unknown. */
   ownerId: string | null
@@ -156,11 +201,13 @@ export function BotWhoCanAskList({
       </PopoverTrigger>
       <PopoverContent align={compact ? 'end' : 'start'} className="w-80">
         {pickerOpen ? (
+          // A draft belongs to one bot on one host: another one starts the picker afresh.
           <BotWhoCanAskPicker
+            key={`${bot.hostId}\0${bot.id}`}
             bot={bot}
             service={service}
             owner={owner}
-            onPicked={(picked) => void add(picked)}
+            onPicked={(picked, proposal) => void add(picked, undefined, proposal)}
           />
         ) : null}
       </PopoverContent>
