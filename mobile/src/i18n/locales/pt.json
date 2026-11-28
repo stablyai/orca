@@ -2109,7 +2109,9 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "loading": "Carregando arquivos…"
+      "loading": "Carregando arquivos…",
+      "more": "Mais",
+      "newEntry": "Novo"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
@@ -2124,7 +2126,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",
-      "copyRelativePath": "Copiar Caminho Relativo"
+      "copyRelativePath": "Copiar Caminho Relativo",
+      "newFile": "Novo arquivo",
+      "newFolder": "Nova pasta",
+      "rename": "Renomear",
+      "duplicate": "Duplicar",
+      "create": "Criar",
+      "fileName": "Nome do arquivo",
+      "folderName": "Nome da pasta",
+      "deleteTitle": "Excluir {{name}}?",
+      "deleteFileDetail": "Isso exclui o arquivo permanentemente. Não é possível desfazer.",
+      "deleteFolderDetail": "Isso exclui a pasta e seu conteúdo permanentemente. Não é possível desfazer.",
+      "duplicateFailed": "Não foi possível duplicar {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "A cópia pode estar incompleta. Verifique-a e tente novamente.",
+      "deleteFailed": "Não foi possível excluir {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Ainda está lá. Verifique a pasta e tente novamente.",
+      "renameFailed": "Não foi possível renomear {{name}}. {{reason}}",
+      "newFileFailed": "Não foi possível criar o arquivo. {{reason}}",
+      "newFolderFailed": "Não foi possível criar a pasta. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",

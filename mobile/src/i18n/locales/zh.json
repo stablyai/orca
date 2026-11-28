@@ -2140,7 +2140,9 @@
       "searchPlaceholder": "搜索文件",
       "loadFailed": "无法加载文件",
       "title": "文件",
-      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项"
+      "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
+      "more": "更多",
+      "newEntry": "新建"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
@@ -2155,7 +2157,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "复制名称",
-      "copyRelativePath": "复制相对路径"
+      "copyRelativePath": "复制相对路径",
+      "newFile": "新建文件",
+      "newFolder": "新建文件夹",
+      "rename": "重命名",
+      "duplicate": "创建副本",
+      "create": "创建",
+      "fileName": "文件名",
+      "folderName": "文件夹名称",
+      "deleteTitle": "要删除 {{name}} 吗？",
+      "deleteFileDetail": "这会永久删除此文件，且无法撤销。",
+      "deleteFolderDetail": "这会永久删除此文件夹及其内容，且无法撤销。",
+      "duplicateFailed": "无法为 {{name}} 创建副本。{{reason}}",
+      "duplicateUnconfirmed": "副本可能不完整。请检查后重试。",
+      "deleteFailed": "无法删除 {{name}}。{{reason}}",
+      "deleteUnconfirmed": "它仍在原处。请检查文件夹后重试。",
+      "renameFailed": "无法重命名 {{name}}。{{reason}}",
+      "newFileFailed": "无法创建文件。{{reason}}",
+      "newFolderFailed": "无法创建文件夹。{{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",

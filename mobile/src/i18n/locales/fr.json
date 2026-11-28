@@ -2107,7 +2107,9 @@
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
-      "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés"
+      "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
+      "more": "Plus",
+      "newEntry": "Nouveau"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponible sur mobile",
@@ -2122,7 +2124,24 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
-      "copyRelativePath": "Copier le chemin relatif"
+      "copyRelativePath": "Copier le chemin relatif",
+      "newFile": "Nouveau fichier",
+      "newFolder": "Nouveau dossier",
+      "rename": "Renommer",
+      "duplicate": "Dupliquer",
+      "create": "Créer",
+      "fileName": "Nom du fichier",
+      "folderName": "Nom du dossier",
+      "deleteTitle": "Supprimer {{name}} ?",
+      "deleteFileDetail": "Le fichier sera supprimé définitivement. Cette action est irréversible.",
+      "deleteFolderDetail": "Le dossier et son contenu seront supprimés définitivement. Cette action est irréversible.",
+      "duplicateFailed": "Impossible de dupliquer {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "La copie est peut-être incomplète. Vérifiez-la et réessayez.",
+      "deleteFailed": "Impossible de supprimer {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Il est toujours là. Vérifiez le dossier et réessayez.",
+      "renameFailed": "Impossible de renommer {{name}}. {{reason}}",
+      "newFileFailed": "Impossible de créer le fichier. {{reason}}",
+      "newFolderFailed": "Impossible de créer le dossier. {{reason}}"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
