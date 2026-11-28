@@ -12,8 +12,12 @@ const lowlightAllStub = path.join(
   'lowlight-unused-all-stub.js'
 )
 const zodLocalesStub = path.join(projectRoot, 'scripts', 'zod-locales-en-only-stub.cjs')
-const zodJsonSchemaStub = path.join(projectRoot, 'scripts', 'zod-json-schema-unused-stub.cjs')
 const emptyModuleStub = path.join(projectRoot, 'scripts', 'metro-empty-module-stub.cjs')
+const {
+  ensureCompressedLocaleCatalogsSync
+} = require('./scripts/sync-compressed-locale-catalogs.cjs')
+
+ensureCompressedLocaleCatalogsSync()
 
 const UNUSED_REANIMATED_ANIMATION_MODULES = new Set([
   './Bounce',
@@ -72,18 +76,11 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   ) {
     return { type: 'sourceFile', filePath: lowlightAllStub }
   }
-  if (context.originModulePath.includes(`${path.sep}zod${path.sep}`)) {
-    if (moduleName === '../locales/index.cjs' || moduleName === './locales/index.cjs') {
-      return { type: 'sourceFile', filePath: zodLocalesStub }
-    }
-    if (
-      moduleName === '../core/json-schema-processors.cjs' ||
-      moduleName === './from-json-schema.cjs' ||
-      moduleName === './to-json-schema.cjs' ||
-      moduleName === '../core/to-json-schema.cjs'
-    ) {
-      return { type: 'sourceFile', filePath: zodJsonSchemaStub }
-    }
+  if (
+    context.originModulePath.includes(`${path.sep}zod${path.sep}`) &&
+    (moduleName === '../locales/index.cjs' || moduleName === './locales/index.cjs')
+  ) {
+    return { type: 'sourceFile', filePath: zodLocalesStub }
   }
   if (
     UNUSED_REANIMATED_ANIMATION_MODULES.has(moduleName) &&

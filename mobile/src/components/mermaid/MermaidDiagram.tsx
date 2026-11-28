@@ -48,7 +48,11 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
     void (async () => {
       try {
         const mermaid = await loadPageMermaid()
-        if (!mermaid || disposed) {
+        if (disposed) {
+          return
+        }
+        if (!mermaid) {
+          setFailedSource(source)
           return
         }
         mermaid.initialize(mermaidDiagramConfig(colorScheme, colors))
