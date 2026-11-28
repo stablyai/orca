@@ -22555,7 +22555,9 @@
       },
       "workers": {
         "stopUnconfirmed": "Orca couldn’t confirm the worker stopped.",
-        "stopUnreachable": "Orca couldn't reach {{server}} to stop {{agent}}."
+        "stopUnreachable": "Orca couldn't reach {{server}} to stop {{agent}}.",
+        "stopNoAnswer": "{{server}} didn't answer in time. The worker may already be stopped.",
+        "stopHelperUnconfirmed": "Orca couldn't confirm a helper of {{agent}} stopped."
       },
       "connectorAsker": {
         "anApp": "An app",

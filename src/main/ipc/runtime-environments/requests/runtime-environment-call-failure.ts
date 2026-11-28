@@ -6,10 +6,12 @@ import type {
   RuntimeRpcResponse
 } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { runtimeEnvironmentManualDisconnectReason } from '../connectivity/runtime-environment-manual-disconnect'
-import { CLIENT_MADE_FAILURE_DATA } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
+import { clientMadeFailureData } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
 
+/** `beforeSend`: refused before the call was made, so nothing was sent; after it, the call's fate is unknown. */
 export function manuallyDisconnectedResponse(
-  environment: Awaited<ReturnType<typeof resolveEnvironment>>
+  environment: Awaited<ReturnType<typeof resolveEnvironment>>,
+  beforeSend = false
 ): RuntimeRpcResponse<never> {
   return {
     id: 'runtime.manualDisconnect',
@@ -17,7 +19,7 @@ export function manuallyDisconnectedResponse(
     error: {
       code: 'runtime_manually_disconnected',
       message: runtimeEnvironmentManualDisconnectReason(environment.id),
-      data: CLIENT_MADE_FAILURE_DATA
+      data: clientMadeFailureData(undefined, beforeSend)
     },
     _meta: { runtimeId: environment.runtimeId }
   }
@@ -37,7 +39,20 @@ export function runtimeEnvironmentCallFailure(
   return {
     id: method,
     ok: false,
-    error: { code: error.code, message: error.message, data: CLIENT_MADE_FAILURE_DATA },
+    error: {
+      code: error.code,
+      message: error.message,
+      data: clientMadeFailureData(
+        error instanceof RemoteRuntimeClientError ? error.data : undefined,
+        error instanceof RemoteRuntimeClientError && failedBeforeAuth(error)
+      )
+    },
     _meta: { runtimeId: environment.runtimeId }
   }
+}
+
+/** A failure before the host authenticated us, when nothing but the handshake has been sent. (The
+ *  socket's own keyed-request proof, `requestSent: false`, is in its data, which is kept.) */
+function failedBeforeAuth(error: RemoteRuntimeClientError): boolean {
+  return error.pairingStage !== undefined && error.pairingStage !== 'runtime'
 }

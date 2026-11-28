@@ -6,7 +6,9 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { useAppStore } from '@/store/index'
 import { fixtureCos } from '../../component-fixtures/fixture-bot-panel'
-import { CLIENT_MADE_FAILURE_DATA } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
+import { clientMadeFailureData } from '../../../../shared/remote-runtime/rpc/runtime-rpc-client-made-failure'
+import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotItemLinkView } from '../../../../shared/bots/bot-items'
 import type { BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
@@ -15,10 +17,6 @@ import { BotItemLinkChips } from './items/BotItemLinkChips'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn() } }))
-// The paired server's version check is not what these cases are about; it passes.
-vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
-  ensureRuntimeEnvironmentCompatible: vi.fn(async () => null)
-}))
 
 const localCall = vi.fn()
 const pairedCall = vi.fn()
@@ -44,6 +42,7 @@ afterEach(() => {
   cleanup()
   window.api = originalApi
   useAppStore.setState(useAppStore.getInitialState(), true)
+  clearRuntimeCompatibilityCache()
   localCall.mockReset()
   pairedCall.mockReset()
   vi.mocked(toast.error).mockReset()
@@ -83,10 +82,29 @@ const refused = (code: string, message: string, data?: unknown) => ({
   _meta: { runtimeId: 'm4' }
 })
 
+// The paired computer's version check (the real probe) passes; its stop answers `stop`.
+const compatible = answered({
+  runtimeId: 'm4',
+  runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+  minCompatibleRuntimeClientVersion: RUNTIME_PROTOCOL_VERSION
+})
+function pairedAnswers(stop: unknown): void {
+  pairedCall.mockImplementation(async (args: { method: string }) =>
+    args.method === 'status.get' ? compatible : stop
+  )
+}
+const stopCalls = () =>
+  pairedCall.mock.calls.filter(([args]) => args.method === 'orchestration.workerStop')
+async function toastShown(): Promise<[unknown, unknown]> {
+  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
+  const [title, options] = vi.mocked(toast.error).mock.calls[0]
+  return [title, options]
+}
+
 // The bot's home is a paired computer, so its worker's Dispatch is there. The stop carries a request
 // id, which that computer needs to stop a worker it placed on a third computer.
 it('stops a worker of a bot on a paired computer on that computer, with a request id', async () => {
-  pairedCall.mockResolvedValue(answered({ dispatchId: dispatch, state: 'stopped' }))
+  pairedAnswers(answered({ dispatchId: dispatch, state: 'stopped' }))
   clickChipStop(pairedBot)
   await waitFor(() =>
     expect(pairedCall).toHaveBeenCalledWith(
@@ -99,14 +117,14 @@ it('stops a worker of a bot on a paired computer on that computer, with a reques
     )
   )
   // A stop there can take longer than an ordinary call's 15 s.
-  expect(pairedCall.mock.calls[0][0].timeoutMs).toBeGreaterThan(15_000)
+  expect(stopCalls()[0][0].timeoutMs).toBeGreaterThan(15_000)
   expect(localCall).not.toHaveBeenCalled()
   expect(toast.error).not.toHaveBeenCalled()
 })
 
 // The bot's chat tree row (also the item's "+N" rows) sends its Stop to the same computer.
 it("stops from a paired bot's chat tree row on that computer", async () => {
-  pairedCall.mockResolvedValue(answered({ dispatchId: dispatch, state: 'stopped' }))
+  pairedAnswers(answered({ dispatchId: dispatch, state: 'stopped' }))
   const worker: BotChatTreeWorker = {
     key: dispatch,
     title: 'Prod scan',
@@ -128,58 +146,123 @@ it("stops from a paired bot's chat tree row on that computer", async () => {
   expect(localCall).not.toHaveBeenCalled()
 })
 
-// No answer at all from the paired computer: the notice names it and the worker.
-it("names the paired computer when it can't be reached", async () => {
-  pairedCall.mockResolvedValue(
+// This Orca proves the stop never left it (no connection): the notice names the computer and the worker.
+it('names the paired computer when the stop never reached it', async () => {
+  pairedAnswers(
     refused(
       'remote_runtime_unavailable',
       'Could not connect to the remote Orca runtime.',
-      CLIENT_MADE_FAILURE_DATA
+      clientMadeFailureData(undefined, true)
     )
   )
   clickChipStop(pairedBot)
-  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
-  const [title, options] = vi.mocked(toast.error).mock.calls[0]
+  const [title, options] = await toastShown()
   expect(title).toEqual(expect.stringContaining('M4 Air'))
   expect(title).toEqual(expect.stringContaining('Prod scan'))
   expect(options).toBeUndefined()
 })
 
-// The paired computer answered, about a third computer it couldn't reach: its words, not "couldn't reach M4 Air".
-it("keeps the paired computer's own answer when it couldn't reach another computer", async () => {
-  const message = 'Could not check whether the user kept Dispatch ctx_remote000001 open on C.'
-  pairedCall.mockResolvedValue(refused('remote_runtime_unavailable', message))
+// The version check before the stop can't reach the computer (a cold probe, no marker on its failure):
+// the stop was never sent, so the notice names the computer.
+it('names the paired computer when its version check fails before the stop', async () => {
+  pairedCall.mockImplementation(async (args: { method: string }) =>
+    args.method === 'status.get'
+      ? refused('remote_runtime_unavailable', 'Could not connect to the remote Orca runtime.')
+      : answered({ dispatchId: dispatch, state: 'stopped' })
+  )
   clickChipStop(pairedBot)
-  await waitFor(() => expect(toast.error).toHaveBeenCalledTimes(1))
-  const [title, options] = vi.mocked(toast.error).mock.calls[0]
+  const [title, options] = await toastShown()
+  expect(stopCalls()).toHaveLength(0)
+  expect(title).toEqual(expect.stringContaining('M4 Air'))
+  expect(title).toEqual(expect.stringContaining('Prod scan'))
+  expect(options).toBeUndefined()
+})
+
+// Sent, then no reply in time: the worker may be stopped, so this is unconfirmed, not unreachable.
+it('says the stop is unconfirmed when the paired computer times out after the send', async () => {
+  pairedAnswers(
+    refused(
+      'runtime_timeout',
+      'Timed out waiting for the remote Orca runtime to respond.',
+      clientMadeFailureData(undefined, false)
+    )
+  )
+  clickChipStop(pairedBot)
+  const [title, options] = await toastShown()
+  expect(title).not.toEqual(expect.stringContaining('M4 Air'))
+  expect(options).toEqual({ description: expect.stringContaining('M4 Air') })
+})
+
+// A full call queue says nothing about the connection: unconfirmed, in its own words.
+it("keeps a full call queue's own words, unconfirmed", async () => {
+  const message = 'Remote runtime call queue is full; retry after current calls finish.'
+  pairedAnswers(
+    refused('runtime_rpc_queue_overloaded', message, clientMadeFailureData(undefined, false))
+  )
+  clickChipStop(pairedBot)
+  const [title, options] = await toastShown()
   expect(title).not.toEqual(expect.stringContaining('M4 Air'))
   expect(options).toEqual({ description: message })
 })
 
+// The paired computer answered, about a third computer it couldn't reach (its data even says "unsent"):
+// its words, not "couldn't reach M4 Air".
+it("keeps the paired computer's own answer when it couldn't reach another computer", async () => {
+  const message = 'Could not check whether the user kept Dispatch ctx_remote000001 open on C.'
+  pairedAnswers(refused('remote_runtime_unavailable', message, { requestSent: false }))
+  clickChipStop(pairedBot)
+  const [title, options] = await toastShown()
+  expect(title).not.toEqual(expect.stringContaining('M4 Air'))
+  expect(options).toEqual({ description: message })
+})
+
+// An unanswered stop the paired computer still owes keeps its own account of why.
+it("shows the paired computer's account of a stop it is still owed", async () => {
+  const next = 'C did not answer, so its worker may still run there. Orca keeps trying.'
+  pairedAnswers(answered({ dispatchId: dispatch, state: 'stop_requested', server: 'C', next }))
+  clickChipStop(pairedBot)
+  const [, options] = await toastShown()
+  expect(options).toEqual({ description: next })
+})
+
+const helperOf = (outcome: string, lastError?: string) => ({
+  dispatchId: `ctx_helper_${outcome}`,
+  creatorDispatchId: dispatch,
+  outcome,
+  ...(lastError ? { lastError } : {})
+})
+const stoppedWith = (...helpers: unknown[]) =>
+  answered({
+    dispatchId: dispatch,
+    state: 'stopped',
+    alreadySettled: false,
+    processAction: 'closed_agent_terminal',
+    helpers
+  })
+
 // The worker stopped, but a helper it started could not be proven stopped: that is no clean stop.
 it('says so when a helper under the stopped worker is unconfirmed', async () => {
-  pairedCall.mockResolvedValue(
-    answered({
-      dispatchId: dispatch,
-      state: 'stopped',
-      alreadySettled: false,
-      processAction: 'closed_agent_terminal',
-      helpers: [
-        {
-          dispatchId: 'ctx_helper000001',
-          creatorDispatchId: dispatch,
-          outcome: 'unconfirmed',
-          lastError: 'C did not answer.'
-        }
-      ]
-    })
-  )
+  pairedAnswers(stoppedWith(helperOf('unconfirmed', 'C did not answer.')))
   clickChipStop(pairedBot)
-  await waitFor(() =>
-    expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
-      description: 'C did not answer.'
-    })
-  )
+  const [title, options] = await toastShown()
+  expect(title).toEqual(expect.stringContaining('Prod scan'))
+  expect(options).toEqual({ description: 'C did not answer.' })
+})
+
+// A helper still starting is not proven stopped either; one the user kept open is.
+it('says so when a helper under the stopped worker is still starting', async () => {
+  pairedAnswers(stoppedWith(helperOf('kept_open'), helperOf('starting')))
+  clickChipStop(pairedBot)
+  const [title] = await toastShown()
+  expect(title).toEqual(expect.stringContaining('Prod scan'))
+})
+
+it('is a clean stop when the only helper left running is one the user kept open', async () => {
+  pairedAnswers(stoppedWith(helperOf('kept_open'), helperOf('stopped')))
+  clickChipStop(pairedBot)
+  await waitFor(() => expect(stopCalls()).toHaveLength(1))
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(toast.error).not.toHaveBeenCalled()
 })
 
 // This computer's own bot keeps the local stop, with its request id for replay.

@@ -199,7 +199,7 @@ function registerPassiveCallHandler(
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
-        return manuallyDisconnectedResponse(environment)
+        return manuallyDisconnectedResponse(environment, true)
       }
       if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
         return wslMoveUndoSpawnFencedResponse(environment, args.method)
