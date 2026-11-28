@@ -4,9 +4,9 @@ import type { RemoteRunLinkRow } from './remote-run-links'
 import { getRemoteDispatch, type RemoteDispatchRow } from './remote-dispatch-records'
 import { writtenRow } from './written-row'
 
-// The asker's terminal and turn come only from the placement: only its start's answer can prove them.
+// The asker's terminal and turn come only from the placement, and never change once proven.
 const NO_ASKER = `remote_dispatches.creator_handle IS NULL
-  AND remote_dispatches.creator_turn_source IS NULL`
+  AND remote_dispatches.creator_turn_source IS NULL AND remote_dispatches.asker_proven = 0`
 
 /** What names a server's Dispatch here. `earlierDispatchId`: the server's Dispatch it continues (a
  *  follow-up) or whose worker started it (a helper). */

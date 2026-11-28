@@ -455,6 +455,19 @@ describe('the asker a paired-server attempt reports for', () => {
     expect(run.judge().toThread).toBe(false)
   })
 
+  it("keeps a proven attempt's asker when a retry's ask arrives later", () => {
+    const run = pairedRun()
+    run.reserve({ kind: 'system' })
+    const first = run.start()
+    run.receive(first)
+    run.fail(first, 'never-ready')
+    run.pull()
+    run.reserve(THREAD_TURN, 'retry-key', first)
+    // A late copy of the first start's answer.
+    run.receive(first)
+    expect(run.judge(sentBy(`dispatch:${first}`)).toThread).toBe(false)
+  })
+
   it('names no one for an attempt the server started by itself', () => {
     const run = pairedRun()
     run.reserve(THREAD_TURN)
