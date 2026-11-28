@@ -148,10 +148,6 @@ export function createTabsCloseActions(
               closed = item
               return false
             })
-            if (closed?.contentType === 'agent-session') {
-              retireNativeChatTab(closed, anotherChatTabInWorktree(current, closed, worktreeId))
-              releaseRemovedChatTabsLater([closed])
-            }
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId
               ? omitRecordKeys(current.unreadTerminalTabs, [terminalEntityId])
@@ -192,6 +188,10 @@ export function createTabsCloseActions(
             const nextUnifiedTabsByWorktree = replaceTabBuckets(current.unifiedTabsByWorktree, [
               [worktreeId, nextTabs]
             ])
+            if (closed?.contentType === 'agent-session') {
+              retireNativeChatTab(closed, nextUnifiedTabsByWorktree)
+              releaseRemovedChatTabsLater([closed])
+            }
             const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
               [worktreeId, nextGroups]
             ])
