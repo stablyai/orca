@@ -2,16 +2,30 @@
 
 import { randomUUID } from 'node:crypto'
 import type { PostHog } from 'posthog-node'
-import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
-import type { AgentDashboardSurface } from '../../shared/telemetry-agent-dashboard-event-schemas'
+import type * as events from '../../shared/telemetry/telemetry-event-classification'
+import type { OptInVia } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { Store } from '../persistence/loading-store/store'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { consumeBurstToken, resetBurstCapsForSession } from './burst-cap'
-import { telemetryEventSampleRate } from './event-sampling'
+import {
+  noteTelemetryEventQueued,
+  resetEventSamplingForSession,
+  telemetryEventSampleRate
+} from './event-sampling'
+import * as protectedMilestones from './protected-milestones'
 import { experimentCohortProps } from './experiment-cohort-props'
 import { getCohortAtEmit } from './cohort-classifier'
-import { isConsentEnvOverridden, resolveConsent } from './consent'
+import {
+  isConsentEnvOverridden,
+  resolveConsent,
+  recordSharingAtLaunch,
+  telemetryWithOptIn
+} from './consent'
 import * as postHogStart from './posthog-client-start'
-import { buildCommonProps, createPostHogClient, waitForCaptureEnqueue } from './posthog-transport'
+import { buildCommonProps, createPostHogClient } from './posthog-transport'
+import { captureOptOutBeforeSdkOptOut } from './opt-out-capture'
+import { flushPickerAccepts, rollUpPickerAccept } from './picker-accept-rollup'
+import { saveDashboardActiveDay, trackedDashboardActiveDays } from './agent-dashboard-active-days'
 import { commonPropsSchema, validate } from './validator'
 
 export { shouldOptOutSdkAtInit } from './posthog-transport'
@@ -36,25 +50,29 @@ const IS_OFFICIAL_BUILD: boolean =
 
 let posthog: PostHog | null = null
 let sessionId: string | null = null
-let commonProps: CommonProps | null = null
+let commonProps: events.CommonProps | null = null
 let shuttingDown = false
 let storeRef: Store | null = null
 
 let testTransportEnabled = false
 
+type CaptureProperties = Readonly<Record<string, unknown>>
+
 // Banner resolution gates first app_opened; mark and emit atomically.
 let appOpenedTrackedThisSession = false
-const trackedDashboardActiveDays = new Map<AgentDashboardSurface, number>()
 
 export function initTelemetry(store: Store, scheduleStart: postHogStart.StartScheduler): void {
   // Retain Store even for contributor builds so opt-out persists.
   storeRef = store
   resetBurstCapsForSession()
+  resetEventSamplingForSession()
   shuttingDown = false
   // Reset banner/app-open gating each launch, not once per install.
   appOpenedTrackedThisSession = false
   trackedDashboardActiveDays.clear()
+  protectedMilestones.bindSession(store, enqueueCapture, isTelemetryEnabled)
   postHogStart.resetStart()
+  recordSharingAtLaunch(store)
 
   if (!TELEMETRY_ENABLED || !IS_OFFICIAL_BUILD || BUILD_IDENTITY === null || WRITE_KEY === null) {
     return
@@ -102,6 +120,11 @@ function ensurePostHogClient(): PostHog | null {
   return posthog
 }
 
+export const isTelemetryInitialized = (): boolean => storeRef !== null
+
+export const telemetrySettings = (): GlobalSettings['telemetry'] | undefined =>
+  storeRef?.getSettings().telemetry
+
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
   return (
@@ -114,32 +137,32 @@ export function isTelemetryEnabled(): boolean {
   )
 }
 
-export function hasTrackedAgentDashboardActiveToday(props: unknown): boolean {
-  if (!props || typeof props !== 'object' || !('surface' in props)) {
-    return false
-  }
-  const surface = props.surface
-  return (
-    (surface === 'in_window' || surface === 'popout') &&
-    (trackedDashboardActiveDays.get(surface) ?? -1) >= Math.floor(Date.now() / 86_400_000)
-  )
-}
-
-export function track<N extends EventName>(name: N, props: EventProps<N>): boolean {
+export function track<N extends events.EventName>(name: N, props: events.EventProps<N>): boolean {
   if (!testTransportEnabled && (!IS_OFFICIAL_BUILD || !TELEMETRY_ENABLED)) {
     return false
   }
 
-  const sampleRate = telemetryEventSampleRate(name)
+  const now = Date.now()
+  const sampleRate = telemetryEventSampleRate(
+    name,
+    props,
+    now,
+    (client) => storeRef?.getSettings().telemetry?.chatMessageSentDays?.[client]
+  )
   // Reject late IPC while the client flushes.
   if (
     shuttingDown ||
     (!posthog && !postHogStart.isStartDeferred()) ||
     !commonProps ||
     !storeRef ||
-    posthog?.optedOut ||
-    (sampleRate < 1 && Math.random() >= sampleRate)
+    posthog?.optedOut
   ) {
+    return false
+  }
+  const sampledOut = sampleRate < 1 && Math.random() >= sampleRate
+  // Milestones derive from every observation, so sampling and budgets cannot hide them.
+  const milestoneDay = protectedMilestones.observationDay(name)
+  if (sampledOut && milestoneDay === null) {
     return false
   }
 
@@ -151,7 +174,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
     (props.surface === 'in_window' || props.surface === 'popout')
       ? props.surface
       : null
-  const dashboardActiveDay = dashboardActiveSurface ? Math.floor(Date.now() / 86_400_000) : 0
+  const dashboardActiveDay = dashboardActiveSurface ? Math.floor(now / 86_400_000) : 0
   // Drop repeat observations before they can exhaust the session-wide event budget.
   if (
     dashboardActiveSurface &&
@@ -161,7 +184,8 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   }
 
   // Cap floods before expensive live consent reads, including opted-out renderers.
-  if (!consumeBurstToken(name)) {
+  const withinBudget = !sampledOut && consumeBurstToken(name)
+  if (!withinBudget && milestoneDay === null) {
     return false
   }
 
@@ -175,6 +199,12 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   // Validate schemas, exact keys, enums and bounded strings at one entry point.
   const result = validate(name, props)
   if (!result.ok) {
+    return false
+  }
+  if (milestoneDay !== null) {
+    protectedMilestones.record(name, result.props, settings, milestoneDay)
+  }
+  if (!withinBudget) {
     return false
   }
   if (dashboardActiveSurface) {
@@ -196,39 +226,32 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
         ? { sample_rate: sampleRate }
         : {}
 
+  if (name === 'native_chat_picker_item_accepted') {
+    return rollUpPickerAccept(result.props, now, storeRef, track)
+  }
+  enqueueCapture(name, { ...result.props, ...mainOwnedProps })
+  noteTelemetryEventQueued(name, result.props, now, storeRef)
+  if (dashboardActiveSurface) {
+    saveDashboardActiveDay(storeRef, settings, dashboardActiveSurface, dashboardActiveDay)
+  }
+  return true
+}
+
+function enqueueCapture(name: events.EventName, props: CaptureProperties): void {
+  if (!commonProps) {
+    throw new Error('telemetry common props missing')
+  }
   // Node SDK requires per-capture person-profile suppression.
   const message = {
     distinctId: commonProps.install_id,
     event: name,
-    properties: {
-      ...commonProps,
-      ...result.props,
-      ...mainOwnedProps,
-      $process_person_profile: false
-    }
+    properties: { ...commonProps, ...props, $process_person_profile: false }
   }
   if (posthog) {
     posthog.capture(message)
   } else {
     postHogStart.holdCapture(message, ensurePostHogClient)
   }
-  if (dashboardActiveSurface && settings.telemetry) {
-    trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
-    try {
-      storeRef.updateSettings({
-        telemetry: {
-          ...settings.telemetry,
-          agentDashboardActiveDays: {
-            ...settings.telemetry.agentDashboardActiveDays,
-            [dashboardActiveSurface]: dashboardActiveDay
-          }
-        }
-      })
-    } catch (err) {
-      console.warn('[telemetry] failed to persist dashboard daily usage limit', err)
-    }
-  }
-  return true
 }
 
 export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
@@ -240,12 +263,7 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   const settings = storeRef.getSettings()
   // Deep-merge opt-in without clobbering installation identity or cohort.
   storeRef.updateSettings(
-    {
-      telemetry: {
-        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-        optedIn
-      }
-    },
+    { telemetry: telemetryWithOptIn(settings, optedIn) },
     { notifyListeners: true }
   )
 
@@ -261,27 +279,9 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
     if (!client || isConsentEnvOverridden()) {
       return
     }
-    // Enqueue opt-out directly before disabling SDK; track would reject it under the newly stored preference.
     try {
-      if (!shuttingDown && commonProps && consumeBurstToken('telemetry_opted_out')) {
-        const validated = validate('telemetry_opted_out', { via })
-        if (validated.ok) {
-          const uuid = randomUUID()
-          const enqueued = waitForCaptureEnqueue(client, 'telemetry_opted_out', uuid)
-          client.capture({
-            distinctId: commonProps.install_id,
-            event: 'telemetry_opted_out',
-            uuid,
-            properties: {
-              ...commonProps,
-              ...validated.props,
-              $process_person_profile: false
-            }
-          })
-          if (!(await enqueued)) {
-            console.warn('[telemetry] telemetry_opted_out did not enqueue before SDK opt-out')
-          }
-        }
+      if (!shuttingDown && commonProps) {
+        await captureOptOutBeforeSdkOptOut(client, commonProps, via)
       }
     } catch (err) {
       console.warn('[telemetry] telemetry_opted_out capture failed before SDK opt-out:', err)
@@ -297,14 +297,8 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
     return
   }
   const settings = storeRef.getSettings()
-  // Only broken migration can omit telemetry; updateSettings deep-merges fallback state.
   storeRef.updateSettings(
-    {
-      telemetry: {
-        ...(settings.telemetry ?? { installId: '', existedBeforeTelemetryRelease: true }),
-        optedIn: true
-      }
-    },
+    { telemetry: telemetryWithOptIn(settings, true) },
     { notifyListeners: true }
   )
   if (posthog && !isConsentEnvOverridden()) {
@@ -320,6 +314,7 @@ export function trackAppOpenedOnce(): void {
   }
   // Repo count zero identifies the pre-repo cohort (onboarding-funnel-cohort-addendum.md).
   appOpenedTrackedThisSession = track('app_opened', { ...getCohortAtEmit() })
+  flushPickerAccepts(Date.now(), storeRef, track)
 }
 
 export async function shutdownTelemetry(): Promise<void> {
@@ -339,26 +334,6 @@ export async function shutdownTelemetry(): Promise<void> {
   }
 }
 
-export function _setPostHogClientForTests(client: PostHog | null): void {
-  posthog = client
-}
-
-export function _setCommonPropsForTests(props: CommonProps | null): void {
-  commonProps = props
-}
-
 export function _setStoreForTests(store: Store | null): void {
   storeRef = store
-}
-
-export function _setShuttingDownForTests(value: boolean): void {
-  shuttingDown = value
-}
-
-export function _enableTransportForTests(enabled: boolean): void {
-  testTransportEnabled = enabled
-}
-
-export function _resetFirstAppOpenedFiredForTests(): void {
-  appOpenedTrackedThisSession = false
 }

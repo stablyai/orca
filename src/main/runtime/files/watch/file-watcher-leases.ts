@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { isWatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
 
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
@@ -188,27 +188,4 @@ export function registerRuntimeFileWatcherRelease(
 
 export async function awaitRuntimeFileWatcherUnsubscribes(): Promise<void> {
   await Promise.allSettled(Array.from(pendingRuntimeFileWatcherUnsubscribes))
-}
-
-export function _getRuntimeFileWatcherReleaseCountForTests(): number {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  return leases.size
-}
-
-export function _resetRuntimeFileWatcherLeasesForTests(): void {
-  const leases = new Set<RuntimeFileWatcherLease>()
-  for (const rootLeases of runtimeFileWatcherLeasesByOwnerAndRoot.values()) {
-    for (const lease of rootLeases) {
-      leases.add(lease)
-    }
-  }
-  for (const lease of leases) {
-    lease.forget()
-  }
-  runtimeFileWatcherLeasesByOwnerAndRoot.clear()
 }

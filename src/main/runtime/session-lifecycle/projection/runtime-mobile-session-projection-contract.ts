@@ -1,17 +1,18 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileTerminalTheme
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedTab
-} from '../../../../shared/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   RuntimeLeafRecord,
@@ -20,6 +21,7 @@ import type {
 import type { TitleDisplayClear } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 
 export type RuntimeMobileSessionProjectionHost = {
+  getRendererStatus?(paneKey: string): { row: AgentStatusEntry | undefined } | undefined
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
@@ -32,7 +34,7 @@ export type RuntimeMobileSessionProjectionHost = {
   ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
-  getStatusSnapshot(): AgentStatusIpcPayload[]
+  getStatusRows(paneKey: string, terminalHandle: string | null): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,
@@ -70,6 +72,8 @@ export type RuntimeMobileSessionProjectionHost = {
     validGroupIds: ReadonlySet<string>
   ): TabGroupLayoutNode | null
   collectTabIds(tabs: readonly RuntimeMobileSessionClientTab[]): Set<string>
+  /** This host's own palette, for a terminal row no window themed. */
+  hostTerminalTheme?(): RuntimeMobileTerminalTheme | undefined
 }
 
 export type RuntimeMobileSessionProjectionInput = {

@@ -1,4 +1,4 @@
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 export function shouldShowCollapseFolderAction(node: TreeNode, isExpanded: boolean): boolean {
@@ -20,16 +20,12 @@ export function shouldShowViewFileAction(node: TreeNode): boolean {
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
-  runtimeDownloadContext?: RuntimeFileOperationArgs | null,
-  // Require advertised SFTP recursive transfer; unknown and system-SSH folder downloads stay hidden.
-  supportsFolderDownload = false
+  runtimeDownloadContext?: RuntimeFileOperationArgs | null
 ): boolean {
-  // Native save dialogs require desktop; runtime/system-SSH folders lack recursive transfer contracts.
-  const hasDownloadCapability = node.isDirectory
-    ? Boolean(connectionId && supportsFolderDownload)
-    : Boolean(connectionId || runtimeDownloadContext)
+  // Native save dialogs require desktop; no host serves a recursive folder transfer.
   return (
-    hasDownloadCapability &&
+    !node.isDirectory &&
+    Boolean(connectionId || runtimeDownloadContext) &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
 }

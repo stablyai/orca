@@ -2,7 +2,7 @@ import { mainAgentStatusEqual } from '../../../shared/agent-status/lifecycle/mai
 import {
   claudeTeammateIdMatchesName,
   isClaudeChildTurnEndEvent
-} from '../../../shared/claude-subagent-roster'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import {
@@ -10,6 +10,7 @@ import {
   isClaudePermissionSettledByReplay
 } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { leadReplyOf, withAcceptedReply } from './server-accepted-reply'
 import {
   claudePermissionNamesToolUse,
   type ClaudeToolRequestFields
@@ -28,8 +29,15 @@ export function pairedClaudeNonAgentWork(
     : undefined
 }
 
-/** Keep main-agent progress behind a child's permission prompt so restart cannot settle live work. */
+/** Keep main-agent progress, and the reply the lead finished with, behind a child's permission prompt so restart cannot settle live work. */
 export function withHeldChildWaitMainAgent(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): EnrichedAgentHookEventPayload {
+  return withAcceptedReply(heldChildWaitRow(previous, next), previous, leadReplyOf(next), true)
+}
+
+function heldChildWaitRow(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload {
@@ -77,7 +85,8 @@ export function shouldKeepClaudePermissionVisible(
   ) {
     return false
   }
-  if (next.hasExplicitPrompt === true) {
+  // A new turn, by its prompt or its new prompt_id, ends the old turn's request.
+  if (next.hasExplicitPrompt === true || next.opensTurn === true) {
     return false
   }
   if (isClaudePermissionOwningChildEnding(previous, next)) {

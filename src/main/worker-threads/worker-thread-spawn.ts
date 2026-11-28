@@ -1,12 +1,82 @@
 import { Worker, type WorkerOptions } from 'node:worker_threads'
+import { ensureWorkerSendLedger, releaseWorkerSendLedgerSlot } from './worker-send-ledger'
+import type { WorkerThreadRole } from './worker-thread-roles'
 
 /** V8's default CodeRange (512 MB on x64) costs every worker ~600 MB of address space, so a few
  * workers exhaust a `ulimit -v` host (#37538). Worker JIT code stays far below this. */
 export const WORKER_CODE_RANGE_MB = 64
 
-export function spawnWorkerThread(filename: string | URL, options: WorkerOptions = {}): Worker {
-  return new Worker(filename, {
+/** Main's isolate and its workers share one V8 cage: an uncapped worker that keeps allocating fills
+ * it and aborts the app. Capped, it ends alone with ERR_WORKER_OUT_OF_MEMORY while main has headroom.
+ * Measured workers stay under ~100 MB. A launch-time --max-old-space-size V8 flag overrides it. */
+export const MAIN_WORKER_HEAP_LIMIT_MB = 512
+
+/** Owners of unflushed durable writes: losing one mid-session would drop writes silently. */
+const UNCAPPED_MAIN_ROLES: ReadonlySet<WorkerThreadRole> = new Set([
+  'orca-bots-db',
+  'orca-journal-sql-writer',
+  'orca-profile-state-backup',
+  'orca-profile-state-writer'
+])
+
+/** Only Electron's main process shares its cage with the app; utility and child processes own theirs. */
+function defaultHeapLimit(role: WorkerThreadRole): { maxOldGenerationSizeMb?: number } {
+  return process.type === 'browser' && !UNCAPPED_MAIN_ROLES.has(role)
+    ? { maxOldGenerationSizeMb: MAIN_WORKER_HEAP_LIMIT_MB }
+    : {}
+}
+
+export type WorkerThreadObserver = {
+  /** Runs before construction: a worker copies environment data when it is created. */
+  beforeSpawn: () => void
+  spawned: (worker: Worker, role: WorkerThreadRole) => void
+}
+
+let observer: WorkerThreadObserver | undefined
+/** Thread id per spawned worker; owners may strip every listener (removeAllListeners). */
+const spawned = new Map<Worker, number>()
+
+/** Main-process diagnostics watch every worker without this module importing them. */
+export function observeWorkerThreads(next: WorkerThreadObserver): void {
+  observer = next
+}
+
+/** Node sets threadId to -1 once the thread is gone, whatever listeners remain. */
+function releaseExitedWorkers(): void {
+  for (const [worker, threadId] of spawned) {
+    if (worker.threadId === -1) {
+      spawned.delete(worker)
+      releaseWorkerSendLedgerSlot(threadId)
+    }
+  }
+}
+
+export function spawnWorkerThread(
+  filename: string | URL,
+  options: WorkerOptions & { name: WorkerThreadRole }
+): Worker {
+  releaseExitedWorkers()
+  ensureWorkerSendLedger()
+  try {
+    observer?.beforeSpawn()
+  } catch {
+    // Diagnostics never fail a spawn.
+  }
+  const worker = new Worker(filename, {
     ...options,
-    resourceLimits: { codeRangeSizeMb: WORKER_CODE_RANGE_MB, ...options.resourceLimits }
+    resourceLimits: {
+      codeRangeSizeMb: WORKER_CODE_RANGE_MB,
+      ...defaultHeapLimit(options.name),
+      ...options.resourceLimits
+    }
   })
+  spawned.set(worker, worker.threadId)
+  try {
+    observer?.spawned(worker, options.name)
+  } catch {
+    // Diagnostics never fail a spawn.
+  }
+  // After the observer's listeners, so a failure report still reads this worker's ledger entry.
+  worker.once('exit', releaseExitedWorkers)
+  return worker
 }

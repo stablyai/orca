@@ -3,7 +3,7 @@ import type {
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole,
   LegacyOperationReceiptRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -90,10 +90,15 @@ export function setLegacyCompatibilityPrincipalStatus(
        WHERE id = ? AND status = 'committed'`
     )
     .run(status, id)
-  if (changed.changes) {
-    this.crewChanges.notify(new Set(['topology']))
+  const principal = this.getLegacyCompatibilityPrincipal(id)
+  if (changed.changes && principal) {
+    this.crewChanges.notify(
+      Object.assign(new Set(['topology'] as const), {
+        trafficAddresses: new Set([`run:${principal.run_id}`])
+      })
+    )
   }
-  return this.getLegacyCompatibilityPrincipal(id)
+  return principal
 }
 
 export function getLegacyOperationReceipt(

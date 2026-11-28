@@ -1,6 +1,5 @@
 import { protocol } from 'electron'
 import { JIRA_IMAGE_SCHEME, jiraImageReference } from '../../../shared/jira/jira-attachment-image'
-import { readGrantedAttachmentImage } from './image-read'
 
 export const JIRA_IMAGE_CUSTOM_SCHEME: Electron.CustomScheme = {
   scheme: JIRA_IMAGE_SCHEME,
@@ -16,6 +15,7 @@ export async function handleJiraImageRequest(request: Request): Promise<Response
     return new Response(null, { status: 405 })
   }
   try {
+    const { readGrantedAttachmentImage } = await import('./image-read')
     const image = await readGrantedAttachmentImage(reference, request.signal)
     if (!image) {
       return new Response(null, { status: 404 })

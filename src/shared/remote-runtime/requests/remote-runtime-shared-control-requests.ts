@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { serializeRemoteRuntimeRpcRequest } from '../remote-runtime-memory-limits'
 import {
   prepareRemoteRuntimeRequest,
@@ -7,7 +7,12 @@ import {
   type RemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
-import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
+  RuntimeRpcResponse
+} from '../rpc/runtime-rpc-envelope'
+import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import { toRemoteRuntimeClientError } from '../control/remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from '../control/remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from '../control/remote-runtime-shared-control-types'
@@ -21,6 +26,8 @@ export function requestSharedControl<TResult>(args: {
   params: unknown
   timeoutMs: number
   envelope?: RuntimeOrchestrationEnvelope
+  /** Picks the params actually sent, e.g. the prefix of a batch that fits the host's request bound. */
+  prepareRequest?: RuntimeRequestPreparation
   ensureReady: () => Promise<void>
   send: (requestId: string) => void
   retireRequestId?: (requestId: string) => void
@@ -29,6 +36,10 @@ export function requestSharedControl<TResult>(args: {
   refreshTimeoutOnKeepalive?: boolean
   /** Runs once the socket is ready, just before sending; a throw rejects without sending. */
   beforeSend?: () => void
+  /** Tags a background request so an idle host doesn't count it as use. */
+  idlePassive?: boolean
+  prepareGuard?: () => Promise<() => boolean | void>
+  captureSendGuard?: () => () => void
 }): Promise<RuntimeRpcResponse<TResult>> {
   const { ensureReady, pendingRequests, send } = args
   if (args.signal?.aborted) {
@@ -38,13 +49,20 @@ export function requestSharedControl<TResult>(args: {
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
     preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: args.deviceToken,
-        method: args.method,
-        params: args.params,
-        envelope: args.envelope
-      })
+      serializePreparedRemoteRuntimeRequest(
+        (params, envelope) =>
+          serializeRemoteRuntimeRpcRequest({
+            requestId,
+            deviceToken: args.deviceToken,
+            method: args.method,
+            params,
+            envelope,
+            idlePassive: args.idlePassive
+          }),
+        args.params,
+        args.envelope,
+        args.prepareRequest
+      )
     )
   } catch (error) {
     return Promise.reject(error)
@@ -54,6 +72,7 @@ export function requestSharedControl<TResult>(args: {
       args.retireRequestId?.(requestId)
       rejectSharedControlPendingRequest(pendingRequests, requestId, abortSignalReason(args.signal!))
     }
+    const deadline = performance.now() + args.timeoutMs
     const timeout = setTimeout(() => {
       const pending = pendingRequests.get(requestId)
       if (!pending) {
@@ -93,26 +112,61 @@ export function requestSharedControl<TResult>(args: {
       onAbort()
       return
     }
-    void ensureReady().then(
-      () => {
-        try {
-          args.beforeSend?.()
-        } catch (error) {
-          rejectSharedControlPendingRequest(
-            pendingRequests,
-            requestId,
-            toRemoteRuntimeClientError(error)
-          )
+    const isCurrent = (): boolean => {
+      if (pendingRequests.get(requestId) !== pending || args.signal?.aborted) {
+        return false
+      }
+      if (performance.now() >= deadline) {
+        rejectSharedControlPendingRequest(pendingRequests, requestId, remoteRuntimeTimeoutError())
+        return false
+      }
+      return true
+    }
+    const run = async (): Promise<void> => {
+      if (args.prepareGuard) {
+        for (;;) {
+          const commit = await args.prepareGuard()
+          if (!isCurrent()) {
+            return
+          }
+          if (commit() !== false) {
+            break
+          }
+        }
+      }
+      try {
+        await ensureReady()
+      } catch (error) {
+        throw toRemoteRuntimeClientError(error)
+      }
+      if (!isCurrent()) {
+        return
+      }
+      const sendGuard = args.captureSendGuard?.()
+      for (;;) {
+        const commit = args.prepareGuard ? await args.prepareGuard() : undefined
+        if (!isCurrent()) {
           return
         }
+        try {
+          sendGuard?.()
+          args.beforeSend?.()
+        } catch (error) {
+          throw toRemoteRuntimeClientError(error)
+        }
+        if (commit?.() === false) {
+          continue
+        }
         send(requestId)
-      },
-      (error) =>
-        rejectSharedControlPendingRequest(
-          pendingRequests,
-          requestId,
-          toRemoteRuntimeClientError(error)
-        )
+        break
+      }
+    }
+    void run().catch((error: unknown) =>
+      rejectSharedControlPendingRequest(
+        pendingRequests,
+        requestId,
+        error instanceof Error ? error : new Error(String(error))
+      )
     )
   })
 }

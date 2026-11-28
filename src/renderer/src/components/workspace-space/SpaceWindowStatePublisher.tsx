@@ -1,12 +1,32 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { useAppStore } from '@/store/index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   pickSpaceWindowState,
   spaceWindowStateChanged,
   type SpaceWindowState
 } from './space-window-state'
-import { revealWorkspaceSpaceChange } from '../status-bar/workspace-space-open-change'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-space/workspace-space-change'
+
+async function revealWorkspaceSpaceChangeLazy(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined,
+  change: WorkspaceSpaceChange
+): Promise<void> {
+  const { revealWorkspaceSpaceChange } =
+    await import('../status-bar/workspace-storage/table/workspace-space-open-change')
+  await revealWorkspaceSpaceChange(worktreeId, executionHostId, change)
+}
+
+async function refreshLinkedIssueForWorktreeLazy(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined
+): Promise<void> {
+  const { refreshLinkedIssueForWorktree } =
+    await import('../status-bar/workspace-storage/decisions/workspace-space-issue-freshness')
+  refreshLinkedIssueForWorktree(worktreeId, executionHostId)
+}
 
 export function SpaceWindowStatePublisher(): null {
   useEffect(() => {
@@ -41,11 +61,13 @@ export function SpaceWindowStatePublisher(): null {
     }
     const offRequest = api.onWindowStateRequested(() => {
       windowOpen = true
-      offStore ??= useAppStore.subscribe((next, previous) => {
-        if (spaceWindowStateChanged(previous, next)) {
-          queuePublish()
-        }
-      })
+      if (offStore == null) {
+        offStore = useAppStore.subscribe((next, previous) => {
+          if (spaceWindowStateChanged(previous, next)) {
+            queuePublish()
+          }
+        })
+      }
       publish(true)
     })
     const offClose = api.onWindowClosed?.(() => {
@@ -60,13 +82,16 @@ export function SpaceWindowStatePublisher(): null {
     })
     const offReveal = api.onRevealWorktree?.((worktreeId, executionHostId, change) => {
       if (change) {
-        void revealWorkspaceSpaceChange(worktreeId, executionHostId, change)
+        void revealWorkspaceSpaceChangeLazy(worktreeId, executionHostId, change)
         return
       }
       activateAndRevealWorktree(worktreeId, { navigationIntent: 'user-open', executionHostId })
     })
     const offRefresh = api.onWorktreeRefreshRequested?.(() => {
       void useAppStore.getState().fetchAllWorktrees()
+    })
+    const offIssueRefresh = api.onIssueRefreshRequested?.((worktreeId, executionHostId) => {
+      void refreshLinkedIssueForWorktreeLazy(worktreeId, executionHostId)
     })
     const offAnalysis = api.onWindowAnalysis?.((analysis) => {
       if (typeof analysis.scannedAt === 'number') {
@@ -82,6 +107,7 @@ export function SpaceWindowStatePublisher(): null {
       offClose?.()
       offReveal?.()
       offRefresh?.()
+      offIssueRefresh?.()
       offAnalysis?.()
     }
   }, [])

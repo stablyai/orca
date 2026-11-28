@@ -2,14 +2,15 @@ import {
   installBrowserSessionHeadersReceived,
   installBrowserSessionRequestLifecycle
 } from '../../../sessions/requests/browser-session-request-decisions'
-import { DnrEngine } from '../engine'
+import type { DnrEngine } from '../engine'
 import type { DnrRequestState } from '../request-state'
 import {
   getBrowserExtensionActionState,
   notifyBrowserExtensionActionsChangedSoon
 } from '../../actions/browser-extension-action-registry'
 import { DnrExtensionHostAccess } from '../../permissions/browser-extension-request-host-access'
-import { DnrExtensionRules } from './browser-extension-dnr-extension-rules'
+import type { DnrExtensionRules } from './browser-extension-dnr-extension-rules'
+import { loadDnrRuntimeModules } from './browser-extension-dnr-runtime-loader'
 import { DnrFrameTracker } from './browser-extension-dnr-frames'
 import { DNR_API_CONSTANTS, DNR_GLOBAL_STATIC_RULE_LIMIT } from './browser-extension-dnr-limits'
 import { DnrMatchedRules } from './browser-extension-dnr-matched-rules'
@@ -40,7 +41,9 @@ export function usesDeclarativeNetRequest(
 
 /** Everything declarativeNetRequest keeps for one profile session (RulesetManager and friends). */
 export class DnrSessionRuntime {
-  readonly engine = new DnrEngine()
+  private _engine: DnrEngine | null = null
+  private addToken = 0
+  private readonly pendingTokens = new Map<string, number>()
   readonly extensions = new Map<string, DnrSessionExtension>()
   readonly frames = new DnrFrameTracker((webContentsId) =>
     resolveBrowserExtensionTab(webContentsId) ? webContentsId : -1
@@ -52,22 +55,22 @@ export class DnrSessionRuntime {
     actionCountChanged: (extensionId, tabId, count) =>
       this.showActionCount(extensionId, tabId, count)
   })
-  /** Rules act at onBeforeRequest (the request path's one cheap check reads these flags). */
   evaluatesRequests = false
-  /** Rules act once response headers arrive (response-header conditions or modifications). */
   evaluatesResponses = false
-  /** Rules with response-header conditions. */
   evaluatesResponseConditions = false
   private readonly requestStates = new Map<number, DnrRequestState>()
   private readonly loads = new Set<Promise<void>>()
   private loadHold: Promise<void> | null = null
-  /** Until the profile's startup loads finish, requests wait for extensions not loaded yet. */
   private startupLoad: (() => Promise<void>) | null = null
 
   constructor(
     readonly session: Electron.Session,
     readonly profileId: string
   ) {}
+
+  get engine(): DnrEngine | null {
+    return this._engine
+  }
 
   /** Whether the request path has anything to do in this session. */
   get inUse(): boolean {
@@ -82,36 +85,52 @@ export class DnrSessionRuntime {
   /** Chrome holds requests until rulesets load; at startup that includes extensions still loading. */
   holdForStartup(startupLoad: () => Promise<void>): void {
     this.startupLoad = startupLoad
+    // Why: a hold built before a reattach waits on the old loads, so later requests get a new one.
+    this.loadHold = null
   }
 
   addExtension(extension: Electron.Extension): Promise<void> {
     this.removeExtension(extension.id)
-    const withHostAccessOnly = !extensionHasPermission(
-      extension,
-      'declarativeNetRequest',
-      this.session
-    )
-    const rules = new DnrExtensionRules(
-      {
-        engine: this.engine,
-        profileId: this.profileId,
-        staticRuleLimit: (extensionId) => this.staticRuleLimit(extensionId),
-        changed: () => this.refresh()
-      },
-      extension,
-      getBrowserExtensionInstallStore().get(extension.id)?.installTime ?? 0,
-      withHostAccessOnly
-    )
-    this.extensions.set(extension.id, {
-      rules,
-      hostAccess: new DnrExtensionHostAccess(this.profileId, extension.id, extension.manifest),
-      keepsMatchedRules: ['declarativeNetRequestFeedback', 'activeTab'].some((permission) =>
-        extensionHasPermission(extension, permission, this.session)
-      )
-    })
-    const load = rules.load().catch((error: unknown) => {
-      console.warn(`[browser-extensions] Could not load rules of ${extension.id}:`, error)
-    })
+    const token = ++this.addToken
+    this.pendingTokens.set(extension.id, token)
+    const load = loadDnrRuntimeModules()
+      .then(async ({ DnrEngine, DnrExtensionRules }) => {
+        if (this.pendingTokens.get(extension.id) !== token) {
+          return
+        }
+        this.pendingTokens.delete(extension.id)
+        const engine = (this._engine ??= new DnrEngine())
+        const withHostAccessOnly = !extensionHasPermission(
+          extension,
+          'declarativeNetRequest',
+          this.session
+        )
+        const rules = new DnrExtensionRules(
+          {
+            engine,
+            profileId: this.profileId,
+            staticRuleLimit: (extensionId) => this.staticRuleLimit(extensionId),
+            changed: () => this.refresh()
+          },
+          extension,
+          getBrowserExtensionInstallStore().get(extension.id)?.installTime ?? 0,
+          withHostAccessOnly
+        )
+        this.extensions.set(extension.id, {
+          rules,
+          hostAccess: new DnrExtensionHostAccess(this.profileId, extension.id, extension.manifest),
+          keepsMatchedRules: ['declarativeNetRequestFeedback', 'activeTab'].some((permission) =>
+            extensionHasPermission(extension, permission, this.session)
+          )
+        })
+        await rules.load()
+      })
+      .catch((error: unknown) => {
+        if (this.pendingTokens.get(extension.id) === token) {
+          this.pendingTokens.delete(extension.id)
+        }
+        console.warn(`[browser-extensions] Could not load rules of ${extension.id}:`, error)
+      })
     this.loads.add(load)
     void load.finally(() => {
       this.loads.delete(load)
@@ -129,7 +148,7 @@ export class DnrSessionRuntime {
     if (!entry) {
       return this.addExtension(extension)
     }
-    this.engine.setHostPermissionsAlwaysRequired(
+    this._engine?.setHostPermissionsAlwaysRequired(
       extension.id,
       !extensionHasPermission(extension, 'declarativeNetRequest', this.session)
     )
@@ -143,6 +162,7 @@ export class DnrSessionRuntime {
   }
 
   removeExtension(extensionId: string): void {
+    this.pendingTokens.delete(extensionId)
     const entry = this.extensions.get(extensionId)
     if (!entry) {
       return
@@ -175,7 +195,10 @@ export class DnrSessionRuntime {
       ])
       this.loadHold = hold
       void hold.then(() => {
-        this.startupLoad = null
+        // A reattach may have re-armed the hold meanwhile; that one stays.
+        if (this.startupLoad === startup) {
+          this.startupLoad = null
+        }
         if (this.loadHold === hold) {
           this.loadHold = null
         }
@@ -185,8 +208,8 @@ export class DnrSessionRuntime {
   }
 
   private refresh(): void {
-    this.evaluatesRequests = this.engine.hasRules('beforeRequest')
-    this.evaluatesResponseConditions = this.engine.hasRules('headersReceived')
+    this.evaluatesRequests = this._engine?.hasRules('beforeRequest') ?? false
+    this.evaluatesResponseConditions = this._engine?.hasRules('headersReceived') ?? false
     this.evaluatesResponses = [...this.extensions.values()].some((entry) =>
       entry.rules.usesResponseStage()
     )
@@ -268,15 +291,20 @@ export function attachBrowserExtensionDnr(
   profileId: string,
   enabledExtensionIds: readonly string[]
 ): void {
-  if (runtimes.has(session)) {
-    return
-  }
-  const runtime = new DnrSessionRuntime(session, profileId)
-  runtimes.set(session, runtime)
   const installs = getBrowserExtensionInstallStore()
   const expectsRules = enabledExtensionIds.some((id) =>
     installs.get(id)?.permissions.some((permission) => DNR_PERMISSIONS.includes(permission))
   )
+  const existing = runtimes.get(session)
+  // A session attached again (idle profile reopened, extensions turned back on) holds requests again.
+  if (existing) {
+    if (expectsRules) {
+      existing.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
+    }
+    return
+  }
+  const runtime = new DnrSessionRuntime(session, profileId)
+  runtimes.set(session, runtime)
   if (expectsRules) {
     runtime.holdForStartup(() => whenBrowserExtensionProfileLoaded(profileId))
   }
@@ -290,6 +318,15 @@ export function attachBrowserExtensionDnr(
     runtime.removeExtension(extension.id)
   )
   session.extensions.getAllExtensions().forEach(add)
+}
+
+/** A resumed extension that couldn't get all its state back starts clean: its onStartup re-adds these. */
+export async function clearBrowserExtensionDnrSessionRules(
+  session: Electron.Session,
+  extensionId: string
+): Promise<void> {
+  // Why one queued step: a call the extension makes meanwhile must not see the old rules.
+  await runtimes.get(session)?.extensions.get(extensionId)?.rules.updateRules('session', 'all', [])
 }
 
 /** Startup waits for an extension's rules with its other restored state. */

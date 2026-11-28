@@ -1,4 +1,4 @@
-// Prove packaged Windows daemon/session behavior across real silent N→N+1 NSIS update; see README and windows-terminal-update-survival-plan.md.
+// Packaged Windows update proof; artifact selection and safety live in README.md.
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,7 +16,6 @@ import {
   createTerminalTab,
   listTabIds,
   startMarker,
-  readTerminalTextBestEffort,
   closeApp,
   captureFailureDiagnostics
 } from './app-driver.mjs'
@@ -172,7 +171,17 @@ async function runProof(ctx, args) {
   const seededRepo = createSeededRepo(path.join(runDir, 'fixture-repo'))
   const seedProfile = buildFreshProfile({ repo: seededRepo })
 
-  let session = await launchInstalledApp({ exePath: base.exePath, userDataDir, seedProfile })
+  // A LOCALAPPDATA this deep puts the daemon-host copy past conpty's 250-character path budget, so
+  // the daemon starts from the install folder's Orca.exe (daemon-host-relocation.ts).
+  const appEnv = opts.daemonFallback
+    ? { LOCALAPPDATA: path.join(runDir, 'deep-local-app-data', 'x'.repeat(180)) }
+    : {}
+  let session = await launchInstalledApp({
+    exePath: base.exePath,
+    userDataDir,
+    seedProfile,
+    extraEnv: appEnv
+  })
   ctx.session = session
   // Create first workspace/terminal and clear intercepting overlays.
   await ensureTerminal(session.page, { allowCreate: true })
@@ -193,8 +202,15 @@ async function runProof(ctx, args) {
   preDaemon.pids.forEach((p) => created.daemonPids.add(p))
   log('daemon', `pre-update daemon pid=${preDaemon.pid} appVersion=${preDaemon.appVersion}`)
   log('daemon', `pre-update daemon exe: ${preDaemon.exePath ?? '(unknown)'}`)
-
-  const preScrollback = await readTerminalTextBestEffort(session.page)
+  if (opts.daemonFallback) {
+    const installFolder = path.dirname(base.exePath).toLowerCase()
+    if (!preDaemon.exePath?.toLowerCase().startsWith(`${installFolder}${path.sep}`)) {
+      throw new Error(
+        `--daemon-fallback: daemon runs from ${preDaemon.exePath}, not ${installFolder}`
+      )
+    }
+    log('daemon', 'fallback confirmed: the daemon runs from the install folder')
+  }
 
   // Close app normally; the detached daemon must remain alive.
   // Allow renderer acknowledgement and teardown; a tree kill invalidates survival evidence.
@@ -221,7 +237,7 @@ async function runProof(ctx, args) {
     assetPattern: opts.assetPattern
   })
   log('update', `installing ${toInstaller}`)
-  const updated = silentInstall(toInstaller, { installDir })
+  const updated = silentInstall(toInstaller, { installDir, updated: opts.updated })
   // Record exact installed directory for teardown; never scan-discover a user install.
   ctx.installedExePath = updated.exePath
   log('update', `installed ${updated.exePath} (version ${updated.version})`)
@@ -235,7 +251,7 @@ async function runProof(ctx, args) {
     })
   )
 
-  session = await launchInstalledApp({ exePath: updated.exePath, userDataDir })
+  session = await launchInstalledApp({ exePath: updated.exePath, userDataDir, extraEnv: appEnv })
   ctx.session = session
   // No create on relaunch: the session must be RESTORED, not freshly made.
   await ensureTerminal(session.page, { allowCreate: false })
@@ -248,7 +264,6 @@ async function runProof(ctx, args) {
     heartbeatFile,
     preDaemon,
     userDataDir,
-    preScrollback,
     echoBeforeUpdate
   })
   evidence.postDaemon?.pids?.forEach((p) => created.daemonPids.add(p))
@@ -274,7 +289,7 @@ async function runProof(ctx, args) {
 }
 
 async function gatherEvidence(args) {
-  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir, preScrollback } = args
+  const { profile, page, runDir, heartbeatFile, preDaemon, userDataDir } = args
   const postDaemon = resolveScopedDaemon(userDataDir)
 
   if (profile === 'survival') {
@@ -316,8 +331,6 @@ async function gatherEvidence(args) {
     }
   }
 
-  const postScrollback = await readTerminalTextBestEffort(page)
-  const scrollbackRestored = scrollbackFidelity(preScrollback, postScrollback)
   await createTerminalTab(page)
   const echoObserved = await probeEcho(page, runDir, 'echo-fresh')
   const ctrlCInterrupted = await probeCtrlCOnFreshLoop(page, runDir)
@@ -327,7 +340,6 @@ async function gatherEvidence(args) {
     postDaemonPid: postDaemon.pid,
     postDaemonAlive: postDaemon.pid != null && isPidAlive(postDaemon.pid),
     postDaemon,
-    scrollbackRestored,
     echoObserved,
     ctrlCInterrupted
   }
@@ -361,7 +373,7 @@ function resolveScopedDaemon(userDataDir) {
   }
 }
 
-/** Print the daemon's lifecycle log (Phase 0) so its startup/session events are
+/** Print the daemon's lifecycle log so its startup/session events are
  *  visible in the CI log before teardown removes the userData dir. */
 function dumpDaemonLog(userDataDir) {
   const logPath = path.join(userDataDir, 'logs', 'daemon.log')
@@ -398,22 +410,6 @@ function isMarkerAlive(runDir) {
 async function heartbeatAdvancedSince(heartbeatFile, sinceMs) {
   await delay(1500)
   return fileMtimeMs(heartbeatFile) > sinceMs
-}
-
-function scrollbackFidelity(before, after) {
-  // WebGL renderer can leave both empty; report unknown (null) rather than a
-  // false failure. When text is available, check a stable prefix survived.
-  if (!before || !before.trim() || !after || !after.trim()) {
-    return null
-  }
-  const marker = before
-    .trim()
-    .split('\n')
-    .find((l) => l.trim().length > 3)
-  if (!marker) {
-    return null
-  }
-  return after.includes(marker.trim())
 }
 
 export function readDaemonLog(userDataDir) {

@@ -1,12 +1,12 @@
 import { revealMarkdownNavigationDetails } from '../../markdown/navigation/markdown-navigation-details'
 import { useEffect, useImperativeHandle, useMemo, useRef, type RefObject } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import type { ProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
+import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { listenMarkdownPreviewScrollInput } from './markdown-preview-scroll-input'
 import {
-  decodeMarkdownPreviewAnchor,
   getMarkdownPreviewAnchorScrollTop,
+  resolveMarkdownPreviewAnchorId,
   scrollMarkdownPreviewTo
 } from './markdown-preview-anchor-navigation'
 import type {
@@ -70,7 +70,10 @@ export function useMarkdownPreviewNavigation({
     () => ({
       search: revealSearchMatch,
       anchor: (rawId) => {
-        const id = decodeMarkdownPreviewAnchor(rawId)
+        const id = resolveMarkdownPreviewAnchorId(rawId, (candidate) => anchorBlocks.has(candidate))
+        if (id === null) {
+          return false
+        }
         const index = anchorBlocks.get(id)
         if (index === undefined) {
           return false

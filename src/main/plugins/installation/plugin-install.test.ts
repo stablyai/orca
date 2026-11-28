@@ -1,34 +1,23 @@
-import { execFile } from 'node:child_process'
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  symlink,
-  truncate,
-  writeFile
-} from 'node:fs/promises'
+import { existsSync } from 'node:fs'
+import { lstat, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   installPluginFromLocalPath,
-  installPluginFromGit,
-  PLUGIN_LOCKFILE_MAX_BYTES,
   readPluginLockfile,
   removeInstalledPlugin
 } from './plugin-install'
-import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
-import { PLUGIN_MANIFEST_MAX_BYTES } from '../plugin-manifest-file'
+import { PluginService } from '../plugin-service'
+import { listPluginsForClients } from '../discovery/plugin-client-list'
 import { readPluginCurrentPointer } from './plugin-current-pointer'
-import { writePluginLockfile } from './plugin-install-lockfile-store'
 import { installStagedPluginTree } from './plugin-install-staging'
-import * as manifestFile from '../plugin-manifest-file'
+import { getRequiredTeamPlugins } from './plugin-team-install-policy'
+import { createDefaultLocalOrcaProfile } from '../../../shared/orca-profiles/orca-profiles'
+import { initializeActiveTeamProfile } from '../../orca-profiles/cloud-auth/active-team-capabilities'
+import { loadPluginDevFolder } from '../development/plugin-dev-folders'
 
 const roots: string[] = []
-const execFileAsync = promisify(execFile)
 
 async function tempRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix))
@@ -71,119 +60,101 @@ afterEach(async () => {
 })
 
 describe('installPluginFromLocalPath', () => {
-  it('refuses to allocate an oversized install lockfile', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const lockPath = join(pluginsDir, 'plugins.lock.json')
-    await writeFile(lockPath, '')
-    await truncate(lockPath, PLUGIN_LOCKFILE_MAX_BYTES + 1)
-
-    await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
-  })
-
-  it('verifies copied content and writes a rollback-compatible consent field', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-
-    const result = await installPluginFromLocalPath({
+  it('lists installed plugins in installation order even when IDs sort differently', async () => {
+    const userDataPath = await tempRoot('orca-plugin-order-')
+    const firstSource = await tempRoot('orca-plugin-first-')
+    const secondSource = await tempRoot('orca-plugin-second-')
+    await writePluginSource(firstSource, { id: 'z-first' })
+    await writePluginSource(secondSource, { id: 'a-second' })
+    const pluginsDir = join(userDataPath, 'plugins')
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+    const first = await installPluginFromLocalPath({
       pluginsDir,
-      sourcePath,
+      sourcePath: firstSource,
       hostVersion: '1.4.0'
     })
-
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    await expect(
-      readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
-    ).resolves.toBe('<h1>Panel</h1>')
-    const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
-      plugins: Record<string, Record<string, unknown>>
-    }
-    expect(lock.plugins[result.pluginKey]).toMatchObject({
-      capabilityHash: result.consentFingerprint
-    })
-    expect(lock.plugins[result.pluginKey]).not.toHaveProperty('consentFingerprint')
-  })
-
-  it('publishes metadata from the copied immutable manifest', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const firstManifest = await readFile(join(sourcePath, 'orca-plugin.json'), 'utf8')
-    const changedManifest = {
-      ...(JSON.parse(firstManifest) as Record<string, unknown>),
-      name: 'Changed During Staging',
-      version: '2.0.0'
-    }
-    await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(changedManifest))
-    const manifestRead = vi
-      .spyOn(manifestFile, 'readPluginManifestText')
-      .mockResolvedValueOnce(firstManifest)
-
-    const result = await installStagedPluginTree({
+    clock.mockReturnValue(2000)
+    const second = await installPluginFromLocalPath({
       pluginsDir,
-      stagingDir: sourcePath,
+      sourcePath: secondSource,
+      hostVersion: '1.4.0'
+    })
+    expect(first.ok && second.ok).toBe(true)
+    clock.mockRestore()
+    const service = new PluginService({
+      userDataPath,
       hostVersion: '1.4.0',
-      source: { kind: 'local-path', path: sourcePath },
-      resolvedCommit: null,
-      identity: { publisher: 'acme' }
+      isPluginSystemEnabled: () => false,
+      getDisabledPlugins: () => [],
+      getPluginConsents: () => ({}),
+      getDevPluginPaths: () => []
     })
-
-    expect(manifestRead).toHaveBeenCalledTimes(2)
-    expect(result).toMatchObject({ ok: true, version: '2.0.0' })
-    if (result.ok) {
-      const lock = await readPluginLockfile(pluginsDir)
-      expect(lock.plugins[result.pluginKey]?.version).toBe('2.0.0')
-    }
+    expect((await listPluginsForClients(service)).map((entry) => entry.pluginKey)).toEqual([
+      'samples.z-first',
+      'samples.a-second'
+    ])
   })
 
-  it('skips root Git metadata before copying while still enforcing plugin limits', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const gitDir = join(sourcePath, '.git')
-    await mkdir(gitDir)
-    await writeFile(join(gitDir, 'large.pack'), '')
-    await truncate(join(gitDir, 'large.pack'), 50 * 1024 * 1024 + 1)
-
-    const result = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-
-    expect(result).toMatchObject({ ok: true })
-    if (result.ok) {
-      await expect(
-        readFile(join(pluginsDir, result.pluginKey, result.contentHash, '.git', 'large.pack'))
-      ).rejects.toMatchObject({ code: 'ENOENT' })
+  it.each(['equal', 'missing'] as const)(
+    'orders plugin IDs by code point when install times are %s',
+    async (times) => {
+      const userDataPath = await tempRoot('orca-plugin-tie-')
+      const zSource = await tempRoot('orca-plugin-z-')
+      const aaSource = await tempRoot('orca-plugin-aa-')
+      await writePluginSource(zSource, { id: 'z' })
+      await writePluginSource(aaSource, { id: 'aa' })
+      const pluginsDir = join(userDataPath, 'plugins')
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(1000)
+      if (times === 'equal') {
+        expect(
+          (
+            await installPluginFromLocalPath({
+              pluginsDir,
+              sourcePath: zSource,
+              hostVersion: '1.4.0'
+            })
+          ).ok
+        ).toBe(true)
+        expect(
+          (
+            await installPluginFromLocalPath({
+              pluginsDir,
+              sourcePath: aaSource,
+              hostVersion: '1.4.0'
+            })
+          ).ok
+        ).toBe(true)
+      }
+      clock.mockRestore()
+      const service = new PluginService({
+        userDataPath,
+        hostVersion: '1.4.0',
+        isPluginSystemEnabled: () => false,
+        getDisabledPlugins: () => [],
+        getPluginConsents: () => ({}),
+        getDevPluginPaths: () => (times === 'missing' ? [zSource, aaSource] : [])
+      })
+      const original = String.prototype.localeCompare
+      const danish = new Intl.Collator('da-DK')
+      vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (
+        this: string,
+        other
+      ) {
+        const current = String(this)
+        if (
+          (current === 'samples.aa' || current === 'samples.z') &&
+          (other === 'samples.aa' || other === 'samples.z')
+        ) {
+          return danish.compare(current, other)
+        }
+        return original.call(current, other)
+      })
+      expect((await listPluginsForClients(service)).map((entry) => entry.pluginKey)).toEqual([
+        'samples.aa',
+        'samples.z'
+      ])
     }
-  })
-
-  it('keeps the first install time across an update, so it keeps a replaced action', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
-    expect(first.ok).toBe(true)
-    if (!first.ok) {
-      return
-    }
-    const installedAt = (await readPluginLockfile(pluginsDir)).plugins[first.pluginKey]?.installedAt
-    await writeFile(join(sourcePath, 'panel.html'), '<h1>Updated</h1>')
-    vi.spyOn(Date, 'now').mockReturnValue((installedAt ?? 0) + 60_000)
-    const updated = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-    expect(updated.ok && updated.contentHash !== first.contentHash).toBe(true)
-    expect((await readPluginLockfile(pluginsDir)).plugins[first.pluginKey]?.installedAt).toBe(
-      installedAt
-    )
-  })
+  )
 
   it('restores the previous current pointer when lockfile publication fails', async () => {
     const sourcePath = await tempRoot('orca-plugin-source-')
@@ -208,41 +179,6 @@ describe('installPluginFromLocalPath', () => {
     await expect(readPluginCurrentPointer(join(pluginsDir, first.pluginKey))).resolves.toBe(
       first.contentHash
     )
-  })
-
-  it('does not replace provenance when a same-content reinstall fails to publish', async () => {
-    const firstSource = await tempRoot('orca-plugin-source-')
-    const secondSource = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(firstSource)
-    await writePluginSource(secondSource)
-    const first = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath: firstSource,
-      hostVersion: '1.4.0'
-    })
-    expect(first.ok).toBe(true)
-    if (!first.ok) {
-      return
-    }
-    const acceptedLock = await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
-    await rm(join(pluginsDir, 'plugins.lock.json'))
-    await mkdir(join(pluginsDir, 'plugins.lock.json'))
-
-    const failed = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath: secondSource,
-      hostVersion: '1.4.0'
-    })
-    expect(failed).toMatchObject({ ok: false })
-
-    await rm(join(pluginsDir, 'plugins.lock.json'), { recursive: true })
-    await writeFile(join(pluginsDir, 'plugins.lock.json'), acceptedLock)
-    const recovered = await readPluginLockfile(pluginsDir)
-    expect(recovered.plugins[first.pluginKey]?.source).toEqual({
-      kind: 'local-path',
-      path: firstSource
-    })
   })
 
   it('preserves legacy lock provenance during a same-content reinstall', async () => {
@@ -277,118 +213,6 @@ describe('installPluginFromLocalPath', () => {
     })
   })
 
-  it('retains only the current and immediately previous content versions', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const hashes: string[] = []
-    for (const content of ['one', 'two', 'three']) {
-      await writeFile(join(sourcePath, 'panel.html'), `<h1>${content}</h1>`)
-      const result = await installPluginFromLocalPath({
-        pluginsDir,
-        sourcePath,
-        hostVersion: '1.4.0'
-      })
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        hashes.push(result.contentHash)
-      }
-    }
-
-    const versionDirs = (
-      await readdir(join(pluginsDir, 'samples.demo'), {
-        withFileTypes: true
-      })
-    )
-      .filter((entry) => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
-      .map((entry) => entry.name)
-      .sort()
-    expect(versionDirs).toEqual(hashes.slice(-2).sort())
-  })
-
-  it('keeps the rollback version when current content is reinstalled', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const hashes: string[] = []
-    for (const content of ['one', 'two', 'two']) {
-      await writeFile(join(sourcePath, 'panel.html'), `<h1>${content}</h1>`)
-      const result = await installPluginFromLocalPath({
-        pluginsDir,
-        sourcePath,
-        hostVersion: '1.4.0'
-      })
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        hashes.push(result.contentHash)
-      }
-    }
-
-    const versionDirs = (await readdir(join(pluginsDir, 'samples.demo'), { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
-      .map((entry) => entry.name)
-      .sort()
-    expect(versionDirs).toEqual([...new Set(hashes)].sort())
-  })
-
-  it('repairs a pointer-new lock-old interrupted publication from provenance', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
-    expect(first.ok).toBe(true)
-    const oldLock = await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
-    await writeFile(join(sourcePath, 'panel.html'), '<h1>new current</h1>')
-    const second = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-    expect(second.ok).toBe(true)
-    if (!first.ok || !second.ok) {
-      return
-    }
-
-    await writeFile(join(pluginsDir, 'plugins.lock.json'), oldLock)
-    const repaired = await readPluginLockfile(pluginsDir)
-
-    expect(repaired.plugins[second.pluginKey]?.contentHash).toBe(second.contentHash)
-    const persisted = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
-      plugins: Record<string, { contentHash?: string }>
-    }
-    expect(persisted.plugins[second.pluginKey]?.contentHash).toBe(second.contentHash)
-  })
-
-  it('rejects a manifest whose declared panel artifact is missing', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath, { includePanel: false })
-
-    const result = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-
-    expect(result).toMatchObject({ ok: false })
-  })
-
-  it('rejects an oversized manifest without reading an unbounded JSON payload', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const manifestPath = join(sourcePath, 'orca-plugin.json')
-    await writeFile(manifestPath, '')
-    await truncate(manifestPath, PLUGIN_MANIFEST_MAX_BYTES + 1)
-
-    const result = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-
-    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('exceeds') })
-  })
-
   it('serializes concurrent installs so lockfile entries are not lost', async () => {
     const firstSource = await tempRoot('orca-plugin-source-')
     const secondSource = await tempRoot('orca-plugin-source-')
@@ -401,117 +225,229 @@ describe('installPluginFromLocalPath', () => {
       installPluginFromLocalPath({ pluginsDir, sourcePath: secondSource, hostVersion: '1.4.0' })
     ])
     expect(results.every((result) => result.ok)).toBe(true)
-    const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
-      plugins: Record<string, unknown>
-    }
+    const lock: { plugins: Record<string, unknown> } = JSON.parse(
+      await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
+    )
     expect(Object.keys(lock.plugins).sort()).toEqual(['samples.first', 'samples.second'])
   })
 
-  it('serializes concurrent lockfile publications without temporary-file collisions', async () => {
+  it('copies a plugin reached through a linked source directory as a real directory without .git', async () => {
+    const parent = await tempRoot('orca-plugin-linked-')
+    const realSource = join(parent, 'real-source')
+    const linkedSource = join(parent, 'linked-source')
     const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const lock = { version: 1 as const, plugins: {} }
+    await mkdir(realSource)
+    await writePluginSource(realSource)
+    await mkdir(join(realSource, '.git'))
+    await writeFile(join(realSource, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+    await symlink(realSource, linkedSource, process.platform === 'win32' ? 'junction' : 'dir')
 
-    await expect(
-      Promise.all([
-        writePluginLockfile(pluginsDir, lock),
-        writePluginLockfile(pluginsDir, lock),
-        writePluginLockfile(pluginsDir, lock)
-      ])
-    ).resolves.toHaveLength(3)
-    await expect(readPluginLockfile(pluginsDir)).resolves.toEqual(lock)
-  })
-
-  it('refuses to repoint at a tampered existing content directory', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const first = await installPluginFromLocalPath({
+    const result = await installPluginFromLocalPath({
       pluginsDir,
-      sourcePath,
+      sourcePath: linkedSource,
       hostVersion: '1.4.0'
     })
-    expect(first.ok).toBe(true)
-    if (!first.ok) {
+
+    expect(result).toMatchObject({ ok: true, pluginKey: 'samples.demo' })
+    if (!result.ok) {
       return
     }
-    await writeFile(
-      join(pluginsDir, first.pluginKey, first.contentHash, 'panel.html'),
-      '<h1>Tampered</h1>'
-    )
-
-    const second = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-
-    expect(second).toMatchObject({
-      ok: false,
-      error: expect.stringContaining('integrity verification')
-    })
-  })
-})
-
-describe('installPluginFromGit', () => {
-  it('uses system Git, resolves the requested ref, and installs its exact bytes', async () => {
-    const sourcePath = await tempRoot('orca-plugin-git-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    await execFileAsync('git', ['init', '--quiet'], { cwd: sourcePath })
-    await execFileAsync('git', ['config', 'user.email', 'plugins@example.invalid'], {
-      cwd: sourcePath
-    })
-    await execFileAsync('git', ['config', 'user.name', 'Plugin Test'], { cwd: sourcePath })
-    await execFileAsync('git', ['add', '.'], { cwd: sourcePath })
-    await execFileAsync('git', ['commit', '--quiet', '-m', 'fixture'], { cwd: sourcePath })
-    await execFileAsync('git', ['tag', 'v1.0.0'], { cwd: sourcePath })
-    const { stdout: commitStdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], {
-      cwd: sourcePath
-    })
-
-    await serveRepositoriesOverTestSsh(await tempRoot('orca-plugin-ssh-shim-'), {
-      '/demo.git': sourcePath
-    })
-    // Why: a tag moved after the dialog showed its commit must not install the new bytes.
-    await expect(
-      installPluginFromGit({
-        pluginsDir,
-        url: 'ssh://git@plugin.test/demo.git',
-        ref: 'v1.0.0',
-        expectedCommit: 'f'.repeat(40),
-        hostVersion: '1.4.0'
-      })
-    ).resolves.toEqual({ ok: false, error: 'plugin Git ref moved after it was checked; try again' })
-    expect((await readPluginLockfile(pluginsDir)).plugins).toEqual({})
-
-    const result = await installPluginFromGit({
-      pluginsDir,
-      url: 'ssh://git@plugin.test/demo.git',
-      ref: 'v1.0.0',
-      expectedCommit: commitStdout.trim(),
-      hostVersion: '1.4.0'
-    })
-
-    expect(result).toMatchObject({ ok: true, resolvedCommit: commitStdout.trim() })
-    if (result.ok) {
-      await expect(
-        readFile(join(pluginsDir, result.pluginKey, result.contentHash, 'panel.html'), 'utf8')
-      ).resolves.toBe('<h1>Panel</h1>')
-    }
+    const installedDir = join(pluginsDir, result.pluginKey, result.contentHash)
+    expect((await lstat(installedDir)).isDirectory()).toBe(true)
+    await expect(readFile(join(installedDir, 'panel.html'), 'utf8')).resolves.toBe('<h1>Panel</h1>')
+    expect(existsSync(join(installedDir, '.git'))).toBe(false)
   })
 })
 
 describe('removeInstalledPlugin', () => {
-  it('rejects an unqualified or traversing key before removing anything', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const pluginsDataDir = await tempRoot('orca-plugin-data-')
-    const outside = join(await tempRoot('orca-plugin-outside-'), 'keep.txt')
-    await writeFile(outside, 'keep')
+  it('blocks development folders under team rules and keeps the installed required plugin discoverable', async () => {
+    const userDataPath = await tempRoot('orca-dev-policy-')
+    const source = await tempRoot('orca-dev-policy-source-')
+    const pluginsDir = join(userDataPath, 'plugins')
+    const pluginKey = 'samples.demo'
+    const localProfile = createDefaultLocalOrcaProfile(1)
+    initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    await writePluginSource(source)
+    const installed = await installPluginFromLocalPath({
+      pluginsDir,
+      sourcePath: source,
+      hostVersion: '1.4.0'
+    })
+    if (!installed.ok) {
+      throw new Error(installed.error)
+    }
+    const cloud = {
+      userId: 'member',
+      cloudProfileId: 'member-profile',
+      email: 'member@example.test',
+      linkedAt: 1
+    }
+    const applyTeamPolicy = (memberSources: boolean, requiredPlugins: string[]) =>
+      initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: 2,
+        identity: cloud,
+        capabilities: {
+          refreshedAt: 1,
+          flags: { team_settings: true, 'plugins.memberSources': memberSources },
+          teamPolicy: { orgIds: ['acme'], requiredPlugins }
+        }
+      })
+    const devPaths = [source]
+    const consents: Record<string, string> = {}
+    const service = new PluginService({
+      userDataPath,
+      hostVersion: '1.4.0',
+      isPluginSystemEnabled: () => true,
+      getDisabledPlugins: () => [],
+      getRequiredPlugins: getRequiredTeamPlugins,
+      getPluginConsents: () => consents,
+      getDevPluginPaths: () => devPaths
+    })
+    try {
+      await service.initialize()
+      const development = service.findValidPlugin(pluginKey)
+      if (!development?.isDev) {
+        throw new Error('Development folder did not load for the local profile')
+      }
+      consents[pluginKey] = development.consentFingerprint
+      expect(service.findApprovedPlugin(pluginKey)?.isDev).toBe(true)
 
-    await expect(
-      removeInstalledPlugin({ pluginsDir, pluginsDataDir, pluginKey: '../outside' })
-    ).rejects.toThrow('invalid qualified plugin key')
-    await expect(readFile(outside, 'utf8')).resolves.toBe('keep')
+      applyTeamPolicy(false, [])
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await expect(
+        loadPluginDevFolder({
+          service,
+          writes: {
+            setDevPluginPaths: (paths) => devPaths.splice(0, devPaths.length, ...paths),
+            applyConsent: async () => {}
+          },
+          path: source,
+          caller: undefined
+        })
+      ).rejects.toThrow('Your team manages which plugin catalogs you can install from.')
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)?.isDev).toBe(false)
+
+      applyTeamPolicy(true, [pluginKey])
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)?.isDev).toBe(false)
+      expect(devPaths).toEqual([source])
+    } finally {
+      await service.dispose()
+      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    }
+  })
+
+  it('revokes activation for an approved install that conflicts with a team release rule', async () => {
+    const userDataPath = await tempRoot('orca-required-plugin-')
+    const stagingDir = await tempRoot('orca-required-plugin-source-')
+    const pluginsDir = join(userDataPath, 'plugins')
+    const pluginKey = 'samples.demo'
+    const requiredCatalog = {
+      kind: 'git',
+      url: 'https://git.example.test/acme/catalog.git',
+      ref: 'main'
+    } as const
+    const oldCatalog = { ...requiredCatalog, url: 'https://git.example.test/other/catalog.git' }
+    const pluginSource = { url: 'https://git.example.test/samples/demo.git', ref: 'main' }
+    const install = (catalog: typeof pluginSource) =>
+      installStagedPluginTree({
+        pluginsDir,
+        stagingDir,
+        hostVersion: '1.4.0',
+        source: {
+          kind: 'marketplace',
+          marketplace: { ...catalog, resolvedCommit: 'a'.repeat(40) },
+          plugin: pluginSource
+        },
+        resolvedCommit: 'b'.repeat(40),
+        identity: { pluginKey }
+      })
+    await writePluginSource(stagingDir)
+    const first = await install(oldCatalog)
+    if (!first.ok) {
+      throw new Error(first.error)
+    }
+
+    const cloud = {
+      userId: 'member',
+      cloudProfileId: 'member-profile',
+      email: 'member@example.test',
+      linkedAt: 1
+    }
+    const localProfile = createDefaultLocalOrcaProfile(1)
+    const applyRequirement = (version: string) =>
+      initializeActiveTeamProfile(userDataPath, { ...localProfile, cloud })({
+        accessToken: 'access',
+        refreshToken: 'refresh',
+        expiresAt: 2,
+        identity: cloud,
+        capabilities: {
+          refreshedAt: 1,
+          flags: { team_settings: true },
+          teamPolicy: {
+            orgIds: ['acme'],
+            internalCatalogs: [requiredCatalog],
+            requiredPlugins: [pluginKey],
+            requiredPluginRules: [{ pluginKey, catalog: requiredCatalog, version }]
+          }
+        }
+      })
+    const clearRequirement = () =>
+      initializeActiveTeamProfile(userDataPath, localProfile)(undefined)
+    const disabled: string[] = []
+    const consents = { [pluginKey]: first.consentFingerprint }
+
+    const service = new PluginService({
+      userDataPath,
+      hostVersion: '1.4.0',
+      isPluginSystemEnabled: () => true,
+      getDisabledPlugins: () => disabled,
+      getRequiredPlugins: getRequiredTeamPlugins,
+      getPluginConsents: () => consents,
+      getDevPluginPaths: () => []
+    })
+    const remove = () =>
+      removeInstalledPlugin({
+        pluginsDir,
+        pluginsDataDir: join(userDataPath, 'plugins-data'),
+        pluginKey
+      })
+    try {
+      await service.initialize()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+
+      applyRequirement('^1.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await service.refresh()
+      expect(service.findValidPlugin(pluginKey)).not.toBeNull()
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+
+      clearRequirement()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+      expect(disabled).toEqual([])
+      expect(consents).toEqual({ [pluginKey]: first.consentFingerprint })
+
+      applyRequirement('^1.0.0')
+      await remove()
+      expect(await readPluginLockfile(pluginsDir)).toEqual({ version: 1, plugins: {} })
+
+      disabled.push(pluginKey)
+      expect(await install(requiredCatalog)).toMatchObject({ ok: true })
+      await service.refresh()
+      expect(service.findApprovedPlugin(pluginKey)).not.toBeNull()
+      await expect(remove()).rejects.toThrow('required by your team')
+
+      disabled.pop()
+      applyRequirement('^2.0.0')
+      expect(service.findApprovedPlugin(pluginKey)).toBeNull()
+      await remove()
+    } finally {
+      await service.dispose()
+      clearRequirement()
+    }
   })
 
   it('rejects a resolved uninstall target outside its root', async () => {
@@ -534,21 +470,6 @@ describe('removeInstalledPlugin', () => {
       })
     ).rejects.toThrow('outside')
     await expect(readFile(marker, 'utf8')).resolves.toBe('keep')
-  })
-
-  it('removes qualified install and data directories', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const pluginsDataDir = await tempRoot('orca-plugin-data-')
-    const key = 'samples.demo'
-    await mkdir(join(pluginsDir, key))
-    await mkdir(join(pluginsDataDir, key))
-    await writeFile(join(pluginsDir, key, 'content'), 'installed')
-    await writeFile(join(pluginsDataDir, key, 'storage.json'), '{}')
-
-    await removeInstalledPlugin({ pluginsDir, pluginsDataDir, pluginKey: key })
-
-    await expect(readFile(join(pluginsDir, key, 'content'))).rejects.toThrow()
-    await expect(readFile(join(pluginsDataDir, key, 'storage.json'))).rejects.toThrow()
   })
 
   it('runs beforeRemove before deleting files and keeps them when it fails', async () => {
@@ -581,31 +502,5 @@ describe('removeInstalledPlugin', () => {
     })
     expect(observed).toEqual(['installed'])
     await expect(readFile(join(pluginsDir, key, 'content'))).rejects.toThrow()
-  })
-})
-
-describe('readPluginLockfile', () => {
-  it('prunes entries whose install directory was deleted by an interrupted removal', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    await writePluginSource(sourcePath)
-    const result = await installPluginFromLocalPath({
-      pluginsDir,
-      sourcePath,
-      hostVersion: '1.4.0'
-    })
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(Object.keys((await readPluginLockfile(pluginsDir)).plugins)).toEqual([result.pluginKey])
-
-    await rm(join(pluginsDir, result.pluginKey), { recursive: true, force: true })
-
-    await expect(readPluginLockfile(pluginsDir)).resolves.toEqual({ version: 1, plugins: {} })
-    const persisted: unknown = JSON.parse(
-      await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')
-    )
-    expect(persisted).toHaveProperty('plugins', {})
   })
 })

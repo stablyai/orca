@@ -1,28 +1,33 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject,
+  SshManagedServerStatus,
   SshManagedServerServingNote,
   SshManagedServerUpdateNote,
   SshTarget
-} from '../../../shared/ssh-types'
-import type { HostServerOnConnectResult } from '../../ssh/ssh-host-server-on-connect'
-import { unservedHostServerMessage, unservedServerStatus } from '../../ssh/ssh-host-unserved-status'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import type { HostServerOnConnectResult } from '../../ssh/host-server/ssh-host-server-on-connect'
+import {
+  unservedHostServerMessage,
+  unservedServerStatus
+} from '../../ssh/host-server/ssh-host-unserved-status'
 import {
   clearSshHostServerStatus,
   getSshHostServerStatus,
+  isSshHostKeptForBridgedTerminals,
   setSshHostServerStatus
-} from '../../ssh/ssh-host-server-status'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+} from '../../ssh/host-server/ssh-host-server-status'
+import { connectionManager } from './ssh-ipc-context'
 import { broadcastSshState, getPublicSshState } from './ssh-renderer-broadcast'
-import { isAuthError } from '../../ssh/ssh-reconnect-error-classification'
-import { isSshSessionStartFailure } from '../../ssh/ssh-session-start-failure'
-import { describeSshConnectFailure } from '../../ssh/ssh-connect-failure-next-step'
+import { isAuthError } from '../../ssh/connection/reconnect/ssh-reconnect-error-classification'
+import { isSshSessionStartFailure } from '../../ssh/connection/ssh-session-start-failure'
+import { describeSshConnectFailure } from '../../ssh/connection/ssh-connect-failure-next-step'
 
 export async function decideHostServer(target: SshTarget): Promise<HostServerOnConnectResult> {
   // Load managed-server deploy/migration/tunnel dependencies only when connecting.
   const [{ resolveHostServerOnConnect }, { hostServerOnConnectDeps }] = await Promise.all([
-    import('../../ssh/ssh-host-server-on-connect'),
+    import('../../ssh/host-server/ssh-host-server-on-connect'),
     import('./ssh-host-server-on-connect-wiring')
   ])
   return await resolveHostServerOnConnect(
@@ -34,7 +39,7 @@ export async function decideHostServer(target: SshTarget): Promise<HostServerOnC
 /** Rechecks a host another desktop's update held during this connect, until the fence clears. */
 export function recheckWhenManagedFenceClears(target: SshTarget, environmentId: string): void {
   void Promise.all([
-    import('../../ssh/managed-server-fence-recheck'),
+    import('../../ssh/host-server/managed-server-fence-recheck'),
     import('./ssh-host-server-on-connect-wiring')
   ]).then(([{ recheckFencedManagedServer, scheduleManagedServerFenceRecheck }, wiring]) => {
     const deps = wiring.hostServerOnConnectDeps(getAppEnvironment().getPath('userData'))
@@ -58,7 +63,7 @@ export function recheckWhenManagedFenceClears(target: SshTarget, environmentId: 
 export function publishHostServerDecisionFailure(targetId: string, error: unknown): void {
   const failure = error instanceof Error ? error : new Error(String(error))
   clearSshHostServerStatus(targetId)
-  broadcastSshState(getCurrentMainWindow, targetId, {
+  broadcastSshState(targetId, {
     targetId,
     status: isAuthError(failure) ? 'auth-failed' : 'error',
     error: isSshSessionStartFailure(failure) ? describeSshConnectFailure(failure) : failure.message,
@@ -90,7 +95,7 @@ export function publishManagedServerConnect(
     error: null,
     managedServer
   }
-  broadcastSshState(getCurrentMainWindow, targetId, state)
+  broadcastSshState(targetId, state)
   return getPublicSshState(targetId) ?? state
 }
 
@@ -102,17 +107,47 @@ export function publishBridgedUnservedHostServer(
   target: SshTarget,
   decision: Extract<HostServerOnConnectResult, { route: 'unserved' }>
 ): SshConnectionState {
-  const managedServer = unservedServerStatus(decision)
-  setSshHostServerStatus(target.id, managedServer)
+  return publishKeptHostServer(target.id, unservedServerStatus(decision))
+}
+
+/**
+ * COMPAT(legacy-relay-bridge): after a refused quiet retry, republish the host only if it is still
+ * kept for bridged terminals, and as connected only if its transport still is.
+ */
+export function restoreKeptHostServer(targetId: string): SshConnectionState {
+  const status = getSshHostServerStatus(targetId)
+  const fallback: SshConnectionState = {
+    targetId,
+    status: 'disconnected',
+    error: null,
+    reconnectAttempt: 0
+  }
+  const state = connectionManager!.getState(targetId) ?? fallback
+  if (!status || !isSshHostKeptForBridgedTerminals(status)) {
+    return getPublicSshState(targetId) ?? state
+  }
+  if (state.status === 'connected') {
+    return publishKeptHostServer(targetId, status)
+  }
+  broadcastSshState(targetId, { ...state, managedServer: status })
+  return getPublicSshState(targetId) ?? state
+}
+
+/** Publish the host connected with this status. */
+export function publishKeptHostServer(
+  targetId: string,
+  managedServer: SshManagedServerStatus
+): SshConnectionState {
+  setSshHostServerStatus(targetId, managedServer)
   const state: SshConnectionState = {
-    ...(connectionManager!.getState(target.id) ?? { targetId: target.id, reconnectAttempt: 0 }),
-    targetId: target.id,
+    ...(connectionManager!.getState(targetId) ?? { targetId, reconnectAttempt: 0 }),
+    targetId,
     status: 'connected',
     error: null,
     managedServer
   }
-  broadcastSshState(getCurrentMainWindow, target.id, state)
-  return getPublicSshState(target.id) ?? state
+  broadcastSshState(targetId, state)
+  return getPublicSshState(targetId) ?? state
 }
 
 /** Publish the unserved status for renderer translation and fail the connect without a fallback. */
@@ -123,7 +158,7 @@ export function publishUnservedHostServer(
   const managedServer = unservedServerStatus(decision)
   setSshHostServerStatus(target.id, managedServer)
   const failure = new Error(unservedHostServerMessage(decision))
-  broadcastSshState(getCurrentMainWindow, target.id, {
+  broadcastSshState(target.id, {
     targetId: target.id,
     status: 'error',
     error: failure.message,

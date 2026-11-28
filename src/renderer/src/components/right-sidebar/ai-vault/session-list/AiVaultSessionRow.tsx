@@ -1,20 +1,25 @@
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import {
+  orcaChatGroupDeleteReason,
+  useOrcaChatDeleteHostReason
+} from '@/lib/agent-session/chat-deletion/orca-chat-delete'
+import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '@/components/ui/context-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   AI_VAULT_SESSION_DRAG_END_EVENT,
   AI_VAULT_SESSION_DRAG_START_EVENT,
   writeAiVaultSessionDragData
-} from '@/lib/ai-vault-session-drag'
+} from '@/lib/agent-session/resume/history/ai-vault-session-drag'
 import type {
   AiVaultScope,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SessionInlineDetails } from './AiVaultSessionDetails'
 import { latestSessionConversationTurn } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
 import { SessionActionMenuItems } from './AiVaultSessionActionMenuItems'
@@ -28,10 +33,12 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
+import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 
 export function VaultSessionRow({
   session,
@@ -44,6 +51,7 @@ export function VaultSessionRow({
   resumeDisabled,
   resumeHidden,
   onToggleDetails,
+  originalPaneTarget,
   onJumpToOriginalPane,
   showJumpToWorktree,
   onJumpToWorktree,
@@ -62,6 +70,7 @@ export function VaultSessionRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
+  onRevealArtifacts,
   onRequestDelete,
   searchHit,
   sourceHostLabel,
@@ -77,6 +86,7 @@ export function VaultSessionRow({
   resumeDisabled: boolean
   resumeHidden?: boolean
   onToggleDetails: () => void
+  originalPaneTarget?: AiVaultOriginalPaneTarget | null
   onJumpToOriginalPane?: () => void
   showJumpToWorktree: boolean
   onJumpToWorktree?: () => void
@@ -95,6 +105,7 @@ export function VaultSessionRow({
   onOpenLog?: () => void
   onRevealLog?: () => void
   onOpenCwd?: () => void
+  onRevealArtifacts?: () => void
   onRequestDelete?: (session: AiVaultSession) => void
   searchHit?: AiVaultSearchHit
   /** The host a search hit came from, set when hits span several hosts. */
@@ -102,27 +113,37 @@ export function VaultSessionRow({
   /** Set in `/resume`'s picker: a click resumes the row, and the row offers no other action. */
   onPick?: () => void
 }) {
+  const t = useTranslate()
   const resumeLabel = isAntigravityReferenceSession(session)
-    ? translate('aiVault.continueInCli', 'Continue in CLI')
+    ? t('aiVault.continueInCli', 'Continue in CLI')
     : defaultResumeLabel
   const updatedAt = session.updatedAt ?? session.modifiedAt
-  const title = useAiVaultSessionDisplayTitle(session)
+  const { title, forked } = useAiVaultSessionDisplayTitle(session, originalPaneTarget)
   const detailsId = getSessionDetailsId(session.id)
   const latestTurn = latestSessionConversationTurn(session)
   const deleteHost = useAiVaultSessionDeleteHost(session)
-  const deleteBlockedReason = onRequestDelete
-    ? aiVaultSessionDeleteBlockedReason(session, deleteHost)
-    : translate(
-        'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
-        'The transcript source is unavailable.'
-      )
-  const requestDelete = session.structuredSession
-    ? undefined
-    : (): void => onRequestDelete?.(session)
+  const chatDeleteHostReason = useOrcaChatDeleteHostReason(session.executionHostId)
+  // An Orca chat is deleted by the host that owns it; the agent's own transcript stays.
+  const deleteBlockedReason = session.structuredSession
+    ? onRequestDelete
+      ? isBotGroupMemberSession(session.structuredSession.sessionId)
+        ? orcaChatGroupDeleteReason(t)
+        : chatDeleteHostReason
+      : t(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
+    : onRequestDelete
+      ? aiVaultSessionDeleteBlockedReason(session, deleteHost, t)
+      : t(
+          'auto.components.right.sidebar.AiVaultSearchEvidence.sourceActionsUnavailable',
+          'The transcript source is unavailable.'
+        )
+  const requestDelete = (): void => onRequestDelete?.(session)
   const draggable = !resumeDisabled && !onPick
   const detailsTooltip = detailsExpanded
-    ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
-    : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
+    ? t('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
+    : t('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
   const startResumeDrag = useCallback(
     (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
@@ -182,7 +203,7 @@ export function VaultSessionRow({
           title={
             !draggable
               ? undefined
-              : translate(
+              : t(
                   'auto.components.right.sidebar.AiVaultSessionRow.dragToResume',
                   'Drag to resume in a new tab'
                 )
@@ -192,7 +213,7 @@ export function VaultSessionRow({
             window.dispatchEvent(new Event(AI_VAULT_SESSION_DRAG_END_EVENT))
           }}
         >
-          {title}
+          {forked ? <ForkMarkedName name={title} /> : title}
         </div>
         <SessionRowTrailingActions
           session={session}
@@ -217,6 +238,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onRequestDelete={requestDelete}
           actionsHidden={Boolean(onPick)}
@@ -228,12 +250,12 @@ export function VaultSessionRow({
           {latestTurn ? (
             <>
               <span className="font-medium text-foreground/80">
-                {conversationRoleLabel(latestTurn.role)}
+                {conversationRoleLabel(latestTurn.role, t)}
               </span>
               <span>: {latestTurn.text}</span>
             </>
           ) : (
-            translate(
+            t(
               'auto.components.right.sidebar.AiVaultSessionRow.noPreviewAvailable',
               'No conversation preview available'
             )
@@ -296,6 +318,7 @@ export function VaultSessionRow({
           onOpenLog={onOpenLog}
           onRevealLog={onRevealLog}
           onOpenCwd={onOpenCwd}
+          onRevealArtifacts={onRevealArtifacts}
           deleteBlockedReason={deleteBlockedReason}
           onDelete={requestDelete}
         />

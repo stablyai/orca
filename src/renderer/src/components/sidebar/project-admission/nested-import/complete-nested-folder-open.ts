@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
+import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { CapturedRuntimeOwner } from '../host-selection/add-repo-runtime-owner'
 import { trackNestedFolderOpen } from './track-nested-folder-open'
 
@@ -17,6 +18,8 @@ export async function completeNestedFolderOpen(args: {
   /** User-entered project name; falls back to the host's basename naming when absent. */
   displayName?: string
   closeModal: () => void
+  /** Settles the add that opened this review; must run before close resets it with null. */
+  reportProject: (added: Repo) => void
   setIsAdding: (value: boolean) => void
 }): Promise<void> {
   trackNestedFolderOpen(args)
@@ -41,6 +44,7 @@ export async function completeNestedFolderOpen(args: {
       return
     }
     if (repo) {
+      args.reportProject(repo)
       args.closeModal()
     }
   } catch (err) {

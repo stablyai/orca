@@ -1,5 +1,4 @@
 import type { AppState } from '../../../types'
-import { removeTabsAttention } from '../../workspace-attention/subject-attention-transitions'
 import type { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 
 type WorktreePurgeOmitters = ReturnType<typeof createWorktreePurgeOmitters>
@@ -14,19 +13,29 @@ export type WorktreePurgeSleepingMaps = Pick<
 export function buildWorktreePurgeSurfacePatch(
   s: AppState,
   omitters: WorktreePurgeOmitters,
-  doomedTabIds: ReadonlySet<string>,
   sleeping: WorktreePurgeSleepingMaps,
   changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const {
     omitByTabId,
     omitByPtyId,
-    omitByPaneKeyTabPrefix,
+    isDoomedPaneKey,
+    omitByPaneKey,
+    omitReadMarksByPaneKey,
     omitByBrowserWorkspaceId,
     omitByPageId,
     omitByFileId
   } = omitters
-  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey, changedPaneKeys)
+  const removedStatusKeys = new Set<string>()
+  for (const key of s.agentStatusByPaneKey.keys()) {
+    if (isDoomedPaneKey(key)) {
+      removedStatusKeys.add(key)
+      changedPaneKeys?.add(key)
+    }
+  }
+  const nextAgentStatusByPaneKey = s.agentStatusByPaneKey.replace(
+    Array.from(removedStatusKeys, (key) => [key, null] as const)
+  )
   return {
     localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
@@ -49,23 +58,27 @@ export function buildWorktreePurgeSurfacePatch(
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
     pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
-    // Evict bulk-purged agent/unread/input state; retainedAgents and orchestration self-heal via pruning/full sync.
+    // Bulk purges skip pane teardown, so evict its agent identity and activity state here.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    agentConversationsByPaneKey: omitByPaneKey(s.agentConversationsByPaneKey),
     ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
       ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
       : {}),
     agentLaunchConfigByPaneKey: sleeping.agentLaunchConfigByPaneKey,
-    acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
-    activityClearedAtByPaneKey: omitByPaneKeyTabPrefix(s.activityClearedAtByPaneKey),
-    manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
-    paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
+    acknowledgedAgentsByPaneKey: omitReadMarksByPaneKey('acknowledgedAgentsByPaneKey'),
+    activityClearedAtByPaneKey: omitReadMarksByPaneKey('activityClearedAtByPaneKey'),
+    manuallyUnreadTurnsByPaneKey: omitReadMarksByPaneKey('manuallyUnreadTurnsByPaneKey'),
+    paneForegroundAgentByPaneKey: omitByPaneKey(s.paneForegroundAgentByPaneKey),
     sleepingAgentSessionsByPaneKey: sleeping.sleepingAgentSessionsByPaneKey,
-    ...removeTabsAttention(s, doomedTabIds),
-    lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
+    structuredChatSleptAtByPaneKey: omitByPaneKey(s.structuredChatSleptAtByPaneKey),
+    unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),
+    unreadTerminalPanes: omitByPaneKey(s.unreadTerminalPanes),
+    unreadAgentCompletionPanes: omitByPaneKey(s.unreadAgentCompletionPanes),
+    lastTerminalInputAtByPaneKey: omitByPaneKey(s.lastTerminalInputAtByPaneKey),
     browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
     browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
     browserAnnotationMarkerIdsByPageId: omitByPageId(s.browserAnnotationMarkerIdsByPageId),
-    remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
+    remoteBrowserPageHandlesByPageId: omitters.omitBrowserPageHandles(),
     pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
     // createBrowserTab writes both the workspace id and the page id into this map.
     pendingAddressBarFocusByTabId: omitByPageId(

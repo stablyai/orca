@@ -4,21 +4,19 @@ import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,
   type NetworkProxySettings
-} from '../../shared/network-proxy'
+} from '../../shared/network/network-proxy'
 import {
   clearElectronProxyCredentialsForSession,
   haveSameElectronProxyCredentials,
-  resetElectronProxyCredentialsForTests,
   separateElectronProxyCredentials,
   setElectronProxyCredentialsForSession,
   type ElectronProxyCredentials
 } from './electron-proxy-credentials'
 import { runBoundedProxyApplication } from './bounded-proxy-application'
+import { notifyProxySessionReadinessChanged } from './proxy-session-readiness-listeners'
 import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
 import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
 
-export { setDefaultProxySessionResolver } from './electron-default-proxy-session'
-export type { ProxyApplyResult } from './proxy-policy-resolution'
 const PROXY_PROBE_URL = 'https://api.anthropic.com/'
 type SessionProxyApplicationState = {
   appliedKey: string | null
@@ -35,16 +33,6 @@ function proxyMemoKey(result: ProxyApplyResult): string {
   return result.source === 'settings' || result.source === 'env'
     ? `${result.source}\0${result.proxyRules}\0${result.proxyBypassRules ?? ''}`
     : result.source
-}
-
-export function resetProxyApplicationForTests(): void {
-  sessionProxyApplications = new WeakMap()
-  resetElectronProxyCredentialsForTests()
-}
-
-export function resetSessionProxyApplicationForTests(proxySession: ProxySession): void {
-  sessionProxyApplications.delete(proxySession)
-  clearElectronProxyCredentialsForSession(proxySession)
 }
 
 export function clearProxySessionCredentials(proxySession: ProxySession): void {
@@ -75,6 +63,12 @@ export async function awaitProxySessionApplication(proxySession: ProxySession): 
       return !state.retired
     }
   }
+}
+
+/** Readiness without waiting: true only once the newest policy applied (or none is tracked). */
+export function isProxySessionApplicationReady(proxySession: ProxySession): boolean {
+  const state = sessionProxyApplications.get(proxySession)
+  return !state || (!state.retired && state.readiness === 'ready')
 }
 
 export function getProxySessionApplicationReadiness(
@@ -111,6 +105,7 @@ export async function releaseProxySessionApplication(
 export async function retireProxySessionApplication(proxySession: ProxySession): Promise<void> {
   const state = getSessionProxyApplicationState(proxySession)
   state.retired = true
+  notifyProxySessionReadinessChanged(proxySession)
   try {
     await releaseProxySessionApplication(proxySession, true)
   } finally {
@@ -149,18 +144,14 @@ async function enqueueSessionProxyApplication(
     .then(() => runBoundedProxyApplication(() => apply(state)))
   state.tail = operation
   state.readiness = 'pending'
-  void operation.then(
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'ready'
-      }
-    },
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'failed'
-      }
+  notifyProxySessionReadinessChanged(proxySession)
+  const settle = (readiness: 'ready' | 'failed') => (): void => {
+    if (state.tail === operation) {
+      state.readiness = readiness
+      notifyProxySessionReadinessChanged(proxySession)
     }
-  )
+  }
+  void operation.then(settle('ready'), settle('failed'))
   return operation
 }
 

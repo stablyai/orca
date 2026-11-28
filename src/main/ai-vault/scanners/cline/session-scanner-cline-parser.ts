@@ -1,22 +1,26 @@
 import { isMissingRemoteSessionPathError } from '../../transcripts/remote-session-file-stat'
 import { BinarySessionTranscriptError } from '../../transcripts/remote-session-content-lines'
 import { readStreamedSessionDocument } from '../../transcripts/session-document-stream'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { clineMessagesPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
-import { arrayValue, extractString } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, normalizeTitleText } from '../../session-scanner-text-normalization'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
+import {
+  extractContentText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -113,7 +117,8 @@ function consumeClineSessionMessage(accumulator: SessionAccumulator, value: unkn
     accumulator.fallbackTitle = normalizeTitleText(extractContentText(content) ?? '')
   }
   if (role === 'assistant' && !accumulator.model) {
-    accumulator.model = extractString(asRecord(message.modelInfo)?.id)
+    const model = extractString(asRecord(message.modelInfo)?.id)
+    accumulator.model = model && ownRetainedString(model)
   }
   addSessionContent(accumulator, role, content, message.ts)
 }
@@ -135,7 +140,8 @@ export async function parseClineSessionDocuments(
       fields: ['session_id', 'cwd', 'workspace_root', 'model', 'started_at', 'prompt'],
       create: () => null,
       consume: () => {},
-      signal
+      signal,
+      drain: () => messages?.drain?.() ?? Promise.resolve()
     })
     if (!parsed) {
       return null
@@ -169,7 +175,8 @@ export async function parseClineSessionDocuments(
       fields: ['updated_at'],
       create,
       consume: consumeClineSessionMessage,
-      signal
+      signal,
+      drain: () => messages?.drain?.() ?? Promise.resolve()
     })
     if (parsed) {
       accumulator = parsed.state

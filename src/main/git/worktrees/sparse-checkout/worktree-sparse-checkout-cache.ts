@@ -1,4 +1,4 @@
-import type { GitRuntimeOptions } from '../../git-runtime-options'
+import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import { detectSparseCheckout } from './worktree-sparse-state'
 
@@ -123,13 +123,4 @@ export function clearSparseCheckoutStateCacheForRepo(repoPath: string): void {
 /** Clear all entries when a change notification cannot be resolved to a repo path. */
 export function clearSparseCheckoutStateCache(): void {
   sparseCheckoutStateCache.clear()
-}
-
-export function __resetSparseCheckoutStateCacheForTests(): void {
-  sparseCheckoutStateCache.clear()
-  changeListener = undefined
-}
-
-export function __getSparseCheckoutStateCacheSizeForTests(): number {
-  return sparseCheckoutStateCache.size
 }

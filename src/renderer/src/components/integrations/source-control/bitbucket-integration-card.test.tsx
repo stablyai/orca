@@ -1,125 +1,95 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { BitbucketIntegrationCard } from './bitbucket-integration-card'
 
-const mocks = vi.hoisted(() => ({
-  refresh: vi.fn(),
-  status: vi.fn(),
-  statuses: { bitbucketStatus: 'not-authenticated', bitbucketAccount: null }
-}))
+type CardHost = { target: RuntimeClientTarget; followsWorkspace: boolean }
+
+const mocks = vi.hoisted(() => {
+  const card: { host: CardHost | null } = { host: null }
+  return { card, refresh: vi.fn(), status: vi.fn(), connect: vi.fn(), disconnect: vi.fn() }
+})
 
 vi.mock('./source-control-preflight-card-status', () => ({
   usePreflightCardStatuses: () => ({
-    statuses: mocks.statuses,
+    statuses: { bitbucketStatus: 'not-configured', bitbucketAccount: null },
     unavailable: false,
+    host: mocks.card.host,
     refresh: mocks.refresh
   })
 }))
-vi.mock('./bitbucket-credentials-dialog', () => ({
-  BitbucketCredentialsDialog: ({ open, initialEmail }: { open: boolean; initialEmail?: string }) =>
-    open ? <div>Credential dialog open {initialEmail}</div> : null
+vi.mock('@/runtime/source-control/bitbucket/runtime-bitbucket-credentials-client', () => ({
+  bitbucketCredentialStatus: mocks.status,
+  bitbucketConnect: mocks.connect,
+  bitbucketDisconnect: mocks.disconnect,
+  BitbucketCredentialsHostOutdatedError: class extends Error {}
 }))
 
-import { BitbucketIntegrationCard } from './bitbucket-integration-card'
-
-const LOAD_FAILED_TEXT = 'Could not check for a saved Bitbucket credential.'
-
-let container: HTMLDivElement
-let root: Root
-
-async function renderCard(): Promise<void> {
-  container = document.createElement('div')
-  document.body.appendChild(container)
-  root = createRoot(container)
-  await act(async () => {
-    root.render(<BitbucketIntegrationCard />)
-  })
+const NOT_CONFIGURED = {
+  configured: false,
+  source: 'none',
+  credentialProtection: null,
+  account: null,
+  authMode: null,
+  email: null,
+  baseUrl: null
 }
 
-function recheckButton(): HTMLButtonElement {
-  const button = Array.from(container.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent === 'Re-check'
+async function connectWithToken(): Promise<void> {
+  render(
+    <TooltipProvider>
+      <BitbucketIntegrationCard />
+    </TooltipProvider>
   )
-  if (!button) {
-    throw new Error('Re-check button not rendered')
-  }
-  return button
+  fireEvent.click(await screen.findByRole('button', { name: 'Connect' }))
+  fireEvent.click(await screen.findByRole('radio', { name: /access token/i }))
+  fireEvent.change(await screen.findByPlaceholderText(/token/i), {
+    target: { value: 'secret' }
+  })
+  const submit = screen
+    .getAllByRole('button', { name: 'Connect' })
+    .find((button) => button.closest('[role="dialog"]'))!
+  fireEvent.click(submit)
+  await waitFor(() => expect(mocks.connect).toHaveBeenCalledTimes(1))
 }
 
-describe('BitbucketIntegrationCard credential-read failures', () => {
+describe('Bitbucket card host wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.statuses = { bitbucketStatus: 'not-authenticated', bitbucketAccount: null }
-    Object.assign(window, {
-      api: {
-        bitbucket: { status: mocks.status, disconnect: vi.fn(async () => {}) },
-        shell: { openUrl: vi.fn() }
-      }
-    })
+    mocks.status.mockResolvedValue(NOT_CONFIGURED)
+    mocks.connect.mockResolvedValue({ ok: true, account: 'dev' })
   })
 
   afterEach(() => {
-    act(() => root.unmount())
-    container.remove()
+    cleanup()
+    useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
-  it('does not let an older failed read overwrite a newer successful re-check', async () => {
-    let rejectInitial!: (error: Error) => void
-    mocks.status
-      .mockReturnValueOnce(
-        new Promise((_resolve, reject) => {
-          rejectInitial = reject
-        })
-      )
-      .mockResolvedValueOnce({ source: 'none', account: null })
+  it('saves to the server whose status the badge shows, even when Settings points elsewhere', async () => {
+    const wsl: RuntimeClientTarget = { kind: 'environment', environmentId: 'wsl-host' }
+    // Settings on this computer, a WSL-server workspace focused: the badge is the WSL server's.
+    mocks.card.host = { target: wsl, followsWorkspace: true }
 
-    await renderCard()
-    await act(async () => {
-      recheckButton().click()
-    })
-    await act(async () => {
-      rejectInitial(new Error('late keychain failure'))
-    })
+    await connectWithToken()
 
-    expect(container.textContent).not.toContain(LOAD_FAILED_TEXT)
+    expect(mocks.status).toHaveBeenCalledWith(wsl)
+    expect(mocks.connect).toHaveBeenCalledWith(wsl, expect.objectContaining({ authMode: 'token' }))
+    // The post-save refresh must re-read the same host and its preflight.
+    await waitFor(() => expect(mocks.status).toHaveBeenCalledTimes(2))
+    expect(mocks.status).toHaveBeenLastCalledWith(wsl)
+    expect(mocks.refresh).toHaveBeenCalled()
   })
 
-  it('does not expose stale credential controls after a re-check fails', async () => {
-    mocks.statuses = { bitbucketStatus: 'connected', bitbucketAccount: null }
-    mocks.status
-      .mockResolvedValueOnce({
-        configured: true,
-        source: 'stored',
-        account: 'stale-account',
-        authMode: 'token',
-        email: 'stale@example.com',
-        baseUrl: null
-      })
-      .mockRejectedValueOnce(new Error('keychain locked'))
+  it('keeps this computer on its own target', async () => {
+    mocks.card.host = { target: { kind: 'local' }, followsWorkspace: false }
 
-    await renderCard()
-    expect(container.textContent).toContain('stale-account')
-    expect(container.textContent).toContain('Edit credentials')
-    expect(container.querySelector('[aria-label="Disconnect Bitbucket"]')).not.toBeNull()
+    await connectWithToken()
 
-    await act(async () => {
-      recheckButton().click()
-    })
-
-    expect(container.textContent).toContain(LOAD_FAILED_TEXT)
-    expect(container.textContent).not.toContain('stale-account')
-    expect(container.textContent).not.toContain('Edit credentials')
-    expect(container.textContent).toContain('Add or replace credentials')
-    expect(container.querySelector('[aria-label="Disconnect Bitbucket"]')).toBeNull()
-
-    await act(async () => {
-      Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Add or replace credentials')
-        ?.click()
-    })
-    expect(container.textContent).toContain('Credential dialog open')
-    expect(container.textContent).not.toContain('stale@example.com')
+    expect(mocks.status).toHaveBeenCalledWith({ kind: 'local' })
+    expect(mocks.connect).toHaveBeenCalledWith({ kind: 'local' }, expect.anything())
   })
 })

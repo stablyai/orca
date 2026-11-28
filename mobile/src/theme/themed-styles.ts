@@ -1,23 +1,32 @@
 import { StyleSheet, type ImageStyle, type TextStyle, type ViewStyle } from 'react-native'
-import { getMobileColorScheme, radii, type MobileColorScheme } from './mobile-theme'
+import { paletteForScheme, radii, type MobileColorScheme, type MobilePalette } from './mobile-theme'
+import { useMobileColorScheme } from './use-mobile-color-scheme'
 
-// Module-scope styles that read `colors`: built once per scheme, and every key reads the current scheme's copy.
-export function themedStyles<T extends Record<string, unknown>>(create: () => T): T {
+// RN 0.88's generated types dropped StyleSheet.NamedStyles; this mapped constraint keeps literal inference.
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle }
+
+// A per-scheme style factory. Render code resolves it with useThemedStyles() so React Compiler
+// tracks the scheme; anything holding a scheme already can call resolve().
+export type ThemedStyles<T> = { readonly resolve: (scheme: MobileColorScheme) => T }
+
+export function themedStyles<T>(
+  create: (colors: MobilePalette, scheme: MobileColorScheme) => T
+): ThemedStyles<T> {
   const built = new Map<MobileColorScheme, T>()
-  const current = (): T => {
-    const scheme = getMobileColorScheme()
-    let styles = built.get(scheme)
-    if (styles === undefined) {
-      styles = create()
-      built.set(scheme, styles)
+  return {
+    resolve: (scheme) => {
+      let styles = built.get(scheme)
+      if (styles === undefined) {
+        styles = create(paletteForScheme(scheme), scheme)
+        built.set(scheme, styles)
+      }
+      return styles
     }
-    return styles
   }
-  const live = { ...current() }
-  for (const key of Object.keys(live)) {
-    Object.defineProperty(live, key, { enumerable: true, get: () => current()[key] })
-  }
-  return live
+}
+
+export function useThemedStyles<T>(sheet: ThemedStyles<T>): T {
+  return sheet.resolve(useMobileColorScheme())
 }
 
 const CORNER_RADIUS_KEYS = [
@@ -69,7 +78,7 @@ function keepsCircularCurve(style: CornerStyle): boolean {
 
 // Every rounded style asks for Apple's continuous corner curve; iOS draws it, Android and the web ignore the key.
 // Mutates the fresh objects `create()` just built.
-function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): T {
+function withContinuousCorners<T extends NamedStyles<T>>(styles: T): T {
   for (const style of Object.values<ViewStyle | TextStyle | ImageStyle>(styles)) {
     if (
       style &&
@@ -84,7 +93,11 @@ function withContinuousCorners<T extends StyleSheet.NamedStyles<T>>(styles: T): 
   return styles
 }
 
-// Drop-in for a module-scope `StyleSheet.create` that reads `colors`.
-export function themedStyleSheet<T extends StyleSheet.NamedStyles<T>>(create: () => T): T {
-  return themedStyles(() => StyleSheet.create(withContinuousCorners(create())))
+// Module-scope `StyleSheet.create` whose values read the scheme's colors.
+export function themedStyleSheet<T extends NamedStyles<T>>(
+  create: (colors: MobilePalette, scheme: MobileColorScheme) => T
+): ThemedStyles<T> {
+  return themedStyles((colors, scheme) =>
+    StyleSheet.create(withContinuousCorners(create(colors, scheme)))
+  )
 }

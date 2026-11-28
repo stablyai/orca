@@ -3,19 +3,14 @@ import type {
   HostedReviewBranchCacheIdentity,
   HostedReviewBranchCacheOptions
 } from './hosted-review-branch-cache-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type {
   HostedReviewForBranchOutcome,
   HostedReviewInfo
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { cachedHostedReviewOutcome } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { isActiveBranch, noteActiveClaim } from './hosted-review-active-branch-claims'
 import {
-  __resetHostedReviewActiveClaimsForTests,
-  isActiveBranch,
-  noteActiveClaim
-} from './hosted-review-active-branch-claims'
-import {
-  __resetUnsettledHostedReviewLookupsForTests,
   lookupCapacityRefusal,
   noteDetachedLookup,
   noteLookupStarted,
@@ -23,7 +18,6 @@ import {
   settleLookup
 } from './hosted-review-unsettled-lookups'
 import {
-  __resetHostedReviewInflightLookupsForTests,
   expireOverdueInflight,
   getInflightLookup,
   releaseInflight,
@@ -33,19 +27,18 @@ import {
   type InflightToken
 } from './hosted-review-inflight-lookups'
 import {
-  __resetHostedReviewScopeGenerationsForTests,
   bumpScopeGeneration,
   hostedReviewRepoScope,
   scopeGeneration
 } from './hosted-review-scope-generations'
 import {
-  __resetHostedReviewLookupBackoffForTests,
   backoffUntil,
   clearFailures,
   dropFailuresWithPrefix,
   noteFailure
 } from './hosted-review-lookup-backoff'
 import { observeProviderRead } from './hosted-review-provider-read'
+import { scaleReviewRefreshInterval } from '../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   ACTIVE_REFRESH_INTERVAL_MS,
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
@@ -84,10 +77,14 @@ function isHeadSensitive(entry: CacheEntry): boolean {
 }
 
 function refreshIntervalMs(entry: CacheEntry, active: boolean): number {
-  if (entry.review !== null) {
-    return FOUND_REVIEW_TTL_MS
-  }
-  return active ? ACTIVE_REFRESH_INTERVAL_MS : NO_REVIEW_REFRESH_INTERVAL_MS
+  const base =
+    entry.review !== null
+      ? FOUND_REVIEW_TTL_MS
+      : active
+        ? ACTIVE_REFRESH_INTERVAL_MS
+        : NO_REVIEW_REFRESH_INTERVAL_MS
+  // A slower host cadence keeps answers longer; forced, user and newly selected reads still ask.
+  return scaleReviewRefreshInterval(base) ?? Number.POSITIVE_INFINITY
 }
 
 function isFresh(entry: CacheEntry, headOid: string | null, active: boolean): boolean {
@@ -126,16 +123,6 @@ export function invalidateHostedReviewBranchCache(
   }
   retireInflightWithPrefix(prefix)
   dropFailuresWithPrefix(prefix)
-}
-
-/** @internal - exposed for tests only */
-export function __resetHostedReviewBranchCacheForTests(): void {
-  entries.clear()
-  __resetHostedReviewInflightLookupsForTests()
-  __resetHostedReviewLookupBackoffForTests()
-  __resetHostedReviewActiveClaimsForTests()
-  __resetUnsettledHostedReviewLookupsForTests()
-  __resetHostedReviewScopeGenerationsForTests()
 }
 
 /** Detached answers may fill gaps or replace strictly older attempts only; never outrank the served pre-refresh answer or a replacement owner. Late null would otherwise mask a real review. */
@@ -291,12 +278,15 @@ export async function readHostedReviewBranchCache(
     retireInflightLookup(key)
   }
 
+  // Stale reviews still block duplicates; stale absence cannot authorize creation.
+  const canServeStale = (entry: CacheEntry): boolean =>
+    !(options.requireFreshAbsence === true && entry.review === null)
   const settleForCaller = async (promise: Promise<HostedReviewForBranchOutcome>) => {
     try {
       return await promise
     } catch (error) {
       const stale = entries.get(key)
-      if (!options.userRefresh && stale) {
+      if (!options.userRefresh && stale && canServeStale(stale)) {
         return cachedHostedReviewOutcome(stale.review)
       }
       throw error
@@ -310,7 +300,7 @@ export async function readHostedReviewBranchCache(
 
   const refusal = options.userRefresh ? null : lookupUnavailableReason(key)
   if (refusal !== null) {
-    if (cached) {
+    if (cached && canServeStale(cached)) {
       return cachedHostedReviewOutcome(cached.review)
     }
     throw new Error(refusal)

@@ -1,14 +1,20 @@
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import {
@@ -20,19 +26,19 @@ import {
 import {
   addHostSectionRows,
   type HostSectionRow
-} from '../../../../../../shared/sidebar-list/host-section-rows'
-import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/host-section-order'
+} from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
-} from '../../../../../../shared/sidebar-list/host-filtering'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { selectWorkspaceBoardStatuses } from '@/store/host-workspace-status-columns'
+} from '../../../../../../shared/sidebar-list/hosts/host-filtering'
+import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
@@ -42,16 +48,18 @@ const EMPTY_PENDING_CREATIONS: readonly PendingCreationRef[] = []
 /** Replay grouping, pins and collapse for unmounted-list shortcut order without reversing the visible-worktrees dependency. */
 export function computeRenderedSidebarWorktrees(
   state: AppState,
+  statuses: RuntimeStatuses,
   visibleWorktrees: readonly Worktree[]
 ): Worktree[] {
   return getRenderedWorktreesInSidebarOrder(
-    computeRenderedSidebarRows(state, visibleWorktrees),
+    computeRenderedSidebarRows(state, statuses, visibleWorktrees),
     getPinnedWorktreeDisplayPolicy(state.settings)
   )
 }
 
 export function computeRenderedSidebarRows(
   state: AppState,
+  statuses: RuntimeStatuses,
   visibleWorktrees: readonly Worktree[]
 ): HostSectionRow[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
@@ -68,7 +76,7 @@ export function computeRenderedSidebarRows(
     state.worktreeCardProperties
   )
 
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
   const rows = planSidebarRows({
     groupBy: state.groupBy,
     sortBy: state.sortBy,
@@ -79,8 +87,8 @@ export function computeRenderedSidebarRows(
     workspaceStatuses: selectWorkspaceBoardStatuses(state),
     projectOrderBy: state.projectOrderBy,
     lineageById: state.worktreeLineageById,
-    lineageParentIdentities: selectSidebarLineageParentIdentities(state),
-    worktreeMap: getWorktreeMapFromState(state),
+    lineageParentIdentities: selectSidebarLineageParentIdentities(state, statuses),
+    worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(state)),
     nestLineage: true,
     projectGroups: filterProjectGroupsForVisibleHosts(
       projectGroups,
@@ -102,7 +110,8 @@ export function computeRenderedSidebarRows(
     // Why no hostLabelById: it only feeds display-only host context labels, never row order.
     defaultHostId,
     pinnedDisplayPolicy,
-    filterRepoIds: state.filterRepoIds
+    filterRepoIds: state.filterRepoIds,
+    hiddenProjects: indexHiddenProjects(state.repos, defaultHostId)
   }).render(state.collapsedGroups)
 
   // Build the host registry only when sections may affect order; zero/one-host cases still safely no-op.
@@ -118,7 +127,7 @@ export function computeRenderedSidebarRows(
             sshConnectionStates: state.sshConnectionStates,
             settings: state.settings,
             runtimeEnvironments: state.runtimeEnvironments,
-            runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+            runtimeStatusByEnvironmentId: statuses,
             hostLabelOverrides: getHostDisplayLabelOverrides(state.settings)
           }),
           state.workspaceHostOrder
@@ -136,9 +145,14 @@ export function computeRenderedSidebarRows(
 
 export function computeRenderedSidebarWorktreeOrder(
   state: AppState,
+  statuses: RuntimeStatuses,
   visibleWorktrees: readonly Worktree[]
 ): string[] {
   return Array.from(
-    new Set(computeRenderedSidebarWorktrees(state, visibleWorktrees).map((worktree) => worktree.id))
+    new Set(
+      computeRenderedSidebarWorktrees(state, statuses, visibleWorktrees).map(
+        (worktree) => worktree.id
+      )
+    )
   )
 }

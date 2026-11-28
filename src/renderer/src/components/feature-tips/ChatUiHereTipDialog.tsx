@@ -1,19 +1,15 @@
 import { useRef, type JSX } from 'react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ChatUiHereFeatureTipVisual } from './ChatUiHereFeatureTipVisual'
 import { getChatUiHereVariantCopy, type ShownChatUiLaunchTipVariant } from './chat-ui-here-copy'
 import { FeatureTipActions } from './FeatureTipActions'
 import {
+  FEATURE_TIP_BUTTONS_ON_CARD_EDGE,
   FeatureTipDialogFrame,
-  FeatureTipEyebrow,
   FeatureTipSettingsLine
 } from './FeatureTipDialogFrame'
-
-// Side by side, the outer edge of the primary button's 3px focus ring sits on the bottom of the
-// visual's centered 22rem card; the column is the frame less its 1px borders.
-const BUTTONS_ON_CARD_EDGE = 'md:pb-[calc((min(27rem,100vh-2rem)-2px-22rem)/2+3px)]'
 
 export function ChatUiHereTipDialog({
   open,
@@ -34,8 +30,9 @@ export function ChatUiHereTipDialog({
   onSkip: () => void
   onSettingsClick: () => void
 }): JSX.Element {
+  const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
-  const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy(variant)
+  const { paragraphs, secondaryLabel, primaryLabel } = getChatUiHereVariantCopy(variant, t)
 
   return (
     <FeatureTipDialogFrame
@@ -47,13 +44,12 @@ export function ChatUiHereTipDialog({
         primaryButtonRef.current?.focus({ preventScroll: true })
       }}
       visual={<ChatUiHereFeatureTipVisual />}
-      copyClassName={BUTTONS_ON_CARD_EDGE}
+      copyClassName={FEATURE_TIP_BUTTONS_ON_CARD_EDGE}
     >
       <DialogHeader className="text-left">
         <div>
-          <FeatureTipEyebrow label={translate('featureTips.eyebrowNew', 'New')} />
           <DialogTitle size="display">
-            {translate('featureTips.chatUiHere.title', 'Chat UI is here')}
+            {t('featureTips.chatUiHere.title', 'Chat UI is here')}
           </DialogTitle>
           <DialogDescription className="mt-3 max-w-2xl">
             <span className="block space-y-3 leading-relaxed">
@@ -63,7 +59,7 @@ export function ChatUiHereTipDialog({
                 </span>
               ))}
               <FeatureTipSettingsLine
-                text={translate(
+                text={t(
                   'featureTips.chatUiHere.changeInSettings',
                   'Change anytime in <link>Settings → Chat UI</link>.'
                 )}

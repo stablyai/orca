@@ -2,12 +2,13 @@ import type {
   PluginHostInstallSource,
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
+import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import {
-  parseGitRepositoryIdentity,
-  splitQualifiedPluginKey
-} from '../../../../../shared/plugins/catalog/plugin-marketplace'
+  pluginInstallTrustee,
+  pluginRepositoryOrigin
+} from '../../../../../shared/plugins/catalog/plugin-repository-link'
 import { gitUrlPluginPublisher } from '../../../../../shared/plugins/installation/plugin-publisher-derivation'
 import { pluginPointsFromManifest, pluginTrust } from './plugin-access-profile'
 import { pluginTrustWarnings } from './plugin-consent-copy'
@@ -25,7 +26,8 @@ export type PluginInstallTrustKind =
 
 export type PluginInstallTrustPrompt = {
   kind: PluginInstallTrustKind
-  /** Who the reader must trust: the repository owner Orca parsed, else the derived publisher. */
+  /** Who the reader must trust: the repository owner Orca parsed, else the derived publisher;
+   *  the publisher for an Orca-hosted mirror in Orca's community catalog. */
   trustee: string
   /** The publisher Orca derives from where it installs from, never the manifest's claim. */
   publisher: string | null
@@ -37,31 +39,22 @@ export type PluginInstallTrustPrompt = {
   access: string[]
 }
 
-/** Orca's own reading of a Git URL: `host/owner/repo` plus the owner, never the manifest's claim. */
-export function pluginRepositoryOrigin(
-  url: string,
-  path?: string
-): { owner: string; repository: string } | null {
-  const identity = parseGitRepositoryIdentity(url)
-  if (!identity) {
-    return null
-  }
-  const repository = `${identity.host}/${identity.path}`
-  return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
-}
+export { pluginRepositoryOrigin }
 
 const THEME_POINTS = ['themes', 'iconThemes', 'terminalThemes'] as const
 
 /**
- * The confirmation a catalog install needs, or null for an official plugin. Every other plugin
- * asks, content included, because only Orca's own catalog vouches for its author.
+ * Publisher confirmation for catalogs without Orca or team approval.
  */
 export function catalogInstallTrustPrompt(
   listing: PluginMarketplaceHostListing,
   preview: PluginMarketplaceHostInstallPreview
 ): PluginInstallTrustPrompt | null {
   // Why both: main derives each from the catalog it read; either saying no is enough to ask.
-  if (listing.official && preview.official) {
+  if (
+    (listing.official && preview.official) ||
+    (listing.managedByTeams && preview.managedByTeams)
+  ) {
     return null
   }
   const { manifest } = preview
@@ -81,7 +74,12 @@ export function catalogInstallTrustPrompt(
           : 'content'
   return {
     kind,
-    trustee: origin?.owner ?? publisher ?? listing.pluginKey,
+    trustee:
+      pluginInstallTrustee({
+        url: listing.source.url,
+        publisher,
+        catalogUrl: listing.marketplaceUrl ?? null
+      }) ?? listing.pluginKey,
     publisher,
     repository: origin?.repository ?? listing.source.url,
     location: listing.marketplaceName || null,

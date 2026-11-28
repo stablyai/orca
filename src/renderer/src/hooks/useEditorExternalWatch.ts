@@ -1,22 +1,26 @@
-import { useEffect, useRef } from 'react'
+import { useSourceControlWatchConsumers } from '../components/editor/external-changes/watching/source-control-watch-consumers'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import { subscribeEditorRuntimeFileWatch } from '../components/editor/external-changes/watching/editor-runtime-file-watch'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,
   type EditorExternalWatchTarget
-} from './editor-external-watch-targets'
-import { markWorktreeCatchUpPayload } from './worktree-file-change-event'
-import { buildEditorExternalWatchEventHandler } from './editor-external-watch-event-reconciliation'
-import { verifyLatchedEditorMoveDestinations } from './editor-external-watch-disk-verification'
+} from '../components/editor/external-changes/watching/editor-external-watch-targets'
+import { markWorktreeCatchUpPayload } from '../runtime/files/watching/worktree-file-change-event'
+import { buildEditorExternalWatchEventHandler } from '../components/editor/external-changes/watching/editor-external-watch-event-reconciliation'
+import { verifyLatchedEditorMoveDestinations } from '../components/editor/external-changes/watching/editor-external-watch-disk-verification'
 import {
   acquireWatchRoot,
+  refreshDeferredWatchRoot,
   releaseAllWatchRoots,
   releaseWatchRoot,
   type HeldWatchRoots
-} from './editor-external-watch-local-roots'
+} from '../components/editor/external-changes/watching/editor-external-watch-local-roots'
+import { SymlinkedTabFolderWatches } from '../components/editor/external-changes/watching/editor-external-watch-symlink-folders'
+import { selectLocalTabFoldersKey } from '../components/editor/external-changes/watching/editor-external-watch-tab-folders-key'
 
 type FsChangedHandler = (
   payload: FsChangedPayload,
@@ -34,12 +38,25 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
 }
 
 export function useEditorExternalWatch(): void {
-  const snapshot = useAppStore(selectEditorExternalWatchTargets)
+  const sectionTargets = useSourceControlWatchConsumers()
+  const snapshot = useAppStore(
+    useCallback(
+      (state) => selectEditorExternalWatchTargets(state, sectionTargets),
+      [sectionTargets]
+    )
+  )
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
   const unwatchedTargetKeysRef = useRef<ReadonlySet<string>>(new Set())
   const remoteWatchUnsubsRef = useRef(new Map<string, () => void>())
   const heldWatchRootsRef = useRef<HeldWatchRoots>(new Map())
   const fsChangedHandlerRef = useRef<FsChangedHandler | null>(null)
+  const [symlinkedFolders] = useState(() => new SymlinkedTabFolderWatches(warnExternalWatchFailure))
+  const tabFoldersKey = useAppStore(
+    useCallback(
+      (state) => selectLocalTabFoldersKey(state.openFiles, snapshot.targets),
+      [snapshot.targets]
+    )
+  )
 
   // Why: diff targets so unchanged worktrees keep their subscription; full teardown on every store change drops events in the gap.
   useEffect(() => {
@@ -60,22 +77,21 @@ export function useEditorExternalWatch(): void {
     targetsRef.current = nextTargets
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
-      // After reacquiring trimmed background watches, overflow-resync missed changes through the normal pipeline.
-      const resync = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
-        ? () =>
-            fsChangedHandlerRef.current?.(
-              markWorktreeCatchUpPayload({
-                worktreePath: target.worktreePath,
-                events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-                connectionId: target.connectionId,
-                resync: true
-              }),
-              target.runtimeEnvironmentId,
-              target
-            )
-        : undefined
+      // Overflow-resync missed changes through the normal pipeline, scoped to this target.
+      const resync = (): void => {
+        fsChangedHandlerRef.current?.(
+          markWorktreeCatchUpPayload({
+            worktreePath: target.worktreePath,
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            connectionId: target.connectionId,
+            resync: true
+          }),
+          target.runtimeEnvironmentId,
+          target
+        )
+      }
       if (target.runtimeEnvironmentId) {
-        // Why: the host's ready event means its watcher is installed, so nothing after the resync is lost.
+        // Why: the remote watch decides when to resync (each host watcher install and each recovery).
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef, resync)
         continue
       }
@@ -83,7 +99,12 @@ export function useEditorExternalWatch(): void {
         // Provider disappearance must report watch failure without uncaught renderer rejection.
         warnExternalWatchFailure(target, err)
       })
-      if (resync) {
+      // Why: this request may be a retry of a root a symlinked tab folder shares; its outcome can free an outer watch.
+      void installed.then(() =>
+        symlinkedFolders.noteSettled(target.worktreePath, heldWatchRootsRef.current)
+      )
+      // After reacquiring trimmed background watches, catch up on changes made while unwatched.
+      if (previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))) {
         void installed.then(resync)
       }
     }
@@ -99,47 +120,70 @@ export function useEditorExternalWatch(): void {
     }
     // Why: final unmount cleanup owns teardown so target changes remain differential.
     // Why: the selector keeps the snapshot identity until a target or unwatched key changes.
-  }, [snapshot])
+  }, [snapshot, symlinkedFolders])
+
+  // Why: runs after the target diff so targetsRef holds the targets these folders belong to.
+  useEffect(() => {
+    symlinkedFolders.sync(tabFoldersKey, targetsRef.current, heldWatchRootsRef.current)
+  }, [symlinkedFolders, tabFoldersKey])
 
   // Why: one stable fs:changed listener prevents target-key changes from opening an event-loss gap.
   useEffect(() => {
     const remoteWatchUnsubs = remoteWatchUnsubsRef.current
     const heldWatchRoots = heldWatchRootsRef.current
     const { handleFsChanged, dispose } = buildEditorExternalWatchEventHandler(
-      (worktreePath, runtimeEnvironmentId, connectionId) =>
-        targetsRef.current.filter(
+      (worktreePath, runtimeEnvironmentId, connectionId) => [
+        ...targetsRef.current.filter(
           (target) =>
             normalizeRuntimePathForComparison(target.worktreePath) ===
               normalizeRuntimePathForComparison(worktreePath) &&
             target.runtimeEnvironmentId === runtimeEnvironmentId &&
             // Why: a local and an SSH root can share a path; runtime streams are already per host.
             (runtimeEnvironmentId !== null || target.connectionId === connectionId)
-        )
+        ),
+        // Why: a watched tab folder reports under its own path; its workspaces reconcile the events.
+        ...(runtimeEnvironmentId === null
+          ? symlinkedFolders.targetsFor(worktreePath, connectionId, heldWatchRoots)
+          : [])
+      ]
     )
-    const unsubscribe = window.api.fs.onFsChanged((payload) => handleFsChanged(payload, null))
+    const unsubscribe = window.api.fs.onFsChanged((payload) => {
+      if (payload.resync && !payload.connectionId) {
+        // Why every local resync: main sends one after a deferred install lands, whoever holds that root.
+        void refreshDeferredWatchRoot(
+          heldWatchRoots,
+          { worktreePath: payload.worktreePath, connectionId: undefined },
+          (error) => console.warn('[filesystem-watch] failed to rewatch deferred root', error)
+        )?.then(() => symlinkedFolders.noteSettled(payload.worktreePath, heldWatchRoots))
+      }
+      handleFsChanged(payload, null)
+    })
     fsChangedHandlerRef.current = handleFsChanged
+    symlinkedFolders.routeHandOversTo((payload) => handleFsChanged(payload, null))
 
     return () => {
       unsubscribe()
       dispose()
       fsChangedHandlerRef.current = null
+      symlinkedFolders.routeHandOversTo(undefined)
       for (const remoteUnsubscribe of remoteWatchUnsubs.values()) {
         remoteUnsubscribe()
       }
       remoteWatchUnsubs.clear()
+      symlinkedFolders.clear()
       releaseAllWatchRoots(heldWatchRoots)
       targetsRef.current = []
       unwatchedTargetKeysRef.current = new Set()
       // Why: module-scoped reload timers survive StrictMode's synthetic cleanup; a late reload dispatch is harmless.
     }
-  }, [])
+  }, [symlinkedFolders])
 }
 
 function subscribeRuntimeTarget(
   target: EditorExternalWatchTarget,
   remoteWatchUnsubs: Map<string, () => void>,
   fsChangedHandlerRef: { current: FsChangedHandler | null },
-  onFirstReady: (() => void) | undefined
+  onCatchUp: () => void
 ): void {
   const runtimeEnvironmentId = target.runtimeEnvironmentId
   if (!runtimeEnvironmentId) {
@@ -152,7 +196,7 @@ function subscribeRuntimeTarget(
       { ...target, runtimeEnvironmentId },
       (payload) => fsChangedHandlerRef.current?.(payload, runtimeEnvironmentId),
       (error) => warnExternalWatchFailure(target, error),
-      onFirstReady
+      onCatchUp
     )
   )
 }

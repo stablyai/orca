@@ -1,11 +1,9 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import {
-  cancelHostAccountSignIn,
-  isLostHostAnswer
-} from '@/runtime/runtime-host-account-sign-in-client'
-import type { HostAccountSignInProvider } from '../../../../../../shared/host-account-sign-in-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import { cancelHostAccountSignIn } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
+import { isLostHostAnswer } from '@/runtime/provider-accounts/sign-in/host-sign-in-lost-answers'
+import type { HostAccountSignInProvider } from '../../../../../../shared/agent-accounts/host-account-sign-in-types'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 type Addition = { target: RuntimeClientTarget }
 

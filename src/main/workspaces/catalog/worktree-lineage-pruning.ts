@@ -1,14 +1,18 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from '../../persistence/loading-store/store'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { isLocalWorktreeScanGenerationCurrent } from './local-worktree-scan-generation'
 
 type WorktreeLineagePruningStore = Pick<Store, 'getRepos' | 'getWorktreeMeta' | 'setWorktreeMeta'> &
   Partial<
@@ -36,19 +40,36 @@ function hasStoredRepoLineage(
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>,
   crossStoreChildKeys: readonly string[]
 ): boolean {
-  return (
-    crossStoreChildKeys.some((childKey) => workspaceKeyBelongsToRepo(childKey, repoPrefix)) ||
-    Object.entries(worktreeLineage).some(
-      ([childId, lineage]) =>
-        worktreeIdBelongsToRepo(childId, repoPrefix) ||
-        worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix)
-    ) ||
-    Object.values(workspaceLineage).some(
-      (lineage) =>
-        workspaceKeyBelongsToRepo(lineage.childWorkspaceKey, repoPrefix) ||
-        workspaceKeyBelongsToRepo(lineage.parentWorkspaceKey, repoPrefix)
-    )
-  )
+  for (const childKey of crossStoreChildKeys) {
+    if (workspaceKeyBelongsToRepo(childKey, repoPrefix)) {
+      return true
+    }
+  }
+  for (const childId in worktreeLineage) {
+    if (!Object.hasOwn(worktreeLineage, childId)) {
+      continue
+    }
+    if (
+      worktreeIdBelongsToRepo(childId, repoPrefix) ||
+      worktreeIdBelongsToRepo(worktreeLineage[childId].parentWorktreeId, repoPrefix)
+    ) {
+      return true
+    }
+  }
+  for (const key in workspaceLineage) {
+    if (!Object.hasOwn(workspaceLineage, key)) {
+      continue
+    }
+    const lineage = workspaceLineage[key]
+    if (
+      workspaceKeyBelongsToRepo(key, repoPrefix) ||
+      workspaceKeyBelongsToRepo(lineage.childWorkspaceKey, repoPrefix) ||
+      workspaceKeyBelongsToRepo(lineage.parentWorkspaceKey, repoPrefix)
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 export function pruneLineageForMissingRepoWorktrees(
@@ -58,12 +79,16 @@ export function pruneLineageForMissingRepoWorktrees(
   options: {
     platform?: NodeJS.Platform
     preservedMetadataCandidateIds?: ReadonlySet<string>
+    /** Scan-start generation; a worktree change since then may have recorded lineage these rows miss (#16654). */
+    scanGeneration?: number
   } = {}
 ): void {
-  const { platform = process.platform, preservedMetadataCandidateIds } = options
+  const { platform = process.platform, preservedMetadataCandidateIds, scanGeneration } = options
   // Mid-move a scan can miss paths that still exist; lineage waits for the move to settle.
   if (
     isWslMoveRepoBlocked(repo) ||
+    (scanGeneration !== undefined &&
+      !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)) ||
     typeof store.getAllWorktreeLineage !== 'function' ||
     typeof store.removeWorktreeLineage !== 'function'
   ) {
@@ -73,31 +98,37 @@ export function pruneLineageForMissingRepoWorktrees(
   const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
   const crossStoreChildKeys = Object.keys(store.getAllCrossStoreWorkspaceLineage?.() ?? {})
   const repoPrefix = `${repo.id}::`
-  // One empty scan cannot prove every stored lineage edge disappeared.
+  // Skip live-path indexing when this repo has no stored lineage, or when an empty scan cannot prove deletion.
   if (
-    gitWorktrees.length === 0 &&
-    hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage, crossStoreChildKeys)
+    gitWorktrees.length === 0 ||
+    !hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage, crossStoreChildKeys)
   ) {
     return
   }
-  const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
-  const livePathKeys = new Set(
-    [repo.path, ...gitWorktrees.map(({ path }) => path)].map((pathValue) =>
-      worktreeRetentionPathComparisonKey(pathValue, platform)
-    )
-  )
+  const liveIds = new Set<string>()
+  for (const worktree of gitWorktrees) {
+    liveIds.add(`${repo.id}::${worktree.path}`)
+  }
+  let livePathKeys: Set<string> | undefined
   const isLive = (worktreeId: string): boolean => {
-    if (liveIds.has(worktreeId) || preservedMetadataCandidateIds?.has(worktreeId)) {
+    if (
+      liveIds.has(worktreeId) ||
+      preservedMetadataCandidateIds?.has(worktreeId) ||
+      store.getWorktreeMeta(worktreeId)?.archivedCheckout
+    ) {
       return true
     }
     const worktreePath = splitWorktreeId(worktreeId)?.worktreePath
     if (!worktreePath) {
       return false
     }
-    if (livePathKeys.has(worktreeRetentionPathComparisonKey(worktreePath, platform))) {
-      return true
+    if (!livePathKeys) {
+      livePathKeys = new Set<string>([worktreeRetentionPathComparisonKey(repo.path, platform)])
+      for (const worktree of gitWorktrees) {
+        livePathKeys.add(worktreeRetentionPathComparisonKey(worktree.path, platform))
+      }
     }
-    return false
+    return livePathKeys.has(worktreeRetentionPathComparisonKey(worktreePath, platform))
   }
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)

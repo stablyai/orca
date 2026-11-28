@@ -1,12 +1,12 @@
-import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../shared/concurrency/event-loop-yield'
 import Database from '../sqlite/sync-database'
-import { attributeUsageEvent } from '../usage/usage-event-attribution'
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
-import type { UsageScanWorktreeRef } from '../usage/usage-provider-contract'
+import { attributeUsageEvent } from '../usage/worktree-attribution/usage-event-attribution'
+import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
+import type { UsageScanWorktreeRef } from '../usage/provider-lifecycle/usage-provider-contract'
 import {
   createUsageWorktreeResolver,
   type UsageWorktreeResolver
-} from '../usage/usage-worktree-resolver'
+} from '../usage/worktree-attribution/usage-worktree-resolver'
 import { getProcessedDatabaseInfo, listZcodeDatabases } from './zcode-database-discovery'
 import { parseZcodeUsageRow } from './zcode-usage-row-parsing'
 import { selectZcodeUsageRows } from './zcode-usage-row-queries'

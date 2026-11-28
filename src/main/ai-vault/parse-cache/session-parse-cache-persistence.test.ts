@@ -1,71 +1,36 @@
 import { existsSync } from 'node:fs'
-import { appendFile, mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
-import * as fsPromises from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../sqlite/sync-database'
 import {
-  configureSessionParseCachePersistence,
   flushSessionParseCachePersist,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
 } from './session-parse-cache-persistence'
-import {
-  SESSION_PARSE_CACHE_SCHEMA_VERSION,
-  SessionParseCacheDatabase
-} from './session-parse-cache-database'
-import { scanAiVaultSessions } from '../session-scanner'
+import { SESSION_PARSE_CACHE_SCHEMA_VERSION } from './session-parse-cache-database'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
   type SessionParseStats
 } from './session-scanner-parse-cache'
-import {
-  invalidateSessionParseCacheEntry,
-  resetSessionParseCacheForTests,
-  storeSessionScopeCwd,
-  type SessionScopeCwdStamp
-} from './session-parse-cache-store'
-import type * as ParseCacheModule from './session-scanner-parse-cache'
-import { isolatedScanRoots } from '../session-scanner-test-fixtures'
-import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
-import { parseSessionCandidate } from '../session-scanner-candidate-parse'
+import { resetSessionParseCacheForTests } from './session-parse-cache-store'
+import { parseSessionCandidate } from '../parsing/session-scanner-candidate-parse'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
 import type { FileWithMtime, SessionFileCandidate } from '../session-scanner-types'
-
-const hooks = vi.hoisted(() => {
-  const state: { beforeParse: (() => Promise<void>) | null } = { beforeParse: null }
-  return state
-})
-
-// Preserve real I/O while measuring whether an uninitialized cache touches disk.
-vi.mock('node:fs/promises', { spy: true })
-vi.mock('./session-scanner-parse-cache', async (importOriginal) => {
-  const actual = await importOriginal<typeof ParseCacheModule>()
-  return {
-    ...actual,
-    parseListedSessionFile: async (...args: Parameters<typeof actual.parseListedSessionFile>) => {
-      await hooks.beforeParse?.()
-      return actual.parseListedSessionFile(...args)
-    }
-  }
-})
+import { sessionParseCacheDatabasePath } from './session-parse-cache-version-files'
 
 const APP_VERSION = '1.2.3-test'
-const DAY_MS = 24 * 60 * 60_000
 
 let tempRoots: string[] = []
 
 beforeEach(() => {
   resetSessionParseCacheForTests()
   resetSessionParseCachePersistenceForTests()
-  hooks.beforeParse = null
 })
 
 afterEach(async () => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
   resetSessionParseCachePersistenceForTests()
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
@@ -134,106 +99,49 @@ function simulateRestart(cacheFile: string): void {
   initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
 }
 
-function databaseRows(cacheFile: string): { path: string; seen_at: number }[] {
-  const db = new SyncDatabase(join(dirname(cacheFile), 'session-parse-cache.sqlite'))
-  try {
-    return db
-      .prepare('SELECT path, seen_at FROM rows ORDER BY path')
-      .all()
-      .map((row) => ({ path: String(row.path), seen_at: Number(row.seen_at) }))
-  } finally {
-    db.close()
-  }
-}
-
-function setSeenAt(cacheFile: string, path: string, seenAt: number): void {
-  const db = new SyncDatabase(join(dirname(cacheFile), 'session-parse-cache.sqlite'))
-  db.prepare('UPDATE rows SET seen_at = ? WHERE path = ?').run(seenAt, path)
-  db.close()
-}
-
 describe('session parse cache persistence', () => {
-  it('persists scope rows across chunks and keeps replacements queued during a yield', async () => {
+  it('keeps its rows while builds on other schema versions share the folder, and prunes all but one of theirs not in use', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const paths = Array.from({ length: 1_001 }, (_, index) => join(root, `session-${index}`))
-    const stamp: SessionScopeCwdStamp = {
-      mtimeMs: 1,
-      sizeBytes: 10,
-      platform: 'linux',
-      cwd: '/original'
-    }
-    for (const path of paths) {
-      storeSessionScopeCwd(path, stamp)
-    }
-    const flushing = flushSessionParseCachePersist()
-    const replacement = { ...stamp, mtimeMs: 2, cwd: '/updated' }
-    storeSessionScopeCwd(paths[0]!, replacement)
-    storeSessionScopeCwd(paths[750]!, replacement)
-    await flushing
-    resetSessionParseCachePersistenceForTests()
-    resetSessionParseCacheForTests()
-
-    const database = new SessionParseCacheDatabase(join(root, 'session-parse-cache.sqlite'))
-    try {
-      const stored = database.readScopeCwds(paths).found
-      expect(stored.size).toBe(paths.length)
-      for (const [index, path] of paths.entries()) {
-        expect(stored.get(path)?.read).toEqual(index === 0 || index === 750 ? replacement : stamp)
-      }
-    } finally {
-      database.close()
-    }
-  })
-
-  it('round-trips: a persisted entry is a reused hit after a restart, without reading the transcript', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'vault-state', 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
     const transcript = await writeTranscript(root)
-    const candidate = await claudeCandidate(transcript)
-    const stats = createSessionParseStats()
-    const first = await parseAgentSessionFileCached(candidate, process.platform, stats)
-    expect(stats.fullParses).toBe(1)
+    await parse(transcript)
     await flushSessionParseCachePersist()
+    resetSessionParseCachePersistenceForTests()
+    // A pre-versioning build replaces its file with its own schema on start; two older ones were used before it.
+    const otherBuild = (name: string, version: number, usedAt: number) => {
+      const db = new SyncDatabase(join(root, name))
+      db.exec('CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL)')
+      db.prepare("INSERT INTO meta VALUES ('schema_version', ?)").run(String(version))
+      db.close()
+      return utimes(join(root, name), usedAt, usedAt)
+    }
+    await rm(join(root, 'session-parse-cache.sqlite'), { force: true })
+    await otherBuild('session-parse-cache.sqlite', 8, 3_000)
+    await otherBuild('session-parse-cache.v7.sqlite', 7, 2_000)
+    await otherBuild('session-parse-cache.v6.sqlite', 6, 1_000)
+    await otherBuild('session-parse-cache.v5.sqlite', 5, 500)
+    const running = new SyncDatabase(join(root, 'session-parse-cache.v5.sqlite'))
+    running.pragma('journal_mode = WAL')
+    running.prepare('SELECT * FROM meta').all()
+    // Still open, yet the least recently written: only the open check keeps it.
+    for (const suffix of ['', '-wal']) {
+      await utimes(join(root, `session-parse-cache.v5.sqlite${suffix}`), 500, 500)
+    }
 
-    simulateRestart(cacheFile)
-    // Removing the transcript proves the restored hit needs no transcript read.
-    await rm(transcript)
-    const reusedStats = createSessionParseStats()
-    const reused = await parseAgentSessionFileCached(candidate, process.platform, reusedStats)
-    expect(reusedStats).toMatchObject({ reused: 1, fullParses: 0, incremental: 0, bytesRead: 0 })
-    expect(reused).toEqual(first)
-  })
-
-  it('scanAiVaultSessions reads the database and writes after parsing', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const roots = isolatedScanRoots(root)
-    const transcript = join(roots.claudeProjectsDir, 'project', 'scan-session.jsonl')
-    await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
-    await writeFile(
-      transcript,
-      `${userRecord(0, 'persisted-scan-marker-AAAA')}\n${assistantRecord(1, 'answer')}\n`
-    )
-    const pinnedMtime = new Date(1740000000000)
-    await utimes(transcript, pinnedMtime, pinnedMtime)
-
-    const first = await scanAiVaultSessions(roots)
-    expect(JSON.stringify(first.sessions[0])).toContain('persisted-scan-marker-AAAA')
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    // Same size and mtime but different content distinguishes a persisted hit from a cold parse.
-    await writeFile(
-      transcript,
-      `${userRecord(0, 'persisted-scan-marker-BBBB')}\n${assistantRecord(1, 'answer')}\n`
-    )
-    await utimes(transcript, pinnedMtime, pinnedMtime)
-    const second = await scanAiVaultSessions(roots)
-    expect(second.sessions[0]).toEqual(first.sessions[0])
+    try {
+      simulateRestart(cacheFile)
+      expect(await parse(transcript)).toMatchObject({ reused: 1, fullParses: 0 })
+      expect((await readdir(root)).filter((name) => name.endsWith('.sqlite')).sort()).toEqual(
+        [
+          'session-parse-cache.sqlite',
+          'session-parse-cache.v5.sqlite',
+          `session-parse-cache.v${SESSION_PARSE_CACHE_SCHEMA_VERSION}.sqlite`
+        ].sort()
+      )
+    } finally {
+      running.close()
+    }
   })
 
   it('reconstructs unreadable diagnostics from a version 8 row before reusing it', async () => {
@@ -246,7 +154,7 @@ describe('session parse cache persistence', () => {
     )
     const candidate = await claudeCandidate(transcript)
     const session = await parseAgentSessionFileCached(candidate, process.platform)
-    const oldDatabase = new SyncDatabase(join(root, 'session-parse-cache.sqlite'))
+    const oldDatabase = new SyncDatabase(sessionParseCacheDatabasePath(root))
     oldDatabase.exec(`
       CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
       INSERT INTO meta VALUES ('schema_version', '8');
@@ -287,27 +195,6 @@ describe('session parse cache persistence', () => {
     expect(reusedStats).toMatchObject({ reused: 1, fullParses: 0, bytesRead: 0 })
   })
 
-  it('falls through to a full parse when a file changed while the app was closed', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcript = await writeTranscript(root)
-    await parse(transcript)
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    // Restored rows lack incremental state; changed transcripts need a full parse.
-    await appendFile(transcript, `${userRecord(2, 'follow-up')}\n${assistantRecord(3, 'more')}\n`)
-    const stats = createSessionParseStats()
-    const reparsed = await parseAgentSessionFileCached(
-      await claudeCandidate(transcript),
-      process.platform,
-      stats
-    )
-    expect(stats).toMatchObject({ fullParses: 1, incremental: 0, reused: 0 })
-    expect(reparsed).toEqual(await parseClaudeSessionFile((await claudeCandidate(transcript)).file))
-  })
-
   it('imports the old JSON file even when a title lookup reaches the database first', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
@@ -343,114 +230,69 @@ describe('session parse cache persistence', () => {
     expect(stats).toMatchObject({ reused: 1, fullParses: 0 })
   })
 
-  it('discards an old JSON file from another schema version', async () => {
+  it('refreshes Droid model and token counts on sidecar-only settings updates without reparsing', async () => {
     const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    const transcript = await writeTranscript(root)
-    const candidate = await claudeCandidate(transcript)
+    const transcript = join(root, 'droid-session.jsonl')
+    const settings = join(root, 'droid-session.settings.json')
     await writeFile(
-      cacheFile,
+      transcript,
+      `${JSON.stringify({ type: 'session_start', id: 'droid-1', title: 'Test', cwd: '/repo', timestamp: '2026-01-01T00:00:00.000Z' })}\n${JSON.stringify({ type: 'message', role: 'user', text: 'hello', timestamp: '2026-01-01T00:00:01.000Z' })}\n`
+    )
+    await writeFile(
+      settings,
       JSON.stringify({
-        schemaVersion: SESSION_PARSE_CACHE_SCHEMA_VERSION - 1,
-        appVersion: 'old',
-        entries: [
-          [
-            transcript,
-            {
-              mtimeMs: candidate.file.mtimeMs,
-              sizeBytes: candidate.file.sizeBytes,
-              platform: process.platform,
-              session: null
-            }
-          ]
-        ]
+        model: 'claude-sonnet-4',
+        tokenUsage: { inputTokens: 10, outputTokens: 20 }
       })
     )
-    simulateRestart(cacheFile)
-    expect((await parse(transcript)).fullParses).toBe(1)
-    expect(existsSync(cacheFile)).toBe(false)
-  })
+    const buildDroidCandidate = async (): Promise<SessionFileCandidate> => {
+      const [fileStat, sidecarStat] = await Promise.all([stat(transcript), stat(settings)])
+      return {
+        agent: 'droid',
+        codexHome: null,
+        file: {
+          path: transcript,
+          mtimeMs: fileStat.mtimeMs,
+          modifiedAt: fileStat.mtime.toISOString(),
+          sizeBytes: fileStat.size,
+          sidecar: {
+            path: settings,
+            mtimeMs: sidecarStat.mtimeMs,
+            sizeBytes: sidecarStat.size
+          }
+        }
+      }
+    }
 
-  it('rebuilds a corrupt database instead of failing the scan', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    await writeFile(join(root, 'session-parse-cache.sqlite'), 'not a database at all'.repeat(512))
-    vi.spyOn(console, 'debug').mockImplementation(() => {})
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcript = await writeTranscript(root)
-    expect((await parse(transcript)).fullParses).toBe(1)
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    expect((await parse(transcript)).reused).toBe(1)
-  })
-
-  it('drops rows whose transcript is gone and keeps old rows whose transcript is still there', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const kept = await writeTranscript(root, 'kaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
-    const deletedOutsideOrca = await writeTranscript(root, 'daaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee')
-    await parse(kept)
-    await parse(deletedOutsideOrca)
-    await flushSessionParseCachePersist()
-    resetSessionParseCachePersistenceForTests()
-    // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
-    setSeenAt(cacheFile, kept, Date.now() - 31 * DAY_MS)
-    // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
-    setSeenAt(cacheFile, deletedOutsideOrca, Date.now() - 31 * DAY_MS)
-    await rm(deletedOutsideOrca)
-
-    simulateRestart(cacheFile)
-    expect((await parse(kept)).reused).toBe(1)
-    await vi.waitFor(() => expect(databaseRows(cacheFile).map((row) => row.path)).toEqual([kept]))
-    await vi.waitFor(() =>
-      // ast-grep-ignore: test-no-wall-clock -- Real database expiry uses current time for persisted row ages.
-      expect(databaseRows(cacheFile)[0]!.seen_at).toBeGreaterThan(Date.now() - DAY_MS)
+    const firstStats = createSessionParseStats()
+    const first = await parseAgentSessionFileCached(
+      await buildDroidCandidate(),
+      process.platform,
+      firstStats
     )
-  })
+    expect(first).toMatchObject({ model: 'claude-sonnet-4', totalTokens: 30 })
+    expect(firstStats).toMatchObject({ fullParses: 1, reused: 0 })
 
-  it('invalidating before the first lookup does not bring the row back', async () => {
-    const root = await makeTempDir()
-    const cacheFile = join(root, 'session-parse-cache.json')
-    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
-    const transcript = await writeTranscript(root)
-    await parse(transcript)
-    await flushSessionParseCachePersist()
-
-    simulateRestart(cacheFile)
-    invalidateSessionParseCacheEntry(transcript)
-    expect((await parse(transcript)).fullParses).toBe(1)
-  })
-
-  it('performs zero disk IO when only configured, as Electron main is', async () => {
-    const root = await makeTempDir()
-    configureSessionParseCachePersistence({
-      filePath: join(root, 'session-parse-cache.json'),
-      appVersion: APP_VERSION
-    })
-    vi.clearAllMocks()
-    invalidateSessionParseCacheEntry(join(root, 'deleted.jsonl'))
-    await flushSessionParseCachePersist()
-    expect(fsPromises.readFile).not.toHaveBeenCalled()
-    expect(fsPromises.readdir).not.toHaveBeenCalled()
-    expect(await readdir(root)).toEqual([])
-  })
-
-  it('swallows database failures and leaves scan results unaffected', async () => {
-    const root = await makeTempDir()
-    // A file blocking the cache directory fails on Windows and as root, unlike chmod-based fixtures.
-    const blocker = join(root, 'blocker')
-    await writeFile(blocker, 'a file, not a directory')
-    initSessionParseCachePersistence({
-      filePath: join(blocker, 'session-parse-cache.json'),
-      appVersion: APP_VERSION
-    })
-    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {})
-    const transcript = await writeTranscript(root)
-    expect((await parse(transcript)).fullParses).toBe(1)
-    await expect(flushSessionParseCachePersist()).resolves.toBeUndefined()
-    expect(debugSpy).toHaveBeenCalled()
-    expect((await parse(transcript)).reused).toBe(1)
+    // Rewrite only the settings sidecar with a new model and token usage; transcript stays untouched.
+    await writeFile(
+      settings,
+      JSON.stringify({
+        model: 'claude-opus-4-6',
+        tokenUsage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheCreationTokens: 25,
+          cacheReadTokens: 10
+        }
+      })
+    )
+    const updatedStats = createSessionParseStats()
+    const updated = await parseAgentSessionFileCached(
+      await buildDroidCandidate(),
+      process.platform,
+      updatedStats
+    )
+    expect(updated).toMatchObject({ model: 'claude-opus-4-6', totalTokens: 185 })
+    expect(updatedStats).toMatchObject({ reused: 1, fullParses: 0, bytesRead: 0 })
   })
 })

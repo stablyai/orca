@@ -1,16 +1,17 @@
 import { ChevronDown } from 'lucide-react-native'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import Animated from 'react-native-reanimated'
-import { PickerModal } from '../../components/PickerModal'
-import { statusDotColor } from '../../components/StatusDot'
-import { hostPickerOptions } from '../../components/use-connected-host-picker'
+import { PickerModal } from '../../components/sheets/PickerModal'
+import { statusDotColor } from '../../components/feedback/StatusDot'
+import { hostPickerOptions } from '../../host-catalog/selection/use-connected-host-picker'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { ConnectionState, HostProfile } from '../../transport/types'
-import { useHostDisplay } from '../../transport/use-host-display'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { HostProfile } from '../../host-catalog/host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
 
 /** The desktop a per-desktop tab shows; it stays put until the user picks another or it is unpaired. */
 export function useHomeTabHost(hosts: readonly HostProfile[], preferred: readonly HostProfile[]) {
@@ -32,47 +33,26 @@ export function MobileHomeHostPill(props: {
   onPick: (hostId: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const [open, setOpen] = useState(false)
-  const [pressed, setPressed] = useState(false)
   const title = useHostDisplay(props.host).title
   const choosable = props.hosts.length > 1
-  const dot = statusDotColor(props.state ?? 'disconnected')
+  const dot = statusDotColor(colors, props.state ?? 'disconnected')
   return (
     <>
-      <Pressable
-        accessibilityRole={choosable ? 'button' : 'text'}
+      <MobileHomePill
+        label={title}
+        leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
         accessibilityLabel={
           choosable
-            ? t('home.tabs.chooseDesktop', '{{desktop}}, choose another desktop', {
+            ? t('home.tabs.chooseComputer', '{{desktop}}, choose another computer', {
                 desktop: title
               })
             : title
         }
-        disabled={!choosable}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
-        onPress={() => setOpen(true)}
-        style={styles.pillHit}
-      >
-        <Animated.View
-          style={[
-            styles.pill,
-            pressed && styles.pillPressed,
-            {
-              transform: [{ scale: pressed ? 0.97 : 1 }],
-              transitionProperty: ['transform', 'backgroundColor'],
-              transitionDuration: 120
-            }
-          ]}
-        >
-          <View style={[styles.dot, { backgroundColor: dot }]} />
-          <Text style={styles.label} numberOfLines={1}>
-            {title}
-          </Text>
-          {choosable ? <ChevronDown size={14} color={colors.textSecondary} /> : null}
-        </Animated.View>
-      </Pressable>
+        onPress={choosable ? () => setOpen(true) : undefined}
+      />
       {choosable ? (
         <PickerModal
           visible={open}
@@ -87,7 +67,49 @@ export function MobileHomeHostPill(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+/** A Home tab's filter pill; without `onPress` it is a plain label. */
+export function MobileHomePill(props: {
+  label: string
+  leading: ReactNode
+  accessibilityLabel: string
+  onPress?: () => void
+}) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const [pressed, setPressed] = useState(false)
+  const choosable = props.onPress !== undefined
+  return (
+    <Pressable
+      accessibilityRole={choosable ? 'button' : 'text'}
+      accessibilityLabel={props.accessibilityLabel}
+      disabled={!choosable}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      onPress={props.onPress}
+      style={styles.pillHit}
+    >
+      <Animated.View
+        style={[
+          styles.pill,
+          pressed && styles.pillPressed,
+          {
+            transform: [{ scale: pressed ? 0.97 : 1 }],
+            transitionProperty: ['transform', 'backgroundColor'],
+            transitionDuration: 120
+          }
+        ]}
+      >
+        {props.leading}
+        <Text style={styles.label} numberOfLines={1}>
+          {props.label}
+        </Text>
+        {choosable ? <ChevronDown size={14} color={colors.textSecondary} /> : null}
+      </Animated.View>
+    </Pressable>
+  )
+}
+
+const stylesSheet = themedStyleSheet((colors) => ({
   pillHit: { alignSelf: 'flex-start', maxWidth: '100%' },
   pill: {
     flexDirection: 'row',

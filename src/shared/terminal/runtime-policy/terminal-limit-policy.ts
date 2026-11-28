@@ -10,6 +10,9 @@ export type TerminalLimitStatus = {
   daemonNonce: string
 }
 
+/** Terminals on this machine against the cap, as the spawn gate last counted them. */
+export type HostTerminalUsage = { terminalsInUse: number; maxTerminals: number }
+
 export type TerminalLimitUpdate = { maxTerminals: number; daemonNonce: string }
 
 export function isConfiguredTerminalLimit(value: unknown): value is number {

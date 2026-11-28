@@ -1,0 +1,28 @@
+import type { RefObject } from 'react'
+import type { TextInputProps, TextInputInstance } from 'react-native'
+import { themedStyleSheet } from '../../../../theme/themed-styles'
+
+export type MobileNativeChatComposerFieldProps = Omit<
+  TextInputProps,
+  'value' | 'children' | 'onScroll' | 'style'
+> & {
+  value: string
+  skillToken: string | null
+  onKeyboardSubmit?: () => void
+  /** The page's DOM paste event; native fields have none. */
+  onWebPaste?: (event: ClipboardEvent) => void
+  // Dictation heard so far, shown between the draft's halves without becoming part of its value.
+  dictationPreview?: { before: string; text: string; after: string } | null
+  ref?: RefObject<TextInputInstance | null>
+}
+
+// Use the field’s exact font so the web overlay and transparent textarea occupy identical space.
+export const mobileNativeChatComposerSkillStylesSheet = themedStyleSheet((colors) => ({
+  token: {
+    color: colors.skillToken,
+    backgroundColor: colors.skillTokenSurface
+  },
+  dictationPreview: {
+    color: colors.textMuted
+  }
+}))

@@ -4,7 +4,10 @@ import { StringDecoder } from 'node:string_decoder'
 import { isDaemonRequestFrame, isHelloFrame } from './daemon-client-frame-guards'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
 import type { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
-import { createNdjsonParser, encodeNdjson } from '../../../shared/main-process-ndjson-framer'
+import {
+  createNdjsonParser,
+  encodeNdjson
+} from '../../../shared/json-stream/main-process-ndjson-framer'
 import {
   BINARY_STREAM_FRAMING,
   type DaemonStreamFraming
@@ -32,6 +35,10 @@ type DaemonClientConnectionOptions = {
     entryPath: string | null
     appVersion: string | null
     spawnerExecPath: string | null
+    providerSpawn?: true
+    providerRelay?: true
+    providerRelayKeep?: true
+    providerRelayAcks?: true
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -163,9 +170,14 @@ export class DaemonClientConnections {
         // Negotiate on the last NDJSON line before the client switches to binary frames.
         ...(streamFraming === BINARY_STREAM_FRAMING ? { streamFraming } : {}),
         ...daemonHelloResizeModel(),
+        ...(hello.role === 'control' ? { visibleProjectionSnapshots: true } : {}),
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {
+                ...(identity.providerSpawn ? { providerSpawn: true } : {}),
+                ...(identity.providerRelay ? { providerRelay: true } : {}),
+                ...(identity.providerRelayKeep ? { providerRelayKeep: true } : {}),
+                ...(identity.providerRelayAcks ? { providerRelayAcks: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,

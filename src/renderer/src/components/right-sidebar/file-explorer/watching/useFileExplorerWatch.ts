@@ -2,8 +2,8 @@ import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type {
   FsChangedPayload,
   FsChangeEvent
-} from '../../../../../../shared/filesystem-entry-types'
-import { FileWatchEventBuffer } from '../../../../../../shared/filesystem-watch-event-buffer'
+} from '../../../../../../shared/file-watch/filesystem-change-event'
+import { FileWatchEventBuffer } from '../../../../../../shared/file-watch/filesystem-watch-event-buffer'
 import type {
   DirCache,
   FileExplorerOperationOwner,
@@ -14,8 +14,8 @@ import { useAppStore } from '@/store/index'
 import {
   isWorktreeCatchUpPayload,
   ORCA_WORKTREE_FILE_CHANGE_EVENT
-} from '@/hooks/worktree-file-change-event'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+} from '@/runtime/files/watching/worktree-file-change-event'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getFileExplorerOperationOwner,
   getFileExplorerOperationOwnerFromState,
@@ -24,7 +24,7 @@ import {
 import { fileExplorerRefreshConcurrency } from './file-explorer-refresh-concurrency'
 import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-refresh-scheduler'
 import { processFileExplorerFsPayload } from './file-explorer-watch-reconcile'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 import './file-explorer-watch-path'
 

@@ -8,19 +8,22 @@
  */
 import { win32 } from 'node:path'
 import { readFileSync, realpathSync, statSync } from 'node:fs'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { resolveProjectExecutionRuntime } from '../../../shared/project-execution-runtime'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
+import { resolveProjectExecutionRuntime } from '../../../shared/execution-host/project-execution-runtime'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Project } from '../../../shared/project/project-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import {
   setBackgroundWslGitGate,
   setLocalGitRuntimeRouter,
   type LocalGitRuntimeRouter
-} from '../../git/command-runner/local-git-runtime-route'
+} from '../../git/command-runner/host-routing/local-git-runtime-route'
 import { isWslDistroRunningForBackgroundWork } from '../../wsl/discovery/wsl-background-distro-gate'
 import {
   onWslHostsNewWorkChanged,
@@ -205,18 +208,19 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
       .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
       .map((repo) => [repo.id, repo])
   )
-  const distroByRepo = new Map(
-    [...localRepos.values()].map((repo) => [
-      repo.id,
-      wslGitDistro(repo, ownerByRepoId, globalDefault)
-    ])
-  )
+  const distroByRepo = new Map<string, string | undefined>()
   // Host-Git routes stay too, so a project nested in a WSL one keeps its own Git.
-  const routes: Route[] = [...localRepos.values()].map((repo) => ({
-    root: normalizeRuntimePathForComparison(repo.path),
-    wslDistro: distroByRepo.get(repo.id)
-  }))
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+  const routes: Route[] = []
+  for (const repo of localRepos.values()) {
+    const wslDistro = wslGitDistro(repo, ownerByRepoId, globalDefault)
+    distroByRepo.set(repo.id, wslDistro)
+    routes.push({ root: normalizeRuntimePathForComparison(repo.path), wslDistro })
+  }
+  const allMeta = store.getAllWorktreeMeta()
+  for (const worktreeId in allMeta) {
+    if (!Object.hasOwn(allMeta, worktreeId)) {
+      continue
+    }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const parsed = localRepos.has(repoId) ? splitWorktreeIdForFilesystem(worktreeId) : null
     if (parsed) {

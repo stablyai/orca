@@ -14,11 +14,15 @@ Browser-use profiles let you run the Orca browser with a specific identity — a
 
 The browser user agent is an app-wide choice because documents and web workers must present one coherent identity. Open **Settings → Browser → Browser identity** to choose between the cleaned identity and Electron's native identity. The change takes effect after you restart Orca.
 
-The cleaned identity removes Orca and Electron tokens from the browser engine's user agent, preserving the Chrome-shaped identity expected by imported sessions. This focused compatibility measure does not make the embedded browser identical to Chrome. Google sign-in hosts see Electron's own identity, because Google rejects sign-in from a browser claiming to be Chrome or another browser. **Native** mode keeps Electron's identity everywhere, for sites that reject the cleaned identity, including some Cloudflare-protected sites.
+**Native** is the default. It keeps Electron's identity without the Orca token, which Cloudflare's security checks, Google sign-in and WhatsApp Web accept. A few sites turn Electron away, so Orca makes two exceptions: Microsoft Teams receives the user agent without the Electron token, and Chase receives the cleaned identity.
+
+**Cleaned** removes the Orca and Electron tokens from the user agent, leaving a Chrome-shaped identity. It doesn't make the embedded browser identical to Chrome, and Cloudflare's full-page security check can loop in this mode. Google sign-in hosts still see Electron's own identity, because Google rejects sign-in from a browser claiming to be Chrome or another browser. If you chose a mode before, Orca keeps your choice.
 
 ## Cookie import and Google sign-in
 
 Import cookies from Chrome or Edge (or from a cookie file) into a profile from Settings or the browser toolbar. Orca replaces existing cookies only for domains included in the import, so sign-ins for unrelated sites in the same profile stay intact. Google cookies are excluded — import menus show **Google logins aren't imported** and tell you to **Sign in to Google directly in Orca.** After an import that skipped Google cookies, a separate warning names the host that ran the import: open a browser in Orca on that host with the same profile, then sign in.
+
+**Clear cookies…** in Settings › Browser removes every cookie in the active profile of the selected host after you confirm, signing you out of every site in that profile. For a paired Orca server it clears both of that profile's stores: the one this computer uses for its pages and the server's own, which streamed pages use. For an SSH host it clears the store this computer keeps for that host's pages. Other profiles and hosts keep their cookies.
 
 When a site requests a discoverable passkey from a USB security key and the key offers multiple accounts, Orca opens an account picker instead of silently canceling the sign-in. Choose the account you want or cancel the request. Platform passkeys stored by the operating system are not available in Orca yet; this flow is for external FIDO security keys.
 

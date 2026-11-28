@@ -1,11 +1,11 @@
-import { antigravityHookService } from '../antigravity/hook-service'
-import { getRelocatedDaemonHost } from '../daemon/executable-host/windows/daemon-host-relocation'
-import { app, ipcMain, powerMonitor, session } from 'electron'
+import { installElectronNativeServices } from '../host/electron-native-services'
+import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
+import { app } from 'electron'
 import os from 'node:os'
 import { join } from 'node:path'
-import { maybeRedirectCliLaunch } from './cli-launch-redirect'
-import { runProfileStateRecoveryPreflight } from './profile-state-recovery-preflight'
-import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
+import { maybeRedirectCliLaunch } from './cli-launch/cli-launch-redirect'
+import { runProfileStateRecoveryPreflight } from './profile-startup/profile-state-recovery-preflight'
+import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-launch/serve-mode-argv'
 import {
   configureDevUserDataPath,
   configureElectronNetworkCompatibility,
@@ -20,23 +20,21 @@ import {
 } from './configure-process'
 import { installServeSupervisorDisconnectQuit } from '../updater/serve-update-handoff'
 import {
-  installUncaughtPipeErrorGuard,
+  installUncaughtExceptionQuitGuard,
   installUnhandledRejectionLogging
-} from './main-process-error-guards'
-import { hydrateShellPath, mergePathSegments } from './hydrate-shell-path'
-import { configureRemoteServerUpdater } from '../runtime/remote-server-updater'
+} from './process-failure/main-process-error-guards'
+import { configureRemoteServerUpdater } from '../runtime/hosts/management/remote-server-updater'
+import { isQuittingForUpdate, loadUpdaterService } from '../updater/updater-service-slot'
 import {
-  getRemoteServerUpdaterSnapshot,
-  checkForRemoteServerUpdate,
-  downloadRemoteServerUpdate,
-  installRemoteServerUpdate,
-  isQuittingForUpdate
-} from '../updater/updater-service'
-import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './dev-instance-identity'
-import { enableRendererHeapHeadroom } from './renderer-heap-headroom'
-import { configureLinuxDevShmUsage } from './linux-dev-shm-policy'
-import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup-diagnostics'
-import { startEventLoopStallProbe } from './event-loop-stall-probe'
+  getDevInstanceIdentity,
+  shouldApplyPreReadyAppName
+} from './profile-startup/dev-instance-identity'
+import { enableRendererHeapHeadroom } from './chromium-policy/renderer-heap-headroom'
+import { configureLinuxDevShmUsage } from './linux-runtime/linux-dev-shm-policy'
+import {
+  isStartupDiagnosticsEnabled,
+  logStartupDiagnostic
+} from './diagnostics/startup-diagnostics'
 import { startEventLoopDelayProbe } from '../diagnostics/event-loop-delay-probe'
 import {
   isMainThreadDiagnosticsEnabled,
@@ -44,72 +42,63 @@ import {
   startMainThreadChurnProbe
 } from '../diagnostics/main-thread-churn-probe'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { setDefaultProcessLauncher } from '@orca/process-host'
+import { launchPlainProcessSpecOnPosixWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
-import { createServeDesktopActivationGate } from './serve-desktop-activation'
+import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock,
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
-  logSingleInstanceLockFailure,
-  SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE
-} from './single-instance-lock'
-import { setAppEnvironment } from '../../shared/app-environment'
+  logSingleInstanceLockFailure
+} from './profile-startup/single-instance-lock'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
-import { selectLinuxKeyringBackend } from './select-linux-keyring-backend'
-import { setPtyHostBindings } from '../ipc/pty/pty-host-bindings'
-import { electronRuntimeDesktopSurface } from '../host/electron-runtime-desktop-surface'
-import { setRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
-import { installElectronBrowserCommands } from '../host/electron-browser-commands'
-import { electronHttpClient } from '../host/electron-http-client'
-import { setMainHttpClient } from '../network/http-client'
-import { electronSpeechServiceFactories } from '../host/electron-speech-services'
-import { setSpeechServiceFactories } from '../speech/speech-runtime-service'
-import { setWorktreeWatcherRemoval } from '../workspaces/removal/worktree-watcher-removal'
-import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesystem-watcher'
-import { setDefaultProxySessionResolver } from '../network/proxy-settings'
+import { selectLinuxKeyringBackend } from './linux-runtime/select-linux-keyring-backend'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { applyMacPressAndHoldDefaultAtStartup } from '../window/desktop-integration/macos-press-and-hold-default'
 import { configureSessionParseCachePersistence } from '../ai-vault/parse-cache/session-parse-cache-persistence'
-import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { recoverPendingProfileProjectMoves } from '../orca-profiles/profile-project-move-intent'
+import '../orca-profiles/profile-index-store'
+// oxfmt-ignore
+import { getProfileUserDataPath, initOrcaProfilePaths } from '../orca-profiles/profile-storage-paths'
+import { recoverPendingProfileProjectMoves } from '../orca-profiles/project-transfer/profile-project-move-intent'
 import { initStatsPath } from '../stats/collector'
-import { initializeUsageStoragePaths } from './usage-storage-paths'
 import { registerDocPreviewSchemePrivileges } from '../browser/document-preview/doc-preview-protocol'
-import { PRIVILEGED_CUSTOM_SCHEMES } from './privileged-custom-schemes'
-import { startCrashpadCapture } from '../crash-reporting/crashpad-capture'
-import { CrashReportStore } from '../crash-reporting/crash-report-store'
-import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
-import { getMainProcessLifecycleIdentity } from '../crash-reporting/main-process-lifecycle-identity'
+import { PRIVILEGED_CUSTOM_SCHEMES } from './chromium-policy/privileged-custom-schemes'
+import { startCrashpadCapture } from '../crash-reporting/capture/crashpad-capture'
+import { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
+import { recordCrashBreadcrumb } from '../crash-reporting/breadcrumbs/crash-breadcrumb-store'
+import { getMainProcessLifecycleIdentity } from '../crash-reporting/process-exits/main-process-lifecycle-identity'
 import {
   ensureVirtualDisplayForHeadlessServe,
   hasUsableLinuxDisplay,
   missingLinuxDisplayMessage
-} from './ensure-virtual-display'
+} from './linux-display/ensure-virtual-display'
 import {
   createGpuCrashDiagnosticsRecorder,
   maybeApplyGpuFallbackForThisLaunch,
   registerGpuLifecycleHandlers
-} from './gpu-lifecycle'
+} from './gpu-recovery/gpu-lifecycle'
 import { mainProcessState as state } from './main-process-state'
-import { initializeSyntheticTitleRuntime } from './synthetic-title-runtime'
+import { initializeSyntheticTitleRuntime } from './main-window/synthetic-title-runtime'
 import { initializeBrowserProcessUserAgent } from '../browser/identity/browser-process-user-agent'
-import { initializeBrowserIdentityModeStore } from '../browser/identity/browser-identity-mode-store'
-import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/profile-state-access'
-import { getActiveProfileStateLocation } from '../persistence/profile-state/profile-state-active-location'
+import { initializeBrowserIdentityModeStore } from '../browser/identity/mode/browser-identity-mode-store'
+import { acquireProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
+import { getActiveProfileStateLocation } from '../persistence/profile-state/offline-access/profile-state-active-location'
 import {
   acquireDesktopProfileLockOrExplain,
   handleMainProcessPreflightFailure
 } from './main-process-preflight-failure'
-import { ensureWindowsAppDataPath } from './windows-app-data-path'
+import { ensureWindowsAppDataPath } from './windows-startup/windows-app-data-path'
 
 export type MainProcessPreflightOptions = {
-  focusExistingWindow: () => void
+  focusExistingWindow: (request: { background?: boolean }) => void
   requestDesktopActivation: (argv?: readonly string[]) => void
 }
 
@@ -159,38 +148,44 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   state.desktopActivationGate = createServeDesktopActivationGate({
     // Hold activation until the startup window exists; early second-instance activation otherwise opens a duplicate and aborts launch.
     initialState: 'initializing',
-    activateWindow: () => {
+    activateWindow: (request) => {
       // Updater replacement must not resurrect the old bundle.
       if (!isQuittingForUpdate()) {
-        options.focusExistingWindow()
+        options.focusExistingWindow(request)
       }
     },
     onBlocked: (reason) => console.error(`[serve] Desktop activation blocked: ${reason}`)
   })
-  installUncaughtPipeErrorGuard()
+  installUncaughtExceptionQuitGuard()
   // #9441: log background rejections so restore failure cannot silently kill main.
   installUnhandledRejectionLogging()
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
   process.env.ORCA_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
-    getSnapshot: getRemoteServerUpdaterSnapshot,
-    check: checkForRemoteServerUpdate,
-    download: downloadRemoteServerUpdate,
-    install: installRemoteServerUpdate
+    getSnapshot: async (runtimeId) =>
+      (await loadUpdaterService()).getRemoteServerUpdaterSnapshot(runtimeId),
+    check: async (runtimeId, options) =>
+      (await loadUpdaterService()).checkForRemoteServerUpdate(runtimeId, options),
+    download: async (runtimeId) =>
+      (await loadUpdaterService()).downloadRemoteServerUpdate(runtimeId),
+    install: async (runtimeId) => (await loadUpdaterService()).installRemoteServerUpdate(runtimeId)
   })
   patchPackagedProcessPath()
   // The synchronous seed covers early IPC; packaged login-shell hydration adds rc PATH later.
   if (app.isPackaged && process.platform !== 'win32') {
-    void hydrateShellPath().then((result) => {
-      if (result.ok) {
-        mergePathSegments(result.segments)
-      } else {
-        // Failed hydration keeps seeded fallbacks, which may differ from shell choice; log the reason for missing-CLI diagnosis.
-        console.warn(
-          `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
-        )
+    void import('./shell-environment/hydrate-shell-path').then(
+      async ({ hydrateShellPath, mergePathSegments }) => {
+        const result = await hydrateShellPath()
+        if (result.ok) {
+          mergePathSegments(result.segments)
+        } else {
+          // Failed hydration keeps seeded fallbacks, which may differ from shell choice; log the reason for missing-CLI diagnosis.
+          console.warn(
+            `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
+          )
+        }
       }
-    })
+    )
   }
   // Register before spawning so CLI/relay-shared tree killing can reach main's gate and breadcrumbs.
   installMainProcessTreeKillGate()
@@ -201,9 +196,16 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Capture after overrides, before ready-time app naming can change userData on case-sensitive filesystems.
   initDataPath()
   startEventLoopDelayProbe('main', getCanonicalUserDataPath())
-  antigravityHookService.setWindowsRuntimePathProvider(
-    () => getRelocatedDaemonHost()?.execPath ?? process.execPath
-  )
+  if (process.platform === 'win32') {
+    void Promise.all([
+      import('../antigravity/hook-service'),
+      import('../daemon/executable-host/windows/daemon-host-relocation')
+    ]).then(([{ antigravityHookService }, { getRelocatedDaemonHost }]) => {
+      antigravityHookService.setWindowsRuntimePathProvider(
+        () => getRelocatedDaemonHost()?.execPath ?? process.execPath
+      )
+    })
+  }
 
   // Electron fixes the Keychain service name before ready; dev userData is already pinned so renaming cannot shift it.
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
@@ -219,12 +221,18 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
       userData: app.getPath('userData'),
       e2eUserData: Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
     })
-    startEventLoopStallProbe()
+    void import('./diagnostics/event-loop-stall-probe').then(({ startEventLoopStallProbe }) =>
+      startEventLoopStallProbe()
+    )
   }
   // Session-long main-thread diagnostics (#7576) distinguish cold cache from unstable filesystem stamps via hit/miss/unprovable counts.
   if (isMainThreadDiagnosticsEnabled()) {
     // Include process-host spawns too; Git-only probe sites miss rg/ps/PTY helpers.
     setSpawnObserver(recordSubprocessSpawn)
+  }
+  // posix_spawn blocks its caller; under memory/disk pressure a launch on main froze the window for minutes.
+  if (process.platform !== 'win32' && process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED !== '1') {
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
   }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Lock after userData override so dev/packaged namespaces differ; concurrent dev copies also need separate profiles to avoid store corruption (#1326, #1312).
@@ -264,19 +272,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Select Linux os_crypt before credential reads/config initialization; install lazy secret access before Store without triggering pre-ready Keychain resolution.
   selectLinuxKeyringBackend()
   setSecretStore(new ElectronSecretStore())
-  // Bind PTY IPC/power at process scope: headless serve has no window yet and must not register no-op handlers.
-  setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
-  // Node hosts omit desktop surfaces and route notifications to paired clients instead.
-  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
-  // Install Chromium browser commands only in Electron; Node hosts advertise no browser capability and reject those RPCs.
-  installElectronBrowserCommands()
-  // Electron consults default-session proxy config; Node hosts use environment only.
-  setDefaultProxySessionResolver(() => session.defaultSession)
-  // Desktop integrations use Chromium networking; Node differs in proxy environment and user agent.
-  setMainHttpClient(electronHttpClient)
-  // Only Electron supplies streaming speech services; other hosts reject speech calls.
-  setSpeechServiceFactories(electronSpeechServiceFactories)
-  setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
+  installElectronNativeServices()
   // Couple only dev desktop lifetime; serve must outlive its CLI shim/background-shell parent.
   const shouldCoupleToDevParent = isDev && !state.isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
@@ -300,7 +296,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   )
   // Capture stats/usage paths before app naming can shift userData.
   initStatsPath()
-  initializeUsageStoragePaths()
+  captureBackendBootstrap()
   // Register preview privileges before ready freezes the table or webviews lose fetch/secure-origin access.
   registerDocPreviewSchemePrivileges(PRIVILEGED_CUSTOM_SCHEMES)
   // Install Crashpad before first renderer; earlier CHECK failures have exit-code evidence only.

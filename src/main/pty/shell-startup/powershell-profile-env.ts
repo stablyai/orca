@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
+import { getSystem32ExePath } from '../../windows/windows-command-paths'
 import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 import { stripTrailingComment } from './shell-startup-env'
 
@@ -8,8 +9,7 @@ import { stripTrailingComment } from './shell-startup-env'
 const POWERSHELL_EDITIONS = [
   {
     documentsSubdir: 'WindowsPowerShell',
-    psHome: () =>
-      join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0')
+    psHome: () => getSystem32ExePath('WindowsPowerShell\\v1.0')
   },
   {
     documentsSubdir: 'PowerShell',

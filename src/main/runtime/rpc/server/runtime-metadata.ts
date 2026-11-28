@@ -1,11 +1,17 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
-import { writeSecureJsonFile } from '../../../../shared/secure-file'
+import {
+  getRuntimeMetadataPath,
+  type RuntimeMetadata
+} from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { writeSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
+import { clearRuntimeRestartMarker } from './runtime-restart-marker-file'
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
-  writeMetadataFile(metadataPath, metadata)
+  writeSecureJsonFile(metadataPath, metadata)
+  // Published metadata means the runtime serves again, so any restart is over.
+  void clearRuntimeRestartMarker(userDataPath)
 }
 
 export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
@@ -54,8 +60,4 @@ export function clearRuntimeMetadataIfOwned(
     return
   }
   clearRuntimeMetadata(userDataPath)
-}
-
-function writeMetadataFile(path: string, metadata: RuntimeMetadata): void {
-  writeSecureJsonFile(path, metadata)
 }

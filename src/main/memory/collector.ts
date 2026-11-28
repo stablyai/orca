@@ -1,36 +1,37 @@
-import { exec } from 'node:child_process'
-import { promisify } from 'node:util'
-import os from 'node:os'
-import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment, type AppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type {
   AppMemory,
   MemorySnapshot,
   SessionMemory,
   UsageValues,
   WorktreeMemory
-} from '../../shared/process-stats-types'
-import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
+} from '../../shared/diagnostics/process-stats-types'
+import { ORPHAN_WORKTREE_ID } from '../../shared/terminal/pty/orphan-worktree-id'
 import { listRegisteredPtys } from './pty-registry'
-import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
 import { collectHostMemory } from './host-memory'
-import { getProcessMemoryMetric } from './process-memory-metric'
-import { readDarwinProcessFootprints } from './darwin-process-footprint'
 import { getLocalDaemonPid } from './local-daemon-pid'
+import { enumerateHostProcesses } from './host-process-index'
+import { claimProcessTree, claimPtyProcessTrees } from './pty-process-trees'
 import {
-  buildProcessIndex,
-  collectSubtree,
-  parsePsOutput,
-  type ProcIndex,
-  type ProcRow
-} from './process-index'
+  agentRegistrationMark,
+  hasAgentProcessRegistrations,
+  listAgentProcessRoots,
+  readAgentProcessChat
+} from './agent-process-registry'
+import type { ProcIndex, ProcRow } from './process-index'
+import { recordPairedReplyParts } from './memory-snapshot-paired-reply'
+import {
+  hasChatSeries,
+  readWorkspaceHistory,
+  recordWorkspaceMemorySeries
+} from './workspace-memory-series'
 import {
   createEmptyWorktreeMemoryBucket,
   pushAppMemoryHistory,
-  pushMemoryHistorySample,
   readAppMemoryHistory,
   readMemoryHistory,
+  createProjectGroupNameLookup,
   resolveWorktreeMemoryNames,
-  sweepStaleMemoryHistory,
   type MemorySnapshotStore,
   type WorktreeMemoryBucket
 } from './memory-snapshot-buckets'
@@ -60,38 +61,6 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
       inflight = null
     })
   return inflight
-}
-
-const execAsync = promisify(exec)
-const PS_EXEC_TIMEOUT_MS = 5_000
-const PS_MAX_BUFFER = 10 * 1024 * 1024
-
-async function enumerateProcesses(): Promise<ProcIndex> {
-  const platform = os.platform()
-  const [rows, footprints] = await Promise.all([
-    platform === 'win32' ? enumerateWindows() : enumerateUnix(),
-    platform === 'darwin' ? readDarwinProcessFootprints() : Promise.resolve(null)
-  ])
-  return buildProcessIndex(rows, footprints, getProcessMemoryMetric(platform))
-}
-
-async function enumerateUnix(): Promise<ProcRow[]> {
-  // Force dot decimals: parseFloat silently truncates locale-formatted comma values.
-  try {
-    const { stdout } = await execAsync('ps -eo pid=,ppid=,pcpu=,rss=', {
-      maxBuffer: PS_MAX_BUFFER,
-      timeout: PS_EXEC_TIMEOUT_MS,
-      env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
-    })
-    return parsePsOutput(stdout)
-  } catch (err) {
-    console.warn('[memory] ps enumeration failed', err)
-    return []
-  }
-}
-
-async function enumerateWindows(): Promise<ProcRow[]> {
-  return enumerateWindowsProcessResources()
 }
 
 type AppBucketsRaw = Omit<AppMemory, 'history'>
@@ -161,13 +130,48 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
   }
 }
 
-async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
-  const appBuckets = bucketElectronMetrics(processIndex)
-  const ptys = listRegisteredPtys()
+type RowTotals = { cpu: number; memory: number; privateMemory: number }
 
-  // Attribute overlapping PTY trees once, in registration order.
+function sumRows(rows: readonly ProcRow[]): RowTotals {
+  const totals = { cpu: 0, memory: 0, privateMemory: 0 }
+  for (const row of rows) {
+    totals.cpu += row.cpu
+    totals.memory += row.memory
+    totals.privateMemory += clampMemoryMetric(row.privateMemory)
+  }
+  return totals
+}
+
+function usageOf(totals: RowTotals, hasPrivateMemory: boolean): UsageValues {
+  return {
+    cpu: clampMemoryMetric(totals.cpu),
+    memory: clampMemoryMetric(totals.memory),
+    ...optionalCommitField(hasPrivateMemory, totals.privateMemory)
+  }
+}
+
+function addUsage(target: RowTotals, usage: UsageValues): void {
+  target.cpu += usage.cpu
+  target.memory += usage.memory
+  target.privateMemory += clampMemoryMetric(usage.privateMemory)
+}
+
+async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
+  const projectGroupName = createProjectGroupNameLookup(store)
+  const agentMark = agentRegistrationMark()
+  const [processIndex, host] = await Promise.all([
+    enumerateHostProcesses({ withStartTimes: hasAgentProcessRegistrations() }),
+    collectHostMemory()
+  ])
+  const { hasPrivateMemory } = processIndex
+  const appBuckets = bucketElectronMetrics(processIndex)
   const claimed = new Set<number>()
+  const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys(), claimed)
+  const agentTrees = listAgentProcessRoots(agentMark).map((root) => ({
+    ...root,
+    // An agent's tree outlives its starting process, so a reused parent PID is ruled out by start order.
+    rows: claimProcessTree(processIndex, root.pid, claimed, true)
+  }))
 
   const orphan = createEmptyWorktreeMemoryBucket(
     ORPHAN_WORKTREE_ID,
@@ -176,60 +180,94 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     'Other'
   )
   const worktreeBuckets = new Map<string, WorktreeMemoryBucket>()
+  const terminals: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  const bucketFor = (worktreeId: string): WorktreeMemoryBucket => {
+    const existing = worktreeBuckets.get(worktreeId)
+    if (existing) {
+      return existing
+    }
+    const names = resolveWorktreeMemoryNames(worktreeId, store, projectGroupName)
+    const bucket = createEmptyWorktreeMemoryBucket(
+      worktreeId,
+      names.worktreeName,
+      names.repoId,
+      names.repoName
+    )
+    worktreeBuckets.set(worktreeId, bucket)
+    return bucket
+  }
 
-  for (const pty of ptys) {
+  // Per workspace, sessions whose pane key came from startup restore.
+  const restoredSessionIds = new Map<string, Set<string>>()
+  for (const { pty, rows } of ptyTrees) {
+    // This machine's panel names a restored terminal by its pane before the pane mounts; paired replies don't carry it.
+    const paneKey = pty.paneKey
+    const restoredPaneKey = paneKey ? null : (pty.restoredPaneKey ?? null)
     let sessionCpu = 0
     let sessionMemory = 0
     let sessionPrivateMemory = 0
-
-    if (pty.pid != null) {
-      for (const pid of collectSubtree(processIndex, pty.pid, claimed)) {
-        if (claimed.has(pid)) {
-          continue
-        }
-        const row = processIndex.byPid.get(pid)
-        if (!row) {
-          continue
-        }
-        claimed.add(pid)
-        sessionCpu += row.cpu
-        sessionMemory += row.memory
-        sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
-      }
+    for (const row of rows) {
+      sessionCpu += row.cpu
+      sessionMemory += row.memory
+      sessionPrivateMemory += clampMemoryMetric(row.privateMemory)
     }
-
     const session: SessionMemory = {
       sessionId: pty.sessionId ?? pty.ptyId,
-      paneKey: pty.paneKey,
+      paneKey: paneKey ?? restoredPaneKey,
       pid: pty.pid ?? 0,
       cpu: clampMemoryMetric(sessionCpu),
       memory: clampMemoryMetric(sessionMemory),
-      ...optionalCommitField(processIndex.hasPrivateMemory, sessionPrivateMemory)
+      ...optionalCommitField(hasPrivateMemory, sessionPrivateMemory)
     }
-
-    let bucket: WorktreeMemoryBucket
-    if (pty.worktreeId) {
-      const existing = worktreeBuckets.get(pty.worktreeId)
-      if (existing) {
-        bucket = existing
-      } else {
-        const names = resolveWorktreeMemoryNames(pty.worktreeId, store)
-        bucket = createEmptyWorktreeMemoryBucket(
-          pty.worktreeId,
-          names.worktreeName,
-          names.repoId,
-          names.repoName
-        )
-        worktreeBuckets.set(pty.worktreeId, bucket)
-      }
-    } else {
-      bucket = orphan
+    const bucket = pty.worktreeId ? bucketFor(pty.worktreeId) : orphan
+    if (restoredPaneKey) {
+      const restored = restoredSessionIds.get(bucket.worktreeId) ?? new Set<string>()
+      restored.add(session.sessionId)
+      restoredSessionIds.set(bucket.worktreeId, restored)
     }
-
     bucket.cpu += session.cpu
     bucket.memory += session.memory
     bucket.privateMemory += clampMemoryMetric(session.privateMemory)
     bucket.sessions.push(session)
+  }
+  // Before chats are added, the buckets hold terminals alone.
+  for (const bucket of worktreeBuckets.values()) {
+    terminals.cpu += bucket.cpu
+    terminals.memory += bucket.memory
+    terminals.privateMemory += bucket.privateMemory
+  }
+  terminals.cpu += orphan.cpu
+  terminals.memory += orphan.memory
+  terminals.privateMemory += orphan.privateMemory
+
+  const agents: RowTotals = { cpu: 0, memory: 0, privateMemory: 0 }
+  // Terminal-only usage of workspaces that also have chats, as paired clients have always seen it.
+  const terminalUsage = new Map<string, RowTotals>()
+  let hasChatOnlyRows = false
+  let hasChats = false
+  for (const { agentSessionId, rows } of agentTrees) {
+    const usage = usageOf(sumRows(rows), hasPrivateMemory)
+    addUsage(agents, usage)
+    const chat = agentSessionId === null ? null : readAgentProcessChat(agentSessionId)
+    if (agentSessionId !== null && chat) {
+      const bucket = bucketFor(chat.worktreeId)
+      if (bucket.sessions.length === 0) {
+        hasChatOnlyRows = true
+      } else if (!terminalUsage.has(bucket.worktreeId)) {
+        const { cpu, memory, privateMemory } = bucket
+        terminalUsage.set(bucket.worktreeId, { cpu, memory, privateMemory })
+      }
+      hasChats = true
+      addUsage(bucket, usage)
+      const { cpu, memory } = usage
+      ;(bucket.chats ??= []).push({
+        agentSessionId,
+        agent: chat.agent,
+        name: chat.name,
+        cpu,
+        memory
+      })
+    }
   }
 
   const bucketList: WorktreeMemoryBucket[] = [...worktreeBuckets.values()]
@@ -240,37 +278,59 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   // Write before reading history to include this sample and refresh active-worktree retention.
   const now = Date.now()
   pushAppMemoryHistory(appBuckets.memory, now)
-  for (const bucket of bucketList) {
-    pushMemoryHistorySample(bucket.worktreeId, bucket.memory, now)
-  }
-  sweepStaleMemoryHistory(now)
+  const terminalSeries = recordWorkspaceMemorySeries(bucketList, terminalUsage, now, hasChats)
 
+  // Without chats or a chat series still drawn, every row draws its terminal history, as it always did.
+  const historyOf = hasChats || hasChatSeries() ? readWorkspaceHistory : readMemoryHistory
   const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
-    ...optionalCommitField(processIndex.hasPrivateMemory, privateMemory),
-    history: readMemoryHistory(b.worktreeId)
+    ...optionalCommitField(hasPrivateMemory, privateMemory),
+    history: historyOf(b.worktreeId)
   }))
+  // Rows holding restored pane keys, so a paired reply replaces only them.
+  const restoredRows = restoredSessionIds.size
+    ? bucketList.flatMap((bucket, index) =>
+        restoredSessionIds.has(bucket.worktreeId) ? [index] : []
+      )
+    : []
+  // With no agent process, restored pane key or chat series, this is the snapshot paired clients have always received.
+  const asPaired =
+    agentTrees.length === 0 && restoredSessionIds.size === 0 && terminalSeries.length === 0
+  const agentProcesses = usageOf(agents, hasPrivateMemory)
 
-  let sessionCpuTotal = 0
-  let sessionMemoryTotal = 0
-  let sessionPrivateTotal = 0
-  for (const wt of worktrees) {
-    sessionCpuTotal += wt.cpu
-    sessionMemoryTotal += wt.memory
-    sessionPrivateTotal += clampMemoryMetric(wt.privateMemory)
-  }
-
-  return {
+  const snapshot: MemorySnapshot = {
     app: { ...appBuckets, history: readAppMemoryHistory() },
     worktrees,
+    ...(asPaired ? {} : { agentProcesses }),
     host,
     processMemoryMetric: processIndex.memoryMetric,
     ...snapshotCommitFields(
-      processIndex.hasPrivateMemory,
-      clampMemoryMetric(appBuckets.privateMemory) + sessionPrivateTotal
+      hasPrivateMemory,
+      clampMemoryMetric(appBuckets.privateMemory) + agents.privateMemory + terminals.privateMemory
     ),
-    totalCpu: appBuckets.cpu + sessionCpuTotal,
-    totalMemory: appBuckets.memory + sessionMemoryTotal,
+    totalCpu: appBuckets.cpu + agentProcesses.cpu + terminals.cpu,
+    totalMemory: appBuckets.memory + agentProcesses.memory + terminals.memory,
     collectedAt: now
   }
+  if (asPaired) {
+    return snapshot
+  }
+  recordPairedReplyParts(snapshot, {
+    rowsDiffer: hasChatOnlyRows || terminalSeries.length > 0 || restoredSessionIds.size > 0,
+    hasChatOnlyRows,
+    terminalSeries,
+    hasPrivateMemory,
+    readTerminalHistory: readMemoryHistory,
+    restoredSessionIds,
+    restoredRows,
+    totals: {
+      ...snapshotCommitFields(
+        hasPrivateMemory,
+        clampMemoryMetric(appBuckets.privateMemory) + terminals.privateMemory
+      ),
+      totalCpu: appBuckets.cpu + terminals.cpu,
+      totalMemory: appBuckets.memory + terminals.memory
+    }
+  })
+  return snapshot
 }

@@ -1,8 +1,8 @@
 import type {
-  CodexSessionCatalogAccess,
   CodexStructuredSessionAdapterDeps,
   CodexStructuredLaunch
 } from '../session-lifecycle/codex-structured-session-state'
+import type { CodexSessionCatalogAccess } from './codex-session-catalog-access'
 import { agentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { CODEX_STRUCTURED_AGENT } from '../launch/codex-structured-agent-definition'
 

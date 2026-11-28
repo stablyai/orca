@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react'
 import { ChevronRight, Copy } from 'lucide-react'
 import { basename, dirname } from '@/lib/path'
-import { cn } from '@/lib/utils'
-import { FileTypeIcon } from '@/components/FileTypeIcon'
+import { cn } from '@/lib/class-names'
+import { FileTypeIcon } from '@/components/icons/FileTypeIcon'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -11,40 +11,47 @@ import {
   ContextMenuContent,
   ContextMenuItem
 } from '@/components/ui/context-menu'
-import { normalizeSearchFileMatchCount } from '../../../../../../shared/search-match-count'
-import type { SearchFileResult, SearchMatch } from '../../../../../../shared/code-search-types'
-import { translate } from '@/i18n/i18n'
+import { normalizeSearchFileMatchCount } from '../../../../../../shared/file-search/search-match-count'
+import { searchMatchLineParts } from '../../../../../../shared/file-search/search-match-line-parts'
+import type {
+  SearchFileResult,
+  SearchMatch
+} from '../../../../../../shared/file-search/code-search-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ToggleButton({
   active,
   onClick,
   title,
   children,
-  ariaExpanded
+  ariaExpanded,
+  ariaControls,
+  highlighted
 }: {
-  active: boolean
+  /** Pressed state; omit for a plain action, such as Clear. */
+  active?: boolean
   onClick: () => void
   title: string
   children: React.ReactNode
   ariaExpanded?: boolean
+  ariaControls?: string
+  /** Tints like pressed without toggle semantics, e.g. a disclosure whose filters are set. */
+  highlighted?: boolean
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
-          className={cn(
-            'h-auto w-auto rounded-sm p-0.5 flex-shrink-0',
-            active
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          )}
+          className="shrink-0"
           onClick={onClick}
           aria-label={title}
           aria-pressed={active}
           aria-expanded={ariaExpanded}
+          aria-controls={ariaControls}
+          data-active={highlighted || undefined}
         >
           {children}
         </Button>
@@ -65,6 +72,7 @@ export function FileResultRow({
   onToggleCollapse: () => void
   collapsed: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileName = basename(fileResult.relativePath)
   const parentDir = dirname(fileResult.relativePath)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -72,7 +80,7 @@ export function FileResultRow({
 
   return (
     <div className="pt-1.5">
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <Tooltip>
           <ContextMenu>
             <ContextMenuTrigger asChild>
@@ -114,10 +122,7 @@ export function FileResultRow({
                 onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
               >
                 <Copy className="size-3.5" />
-                {translate(
-                  'auto.components.right.sidebar.SearchResultItems.3596b9668d',
-                  'Copy Path'
-                )}
+                {t('auto.components.right.sidebar.SearchResultItems.3596b9668d', 'Copy Path')}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -140,34 +145,19 @@ export function MatchResultRow({
   relativePath: string
   onClick: () => void
 }): React.JSX.Element {
-  const parts = useMemo(() => {
-    const content = match.lineContent
-    const col = (match.displayColumn ?? match.column) - 1
-    const len = match.displayMatchLength ?? match.matchLength
-
-    if (col >= 0 && col + len <= content.length) {
-      // Keep nearby context so long prefixes do not push the match out of view.
-      const BEFORE_MAX = 26
-      const rawBefore = content.slice(0, col).trimStart()
-      const before =
-        rawBefore.length > BEFORE_MAX
-          ? `…${rawBefore.slice(rawBefore.length - BEFORE_MAX)}`
-          : rawBefore
-      return {
-        before,
-        match: content.slice(col, col + len),
-        after: content.slice(col + len)
-      }
-    }
-
-    return { before: content, match: '', after: '' }
-  }, [
-    match.lineContent,
-    match.column,
-    match.matchLength,
-    match.displayColumn,
-    match.displayMatchLength
-  ])
+  const t = useTranslate()
+  const { lineContent, column, matchLength, displayColumn, displayMatchLength } = match
+  const parts = useMemo(
+    () =>
+      searchMatchLineParts({
+        lineContent,
+        column,
+        matchLength,
+        displayColumn,
+        displayMatchLength
+      }),
+    [lineContent, column, matchLength, displayColumn, displayMatchLength]
+  )
 
   return (
     <ContextMenu>
@@ -203,10 +193,7 @@ export function MatchResultRow({
           onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SearchResultItems.cc06595a3b',
-            'Copy Line Path'
-          )}
+          {t('auto.components.right.sidebar.SearchResultItems.cc06595a3b', 'Copy Line Path')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

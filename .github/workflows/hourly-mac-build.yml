@@ -92,12 +92,20 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
-      fast_runners: false
+
+  release-javascript:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    uses: ./.github/workflows/release-javascript.yml
+    with:
+      ref: ${{ needs.preflight.outputs.head_sha }}
+      dev_build: true
 
   build-hourly-mac:
     needs:
       - preflight
       - orcad-template
+      - release-javascript
     if: needs.preflight.outputs.should_build == 'true'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -151,7 +159,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/Library/Caches/orca-node-runtime
-          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime-pin.ts') }}
+          key: orca-node-runtime-mac-${{ hashFiles('src/shared/node-runtime/node-runtime-pin.ts') }}
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -163,6 +171,11 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
+      # Restore-keys bring back every older Electron zip; drop them so the next save keeps only this version.
+      - name: Prune stale Electron downloads
+        shell: bash
+        run: if [ -f config/scripts/electron-installation/prune-electron-download-cache.mjs ]; then node config/scripts/electron-installation/prune-electron-download-cache.mjs; fi
+
       # Install both x64/arm64 optional natives for both macOS packages.
       - name: Install dependencies
         uses: nick-fields/retry@v4
@@ -172,8 +185,9 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
-      # Build required out/mobile-web from mobile’s React Native/Expo install.
+      # Build required out/mobile-web only when shared dev JavaScript is not restored.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.release-javascript.outputs.supported != 'true'
 
       # Require cert before expensive build; signing enables installation over existing Orca.
       - name: Verify macOS signing environment
@@ -219,12 +233,44 @@ jobs:
           fi
           cat "$RUNNER_TEMP/hourly-identity.txt" >>"$GITHUB_OUTPUT"
 
+      - name: Download shared JavaScript
+        if: needs.release-javascript.outputs.supported == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: release-javascript
+          path: .build/release-javascript
+
+      - name: Cache macOS native helpers
+        id: macos-native-helpers
+        uses: actions/cache@v5
+        with:
+          path: |
+            native/computer-use-macos/.build/release
+            native/keyboard-layout-macos/.build/release
+            native/notification-status-macos/.build/release
+            native/process-footprint-macos/.build/release
+            native/socket-owner-macos/.build/release
+          key: macos-native-helpers-v1-${{ hashFiles('native/*-macos/**', 'config/scripts/native-build/macos/**', 'config/scripts/native-build/posix/build-provider-exec.mjs', 'resources/build/entitlements.computer-use.mac.plist', 'resources/build/icon.icns') }}
+
       - name: Build app
-        run: pnpm build:release
+        run: |
+          if [ -n "$ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA" ]; then
+            RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release/javascript-artifacts/release-javascript-artifact.mjs'
+            if [ ! -f "$RELEASE_JAVASCRIPT_ARTIFACT" ]; then
+              RELEASE_JAVASCRIPT_ARTIFACT='config/scripts/release-javascript-artifact.mjs'
+            fi
+            node "$RELEASE_JAVASCRIPT_ARTIFACT" restore
+            pnpm run build:release:host
+          else
+            pnpm build:release
+          fi
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+          ORCA_REUSE_MACOS_NATIVE_HELPERS: ${{ steps.macos-native-helpers.outputs.cache-hit == 'true' && '1' || '' }}
+          ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
           # Unset dev identity so official-only stable/rc telemetry stays silent.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -297,6 +343,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          gh release upload "$TAG" dist/*-mac.yml --repo "$HOURLY_REPO" --clobber
 
       # Verify latest-mac.yml before exposing release; missing manifests cause picker download 404s.
       - name: Verify update manifest published
@@ -389,7 +446,9 @@ jobs:
 
   # Wait for mac tag/version before Windows upload; local ./ workflow consistently follows the dispatch ref.
   build-hourly-win:
-    needs: build-hourly-mac
+    needs:
+      - build-hourly-mac
+      - release-javascript
     # Publish Windows only into the existing live mac release.
     if: needs.build-hourly-mac.outputs.published == 'true'
     permissions:
@@ -403,4 +462,4 @@ jobs:
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
       orcad_template: true
-      fast_release: false
+      javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}

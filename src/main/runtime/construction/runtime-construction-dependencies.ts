@@ -1,28 +1,36 @@
+import type { PairedDeviceAccountLookup } from '../rpc/server/pairing/device-entry'
+import type { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
+import type {
+  SleepingAgentSessionRecord,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
-import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { ExecutionHostScope } from '../../../shared/execution-host/execution-host'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
   RuntimeTerminalProgramStatusFacetEvent
 } from '../terminal/output/terminal-agent-status-events'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
-import type { ClaudeTerminalEvidence } from '../../../shared/claude-terminal-interrupt'
+import type { ClaudeTerminalEvidence } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-terminal-interrupt'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/structured-agent-session-status-feed'
-import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-status-ipc-boundary'
+import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
+import type { ObservedAgentStatusPaneIdentity } from '../../ipc/agent-hooks/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../../agent-hooks/server/server-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
-import type { OrchestrationEnvironmentTransport } from '../orchestration/environment-transport'
+import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
-import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
+import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  /** A host that opened the saved-chat store before construction passes the ids it used. */
+  legacyStructuredSessionTabIds?: readonly string[]
   getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth
@@ -31,12 +39,30 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
+  /** `savedRecord` null: the caller already read it and found none. */
+  getPaneAgentIdentity?: (
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord | null
+  ) => ReturnType<typeof paneAgentIdentity>
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getPublicAgentStatusSnapshotForPane?: (
+    paneKey: string,
+    terminalHandle?: string | null
+  ) => AgentStatusIpcPayload[]
   structuredAgentStatusSink?: StructuredAgentSessionStatusSink
   readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
   getAgentProviderSessionSnapshot?: (tabId?: string) => AgentStatusIpcPayload[]
-  getAgentProviderSessionRowsForPane?: (paneKey: string) => AgentStatusIpcPayload[]
+  getAgentProviderSessionRowsForSession?: (
+    agent: string,
+    session: AgentProviderSessionMetadata
+  ) => AgentStatusIpcPayload[]
+  getAgentProviderSessionRowsForPane?: (
+    paneKey: string,
+    terminalHandle?: string | null
+  ) => AgentStatusIpcPayload[]
+  getAcceptedAgentReply?: (paneKey: string, leadTurnKey: number) => string | undefined
+  subscribeAgentStatusRowChanges?: (listener: (paneKey: string) => void) => () => void
   subscribeAgentProviderSessionChanges?: (
     listener: (sessions: readonly { paneKey: string; sessionId: string }[]) => void
   ) => () => void
@@ -46,19 +72,32 @@ export type RuntimeConstructionDependencies = {
     connectionId: string | null
     terminalProvenance: 'current_runtime' | 'restored'
   }) => AgentHookAuthorityAttestation | null
-  retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
+  /** `launchRetired`: a command finished after an earlier mark already retired the launch. */
+  retireAgentHookCompatibilityAuthority?: (
+    paneKey: string,
+    options?: { confirmedExit?: boolean; launchRetired?: true }
+  ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
+  /** `settleForSleep`: only settle the pane's exit proofs for a sleep capture (a fresh one for a
+   *  pane whose agent may have ended unseen); answers null without probing. */
   checkHookAgentPresence?: (
     paneKey: string,
-    exitedSince?: number
+    exitedSince?: number,
+    options?: { settleForSleep?: true }
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
-  reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+  reconcileAgentStatusForEndedProcess?: (
+    paneKeys: Iterable<string>,
+    sleep?: { ptyId: string; incarnationId?: string }
+  ) => void
   /** A worker attached to these panes; an exit the hook store proved before then is not its own. */
   forgetHookAgentExit?: (paneKeys: Iterable<string>) => void
   dropAgentStatusForRemovedWorktree?: (worktreeId: string, host?: ExecutionHostScope) => void
   canRecoverPersistentLocalPtys?: () => boolean
   getPairedDeviceName?: (pairedDeviceId: string) => string | null
+  /** The Orca account a paired device says it is signed in to (a phone: its desktop's), with its
+   *  computer; a desktop's comes from the sending connection's claim when one is given. */
+  getPairedDeviceAccount?: PairedDeviceAccountLookup
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -69,7 +108,7 @@ export type RuntimeConstructionDependencies = {
   resolveCodexStructuredLaunchHome?: (input: {
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>
-  prepareCodexCatalogProbeHome?: (homePath: string) => void
+  prepareCodexCatalogProbeHome?: (homePath: string) => void | Promise<void>
   buildAgentHookPtyEnv?: () => Record<string, string>
   getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
   /** Live headless-model depth; a host with no renderer to reveal from needs only its PTY provider's live window. */
@@ -79,6 +118,8 @@ export type RuntimeConstructionDependencies = {
   applySessionSearchSettings?: SessionSearchSettingsApply
   orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
   workspaceSleepPlatform?: WorkspaceSleepPlatform
+  /** The Orca profile whose store this runtime serves; fixed for the process, unlike the active one. */
+  servedOrcaProfileId?: string
 }
 
 export type RuntimeConstructionBindings = Required<RuntimeConstructionDependencies>

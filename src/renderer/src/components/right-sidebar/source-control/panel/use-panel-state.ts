@@ -16,29 +16,28 @@ export function useSourceControlPanelState() {
     activeWorktreeId,
     activeWorktreeInstanceId,
     branchSummary,
-    conflictOperationsByWorktree,
+    conflictOperation,
     isBranchVisible,
     isFolder,
     repositoryHuge,
     settings,
-    worktreeMap,
     worktreePath
   } = context
 
   const notes = useSourceControlDiffCommentNotes({
     activeWorktreeId,
-    clearDiffComments: storeActions.clearDiffComments,
-    clearDiffCommentsForFile: storeActions.clearDiffCommentsForFile
+    deleteDiffCommentsByIds: storeActions.deleteDiffCommentsByIds
   })
   const viewState = useSourceControlPanelViewState({
     activeWorktreeId,
     settings,
+    owner: JSON.stringify([activeRepoTarget, activeConnectionId, activeWorktreeInstanceId]),
     updateSettings: storeActions.updateSettings
   })
   const operationState = useSourceControlWorktreeOperationState({
     activeWorktreeId,
-    conflictOperationsByWorktree,
-    worktreeMap
+    activeWorktreeInstanceId,
+    conflictOperation
   })
   useSourceControlBranchLineTotalGate({
     activeWorktreeId,

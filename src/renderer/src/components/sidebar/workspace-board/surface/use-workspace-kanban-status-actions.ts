@@ -4,12 +4,12 @@ import '../../workspace-status/presentation/workspace-status'
 import {
   getWorkspaceStatus,
   makeWorkspaceStatusId
-} from '../../../../../../shared/workspace-statuses'
+} from '../../../../../../shared/workspace/status/workspace-statuses'
 
 import {
   ownerHostDefinesStatus,
   selectAllKnownWorkspaceStatuses
-} from '@/store/host-workspace-status-columns'
+} from '@/store/workspaces/status/host-workspace-status-columns'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 

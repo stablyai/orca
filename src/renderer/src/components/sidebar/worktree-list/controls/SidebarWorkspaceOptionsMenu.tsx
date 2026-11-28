@@ -1,19 +1,26 @@
-import React, { useCallback, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import React, { Suspense } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { OptionsFilterCountBadge } from './options-filter-count-badge'
-import {
-  useWorkspaceOptionsFilterBadge,
-  WorkspaceOptionsMenuItems
-} from './workspace-options-menu-items'
+import { useAppStore } from '@/store/index'
+import { SidebarOptionsPopover } from './SidebarOptionsPopover'
+import { useWorkspaceOptionsFilterBadge } from './use-workspace-options-filter-badge'
+
+const WorkspaceOptionsMenuItems = lazy(() =>
+  import('./workspace-options-menu-items').then((module) => ({
+    default: module.WorkspaceOptionsMenuItems
+  }))
+)
+
+const LazyWorktreeCardsKeptHintContent = lazy(
+  () =>
+    import('../../workspace-card/template/WorktreeCardsIntroNotice').then((module) => ({
+      default: module.WorktreeCardsKeptHintContent
+    })),
+  { reloadKey: 'worktree-cards-kept-hint-content' }
+)
+
+const dismissKeptHint = (): void => useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -24,76 +31,54 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
-  const [open, setOpen] = useState(false)
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
-
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      setOpen(next)
-      onMenuOpenChange?.(next)
-    },
-    [onMenuOpenChange]
-  )
+  const keptHintOpen = useAppStore((s) => s.worktreeCardsIntroKeptHintOpen)
 
   return (
-    <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              type="button"
-              className="relative text-muted-foreground"
-              aria-label={
-                hasAnyFilter
-                  ? translate(
-                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
-                      'Workspace options ({{count}} filters active)',
-                      {
-                        count: activeFilterCount,
-                        defaultValue_one: 'Workspace options ({{count}} filter active)'
-                      }
-                    )
-                  : translate(
-                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
-                      'Workspace options'
-                    )
+    <SidebarOptionsPopover
+      ariaLabel={
+        hasAnyFilter
+          ? t(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
+              'Workspace options ({{count}} filters active)',
+              {
+                count: activeFilterCount,
+                defaultValue_one: 'Workspace options ({{count}} filter active)'
               }
-              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-            >
-              <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-              <OptionsFilterCountBadge count={activeFilterCount} />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {hasAnyFilter
-            ? translate(
-                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
-                'Workspace options ({{count}} filters)',
-                {
-                  count: activeFilterCount,
-                  defaultValue_one: 'Workspace options ({{count}} filter)'
-                }
-              )
-            : translate(
-                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
-                'Workspace options'
-              )}
-        </TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        className="w-72 pb-2"
-        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-      >
+            )
+          : t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082', 'Workspace options')
+      }
+      tooltip={
+        hasAnyFilter
+          ? t(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
+              'Workspace options ({{count}} filters)',
+              {
+                count: activeFilterCount,
+                defaultValue_one: 'Workspace options ({{count}} filter)'
+              }
+            )
+          : t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082', 'Workspace options')
+      }
+      activeFilterCount={activeFilterCount}
+      preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+      onMenuOpenChange={onMenuOpenChange}
+      hint={{
+        open: keptHintOpen,
+        onDismiss: dismissKeptHint,
+        content: keptHintOpen ? (
+          <Suspense fallback={null}>
+            <LazyWorktreeCardsKeptHintContent />
+          </Suspense>
+        ) : null
+      }}
+    >
+      <Suspense fallback={null}>
         <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </Suspense>
+    </SidebarOptionsPopover>
   )
 })
 

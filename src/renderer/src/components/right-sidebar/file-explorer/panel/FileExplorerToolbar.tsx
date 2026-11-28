@@ -6,12 +6,15 @@ import {
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeOpenInMenuItems } from '@/components/sidebar/workspace-actions/open/WorktreeOpenInMenu'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { cn } from '@/lib/class-names'
 
 type FileExplorerToolbarProps = {
   repoName: string
@@ -62,6 +65,8 @@ export function FileExplorerToolbar({
   showDotfiles,
   onToggleDotfiles
 }: FileExplorerToolbarProps): React.JSX.Element {
+  const t = useTranslate()
+  const toggleDotfilesShortcut = useOptionalShortcutLabel('fileExplorer.toggleDotfiles')
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
       <span
@@ -80,7 +85,7 @@ export function FileExplorerToolbar({
               'text-muted-foreground hover:text-foreground',
               !canCollapseAll && 'cursor-not-allowed opacity-50'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.right.sidebar.FileExplorerToolbar.6026b16950',
               'Collapse All'
             )}
@@ -98,10 +103,7 @@ export function FileExplorerToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate(
-            'auto.components.right.sidebar.FileExplorerToolbar.6026b16950',
-            'Collapse All'
-          )}
+          {t('auto.components.right.sidebar.FileExplorerToolbar.6026b16950', 'Collapse All')}
         </TooltipContent>
       </Tooltip>
       <Tooltip>
@@ -114,7 +116,7 @@ export function FileExplorerToolbar({
               'text-muted-foreground hover:text-foreground',
               !canRefresh && 'cursor-not-allowed opacity-50'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28',
               'Refresh Explorer'
             )}
@@ -136,10 +138,7 @@ export function FileExplorerToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate(
-            'auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28',
-            'Refresh Explorer'
-          )}
+          {t('auto.components.right.sidebar.FileExplorerToolbar.d95e30fe28', 'Refresh Explorer')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenu>
@@ -151,7 +150,7 @@ export function FileExplorerToolbar({
                 variant="ghost"
                 size="icon-xs"
                 className="text-muted-foreground hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.right.sidebar.FileExplorerToolbar.31b4c3195d',
                   'More Explorer Actions'
                 )}
@@ -161,7 +160,7 @@ export function FileExplorerToolbar({
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate(
+            {t(
               'auto.components.right.sidebar.FileExplorerToolbar.31b4c3195d',
               'More Explorer Actions'
             )}
@@ -169,17 +168,17 @@ export function FileExplorerToolbar({
         </Tooltip>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
           <DropdownMenuCheckboxItem checked={showDotfiles} onCheckedChange={onToggleDotfiles}>
-            {translate(
-              'auto.components.right.sidebar.FileExplorerToolbar.78f133232c',
-              'Show Dotfiles'
-            )}
+            {t('auto.components.right.sidebar.FileExplorerToolbar.78f133232c', 'Show Dotfiles')}
+            {toggleDotfilesShortcut ? (
+              <DropdownMenuShortcut>{toggleDotfilesShortcut}</DropdownMenuShortcut>
+            ) : null}
           </DropdownMenuCheckboxItem>
           {showGitIgnoredFilesToggle ? (
             <DropdownMenuCheckboxItem
               checked={showGitIgnoredFiles}
               onCheckedChange={onToggleGitIgnoredFiles}
             >
-              {translate(
+              {t(
                 'auto.components.right.sidebar.FileExplorerToolbar.d238264654',
                 'Show Git Ignored Files'
               )}

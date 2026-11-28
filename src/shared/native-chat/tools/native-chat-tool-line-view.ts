@@ -1,4 +1,4 @@
-import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
+import { agentJournalToolCallLifecycle } from '../../agent-session/journal/agent-journal-tool-call-lifecycle'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,
@@ -43,6 +43,6 @@ export function nativeChatToolLineView(
     label?.commandDetail != null ||
     results.length > 0 ||
     (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
-  const resultPreview = call ? '' : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
+  const resultPreview = call ? '' : (body?.output.trimStart().split('\n')[0]?.slice(0, 80) ?? '')
   return { call, label, body, resultPreview, failed, results, hasDetail }
 }

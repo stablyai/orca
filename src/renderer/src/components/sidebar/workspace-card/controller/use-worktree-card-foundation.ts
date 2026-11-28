@@ -1,50 +1,63 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/constants'
-import { getWorktreeCardDetails } from '../../../../../../shared/worktree/card-properties'
+import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { getWorktreeCardDetails } from '../../../../../../shared/worktree/row-display/card-properties'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-ports/workspace-port-groups'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
-import { useRuntimeHostDisconnected } from '@/store/use-runtime-status-view'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import { hydrateRuntimeEnvironmentSshState } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
+import {
+  useAppStoreWithHostStatuses,
+  useRuntimeHostDisconnected
+} from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+
+// Non-hook helper so React Compiler does not treat `useAppStore.getState()` as a bare hook reference.
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 export function useWorktreeCardFoundation({
   worktree,
-  repo
-}: Pick<WorktreeCardProps, 'worktree' | 'repo'>) {
-  const openModal = useAppStore((s) => s.openModal)
-  const openTaskPage = useAppStore((s) => s.openTaskPage)
-  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
-  const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
-  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
+  repo,
+  compactLine = false
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
+  // Static store actions never trigger re-renders; read once without registering 12 per-card subscriptions.
+  const {
+    openModal,
+    openTaskPage,
+    openAutomationsPage,
+    setPendingAutomationRunNavigation,
+    updateWorktreeMeta,
+    setWorkspaceUnreadByUser,
+    deleteFolderWorkspace,
+    setActiveWorktree,
+    setRenamingWorktreeId,
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue
+  } = getAppStoreState()
   const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
-  const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
-  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const settings = useAppStore((s) => s.settings)
-  const fetchIssue = useAppStore((s) => s.fetchIssue)
-  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
-  const compactWorktreeCards = settings?.compactWorktreeCards === true
+  // A one-line card is always the Compact card, which only the default style has.
+  const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
+  const newCardStyle = drawsNewCards && !compactLine
+  const compactWorktreeCards = compactLine || settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),
     [cardProps, compactWorktreeCards, newCardStyle]
@@ -162,12 +175,12 @@ export function useWorktreeCardFoundation({
   const sshOwnerEnvironmentId = useAppStore((s) =>
     repo?.connectionId ? runtimeEnvironmentIdUnlessTwin(s, worktree.id) : null
   )
-  const sshStatus = useAppStore((s) => {
+  const sshStatus = useAppStoreWithHostStatuses((s, statuses) => {
     // Why: runtime-owned SSH targets suppress their ssh:state-changed broadcasts, so don't show a false "disconnected" chip for them.
     if (!repo?.connectionId || isRuntimeOwnedSshTargetId(repo.connectionId)) {
       return null
     }
-    return selectRuntimeAwareSshStatus(s, sshOwnerEnvironmentId, repo.connectionId)
+    return selectRuntimeAwareSshStatus(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
   })
   useEffect(() => {
     if (sshOwnerEnvironmentId) {
@@ -176,9 +189,9 @@ export function useWorktreeCardFoundation({
   }, [sshOwnerEnvironmentId])
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   // Require positive removal evidence; runtime-owned targets are absent from listTargets by design.
-  const sshTargetRemoved = useAppStore((s) =>
+  const sshTargetRemoved = useAppStoreWithHostStatuses((s, statuses) =>
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId)
-      ? selectRuntimeAwareSshTargetRemoved(s, sshOwnerEnvironmentId, repo.connectionId)
+      ? selectRuntimeAwareSshTargetRemoved(s, statuses, sshOwnerEnvironmentId, repo.connectionId)
       : false
   )
 
@@ -201,7 +214,6 @@ export function useWorktreeCardFoundation({
   // Missing runtime probe data means unknown, not disconnected.
   const isRuntimeDisconnected = useRuntimeHostDisconnected(runtimeOwnerEnvironmentId || null)
   const [titleRenaming, setTitleRenaming] = useState(false)
-  const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
   const sshTargetLabel = useAppStore((s) =>
     repo?.connectionId
@@ -242,12 +254,11 @@ export function useWorktreeCardFoundation({
     isSshDisconnected,
     sshTargetRemoved,
     parsedRepoHost,
+    runtimeHostId,
     runtimeHostLabel,
     isRuntimeDisconnected,
     titleRenaming,
     setTitleRenaming,
-    showRenameErrorDialog,
-    setShowRenameErrorDialog,
     sshTargetLabel
   }
 }

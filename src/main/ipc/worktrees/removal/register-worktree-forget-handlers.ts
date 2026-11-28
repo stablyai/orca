@@ -1,27 +1,29 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   RemoveWorktreeResult,
   ForceDeleteWorktreeBranchResult
 } from '../../../../shared/worktree/create-types'
-import { parseWorktreeId } from '../../worktree-logic'
+import { parseWorktreeId } from '../paths/worktree-logic'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
-import {
-  notifyWorktreesChanged,
-  cleanupUnusedWorktreePushTargetRemote
-} from '../../worktree-remote'
+import { notifyWorktreesChanged, cleanupUnusedWorktreePushTargetRemote } from '../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { forceDeleteLocalBranch } from '../../../git/worktrees/removal/worktree-branch-removal'
-import { gitExecFileAsync } from '../../../git/runner'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import { getWorktreeRemovalInFlightKey } from './worktree-removal-coordinator'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'
@@ -39,13 +41,16 @@ import {
   assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
   isWslMoveSourceHost
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
-export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
+export function registerWorktreeForgetHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:forgetLocal',
     async (
       _event,
@@ -154,7 +159,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:forceDeletePreservedBranch',
     async (
       _event,

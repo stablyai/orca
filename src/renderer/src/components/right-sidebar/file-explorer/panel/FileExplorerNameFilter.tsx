@@ -1,7 +1,11 @@
 import React from 'react'
 import { ListFilter, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  EXPLORER_QUERY_FIELD_CLASS,
+  EXPLORER_QUERY_INPUT_CLASS
+} from './explorer-query-field-class'
 
 type FileExplorerNameFilterProps = {
   query: string
@@ -18,27 +22,22 @@ export function FileExplorerNameFilter({
   onQueryChange,
   onClear
 }: FileExplorerNameFilterProps): React.JSX.Element {
+  const t = useTranslate()
   return (
-    <div
-      className="flex h-8 items-center gap-1 rounded-md border border-border bg-input/50 px-2 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring"
-      data-ignore-file-explorer-keys="true"
-    >
+    <div className={EXPLORER_QUERY_FIELD_CLASS} data-ignore-file-explorer-keys="true">
       <ListFilter className="size-3.5 shrink-0 text-muted-foreground" />
       <input
         type="text"
         data-explorer-query-input="files"
-        className="min-w-0 flex-1 bg-transparent py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground"
-        aria-label={translate(
+        className={EXPLORER_QUERY_INPUT_CLASS}
+        aria-label={t(
           'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
           'Find files'
         )}
         placeholder={
           scopeLabel
-            ? translate('fileExplorer.root.findInFolder', 'Find in {{path}}', { path: scopeLabel })
-            : translate(
-                'auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3',
-                'Find files'
-              )
+            ? t('fileExplorer.root.findInFolder', 'Find in {{path}}', { path: scopeLabel })
+            : t('auto.components.right.sidebar.FileExplorerNameFilter.26fb73c6e3', 'Find files')
         }
         value={query}
         onChange={(event) => onQueryChange(event.currentTarget.value)}
@@ -48,16 +47,16 @@ export function FileExplorerNameFilter({
       {query ? (
         <Button
           type="button"
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
-          className="h-auto w-auto rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
-          aria-label={translate(
+          className="shrink-0"
+          aria-label={t(
             'auto.components.right.sidebar.FileExplorerNameFilter.4d5a6b2a49',
             'Clear file filter'
           )}
           onClick={onClear}
         >
-          <X className="size-3" />
+          <X className="size-3.5" />
         </Button>
       ) : null}
     </div>

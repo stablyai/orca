@@ -1,10 +1,10 @@
-import type { CodexUsageSummary } from '../../../../shared/codex-usage-types'
-import type { OpenCodeUsageSummary } from '../../../../shared/opencode-usage-types'
-import type { MuseUsageSummary } from '../../../../shared/muse-usage-types'
-import type { ZcodeUsageSummary } from '../../../../shared/zcode-usage-types'
+import type { CodexUsageSummary } from '../../../../shared/agent-usage/analytics/codex-usage-types'
+import type { OpenCodeUsageSummary } from '../../../../shared/agent-usage/analytics/opencode-usage-types'
+import type { MuseUsageSummary } from '../../../../shared/agent-usage/analytics/muse-usage-types'
 import { countActiveDays, getClaudeDailyTotal } from './usage-overview-daily-series'
 import type { UsageOverviewInput, UsageProviderOverview } from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 function getCodexNewInputTokens(summary: CodexUsageSummary | null): number {
   if (!summary) {
@@ -27,21 +27,17 @@ function getOpenCodeNewInputTokens(summary: OpenCodeUsageSummary | null): number
   return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
 }
 
-function getZcodeNewInputTokens(summary: ZcodeUsageSummary | null): number {
-  if (!summary) {
-    return 0
-  }
-  return Math.max(summary.inputTokens - summary.cachedInputTokens, 0)
-}
-
-export function createClaudeProvider(input: UsageOverviewInput['claude']): UsageProviderOverview {
+export function createClaudeProvider(
+  input: UsageOverviewInput['claude'],
+  t: Translate = translate
+): UsageProviderOverview {
   const summary = input.summary
   const dailyActiveDays = input.daily
     .filter((entry) => getClaudeDailyTotal(entry) > 0)
     .map((entry) => entry.day)
   return {
     id: 'claude',
-    label: translate('auto.components.stats.usage.overview.model.544d6d4c16', 'Claude'),
+    label: t('auto.components.stats.usage.overview.model.544d6d4c16', 'Claude'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyClaudeData ?? input.scanState?.hasAnyClaudeData ?? false,
@@ -68,14 +64,17 @@ export function createClaudeProvider(input: UsageOverviewInput['claude']): Usage
   }
 }
 
-export function createCodexProvider(input: UsageOverviewInput['codex']): UsageProviderOverview {
+export function createCodexProvider(
+  input: UsageOverviewInput['codex'],
+  t: Translate = translate
+): UsageProviderOverview {
   const summary = input.summary
   const dailyActiveDays = input.daily
     .filter((entry) => entry.totalTokens > 0)
     .map((entry) => entry.day)
   return {
     id: 'codex',
-    label: translate('auto.components.stats.usage.overview.model.eb220d193b', 'Codex'),
+    label: t('auto.components.stats.usage.overview.model.eb220d193b', 'Codex'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyCodexData ?? input.scanState?.hasAnyCodexData ?? false,
@@ -98,7 +97,8 @@ export function createCodexProvider(input: UsageOverviewInput['codex']): UsagePr
 }
 
 export function createOpenCodeProvider(
-  input: UsageOverviewInput['opencode']
+  input: UsageOverviewInput['opencode'],
+  t: Translate = translate
 ): UsageProviderOverview {
   const summary = input.summary
   const dailyActiveDays = input.daily
@@ -106,7 +106,7 @@ export function createOpenCodeProvider(
     .map((entry) => entry.day)
   return {
     id: 'opencode',
-    label: translate('auto.components.stats.usage.overview.model.bc474051e5', 'OpenCode'),
+    label: t('auto.components.stats.usage.overview.model.bc474051e5', 'OpenCode'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyOpenCodeData ?? input.scanState?.hasAnyOpenCodeData ?? false,
@@ -128,14 +128,17 @@ export function createOpenCodeProvider(
   }
 }
 
-export function createMuseProvider(input: UsageOverviewInput['muse']): UsageProviderOverview {
+export function createMuseProvider(
+  input: UsageOverviewInput['muse'],
+  t: Translate = translate
+): UsageProviderOverview {
   const summary = input.summary
   const dailyActiveDays = input.daily
     .filter((entry) => entry.totalTokens > 0)
     .map((entry) => entry.day)
   return {
     id: 'muse',
-    label: translate('auto.lib.agent.catalog.muse_label', 'Muse'),
+    label: t('auto.lib.agent.catalog.muse_label', 'Muse'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyMuseData ?? input.scanState?.hasAnyMuseData ?? false,
@@ -158,14 +161,17 @@ export function createMuseProvider(input: UsageOverviewInput['muse']): UsageProv
   }
 }
 
-export function createZcodeProvider(input: UsageOverviewInput['zcode']): UsageProviderOverview {
+export function createZcodeProvider(
+  input: UsageOverviewInput['zcode'],
+  t: Translate = translate
+): UsageProviderOverview {
   const summary = input.summary
   const dailyActiveDays = input.daily
     .filter((entry) => entry.totalTokens > 0)
     .map((entry) => entry.day)
   return {
     id: 'zcode',
-    label: translate('auto.lib.agent.catalog.zcode_label', 'ZCode'),
+    label: t('auto.lib.agent.catalog.zcode_label', 'ZCode'),
     enabled: input.scanState?.enabled ?? false,
     isScanning: input.scanState?.isScanning ?? false,
     hasData: summary?.hasAnyZcodeData ?? input.scanState?.hasAnyZcodeData ?? false,
@@ -175,7 +181,7 @@ export function createZcodeProvider(input: UsageOverviewInput['zcode']): UsagePr
     activityLabel: 'events',
     activityCount: summary?.events ?? 0,
     totalTokens: summary?.totalTokens ?? 0,
-    newInputTokens: getZcodeNewInputTokens(summary),
+    newInputTokens: Math.max((summary?.inputTokens ?? 0) - (summary?.cachedInputTokens ?? 0), 0),
     outputTokens: summary?.outputTokens ?? 0,
     cacheTokens: summary?.cachedInputTokens ?? 0,
     reasoningTokens: summary?.reasoningOutputTokens ?? 0,

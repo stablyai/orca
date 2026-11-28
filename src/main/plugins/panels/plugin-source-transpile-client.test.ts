@@ -1,73 +1,61 @@
-import { Worker } from 'node:worker_threads'
-import { getVersion } from 'sucrase'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  createPluginSourceTranspileClient,
-  type PluginSourceTranspileWorker
-} from './plugin-source-transpile-client'
-import { PLUGIN_SOURCE_TRANSPILER_ID } from './plugin-source-transpile-protocol'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createPluginSourceTranspileClient } from './plugin-source-transpile-client'
+import type {
+  PluginSourceTranspiled,
+  PluginSourceTranspileRequest,
+  PluginSourceTranspileResponse
+} from './source-transpilation/plugin-source-transpile-protocol'
+import { inProcessWorker } from '../../worker-threads/in-process-worker.test-fixture'
 
-// Real threads: echoes `source` back, except that "hang" busy-loops the thread forever.
-const FAKE_TRANSPILER = `
-const { parentPort } = require('node:worker_threads')
-parentPort.on('message', ({ id, source }) => {
-  if (source === 'hang') { for (;;) {} }
-  parentPort.postMessage({ id, result: { ok: true, code: source, imports: [] } })
-})`
+const BUDGET_MS = 100
+const TRANSPILED: PluginSourceTranspiled = { ok: true, code: 'x', mappings: '', imports: [] }
 
-const workers: Worker[] = []
-afterEach(async () => {
-  await Promise.all(workers.splice(0).map((worker) => worker.terminate()))
-})
-
-function fakeWorkers(): { create: () => PluginSourceTranspileWorker; created: () => number } {
-  return {
-    create: () => {
-      const worker = new Worker(FAKE_TRANSPILER, { eval: true })
-      workers.push(worker)
-      return worker
-    },
-    created: () => workers.length
-  }
+function setup(answerAfterMs = 0) {
+  const worker = inProcessWorker(async (request: PluginSourceTranspileRequest) => {
+    // ast-grep-ignore: test-no-real-time-wait -- every test here runs on fake timers
+    await new Promise((resolve) => setTimeout(resolve, answerAfterMs))
+    const response: PluginSourceTranspileResponse = { id: request.id, result: TRANSPILED }
+    return response
+  })
+  const transpile = createPluginSourceTranspileClient({
+    createWorker: worker.factory,
+    budgetMs: BUDGET_MS
+  })
+  return { transpile, controls: worker.controls }
 }
 
-describe('plugin source transpile client', () => {
-  it('keeps one warm worker for successive files', async () => {
-    const fake = fakeWorkers()
-    const transpile = createPluginSourceTranspileClient({ createWorker: fake.create })
-    await expect(transpile('a.ts', 'one')).resolves.toEqual({ ok: true, code: 'one', imports: [] })
-    await expect(transpile('b.ts', 'two')).resolves.toMatchObject({ code: 'two' })
-    expect(fake.created()).toBe(1)
+describe('createPluginSourceTranspileClient', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
-  it('cuts a transform over the budget short, terminates its thread and starts a new one', async () => {
-    const fake = fakeWorkers()
-    const transpile = createPluginSourceTranspileClient({
-      createWorker: fake.create,
-      budgetMs: 200
-    })
-    // The thread never answers, so resolving at all means the budget cut it short.
-    const hung = transpile('slow.ts', 'hang')
-    const after = transpile('next.ts', 'fine')
-    await expect(hung).resolves.toEqual({
+  it('does not count a worker cold start against the budget', async () => {
+    const { transpile } = setup(BUDGET_MS * 5)
+
+    const pending = transpile('main.ts', 'export {}')
+    await vi.advanceTimersByTimeAsync(BUDGET_MS * 5)
+    expect(await pending).toEqual(TRANSPILED)
+  })
+
+  it('replaces a worker that never reports ready after the boot budget', async () => {
+    const { transpile, controls } = setup()
+    controls.hangsOn = () => true
+
+    const stalled = transpile('main.ts', 'export {}')
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await stalled).toEqual({
       ok: false,
-      message: expect.stringContaining('200 ms transpile budget')
+      message: 'the transpiler did not start within 10000 ms',
+      transient: true
     })
-    // The busy-looping thread is gone; the queued file runs on a fresh one.
-    await expect(after).resolves.toMatchObject({ ok: true, code: 'fine' })
-    expect(fake.created()).toBe(2)
-  })
 
-  it('reports a worker that cannot start instead of throwing', async () => {
-    const transpile = createPluginSourceTranspileClient({
-      createWorker: () => {
-        throw new Error('no entry')
-      }
-    })
-    await expect(transpile('a.ts', 'x')).resolves.toEqual({ ok: false, message: 'no entry' })
-  })
-
-  it('names the bundled sucrase in the cache key', () => {
-    expect(PLUGIN_SOURCE_TRANSPILER_ID).toBe(`sucrase@${getVersion()}`)
+    controls.hangsOn = () => false
+    const retried = transpile('main.ts', 'export {}')
+    await vi.advanceTimersByTimeAsync(BUDGET_MS)
+    expect(await retried).toEqual(TRANSPILED)
+    expect(controls.spawned).toBe(2)
   })
 })

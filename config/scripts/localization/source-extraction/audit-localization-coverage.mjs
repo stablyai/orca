@@ -6,10 +6,23 @@ import process from 'node:process'
 // TypeScript 7 is a native CLI; AST consumers still need the legacy JavaScript API.
 import ts from 'typescript-api'
 import { isTestOnlySourcePath } from '../../static-analysis/process-boundaries/test-only-source-path.mjs'
+import { isVisibleObjectKey } from './localization-visible-object-keys.mjs'
+import {
+  COPY_PRESERVING_BINARY_OPERATORS,
+  expressionNameText,
+  hasAncestorObjectPropertyName,
+  nearestObjectPropertyName,
+  propertyNameText
+} from './localization-ast-queries.mjs'
+import {
+  catalogDataKind,
+  isErrorMessage,
+  readCatalogEnglish
+} from './localization-coded-copy-rules.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
-const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate'])
+const LOCALIZATION_CALL_NAMES = new Set(['t', 'translate', 'translateMain'])
 const CLASS_PROPERTY_NAMES = new Set(['className', 'classNames'])
 // Why: the children of these elements are CSS or code, never copy a translator should see.
 const NON_COPY_JSX_ELEMENTS = new Set(['style', 'script'])
@@ -35,31 +48,13 @@ const USER_VISIBLE_JSX_ATTRIBUTES = new Set([
   'toggleDescription',
   'tooltip'
 ])
-const USER_VISIBLE_OBJECT_KEYS = new Set([
-  'accessibilityHint',
-  'accessibilityLabel',
-  'ariaLabel',
-  'badge',
-  'description',
-  'emptyText',
-  'error',
-  'headerTitle',
-  'helperText',
-  'keywords',
-  'label',
-  'message',
-  'placeholder',
-  'subtitle',
-  'title',
-  'toggleDescription',
-  'tooltip'
-])
 const USER_VISIBLE_FUNCTION_NAMES = new Set([
   'alert',
   'confirm',
   'prompt',
   'showError',
-  'showToast'
+  'showToast',
+  'toast'
 ])
 const USER_VISIBLE_OBJECT_METHODS = new Set([
   'error',
@@ -71,13 +66,13 @@ const USER_VISIBLE_OBJECT_METHODS = new Set([
   'warning'
 ])
 const USER_VISIBLE_OBJECT_NAMES = new Set(['toast'])
-// Only comparison operands are non-copy; rejecting all non-+ operators hides guarded JSX and ?? fallback strings.
-const COPY_PRESERVING_BINARY_OPERATORS = new Set([
-  ts.SyntaxKind.PlusToken,
-  ts.SyntaxKind.QuestionQuestionToken,
-  ts.SyntaxKind.BarBarToken,
-  ts.SyntaxKind.AmpersandAmpersandToken
-])
+// Shared copy the desktop draws besides the renderer; its agent- and CLI-facing files are
+// allowlisted by path.
+const DEFAULT_SOURCE_ROOTS = [
+  path.join('src', 'renderer', 'src'),
+  path.join('src', 'shared', 'bots'),
+  path.join('src', 'shared', 'composio')
+]
 
 function normalizePath(root, filePath) {
   return path.relative(root, filePath).split(path.sep).join('/')
@@ -137,26 +132,6 @@ function compactText(text) {
 function lineAndColumn(sourceFile, node) {
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
   return { line: position.line + 1, column: position.character + 1 }
-}
-
-function propertyNameText(name) {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text
-  }
-  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) {
-    return name.expression.text
-  }
-  return undefined
-}
-
-function expressionNameText(node) {
-  if (ts.isIdentifier(node)) {
-    return node.text
-  }
-  if (ts.isPropertyAccessExpression(node)) {
-    return `${expressionNameText(node.expression) ?? ''}.${node.name.text}`.replace(/^\./, '')
-  }
-  return undefined
 }
 
 function stringParts(node) {
@@ -254,35 +229,6 @@ function isRenderedJsxExpression(node) {
   return false
 }
 
-function nearestObjectPropertyName(node) {
-  let current = node.parent
-  while (current) {
-    if (ts.isPropertyAssignment(current) || ts.isShorthandPropertyAssignment(current)) {
-      return propertyNameText(current.name)
-    }
-    if (ts.isObjectLiteralExpression(current) || ts.isArrayLiteralExpression(current)) {
-      current = current.parent
-      continue
-    }
-    return undefined
-  }
-  return undefined
-}
-
-function hasAncestorObjectPropertyName(node, names) {
-  let current = node.parent
-  while (current) {
-    if (
-      (ts.isPropertyAssignment(current) || ts.isShorthandPropertyAssignment(current)) &&
-      names.has(propertyNameText(current.name) ?? '')
-    ) {
-      return true
-    }
-    current = current.parent
-  }
-  return false
-}
-
 function nearestAncestorObjectPropertyName(node) {
   let current = node.parent
   while (current) {
@@ -331,7 +277,7 @@ function isInsideNonCopyJsxElement(node) {
   return Boolean(element && NON_COPY_JSX_ELEMENTS.has(element.openingElement.tagName.getText()))
 }
 
-function classifyStringNode(node) {
+function classifyStringNode(node, includeNativeDialogFields = false) {
   if (
     hasAncestorObjectPropertyName(node, CLASS_PROPERTY_NAMES) ||
     isInsideNonCopyJsxElement(node)
@@ -369,12 +315,15 @@ function classifyStringNode(node) {
   }
 
   const objectPropertyName = nearestObjectPropertyName(node)
-  if (objectPropertyName && !USER_VISIBLE_OBJECT_KEYS.has(objectPropertyName)) {
+  if (objectPropertyName && !isVisibleObjectKey(objectPropertyName, includeNativeDialogFields)) {
     return undefined
   }
 
   const ancestorObjectPropertyName = nearestAncestorObjectPropertyName(node)
-  if (ancestorObjectPropertyName && !USER_VISIBLE_OBJECT_KEYS.has(ancestorObjectPropertyName)) {
+  if (
+    ancestorObjectPropertyName &&
+    !isVisibleObjectKey(ancestorObjectPropertyName, includeNativeDialogFields)
+  ) {
     return undefined
   }
 
@@ -407,7 +356,12 @@ function areaForFile(relativePath) {
   return `renderer/${parts[0] ?? 'root'}`
 }
 
-export function collectLocalizationCandidates(filePath, sourceText, root = process.cwd()) {
+export function collectLocalizationCandidates(
+  filePath,
+  sourceText,
+  root = process.cwd(),
+  options = {}
+) {
   const sourceKind =
     filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   const sourceFile = ts.createSourceFile(
@@ -423,6 +377,9 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
   function pushReport(node, kind, text, dynamic = false) {
     const value = compactText(text)
     if (!hasHumanLanguageText(value) || isInsideLocalizationCall(node)) {
+      return
+    }
+    if (kind.startsWith('catalog-data:') && options.catalogEnglish?.has(value)) {
       return
     }
     const position = lineAndColumn(sourceFile, node)
@@ -445,12 +402,23 @@ export function collectLocalizationCandidates(filePath, sourceText, root = proce
       return
     }
 
+    // A quoted key ('line': …) names the property; only its value can be copy.
+    if (node.parent && ts.isPropertyAssignment(node.parent) && node.parent.name === node) {
+      return
+    }
+
     if (
       ts.isStringLiteralLike(node) ||
       ts.isNoSubstitutionTemplateLiteral(node) ||
       ts.isTemplateExpression(node)
     ) {
-      const kind = classifyStringNode(node)
+      const kind =
+        catalogDataKind(relativePath, node) ??
+        classifyStringNode(node, options.includeNativeDialogFields) ??
+        (isErrorMessage(relativePath, node) &&
+        stringParts(node).some(({ text }) => / \S/.test(text))
+          ? 'error-message'
+          : undefined)
       if (kind) {
         for (const part of stringParts(node)) {
           pushReport(node, kind, part.text, part.dynamic)
@@ -521,6 +489,7 @@ function parseArgs(argv) {
     allowlistPath: path.join('config', 'localization-coverage-allowlist.json'),
     check: false,
     format: 'summary',
+    includeNativeDialogFields: false,
     outputPath: null,
     sourceRoots: []
   }
@@ -531,6 +500,8 @@ function parseArgs(argv) {
       options.format = 'json'
     } else if (arg === '--markdown') {
       options.format = 'markdown'
+    } else if (arg === '--native-dialog-fields') {
+      options.includeNativeDialogFields = true
     } else if (arg === '--check') {
       options.check = true
     } else if (arg === '--allowlist') {
@@ -548,7 +519,7 @@ function parseArgs(argv) {
     }
   }
   if (options.sourceRoots.length === 0) {
-    options.sourceRoots.push(path.join('src', 'renderer', 'src'))
+    options.sourceRoots.push(...DEFAULT_SOURCE_ROOTS)
   }
 
   return options
@@ -578,7 +549,11 @@ async function readAllowlist(root, allowlistPath) {
   return JSON.parse(raw)
 }
 
-function findNewCandidates(reports, allowlist) {
+/** An entry with only a path and a reason allowlists a whole file (agent- or CLI-facing text). */
+export function findNewCandidates(reports, allowlist) {
+  const allowedFiles = new Set(
+    allowlist.filter((entry) => entry.kind === undefined).map((entry) => entry.filePath)
+  )
   const allowedCounts = new Map(
     allowlist.map((entry) => [
       JSON.stringify({
@@ -594,6 +569,9 @@ function findNewCandidates(reports, allowlist) {
   const newCandidates = []
 
   for (const report of reports) {
+    if (allowedFiles.has(report.filePath)) {
+      continue
+    }
     const signature = candidateSignature(report)
     const seenCount = seenCounts.get(signature) ?? 0
     const allowedCount = allowedCounts.get(signature) ?? 0
@@ -613,10 +591,13 @@ export async function main(root = process.cwd(), argv = process.argv.slice(2)) {
     files.push(...(await collectSourceFiles(root, path.resolve(root, sourceRoot))))
   }
   const reports = []
+  const catalogEnglish = await readCatalogEnglish(root)
 
   for (const filePath of files) {
     const sourceText = await fs.readFile(filePath, 'utf8')
-    reports.push(...collectLocalizationCandidates(filePath, sourceText, root))
+    reports.push(
+      ...collectLocalizationCandidates(filePath, sourceText, root, { ...options, catalogEnglish })
+    )
   }
 
   if (options.check) {

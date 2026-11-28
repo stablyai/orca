@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { connect } from 'node:net'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { ensurePrivateDir } from '../endpoint/publication/daemon-private-file-modes'
 import { scheduleTerminalHistoryPermissionRepair } from '../history/storage/terminal-history-permission-repair'
 import { getDaemonLogFilePath } from '../../observability/logs-directory'
@@ -10,7 +10,7 @@ import { DaemonClient } from '../transport/client/daemon-client'
 import { daemonRecoveryProbeTimeoutMs } from './daemon-recovery-budget'
 import { remainingDaemonRequestTimeoutMs } from './daemon-request-deadline'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
-import type { ListSessionsResult } from '../protocol/daemon-rpc-contract'
+import { countLiveDaemonSessions, type ListSessionsResult } from '../protocol/daemon-rpc-contract'
 
 export function getDaemonRuntimeDir(): string {
   const dir = daemonRuntimeDirFor(getAppEnvironment().getPath('userData'))
@@ -110,7 +110,7 @@ export async function getAliveDaemonSessionCount(
       undefined,
       remainingDaemonRequestTimeoutMs(probeDeadlineMs)
     )
-    return result.sessions.filter((session) => session.isAlive).length
+    return countLiveDaemonSessions(result)
   } catch {
     return null
   } finally {

@@ -1,25 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
   DocPreviewFileFailure,
   DocPreviewFileFailureReason
-} from '../../../../../shared/doc-preview-scheme'
+} from '../../../../../shared/document-preview/doc-preview-scheme'
 import type { HtmlDocPreviewProps } from './html-doc-preview-props'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
+} from '@/lib/browser/history/browser-page-conversion-history'
 import { BrowserGuestAnnotateOverlays } from '@/components/browser-pane/annotate/browser-guest-annotate-overlays'
 import { attachDocPreviewWebview } from './doc-preview-webview-attach'
+import { setBrowserGuestVisible } from '../host-guest/browser-guest-activity'
 import {
   buildDocPreviewGrantRequest,
   ensureDocPreviewGrant,
   releaseDocPreviewGrant,
   type DocPreviewGrantHandle
-} from '@/lib/doc-preview-grants'
-import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
+} from '@/lib/browser/documents/doc-preview-grants'
+import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
 import {
   DocPreviewDirectoryAccessBanner,
@@ -32,9 +34,9 @@ import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
@@ -54,11 +56,17 @@ export function HtmlDocPreview({
   convertedFrom = null,
   convertedTo = null
 }: HtmlDocPreviewProps): React.JSX.Element {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  const isActiveRef = useRef(isActive)
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
   const [downloadBlocked, setDownloadBlocked] = useState(false)
@@ -122,13 +130,16 @@ export function HtmlDocPreview({
     browserOverlayViewport,
     handleAnnotationViewportMessage,
     resetBrowserOverlayViewport,
-    elementTools
+    elementTools,
+    toolSwitch
   } = useDocPreviewGuestTools({
+    documentGeneration,
     previewId,
     worktreeId,
     grantId,
     webviewRef,
     containerRef,
+    isActive,
     toolsReady: state === 'ready' && !isUnavailable
   })
   const previewDocument = useMemo(
@@ -142,6 +153,7 @@ export function HtmlDocPreview({
     let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
+      setDocumentGeneration((generation) => generation + 1)
       resetBrowserOverlayViewport()
       loadFailed = false
       setFailureReason(null)
@@ -244,6 +256,7 @@ export function HtmlDocPreview({
         detach = attached.detach
         reloadRef.current = attached.reload
         webviewRef.current = attached.webview
+        setBrowserGuestVisible(previewId, isActiveRef.current)
         // Main binds the grant on first commit; tools need the attached guest pointed at it.
         setGrant(handle)
       })
@@ -277,6 +290,7 @@ export function HtmlDocPreview({
   ])
 
   useEffect(() => {
+    setBrowserGuestVisible(previewId, isActive)
     // Eviction removes the guest, not the retained pane; only the selected preview restores it.
     if (isActive && webviewRef.current && !webviewRef.current.isConnected) {
       setRemintCount((count) => count + 1)
@@ -312,7 +326,7 @@ export function HtmlDocPreview({
     reloadRef.current?.()
   }, [failureReason, handleHardReload, state])
 
-  const notices = docPreviewNotices(isUnavailable, downloadBlocked, assetFailures)
+  const notices = docPreviewNotices(isUnavailable, downloadBlocked, assetFailures, t)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-editor-surface">
@@ -336,7 +350,7 @@ export function HtmlDocPreview({
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
         elementTools={elementTools}
         markupActive={markup.isActive}
-        onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
+        onToggleMarkup={() => toolSwitch.toggleTool('draw')}
         // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
         markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
         shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
@@ -368,9 +382,13 @@ export function HtmlDocPreview({
           annotationSend={annotationSend}
           grabAnnotations={grabAnnotations}
           containerRef={containerRef}
-          webviewRef={webviewRef}
+          guestSurfaceRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
+          currentUrl={history.currentUrl}
+          toolSwitch={toolSwitch}
+          canPickElements={state === 'ready' && !isUnavailable}
+          showPaletteKeyHints={true}
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">
@@ -381,13 +399,13 @@ export function HtmlDocPreview({
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-editor-surface px-6 text-center">
             <AlertCircle className="size-6 text-muted-foreground" />
             <p className="text-sm font-medium">
-              {translate(
+              {t(
                 'auto.components.editor.HtmlDocPreview.previewUnavailableTitle',
                 'Preview unavailable'
               )}
             </p>
             <p className="max-w-sm text-xs text-muted-foreground">
-              {docPreviewFailureDetail(failureReason)}
+              {docPreviewFailureDetail(failureReason, t)}
             </p>
           </div>
         ) : null}

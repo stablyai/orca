@@ -1,36 +1,37 @@
-import { githubCandidateOwner } from '@/store/github/source-collections'
-import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
+import { githubCandidateOwner } from '@/store/github/sources/source-preference-ownership'
+import { getTaskPageRepoSourceContext } from '@/lib/work-items/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,
   buildGitLabProviderIdentity
-} from '@/lib/task-repo-source-context'
+} from '@/lib/work-items/task-repo-source-context'
 import type {
   GitLabTaskFilter,
   GitLabIssueFilter
 } from '@/components/task-page/task-page-localized-options'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TaskPageRepoCacheRowInput } from './task-page-cache-selectors'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
+} from '../../../../shared/workspace/naming/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import {
   type TaskSourceContext,
   getTaskSourceCacheScope
-} from '../../../../shared/task-source-context'
-import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
+} from '../../../../shared/work-items/task-source-context'
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
 import {
   getAccountBackedTaskSourceSummary,
   type TaskSourceContextSummary,
   type TaskSourceHostAvailability
-} from '../task-source-context-summary'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
-import { cn } from '@/lib/utils'
+} from './source-selection/task-source-context-summary'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
+import { cn } from '@/lib/class-names'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
+import type { Translate } from '@/i18n/use-translate'
 export function isGitLabMRFilter(
   value: GitLabTaskFilter | GitLabIssueFilter
 ): value is GitLabTaskFilter {
@@ -81,6 +82,22 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
     )?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
+/** The GitHub fan-out's repo arguments; a repo on a host known unreachable is marked, not dialled. */
+export function getTaskPageGitHubRepoArgs(
+  repos: readonly Repo[],
+  unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>
+) {
+  return repos.map((repo) => {
+    const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
+    return {
+      repoId: repo.id,
+      path: repo.path,
+      executionHostId: repo.executionHostId,
+      sourceContext,
+      hostUnreachable: Boolean(sourceContext && unreachableHostIds.has(sourceContext.hostId))
+    }
+  })
+}
 export function getTaskSourceHostAvailabilityForHost(
   host: ExecutionHostRegistryEntry | null | undefined,
   hostId: TaskSourceContext['hostId']
@@ -112,20 +129,27 @@ export function getTaskSourceHostAvailabilityForHost(
   }
 }
 /** Projects boards have no source row: name the shared row-less host, not the selected repos. */
-export function getGitHubProjectSourceSummary(args: {
-  providerLabel: string
-  hostId: TaskSourceContext['hostId']
-  host: ExecutionHostRegistryEntry | null | undefined
-  hostLabelById: ReadonlyMap<string, string>
-}): TaskSourceContextSummary {
+export function getGitHubProjectSourceSummary(
+  args: {
+    providerLabel: string
+    hostId: TaskSourceContext['hostId']
+    host: ExecutionHostRegistryEntry | null | undefined
+    hostLabelById: ReadonlyMap<string, string>
+  },
+  t?: Translate
+): TaskSourceContextSummary {
   const availability = getTaskSourceHostAvailabilityForHost(args.host, args.hostId)
-  return getAccountBackedTaskSourceSummary(args.providerLabel, {
-    accountLabel: null,
-    accountHostId: args.hostId,
-    hostLabelById: args.hostLabelById,
-    // Why: boards need no task-source capability, so only host health applies.
-    hostAvailability: availability && !availability.reason ? [availability] : []
-  })
+  return getAccountBackedTaskSourceSummary(
+    args.providerLabel,
+    {
+      accountLabel: null,
+      accountHostId: args.hostId,
+      hostLabelById: args.hostLabelById,
+      // Why: boards need no task-source capability, so only host health applies.
+      hostAvailability: availability && !availability.reason ? [availability] : []
+    },
+    t
+  )
 }
 export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput {
   const sourceContext = getTaskPageRepoSourceContext(repo, 'github')
@@ -140,20 +164,20 @@ export function getTaskPageRepoCacheInput(repo: Repo): TaskPageRepoCacheRowInput
 // Why: opaque sticky headers and a padding-gap cover prevent vertical and horizontal bleed.
 export const GITHUB_TASK_STICKY_ID_HEADER_CLASS = cn(
   // Why: full-height flex keeps the sticky fill from shrinking around its label.
-  'sticky left-3 z-30 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  'sticky left-(--rail-page-gutter) z-30 flex items-center before:absolute before:left-[calc(-1*var(--rail-page-gutter))] before:top-0 before:bottom-0 before:w-(--rail-page-gutter) before:bg-inherit',
   GITHUB_TASK_HEADER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_TITLE_HEADER_CLASS = cn(
-  'sticky left-[92px] z-30 flex items-center border-r border-border/40 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  'sticky left-[calc(var(--rail-page-gutter)+80px)] z-30 flex items-center border-r border-border/40 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
   GITHUB_TASK_HEADER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_ID_CELL_CLASS = cn(
-  'sticky left-3 z-20 flex items-center before:absolute before:-left-3 before:top-0 before:bottom-0 before:w-3 before:bg-inherit',
+  'sticky left-(--rail-page-gutter) z-20 flex items-center before:absolute before:left-[calc(-1*var(--rail-page-gutter))] before:top-0 before:bottom-0 before:w-(--rail-page-gutter) before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )
 export const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
-  'sticky left-[92px] z-20 flex min-w-0 flex-col justify-center border-r border-border/40 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
+  'sticky left-[calc(var(--rail-page-gutter)+80px)] z-20 flex min-w-0 flex-col justify-center border-r border-border/40 pr-2 before:absolute before:-left-2 before:top-0 before:bottom-0 before:w-2 before:bg-inherit',
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )

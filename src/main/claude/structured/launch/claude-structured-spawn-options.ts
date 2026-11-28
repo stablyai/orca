@@ -1,14 +1,15 @@
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 import type {
   ClaudeStructuredLaunch,
   ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { claudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import {
   claudeEffortLevel,
   restoredClaudeStructuredSessionOptions
 } from './claude-structured-options'
-import type { ClaudeCliFlagFact } from '../../claude-cli-flag-support'
+import type { ClaudeCliFlagFact } from '../../cli-capabilities/claude-cli-flag-support'
 
 /** Saved choices replace configured flags so the CLI receives each flag once. */
 function withoutConfiguredFlag(
@@ -27,6 +28,8 @@ export type ClaudeStructuredSpawnOptions = {
   options: Map<string, string>
   /** Saved Fast must be applied before input when launch settings cannot carry it. */
   fastModeAtStart: boolean
+  /** The chat was saved in Plan; a kept agent may still be in it. */
+  savedPlan: boolean
 } & Partial<Pick<ClaudeSession, 'cliFlag' | 'flagSettingsControl'>>
 
 /** Pass SDK-valid saved choices through; let the installed CLI reject unsupported values. */
@@ -62,14 +65,21 @@ export function claudeStructuredSpawnOptions(input: {
         !Object.hasOwn(sdkOptions.extraArgs ?? {}, 'settings')
       ) {
         options.set('fastMode', fastMode)
-        sdkOptions.settings = { fastMode: decoded }
+        // Laid over the launch's own overlay: a tidy-up's turns every configured hook off there.
+        const overlay = typeof sdkOptions.settings === 'object' ? sdkOptions.settings : {}
+        sdkOptions.settings = { ...overlay, fastMode: decoded }
       } else if (input.flagSettingsControl !== 'unsupported') {
         options.set('fastMode', fastMode)
         fastModeAtStart = true
       }
     }
   }
-  return { sdkOptions, options, fastModeAtStart }
+  return {
+    sdkOptions,
+    options,
+    fastModeAtStart,
+    savedPlan: input.saved?.interactionMode === 'plan'
+  }
 }
 
 /** Orca passes this flag only for a Full access chat; the agent's own arguments cannot carry it. */
@@ -85,9 +95,11 @@ export function adoptClaudeStructuredSpawnOptions(
     | 'translator'
     | 'launchIntent'
     | 'fastModeAtStart'
+    | 'savedPlan'
     | 'appliedInputOptions'
     | 'cliFlag'
     | 'flagSettingsControl'
+    | 'promptSuggestionPause'
   >,
   spawn: ClaudeStructuredSpawnOptions
 ): void {
@@ -101,8 +113,12 @@ export function adoptClaudeStructuredSpawnOptions(
       : permissionMode
   }
   session.fastModeAtStart = spawn.fastModeAtStart
+  session.savedPlan = spawn.savedPlan
   session.cliFlag = spawn.cliFlag
   session.flagSettingsControl = spawn.flagSettingsControl
+  session.promptSuggestionPause = spawn.sdkOptions.promptSuggestions
+    ? claudePromptSuggestionPause()
+    : undefined
   const fastMode = spawn.options.get('fastMode')
   if (fastMode !== undefined && !spawn.fastModeAtStart) {
     session.appliedInputOptions.set('fastMode', fastMode)

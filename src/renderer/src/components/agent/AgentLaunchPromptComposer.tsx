@@ -1,21 +1,19 @@
 import { useMemo, type Ref } from 'react'
 import { useAppStore } from '@/store'
-import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
-import { translate } from '@/i18n/i18n'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { formatNativeChatFileReference } from '../../../../shared/native-chat/input/composer/agent-image-paste'
+import { useTranslate } from '@/i18n/use-translate'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { NativeChatComposer } from '../native-chat/composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../native-chat/composer/submit/native-chat-structured-composer-transport'
+import type { NativeChatComposerNotice } from '../native-chat/composer/controls/native-chat-composer-notice'
+import { useNativeChatComposerError } from '../native-chat/composer/controls/use-native-chat-composer-notice'
+import { nativeChatLaunchPromptDraftScopeKey } from '../native-chat/drafts/native-chat-launch-draft-source'
 import {
-  NativeChatComposer,
-  type NativeChatComposerHandle
-} from '../native-chat/NativeChatComposer'
-import type { NativeChatStructuredComposerTransport } from '../native-chat/native-chat-composer-types'
-import type { NativeChatComposerNotice } from '../native-chat/native-chat-composer-notice'
-import { useNativeChatComposerError } from '../native-chat/use-native-chat-composer-notice'
-import {
-  nativeChatLaunchPromptDraftScopeKey,
   readNativeChatComposerDraft,
   clearNativeChatComposerDraftIfUnchanged
-} from '../native-chat/native-chat-composer-draft-store'
-import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
+} from '../native-chat/drafts/native-chat-composer-draft-store'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
@@ -54,6 +52,7 @@ export function AgentLaunchPromptComposer({
   disabled?: boolean
   onLaunch: (prompt: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const scopeKey = agentLaunchPromptScopeKey(entry)
   const { worktreeId } = entry
   const runtimeEnvironmentId = useAppStore((state) =>
@@ -104,16 +103,10 @@ export function AgentLaunchPromptComposer({
         }
       },
       placeholder: getNativeChatAgentProfile(entry.agent)
-        ? translate(
-            'agentPicker.promptPlaceholder',
-            'Add a prompt (optional): / for skills, @ for files'
-          )
-        : translate(
-            'agentPicker.promptPlaceholderFilesOnly',
-            'Add a prompt (optional): @ for files'
-          )
+        ? t('agentPicker.promptPlaceholder', 'Add a prompt (optional): / for skills, @ for files')
+        : t('agentPicker.promptPlaceholderFilesOnly', 'Add a prompt (optional): @ for files')
     }),
-    [entry.agent, onLaunch, scopeKey]
+    [entry.agent, onLaunch, scopeKey, t]
   )
   return (
     <NativeChatComposer

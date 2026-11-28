@@ -1,12 +1,13 @@
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import { getPRInlineCommentPlacement } from '../../../../../shared/github/pr-inline-comment-placement'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import { getPRInlineCommentPlacement } from '../../../../../shared/github/comments/pr-inline-comment-placement'
 
 export function buildInlineReviewComments(
   comments: PRComment[],
   repoId: string,
-  prNumber: number
+  prNumber: number,
+  intlLocale?: string
 ): DecoratedDiffComment[] {
   return comments.flatMap((comment): DecoratedDiffComment[] => {
     const placement = getPRInlineCommentPlacement(comment)
@@ -27,7 +28,7 @@ export function buildInlineReviewComments(
         side: 'modified',
         author: comment.author,
         authorAvatarUrl: comment.authorAvatarUrl,
-        createdAtLabel: formatRelativeTime(comment.createdAt),
+        createdAtLabel: formatRelativeTime(comment.createdAt, intlLocale),
         url: comment.url,
         canDelete: false,
         canEdit: false

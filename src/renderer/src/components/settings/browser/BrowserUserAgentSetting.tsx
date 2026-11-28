@@ -2,34 +2,36 @@ import { useEffect, useState } from 'react'
 import type {
   BrowserIdentityModeStatus,
   BrowserUserAgentMode
-} from '../../../../../shared/browser-user-agent-mode'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
-import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../../shared/browser/identity/browser-user-agent-mode'
+import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
+import { getBrowserUserAgentDescription } from './browser-user-agent-search'
 
-type BrowserUserAgentSettingProps = {
-  hostId: ExecutionHostId
-}
-
-export function BrowserUserAgentSetting({
-  hostId
-}: BrowserUserAgentSettingProps): React.JSX.Element {
+export function BrowserUserAgentSetting(): React.JSX.Element {
+  const t = useTranslate()
   const [status, setStatus] = useState<BrowserIdentityModeStatus | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const title = translate('settings.browser.userAgent.title', 'Browser identity')
-  const description = translate(
-    'settings.browser.userAgent.description',
-    'Choose the user agent for every browser profile and page. Changes take effect after a restart.'
-  )
-  const isLocal = hostId === LOCAL_EXECUTION_HOST_ID
+  const title = t('settings.browser.userAgent.title', 'Browser identity')
+  // This desktop's identity drives its local, SSH and This device pages whichever host is focused.
+  const hostsPages = !isWebClientLocation()
+  const hasServers = useAppStore((s) => s.runtimeEnvironments.length > 0)
+  const description =
+    hostsPages && hasServers
+      ? `${getBrowserUserAgentDescription(t)} ${t(
+          'settings.browser.userAgent.serverPagesNote',
+          "Server (streamed) pages use that server's identity; set it there with orca browser identity set."
+        )}`
+      : getBrowserUserAgentDescription(t)
 
   useEffect(() => {
     setStatus(null)
     setError(null)
-    if (!isLocal) {
+    if (!hostsPages) {
       return
     }
     let disposed = false
@@ -48,7 +50,7 @@ export function BrowserUserAgentSetting({
     return () => {
       disposed = true
     }
-  }, [isLocal])
+  }, [hostsPages])
 
   const setMode = (mode: BrowserUserAgentMode): void => {
     setSaving(true)
@@ -57,9 +59,7 @@ export function BrowserUserAgentSetting({
       .identitySet(mode)
       .then((result) => {
         if (!result) {
-          setError(
-            translate('settings.browser.userAgent.unavailable', 'Browser identity is unavailable.')
-          )
+          setError(t('settings.browser.userAgent.unavailable', 'Browser identity is unavailable.'))
         } else if (!result.ok) {
           setError(result.error.message)
         } else {
@@ -71,10 +71,10 @@ export function BrowserUserAgentSetting({
   }
 
   let control: React.JSX.Element
-  if (!isLocal) {
+  if (!hostsPages) {
     control = (
       <span className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'settings.browser.userAgent.remoteUnsupported',
           'Manage browser identity on the remote host with the Orca CLI.'
         )}
@@ -83,7 +83,7 @@ export function BrowserUserAgentSetting({
   } else if (!status) {
     control = (
       <span className="text-xs text-muted-foreground">
-        {error ?? translate('settings.browser.userAgent.loading', 'Loading…')}
+        {error ?? t('settings.browser.userAgent.loading', 'Loading…')}
       </span>
     )
   } else if (status.identity.configuredMode === null) {
@@ -91,13 +91,13 @@ export function BrowserUserAgentSetting({
     control = (
       <div className="space-y-1 text-right">
         <div className="text-xs text-destructive">
-          {translate(
+          {t(
             'settings.browser.userAgent.resetRequired',
             'Identity data must be reset explicitly before it can be changed.'
           )}
         </div>
         <div className="text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'settings.browser.userAgent.resetRequiredCommand',
             'Reset it from the command line: orca browser identity set --mode <mode> --reset'
           )}
@@ -116,8 +116,8 @@ export function BrowserUserAgentSetting({
             {
               value: 'clean',
               disabled: saving,
-              label: translate('settings.browser.userAgent.optionClean', 'Cleaned'),
-              tooltip: translate(
+              label: t('settings.browser.userAgent.optionClean', 'Cleaned'),
+              tooltip: t(
                 'settings.browser.userAgent.optionCleanTooltip',
                 'Removes Orca and Electron tokens to match imported Chrome sessions.'
               )
@@ -125,8 +125,8 @@ export function BrowserUserAgentSetting({
             {
               value: 'native',
               disabled: saving,
-              label: translate('settings.browser.userAgent.optionNative', 'Native'),
-              tooltip: translate(
+              label: t('settings.browser.userAgent.optionNative', 'Native'),
+              tooltip: t(
                 'settings.browser.userAgent.optionNativeTooltip',
                 "Keeps Electron's built-in identity for sites that reject the cleaned identity."
               )
@@ -135,9 +135,10 @@ export function BrowserUserAgentSetting({
         />
         {status.identity.restartRequired ? (
           <div className="text-[11px] text-muted-foreground">
-            {translate('settings.browser.userAgent.restartRequired', 'Restart required')}
+            {t('settings.browser.userAgent.restartRequired', 'Restart required')}
           </div>
         ) : null}
+
         {error ? <div className="text-[11px] text-destructive">{error}</div> : null}
       </div>
     )

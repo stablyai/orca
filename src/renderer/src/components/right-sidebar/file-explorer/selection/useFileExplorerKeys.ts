@@ -2,12 +2,12 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { InlineInput } from '../mutations/file-explorer-inline-input-row'
 import type { TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
-import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
+import type { LocalPathOpenOwner } from '@/lib/files/os-open/local-path-open-guard'
 import {
   fileExplorerHasRedo,
   fileExplorerHasUndo,
@@ -18,10 +18,11 @@ import {
   applyFileExplorerNavigation,
   type SelectionMode
 } from './file-explorer-keyboard-navigation'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import { translate } from '@/i18n/i18n'
-import { isEditableTarget } from '@/lib/editable-target'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { tryHandleFileExplorerDotfilesShortcut } from './file-explorer-dotfiles-shortcut'
 
 export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): boolean {
   return (
@@ -152,9 +153,21 @@ export function useFileExplorerKeys(opts: {
         return
       }
 
-      // Undo owns the whole shell, including Radix’s scrollbar sibling outside the viewport.
+      // Undo and dotfiles toggle own the whole shell, including Radix’s scrollbar sibling outside the viewport.
       const inExplorer = focusInExplorer()
       const platform = getShortcutPlatform()
+      if (
+        inExplorer &&
+        tryHandleFileExplorerDotfilesShortcut({
+          event: e,
+          platform,
+          keybindings,
+          activeWorktreeId: activeWorktreeIdRef.current,
+          containerRef: opts.containerRef
+        })
+      ) {
+        return
+      }
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()

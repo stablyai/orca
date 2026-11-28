@@ -1,6 +1,11 @@
 import { ipcMain } from 'electron'
-import { createProject, getProject, listProjects } from '../../linear/linear-project-queries'
-import { listProjectIssues } from '../../linear/linear-project-issue-queries'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
+import {
+  createProject,
+  getProject,
+  listProjects
+} from '../../linear/projects/linear-project-queries'
+import { listProjectIssues } from '../../linear/projects/linear-project-issue-queries'
 import {
   normalizeConcreteWorkspaceId,
   normalizeIdList,
@@ -11,8 +16,8 @@ import {
 import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-limits'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
-export function registerLinearProjectHandlers(): void {
-  ipcMain.handle(
+export function registerLinearProjectHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'linear:listProjects',
     async (
       _event,
@@ -33,7 +38,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:createProject',
     async (
       _event,
@@ -99,7 +104,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:getProject',
     async (_event, args: { id: string; workspaceId?: string; force?: boolean }) => {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
@@ -113,7 +118,7 @@ export function registerLinearProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'linear:listProjectIssues',
     async (
       _event,

@@ -4,17 +4,22 @@ import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedFailureReason,
   BrowserCertificateProceedResult,
   BrowserLoadError
-} from '../../../../../shared/browser-workspace-types'
-import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import {
+  browserCertificatePresentationLoadError,
+  browserCertificateProceedFailureKind,
+  matchBrowserCertificateFailure
+} from '../../../../../shared/browser/certificate-trust/browser-certificate-failure-match'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute
-} from '../../../../../shared/browser-load-failure'
+} from '../../../../../shared/browser/navigation/browser-load-failure'
 import {
   formatLoadFailureDescription,
   formatLoadFailureTitle,
@@ -51,61 +56,30 @@ type CertificateProceedAttempt = {
   reason?: BrowserCertificateProceedFailureReason | 'request-failed'
 }
 
-function getMatchingCertificateFailure(args: {
-  loadError: BrowserLoadError
-  certificateFailure?: BrowserCertificateFailure | null
-  expectedBrowserPageId?: string | null
-  canProceed: boolean
-}): BrowserCertificateFailure | null {
-  const { loadError, certificateFailure, expectedBrowserPageId, canProceed } = args
-  const errorMatchesChallenge = Boolean(
-    certificateFailure &&
-    (loadError.code === -1 ||
-      (loadError.code === certificateFailure.errorCode &&
-        normalizeCertificateError(certificateFailure.error) ===
-          normalizeCertificateError(loadError.description)))
-  )
-  if (
-    !canProceed ||
-    !certificateFailure?.canProceed ||
-    !expectedBrowserPageId ||
-    certificateFailure.browserPageId !== expectedBrowserPageId ||
-    certificateFailure.errorCode !== -202 ||
-    !errorMatchesChallenge
-  ) {
-    return null
-  }
-  try {
-    return new URL(loadError.validatedUrl).origin === certificateFailure.origin
-      ? certificateFailure
-      : null
-  } catch {
-    return null
-  }
-}
-
 function formatCertificateProceedFailure(
-  reason: BrowserCertificateProceedFailureReason | 'request-failed'
+  reason: BrowserCertificateProceedFailureReason | 'request-failed',
+  t: Translate = translate
 ): string {
-  if (reason === 'expired') {
-    return translate(
+  const kind = browserCertificateProceedFailureKind(reason)
+  if (kind === 'expired') {
+    return t(
       'browser.loadFailure.certificateChallengeExpired',
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
-  if (reason === 'changed' || reason === 'navigated') {
-    return translate(
+  if (kind === 'changed') {
+    return t(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
-  if (reason === 'request-failed') {
-    return translate(
+  if (kind === 'request-failed') {
+    return t(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'
     )
   }
-  return translate(
+  return t(
     'browser.loadFailure.certificateChallengeUnavailable',
     'This certificate request is no longer available. Retry the page to request a new one.'
   )
@@ -124,29 +98,25 @@ export function BrowserLoadFailureOverlay({
   route = null,
   autoRetry
 }: BrowserLoadFailureOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   const connectingTimerRef = useRef<{
     challengeId: string
     timer: ReturnType<typeof setTimeout>
   } | null>(null)
   const [proceedAttempt, setProceedAttempt] = useState<CertificateProceedAttempt | null>(null)
-  const matchingCertificateFailure = getMatchingCertificateFailure({
+  const matchingCertificateFailure = matchBrowserCertificateFailure({
     loadError,
     certificateFailure,
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
-  // Chromium can replace the diagnostic code with -1 after main captures an exact certificate challenge.
-  const presentationLoadError =
-    matchingCertificateFailure && loadError.code === -1
-      ? {
-          ...loadError,
-          code: matchingCertificateFailure.errorCode ?? loadError.code,
-          description: matchingCertificateFailure.error
-        }
-      : loadError
+  const presentationLoadError = browserCertificatePresentationLoadError(
+    loadError,
+    matchingCertificateFailure
+  )
   const certificateError = isCertificateLoadError(presentationLoadError)
   const failure = describeBrowserLoadFailure(presentationLoadError, route)
-  const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint)
+  const description = formatLoadFailureDescription(presentationLoadError, failure, sshRoutedHint, t)
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
@@ -219,14 +189,14 @@ export function BrowserLoadFailureOverlay({
       disabled={actionsDisabled}
       onClick={() => void onRetry()}
     >
-      {translate('browser.loadFailure.retry', 'Retry')}
+      {t('browser.loadFailure.retry', 'Retry')}
     </Button>
   )
   const certificateActions = (
     <>
       {externalUrl && onOpenExternal ? (
         <Button size="sm" disabled={actionsDisabled} onClick={() => onOpenExternal(externalUrl)}>
-          {translate('browser.loadFailure.openExternally', 'Open Externally')}
+          {t('browser.loadFailure.openExternally', 'Open Externally')}
         </Button>
       ) : null}
       {retryButton}
@@ -241,10 +211,10 @@ export function BrowserLoadFailureOverlay({
           {activeProceedAttempt?.state === 'submitting' && activeProceedAttempt.showConnecting ? (
             <>
               <Loader2 className="animate-spin" />
-              {translate('browser.loadFailure.connecting', 'Connecting…')}
+              {t('browser.loadFailure.connecting', 'Connecting…')}
             </>
           ) : (
-            translate('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
+            t('browser.loadFailure.proceedUnsafe', 'Proceed Anyway (Unsafe)')
           )}
         </Button>
       ) : null}
@@ -256,7 +226,7 @@ export function BrowserLoadFailureOverlay({
         <div className="flex min-h-full items-center justify-center px-8 pt-12 pb-24">
           <div aria-live="polite" className="w-full max-w-lg">
             <h2 className="text-xl font-semibold text-balance text-foreground">
-              {formatLoadFailureTitle(presentationLoadError, failure)}
+              {formatLoadFailureTitle(presentationLoadError, failure, t)}
             </h2>
             {description ? (
               <p className="mt-2 text-sm text-pretty text-muted-foreground">{description}</p>
@@ -266,7 +236,7 @@ export function BrowserLoadFailureOverlay({
             ) : null}
             {activeProceedAttempt?.state === 'failed' && activeProceedAttempt.reason ? (
               <p role="alert" className="mt-3 text-sm text-destructive">
-                {formatCertificateProceedFailure(activeProceedAttempt.reason)}
+                {formatCertificateProceedFailure(activeProceedAttempt.reason, t)}
               </p>
             ) : null}
             <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -282,7 +252,7 @@ export function BrowserLoadFailureOverlay({
                       data-testid="browser-load-failure-recheck-ssh-route"
                       onClick={onRecheckSshRoute}
                     >
-                      {translate('browser.loadFailure.recheckSshRoute', 'Run connection check')}
+                      {t('browser.loadFailure.recheckSshRoute', 'Run connection check')}
                     </Button>
                   ) : null}
                 </>

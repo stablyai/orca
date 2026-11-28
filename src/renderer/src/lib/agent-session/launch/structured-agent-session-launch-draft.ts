@@ -2,19 +2,19 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { findStructuredLaunchTab } from './structured-agent-session-launch-surface'
 import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { moveNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-move'
-import type { NativeChatComposerDraftChange } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { moveNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-move'
+import type { NativeChatComposerDraftChange } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import type { StructuredLaunchState } from './structured-agent-session-launch-state-store'
 
 type DraftDestination = Pick<
   StructuredLaunchState['intent'],
   'sessionId' | 'worktreeId' | 'executionHostId'
->
+> & { params?: { tabId?: string } }
 
 export function moveStructuredAgentLaunchDraft(
   destination: DraftDestination,
@@ -35,6 +35,7 @@ export function moveStructuredAgentLaunchDraft(
           : { at: 'end' }),
         target:
           findStructuredLaunchTab(destination)?.id ??
+          destination.params?.tabId ??
           structuredAgentSessionTabId(destination.sessionId),
         pending: true
       }
@@ -75,7 +76,10 @@ function seedEmptyLaunchDraft(
     undefined,
     {
       at: 'end',
-      target: findStructuredLaunchTab(destination)?.id ?? structuredAgentSessionTabId(sessionId),
+      target:
+        findStructuredLaunchTab(destination)?.id ??
+        destination.params?.tabId ??
+        structuredAgentSessionTabId(sessionId),
       pending: true
     }
   )

@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   PluginMarketplaceHostInstallPreview,
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { translate } from '@/i18n/i18n'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { useTranslate } from '@/i18n/use-translate'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginPreviewCache } from './plugin-preview-cache'
-import { requestPluginInstallCounts } from '@/store/plugin-install-counts'
+import { requestPluginInstallCounts } from '@/store/plugins/installation/plugin-install-counts'
+import { useAppStore } from '@/store/index'
+import {
+  getOrcaCloudTeamCapabilities,
+  ORCA_CLOUD_TEAM_POLICY_FLAGS as flags
+} from '../../../../../shared/orca-profiles/orca-cloud-team-policy'
 
 /** A plugin page's manifest read; a failure means nothing is known, not "nothing needed". */
 export type PluginPagePreview =
@@ -47,6 +53,7 @@ export function usePluginCatalog({
   /** A plugin asked for from outside Settings (a file-type suggestion); opens its page. */
   onOpenRequested?: (pluginKey: string) => void
 }) {
+  const t = useTranslate()
   const [sources, setSources] = useState<PluginMarketplaceHostSourceState[]>([])
   const [listings, setListings] = useState<PluginMarketplaceHostListing[]>([])
   const [loading, setLoading] = useState(true)
@@ -55,14 +62,30 @@ export function usePluginCatalog({
   const mountedRef = useRef(false)
   const requestRef = useRef(0)
   const [previewCache] = useState(createPluginPagePreviewCache)
+  const teamCapabilities = useAppStore((state) =>
+    getOrcaCloudTeamCapabilities(state.orcaProfileAuthStatus)
+  )
+  const catalogPolicy = useMemo(() => {
+    const policy = teamCapabilities?.teamPolicy
+    return JSON.stringify([
+      policy?.internalCatalogs,
+      policy?.internalCatalogAttribution,
+      policy?.requiredPluginRules,
+      policy?.blockedPlugins,
+      teamCapabilities?.flags[flags.plugins],
+      teamCapabilities?.flags[flags.officialPlugins],
+      teamCapabilities?.flags[flags.communityPlugins],
+      teamCapabilities?.flags[flags.allowMemberSources]
+    ])
+  }, [teamCapabilities])
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
     requestPluginInstallCounts()
     try {
       const [nextSources, nextListings] = await Promise.all([
-        window.api.plugins.listMarketplaces(),
-        window.api.plugins.listMarketplacePlugins()
+        window.api.plugins.listMarketplaces({ waitForRefresh: true }),
+        window.api.plugins.listMarketplacePlugins({ waitForRefresh: true })
       ])
       if (mountedRef.current && requestId === requestRef.current) {
         setSources(nextSources)
@@ -96,7 +119,7 @@ export function usePluginCatalog({
       mountedRef.current = false
       requestRef.current += 1
     }
-  }, [loadMarketplaceData])
+  }, [loadMarketplaceData, catalogPolicy])
 
   const refresh = async (): Promise<void> => {
     setRefreshBusy(true)
@@ -109,7 +132,7 @@ export function usePluginCatalog({
         setError(
           marketplaceError(
             cause,
-            translate(
+            t(
               'auto.components.settings.PluginMarketplaceBrowser.refreshFailed',
               "Couldn't refresh catalogs. Try again."
             )

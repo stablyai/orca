@@ -1,8 +1,9 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { gitExecFileAsync } from '../../../git/runner'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGhExecOptions,
   getLocalProjectGitExecOptions,
@@ -15,17 +16,20 @@ import {
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
-} from '../../../github/pr-head-tracking-ref'
-import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
-import { resolvePrStartPointUnlessWslStopped } from '../../../github/pr-start-point-wsl-gate'
-import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
+} from '../../../github/pull-requests/start-points/pr-head-tracking-ref'
+import { resolveGitHubPrStartPoint } from '../../../github/pull-requests/start-points/pr-start-point'
+import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
+import { resolveGitHubReviewHeadRemote } from '../../../github/pull-requests/start-points/review-head-remote'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
-export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
+export function registerReviewBaseHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, runtime } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:resolvePrBase',
     async (
       _event,
@@ -100,7 +104,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:resolveMrBase',
     async (
       _event,

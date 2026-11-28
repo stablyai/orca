@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 const STATUS_RETRY_TIMEOUT_MS = 15_000
 
@@ -11,6 +12,7 @@ export function StatusRetryButton({
 }: {
   onRetry: (signal: AbortSignal) => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [isRetrying, setIsRetrying] = useState(false)
   const [showSpinner, setShowSpinner] = useState(false)
   const retryControllerRef = useRef<AbortController | null>(null)
@@ -39,29 +41,34 @@ export function StatusRetryButton({
     retryControllerRef.current = controller
     const timeout = window.setTimeout(() => controller.abort(), STATUS_RETRY_TIMEOUT_MS)
     setIsRetrying(true)
-    try {
-      await onRetry(controller.signal)
-    } catch (error) {
-      if (!isMountedRef.current) {
-        return
+    await runWithFinally(
+      async () => {
+        try {
+          await onRetry(controller.signal)
+        } catch (error) {
+          if (!isMountedRef.current) {
+            return
+          }
+          // Report retry failures without leaving the warning unusable through an unhandled click rejection.
+          console.warn('[SourceControl] status retry failed', error)
+          toast.error(
+            t(
+              'auto.components.right.sidebar.SourceControl.97e7124eac',
+              'Could not refresh Source Control. Try again.'
+            )
+          )
+        }
+      },
+      () => {
+        window.clearTimeout(timeout)
+        if (retryControllerRef.current === controller) {
+          retryControllerRef.current = null
+        }
+        if (isMountedRef.current) {
+          setIsRetrying(false)
+        }
       }
-      // Report retry failures without leaving the warning unusable through an unhandled click rejection.
-      console.warn('[SourceControl] status retry failed', error)
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.SourceControl.97e7124eac',
-          'Could not refresh Source Control. Try again.'
-        )
-      )
-    } finally {
-      window.clearTimeout(timeout)
-      if (retryControllerRef.current === controller) {
-        retryControllerRef.current = null
-      }
-      if (isMountedRef.current) {
-        setIsRetrying(false)
-      }
-    }
+    )
   }
 
   return (
@@ -73,7 +80,7 @@ export function StatusRetryButton({
       onClick={() => void handleRetry()}
     >
       {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
-      {translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+      {t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
     </Button>
   )
 }

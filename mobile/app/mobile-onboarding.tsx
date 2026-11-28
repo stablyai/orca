@@ -2,8 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Animated, BackHandler, Easing, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { OrcaLogo } from '../src/components/OrcaLogo'
-import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
+import { OrcaLogo } from '../src/components/icons/OrcaLogo'
+import { ensureNotificationPermissions } from '../src/notifications/delivery-policy/notification-permissions'
 import {
   MobileOnboardingPage,
   type MobileOnboardingBusyChoice,
@@ -11,15 +11,15 @@ import {
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { PUSH_CURVE, PUSH_SLIDE_MS } from '../src/navigation/push-motion'
-import { useReducedMotionEnabled } from '../src/platform/use-reduced-motion'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
-import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { useReducedMotionEnabled } from '../src/platform/accessibility/use-reduced-motion'
+import { mobileOnboardingStylesSheet } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { setRemotePushEnabled } from '../src/notifications/push-registration'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
+import { useThemedStyles } from '../src/theme/themed-styles'
 
 export default function MobileOnboardingScreen() {
   const params = useLocalSearchParams<{
@@ -45,7 +45,7 @@ function MobileOnboardingFlow({
   hostId: string | undefined
   rawSteps: string | undefined
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileOnboardingStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])

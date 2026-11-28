@@ -1,12 +1,9 @@
 import { dirname } from 'node:path'
-import {
-  setMigrationUnsupportedPty,
-  setMigrationUnsupportedPtyPersistenceListener
-} from '../../agent-hooks/migration-unsupported-pty-state'
-import { agentHookServer } from '../../agent-hooks/server'
+import { setMigrationUnsupportedPtyPersistenceListener } from '../../agent-hooks/observations/migration-unsupported-pty-state'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { ActiveViewPreference } from '../preferences/active-view-preference'
-import { registerPersistedPaneKeyAlias } from '../restoring-sessions/pane-alias-normalization'
 import { normalizePersistedPaneIdentityState } from '../restoring-sessions/workspace-pane-normalization'
+import { moveChatReadMarksAtLoad } from '../restoring-sessions/chat-read-mark-move-at-load'
 import { nameEmptyPersistedTerminalLayoutRoots } from '../restoring-sessions/empty-terminal-layout-root-repair'
 import { StoreRuntimeState, type StoreRuntimeOptions } from './store-runtime-state'
 import {
@@ -16,36 +13,42 @@ import {
   type StoreDomains,
   type StoreDomainOperations
 } from './store-domain-composition'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
 import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './profile-writing/write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
-} from './legacy-opencode-go-api-key-migration'
-import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
-import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+} from './profile-loading/legacy-opencode-go-api-key-migration'
+import {
+  enqueuePrimaryStateOperation,
+  writeToDiskAsync
+} from './profile-writing/primary-state-writes'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
+import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
+import { registerLoadedPaneIdentity } from './profile-loading/register-loaded-pane-identity'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
   freezeProfileStateWritesAsync,
   type ProfileStateMaintenanceOptions
-} from './profile-state-maintenance'
+} from './profile-writing/profile-state-maintenance'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
   ProfileStateMaintenance
-} from './profile-state-authority'
+} from './profile-writing/profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
+  initializeHomeWorkspace?: boolean
   serializedState?: string
   collectUnboundPaneAlias?: (entry: ProfileStateStartupPaneAlias) => void
   /** Consume the validated startup read without caching a second copy. */
@@ -94,16 +97,21 @@ export class Store {
     this.runtime.flushOrThrow = () => this.flushOrThrow()
     this.runtime.runDurableMutation = (mutate) => this.runDurableMutation(mutate)
     let loaded: PersistedState
+    let profileDocumentExisted = true
     if (options.profileStateAuthority !== undefined) {
       if (initial !== undefined) {
+        profileDocumentExisted =
+          initial.takeParsedState !== undefined
+            ? parsedState !== undefined
+            : initial.serializedState !== undefined
         loaded =
           initial.takeParsedState !== undefined
             ? this.domains.loader.loadParsedFromAuthority(parsedState)
             : this.domains.loader.loadFromAuthority(initial.serializedState)
       } else {
-        loaded = this.domains.loader.loadFromAuthority(
-          options.profileStateAuthority.readSerializedState()
-        )
+        const serializedState = options.profileStateAuthority.readSerializedState()
+        profileDocumentExisted = serializedState !== undefined
+        loaded = this.domains.loader.loadFromAuthority(serializedState)
       }
     } else if (options.serializedState !== undefined) {
       loaded = this.domains.loader.loadSerialized(options.serializedState)
@@ -117,7 +125,14 @@ export class Store {
         collectUnboundPaneAlias: options.collectUnboundPaneAlias
       }
     )
-    this.state = normalized.state
+    const movedReadMarks = moveChatReadMarksAtLoad(normalized.state)
+    let initialState = movedReadMarks
+    // Only a missing desktop profile document receives initial data; empty saved profiles stay empty.
+    if (options.initializeHomeWorkspace && !profileDocumentExisted) {
+      initialState = createInitialHomeWorkspaceState(initialState)
+      this.runtime.loadNeedsSave = true
+    }
+    this.state = initialState
     this.runtime.state = this.state
     this.runtime.activeViewPreference = new ActiveViewPreference(
       this.runtime.dataFile,
@@ -136,20 +151,7 @@ export class Store {
     if (!imported) {
       // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.
       this.domains.orcadMigrationBlobInstalls.installPendingOrcadMigrationReceivedBlobs()
-      for (const entry of initial?.unboundPaneAliases ?? []) {
-        agentHookServer.registerPaneKeyAlias(
-          entry.legacyPaneKey,
-          entry.stablePaneKey,
-          undefined,
-          entry.updatedAt
-        )
-      }
-      for (const entry of normalized.migrationUnsupportedEntries) {
-        setMigrationUnsupportedPty(entry)
-      }
-      for (const entry of normalized.legacyPaneKeyAliasEntries) {
-        registerPersistedPaneKeyAlias(entry)
-      }
+      registerLoadedPaneIdentity(normalized, initial?.unboundPaneAliases ?? [])
       setMigrationUnsupportedPtyPersistenceListener((entries) => {
         this.state.migrationUnsupportedPtyEntries = entries
         scheduleSave(this.domains.scheduling, ['migrationUnsupportedPtyEntries'])
@@ -164,15 +166,17 @@ export class Store {
         adaptedProjectGroups ||
         sweptRepoIds.length > 0
       ) {
-        scheduleSave(this.domains.scheduling)
+        scheduleFullProfileSave(this.domains.scheduling)
+      } else if (movedReadMarks !== normalized.state) {
+        scheduleSave(this.domains.scheduling, ['ui'])
       }
     }
   }
 
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
-  migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): void {
-    if (migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
-      scheduleSave(this.domains.scheduling)
+  async migrateLegacyOpenCodeGoApiKey(target: OpenCodeGoApiKeyTarget): Promise<void> {
+    if (await migrateLegacyOpenCodeGoApiKey(this.runtime.protectedSecrets, target)) {
+      scheduleSave(this.domains.scheduling, ['settings'])
     }
   }
 
@@ -250,7 +254,7 @@ export class Store {
     }
     return enqueuePrimaryStateOperation(this.domains.writes, async () => {
       this.runtime.dirtyProfileStateDomains = null
-      if (!(await writeToDiskAsync(this.domains.writes))) {
+      if (!(await writeToDiskAsync(this.domains.writes, { wholeSessions: true }))) {
         throw new Error('Profile state changed while preparing its export')
       }
       return exportState(authority)

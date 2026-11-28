@@ -1,5 +1,5 @@
-import type { UsageProvider } from '../usage/usage-provider-contract'
-import { scanZcodeUsageDatabasesViaWorker } from '../usage/usage-scan-worker-spawn'
+import type { UsageProvider } from '../usage/provider-lifecycle/usage-provider-contract'
+import { scanZcodeUsageDatabasesViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 import type { ZcodeUsageDailyAggregate, ZcodeUsageSession } from './types'
 
 // v1: the initial projection over `model_usage` rows.

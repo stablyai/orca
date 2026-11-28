@@ -1,3 +1,5 @@
+import { codeFontFamily } from './mobile-code-font'
+
 // Desktop's main.css tokens per scheme; keep mobile on these instead of introducing inline colors.
 
 export type MobileColorScheme = 'light' | 'dark'
@@ -12,12 +14,21 @@ const darkColors = {
   // Sheets sit a step above the screen, their groups a step above the sheet (the desktop's sidebar and secondary).
   sheetSurface: '#171717',
   sheetGroup: '#262626',
+  // A page of grouped rows (Settings): the screen's own black in dark.
+  groupedPage: '#0a0a0a',
   // A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group.
   translucentFill: 'rgba(120, 120, 128, 0.36)',
   // --chat-composer-surface painted over --chat-canvas, and --chat-composer-border.
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
   composerControl: '#262626',
+  // A floating card's hairline edge (the answer card), a step stronger than the composer's.
+  floatingCardBorder: 'rgba(250, 250, 250, 0.16)',
+  // An unfilled choice's edge on a card, 3:1 against it (WCAG 1.4.11), and the faint fill of the picked one.
+  choiceBorder: 'rgba(255, 255, 255, 0.34)',
+  choiceSelectedFill: 'rgba(134, 239, 172, 0.08)',
+  // A small filled pill on a card (a queued row's Steer): light needs more than bgRaised to read on white.
+  cardPillFill: '#262626',
   // A text field's edge, 3:1 on the screen, a sheet and a sheet group (WCAG 1.4.11): desktop's dark --ring.
   inputBorder: '#737373',
   skillToken: '#8ab4f8',
@@ -26,6 +37,10 @@ const darkColors = {
   chatUserSurface: '#262626',
   chatUserBorder: 'rgba(250, 250, 250, 0.06)',
   chatForegroundStrong: '#e3e3e3',
+  // --chat-canvas: the chat's one ground, under its header, tabs, transcript and composer.
+  chatCanvas: '#161616',
+  // A box inside a chat or rendered Markdown: bgPanel would vanish on chatCanvas, so dark lifts it to bgRaised.
+  chatPanel: '#262626',
 
   // --foreground, --muted-foreground, --chat-foreground-faint
   textPrimary: '#fafafa',
@@ -34,6 +49,9 @@ const darkColors = {
 
   // --primary: the filled primary-action surface.
   surfaceBright: '#e5e5e5',
+  // A list screen's floating create (+) button: the accent, as on Home, since a pale disc glares on the dark page.
+  createActionFill: '#3276f2',
+  onCreateActionFill: '#ffffff',
 
   accentBlue: '#3276f2',
   // White text preserves contrast on saturated accent fills.
@@ -42,6 +60,11 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Desktop's --agent-question: something waits on the owner (an item that needs you).
+  agentQuestion: '#f97316',
+  // Desktop's --agent-question-text and bg-agent-question/12: the Needs you tag's words and fill.
+  agentQuestionText: '#fdba74',
+  agentQuestionTint: 'rgba(249, 115, 22, 0.12)',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -52,24 +75,33 @@ const darkColors = {
   statusPurple: '#d8b4fe',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
-  // Desktop's `--diff-*-ground` and `--diff-*-gutter` mixes.
-  diffAddedBg: 'rgba(129, 184, 139, 0.16)',
-  diffDeletedBg: 'rgba(199, 78, 57, 0.18)',
-  diffAddedGutter: 'rgba(129, 184, 139, 0.3)',
-  diffDeletedGutter: 'rgba(199, 78, 57, 0.32)',
+  gitDecorationModified: '#e2c08d',
+  // GitHub's (Primer) diff colours, Kelvin's choice for every phone diff: row ground, line-number cell over it,
+  // the +/− sign, unchanged line numbers, and the blue "unchanged lines" fold band.
+  diffAddedBg: 'rgba(46, 160, 67, 0.15)',
+  diffDeletedBg: 'rgba(248, 81, 73, 0.13)',
+  diffAddedGutter: 'rgba(63, 185, 80, 0.3)',
+  diffDeletedGutter: 'rgba(248, 81, 73, 0.3)',
+  diffAddedSign: '#3fb950',
+  diffDeletedSign: '#f85149',
+  diffLineNumber: '#6e7681',
+  diffFoldBg: 'rgba(56, 139, 253, 0.1)',
+  diffFoldGutter: 'rgba(56, 139, 253, 0.22)',
+  diffFoldText: '#4493f8',
   // Desktop's `--chat-diff-*`: decoration mixed toward foreground for tinted rows.
   chatDiffAdded: '#a5ccac',
   chatDiffRemoved: '#d68273',
 
-  // Monaco's `vs-dark`; function and meta come from VS Code Dark+, which Monaco lacks.
-  syntaxComment: '#608b4e',
-  syntaxKeyword: '#569cd6',
-  syntaxString: '#ce9178',
-  syntaxNumber: '#b5cea8',
-  syntaxType: '#3dc9b0',
-  syntaxFunction: '#dcdcaa',
-  syntaxVariable: '#74b0df',
-  syntaxMeta: '#c586c0',
+  // GitHub's Primer dark syntax palette (prettylights); type is its built-in orange, tag covers keys and tag names.
+  syntaxComment: '#8b949e',
+  syntaxKeyword: '#ff7b72',
+  syntaxString: '#a5d6ff',
+  syntaxNumber: '#79c0ff',
+  syntaxType: '#ffa657',
+  syntaxFunction: '#d2a8ff',
+  syntaxVariable: '#ffa657',
+  syntaxMeta: '#79c0ff',
+  syntaxTag: '#7ee787',
 
   // Terminal WebView background (Tokyonight) — separate from app chrome
   terminalBg: '#1a1b26'
@@ -86,10 +118,16 @@ const lightColors: MobilePalette = {
   // Light inverts it: a grey sheet under white groups, as iOS does.
   sheetSurface: '#f5f5f5',
   sheetGroup: '#ffffff',
+  // Grey under white groups, as iOS does; on white the groups vanish.
+  groupedPage: '#f5f5f5',
   translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
+  floatingCardBorder: 'rgba(10, 10, 10, 0.14)',
+  choiceBorder: 'rgba(0, 0, 0, 0.44)',
+  choiceSelectedFill: 'rgba(20, 118, 56, 0.06)',
+  cardPillFill: 'rgba(120, 120, 128, 0.16)',
   // Desktop's light --ring (#a1a1a1) is under 3:1 on white, so both schemes share the dark one.
   inputBorder: '#737373',
   skillToken: '#1d4ed8',
@@ -97,18 +135,25 @@ const lightColors: MobilePalette = {
   chatUserSurface: '#f5f5f5',
   chatUserBorder: 'rgba(10, 10, 10, 0.07)',
   chatForegroundStrong: '#1e1e1e',
+  chatCanvas: '#ffffff',
+  chatPanel: '#fafafa',
 
   textPrimary: '#0a0a0a',
   textSecondary: '#696969',
   textMuted: '#696969',
 
   surfaceBright: '#171717',
+  createActionFill: '#171717',
+  onCreateActionFill: '#ffffff',
 
   accentBlue: '#225be3',
   onAccent: '#ffffff',
 
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
+  agentQuestion: '#ea580c',
+  agentQuestionText: '#c2410c',
+  agentQuestionTint: 'rgba(234, 88, 12, 0.12)',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
@@ -116,22 +161,30 @@ const lightColors: MobilePalette = {
   statusPurple: '#9333ea',
   gitDecorationAdded: '#587c0c',
   gitDecorationDeleted: '#ad0707',
-  diffAddedBg: 'rgba(88, 124, 12, 0.13)',
-  diffDeletedBg: 'rgba(173, 7, 7, 0.11)',
-  diffAddedGutter: 'rgba(88, 124, 12, 0.26)',
-  diffDeletedGutter: 'rgba(173, 7, 7, 0.22)',
+  gitDecorationModified: '#895503',
+  diffAddedBg: '#dafbe1',
+  diffDeletedBg: '#ffebe9',
+  diffAddedGutter: '#aceebb',
+  diffDeletedGutter: '#ffcecb',
+  diffAddedSign: '#1a7f37',
+  diffDeletedSign: '#cf222e',
+  diffLineNumber: '#6e7781',
+  diffFoldBg: '#ddf4ff',
+  diffFoldGutter: 'rgba(84, 174, 255, 0.4)',
+  diffFoldText: '#0969da',
   chatDiffAdded: '#415a0b',
   chatDiffRemoved: '#7c0808',
 
-  // Monaco's `vs`; function and meta from VS Code Light+.
-  syntaxComment: '#008000',
-  syntaxKeyword: '#0000ff',
-  syntaxString: '#a31515',
-  syntaxNumber: '#098658',
-  syntaxType: '#008080',
-  syntaxFunction: '#795e26',
-  syntaxVariable: '#001188',
-  syntaxMeta: '#af00db',
+  // GitHub's Primer light syntax palette (prettylights).
+  syntaxComment: '#59636e',
+  syntaxKeyword: '#cf222e',
+  syntaxString: '#0a3069',
+  syntaxNumber: '#0550ae',
+  syntaxType: '#953800',
+  syntaxFunction: '#8250df',
+  syntaxVariable: '#953800',
+  syntaxMeta: '#0550ae',
+  syntaxTag: '#116329',
 
   terminalBg: '#1a1b26'
 }
@@ -142,9 +195,6 @@ export function paletteForScheme(scheme: MobileColorScheme): MobilePalette {
   return palettes[scheme]
 }
 
-// Live object rewritten in place on a scheme change; read it at render time, never copy at module scope.
-export const colors: MobilePalette = { ...darkColors }
-
 let currentScheme: MobileColorScheme = 'dark'
 const schemeListeners = new Set<() => void>()
 
@@ -152,12 +202,16 @@ export function getMobileColorScheme(): MobileColorScheme {
   return currentScheme
 }
 
+// For event handlers and effects; render code reads useMobileColors() so React Compiler sees the dependency.
+export function getMobilePalette(): MobilePalette {
+  return palettes[currentScheme]
+}
+
 export function applyMobileColorScheme(scheme: MobileColorScheme): void {
   if (scheme === currentScheme) {
     return
   }
   currentScheme = scheme
-  Object.assign(colors, palettes[scheme])
   for (const listener of schemeListeners) {
     listener()
   }
@@ -171,6 +225,8 @@ export function subscribeMobileColorScheme(listener: () => void): () => void {
 }
 
 export const spacing = {
+  /** Between quiet lines that read as one list (item lines in a chat). */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,
@@ -203,7 +259,7 @@ export const typography = {
   titleSize: 18,
   bodySize: 14,
   metaSize: 12,
-  monoFamily: 'monospace' as const
+  monoFamily: codeFontFamily
 } as const
 
 // One press and one disabled look for every control; fills on press use colors.translucentFill.

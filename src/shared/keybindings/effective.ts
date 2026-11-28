@@ -9,6 +9,7 @@ import {
   DEFINITIONS_BY_ID,
   KEYBINDING_DEFINITIONS,
   getKeybindingPlatform,
+  getLegacySearchBindings,
   isDigitIndexActionId
 } from './definitions'
 import { keybindingConflictIdentities } from './matching-key'
@@ -67,6 +68,34 @@ export function keybindingConflictGroups(definition: KeybindingDefinition): read
   )
 }
 
+// Why: main consumes these before renderer handlers run, but a focused browser guest runs its own chords ahead of the after-browser ones.
+export function keybindingMainProcessConflictGroups(
+  definition: KeybindingDefinition,
+  scopes: Iterable<string>
+): Set<string> {
+  const groups = new Set(keybindingConflictGroups(definition))
+  if (isKeybindingInterceptedByMainProcess(definition)) {
+    for (const scope of scopes) {
+      if (scope !== 'browser' || isKeybindingInterceptedBeforeBrowserChords(definition)) {
+        groups.add(scope)
+      }
+    }
+  }
+  return groups
+}
+
+function bindingIdentitiesOverlap(
+  left: KeybindingDefinition,
+  a: string,
+  right: KeybindingDefinition,
+  b: string,
+  platform: NodeJS.Platform
+): boolean {
+  return keybindingConflictIdentities(left.id, a, platform).some((identity) =>
+    keybindingConflictIdentities(right.id, b, platform).includes(identity)
+  )
+}
+
 export function bindingsOverlap(
   left: KeybindingDefinition,
   a: string,
@@ -77,11 +106,20 @@ export function bindingsOverlap(
   return (
     keybindingConflictGroups(left).some((group) =>
       keybindingConflictGroups(right).includes(group)
-    ) &&
-    keybindingConflictIdentities(left.id, a, platform).some((identity) =>
-      keybindingConflictIdentities(right.id, b, platform).includes(identity)
-    )
+    ) && bindingIdentitiesOverlap(left, a, right, b, platform)
   )
+}
+
+export function isDefaultKeybinding(
+  definition: KeybindingDefinition,
+  binding: string,
+  platform: NodeJS.Platform
+): boolean {
+  // Previous defaults retain intentional sharing when profiles inherit or save them.
+  return [
+    ...getDefaultBindings(definition, platform),
+    ...(getLegacySearchBindings(platform)[definition.id] ?? [])
+  ].some((ownDefault) => bindingsOverlap(definition, binding, definition, ownDefault, platform))
 }
 
 export function getEffectiveKeybindingsForAction(
@@ -115,18 +153,25 @@ export function getEffectiveKeybindingsForDefinition(
   if (cached) {
     return cached
   }
+  // Why: main routes its chords from the static registry, so plugin claims can't make them yield there.
+  const claimants = isKeybindingInterceptedByMainProcess(definition)
+    ? KEYBINDING_DEFINITIONS
+    : definitions
+  const groups = keybindingMainProcessConflictGroups(
+    definition,
+    claimants.map((other) => other.scope)
+  )
   const effective = configured.filter(
     (binding) =>
-      !definitions.some(
+      !claimants.some(
         (other) =>
           other.id !== definition.id &&
           Object.hasOwn(overrides, other.id) &&
+          keybindingConflictGroups(other).some((group) => groups.has(group)) &&
           getConfiguredBindings(other.id, platform, overrides, other).some(
             (claim) =>
-              bindingsOverlap(definition, binding, other, claim, platform) &&
-              !getDefaultBindings(other, platform).some((ownDefault) =>
-                bindingsOverlap(other, claim, other, ownDefault, platform)
-              )
+              bindingIdentitiesOverlap(definition, binding, other, claim, platform) &&
+              !isDefaultKeybinding(other, claim, platform)
           )
       )
   )
@@ -184,7 +229,6 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'sidebar.right.toggle': 'afterBrowserChords',
   'worktree.quickOpen': 'afterBrowserChords',
   'workspace.create': 'afterBrowserChords',
-  'workspace.delete': 'afterBrowserChords',
   'workspace.openBoard': 'afterBrowserChords',
   'view.tasks': 'afterBrowserChords',
   'dashboard.toggle': 'afterBrowserChords',

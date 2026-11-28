@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspacePathStatus } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import type { RepoSlice } from '../repos/repo-state'
 import {
   getFolderWorkspaceStatusRequestSnapshot,

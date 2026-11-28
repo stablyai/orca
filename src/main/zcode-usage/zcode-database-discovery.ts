@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { wslGatedStat } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import type { ZcodeUsageProcessedDatabase } from './types'
 
 function getDefaultZcodeDatabasePath(): string {

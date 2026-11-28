@@ -1,7 +1,14 @@
+import { createHash } from 'node:crypto'
 import {
   ORCA_SCRUB_SAFE_LAUNCH_ENV,
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import { SHARED_TOOL_PROCESS_SESSION_ENV_NAMES } from '../runtime/agent-session/environment/shared-tool-process-session-env'
+import {
+  ORCA_AGENT_SESSION_TOOL_TOKEN_ENV,
+  SHARED_TOOL_PROCESS_SESSION_FILES,
+  SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 
 export const HERMES_PLUGIN_NAME = 'orca-status'
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
@@ -30,12 +37,18 @@ export const HERMES_CLIENT_ENV_PASSTHROUGH: readonly string[] = [
   'ORCA_AGENT_HOOK_VERSION'
 ]
 
+/** Where, under the profile's home, Orca writes each chat's tool environment, named
+ *  `<session id>.json`: outside the plugin, so removing the plugin never strips a running chat. */
+export const HERMES_SESSION_ENV_DIR = SHARED_TOOL_PROCESS_SESSION_FILES[0].dir
+/** The Hermes session ids Orca writes and the plugin reads as file names. */
+export const HERMES_SESSION_ID_PATTERN = SHARED_TOOL_PROCESS_SESSION_ID_PATTERN
+
 export function getPluginManifest(): string {
   return [
     `# ${HERMES_PLUGIN_MARKER}`,
     `name: ${HERMES_PLUGIN_NAME}`,
     'version: 1.0.0',
-    'description: "Reports Hermes Agent lifecycle events to Orca."',
+    'description: "Reports Hermes Agent lifecycle events to Orca and runs each Orca chat\'s tools as that chat."',
     'author: "Orca"',
     'kind: standalone',
     'provides_hooks:',
@@ -44,12 +57,27 @@ export function getPluginManifest(): string {
   ].join('\n')
 }
 
+/** Each process the plugin loads in, with session env registered, writes `<prefix><pid>` here. */
+export const HERMES_PLUGIN_LOADED_PREFIX = '.loaded-'
+const GENERATION_PLACEHOLDER = '__ORCA_PLUGIN_GENERATION__'
+
+/** This build's plugin, by its source: a gateway marked with another one runs an older plugin. */
+export const HERMES_PLUGIN_GENERATION = createHash('sha256')
+  .update(pluginInitTemplate())
+  .digest('hex')
+  .slice(0, 16)
+
 export function getPluginInitSource(): string {
+  return pluginInitTemplate().replace(GENERATION_PLACEHOLDER, HERMES_PLUGIN_GENERATION)
+}
+
+function pluginInitTemplate(): string {
   return `# ${HERMES_PLUGIN_MARKER}
 from __future__ import annotations
 
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from typing import Any, Callable, Optional
@@ -60,7 +88,20 @@ except ImportError:
     # Hermes before the shared gateway runs each pane's session in that pane's own process.
     bound_client_env = None
 
+try:
+    from gateway.session_context import _bound_session_value
+except ImportError:
+    _bound_session_value = None
+
 EVENTS = ${JSON.stringify(HERMES_EVENTS)}
+# Why: the gateway runs every chat's tools, so its own environment names no chat. Orca writes each
+# chat's here, by Hermes session id, and Hermes asks for it at every tool spawn.
+SESSION_ENV_NAMES = ${JSON.stringify(SHARED_TOOL_PROCESS_SESSION_ENV_NAMES)}
+# <home>/plugins/orca-status/__init__.py -> <home>/<sessions dir>
+SESSION_ENV_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "${HERMES_SESSION_ENV_DIR}")
+LOADED_MARK = os.path.join(SESSION_ENV_DIR, "${HERMES_PLUGIN_LOADED_PREFIX}%d" % os.getpid())
+SESSION_ID = re.compile(r"${HERMES_SESSION_ID_PATTERN}")
+GENERATION = "${GENERATION_PLACEHOLDER}"
 # Why: hook args/results can include full tool payloads. Bound traversal before
 # JSON encoding so status hooks stay best-effort and cheap.
 MAX_JSONABLE_DEPTH = 5
@@ -188,7 +229,12 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
 
 
 def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any]:
-    payload: dict[str, Any] = {"hook_event_name": event_name, "cwd": os.getcwd()}
+    payload: dict[str, Any] = {"hook_event_name": event_name}
+    try:
+        payload["cwd"] = os.getcwd()
+    except OSError:
+        # Hermes Kanban cleanup can delete a worker's cwd; a status hook must not fail the tool.
+        pass
     for key in SELECTED_KEYS.get(event_name, ()):
         if key in kwargs:
             payload[key] = _jsonable(kwargs[key])
@@ -207,6 +253,30 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
     return payload
 
 
+def _published_env(session_id: str) -> Optional[dict[str, Any]]:
+    if not SESSION_ID.fullmatch(session_id or ""):
+        return None
+    try:
+        with open(os.path.join(SESSION_ENV_DIR, session_id + ".json"), "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def _session_env(session_id: str) -> dict[str, Any]:
+    published = _published_env(session_id)
+    if published is None and _bound_session_value is not None:
+        # A delegated subagent, and the rest of a turn Hermes compressed, run under a new session id;
+        # the chat id bound to this turn still names the chat (never the gateway's os.environ copy).
+        chat_id = _bound_session_value("HERMES_SESSION_CHAT_ID")
+        if isinstance(chat_id, str) and chat_id != session_id:
+            published = _published_env(chat_id)
+    # A gateway restarted from a chat's tool keeps that chat's token: only the file's own may reach a tool.
+    env = dict(published) if isinstance(published, dict) else {}
+    env.setdefault("${ORCA_AGENT_SESSION_TOOL_TOKEN_ENV}", None)
+    return env
+
+
 def _make_hook(event_name: str) -> Callable[..., None]:
     def _hook(**kwargs: Any) -> None:
         _post_to_orca(_payload_for_event(event_name, kwargs))
@@ -217,5 +287,31 @@ def _make_hook(event_name: str) -> Callable[..., None]:
 def register(ctx: Any) -> None:
     for event_name in EVENTS:
         ctx.register_hook(event_name, _make_hook(event_name))
+    # Hermes before 0.23.1 has no per-session env: its chats' tools keep no Orca identity.
+    if not hasattr(ctx, "register_session_env"):
+        return
+    # Orca reads this process's mark to know its tools get this plugin's session env, so the mark
+    # exists only while the env is registered: gone before a retry, and when Hermes unloads it.
+    _unmark_loaded()
+    try:
+        ctx.register_session_env(SESSION_ENV_NAMES, _session_env)
+    except ValueError:
+        # Another plugin holds one of these names; status hooks still report.
+        return
+    if hasattr(ctx, "on_unload"):
+        ctx.on_unload(_unmark_loaded)
+    try:
+        os.makedirs(SESSION_ENV_DIR, exist_ok=True)
+        with open(LOADED_MARK, "w", encoding="utf-8") as f:
+            f.write(GENERATION)
+    except OSError:
+        pass
+
+
+def _unmark_loaded() -> None:
+    try:
+        os.remove(LOADED_MARK)
+    except OSError:
+        pass
 `
 }

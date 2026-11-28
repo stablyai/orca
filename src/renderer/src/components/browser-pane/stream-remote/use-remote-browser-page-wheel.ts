@@ -1,8 +1,12 @@
-import { useCallback, useEffect } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
+import type {
+  LatestRemoteBrowserInput,
+  RemoteBrowserInputQueue
+} from './remote-browser-input-queue'
 import {
   WHEEL_DELTA_LINE,
   WHEEL_DELTA_PAGE,
@@ -10,6 +14,8 @@ import {
   type RemoteBrowserPaneNotice,
   type RemoteBrowserRuntimeTarget
 } from './remote-browser-page-input-model'
+import { remoteBrowserWheelZoomDirection } from './use-remote-browser-page-zoom'
+import type { BrowserPageZoomDirection } from '../../../../../shared/browser/site-settings/browser-page-zoom'
 
 export function useRemoteBrowserPageWheel({
   busy,
@@ -20,15 +26,13 @@ export function useRemoteBrowserPageWheel({
   lifecycle,
   runtimeWorktree,
   getRemoteImagePoint,
-  enqueueRemoteInput,
+  inputQueue,
   createRemoteOperationToken,
   isCurrentRemoteOperationToken,
   closeMissingRemotePage,
   scheduleRemoteTabInfoRefresh,
   setPaneNotice,
-  pendingRemoteWheelRef,
-  remoteWheelFrameRef,
-  remoteWheelInFlightRef
+  requestZoom
 }: {
   busy: boolean
   imageRef: React.RefObject<HTMLImageElement | null>
@@ -41,85 +45,80 @@ export function useRemoteBrowserPageWheel({
     clientX: number
     clientY: number
   }) => { x: number; y: number } | null
-  enqueueRemoteInput: (operation: () => Promise<void>) => Promise<void>
+  inputQueue: RemoteBrowserInputQueue
   createRemoteOperationToken: (remotePageId?: string | null) => RemoteBrowserOperationToken | null
   isCurrentRemoteOperationToken: (token: RemoteBrowserOperationToken) => boolean
   closeMissingRemotePage: (remotePageId?: string | null) => void
   scheduleRemoteTabInfoRefresh: (token: RemoteBrowserOperationToken, delayMs?: number) => void
   setPaneNotice: (notice: RemoteBrowserPaneNotice | null) => void
-  pendingRemoteWheelRef: React.MutableRefObject<PendingRemoteBrowserWheel | null>
-  remoteWheelFrameRef: React.MutableRefObject<number | null>
-  remoteWheelInFlightRef: React.MutableRefObject<boolean>
+  /** Null when the host can't zoom, so zoom gestures scroll as they always did there. */
+  requestZoom: ((direction: BrowserPageZoomDirection, gesture?: 'key' | 'wheel') => void) | null
 }): void {
-  const schedulePendingRemoteWheel = useCallback((): void => {
-    if (remoteWheelFrameRef.current !== null || remoteWheelInFlightRef.current) {
+  const sendWheel = async (wheel: PendingRemoteBrowserWheel): Promise<void> => {
+    const { target, pageId, operationToken, point, dx, dy } = wheel
+    if (!isCurrentRemoteOperationToken(operationToken)) {
       return
     }
-    remoteWheelFrameRef.current = window.requestAnimationFrame(() => {
-      remoteWheelFrameRef.current = null
-      const pending = pendingRemoteWheelRef.current
-      if (!pending || remoteWheelInFlightRef.current) {
-        return
-      }
-      pendingRemoteWheelRef.current = null
-      remoteWheelInFlightRef.current = true
-      const { target, pageId, operationToken, point, dx, dy } = pending
-      const params = { worktree: runtimeWorktree, page: pageId }
-      void enqueueRemoteInput(async () => {
-        if (!isCurrentRemoteOperationToken(operationToken)) {
+    const params = { worktree: runtimeWorktree, page: pageId }
+    try {
+      await callRuntimeRpc(
+        target,
+        'browser.mouseMove',
+        { ...params, x: point.x, y: point.y },
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
+      )
+      await callRuntimeRpc(
+        target,
+        'browser.mouseWheel',
+        { ...params, dx, dy },
+        { timeoutMs: 15_000, suppressFeatureInteraction: true }
+      )
+      scheduleRemoteTabInfoRefresh(operationToken, 400)
+    } catch (error) {
+      if (isCurrentRemoteOperationToken(operationToken)) {
+        if (isRemoteBrowserPageMissingError(error)) {
+          closeMissingRemotePage(pageId)
           return
         }
-        try {
-          await callRuntimeRpc(
-            target,
-            'browser.mouseMove',
-            { ...params, x: point.x, y: point.y },
-            { timeoutMs: 15_000, suppressFeatureInteraction: true }
-          )
-          await callRuntimeRpc(
-            target,
-            'browser.mouseWheel',
-            {
-              ...params,
-              dx,
-              dy
-            },
-            { timeoutMs: 15_000, suppressFeatureInteraction: true }
-          )
-          scheduleRemoteTabInfoRefresh(operationToken, 400)
-        } catch (error) {
-          if (isCurrentRemoteOperationToken(operationToken)) {
-            if (isRemoteBrowserPageMissingError(error)) {
-              closeMissingRemotePage(pageId)
-              return
-            }
-            setPaneNotice({
-              kind: 'consequence',
-              text: error instanceof Error ? error.message : 'Remote scroll failed.'
-            })
-          }
-        }
-      }).finally(() => {
-        remoteWheelInFlightRef.current = false
-        if (pendingRemoteWheelRef.current) {
-          schedulePendingRemoteWheel()
-        }
-      })
+        setPaneNotice({
+          kind: 'consequence',
+          text: error instanceof Error ? error.message : 'Remote scroll failed.'
+        })
+      }
+    }
+  }
+  const sendWheelRef = useRef(sendWheel)
+  useLayoutEffect(() => {
+    sendWheelRef.current = sendWheel
+  })
+  const wheelRef = useRef<LatestRemoteBrowserInput<PendingRemoteBrowserWheel> | null>(null)
+  useEffect(() => {
+    // Deltas aimed at the same page add up; a new page or stream generation starts over.
+    const wheel = inputQueue.latest<PendingRemoteBrowserWheel>({
+      perFrame: true,
+      merge: (pending, next) =>
+        pending?.target.environmentId === next.target.environmentId &&
+        pending.pageId === next.pageId &&
+        pending.operationToken.generation === next.operationToken.generation
+          ? { ...next, dx: pending.dx + next.dx, dy: pending.dy + next.dy }
+          : next,
+      send: (value) => sendWheelRef.current(value)
     })
-  }, [
-    closeMissingRemotePage,
-    enqueueRemoteInput,
-    isCurrentRemoteOperationToken,
-    pendingRemoteWheelRef,
-    remoteWheelFrameRef,
-    remoteWheelInFlightRef,
-    scheduleRemoteTabInfoRefresh,
-    setPaneNotice,
-    runtimeWorktree
-  ])
+    wheelRef.current = wheel
+    return () => {
+      wheel.dispose()
+      wheelRef.current = null
+    }
+  }, [inputQueue])
 
   const handleRemoteScreenshotWheel = useCallback(
     (event: WheelEvent): void => {
+      const zoomDirection = requestZoom ? remoteBrowserWheelZoomDirection(event) : null
+      if (requestZoom && zoomDirection) {
+        event.preventDefault()
+        requestZoom(zoomDirection, 'wheel')
+        return
+      }
       if (busy) {
         event.preventDefault()
         return
@@ -144,37 +143,16 @@ export function useRemoteBrowserPageWheel({
       if (dx === 0 && dy === 0) {
         return
       }
-      const current = pendingRemoteWheelRef.current
-      const sameTarget =
-        current?.target.environmentId === target.environmentId &&
-        current.pageId === pageId &&
-        current.operationToken.generation === operationToken.generation
-      pendingRemoteWheelRef.current = sameTarget
-        ? {
-            ...current,
-            point,
-            dx: current.dx + dx,
-            dy: current.dy + dy
-          }
-        : {
-            target,
-            pageId,
-            operationToken,
-            point,
-            dx,
-            dy
-          }
-      schedulePendingRemoteWheel()
+      wheelRef.current?.push({ target, pageId, operationToken, point, dx, dy })
     },
     [
       busy,
       createRemoteOperationToken,
       getRemoteImagePoint,
       lifecycle,
-      pendingRemoteWheelRef,
       remoteViewportRef,
+      requestZoom,
       runtimeTarget,
-      schedulePendingRemoteWheel,
       setPaneNotice
     ]
   )

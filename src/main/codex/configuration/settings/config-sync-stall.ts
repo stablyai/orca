@@ -10,7 +10,7 @@ import type { CodexSettingsPromotionHomes } from './config-settings-promotion'
 import type {
   CodexConfigSyncStallReason,
   CodexConfigSyncStatus
-} from '../../../../shared/codex-config-sync-types'
+} from '../../../../shared/agent-accounts/codex/codex-config-sync-types'
 
 /** Diagnose settings withheld by a stalled mirror from the current file observations. */
 export function getCodexConfigSyncStatus(
@@ -100,8 +100,4 @@ export function reportCodexConfigSyncOutcome(
   console.warn(
     `[codex-config] Config sync stalled (${status.reason}): ${status.systemConfigPath} is unusable, so ${runtimeHomePath} keeps its last synced settings. Edits to the source will not apply until it is readable.`
   )
-}
-
-export function resetCodexConfigSyncStallLatchForTests(): void {
-  stalledHomes.clear()
 }

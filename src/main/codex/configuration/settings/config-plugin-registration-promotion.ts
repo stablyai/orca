@@ -7,6 +7,7 @@ import {
   normalizeCodexRegistrationValue,
   parseCodexRegistrationTimestamp,
   readCodexRegistrationEntries,
+  readCodexRegistrationRootsDefinedOutsideTables,
   type CodexRegistrationEntry,
   type CodexRegistrationRoot
 } from '../toml/config-toml-plugin-registration-tables'
@@ -40,10 +41,16 @@ export function planCodexRegistrationPromotion(
     plugins: []
   }
   const fields: CodexRegistrationPromotion[] = []
+  // A `[root.name]` table beside an inline, dotted or array definition would redefine a key.
+  const definedOutsideTables = readCodexRegistrationRootsDefinedOutsideTables(systemConfig)
   for (const entry of runtimeEntries.values()) {
     const systemEntry = systemEntries.get(entry.key)
     if (!systemEntry) {
-      if (!mirroredRegistrations.has(entry.key)) {
+      if (
+        !mirroredRegistrations.has(entry.key) &&
+        !definedOutsideTables.has(entry.key) &&
+        !definedOutsideTables.has(entry.root)
+      ) {
         appends[entry.root].push({ kind: 'append', key: entry.key, block: entry.block })
       }
       continue
@@ -131,6 +138,13 @@ export function readCodexRegistrationBaseline(
 
 function getBaselineFields(root: CodexRegistrationRoot): readonly string[] {
   return root === 'plugins' ? PLUGIN_BASELINE_FIELDS : []
+}
+
+/** The fields that name what a registration points at; a change makes it a different registration. */
+export function readCodexRegistrationIdentity(entry: CodexRegistrationEntry): string {
+  const identityFields =
+    entry.root === 'marketplaces' ? MARKETPLACE_IDENTITY_FIELDS : PLUGIN_IDENTITY_FIELDS
+  return JSON.stringify(identityFields.map((field) => readNormalizedField(entry, field)))
 }
 
 function hasMatchingRegistrationIdentity(
@@ -235,8 +249,8 @@ function appendRegistrationBlock(content: string, block: string, usesCrlf: boole
   const eol = usesCrlf ? '\r\n' : '\n'
   const rendered = block
     .split('\n')
-    .map((line) => withCrLine(line.replace(/\r$/, ''), usesCrlf))
-    .join('\n')
+    .map((line) => line.replace(/\r$/, ''))
+    .join(eol)
   if (content.trim() === '') {
     return `${rendered}${eol}`
   }

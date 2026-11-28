@@ -1,4 +1,5 @@
-import { ensureNumber, extractString } from '../usage/usage-record-coercion'
+import { extractString } from '../../shared/text/trimmed-string'
+import { ensureNumber } from '../usage/source-input/usage-record-coercion'
 import type { ZcodeUsageRow } from './zcode-usage-row-queries'
 import type { ZcodeUsageParsedEvent } from './types'
 

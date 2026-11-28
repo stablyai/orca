@@ -1,6 +1,6 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { useAppStore } from '@/store/index'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
@@ -9,8 +9,8 @@ import {
   type EditorFileSavedDetail,
   type EditorPathMutationTarget
 } from '../autosave/editor-autosave'
-import type { DiffContent, FileContent } from '../editor-panel-content-types'
-import { isReloadableSingleFileDiffTab } from '../editor-panel-diff-reload'
+import type { DiffContent, FileContent } from '../loading/editor-panel-content-types'
+import { isReloadableSingleFileDiffTab } from '../loading/editor-panel-diff-reload'
 import { createEditorWatcherReloadCoalescer } from './editor-watcher-reload-coalescer'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { hasRecentSelfWrite } from './editor-self-write-registry'

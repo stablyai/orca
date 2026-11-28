@@ -1,11 +1,11 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
-import type { ProjectGroupImportResult } from '../../../../../../shared/project-group-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { ProjectGroupImportResult } from '../../../../../../shared/project/groups/project-group-types'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'
 import type { AddRepoDialogStep } from '../dialog/add-repo-dialog-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function useAddRepoNestedReviewController({
   activeRuntimeEnvironmentId,
@@ -70,7 +70,8 @@ export function useAddRepoNestedReviewController({
     nestedGroupName: review.nestedGroupName,
     nestedImportScanId: review.nestedImportScanId,
     nestedRuntimeEnvironmentId: review.nestedRuntimeEnvironmentId,
-    getNestedRepoRuntimeKind: review.getNestedRepoRuntimeKind
+    getNestedRepoRuntimeKind: review.getNestedRepoRuntimeKind,
+    takeNestedProjectReporter: review.takeNestedProjectReporter
   })
   return { ...review, ...imports }
 }

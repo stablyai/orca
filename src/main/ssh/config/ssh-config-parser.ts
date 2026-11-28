@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { splitOpenSshArguments } from './ssh-config-arguments'
 
 export type SshConfigHost = {
   host: string
@@ -191,52 +192,6 @@ function parseScalarConfigValue(input: string): string {
 
 function splitHostPatterns(input: string): string[] {
   return splitOpenSshArguments(input)
-}
-
-function splitOpenSshArguments(input: string): string[] {
-  const args: string[] = []
-  let current = ''
-  let inQuotes = false
-  let escaped = false
-
-  for (const char of input) {
-    if (escaped) {
-      current += char
-      escaped = false
-      continue
-    }
-
-    if (inQuotes && char === '\\') {
-      escaped = true
-      continue
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes
-      continue
-    }
-
-    // Inline comments must not become imported aliases.
-    if (!inQuotes && char === '#') {
-      break
-    }
-
-    if (!inQuotes && /\s/.test(char)) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-      continue
-    }
-
-    current += char
-  }
-
-  if (current) {
-    args.push(current)
-  }
-
-  return args
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */

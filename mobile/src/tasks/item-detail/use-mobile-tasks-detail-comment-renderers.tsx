@@ -1,0 +1,190 @@
+import type { TaskCreateActionsModel } from '../task-list/use-mobile-tasks-task-create-actions'
+import { MessageBox } from '../../components/composer-input/MessageBox'
+import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
+import { Pressable, Text, View } from 'react-native'
+import type { ReactNode } from 'react'
+import type { DetailComment } from '../mobile-tasks-provider-detail-types'
+import type { DetailCommentGroup } from '../mobile-tasks-view-state-types'
+import { SHOW_MOBILE_COMMENT_THREAD_TOOLS } from '../task-list/mobile-tasks-options'
+import {
+  commentAuthor,
+  commentSourceLabel,
+  detailCommentGroupCount,
+  detailCommentGroupId,
+  detailCommentGroupRoot,
+  isResolvedDetailCommentGroup,
+  renderCommentReactions
+} from './mobile-tasks-item-comments'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
+import { formatUpdatedAt } from './mobile-tasks-item-mapping'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { pressedStyle } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
+
+export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const {
+    actionItem,
+    detailPayload,
+    expandedResolvedCommentGroups,
+    itemReplyDrafts,
+    mutatingStatus,
+    replyToGitHubComment,
+    setExpandedResolvedCommentGroups,
+    setItemReplyDrafts,
+    toggleGitHubReviewThread
+  } = model
+  const renderCommentComposer = (args: {
+    value: string
+    onChangeText: (next: string) => void
+    onSubmit: () => void
+    disabled?: boolean
+  }): ReactNode => (
+    <MessageBox
+      style={styles.stackedInput}
+      value={args.value}
+      onChangeText={args.onChangeText}
+      placeholder={t('tasks.detailCommentRenderers.commentPlaceholder', 'Add a comment')}
+      editable={!args.disabled}
+      onSend={args.onSubmit}
+      canSend={!args.disabled && args.value.trim().length > 0}
+      sendAccessibilityLabel={t('tasks.detailCommentRenderers.sendComment', 'Send comment')}
+    />
+  )
+
+  const renderDetailComment = (
+    comment: DetailComment,
+    options: { nested?: boolean } = {}
+  ): ReactNode => (
+    <View
+      key={String(comment.id)}
+      style={[
+        styles.commentBlock,
+        options.nested && styles.commentReplyBlock,
+        comment.isResolved && styles.commentResolvedBlock
+      ]}
+    >
+      {comment.path ? (
+        // Only a review comment says where it sits; a plain comment needs no label.
+        <Text style={styles.commentSource} numberOfLines={1}>
+          {commentSourceLabel(comment)}
+        </Text>
+      ) : null}
+      <Text style={styles.commentMeta}>
+        <Text style={styles.commentAuthor}>{commentAuthor(comment)}</Text>
+        {formatUpdatedAt(comment.createdAt ?? '')
+          ? ` · ${formatUpdatedAt(comment.createdAt ?? '')}`
+          : ''}
+      </Text>
+      <MobileMarkdown content={comment.body} />
+      {renderCommentReactions(styles, comment)}
+      {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
+      actionItem?.provider === 'github' &&
+      detailPayload?.provider === 'github' ? (
+        <View style={styles.commentControls}>
+          {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
+          actionItem?.provider === 'github' &&
+          detailPayload?.provider === 'github' ? (
+            <>
+              {actionItem.source.type === 'pr' && comment.threadId ? (
+                <Pressable
+                  style={({ pressed }) => [styles.inlineSaveButtonCompact, pressed && pressedStyle]}
+                  disabled={mutatingStatus}
+                  onPress={() => void toggleGitHubReviewThread(actionItem, comment)}
+                >
+                  <Text style={styles.inlineSaveText}>
+                    {comment.isResolved
+                      ? t('tasks.detailCommentRenderers.reopenThread', 'Reopen thread')
+                      : t('tasks.detailCommentRenderers.resolveThread', 'Resolve thread')}
+                  </Text>
+                </Pressable>
+              ) : null}
+              <MessageBox
+                value={itemReplyDrafts[String(comment.id)] ?? ''}
+                onChangeText={(next) =>
+                  setItemReplyDrafts((current) => ({
+                    ...current,
+                    [String(comment.id)]: next
+                  }))
+                }
+                placeholder={t('tasks.detailCommentRenderers.reply', 'Reply')}
+                onSend={() => void replyToGitHubComment(actionItem, comment)}
+                canSend={!mutatingStatus && !!(itemReplyDrafts[String(comment.id)] ?? '').trim()}
+                sendAccessibilityLabel={t('tasks.detailCommentRenderers.reply', 'Reply')}
+              />
+            </>
+          ) : null}
+        </View>
+      ) : null}
+    </View>
+  )
+
+  const renderDetailCommentGroup = (group: DetailCommentGroup): ReactNode => {
+    const id = detailCommentGroupId(group)
+    const root = detailCommentGroupRoot(group)
+    const count = detailCommentGroupCount(group)
+    const isCollapsedResolved =
+      isResolvedDetailCommentGroup(group) && !expandedResolvedCommentGroups.has(id)
+
+    if (isCollapsedResolved) {
+      const countLabel =
+        count === 1
+          ? t('tasks.detailCommentRenderers.comments_one', '{{count}} comment', { count })
+          : t('tasks.detailCommentRenderers.comments_other', '{{count}} comments', { count })
+      return (
+        <Pressable
+          key={id}
+          style={({ pressed }) => [styles.resolvedCommentSummary, pressed && pressedStyle]}
+          onPress={() =>
+            setExpandedResolvedCommentGroups((current) => {
+              const next = new Set(current)
+              next.add(id)
+              return next
+            })
+          }
+        >
+          <Text style={styles.resolvedCommentTitle} numberOfLines={1}>
+            {group.kind === 'thread'
+              ? t(
+                  'tasks.detailCommentRenderers.resolvedThreadBy',
+                  'Resolved thread by {{author}}',
+                  {
+                    author: commentAuthor(root)
+                  }
+                )
+              : t(
+                  'tasks.detailCommentRenderers.resolvedCommentBy',
+                  'Resolved comment by {{author}}',
+                  {
+                    author: commentAuthor(root)
+                  }
+                )}
+          </Text>
+          <Text style={styles.detailSectionMeta}>
+            {count > 1 ? countLabel : t('tasks.detailCommentRenderers.show', 'Show')}
+          </Text>
+        </Pressable>
+      )
+    }
+
+    return (
+      <View key={id} style={styles.commentThreadGroup}>
+        {group.kind === 'thread'
+          ? [
+              renderDetailComment(group.root),
+              ...group.replies.map((reply) => renderDetailComment(reply, { nested: true }))
+            ]
+          : renderDetailComment(group.comment)}
+      </View>
+    )
+  }
+  return {
+    ...model,
+    renderCommentComposer,
+    renderDetailComment,
+    renderDetailCommentGroup
+  }
+}
+
+export type DetailCommentRenderersModel = ReturnType<typeof useMobileTasksDetailCommentRenderers>

@@ -1,5 +1,5 @@
-import type { WorkspaceResource } from '@/lib/workspace-copy-owner'
-import type { LargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import type { WorkspaceResource } from '@/lib/workspace/ownership/workspace-copy-owner'
+import type { LargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 
 export type DiffViewerProps = {
   modelKey: string

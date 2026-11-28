@@ -1,5 +1,10 @@
-import React from 'react'
-import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'
+import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
+import React, { Suspense, useCallback } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useAppStore } from '@/store/index'
+import { restoreAgentSettingsInvoker } from './restore-agent-settings-invoker'
+
+export { restoreAgentSettingsInvoker }
 import {
   Dialog,
   DialogContent,
@@ -7,16 +12,20 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { AgentsPane } from '@/components/settings/agents/AgentsPane'
-import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/runtime/hosts/capabilities/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
+
+const AgentsPane = lazy(() =>
+  import('@/components/settings/agents/AgentsPane').then((module) => ({
+    default: module.AgentsPane
+  }))
+)
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -29,10 +38,18 @@ export default function AgentSettingsDialog({
   onOpenChange,
   onCloseAutoFocus
 }: AgentSettingsDialogProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
+  const t = useTranslate()
+  const viewActive = useAppStateViewActive()
+  const settings = useAppStateValue((s) => s.settings)
+  const updateSettings = useCallback(
+    (...args: Parameters<ReturnType<typeof useAppStore.getState>['updateSettings']>) =>
+      useAppStore.getState().updateSettings(...args),
+    []
+  )
+  const runtimeEnvironments = useAppStateValue((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStateValue(
+    (s) => s.runtimeEnvironmentCatalogHydrated
+  )
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
@@ -41,7 +58,7 @@ export default function AgentSettingsDialog({
   )
   const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
   const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
-    open && (isWindowsRenderer || isWebClient),
+    viewActive && open && (isWindowsRenderer || isWebClient),
     false,
     localCapabilityOwnerKey
   )
@@ -69,50 +86,31 @@ export default function AgentSettingsDialog({
       <DialogContent className="sm:max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
+            {t('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.agent.AgentSettingsDialog.50cdb57c03',
               'Manage AI agents, set a default, and customize commands.'
             )}
           </DialogDescription>
         </DialogHeader>
         <div className="scrollbar-sleek -mr-2 max-h-[70vh] overflow-y-auto pr-2">
-          <AgentsPane
-            settings={settings}
-            updateSettings={updateSettings}
-            hostScope={hostScope}
-            wslSupportedPlatform={wslSupportedPlatform}
-            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
-            wslDistros={localWindowsTerminalCapabilities.wslDistros}
-            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
-          />
+          {open ? (
+            <Suspense fallback={null}>
+              <AgentsPane
+                settings={settings}
+                updateSettings={updateSettings}
+                hostScope={hostScope}
+                wslSupportedPlatform={wslSupportedPlatform}
+                wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+                wslDistros={localWindowsTerminalCapabilities.wslDistros}
+                wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
+              />
+            </Suspense>
+          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   )
-}
-
-export function restoreAgentSettingsInvoker(event: Event, invoker: HTMLButtonElement | null): void {
-  if (event.defaultPrevented) {
-    return
-  }
-  event.preventDefault()
-  const active = document.activeElement
-  const dialog = event.target
-  if (
-    invoker?.isConnected &&
-    !invoker.disabled &&
-    !invoker.closest('[inert]') &&
-    (active === document.body ||
-      active === invoker ||
-      (dialog instanceof HTMLElement && active && overlayFocusContains(dialog, active))) &&
-    !getOverlayFocusOwners(invoker).some(
-      (owner) =>
-        owner !== dialog && !(dialog instanceof HTMLElement && overlayFocusContains(dialog, owner))
-    )
-  ) {
-    invoker.focus({ preventScroll: true })
-  }
 }

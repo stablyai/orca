@@ -1,7 +1,4 @@
-import {
-  lowerActionArgumentChoices,
-  demoteActionArgumentChoices
-} from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
+import { lowerActionArgumentChoices } from '../../../../../../shared/source-control/ai/recipes/source-control-action-argument-document'
 import {
   sourceControlActionSelectedPreferences,
   sourceControlActionExecutionArgs
@@ -10,7 +7,6 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import { readActionModelSelection } from '../../../../../../shared/source-control/ai/recipes/source-control-action-model-selection'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
-  resolveSourceControlActionCommandTemplate,
   type SourceControlActionId,
   type SourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
@@ -26,13 +22,6 @@ export const ACTION_MODE_OVERRIDE = 'override'
 export const DEFAULT_AGENT_VALUE = '__default_agent__'
 export const CUSTOM_COMMAND_MODE_INHERIT = 'inherit'
 export const CUSTOM_COMMAND_MODE_REPO = 'repo'
-
-export function readInheritedCommandTemplate(
-  source: SourceControlAiSettings,
-  actionId: SourceControlActionId
-): string {
-  return resolveSourceControlActionCommandTemplate(source.actions, actionId)
-}
 
 export function readInheritedAgentArgs(
   source: SourceControlAiSettings,
@@ -58,29 +47,6 @@ export function resolveAgentArgsPlaceholderAgent(
     return effectiveAgent
   }
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
-}
-
-export function completeRepoActionRecipe(
-  recipe: SourceControlActionRecipe,
-  actionId: SourceControlActionId
-): NonNullable<
-  NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
-> {
-  if (recipe.argumentChoices && recipe.argumentChoices.syntaxAgent !== recipe.agentId) {
-    recipe = demoteActionArgumentChoices(recipe)
-  }
-  const commandInputTemplate =
-    typeof recipe.commandInputTemplate === 'string'
-      ? recipe.commandInputTemplate
-      : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
-  return {
-    agentId: recipe.agentId ?? null,
-    commandInputTemplate,
-    ...(typeof recipe.agentArgs === 'string' ? { agentArgs: recipe.agentArgs } : {}),
-    ...(recipe.argumentChoices ? { argumentChoices: recipe.argumentChoices } : {}),
-    ...(recipe.launchPreferences ? { launchPreferences: recipe.launchPreferences } : {}),
-    ...(recipe.surface ? { surface: recipe.surface } : {})
-  }
 }
 
 export function actionScopeLabel(hasOverride: boolean): string {

@@ -71,9 +71,16 @@ function FixtureReadySignal({ interact }: { interact: ComponentFixture['interact
     const settle = async (): Promise<void> => {
       await document.fonts.ready
       await waitForPaint()
+      if (cancelled) {
+        return
+      }
       const frame = document.getElementById(FRAME_ID)
       if (interact && frame) {
         await interact(frame)
+        // Why: a story replaced during interact must not paint or settle for its successor.
+        if (cancelled) {
+          return
+        }
         await waitForPaint()
       }
       await waitForAnimationsToSettle()
@@ -84,7 +91,9 @@ function FixtureReadySignal({ interact }: { interact: ComponentFixture['interact
       markComponentFixtureState('ready')
     }
     settle().catch((error: unknown) => {
-      markComponentFixtureState('error', error instanceof Error ? error.message : String(error))
+      if (!cancelled) {
+        markComponentFixtureState('error', error instanceof Error ? error.message : String(error))
+      }
     })
     return () => {
       cancelled = true
@@ -114,7 +123,7 @@ export function ComponentFixtureFrame({
 }): React.JSX.Element {
   return (
     <I18nProvider>
-      <TooltipProvider delayDuration={400}>
+      <TooltipProvider>
         <div
           id={FRAME_ID}
           className="inline-block bg-background p-4 text-foreground"

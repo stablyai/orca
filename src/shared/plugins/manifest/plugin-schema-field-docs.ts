@@ -21,6 +21,10 @@ export const PLUGIN_EDITOR_FRAME_SINCE = '1.4.248'
 export const PLUGIN_HOOKS_SINCE = '1.4.248'
 /** Workers act on workspaces, terminals and agents: `workspace:write`, `terminal:read`, `agent:launch`. */
 export const PLUGIN_HOST_ACTIONS_SINCE = '1.4.248'
+/** First release that plays an app theme's `background.videoPath`. */
+export const PLUGIN_THEME_VIDEO_BACKGROUND_SINCE = '1.4.254'
+/** First release that draws a panel `icon` given as inline SVG path data. */
+export const PLUGIN_PANEL_PATH_ICON_SINCE = '1.4.274'
 
 type PluginFieldDoc = {
   description: string

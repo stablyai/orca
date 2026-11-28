@@ -4,7 +4,7 @@ import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
 } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike
@@ -14,27 +14,122 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
+import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+import { tunneledOrcadPairingCode } from './orcad-tunneled-pairing'
+import { OrcadManagedPairingRepairFailedError } from './orcad-managed-pairing-repair-failure'
+import { quotePosixShellUnlessPlain } from '../../../shared/shell/launch/shell-argument-quoting'
+import { RUNTIME_SERVER_REPLACED_STATUS_CODE } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 
 /** Unreachable proves no identity; unpaired is a refusal sealed by the pinned server key. */
 export type OrcadTunnelIdentity =
   | { verdict: 'verified' }
-  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string }
+  /** `sealed`: the pinned key's handshake itself refused (close 4001/4003), not a guess from an odd answer. */
+  | { verdict: 'foreign' | 'unreachable' | 'unpaired'; detail: string; sealed?: true }
 
 export const ORCAD_IDENTITY_MISMATCH_CODE = 'orcad_identity_mismatch'
 
+/** `foreign-port`: another process answered; `replaced-server`: the host's own slot serves another key. */
+export type OrcadIdentityMismatchKind = 'foreign-port' | 'replaced-server'
+
 export class OrcadManagedIdentityError extends Error {
   readonly code = ORCAD_IDENTITY_MISMATCH_CODE
-  constructor(remotePort: number, detail: string) {
-    super(
-      `${ORCAD_IDENTITY_MISMATCH_CODE}: the server on remote port ${remotePort} is not this ` +
-        `host’s Orca server (another Orca may be using that port): ${detail}`
-    )
+  private constructor(
+    readonly kind: OrcadIdentityMismatchKind,
+    explanation: string,
+    detail: string,
+    /** A sealed refusal, not a catch-all `foreign` answer a restart can produce. */
+    readonly sealed = false,
+    /** A pinned WSL host's server now holds another key; already WSL-worded, never wrapped twice. */
+    readonly wslHostKeyChanged = false
+  ) {
+    super(`${ORCAD_IDENTITY_MISMATCH_CODE}: ${explanation}: ${detail}`)
     this.name = 'OrcadManagedIdentityError'
   }
+
+  static foreignPort(
+    remotePort: number,
+    detail: string,
+    sealed = false
+  ): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      `the server on remote port ${remotePort} is not this host’s Orca server ` +
+        '(another Orca may be using that port)',
+      detail,
+      sealed
+    )
+  }
+
+  /** SSH access alone can't re-pin a different server key, so only the user can re-pair. */
+  static replacedServer(
+    environment: { id: string; name: string },
+    detail: string
+  ): OrcadManagedIdentityError {
+    const environmentName = environment.name
+    // Why the id: a name is free text, so pasting it into a shell could expand or pick another server.
+    const selector = quotePosixShellUnlessPlain(environment.id)
+    return new OrcadManagedIdentityError(
+      'replaced-server',
+      `${environmentName} is not the Orca server this desktop paired with (Orca now connects ` +
+        'to the host as a different SSH user, or the server was reinstalled), so reconnecting ' +
+        `won’t restore access. To pair with the host’s current server, open the ⋯ menu on ` +
+        `${environmentName} in Settings › Remote Orca Servers and choose Forget… (or run ` +
+        `\`orca environment forget --environment ${selector} --yes\`), then click ` +
+        'Connect on the SSH host',
+      detail
+    )
+  }
+
+  /** A WSL host's distro serves another key under its own account (#49180); keeps the refusal's kind. */
+  static wslHostServer(
+    distro: string,
+    refused: OrcadManagedIdentityError
+  ): OrcadManagedIdentityError {
+    if (refused.wslHostKeyChanged) {
+      return refused
+    }
+    const detail = refused.message.replace(`${ORCAD_IDENTITY_MISMATCH_CODE}: `, '')
+    return new OrcadManagedIdentityError(
+      refused.kind,
+      wslHostServerExplanation(distro),
+      detail,
+      refused.sealed
+    )
+  }
+
+  /** A pinned WSL host refused by a server whose account holds another key: sealed, it ends retries. */
+  static wslHostKeyChanged(distro: string, detail: string): OrcadManagedIdentityError {
+    return new OrcadManagedIdentityError(
+      'foreign-port',
+      wslHostServerExplanation(distro),
+      detail,
+      true,
+      true
+    )
+  }
+}
+
+function wslHostServerExplanation(distro: string): string {
+  return (
+    `the Orca server in ${distro} is not the one this desktop paired with (it was ` +
+    'reinstalled or its identity was reset), so reconnecting won’t restore access. Remove ' +
+    'the WSL host and add it again'
+  )
+}
+
+/** The refusal `wslHostKeyChanged` builds: this host's paired server no longer exists. */
+export function isWslHostKeyChangedRefusal(error: unknown): error is OrcadManagedIdentityError {
+  return error instanceof OrcadManagedIdentityError && error.wslHostKeyChanged
+}
+
+/** Status code of a refusal automatic retries can't clear (the pairing must change); null otherwise. */
+export function managedOrcadRefusalNeedingUserCode(error: unknown): string | null {
+  if (error instanceof OrcadManagedIdentityError && error.kind === 'replaced-server') {
+    return RUNTIME_SERVER_REPLACED_STATUS_CODE
+  }
+  return error instanceof OrcadManagedPairingRepairFailedError ? 'unauthorized' : null
 }
 
 export const ORCAD_PAIRING_REJECTED_CODE = 'orcad_pairing_rejected'
@@ -57,7 +152,7 @@ export function orcadIdentityRefusal(
 ): Error {
   return identity.verdict === 'unpaired'
     ? new OrcadManagedPairingRejectedError(identity.detail)
-    : new OrcadManagedIdentityError(remotePort, identity.detail)
+    : OrcadManagedIdentityError.foreignPort(remotePort, identity.detail, identity.sealed === true)
 }
 
 // Key rejection closes the socket instead of returning a status reply.
@@ -74,7 +169,7 @@ export function classifyOrcadTunnelIdentityFailure(error: unknown): OrcadTunnelI
     return { verdict: 'unpaired', detail }
   }
   if (error instanceof RemoteRuntimeClientError && FOREIGN_CLOSE_CODES.has(error.closeCode ?? 0)) {
-    return { verdict: 'foreign', detail }
+    return { verdict: 'foreign', detail, sealed: true }
   }
   return isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
     ? { verdict: 'unreachable', detail }

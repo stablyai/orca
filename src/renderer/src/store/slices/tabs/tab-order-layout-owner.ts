@@ -1,7 +1,10 @@
 // Mirror window-set tab order to main so the subsequent save cannot reorder anchored creates or paired-client moves.
 
-import { recordLayoutApply } from '@/runtime/layout-apply-send'
-import { tabOrderAnchor, tabOrderMoves } from '../../../../../shared/workspace-layout/tab-order'
+import { recordLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
+import {
+  tabOrderAnchor,
+  tabOrderMoves
+} from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { AppState } from '../../types'
 
 export function recordTabOrderInLayoutOwner(

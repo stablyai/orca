@@ -2,11 +2,8 @@ import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import type { Dirent } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
-import type { DirEntry, FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { probeGitAvailability } from '../../../git/git-availability'
-import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
-import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
+import type { FilesystemPathFlavor } from '../../../../shared/file-access/filesystem-path-flavor'
 
 function resolveServerBrowsePath(pathValue: string): string {
   const trimmed = pathValue.trim() || '~'
@@ -46,6 +43,7 @@ export class RuntimeServerEnvironmentCommands {
     entries: DirEntry[]
     pathFlavor: FilesystemPathFlavor
   }> {
+    const { isServerDriveListRequest, listWindowsDrives } = await import('./windows-drive-listing')
     if (isServerDriveListRequest(pathValue)) {
       return listWindowsDrives()
     }
@@ -64,6 +62,7 @@ export class RuntimeServerEnvironmentCommands {
           isSymlink: entry.isSymbolicLink()
         }))
     )
+    const { sortDirEntries } = await import('../../../../shared/file-listing/file-name-sort')
     sortDirEntries(mapped)
     return {
       resolvedPath: dirPath,
@@ -73,6 +72,10 @@ export class RuntimeServerEnvironmentCommands {
   }
 
   async isGitAvailable(): Promise<boolean> {
+    const [{ probeGitAvailability }, { gitExecFileAsync }] = await Promise.all([
+      import('../../../git/command-runner/host-routing/git-availability'),
+      import('../../../git/command-runner/git-exec-file')
+    ])
     return probeGitAvailability(gitExecFileAsync, { cwd: process.cwd(), timeout: 3000 })
   }
 }

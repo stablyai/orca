@@ -1,11 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { Duplex } from 'node:stream'
 import type { ClientChannel } from 'ssh2'
-import type { SshTarget } from '../../../shared/ssh-types'
-import { wrapRemoteCommandForPosixShell } from '../ssh-posix-command-wrapper'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+import { wrapRemoteCommandForPosixShell } from '../remote-exec/ssh-posix-command-wrapper'
 import type { SshExecOptions } from '../connection/ssh-exec-options'
 import { buildSshArgs, type SystemSshBuildArgsOptions } from './system-ssh-args'
 import { findSystemSsh } from './system-ssh-binary'
+import { terminateSystemSsh } from './system-ssh-termination'
 
 type SystemSshProcess = {
   stdin: NodeJS.WritableStream
@@ -21,7 +22,11 @@ export type SystemSshCommandChannel = ClientChannel & {
   _closeRequested?: boolean
 }
 
-type SystemSshCommandOptions = SshExecOptions & SystemSshBuildArgsOptions
+export type SystemSshCommandOptions = SshExecOptions &
+  SystemSshBuildArgsOptions & {
+    /** For commands that send no input: Windows OpenSSH can hang after remote exit while its stdin pipe stays open. */
+    closeStdin?: boolean
+  }
 
 /** Expose system SSH stdin/stdout as the relay channel when ssh2 cannot provide the required authentication/reuse. */
 export function spawnSystemSsh(
@@ -64,7 +69,11 @@ export function spawnSystemSshCommand(
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
-  return wrapCommandProcess(proc)
+  const channel = wrapCommandProcess(proc)
+  if (options?.closeStdin) {
+    channel.stdin.end()
+  }
+  return channel
 }
 
 function wrapChildProcess(proc: ChildProcess): SystemSshProcess {
@@ -113,11 +122,7 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
   mutableChannel._process = proc
   mutableChannel.close = () => {
     mutableChannel._closeRequested = true
-    try {
-      proc.kill('SIGTERM')
-    } catch {
-      // Process may already be dead
-    }
+    terminateSystemSsh(proc)
   }
 
   const cleanupProcessListeners = (): void => {

@@ -1,6 +1,6 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { codexJournalItem } from './codex-structured-item-translation'
 import type { CodexThreadItem } from './codex-thread-item-identity'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
@@ -57,6 +57,9 @@ export type CodexStructuredItemStreams = {
     params: unknown
   ) => CodexStructuredItemStreamHandleResult
   forget: (threadId: string, itemId: string) => void
+  /** A tracked item's already-saved text, where its stream resumes after a reattach. */
+  /** Null: the saved row is a truncated preview, kept as is until the item ends. */
+  seedText: (threadId: string, itemId: string, text: string | null) => void
   /** Force-saves streamed text before a row; a thread limits that to its own streams, the only text its row follows. */
   flush: (threadId?: string) => boolean
   dispose: () => void

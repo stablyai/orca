@@ -1,12 +1,16 @@
-import type { Tab } from '../../../../shared/tab-types'
-import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
-import { EmulatorDeviceFrame } from './emulator-device-frame'
-import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
-import { useEmulatorPaneSession } from './use-emulator-pane-session'
-import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
-import { useEmulatorInputCheck } from './use-emulator-input-check'
-import { translate } from '@/i18n/i18n'
+import { emulatorOpeningMessage } from './session/emulator-opening-message'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { EmulatorPaneToolbar } from './devices/emulator-pane-toolbar'
+import { EmulatorDeviceFrame } from './frame/emulator-device-frame'
+import { MobileEmulatorAgentSetupGuideLayer } from './agent-setup/MobileEmulatorAgentSetupGuideLayer'
+import { useEmulatorPaneSession } from './session/use-emulator-pane-session'
+import { scrcpyDeviceIdFromStreamUrl } from './streaming/emulator-scrcpy-stream-url'
+import { useEmulatorInputCheck } from './input/use-emulator-input-check'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useEffect, useMemo } from 'react'
+import { emulatorServerLabel } from '@/lib/simulator/runtime/emulator-runtime-target'
+import { EMULATOR_STREAM_LOST_EVENT } from '@/lib/simulator/runtime/emulator-runtime-attach'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -16,6 +20,7 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const {
     devices,
@@ -23,6 +28,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     setSelectedUdid,
     loading,
     error,
+    selectionRequired,
     attach,
     markStreamLost,
     shutdown,
@@ -31,6 +37,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     sendGesture,
     sendRotate,
     displayName,
+    deviceId,
     previewUrl,
     wsUrl,
     streamKey,
@@ -47,6 +54,17 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     streamKey
   )
   const visibleError = error ?? inputError
+  const serverLabel = useMemo(() => emulatorServerLabel(worktreeId), [worktreeId])
+  // A server workspace's stream forward closed (the server disconnected): offer Connect again.
+  useEffect(() => {
+    const onLost = (event: Event): void => {
+      if (event instanceof CustomEvent && event.detail?.worktreeId === worktreeId) {
+        markStreamLost()
+      }
+    }
+    window.addEventListener(EMULATOR_STREAM_LOST_EVENT, onLost)
+    return () => window.removeEventListener(EMULATOR_STREAM_LOST_EVENT, onLost)
+  }, [markStreamLost, worktreeId])
 
   return (
     <div
@@ -59,6 +77,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         loading={loading}
         devices={devices}
         selectedUdid={selectedUdid}
+        serverLabel={serverLabel}
         onSelectDevice={(udid) => {
           setSelectedUdid(udid)
           void attach(udid)
@@ -69,6 +88,11 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onRotate={() => void sendRotate()}
       />
 
+      {selectionRequired && (
+        <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+          {emulatorOpeningMessage(selectionRequired, t, serverLabel)}
+        </p>
+      )}
       {visibleError ? (
         <div className="border-b border-border bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {visibleError}
@@ -85,13 +109,12 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (
             <p className="mb-4 text-center text-xs text-muted-foreground">
-              {translate(
-                'auto.components.emulator.pane.EmulatorPane.59b08fa031',
-                'No emulator connected'
-              )}
+              {t('auto.components.emulator.pane.EmulatorPane.59b08fa031', 'No emulator connected')}
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            worktreeId={worktreeId}
+            deviceId={deviceId}
             previewUrl={previewUrl}
             wsUrl={wsUrl}
             streamKey={streamKey}

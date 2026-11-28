@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import * as transcriptFs from '../native-chat/wsl-transcript-fs-access'
-import { getLocalUsageDay } from '../usage/usage-calendar-range'
-import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import * as transcriptFs from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { getLocalUsageDay } from '../usage/reporting/range-query/usage-calendar-range'
+import type { UsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import { parseZcodeUsageDatabase, scanZcodeUsageDatabases } from './scanner'
 import {
   buildZcodeUsageDailyPoints,

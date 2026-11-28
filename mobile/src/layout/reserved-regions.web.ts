@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import { usePageBridgeClientIfPresent } from '../transport/client-context.web'
-import { EMPTY_PAGE_GEOMETRY } from '../mobile-web-shell/bridge/bridge-page-geometry'
+import { usePageBridgeClientIfPresent } from '../transport/connection/client-context.web'
+import { EMPTY_PAGE_GEOMETRY } from '../mobile-web-shell/bridge/page-geometry/bridge-page-geometry'
 
 export function usePageGeometry() {
   const client = usePageBridgeClientIfPresent()
@@ -12,4 +12,9 @@ export function usePageGeometry() {
 export function useReservedRegions() {
   const { occlusions } = usePageGeometry()
   return useMemo(() => ({ divisions: [], occlusions }), [occlusions])
+}
+
+/** The native shell has already kept only the occlusions a header may share. */
+export function useTopChromeOcclusions() {
+  return usePageGeometry().occlusions
 }

@@ -1,28 +1,26 @@
+import { RailPageScroll } from '@/components/rail-page/RailPage'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { ExternalLink } from 'lucide-react'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageGitLabTodoList({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const { primaryRepo, gitlabTodos, gitlabTodosLoading } = model
   return (
-    <div className="flex min-h-0 max-h-full flex-col rounded-md border border-t-0 border-border/50 bg-muted/50 overflow-hidden rounded-t-none shadow-sm">
-      <div className="flex-none grid grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] gap-3 border-b border-border/50 px-3 py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-        <span>{translate('auto.components.TaskPage.8396825a14', 'Action')}</span>
-        <span>{translate('auto.components.TaskPage.16cba35bee', 'Title')}</span>
-        <span>{translate('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
-        <span>{translate('auto.components.TaskPage.f362667d55', 'Updated')}</span>
+    <div className="flex min-h-0 max-h-full flex-col overflow-hidden bg-background">
+      <div className="flex-none grid grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] gap-3 border-b border-border/50 rail-page-row-gutter py-2 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+        <span>{t('auto.components.TaskPage.8396825a14', 'Action')}</span>
+        <span>{t('auto.components.TaskPage.16cba35bee', 'Title')}</span>
+        <span>{t('auto.components.TaskPage.00022ec0ba', 'Project')}</span>
+        <span>{t('auto.components.TaskPage.f362667d55', 'Updated')}</span>
         <span />
       </div>
-      <div
-        className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek"
-        style={{
-          scrollbarGutter: 'stable'
-        }}
-      >
+      <RailPageScroll className="min-h-0 flex-initial overflow-y-auto scrollbar-sleek">
         {gitlabTodosLoading && gitlabTodos.length === 0 ? (
           <div className="divide-y divide-border/50">
             {Array.from({
@@ -30,7 +28,7 @@ export function TaskPageGitLabTodoList({
             }).map((_, i) => (
               <div
                 key={i}
-                className="grid w-full gap-3 px-3 py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
+                className="grid w-full gap-3 rail-page-row-gutter py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
               >
                 <div className="h-4 w-20 animate-pulse rounded bg-muted/70" />
                 <div>
@@ -46,11 +44,8 @@ export function TaskPageGitLabTodoList({
         {!gitlabTodosLoading && gitlabTodos.length === 0 ? (
           <div className="px-4 py-12 text-center text-sm text-muted-foreground">
             {primaryRepo
-              ? translate(
-                  'auto.components.TaskPage.d591aac6ae',
-                  'No pending todos. You’re all caught up!'
-                )
-              : translate(
+              ? t('auto.components.TaskPage.d591aac6ae', 'No pending todos. You’re all caught up!')
+              : t(
                   'auto.components.TaskPage.03da966159',
                   'Select a project so we can authenticate to GitLab.'
                 )}
@@ -69,14 +64,14 @@ export function TaskPageGitLabTodoList({
                   openAppHttpLink(todo.targetUrl)
                 }
               }}
-              className="grid w-full cursor-pointer gap-3 px-3 py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
+              className="grid w-full cursor-pointer gap-3 rail-page-row-gutter py-2 text-left grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px] hover:bg-muted/50"
               title={
                 todo.targetType === 'MergeRequest'
-                  ? translate('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {
+                  ? t('auto.components.TaskPage.a0544fb653', 'MR !{{value0}}', {
                       value0: todo.targetIid ?? ''
                     })
                   : todo.targetType === 'Issue'
-                    ? translate('auto.components.TaskPage.e9b6955dcd', 'Issue #{{value0}}', {
+                    ? t('auto.components.TaskPage.e9b6955dcd', 'Issue #{{value0}}', {
                         value0: todo.targetIid ?? ''
                       })
                     : todo.targetType
@@ -91,7 +86,7 @@ export function TaskPageGitLabTodoList({
                 {todo.projectPath}
               </span>
               <span className="text-xs text-muted-foreground">
-                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(getIntlLocale()) : ''}
+                {todo.updatedAt ? new Date(todo.updatedAt).toLocaleDateString(intlLocale) : ''}
               </span>
               <span className="flex justify-end">
                 <ExternalLink className="size-3.5 text-muted-foreground" />
@@ -99,7 +94,7 @@ export function TaskPageGitLabTodoList({
             </div>
           ))}
         </div>
-      </div>
+      </RailPageScroll>
     </div>
   )
 }

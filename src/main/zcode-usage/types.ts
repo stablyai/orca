@@ -4,7 +4,7 @@ import type {
   UsageLocationModelBreakdown,
   UsageModelBreakdown,
   UsageSession
-} from '../usage/usage-rollup-records'
+} from '../usage/rollups/usage-rollup-records'
 
 export type ZcodeUsageMetric = {
   cacheReadInputTokens: number

@@ -1,14 +1,17 @@
-import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-types'
-import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
-import type { RuntimeClient } from '../runtime-client'
-import { RuntimeClientError } from '../runtime/types'
+import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
+import type { RuntimeClient } from '../runtime/client'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import { hasStructuredSessionMarker } from '../../shared/agent-launch/environment/structured-session-marker'
+import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
-  assertLocalCwdWorktreeSelector,
   getBrowserWorktreeSelector,
   normalizeWorktreeSelectorForCaller,
   resolveCurrentWorktreeSelector
-} from '../selectors'
+} from '../workspace-selection/workspace-selector'
 
 type BrowserCliTarget = {
   worktree?: string
@@ -46,6 +49,46 @@ async function getEnforceableExpectUrl(
   return expectUrl
 }
 
+/** Unscoped commands fall back to the tab a person is looking at, so remote callers and chat agents must name their target. */
+export async function getScopedBrowserWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
+  if (worktree !== undefined) {
+    return worktree
+  }
+  // Why: chat agents have no terminal workspace (#41282), so outside a workspace folder they would drive the user's tab.
+  if (!client.isRemote && (hasStructuredSessionMarker() || readInjectedAgentSessionId())) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'This browser command names no workspace or page, so it would act on the tab the user is looking at. Nothing was sent.',
+      {
+        nextSteps: [
+          'Run it from your workspace folder or pass --worktree <selector>; page commands also take --page <browserPageId> from `orca tab list --json`.'
+        ]
+      }
+    )
+  }
+  if (client.isRemote) {
+    const environment = client.environmentSelector
+    const remote = environment
+      ? ` --environment ${quoteCliCommandArgument(environment)}`
+      : ' --pairing-code <the same code>'
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Remote browser commands need --page <browserPageId> or a server-side --worktree <selector> (not `all`); without one they would act on the tab the user is looking at. Nothing was sent.',
+      {
+        nextSteps: [
+          `Find the page with \`orca tab list${remote} --json\` and pass its browserPageId as --page.`
+        ]
+      }
+    )
+  }
+  return worktree
+}
+
 async function getBrowserPageTarget(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -53,7 +96,7 @@ async function getBrowserPageTarget(
 ): Promise<BrowserCliTarget> {
   const page = getOptionalStringFlag(flags, 'page')
   if (!page) {
-    return { worktree: await getBrowserWorktreeSelector(flags, cwd, client) }
+    return { worktree: await getScopedBrowserWorktreeSelector(flags, cwd, client) }
   }
 
   const explicitWorktree = getOptionalStringFlag(flags, 'worktree')

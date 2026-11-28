@@ -2,17 +2,19 @@ import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  type HookDefinition
-} from '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+  removeManagedCommands
+} from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 import {
   readHooksJsonRemote,
+  writeHooksJsonRemote
+} from '../../../agent-hooks/installation/configuration/hooks-json-remote'
+import {
   readTextFileRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote,
   writeTextFileRemoteAtomic
-} from '../../../agent-hooks/installer-utils-remote'
+} from '../../../agent-hooks/installation/remote/hook-text-files-remote'
+import { writeManagedScriptRemote } from '../../../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   assertLoadableHookTrustConfig,
   type CodexTrustEntry
@@ -87,6 +89,7 @@ export async function installCodexHooksRemote(
         handlerIndex: 0,
         command,
         timeoutSec: hook.timeout,
+        statusMessage: hook.statusMessage,
         // Orca's setting overrides Codex's /hooks off switch for this hook, as local installs do.
         enabled: true
       })
@@ -99,21 +102,34 @@ export async function installCodexHooksRemote(
     // Preserve other managers' metadata in the user's remote hooks.json.
     await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
     try {
-      const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
-      if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
-        return {
-          agent: 'codex',
-          state: 'installed',
-          configPath: remoteConfigPath,
-          managedHooksPresent: true,
-          detail: 'Trust entries deferred until config.toml is seeded by the launch path'
+      for (let attempt = 0; ; attempt++) {
+        const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
+        if (existingTomlRaw === null && options?.deferTrustUntilConfigToml === true) {
+          return {
+            agent: 'codex',
+            state: 'installed',
+            configPath: remoteConfigPath,
+            managedHooksPresent: true,
+            detail: 'Trust entries deferred until config.toml is seeded by the launch path'
+          }
         }
-      }
-      const existingToml = existingTomlRaw ?? ''
-      const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
-      if (updatedToml !== existingToml) {
+        const existingToml = existingTomlRaw ?? ''
+        const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+        if (updatedToml === existingToml) {
+          break
+        }
         assertLoadableHookTrustConfig(remoteTomlPath, existingToml, updatedToml)
-        await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
+        // A save after the read is kept; redo the edit on it.
+        if (
+          await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml, {
+            computedFrom: existingTomlRaw
+          })
+        ) {
+          break
+        }
+        if (attempt === 2) {
+          throw new Error(`${remoteTomlPath} kept changing while Orca updated it`)
+        }
       }
     } catch (error) {
       return {

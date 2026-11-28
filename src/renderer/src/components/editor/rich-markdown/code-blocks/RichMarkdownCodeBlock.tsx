@@ -4,10 +4,11 @@ import { useTranslation } from 'react-i18next'
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { Copy, Check } from 'lucide-react'
-import MermaidBlock from '../../MermaidBlock'
-import { useMermaidDiagramExpand } from '../../use-mermaid-diagram-expand'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { translate } from '@/i18n/i18n'
+import MermaidBlock from '../../diagrams/MermaidBlock'
+import { useMermaidDiagramExpand } from '../../diagrams/use-mermaid-diagram-expand'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+import { useTranslate } from '@/i18n/use-translate'
+import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
 import {
   getCodeBlockLanguageLabel,
   getCodeBlockLanguages,
@@ -18,6 +19,7 @@ export function RichMarkdownCodeBlock({
   node,
   updateAttributes
 }: NodeViewProps): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const language = (node.attrs.language as string) || ''
   const [copied, setCopied] = useState(false)
@@ -66,9 +68,8 @@ export function RichMarkdownCodeBlock({
   const handleCopy = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      const text = node.textContent
       void window.api.ui
-        .writeClipboardText(text)
+        .writeClipboardText(toCodeClipboardText(node.textContent))
         .then(() => {
           if (!isMountedRef.current) {
             return
@@ -120,17 +121,14 @@ export function RichMarkdownCodeBlock({
         className="code-block-copy-btn"
         contentEditable={false}
         onClick={handleCopy}
-        aria-label={translate(
-          'auto.components.editor.RichMarkdownCodeBlock.c72beafc0f',
-          'Copy code'
-        )}
-        title={translate('auto.components.editor.RichMarkdownCodeBlock.c72beafc0f', 'Copy code')}
+        aria-label={t('auto.components.editor.RichMarkdownCodeBlock.c72beafc0f', 'Copy code')}
+        title={t('auto.components.editor.RichMarkdownCodeBlock.c72beafc0f', 'Copy code')}
       >
         {copied ? (
           <>
             <Check size={14} />
             <span className="code-block-copy-label">
-              {translate('auto.components.editor.RichMarkdownCodeBlock.232d9ed853', 'Copied')}
+              {t('auto.components.editor.RichMarkdownCodeBlock.232d9ed853', 'Copied')}
             </span>
           </>
         ) : (

@@ -1,15 +1,17 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getEligibleWorktreeParents } from '../parenting/worktree-parent-candidates'
+import { useEligibleFolderParents } from '../parenting/use-eligible-folder-parents'
 import {
   EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY,
   EMPTY_CYCLIC_LINEAGE_IDS,
@@ -37,8 +39,8 @@ export function useMenuLineageParent(args: {
       EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY
     )
   )
-  const parentIdentities = useAppStore((s) =>
-    menuOpen ? selectSidebarLineageParentIdentities(s) : undefined
+  const parentIdentities = useAppStoreWithHostStatuses((s, statuses) =>
+    menuOpen ? selectSidebarLineageParentIdentities(s, statuses) : undefined
   )
   const hasLink = (item: Worktree): boolean =>
     hasWorktreeParentLink(
@@ -68,6 +70,7 @@ export function useMenuLineageParent(args: {
       ? null
       : (allWorktrees.find((row) => getWorktreeHostIdentity(row) === parentIdentity) ?? null)
   }, [allWorktrees, lineageInfo, parentIdentities, worktree])
+  const folderParentCount = useEligibleFolderParents(worktree, menuOpen).length
   const eligibleParentCount = useMemo(
     () =>
       menuOpen
@@ -79,11 +82,12 @@ export function useMenuLineageParent(args: {
             repoMap,
             cyclicLineageIds,
             parentIdentities
-          }).length
+          }).length + folderParentCount
         : 0,
     [
       allWorktrees,
       cyclicLineageIds,
+      folderParentCount,
       menuOpen,
       parentIdentities,
       repoMap,

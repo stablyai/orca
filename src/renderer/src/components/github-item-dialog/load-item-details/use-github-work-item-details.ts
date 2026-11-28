@@ -1,23 +1,23 @@
-import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import { projectPRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { useAppStore } from '@/store'
 import { useGitHubItemTargetContext } from './github-work-item-target-context'
 import {
   GitHubWorkItemTargetError,
   matchesGitHubWorkItemTarget
-} from '../../../../../shared/github/work-item-target'
+} from '../../../../../shared/github/work-items/work-item-target'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskItems } from '@/lib/work-items/github/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
-import { addressedGitHubIssueItem } from '@/lib/github-task-target'
+import { addressedGitHubIssueItem } from '@/lib/work-items/github/github-task-target'
 import {
   normalizeItemDialogTab,
   type ItemDialogTab
 } from '@/components/github/github-work-item-identity'
-import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { GitHubWorkItemDetailsArgs } from './github-item-dialog-types'
 import {
   invalidateWorkItemDetailsCacheByMatch,
@@ -139,6 +139,17 @@ export function useGitHubWorkItemDetails({
         ? cachedEntry.error
         : null
   const detailsLoaded = Boolean(details)
+  // Why: an uncached item's first commit precedes the effect below that marks its read pending.
+  // Count a read that effect will start as pending, so empty copy never paints before a read confirms it.
+  const detailsReadOwed =
+    !!workItem &&
+    !!effectiveRepoId &&
+    !!detailsCacheKey &&
+    canUseDetailsRepoContext &&
+    !invalidOpenedItem &&
+    (!binding || cache.current(binding)) &&
+    (!cachedEntry || !!cachedEntry.rereadOwed)
+  const detailsPending = !details && !error && (loading || detailsReadOwed)
 
   // Invalidation keeps shown details without changing fetch dependencies; a tick starts the one owed read.
   const [refetchTick, setRefetchTick] = useState(0)
@@ -304,6 +315,7 @@ export function useGitHubWorkItemDetails({
     loading,
     error,
     detailsLoaded,
+    detailsPending,
     displayWorkItem,
     addressedWorkItem,
     appendOptimisticComment,

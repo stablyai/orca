@@ -1,15 +1,14 @@
 import { useCallback, useMemo, useRef } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { expandDraggedWorktreeIdsForVisibleLineage } from './worktree-manual-order'
-import { getWorktreeDragUnitGroups } from './worktree-drag-units'
+import type { WorktreeRowGeometry } from '../viewport/use-row-geometry'
 import {
-  getWorktreeSidebarDragRectsForGroup,
   refreshWorktreeSidebarDragSession,
   type WorktreeSidebarDragRect,
   type WorktreeSidebarDragSession
@@ -23,7 +22,7 @@ import {
   computeWorktreeSidebarDropPreview,
   type WorktreeSidebarDropPreview
 } from './worktree-sidebar-drop-preview'
-import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
+import { getWorktreeDragGroups } from './groups'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import {
@@ -41,46 +40,68 @@ export type WorktreeStatusDropRequest = {
   draggedKeys: readonly string[]
 }
 
+const dragGroupsCache = new WeakMap<HostSectionRow[], ReturnType<typeof getWorktreeDragGroups>>()
+
+function getCachedWorktreeDragGroups(rows: HostSectionRow[]) {
+  let cached = dragGroupsCache.get(rows)
+  if (!cached) {
+    cached = getWorktreeDragGroups(rows)
+    dragGroupsCache.set(rows, cached)
+  }
+  return cached
+}
+
 export type WorktreeDragSession = ReturnType<typeof useWorktreeDragSession>
 
 export function useWorktreeDragSession(args: {
   rows: HostSectionRow[]
   scrollRef: React.RefObject<HTMLDivElement | null>
+  geometry: WorktreeRowGeometry
 }) {
-  const { rows, scrollRef } = args
+  const { rows, scrollRef, geometry } = args
+  const { getRects, getUnits: getWorktreeDragUnitGroups } = geometry
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   // Hold cross-group drop anchors separately so expanding target cards cannot move the line under a still pointer.
   const statusDropAnchorsRef = useRef<Map<string, WorktreeSidebarDropAnchor>>(new Map())
 
-  const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
-  const worktreeDragUnitGroups = useMemo(() => getWorktreeDragUnitGroups(rows), [rows])
-  const naturalDragWorktreeKeys = useMemo(() => getNaturalWorktreeKeys(rows), [rows])
-  const worktreeLineageDragRows = useMemo(
-    () =>
-      rows
-        .filter((row): row is WorktreeItemRow => row.type === 'item')
-        .filter(
-          (row) =>
-            row.sectionKey !== PINNED_GROUP_KEY ||
-            !naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))
-        )
-        .map((row) => ({
-          worktreeId: row.worktree.id,
-          hostId: row.worktree.hostId,
-          depth: row.depth
-        })),
-    [naturalDragWorktreeKeys, rows]
-  )
+  const getWorktreeDragGroupsCb = useCallback(() => getCachedWorktreeDragGroups(rows), [rows])
+  const getWorktreeLineageDragRows = useCallback(() => {
+    let naturalDragWorktreeKeys: Set<string> | undefined
+    const lineageRows: {
+      worktreeId: string
+      hostId: WorktreeItemRow['worktree']['hostId']
+      depth: number
+    }[] = []
+    for (const row of rows) {
+      if (row.type !== 'item') {
+        continue
+      }
+      if (row.sectionKey === PINNED_GROUP_KEY) {
+        if (!naturalDragWorktreeKeys) {
+          naturalDragWorktreeKeys = getNaturalWorktreeKeys(rows)
+        }
+        if (naturalDragWorktreeKeys.has(getWorktreeHostIdentity(row.worktree))) {
+          continue
+        }
+      }
+      lineageRows.push({
+        worktreeId: row.worktree.id,
+        hostId: row.worktree.hostId,
+        depth: row.depth
+      })
+    }
+    return lineageRows
+  }, [rows])
   const getReorderDraggedIds = useCallback(
     (draggedIds: readonly string[]) =>
-      expandDraggedWorktreeIdsForVisibleLineage(worktreeLineageDragRows, draggedIds),
-    [worktreeLineageDragRows]
+      expandDraggedWorktreeIdsForVisibleLineage(getWorktreeLineageDragRows(), draggedIds),
+    [getWorktreeLineageDragRows]
   )
   // Why by identity: by id, a dragged twin would also pull in its other-host copy's children.
   const getReorderDraggedCopies = useCallback(
     (copies: DraggedWorktreeCopies): DraggedWorktreeCopies =>
       expandDraggedWorktreeIdsForVisibleLineage(
-        worktreeLineageDragRows.map((row) => ({
+        getWorktreeLineageDragRows().map((row) => ({
           worktreeId: composeWorktreeHostIdentity(row.hostId, row.worktreeId),
           depth: row.depth
         })),
@@ -89,11 +110,13 @@ export function useWorktreeDragSession(args: {
         id: getWorktreeIdFromHostIdentity(identity),
         hostId: getExecutionHostIdFromWorktreeHostIdentity(identity)
       })),
-    [worktreeLineageDragRows]
+    [getWorktreeLineageDragRows]
   )
   const getReorderUnitDraggedKeys = useCallback(
     (sourceGroupKey: string, reorderDraggedKeys: readonly string[]) => {
-      const group = worktreeDragUnitGroups.find((candidate) => candidate.key === sourceGroupKey)
+      const group = getWorktreeDragUnitGroups().find(
+        (candidate) => candidate.key === sourceGroupKey
+      )
       if (!group) {
         return reorderDraggedKeys
       }
@@ -101,12 +124,9 @@ export function useWorktreeDragSession(args: {
       const filtered = reorderDraggedKeys.filter((key) => unitKeys.has(key))
       return filtered.length > 0 ? filtered : reorderDraggedKeys
     },
-    [worktreeDragUnitGroups]
+    [getWorktreeDragUnitGroups]
   )
-  const { groupKeyByRowKey, groupIndexByRowKey } = useMemo(
-    () => getWorktreeDragIndexes(rows),
-    [rows]
-  )
+  const { groupKeyByRowKey, groupIndexByRowKey } = geometry.indexes
   const refreshWorktreeDragSession = useCallback((): boolean => {
     const session = worktreeDragSessionRef.current
     const container = scrollRef.current
@@ -116,13 +136,13 @@ export function useWorktreeDragSession(args: {
 
     const refreshedSession = refreshWorktreeSidebarDragSession({
       session,
-      groups: worktreeDragGroups,
-      unitGroups: worktreeDragUnitGroups,
-      rects: getWorktreeSidebarDragRectsForGroup(container, session.sourceGroupKey)
+      groups: getWorktreeDragGroupsCb(),
+      unitGroups: getWorktreeDragUnitGroups(),
+      rects: getRects(session.sourceGroupKey, session.reorderUnitDraggedKeys)
     })
     worktreeDragSessionRef.current = refreshedSession
     return refreshedSession !== null
-  }, [scrollRef, worktreeDragGroups, worktreeDragUnitGroups])
+  }, [scrollRef, getWorktreeDragGroupsCb, getWorktreeDragUnitGroups, getRects])
   const computeWorktreeDropForGroup = useCallback(
     (dropArgs: {
       pointerY: number
@@ -137,7 +157,9 @@ export function useWorktreeDragSession(args: {
       if (!container) {
         return null
       }
-      const group = worktreeDragUnitGroups.find((candidate) => candidate.key === dropArgs.groupKey)
+      const group = getWorktreeDragUnitGroups().find(
+        (candidate) => candidate.key === dropArgs.groupKey
+      )
       if (!group) {
         return null
       }
@@ -155,7 +177,7 @@ export function useWorktreeDragSession(args: {
         anchor: dropArgs.anchor
       })
     },
-    [scrollRef, worktreeDragUnitGroups]
+    [scrollRef, getWorktreeDragUnitGroups]
   )
   const computeWorktreeDrop = useCallback(
     (pointerY: number): WorktreeSidebarDropPreview | null => {
@@ -210,7 +232,7 @@ export function useWorktreeDragSession(args: {
       const preview = computeWorktreeDropForGroup({
         pointerY: request.pointerY,
         groupKey,
-        rects: getWorktreeSidebarDragRectsForGroup(container, groupKey),
+        rects: getRects(groupKey),
         draggedIds: request.draggedKeys,
         draggingWorktreeId: session?.draggingWorktreeId ?? null,
         grab: session?.grab ?? null,
@@ -227,16 +249,17 @@ export function useWorktreeDragSession(args: {
       }
       return preview
     },
-    [computeWorktreeDropForGroup, scrollRef]
+    [computeWorktreeDropForGroup, scrollRef, getRects]
   )
 
   // Keep session callback identity stable for memoized cards.
   return useMemo(
     () => ({
+      getRects,
       worktreeDragSessionRef,
       statusDropAnchorsRef,
-      worktreeDragGroups,
-      worktreeDragUnitGroups,
+      getWorktreeDragGroups: getWorktreeDragGroupsCb,
+      getWorktreeDragUnitGroups,
       groupKeyByRowKey,
       groupIndexByRowKey,
       getReorderDraggedIds,
@@ -247,6 +270,7 @@ export function useWorktreeDragSession(args: {
       computeWorktreeStatusDrop
     }),
     [
+      getRects,
       computeWorktreeDrop,
       computeWorktreeStatusDrop,
       getReorderDraggedCopies,
@@ -255,8 +279,8 @@ export function useWorktreeDragSession(args: {
       groupIndexByRowKey,
       groupKeyByRowKey,
       refreshWorktreeDragSession,
-      worktreeDragGroups,
-      worktreeDragUnitGroups
+      getWorktreeDragGroupsCb,
+      getWorktreeDragUnitGroups
     ]
   )
 }

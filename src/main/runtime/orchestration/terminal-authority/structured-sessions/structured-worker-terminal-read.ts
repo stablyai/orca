@@ -3,13 +3,12 @@
  * worker-read requires coordinator authority and offers the same mutable window, not a paging alternative.
  * Keep terminal.show non-resolving: fabricated PTY ids would expose writable terminal operations. */
 
-import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal-contracts'
-import { formatWorkerTranscriptMessage } from '../../../../../shared/worker-transcript-text'
-import '../../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
-import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/structured-agent-session-mutation-refusals'
+import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { formatWorkerTranscriptMessage } from '../../../../../shared/native-chat/transcript/worker-transcript-text'
+import '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission'
+import { AGENT_SESSION_NOT_ATTACHED } from '../../../../native-chat/agent-session-wire/operations/structured-agent-session-mutation-refusals'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import { boundStructuredJournalTail } from '../../structured-worker-journal-archive'
-import { readStructuredLineageJournalPage } from '../../structured-worker-journal-page'
+import { readStructuredLineageJournalPage } from '../../workers/archives/structured-worker-journal-page'
 import {
   holdStructuredWorker,
   observeStructuredSession,
@@ -50,6 +49,8 @@ export async function readStructuredWorkerTerminal(args: {
     throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
   }
   // Redacts dispatch capabilities and clips oversized blocks under the archive path's byte bound.
+  const { boundStructuredJournalTail } =
+    await import('../../workers/archives/structured-worker-journal-archive')
   const bounded = boundStructuredJournalTail(page.items)
   const lines = bounded.messages.flatMap((message) =>
     formatWorkerTranscriptMessage(message).split('\n')

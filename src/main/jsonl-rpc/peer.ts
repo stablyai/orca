@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   createIncrementalNdjsonFramer,
   encodeNdjson
-} from '../../shared/main-process-ndjson-framer'
+} from '../../shared/json-stream/main-process-ndjson-framer'
 import { detachProviderStreamErrorHandler } from '../provider-process/provider-stdio-error-boundary'
 import { ProviderStdioWriteQueue } from '../provider-process/provider-stdio-write-queue'
 import { ProviderOutputEnd } from '../provider-process/provider-output-end'
@@ -14,8 +14,9 @@ import {
 } from './peer-limits'
 import { settleOversizedJsonlRecord, type JsonlRpcRequestOptions } from './peer-oversized-record'
 import { settleJsonlRpcReply, type JsonlRpcPendingRequest } from './peer-reply'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
-const recordSchema = z.looseObject({ type: z.string() })
+const recordSchema = lazyZodSchema(() => z.looseObject({ type: z.string() }))
 
 export type JsonlRpcRecord = z.infer<typeof recordSchema>
 export class JsonlRpcStreamClosedError extends Error {

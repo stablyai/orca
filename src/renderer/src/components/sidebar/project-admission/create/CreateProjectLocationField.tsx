@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { RemoteFileBrowser } from '../../host-path-browser/RemoteFileBrowser'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CreateProjectParentBrowserProps = {
   runtimeEnvironmentId?: string | null
@@ -21,17 +21,18 @@ export function CreateProjectParentBrowser({
   onParentChange,
   onClose
 }: CreateProjectParentBrowserProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
+          {t(
             'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
             'Browse host filesystem'
           )}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.CreateProjectLocationField.b589b77997',
             'Navigate to a directory and click Select to choose it.'
           )}
@@ -81,10 +82,11 @@ export function CreateProjectLocationField({
   onPickParent,
   onBrowseServer
 }: CreateProjectLocationFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-1">
       <span className="text-[11px] font-medium text-muted-foreground block">
-        {translate('auto.components.sidebar.CreateProjectLocationField.134e37f711', 'Location')}
+        {t('auto.components.sidebar.CreateProjectLocationField.134e37f711', 'Location')}
       </span>
 
       {manualParentEntry ? (
@@ -92,7 +94,7 @@ export function CreateProjectLocationField({
           <Input
             value={createParent}
             onChange={(e) => onParentChange(e.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.sidebar.CreateProjectLocationField.2a20a603a3',
               '/home/user/projects'
             )}
@@ -109,7 +111,7 @@ export function CreateProjectLocationField({
                 className="h-11 w-11 shrink-0"
                 onClick={onBrowseServer}
                 disabled={isCreating || !runtimeEnvironmentId}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
                   'Browse host filesystem'
                 )}
@@ -118,7 +120,7 @@ export function CreateProjectLocationField({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate(
+              {t(
                 'auto.components.sidebar.CreateProjectLocationField.f520f83a97',
                 'Browse host filesystem'
               )}
@@ -135,13 +137,13 @@ export function CreateProjectLocationField({
             onClick={onPickParent}
             disabled={isCreating}
             className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-not-allowed"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.CreateProjectLocationField.afaf54f245',
               'Change parent folder'
             )}
           >
             <Pencil className="size-3" />
-            {translate('auto.components.sidebar.CreateProjectLocationField.632b456b1b', 'Change')}
+            {t('auto.components.sidebar.CreateProjectLocationField.632b456b1b', 'Change')}
           </button>
         </div>
       ) : (
@@ -155,7 +157,7 @@ export function CreateProjectLocationField({
           <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/40">
             <Folder className="size-3.5" />
           </span>
-          {translate(
+          {t(
             'auto.components.sidebar.CreateProjectLocationField.95548e33bf',
             'Choose parent folder...'
           )}

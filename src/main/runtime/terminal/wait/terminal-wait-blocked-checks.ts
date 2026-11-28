@@ -6,12 +6,12 @@ import {
   readWaitBlockedCarry,
   resetWaitBlockedCarry,
   type WaitBlockedCheckState
-} from '../../wait-blocked-check-state'
+} from './wait-blocked-check-state'
 import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
-import { ownRetainedString } from '../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { createTerminalAgentStatusProcessor } from '../../../../shared/program-status/terminal-agent-status-processor'
 import type { RuntimePtyTitleTrackerEntry } from '../records/runtime-terminal-state-records'

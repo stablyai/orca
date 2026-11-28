@@ -1,6 +1,6 @@
 import type { MouseEvent } from 'react'
 import { GitPullRequest } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeCardDetailSection } from '../details/WorktreeCardDetailSection'
 import { DetailHeader } from '../metadata/WorktreeCardMetadataControls'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -28,6 +28,7 @@ export function WorktreeCardReviewDetailSection({
   onOpenLink: (url: string, event: MouseEvent) => void
   onManageLinks?: (event: MouseEvent) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!review) {
     return null
   }
@@ -45,7 +46,7 @@ export function WorktreeCardReviewDetailSection({
     <WorktreeCardDetailSection>
       <DetailHeader
         icon={<GitPullRequest className="size-3" />}
-        label={`${translate('workspace.links.reviews', 'Reviews')} · 1`}
+        label={`${t('workspace.links.reviews', 'Reviews')} · 1`}
         onAddReference={onManageLinks}
       />
       <div className="py-1.5">

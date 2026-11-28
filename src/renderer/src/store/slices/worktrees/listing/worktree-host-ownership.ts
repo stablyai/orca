@@ -1,9 +1,9 @@
 import type { AppState } from '../../../types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import { findRepoForHost } from '../../repo-host-identity'
-import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
+import { reuseEqualCatalogRows } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -11,14 +11,14 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { toVisibleWorktree } from './worktree-catalog-visibility'
-import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function withRepoHostOwnership<
   T extends {
@@ -115,10 +115,13 @@ export function toVisibleWorktrees(
   hostId: ExecutionHostId,
   setup?: ProjectHostSetup
 ): Worktree[] {
-  return result.worktrees
-    .filter((worktree) => worktree.visible)
-    .map(toVisibleWorktree)
-    .map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+  const visible: Worktree[] = []
+  for (const worktree of result.worktrees) {
+    if (worktree.visible) {
+      visible.push(withRepoHostOwnership(toVisibleWorktree(worktree), hostId, setup))
+    }
+  }
+  return visible
 }
 
 export function getProjectHostSetupForRepoHost(
@@ -220,10 +223,19 @@ export function mergeWorktreesForHost<
 ): T[] {
   // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order or sortEpoch.
   const existing = current ?? []
-  const reconciled = reuseEqualCatalogRows(
-    existing.filter((worktree) => worktreeMatchesHost(worktree, hostId, options)),
-    refreshed
-  )
+  let matchingForHost: T[] | null = null
+  for (let i = 0; i < existing.length; i++) {
+    const worktree = existing[i]
+    if (worktreeMatchesHost(worktree, hostId, options)) {
+      matchingForHost?.push(worktree)
+    } else if (!matchingForHost) {
+      matchingForHost = existing.slice(0, i)
+    }
+  }
+  if (!matchingForHost) {
+    return reuseEqualCatalogRows(existing, refreshed)
+  }
+  const reconciled = reuseEqualCatalogRows(matchingForHost, refreshed)
   const next: T[] = []
   let inserted = false
 
@@ -285,7 +297,10 @@ export function getRemovedWorktreeIdsAfterAuthoritativeScan(
   if (!detected.authoritative) {
     return []
   }
-  const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
+  const detectedIds = new Set<string>()
+  for (const worktree of detected.worktrees) {
+    detectedIds.add(worktree.id)
+  }
   return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => !detectedIds.has(id))
 }
 

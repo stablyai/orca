@@ -1,5 +1,5 @@
 /* eslint-disable no-control-regex -- Terminal control-sequence parsing intentionally matches raw control bytes. */
-import { ownRetainedString } from '../../shared/own-retained-string'
+import { ownRetainedString } from '../../shared/text/own-retained-string'
 import type {
   AdvertisedUrl,
   AdvertisedUrlChangeEvent,
@@ -107,7 +107,9 @@ export function extractUrlCandidates(cleaned: string): URL[] {
     while (candidate.length > 0 && /[.,;:!?)\]}>'"`]/.test(candidate.slice(-1))) {
       candidate = candidate.slice(0, -1)
     }
-    const url = parseUrl(candidate)
+    // A trimmed ] that makes the URL valid again closed an IPv6 host such as http://[::1].
+    const url =
+      parseUrl(candidate) ?? (match[0][candidate.length] === ']' ? parseUrl(`${candidate}]`) : null)
     if (url) {
       results.push(url)
     }

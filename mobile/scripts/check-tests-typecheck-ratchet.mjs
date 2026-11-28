@@ -14,28 +14,7 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 
 // Tests outside the RN program. Checked transfers are the roots of tsconfig.test.node.json and must pass
 // that strict program; the rest are legacy runtime-only allowances whose bodies nothing typechecks.
-export const TESTS_OUTSIDE_PROGRAM = new Map([
-  [
-    'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/components/pr-sidebar/reviewer-picker.target-contract.test.tsx',
-    'Checked transfer: strict Node program over emitted phone/host declarations (tsconfig.test.node.json)'
-  ],
-  [
-    'src/session/mobile-native-command-discovery.test.tsx',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports desktop ACP command discovery, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/tasks/agent-launch-mobile-replay.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/tasks/mobile-agent-launch-architecture.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ]
-])
+export const TESTS_OUTSIDE_PROGRAM = new Map([])
 
 // Normalize tsc’s host separators to POSIX baseline paths or Windows reports every entry stale and added.
 const toPosix = (filePath) => filePath.replaceAll('\\', '/')
@@ -126,8 +105,10 @@ export function checkTransfers(result, allowed = TESTS_OUTSIDE_PROGRAM, nocheck 
   if (!result.ok) {
     problems.push('the phone/host contract program did not pass')
   }
-  if (result.expected.length === 0) {
-    problems.push('tsconfig.test.node.json names no checked transfer')
+  for (const [file, reason] of allowed) {
+    if (reason.startsWith('Checked transfer:') && !result.expected.includes(file)) {
+      problems.push(`checked transfer is absent from tsconfig.test.node.json: ${file}`)
+    }
   }
   for (const file of result.expected) {
     if (!allowed.has(file)) {

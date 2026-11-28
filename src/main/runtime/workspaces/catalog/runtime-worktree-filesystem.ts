@@ -1,24 +1,20 @@
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isENOENT } from '../../../ipc/filesystem/access/filesystem-path-containment'
-import {
-  getLocalWorktreePathAccess,
-  toLocalWorktreeRuntimePath
-} from '../../../workspaces/removal/local-worktree-filesystem'
+import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
+import { getLocalWorktreePathAccess } from '../../../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
   getRuntimeFolderWorkspaceRootId,
-  isRuntimeFolderWorkspaceIdForRepo,
   mergeRuntimeFolderWorkspace
 } from './runtime-folder-workspace'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 /** Callers hold a local removal route; an `ssh:` or `runtime:` host is refused before this. */
@@ -26,11 +22,8 @@ export async function isLocalRuntimeWorktreePathMissing(
   worktreePath: string,
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
-  const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-  return isWorktreePathMissing(
-    toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-    access.statPath
-  )
+  const access = getLocalWorktreePathAccess(localWorktreeGitOptions, worktreePath)
+  return isWorktreePathMissing(worktreePath, access.statPath)
 }
 
 function getRuntimeFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
@@ -45,19 +38,20 @@ function runtimeFolderWorkspaceRows(
   stamp: boolean
 ): Worktree[] {
   const rootId = getRuntimeFolderWorkspaceRootId(repo)
+  const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   const allMeta = store.getAllWorktreeMeta()
   const expectedHostId = getRepoExecutionHostId(repo)
   // A project a WSL move is taking still lists, without stamping identities it lacks.
   const canWrite = stamp && !isWslMoveRepoBlocked(repo)
-  const ids = Object.keys(allMeta).filter(
-    (worktreeId) =>
-      isRuntimeFolderWorkspaceIdForRepo(repo, worktreeId) &&
+  const ids: string[] = [rootId]
+  for (const worktreeId in allMeta) {
+    if (
+      worktreeId.startsWith(instancePrefix) &&
+      Object.hasOwn(allMeta, worktreeId) &&
       (repoOwnerCount === 1 || allMeta[worktreeId]?.hostId === expectedHostId)
-  )
-  if (!ids.includes(rootId)) {
-    ids.unshift(rootId)
-  } else {
-    ids.sort((left, right) => (left === rootId ? -1 : right === rootId ? 1 : 0))
+    ) {
+      ids.push(worktreeId)
+    }
   }
   return ids.map((worktreeId) => {
     const existing = getRepoOwnedWorktreeMeta(repo, worktreeId, allMeta, repoOwnerCount)

@@ -1,6 +1,6 @@
 // A stand-in for the connector seam and the machine around it, recording each call a client makes.
 import { vi } from 'vitest'
-import type { ConnectorProject } from '../../shared/connector-cloud-contract'
+import type { ConnectorBot } from '../../shared/connectors/connector-cloud-contract'
 import type {
   ConversationEvent,
   ConversationWatchListener
@@ -21,6 +21,7 @@ export function fakeSeam() {
     (await outcomes.get(id)) ?? { outcome: 'accepted' }
   const seam = {
     signal: disabled.signal,
+    resetAccount: () => watchers.clear(),
     start: vi.fn(async (_host: unknown, key: unknown, id: string) => ({
       conversation: key,
       initial: await outcome(id)
@@ -31,6 +32,9 @@ export function fakeSeam() {
     }),
     cancel: vi.fn((_host: unknown, _key: unknown, id: string) => outcome(id)),
     recorded: vi.fn(async (_key: unknown, id: string) => recorded.get(id) ?? null),
+    carried: vi.fn(
+      async (_key: unknown, _id: string, _text: string, done: Promise<unknown>) => await done
+    ),
     watch: vi.fn((_host: unknown, listener: ConversationWatchListener) => {
       listener({ kind: 'snapshot', conversations: [] })
       watchers.add(listener)
@@ -39,7 +43,15 @@ export function fakeSeam() {
   }
   return {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client calls only these seam members.
-    seam: seam as unknown as ExternalConversationSeam,
+    seam: {
+      ...seam,
+      receipts: {
+        recorded: seam.recorded,
+        carried: seam.carried,
+        known: (_key: unknown, id: string) => recorded.has(id),
+        heldByMute: () => null
+      }
+    } as unknown as ExternalConversationSeam,
     calls: seam,
     outcomes,
     recorded,
@@ -48,27 +60,43 @@ export function fakeSeam() {
   }
 }
 
-/** `current` is the seam while connectors are on, null while they are off. */
-export function fakeMachine(
-  current: () => FakeSeam | null,
-  projects: ConnectorProject[] = []
-): ConnectorMachine & { toggle: () => void; agentList: string[] } {
-  const toggled = new Set<() => void>()
-  const machine: ConnectorMachine & { toggle: () => void; agentList: string[] } = {
-    /** What `agents()` reports; tests change it to model a settings change. */
-    agentList: ['claude', 'codex'],
+export const FAKE_BOT: ConnectorBot = {
+  id: 'b1',
+  name: 'Reviewer',
+  agent: 'claude',
+  members: [],
+  paused: false
+}
+
+/** `current` is the machine's seam; `wanted` is what wantsConnection answers. */
+export function fakeMachine(current: () => FakeSeam | null): ConnectorMachine & {
+  inputsChanged: () => void
+  botList: ConnectorBot[]
+  wanted: boolean
+} {
+  const changed = new Set<() => void>()
+  const machine: ConnectorMachine & {
+    inputsChanged: () => void
+    botList: ConnectorBot[]
+    wanted: boolean
+  } = {
+    /** What `bots()` reports; tests change it to model a changed hello. */
+    botList: [],
+    wanted: true,
     runtime: 'desktop',
-    hostName: 'box',
+    hostName: () => 'box',
     orcaVersion: '1.4.250',
     seam: () => current()?.seam ?? null,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake seam never reads its host.
     conversationHost: () => ({}) as ReturnType<ConnectorMachine['conversationHost']>,
-    agents: () => machine.agentList,
-    projects: () => projects,
-    onConnectorsToggled: (listener) => {
-      toggled.add(listener)
+    bots: () => machine.botList,
+    triggers: () => [],
+    runTrigger: async () => false,
+    wantsConnection: () => machine.wanted,
+    onHelloInputsChanged: (listener) => {
+      changed.add(listener)
     },
-    toggle: () => toggled.forEach((listener) => listener())
+    inputsChanged: () => changed.forEach((listener) => listener())
   }
   return machine
 }

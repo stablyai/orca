@@ -1,12 +1,15 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import {
+  forgeCredentialTarget,
+  forgeOwnerHostIdForWorkspace
+} from '@/runtime/source-control/forge/forge-credential-target'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
-import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import HostedReviewActions from '../../hosted-review/provider-actions/HostedReviewActions'
 import { GitHubPRStackMap } from '../../hosted-review/provider-actions/GitHubPRStackMap'
 import { SourceControlAgentActionDialog } from '../../source-control/ai/SourceControlAgentActionDialog'
 import { ChecksPanelUpdatedAtMetadata } from './checks-panel-updated-at-metadata'
-import { getChecksPanelRefreshErrorBannerLine } from '../../hosted-review/provider-actions/github-refresh-error-copy'
 import { resolveChecksPanelHostedReviewModifierDestination } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { clearPendingPRCommentAiAck } from '../comments/pr-comments-ai-launch-ack'
 import {
@@ -18,15 +21,24 @@ import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary
 import { ChecksList } from './checks-list'
 import { PRCommentsList } from '../comments/comments-list'
 import { openAnnotationLocation } from '@/components/editor/check-details/actions/check-annotation-open'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'
 
 export function ChecksPanelActiveContent({
-  model
+  model,
+  refreshError,
+  coldChecks,
+  coldComments,
+  commentsError
 }: {
   model: ChecksPanelActiveContentModel
+  refreshError: string | null
+  coldChecks: boolean
+  coldComments: boolean
+  commentsError: string | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     activeConnectionId,
     activeConflictReview,
@@ -41,12 +53,13 @@ export function ChecksPanelActiveContent({
     canTargetPRComments,
     checks,
     checksError,
+    checksLoaded,
     checksLoading,
     claimedCommentResolutionRef,
     commentResolutionLaunchAcceptedRef,
     comments,
+    commentsLoaded,
     commentsDisabledReason,
-    commentsError,
     commentsLoading,
     commentsSelectionClearRequest,
     conflictDetailsRefreshing,
@@ -80,7 +93,6 @@ export function ChecksPanelActiveContent({
     manualRefreshError,
     pendingCommentResolutionRef,
     pr,
-    prRefreshState,
     refreshHostedReviewAfterMutation,
     repo,
     resolveCommentsWithAIDisabledReason,
@@ -108,11 +120,6 @@ export function ChecksPanelActiveContent({
     settings,
     Boolean(activeWorktreeId)
   )
-  // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
-  const refreshError =
-    (activeReview.provider === 'github' && prRefreshState?.status === 'error'
-      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)
-      : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {refreshError ? (
@@ -157,7 +164,7 @@ export function ChecksPanelActiveContent({
             />
             <button
               className="cursor-pointer rounded p-1 text-emerald-500 transition-colors hover:bg-accent hover:text-emerald-400 disabled:cursor-default disabled:opacity-50"
-              title={translate('auto.components.right.sidebar.ChecksPanel.2ab7fd4b6d', 'Save')}
+              title={t('auto.components.right.sidebar.ChecksPanel.2ab7fd4b6d', 'Save')}
               onClick={() => void handleSaveTitle()}
               disabled={titleSaving}
             >
@@ -169,7 +176,7 @@ export function ChecksPanelActiveContent({
             </button>
             <button
               className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
-              title={translate('auto.components.right.sidebar.ChecksPanel.058039787c', 'Cancel')}
+              title={t('auto.components.right.sidebar.ChecksPanel.058039787c', 'Cancel')}
               onClick={handleCancelEdit}
               disabled={titleSaving}
             >
@@ -232,12 +239,18 @@ export function ChecksPanelActiveContent({
         </>
       )}
       {/* Conflicts can prevent checks running; do not claim no checks are configured before resolving them. */}
-      {!(activeConflictReview && checks.length === 0 && !gitLabPipelineCheck && !checksLoading) && (
+      {(!activeConflictReview ||
+        checks.length > 0 ||
+        gitLabPipelineCheck ||
+        coldChecks ||
+        (checksError && !manualRefreshError)) && (
         <ChecksList
           checks={checks}
           pipelineCheck={gitLabPipelineCheck}
           checksError={manualRefreshError ? null : checksError}
           checksLoading={checksLoading}
+          loadingSkeleton={coldChecks}
+          checksRead={checksLoaded}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
           githubRepository={pr?.prRepo ?? null}
@@ -245,9 +258,42 @@ export function ChecksPanelActiveContent({
         />
       )}
       <PRCommentsList
+        imageUploadAddress={
+          pr && model.repo
+            ? () => ({
+                runtime: forgeCredentialTarget({
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(
+                    model.repo!,
+                    activeWorktree
+                  )
+                }),
+                target: {
+                  kind: 'repo',
+                  repo: model.repo!.id,
+                  source: 'origin',
+                  ownerRepo: pr.prRepo ?? undefined
+                }
+              })
+            : undefined
+        }
+        editImageUploadAddress={
+          pr?.prRepo && model.repo
+            ? () => ({
+                runtime: forgeCredentialTarget({
+                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(
+                    model.repo!,
+                    activeWorktree
+                  )
+                }),
+                target: { kind: 'slug', ...pr.prRepo!, wakeWslDistro: true }
+              })
+            : undefined
+        }
         comments={comments}
         commentsError={manualRefreshError ? null : commentsError}
         commentsLoading={commentsLoading}
+        loadingSkeleton={coldComments}
+        commentsRead={commentsLoaded}
         reviewKind={reviewShortLabel}
         commentsDisabled={!canTargetPRComments}
         commentsDisabledReason={commentsDisabledReason}
@@ -292,7 +338,7 @@ export function ChecksPanelActiveContent({
         actionId={agentComposerState?.actionId ?? 'fixChecks'}
         title={
           agentComposerState?.title ??
-          translate('auto.components.right.sidebar.ChecksPanel.7fad8509fe', 'Fix With AI')
+          t('auto.components.right.sidebar.ChecksPanel.7fad8509fe', 'Fix With AI')
         }
         description={agentComposerState?.description ?? ''}
         baseCommandInput={agentComposerState?.prompt ?? ''}

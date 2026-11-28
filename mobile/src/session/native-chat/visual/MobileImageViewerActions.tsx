@@ -1,18 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { Copy, Download, Share, type LucideIcon } from 'lucide-react-native'
-import { ActionSheetModal } from '../../../components/ActionSheetModal'
-import { TransientToast, useTransientToast } from '../../../components/TransientToast'
+import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
+import { TransientToast, useTransientToast } from '../../../components/feedback/TransientToast'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   BRIDGE_IMAGE_OPERATIONS,
   type BridgeImageOperation
-} from '../../../mobile-web-shell/bridge/bridge-image-verbs'
-import { useImageActions } from '../../../platform/image-actions'
-import { ImageActionRefusedError } from '../../../platform/image-actions-contract'
-import { colors, feedback } from '../../../theme/mobile-theme'
-import type { ImageViewerActionsProps } from './MobileNativeChatImageViewer'
+} from '../../../mobile-web-shell/bridge/native-capabilities/bridge-image-verbs'
+import { useImageActions } from '../../../platform/image-actions/image-actions'
+import { ImageActionRefusedError } from '../../../platform/image-actions/image-actions-contract'
+import { feedback } from '../../../theme/mobile-theme'
+import type { ImageViewerActionsProps } from '../../../files/media/presentation/MobileImageViewer'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 
 type OperationCopy = {
   icon: LucideIcon
@@ -61,6 +62,7 @@ export function MobileImageViewerActions({
   buttonStyle,
   toastInset
 }: ImageViewerActionsProps): React.JSX.Element | null {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const actionsFor = useImageActions()
   const act = useMemo(() => actionsFor?.(uri) ?? null, [actionsFor, uri])

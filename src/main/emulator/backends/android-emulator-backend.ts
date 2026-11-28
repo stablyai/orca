@@ -1,5 +1,8 @@
 import { EmulatorError, emulatorErrorCodedMessage } from '../emulator-errors'
-import { emulatorCodedMessage, emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import {
+  emulatorCodedMessage,
+  emulatorFailureText
+} from '../../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import type {
   BackendAvailability,
@@ -39,7 +42,7 @@ import {
 } from '../android/android-stream-session-starter'
 import { AndroidStreamController } from '../android/android-stream-controller'
 import { scrcpyVideoRegistry } from '../scrcpy-video-registry'
-import { ANDROID_AVD_BOOT_TIMEOUT_MS } from '../../../shared/emulator-attach-timeouts'
+import { ANDROID_AVD_BOOT_TIMEOUT_MS } from '../../../shared/emulator/emulator-attach-timeouts'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 export type AndroidEmulatorBackendOptions = {
@@ -150,7 +153,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     if (!this.sdkState.resolve()) {
       return false
     }
-    const devices = await this.listDevices()
+    const sdk = this.requireSdk()
+    const devices = await listAndroidDevices(this.runner, sdk, { includeSystemMetadata: false })
     return devices.some((device) => device.id === id || device.name === id)
   }
 
@@ -206,8 +210,8 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     await this.input.gesture(deviceId, points)
   }
 
-  async type(deviceId: string, text: string): Promise<void> {
-    await this.input.type(deviceId, text)
+  async type(deviceId: string, text: string, paste = false): Promise<void> {
+    await this.input.type(deviceId, text, paste)
   }
 
   async button(deviceId: string, name: string): Promise<void> {

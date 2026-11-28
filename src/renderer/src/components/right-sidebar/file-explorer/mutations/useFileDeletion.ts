@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { dirname } from '@/lib/path'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isPathEqualOrDescendant } from '../navigation/file-explorer-paths'
 import { runBatchDeletion, selectDeletionRoots } from './file-explorer-batch-deletion'
 import type { TreeNode } from '../tree/file-explorer-types'
@@ -25,14 +25,18 @@ import {
   requestEditorSaveQuiesce
 } from '@/components/editor/autosave/editor-autosave'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
-import { deleteRuntimePath, writeRuntimeFile } from '@/runtime/runtime-file-mutation-client'
+import {
+  deleteRuntimePath,
+  writeRuntimeFile
+} from '@/runtime/files/mutations/runtime-file-mutation-client'
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
-} from '../../../../../../shared/file-write-disk-precondition'
+} from '../../../../../../shared/file-write/file-write-disk-precondition'
 import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 type UseFileDeletionParams = {
   activeWorktreeId: string | null
@@ -73,157 +77,164 @@ export function useFileDeletion({
       // Unresolved owners use remote copy and fail closed below; they must never reach local filesystem authorization.
       const isRemote = operationOwner.kind !== 'local'
 
-      try {
-        const operationGuard = captureFileExplorerOperationGuard(
-          activeWorktreeId,
-          node.operationOwner
-        )
-        // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
-        if (isRemote && !options?.skipConfirmation) {
-          const confirmed = await confirmRemoteDelete(confirm, node)
-          if (!confirmed) {
-            return false
-          }
-        }
-
-        const operationRoute = operationGuard.assertCurrent()
-        const filesToClose = getFileExplorerDeletionEditors(
-          useAppStore.getState(),
-          openFiles,
-          node.path,
-          operationRoute
-        )
-        // Save dirty buffers before snapshot/trash; quiescing alone would discard edits, and failed saves must abort deletion.
-        const dirtyFiles = filesToClose.filter((file) => file.isDirty)
-        await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
-        // Quiesce trailing autosaves so they cannot recreate trashed files.
-        await Promise.all(filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id })))
-
-        // Confirmation/autosave may outlive reconnects; require the row’s original owner generation.
-        operationGuard.assertCurrent()
-        const state = useAppStore.getState()
-        const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
-        const fileContext = {
-          target: operationRoute.target,
-          worktreeId: activeWorktreeId,
-          worktreePath: worktree?.path ?? null,
-          connectionId: operationRoute.connectionId,
-          expectedExecutionHostId: operationRoute.expectedExecutionHostId,
-          expectedSshTargetId: operationRoute.expectedSshTargetId,
-          expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
-        }
-
-        const parentDir = dirname(node.path)
-        // Snapshot before deletion, but record undo only after success to avoid poisoning the stack.
-        let undoContent: string | undefined
-        if (!node.isDirectory) {
+      return runWithFinally(
+        async () => {
           try {
-            const rf = await readRuntimeFileContent({
-              target: fileContext.target,
-              filePath: node.path,
-              relativePath: node.relativePath,
-              worktreeId: activeWorktreeId ?? undefined,
-              connectionId: operationRoute.connectionId
-            })
-            if (!rf.isBinary) {
-              undoContent = rf.content
-            }
-          } catch {
-            // Unreadable snapshots cannot safely support undo.
-          }
-        }
-
-        operationGuard.assertCurrent()
-        const deletion = await deleteWithPermanentFallback({
-          name: node.name,
-          isRemote,
-          isWindows,
-          confirm,
-          deletePath: (deleteOptions) =>
-            deleteRuntimePath(fileContext, node.path, node.isDirectory, deleteOptions),
-          beforePermanentDelete: () => operationGuard.assertCurrent()
-        })
-        if (!deletion) {
-          return false
-        }
-        const { permanent } = deletion
-
-        if (undoContent !== undefined) {
-          commitFileExplorerOp({
-            undo: async () => {
-              const currentRoute = operationGuard.assertCurrent()
-              // Undo must not overwrite a path recreated since deletion.
-              assertFileWriteApplied(
-                await writeRuntimeFile(
-                  {
-                    ...fileContext,
-                    target: currentRoute.target,
-                    connectionId: currentRoute.connectionId
-                  },
-                  node.path,
-                  undoContent,
-                  undefined,
-                  missingOrIdenticalPrecondition(undoContent)
-                )
-              )
-              await refreshDir(parentDir)
-            },
-            redo: async () => {
-              const currentRoute = operationGuard.assertCurrent()
-              await deleteRuntimePath(
-                {
-                  ...fileContext,
-                  target: currentRoute.target,
-                  connectionId: currentRoute.connectionId
-                },
-                node.path,
-                node.isDirectory,
-                { permanent }
-              )
-              await refreshDir(parentDir)
-            }
-          })
-        }
-
-        for (const file of filesToClose) {
-          closeFile(file.id)
-        }
-
-        if (activeWorktreeId) {
-          useAppStore.setState((state) => {
-            const currentExpanded = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
-            const nextExpanded = new Set(
-              Array.from(currentExpanded).filter(
-                (dirPath) => !isPathEqualOrDescendant(dirPath, node.path)
-              )
+            const operationGuard = captureFileExplorerOperationGuard(
+              activeWorktreeId,
+              node.operationOwner
             )
-
-            if (nextExpanded.size === currentExpanded.size) {
-              return state
-            }
-
-            return {
-              expandedDirs: {
-                ...state.expandedDirs,
-                [activeWorktreeId]: nextExpanded
+            // Remote deletes bypass Trash and may be unrecoverable; batches confirm once up front.
+            if (isRemote && !options?.skipConfirmation) {
+              const confirmed = await confirmRemoteDelete(confirm, node)
+              if (!confirmed) {
+                return false
               }
             }
-          })
+
+            const operationRoute = operationGuard.assertCurrent()
+            const filesToClose = getFileExplorerDeletionEditors(
+              useAppStore.getState(),
+              openFiles,
+              node.path,
+              operationRoute
+            )
+            // Save dirty buffers before snapshot/trash; quiescing alone would discard edits, and failed saves must abort deletion.
+            const dirtyFiles = filesToClose.filter((file) => file.isDirty)
+            await Promise.all(dirtyFiles.map((file) => requestEditorFileSave({ fileId: file.id })))
+            // Quiesce trailing autosaves so they cannot recreate trashed files.
+            await Promise.all(
+              filesToClose.map((file) => requestEditorSaveQuiesce({ fileId: file.id }))
+            )
+
+            // Confirmation/autosave may outlive reconnects; require the row’s original owner generation.
+            operationGuard.assertCurrent()
+            const state = useAppStore.getState()
+            const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
+            const fileContext = {
+              target: operationRoute.target,
+              worktreeId: activeWorktreeId,
+              worktreePath: worktree?.path ?? null,
+              connectionId: operationRoute.connectionId,
+              expectedExecutionHostId: operationRoute.expectedExecutionHostId,
+              expectedSshTargetId: operationRoute.expectedSshTargetId,
+              expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
+            }
+
+            const parentDir = dirname(node.path)
+            // Snapshot before deletion, but record undo only after success to avoid poisoning the stack.
+            let undoContent: string | undefined
+            if (!node.isDirectory) {
+              try {
+                const rf = await readRuntimeFileContent({
+                  target: fileContext.target,
+                  filePath: node.path,
+                  relativePath: node.relativePath,
+                  worktreeId: activeWorktreeId ?? undefined,
+                  connectionId: operationRoute.connectionId
+                })
+                if (!rf.isBinary) {
+                  undoContent = rf.content
+                }
+              } catch {
+                // Unreadable snapshots cannot safely support undo.
+              }
+            }
+
+            operationGuard.assertCurrent()
+            const deletion = await deleteWithPermanentFallback({
+              name: node.name,
+              isRemote,
+              isWindows,
+              confirm,
+              deletePath: (deleteOptions) =>
+                deleteRuntimePath(fileContext, node.path, node.isDirectory, deleteOptions),
+              beforePermanentDelete: () => operationGuard.assertCurrent()
+            })
+            if (!deletion) {
+              return false
+            }
+            const { permanent } = deletion
+
+            if (undoContent !== undefined) {
+              commitFileExplorerOp({
+                undo: async () => {
+                  const currentRoute = operationGuard.assertCurrent()
+                  // Undo must not overwrite a path recreated since deletion.
+                  assertFileWriteApplied(
+                    await writeRuntimeFile(
+                      {
+                        ...fileContext,
+                        target: currentRoute.target,
+                        connectionId: currentRoute.connectionId
+                      },
+                      node.path,
+                      undoContent,
+                      undefined,
+                      missingOrIdenticalPrecondition(undoContent)
+                    )
+                  )
+                  await refreshDir(parentDir)
+                },
+                redo: async () => {
+                  const currentRoute = operationGuard.assertCurrent()
+                  await deleteRuntimePath(
+                    {
+                      ...fileContext,
+                      target: currentRoute.target,
+                      connectionId: currentRoute.connectionId
+                    },
+                    node.path,
+                    node.isDirectory,
+                    { permanent }
+                  )
+                  await refreshDir(parentDir)
+                }
+              })
+            }
+
+            for (const file of filesToClose) {
+              closeFile(file.id)
+            }
+
+            if (activeWorktreeId) {
+              useAppStore.setState((state) => {
+                const currentExpanded = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
+                const nextExpanded = new Set(
+                  Array.from(currentExpanded).filter(
+                    (dirPath) => !isPathEqualOrDescendant(dirPath, node.path)
+                  )
+                )
+
+                if (nextExpanded.size === currentExpanded.size) {
+                  return state
+                }
+
+                return {
+                  expandedDirs: {
+                    ...state.expandedDirs,
+                    [activeWorktreeId]: nextExpanded
+                  }
+                }
+              })
+            }
+
+            // Refresh only the parent to preserve scroll position and avoid redundant full-tree reloads.
+            await refreshDir(dirname(node.path))
+
+            return true
+          } catch (error) {
+            toast.error(
+              getFileDeleteErrorMessage(error) ||
+                fileDeleteFailedMessage(node.name, isRemote, isWindows)
+            )
+            return false
+          }
+        },
+        () => {
+          inFlightRef.current.delete(node.path)
         }
-
-        // Refresh only the parent to preserve scroll position and avoid redundant full-tree reloads.
-        await refreshDir(dirname(node.path))
-
-        return true
-      } catch (error) {
-        toast.error(
-          getFileDeleteErrorMessage(error) ||
-            fileDeleteFailedMessage(node.name, isRemote, isWindows)
-        )
-        return false
-      } finally {
-        inFlightRef.current.delete(node.path)
-      }
+      )
     },
     [activeWorktreeId, closeFile, confirm, isWindows, openFiles, refreshDir]
   )
@@ -260,24 +271,30 @@ export function useFileDeletion({
           needsConfirmation: roots.some(needsRemoteDeleteConfirmation),
           confirmBatch: () =>
             confirm({
+              title: translate('common.delete', 'Delete'),
               // Count selected children even when ancestor roots subsume their deletes.
-              title: hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.deleteItems',
-                    'Delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
-                  )
-                : translate(
-                    'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
-                    'Permanently delete {{count}} items?',
-                    { count: nodes.length, defaultValue_one: 'Permanently delete {{count}} item?' }
-                  ),
-              description: !hasLocalDelete
-                ? translate(
-                    'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
-                    'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
-                  )
-                : mixedBatchDeleteDescription(isWindows),
+              description: [
+                hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.deleteItems',
+                      'Delete {{count}} items?',
+                      { count: nodes.length, defaultValue_one: 'Delete {{count}} item?' }
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.useFileDeletion.permanentlyDeleteItems',
+                      'Permanently delete {{count}} items?',
+                      {
+                        count: nodes.length,
+                        defaultValue_one: 'Permanently delete {{count}} item?'
+                      }
+                    ),
+                !hasLocalDelete
+                  ? translate(
+                      'auto.components.right.sidebar.useFileDeletion.dd029aa5cd',
+                      'This permanently deletes the selected items and any directory contents on the remote host. This cannot be undone.'
+                    )
+                  : mixedBatchDeleteDescription(isWindows)
+              ].join('\n'),
               confirmLabel: translate(
                 'auto.components.right.sidebar.useFileDeletion.92276aceb7',
                 'Delete'

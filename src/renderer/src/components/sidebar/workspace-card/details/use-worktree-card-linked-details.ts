@@ -1,6 +1,6 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
-import type { IssueInfo } from '../../../../../../shared/github/pull-request-types'
+import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from '../review/worktree-card-jira-issue-display'
 import type { WorktreeCardIssueDisplay } from '../metadata/worktree-card-meta-types'
@@ -31,6 +31,7 @@ export function useWorktreeCardLinkedDetails({
     ReviewDetails,
     'branch' | 'issueEntry' | 'linearIssueEntry' | 'linearIssueFallbackEntry' | 'prDisplay'
   >) {
+  const t = useTranslate()
   const issue: IssueInfo | null | undefined = worktree.linkedIssue
     ? issueEntry !== undefined
       ? issueEntry.data
@@ -44,11 +45,11 @@ export function useWorktreeCardLinkedDetails({
           // Why: linked metadata persists immediately but GitHub details arrive async; show the link number so it doesn't look unlinked.
           title:
             issue === null
-              ? translate(
+              ? t(
                   'auto.components.sidebar.useWorktreeCardLinkedDetails.issueUnavailable',
                   'Issue details unavailable'
                 )
-              : translate(
+              : t(
                   'auto.components.sidebar.useWorktreeCardLinkedDetails.loadingIssue',
                   'Loading issue...'
                 )
@@ -58,12 +59,26 @@ export function useWorktreeCardLinkedDetails({
     ? (linearIssueEntry?.data ?? linearIssueFallbackEntry?.data)
     : null
 
-  const linearReferences = getWorkspaceAttachments(worktree).filter(
-    (item) =>
-      item.provider === 'linear' &&
-      (item.identifier ?? item.linearIdentifier) === worktree.linkedLinearIssue
-  )
-  const linearIssueUrlFallback = linearReferences.length === 1 ? linearReferences[0].url : undefined
+  let linearIssueUrlFallback: string | undefined
+  if (worktree.linkedLinearIssue && !linearIssue) {
+    const attachments = getWorkspaceAttachments(worktree)
+    let matchCount = 0
+    for (let i = 0; i < attachments.length; i += 1) {
+      const item = attachments[i]
+      if (
+        item.provider === 'linear' &&
+        (item.identifier ?? item.linearIdentifier) === worktree.linkedLinearIssue
+      ) {
+        matchCount += 1
+        if (matchCount === 1) {
+          linearIssueUrlFallback = item.url
+        } else {
+          linearIssueUrlFallback = undefined
+          break
+        }
+      }
+    }
+  }
 
   const linearIssueDisplay = worktree.linkedLinearIssue
     ? linearIssue
@@ -79,11 +94,11 @@ export function useWorktreeCardLinkedDetails({
           identifier: worktree.linkedLinearIssue,
           title:
             linearIssueEntry || linearIssueFallbackEntry
-              ? translate(
+              ? t(
                   'auto.components.sidebar.useWorktreeCardLinkedDetails.linearIssueUnavailable',
                   'Linear issue details unavailable'
                 )
-              : translate(
+              : t(
                   'auto.components.sidebar.useWorktreeCardLinkedDetails.loadingLinearIssue',
                   'Loading Linear issue...'
                 ),
@@ -93,6 +108,7 @@ export function useWorktreeCardLinkedDetails({
   const jiraIssueDisplay = getWorktreeCardJiraIssueDisplay(worktree)
   const cardTitleDisplay = getWorktreeCardTitleDisplay({
     storedDisplayName: worktree.displayName,
+    displayNameMode: worktree.displayNameMode,
     branchName: branch,
     // Fetched titles only: display fallbacks hold localized loading/unavailable placeholders.
     linearIssueTitle: linearIssue?.title,
@@ -104,9 +120,11 @@ export function useWorktreeCardLinkedDetails({
   const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
   const isQueuedForDeletion = deleteState?.phase === 'queued'
-  const deleteLabel = isQueuedForDeletion
-    ? translate('auto.components.sidebar.WorktreeCard.ef18787206', 'Queued for deletion')
-    : translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')
+  const deleteLabel = isDeleting
+    ? isQueuedForDeletion
+      ? t('auto.components.sidebar.WorktreeCard.ef18787206', 'Queued for deletion')
+      : t('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')
+    : ''
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   return {

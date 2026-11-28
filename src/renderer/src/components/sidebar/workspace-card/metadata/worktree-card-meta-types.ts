@@ -1,4 +1,4 @@
-import type { IssueInfo } from '../../../../../../shared/github/pull-request-types'
+import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   Worktree,
   WorkspaceAttachment,
@@ -8,6 +8,8 @@ import type {
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
 import type { WorkspaceReferenceDetailsMap } from '../review/workspace-reference-details'
+import type { Bot } from '../../../../../../shared/bot-types'
+import type { AutoNameFailure } from '../identity/use-auto-name-failure'
 
 export type WorktreeCardIssueDisplay =
   | IssueInfo
@@ -45,6 +47,8 @@ export type WorktreeCardMetaBadgesProps = {
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
   cliProvenance?: CliWorkspaceProvenance | null
+  /** The bot whose worker made the workspace. */
+  bot?: Pick<Bot, 'id' | 'name' | 'avatar' | 'hostId'> | null
 }
 
 export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
@@ -58,6 +62,8 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
   workspaceTitleRenameDisabled?: boolean
+  /** Its own section under the identity; shown in whichever card the row has. */
+  autoNameFailure?: AutoNameFailure | null
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number

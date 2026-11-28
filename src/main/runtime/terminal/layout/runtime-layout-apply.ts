@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type {
   CommandOf,
   LayoutApplyReply,
@@ -6,11 +9,11 @@ import type {
   RenameTabsCommand,
   UntitledTab
 } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { renameTabCommandsOf } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
-import { isWslMoveWorkspaceSessionFrozen } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import { isWslMoveWorkspaceSessionFrozen } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Route tab commands to their holding partitions; group trees and browser records use the workspace partition. */
 export type WindowLayoutCommand =
@@ -21,6 +24,7 @@ export type WindowLayoutCommand =
         | { type: 'setGroupRatios' }
         | { type: 'closeTabs'; tabIds: [string] }
         | { browserTabId: string }
+        | { type: 'replaceTabContent' }
         | { type: 'moveTabToWorkspace' }
         | { type: 'renameEditorFiles' }
         | { type: 'setDefaultTabsApplied' | 'applyDefaultTabs' }
@@ -52,7 +56,7 @@ export async function applyWindowLayoutCommand(
     return { ok: false, code: 'wsl_move_in_progress' }
   }
   if (command.type === 'moveTabToWorkspace') {
-    return moveTabToWorkspace(store, hostIdsFor, command)
+    return moveTabToWorkspace(store, hostIdsFor, command, run)
   }
   if (command.type === 'renameEditorFiles' && command.alsoIn) {
     return renameEditorFilesInWorkspaces(store, hostIdsFor, command)
@@ -187,7 +191,8 @@ async function renameTabs(
 async function moveTabToWorkspace(
   store: RuntimeStore,
   hostIdsFor: (worktreeId: string, tabId: string | null) => ExecutionHostId[],
-  command: CommandOf<'moveTabToWorkspace'>
+  command: CommandOf<'moveTabToWorkspace'>,
+  run?: LayoutCommandRunOptions
 ): Promise<LayoutApplyReply> {
   const [from] = hostIdsFor(command.workspace, null)
   const [to] = hostIdsFor(command.toWorkspace, null)
@@ -202,12 +207,16 @@ async function moveTabToWorkspace(
     if (!store.moveTabToWorkspaceAcrossPartitions) {
       throw new Error('layout_store_unavailable')
     }
-    return store.moveTabToWorkspaceAcrossPartitions(command, from, to)
+    return run
+      ? store.moveTabToWorkspaceAcrossPartitions(command, from, to, run)
+      : store.moveTabToWorkspaceAcrossPartitions(command, from, to)
   }
   if (!store.applyLayoutCommand) {
     throw new Error('layout_store_unavailable')
   }
-  return store.applyLayoutCommand(command, [from])
+  return run
+    ? store.applyLayoutCommand(command, [from], run)
+    : store.applyLayoutCommand(command, [from])
 }
 
 /** Rename disk-move paths across partitions in one durable write; paired-server ownership refuses the whole operation. */

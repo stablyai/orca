@@ -11,24 +11,21 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
-import { resolveImportedFolderProjectLink } from '../../../shared/imported-folder-project-identity'
+} from '../../../shared/execution-host/execution-host'
+import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
+import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
 import { invalidateAuthorizedRootsCache } from '../../ipc/worktrees/removal/registered-worktree-roots-cache'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/worktree-change-invalidators'
-import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
-import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { readAllWorktreeMetaForRepo } from '../../persistence/host-qualified-worktree-meta'
-import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
 import {
   countRepoWorkspacesWithMetadata,
   describeProjectRemovalRefusal
@@ -37,7 +34,7 @@ import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable,
   assertWslMoveReposWritable
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { runtimeVisibleProjectHostSetups } from '../workspaces/catalog/runtime-visible-catalog'
 import { assertNoProjectWorktreeCreate } from '../../workspaces/creation/worktree-create-in-flight'
 import { releaseWorktreeCreatePreparationsForRepo } from '../../workspaces/creation/preparation/worktree-create-preparation-project-removal'
@@ -45,13 +42,13 @@ import {
   findProjectHostSetup,
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   type ProjectHostSetupTarget
-} from '../../../shared/project-host-setup-target'
+} from '../../../shared/project/host-setup/project-host-setup-target'
 
-type RuntimeProjectHostSetupDependencies = {
+type RuntimeProjectHostSetupDependencies = RepositoryMetadataOwner & {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
   addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
-  cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
+  cloneRepo: (args: ProjectHostSetupCloneArgs) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
@@ -136,7 +133,9 @@ export class RuntimeProjectHostSetupController {
     const folderRemote =
       repoWasCreated && repo.gitRemoteIdentity !== undefined
         ? repo
-        : await readCurrentGitRemoteIdentity(repo)
+        : await (
+            await import('../../workspaces/catalog/repo-git-remote-identity')
+          ).readCurrentGitRemoteIdentity(repo)
     return this.completeSetup(args, repo, repoWasCreated, folderRemote)
   }
 
@@ -151,13 +150,17 @@ export class RuntimeProjectHostSetupController {
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
-    const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
+    const repo = await this.deps.cloneRepo(args)
     return this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,
       !knownRepoIds.has(repo.id),
       // Fresh-clone remote is unprobed; Git-remote linking needs that fact.
-      repo.gitRemoteIdentity === undefined ? await readCurrentGitRemoteIdentity(repo) : repo
+      repo.gitRemoteIdentity === undefined
+        ? await (
+            await import('../../workspaces/catalog/repo-git-remote-identity')
+          ).readCurrentGitRemoteIdentity(repo)
+        : repo
     )
   }
 
@@ -177,6 +180,8 @@ export class RuntimeProjectHostSetupController {
     updateProjectHostSetup: NonNullable<RuntimeStore['updateProjectHostSetup']>,
     args: ProjectHostSetupUpdateArgs
   ): Promise<ProjectHostSetupUpdateResult> {
+    const { updateProjectHostSetupWithProvenKind } =
+      await import('../../workspaces/catalog/folder-repo-git-conversion')
     const result = await updateProjectHostSetupWithProvenKind(
       store,
       (setupArgs) => {
@@ -190,6 +195,8 @@ export class RuntimeProjectHostSetupController {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
     if ('worktreeBasePath' in args.updates && result.repo) {
+      const { prepareLocalWorktreeRootForRepo } =
+        await import('../../workspaces/creation/worktree-root-preparation')
       void prepareLocalWorktreeRootForRepo(store, result.repo)
       invalidateAuthorizedRootsCache()
     }
@@ -260,14 +267,16 @@ export class RuntimeProjectHostSetupController {
     }
   }
 
-  private completeSetup(
+  private async completeSetup(
     args: ProjectHostSetupExistingFolderArgs,
     initialRepo: Repo,
     repoWasCreated: boolean,
     folderRemote: Pick<Repo, 'gitRemoteIdentity'>
-  ): ProjectHostSetupResult {
+  ): Promise<ProjectHostSetupResult> {
     try {
-      return this.linkRepo(args, initialRepo, folderRemote)
+      const result = await this.linkRepo(args, initialRepo, folderRemote)
+      this.deps.notifyReposChanged()
+      return result
     } catch (error) {
       if (repoWasCreated) {
         // Rollback must remove only this host's row, never a same-id sibling.
@@ -275,53 +284,27 @@ export class RuntimeProjectHostSetupController {
         this.deps.invalidateResolvedWorktrees()
         this.deps.invalidateWorktreeScan(initialRepo.id)
         invalidateAuthorizedRootsCache()
-        this.deps.notifyReposChanged()
       }
+      this.deps.notifyReposChanged()
       throw error
     }
   }
 
-  private linkRepo(
+  private async linkRepo(
     args: ProjectHostSetupExistingFolderArgs,
     initialRepo: Repo,
     folderRemote: Pick<Repo, 'gitRemoteIdentity'>
-  ): ProjectHostSetupResult {
-    const store = this.deps.getStore()
-    if (!store) {
-      throw new Error('runtime_unavailable')
-    }
-    assertWslMoveHostSetupWritable(store, {
-      projectId: args.projectId,
-      hostId: getRepoExecutionHostId(initialRepo),
-      repoId: initialRepo.id
-    })
-    let repo = initialRepo
-    let setup = getProjectHostSetupForRepo(this.listSetups(), repo)
-    if (setup.projectId !== args.projectId) {
-      const existingProject = this.listProjects().find((project) => project.id === args.projectId)
-      const updated = store.updateRepo(
-        repo,
-        resolveImportedFolderProjectLink(
-          { ...repo, ...folderRemote },
-          args.projectId,
-          existingProject?.providerIdentity ?? args.projectProviderIdentity
-        )
-      )
-      if (!updated) {
-        throw new Error(`Project setup repo disappeared before it could be linked: ${repo.id}`)
-      }
-      repo = updated
-      setup = getProjectHostSetupForRepo(this.listSetups(), repo)
-    }
-    const setupMethod = args.setupMethod ?? 'imported-existing-folder'
-    const updated = store.updateRepo(repo, { projectHostSetupMethod: setupMethod })
-    if (!updated) {
-      throw new Error(
-        `Project setup repo disappeared before setup metadata could be linked: ${repo.id}`
-      )
-    }
-    repo = updated
-    setup = getProjectHostSetupForRepo(this.listSetups(), repo)
+  ): Promise<ProjectHostSetupResult> {
+    const { linkImportedFolderToProject } =
+      await import('../../workspaces/catalog/imported-folder-project-link')
+    const repo = await linkImportedFolderToProject(
+      this.deps.getStore,
+      initialRepo,
+      folderRemote,
+      args,
+      this.deps
+    )
+    const setup = getProjectHostSetupForRepo(this.listSetups(), repo)
     const project = this.listProjects().find((entry) => entry.id === setup.projectId)
     if (!project) {
       throw new Error(`Project setup was created without a project record: ${setup.projectId}`)
