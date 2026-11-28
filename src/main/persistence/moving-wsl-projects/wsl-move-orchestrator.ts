@@ -67,12 +67,11 @@ export class WslMoveOrchestrator {
     const adopted = this.sidecar.tryAdopt(this.records, (record) =>
       settleWslMoveOrchestratorRecord(record, now, finished(record.distro))
     )
-    for (const [key, record] of this.records) {
-      if (adopted?.includes(key)) {
-        this.scheduleFor(key, record)
-      }
+    // Every record, not only the file's: a timer that fired while held must run again.
+    for (const [key, record] of adopted ? this.records : []) {
+      this.scheduleFor(key, record)
     }
-    return adopted !== null
+    return adopted
   }
 
   /** Reads a sidecar the start could not (a sharing violation passes) and saves the merge. */
@@ -173,8 +172,10 @@ export class WslMoveOrchestrator {
     // Kept even with no record yet, so a decline in a file read later is taken back too.
     this.sidecar.noteWhileUnread(key, take)
     const current = this.records.get(key)
-    if (current) {
-      this.commit(key, 'user', take(current), undefined, take)
+    const stored = current && this.commit(key, 'user', take(current), undefined, take)
+    if (stored === undefined || stored === current) {
+      // Nothing changed to save, but the release from a persisted hold must outlive a restart.
+      this.saveAndPublish()
     }
   }
 

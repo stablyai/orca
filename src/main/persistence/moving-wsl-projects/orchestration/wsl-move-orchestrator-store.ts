@@ -10,10 +10,7 @@ import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { writeDurableSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
 import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
-import type {
-  WslMoveOrchestratorRecord,
-  WslMoveOrchestratorState
-} from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
+import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMoveOrchestratorLoad } from './wsl-move-orchestrator-ports'
 
 const FILE_NAME = 'wsl-move-orchestrator.json'
@@ -34,25 +31,11 @@ const blockerSchema = lazyZodSchema(() =>
   })
 )
 
-/** A Record, so a kind added to the union without being listed here fails to compile. */
-const KNOWN_STATE_KINDS: Record<WslMoveOrchestratorState['kind'], true> = {
-  idle: true,
-  pending: true,
-  deferred: true,
-  moving: true,
-  'waiting-for-host': true,
-  backoff: true,
-  parked: true,
-  done: true,
-  'distro-gone': true,
-  'restore-offered': true
-}
-
-/** A newer build's state kind; a malformed record of a known kind is dropped instead. */
-function hasNewerStateKind(value: unknown): boolean {
-  const state = typeof value === 'object' && value !== null && 'state' in value ? value.state : null
-  const kind = typeof state === 'object' && state !== null && 'kind' in state ? state.kind : null
-  return typeof kind === 'string' && !Object.hasOwn(KNOWN_STATE_KINDS, kind)
+/** A record this build cannot parse but whose distro it can name: kept, and left to the user. */
+function namesDistro(value: unknown): boolean {
+  const distro =
+    typeof value === 'object' && value !== null && 'distro' in value ? value.distro : null
+  return typeof distro === 'string' && distro.length > 0
 }
 
 const stateSchema = lazyZodSchema(() =>
@@ -112,7 +95,9 @@ const recordSchema = lazyZodSchema(() =>
 const fileSchema = lazyZodSchema(() =>
   z.object({
     version: z.literal(1),
-    distros: z.record(z.string(), z.unknown())
+    distros: z.record(z.string(), z.unknown()),
+    /** Set once an unparseable file was set aside: the distros the user has acted on since. */
+    heldUntilUserActs: z.array(z.string()).optional()
   })
 )
 
@@ -122,7 +107,10 @@ export function wslMoveOrchestratorStorePath(userDataPath: string): string {
 
 export type WslMoveOrchestratorStore = {
   load: () => WslMoveOrchestratorLoad
-  save: (records: ReadonlyMap<string, WslMoveOrchestratorRecord>) => void
+  save: (
+    records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
+    heldUntilUserActs?: readonly string[]
+  ) => void
 }
 
 type SidecarRead =
@@ -130,7 +118,7 @@ type SidecarRead =
   | { kind: 'read-failed'; code: string }
   | { kind: 'corrupt' }
   | { kind: 'unsupported'; version: number }
-  | { kind: 'readable'; distros: Record<string, unknown> }
+  | { kind: 'readable'; distros: Record<string, unknown>; heldUntilUserActs?: string[] }
 
 /** The sidecar's load and save; a newer build's record is written back as read. */
 export function createWslMoveOrchestratorStore(
@@ -149,6 +137,8 @@ export function createWslMoveOrchestratorStore(
       console.warn(`[wsl-move] ${message}`, ...(detail === undefined ? [] : [detail]))
     }
   }
+  const write = (distros: Record<string, unknown>, heldUntilUserActs?: readonly string[]) =>
+    writeDurableSecureJsonFile(path, { version: 1, distros, heldUntilUserActs })
   const load = (): WslMoveOrchestratorLoad => {
     if (unsupported) {
       return { kind: 'unreadable' }
@@ -182,7 +172,14 @@ export function createWslMoveOrchestratorStore(
       }
       console.warn(`[wsl-move] Unparseable orchestrator state set aside as ${aside}`)
       lastWarning = null
-      return { kind: 'missing', setAside: true }
+      kept = {}
+      try {
+        // Written now, so a restart before any save still holds every distro the file may have declined.
+        write({}, [])
+      } catch (error) {
+        console.warn('[wsl-move] Could not record the hold after setting state aside', error)
+      }
+      return { kind: 'readable', records: new Map(), unknownKeys: new Set(), heldUntilUserActs: [] }
     }
     lastWarning = null
     if (read.kind !== 'readable') {
@@ -194,19 +191,22 @@ export function createWslMoveOrchestratorStore(
       const record = recordSchema.safeParse(value)
       if (record.success) {
         records.set(wslMoveJournalKey(record.data.distro), record.data)
-      } else if (hasNewerStateKind(value)) {
+      } else if (namesDistro(value)) {
+        // A newer build may add a reason, cause or blocker under version 1; dropping it could undo a decline.
         kept[key] = value
       }
     }
-    return { kind: 'readable', records, unknownKeys: new Set(Object.keys(kept)) }
+    return {
+      kind: 'readable',
+      records,
+      unknownKeys: new Set(Object.keys(kept)),
+      heldUntilUserActs: read.heldUntilUserActs
+    }
   }
-  const save = (records: ReadonlyMap<string, WslMoveOrchestratorRecord>): void => {
+  const save: WslMoveOrchestratorStore['save'] = (records, heldUntilUserActs) => {
     // Once this build wrote its own record for a distro, a prune of it must not bring back the old.
     kept = Object.fromEntries(Object.entries(kept).filter(([key]) => !records.has(key)))
-    writeDurableSecureJsonFile(path, {
-      version: 1,
-      distros: { ...kept, ...Object.fromEntries(records) }
-    })
+    write({ ...kept, ...Object.fromEntries(records) }, heldUntilUserActs)
   }
   return { load, save }
 }
@@ -224,5 +224,5 @@ function parseSidecar(text: string): SidecarRead {
     return { kind: 'unsupported', version }
   }
   const file = fileSchema.safeParse(raw)
-  return file.success ? { kind: 'readable', distros: file.data.distros } : { kind: 'corrupt' }
+  return file.success ? { kind: 'readable', ...file.data } : { kind: 'corrupt' }
 }

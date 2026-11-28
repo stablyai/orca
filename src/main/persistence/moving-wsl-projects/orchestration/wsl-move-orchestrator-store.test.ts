@@ -83,7 +83,7 @@ describe('WSL move orchestrator sidecar', () => {
     expect(stateOf(orchestrator, 'Ubuntu-C')).toMatchObject({ reason: 'not-now' })
   })
 
-  it('sets an unparseable sidecar aside, saves again, and moves nothing on its own', async () => {
+  it('sets an unparseable sidecar aside and moves nothing on its own, even after a restart', async () => {
     const whole = JSON.stringify({ version: 1, distros: Object.fromEntries(records('Ubuntu-B')) })
     const truncated = whole.slice(0, -2)
     writeFileSync(path, truncated)
@@ -96,6 +96,12 @@ describe('WSL move orchestrator sidecar', () => {
     expect(ports.start).not.toHaveBeenCalled()
     expect(readFileSync(`${path}.corrupt-42`, 'utf8')).toBe(truncated)
     expect(Object.keys(distrosOnDisk(path))).toEqual([wslMoveJournalKey('Ubuntu-A')])
+
+    orchestrator.dispose()
+    const restarted = start()
+    await restarted.trigger('Ubuntu-B', 'connect')
+    await restarted.whenIdle()
+    expect(ports.start).not.toHaveBeenCalled()
   })
 
   it('takes back a decline read after the outage when the user added the host during it', () => {
@@ -127,8 +133,11 @@ describe('WSL move orchestrator sidecar', () => {
     expect(readdirSync(userDataPath)).toEqual(['wsl-move-orchestrator.json'])
   })
 
-  it('keeps a record this build cannot parse, and leaves its distro to the user', async () => {
-    const future = { distro: 'Ubuntu-B', state: { kind: 'later-kind' }, attempts: 0 }
+  it('keeps a record a newer build wrote under version 1, and leaves its distro to the user', async () => {
+    const future = {
+      ...declined('Ubuntu-B'),
+      state: { kind: 'parked', reason: 'declined', cause: 'later-cause' }
+    }
     writeFileSync(
       path,
       JSON.stringify({ version: 1, distros: { [wslMoveJournalKey('Ubuntu-B')]: future } })

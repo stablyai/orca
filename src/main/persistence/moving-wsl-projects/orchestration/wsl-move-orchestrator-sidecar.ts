@@ -2,6 +2,7 @@
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
+import { sameWslMoveOrchestratorRecord } from './wsl-move-orchestrator-transitions'
 
 /** Waits before re-trying a save a sharing violation refused (another process held the file). */
 export const WSL_MOVE_SIDECAR_SAVE_RETRY_MS = [50, 250, 1_000] as const
@@ -16,7 +17,7 @@ function isTransientSaveError(error: unknown): boolean {
 
 export class WslMoveOrchestratorSidecar {
   private loaded = false
-  /** After an unparseable file was set aside, any distro may have declined: hold them all. */
+  /** After an unparseable file was set aside (persisted in the file), hold all but released ones. */
   private holdAll = false
   /** Distros whose record only a newer build can parse: automatic steps leave them alone. */
   private readonly unknown = new Set<string>()
@@ -34,33 +35,44 @@ export class WslMoveOrchestratorSidecar {
     return this.loaded
   }
 
-  /** Merges the file into `records` once readable; returns the keys it set, or null if unread. */
-  tryAdopt(records: Records, settle: Replay): string[] | null {
+  /** Merges the file into `records` once readable; false while it is not (or already was). */
+  tryAdopt(records: Records, settle: Replay): boolean {
     if (this.loaded) {
-      return null
+      return false
     }
     const result = this.ports.load()
     if (result.kind === 'unreadable') {
-      return null
+      return false
     }
     this.loaded = true
-    this.holdAll = result.kind === 'missing' && result.setAside === true
-    const read = result.kind === 'readable' ? result.records : new Map()
-    for (const key of result.kind === 'readable' ? result.unknownKeys : []) {
-      this.unknown.add(key)
+    if (result.kind === 'missing') {
+      return true
     }
-    const adopted: string[] = []
-    for (const [key, record] of read) {
+    if (result.heldUntilUserActs) {
+      this.holdAll = true
+      for (const key of result.heldUntilUserActs) {
+        this.releasedByUser.add(key)
+      }
+    }
+    for (const key of result.unknownKeys) {
+      if (!this.releasedByUser.has(key)) {
+        this.unknown.add(key)
+      }
+    }
+    for (const [key, record] of result.records) {
       // Not the user's fresh record: their acts land on the file's, keeping what they did not decide.
       const merged = (this.replays.get(key) ?? []).reduce(
         (next, replay) => replay(next),
         settle(record)
       )
-      records.set(key, merged)
-      adopted.push(key)
+      const current = records.get(key)
+      // Same content keeps the object, so a user step under way does not read it as changed under it.
+      if (!current || !sameWslMoveOrchestratorRecord(current, merged)) {
+        records.set(key, merged)
+      }
     }
     this.replays.clear()
-    return adopted
+    return true
   }
 
   /** Remembers an act made before the file was read; no-op once it was. */
@@ -87,7 +99,7 @@ export class WslMoveOrchestratorSidecar {
     }
     this.cancelRetryNow()
     try {
-      this.ports.save(records)
+      this.ports.save(records, this.holdAll ? [...this.releasedByUser] : undefined)
       this.saveRetries = 0
     } catch (error) {
       const delay = WSL_MOVE_SIDECAR_SAVE_RETRY_MS[this.saveRetries]

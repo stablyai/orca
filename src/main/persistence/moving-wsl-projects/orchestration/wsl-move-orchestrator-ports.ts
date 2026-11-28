@@ -13,12 +13,13 @@ import type { WslMovedDistroVerdict } from './wsl-move-orchestrator-external-tra
 
 /** The sidecar's read; `unreadable` may hide a decline, so nothing moves on its own or saves. */
 export type WslMoveOrchestratorLoad =
-  /** `setAside`: an unparseable file was renamed aside, so its declines are unknown. */
-  | { kind: 'missing'; setAside?: boolean }
+  | { kind: 'missing' }
   | {
       kind: 'readable'
       records: Map<string, WslMoveOrchestratorRecord>
       unknownKeys: ReadonlySet<string>
+      /** Present after an unparseable file was set aside: the distros the user acted on since. */
+      heldUntilUserActs?: readonly string[]
     }
   | { kind: 'unreadable' }
 
@@ -73,7 +74,10 @@ export type WslMoveOrchestratorPorts = {
   ) => Promise<WslMoveUseLocallyResult>
   load: () => WslMoveOrchestratorLoad
   /** Throws on failure; never called before a load succeeded. */
-  save: (records: ReadonlyMap<string, WslMoveOrchestratorRecord>) => void
+  save: (
+    records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
+    heldUntilUserActs?: readonly string[]
+  ) => void
   /** Returns the cancel. */
   schedule: (delayMs: number, run: () => void) => () => void
   /** One row per state change; `cause` is the preview or result behind it. */
