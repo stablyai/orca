@@ -5,10 +5,7 @@ import {
   type AntigravityNativeCredential
 } from './native-credential-codec'
 import { fetchGoogleIdentity } from './google-userinfo-identity'
-import {
-  AntigravityRewrittenLoginIdentity,
-  identifyLoginToSave
-} from './native-account-rewritten-login'
+import { AntigravityRewrittenLoginIdentity } from './native-account-rewritten-login'
 import type {
   AntigravityAccountStore,
   AntigravityAccountVault,
@@ -108,8 +105,7 @@ export class AntigravityAccountService {
     return this.serialize(async () => this.state(await this.reconcile()))
   }
 
-  /** `keepUnidentified`: a login Google won't name (its access token expired) is still saved,
-   *  without an email, so signing in over it loses nothing. */
+  /** `keepUnidentified`: saves a login Google won't name, without an email. */
   addCurrentAccount(options?: { keepUnidentified?: boolean }): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile()
@@ -119,7 +115,7 @@ export class AntigravityAccountService {
       if (vault.accounts.some((entry) => this.matches(entry, current))) {
         return this.state({ vault, current })
       }
-      const identity = await identifyLoginToSave(current, this.lookupIdentity, this.now(), options)
+      const identity = await this.rewrittenLogins.identifyToSave(current, options)
       if (!current.identity && (await this.backend.read())?.contents !== current.contents) {
         throw new Error('The native Antigravity account changed. Save the current account again.')
       }
