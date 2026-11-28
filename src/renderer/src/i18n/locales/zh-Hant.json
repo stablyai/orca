@@ -1742,7 +1742,8 @@
         "add": "為此存放庫新增伺服器",
         "files": "來自此存放庫的檔案",
         "open": "開啟 {{file}}"
-      }
+      },
+      "unreadable": "無法在這台電腦上開啟已儲存的登入或金鑰"
     },
     "navigation": {
       "accounts": {
@@ -22385,7 +22386,9 @@
           "needsAuth": "需要登入",
           "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
           "pending": "正在連線…",
-          "tools_other": "{{count}} 個工具"
+          "tools_other": "{{count}} 個工具",
+          "orcaRemoved": "已移除：下一則訊息時重新啟動",
+          "orcaChanged": "已變更：下一則訊息時重新啟動"
         },
         "signIn": {
           "external": "請在開啟的頁面完成",
@@ -22425,7 +22428,8 @@
           "user": "使用者",
           "plugin": "外掛",
           "session": "工作階段"
-        }
+        },
+        "stillFailing": "重新連線後仍然失敗。"
       }
     },
     "tab": {
