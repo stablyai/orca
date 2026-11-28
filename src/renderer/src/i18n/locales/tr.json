@@ -20293,6 +20293,8 @@
               "searchProjects": "Projeleri ara...",
               "noMatches": "Aramanızla eşleşen proje yok.",
               "chooseSource": "Görev kaynağı seçin",
+              "only": "Yalnızca",
+              "onlyProject": "Yalnızca {{project}}",
               "hostCount_other": "{{count}} sunucu",
               "hostCount_one": "{{count}} sunucu",
               "hostCount": "{{value0}} sunucu"

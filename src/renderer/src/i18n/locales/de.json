@@ -20293,6 +20293,8 @@
               "searchProjects": "Projekte suchen…",
               "noMatches": "Keine Projekte entsprechen der Suche.",
               "chooseSource": "Aufgabenquelle auswählen",
+              "only": "Nur",
+              "onlyProject": "Nur {{project}}",
               "hostCount_one": "{{count}} Host",
               "hostCount": "{{value0}} Hosts",
               "hostCount_other": "{{count}} Hosts"

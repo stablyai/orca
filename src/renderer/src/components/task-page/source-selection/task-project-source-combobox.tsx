@@ -6,7 +6,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from '../../host-picker/project-host-count-label'
 import type { Repo } from '../../../../../shared/repository/repo-types'
@@ -18,6 +17,7 @@ import {
   isTaskProjectGroupSelected,
   selectedTaskProjectGroups
 } from './task-project-source-combobox-model'
+import { TaskProjectSourceTriggerLabel } from './task-project-source-trigger-label'
 
 type TaskProjectSourceStatus = {
   label: string
@@ -33,42 +33,6 @@ type TaskProjectSourceComboboxProps = {
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   getRepoSourceStatus?: (repo: Repo) => TaskProjectSourceStatus | null | undefined
   triggerClassName?: string
-}
-
-function renderTriggerLabel(
-  groups: readonly TaskProjectPickerGroup[],
-  selected: ReadonlySet<string>,
-  t: Translate = translate
-): React.JSX.Element {
-  if (groups.length === 0) {
-    return (
-      <span className="text-muted-foreground">
-        {t('auto.components.task.project.source.combobox.noProjects', 'No projects')}
-      </span>
-    )
-  }
-  const selectedProjectGroups = selectedTaskProjectGroups(groups, selected)
-  if (selectedProjectGroups.length === groups.length) {
-    return (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        {t('auto.components.task.project.source.combobox.allProjects', 'All projects')}
-      </span>
-    )
-  }
-  const [first, second, ...rest] = selectedProjectGroups
-  return (
-    <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
-      {first ? (
-        <RepoBadgeLabel
-          name={first.repo.displayName}
-          color={first.repo.badgeColor}
-          repo={first.repo}
-        />
-      ) : null}
-      {second ? <span className="text-muted-foreground">, {second.repo.displayName}</span> : null}
-      {rest.length > 0 ? <span className="text-muted-foreground">+{rest.length}</span> : null}
-    </span>
-  )
 }
 
 function getProjectDetail(
@@ -186,6 +150,13 @@ export default function TaskProjectSourceCombobox({
     [groups, onChange, selected]
   )
 
+  const selectOnlyProject = useCallback(
+    (group: TaskProjectPickerGroup) => {
+      onChange(new Set([getSelectedTaskProjectSource(group, selected).id]))
+    },
+    [onChange, selected]
+  )
+
   const selectProjectSource = useCallback(
     (group: TaskProjectPickerGroup, source: Repo) => {
       const status = getRepoSourceStatus?.(source)
@@ -226,7 +197,7 @@ export default function TaskProjectSourceCombobox({
           aria-expanded={open}
           className={cn('h-8 w-full justify-between px-3 text-xs font-normal', triggerClassName)}
         >
-          {renderTriggerLabel(groups, selected, t)}
+          <TaskProjectSourceTriggerLabel groups={groups} selected={selected} />
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -324,6 +295,25 @@ export default function TaskProjectSourceCombobox({
                       </span>
                       <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{detail}</p>
                     </div>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={t(
+                      'auto.components.task.project.source.combobox.onlyProject',
+                      'Only {{project}}',
+                      { project: group.repo.displayName }
+                    )}
+                    onClick={() => selectOnlyProject(group)}
+                    onKeyDown={(event) => {
+                      // cmdk prevents native button activation on Enter.
+                      if (event.key === 'Enter') {
+                        event.stopPropagation()
+                      }
+                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    className="shrink-0 px-2 text-xs text-muted-foreground can-hover:opacity-0 hover:text-foreground group-hover/source-row:opacity-100 focus-visible:opacity-100"
+                  >
+                    {t('auto.components.task.project.source.combobox.only', 'Only')}
                   </button>
                   {hasSourceMenu ? (
                     <Popover

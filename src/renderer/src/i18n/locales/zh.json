@@ -19330,6 +19330,8 @@
               "searchProjects": "搜索项目...",
               "noMatches": "没有匹配搜索的项目",
               "chooseSource": "选择任务来源",
+              "only": "仅此项",
+              "onlyProject": "仅 {{project}}",
               "hostCount_other": "{{count}} 台主机",
               "hostCount": "{{value0}} 个主机"
             }

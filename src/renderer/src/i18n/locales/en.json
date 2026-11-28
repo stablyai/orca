@@ -20317,6 +20317,8 @@
               "searchProjects": "Search projects...",
               "noMatches": "No projects match your search.",
               "chooseSource": "Choose task source",
+              "only": "Only",
+              "onlyProject": "Only {{project}}",
               "hostCount_other": "{{count}} hosts",
               "hostCount_one": "{{count}} host",
               "hostCount": "{{value0}} hosts"

@@ -20181,6 +20181,8 @@
               "searchProjects": "Rechercher des projets...",
               "noMatches": "Aucun projet ne correspond à votre recherche.",
               "chooseSource": "Choisir la source des tâches",
+              "only": "Uniquement",
+              "onlyProject": "Uniquement {{project}}",
               "hostCount_one": "{{count}} hôte",
               "hostCount_other": "{{count}} hôtes",
               "hostCount_many": "{{count}} hôtes",

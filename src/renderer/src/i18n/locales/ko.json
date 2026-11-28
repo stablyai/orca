@@ -19518,6 +19518,8 @@
               "searchProjects": "프로젝트 검색...",
               "noMatches": "검색과 일치하는 프로젝트가 없습니다.",
               "chooseSource": "작업 소스 선택",
+              "only": "이것만",
+              "onlyProject": "{{project}}만",
               "hostCount_other": "호스트 {{count}}개",
               "hostCount_one": "호스트 {{count}}개",
               "hostCount": "호스트 {{value0}}개"

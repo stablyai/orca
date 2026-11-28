@@ -20062,6 +20062,8 @@
               "searchProjects": "搜尋專案...",
               "noMatches": "沒有符合搜尋的專案。",
               "chooseSource": "選擇任務來源",
+              "only": "僅此項",
+              "onlyProject": "僅 {{project}}",
               "hostCount_other": "{{count}} 台主機",
               "hostCount": "{{value0}} 台主機"
             }

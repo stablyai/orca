@@ -20877,6 +20877,8 @@
               "searchProjects": "Поиск проектов",
               "noMatches": "Проекты не найдены.",
               "chooseSource": "Выберите источник задачи",
+              "only": "Только",
+              "onlyProject": "Только {{project}}",
               "hostCount_one": "{{count}} сервер",
               "hostCount_few": "{{count}} сервера",
               "hostCount_many": "{{count}} серверов",

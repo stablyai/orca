@@ -19809,6 +19809,8 @@
               "searchProjects": "Buscar proyectos...",
               "noMatches": "Ningún proyecto coincide con tu búsqueda.",
               "chooseSource": "Elige el origen de tareas",
+              "only": "Solo",
+              "onlyProject": "Solo {{project}}",
               "hostCount_one": "{{count}} host",
               "hostCount_other": "{{count}} hosts",
               "hostCount_many": "{{count}} hosts",

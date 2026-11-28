@@ -19328,6 +19328,8 @@
               "searchProjects": "プロジェクトを検索…",
               "noMatches": "検索条件に一致するプロジェクトはありません。",
               "chooseSource": "タスクソースを選択",
+              "only": "のみ",
+              "onlyProject": "{{project}} のみ",
               "hostCount_other": "{{count}} 台のホスト",
               "hostCount": "{{value0}} 台のホスト"
             }
