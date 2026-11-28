@@ -8,6 +8,7 @@ export const AGENT_CLI_UPDATE_AGENTS = [
   'grok',
   'opencode',
   'opencode2',
+  'pi',
   'omp',
   'copilot',
   'kimi',

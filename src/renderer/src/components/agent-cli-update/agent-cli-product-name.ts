@@ -19,6 +19,8 @@ export function agentCliProductName(
       return t('agentCliUpdate.opencodeProduct', 'OpenCode')
     case 'opencode2':
       return t('agentCliUpdate.opencode2Product', 'OpenCode 2')
+    case 'pi':
+      return t('agentCliUpdate.piProduct', 'Pi')
     case 'omp':
       return t('agentCliUpdate.ompProduct', 'OMP')
     case 'copilot':
