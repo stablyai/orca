@@ -1,5 +1,6 @@
-// Orca components panel catalog 2 (since Orca 1.4.247): data and content components. Part of the
-// `orca` module with orca.d.ts, orca-components.d.ts and orca-components-layout.d.ts.
+// Orca components panel catalog 2 (since Orca 1.4.247) and later: data, content and code
+// components. Part of the `orca` module with orca.d.ts, orca-components.d.ts and
+// orca-components-layout.d.ts.
 
 declare module 'orca' {
   import type { IconName, Leaf, MaxHeight, OrcaComponent, Tone } from 'orca'
@@ -118,4 +119,58 @@ declare module 'orca' {
   export const CodeView: OrcaComponent<CodeViewProps>
   export const Image: OrcaComponent<ImageProps>
   export const KeyValue: OrcaComponent<KeyValueProps>
+
+  // Catalog 5: check `ui.has('CodeInput')` when your minimum Orca is older.
+  export type CompletionKind = 'field' | 'operator' | 'function' | 'keyword' | 'value'
+  /** A suggestion for the word before the cursor; Orca filters them as the person types. */
+  export type Completion = {
+    label: string
+    detail?: string
+    /** Inserted instead of `label`. */
+    insert?: string
+    kind?: CompletionKind
+  }
+  /** A range of `value` drawn underlined, in UTF-16 indexes (`text.slice(from, to)`). */
+  export type Diagnostic = {
+    from: number
+    to: number
+    message: string
+    tone?: 'danger' | 'warning'
+  }
+  /**
+   * Editable code, highlighted when Orca knows `language`. Typing a word offers the matching
+   * `completions` (Ctrl+Space shows them all); `diagnostics` are dropped while the text on screen
+   * is newer than the `value` they were computed for.
+   */
+  export type CodeInputProps = Leaf & {
+    label: string
+    labelHidden?: boolean
+    value?: string
+    defaultValue?: string
+    placeholder?: string
+    language?: string
+    /**
+     * Visible lines, 1 to 20 (default 1). With 1 the text is one line that wraps, and Enter
+     * submits; with more, Enter breaks the line and Cmd/Ctrl+Enter submits. Shift+Enter always
+     * breaks the line; a new line keeps the indent of the one it breaks.
+     */
+    rows?: number
+    /** Grows with its text up to this many lines (default `rows`), then scrolls. */
+    maxRows?: number
+    maxLength?: number
+    invalid?: boolean
+    disabled?: boolean
+    completions?: Completion[]
+    /**
+     * Characters that open and close a string (for JavaScript: single quote, double quote and
+     * backtick). Typing inside one offers no `completions`. A backslash escapes the next
+     * character; a line break ends a string opened by any quote but a backtick. Ctrl+Space still
+     * offers them.
+     */
+    quotes?: string
+    diagnostics?: Diagnostic[]
+    onChange?: (value: string) => void
+    onSubmit?: (value: string) => void
+  }
+  export const CodeInput: OrcaComponent<CodeInputProps>
 }

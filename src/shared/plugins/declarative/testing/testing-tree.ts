@@ -68,6 +68,7 @@ const ROLES: Record<string, string> = {
   Skeleton: 'status',
   RelativeTime: 'time',
   Box: 'group',
+  CodeInput: 'combobox',
   Unsupported: 'unsupported'
 }
 
@@ -141,13 +142,24 @@ function labelOf(node: PluginDeclarativeNode): string | undefined {
   return typeof label === 'string' ? label : undefined
 }
 
+function roleOf(node: PluginDeclarativeNode): string {
+  const props: Record<string, unknown> = node.props
+  if (node.type === 'ListItem' && props.onPress !== undefined) {
+    return 'button'
+  }
+  // A multi-line CodeInput renders as a multi-line textbox, since a combobox may not be multi-line.
+  if (node.type === 'CodeInput' && typeof props.rows === 'number' && props.rows > 1) {
+    return 'textbox'
+  }
+  return ROLES[node.type] ?? 'generic'
+}
+
 function toElement(node: PluginDeclarativeNode, path: string): TestElement {
   const props: Record<string, unknown> = node.props
-  const pressable = node.type === 'ListItem' && props.onPress !== undefined
   return {
     type: node.type,
     key: node.key?.startsWith('#') ? undefined : node.key,
-    role: pressable ? 'button' : (ROLES[node.type] ?? 'generic'),
+    role: roleOf(node),
     label: labelOf(node),
     text: normalize(textOf(node)),
     props,

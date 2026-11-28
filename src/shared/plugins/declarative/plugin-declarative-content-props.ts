@@ -10,6 +10,7 @@ import {
   flag,
   icon,
   label,
+  languageId,
   maxHeight,
   requiredLabel,
   tone
@@ -37,11 +38,7 @@ const codeViewProps = lazyZodSchema(() =>
   z
     .object({
       code: documentText,
-      /** A language id Orca highlights (built in or from a syntax plugin); unknown ones stay plain. */
-      language: z
-        .string()
-        .regex(/^[A-Za-z0-9_+#.-]{1,64}$/)
-        .optional(),
+      language: languageId.optional(),
       label: label.optional(),
       lineNumbers: flag,
       wrap: flag,

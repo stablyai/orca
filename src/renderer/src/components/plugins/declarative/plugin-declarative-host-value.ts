@@ -29,14 +29,21 @@ export function usePluginDeclarativeHostValue<T>(options: {
   send: (callback: string, value: T, edit: number) => void
   /** The drawn node's props, so `orca plugin shot --act` can edit this control as a person would. */
   actTarget?: PluginDeclarativeDrawnProps
-}): { value: T; change: (next: T) => void; readOnly: boolean } {
+}): {
+  value: T
+  change: (next: T) => void
+  readOnly: boolean
+  /** Whether the guest's latest render had processed every edit sent for this control. */
+  caughtUp: boolean
+} {
   const { value, callback, send } = options
   const acked = options.acked ?? 0
   const [state, setState] = useState<HostValueState<T>>(() => ({
     local: value ?? options.defaultValue ?? options.fallback,
     remote: value,
     acked,
-    sent: 0
+    // The guest keeps its count across remounts; new ids must start past what it has already seen.
+    sent: acked
   }))
   let current = state
   if (!Object.is(state.remote, value) || state.acked !== acked) {
@@ -53,6 +60,7 @@ export function usePluginDeclarativeHostValue<T>(options: {
     value: current.local,
     // A controlled value with no handler is the guest's to set: the person cannot edit it.
     readOnly: value !== undefined && callback === undefined,
+    caughtUp: current.acked >= current.sent,
     change: (next: T) => {
       // Discrete input events re-render synchronously, so `current` is fresh for each edit.
       const edit = current.sent + 1

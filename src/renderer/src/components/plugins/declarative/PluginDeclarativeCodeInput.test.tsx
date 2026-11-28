@@ -1,0 +1,275 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
+import { PluginDeclarativeCodeInput } from './PluginDeclarativeCodeInput'
+
+// The suggestions render inline, so the test reads them without a portal or positioning.
+vi.mock('@/components/ui/popover', () => ({
+  Popover: ({ open, children }: { open: boolean; children: React.ReactNode }) => (
+    <div data-open={open}>{children}</div>
+  ),
+  PopoverAnchor: ({ children }: { children: React.ReactNode }) => children,
+  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+}))
+
+type Props = PluginDeclarativeProps<'CodeInput'>
+
+const base: Props = {
+  label: 'Filter',
+  completions: [{ label: 'total' }],
+  onChange: { $callback: 'change' }
+}
+
+beforeEach(() => {
+  // happy-dom has no editing commands; the component falls back to setting the value itself.
+  document.execCommand = vi.fn(() => false)
+})
+
+afterEach(cleanup)
+
+function rendered(): HTMLTextAreaElement {
+  const textarea = screen.queryByRole('combobox') ?? screen.getByRole('textbox')
+  if (!(textarea instanceof HTMLTextAreaElement)) {
+    throw new Error('CodeInput did not render a textarea')
+  }
+  return textarea
+}
+
+function field(props: Props): { textarea: HTMLTextAreaElement; emit: ReturnType<typeof vi.fn> } {
+  const emit = vi.fn()
+  render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  return { textarea: rendered(), emit }
+}
+
+function placeCaret(textarea: HTMLTextAreaElement, at: number): void {
+  textarea.focus()
+  textarea.setSelectionRange(at, at)
+  fireEvent.select(textarea)
+}
+
+function suggest(textarea: HTMLTextAreaElement, at: number): void {
+  placeCaret(textarea, at)
+  fireEvent.keyDown(textarea, { key: ' ', ctrlKey: true })
+}
+
+it('is a single-line combobox and a multi-line textbox that owns the suggestions', () => {
+  const single = field(base).textarea
+  expect(single.getAttribute('role')).toBe('combobox')
+  expect(single.hasAttribute('aria-multiline')).toBe(false)
+  expect(single.getAttribute('aria-expanded')).toBe('false')
+  cleanup()
+
+  const { textarea } = field({ ...base, defaultValue: 'to', rows: 2 })
+  expect(textarea.getAttribute('role')).toBe('textbox')
+  expect(textarea.getAttribute('aria-multiline')).toBe('true')
+  expect(textarea.hasAttribute('aria-expanded')).toBe(false)
+  suggest(textarea, 2)
+  const listbox = screen.getByRole('listbox')
+  expect(textarea.getAttribute('aria-autocomplete')).toBe('list')
+  expect(textarea.getAttribute('aria-controls')).toBe(listbox.id)
+  expect(textarea.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option').id)
+})
+
+it('replaces the word at the caret with the chosen suggestion', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status' })
+  suggest(textarea, 2)
+  expect(screen.getByRole('option').textContent).toBe('total')
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('total + status')
+})
+
+it('drops suggestions once the caret leaves the word', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status', rows: 2 })
+  suggest(textarea, 2)
+  placeCaret(textarea, 11)
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.keyDown(textarea, { key: 'Enter' })
+  expect(textarea.value).toBe('to + status\n')
+})
+
+it('does not replace other text when the caret moved without a select event', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status' })
+  suggest(textarea, 2)
+  textarea.setSelectionRange(11, 11)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('to + status')
+})
+
+it('breaks the line on Shift+Enter while suggestions are open', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status', rows: 2 })
+  suggest(textarea, 2)
+  fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+  expect(textarea.value).toBe('to\n + status')
+  expect(screen.queryByRole('option')).toBeNull()
+})
+
+it('leaves Shift+Tab to move focus while suggestions are open', () => {
+  const { textarea } = field({ ...base, defaultValue: 'to + status' })
+  suggest(textarea, 2)
+  // fireEvent returns false when the handler prevented the default focus move.
+  expect(fireEvent.keyDown(textarea, { key: 'Tab', shiftKey: true })).toBe(true)
+  expect(textarea.value).toBe('to + status')
+  fireEvent.blur(textarea)
+  expect(screen.queryByRole('option')).toBeNull()
+})
+
+it('breaks the line instead of submitting on the submit modifier with Shift+Enter', () => {
+  const { textarea, emit } = field({
+    ...base,
+    defaultValue: 'ab',
+    rows: 2,
+    onSubmit: { $callback: 'submit' }
+  })
+  placeCaret(textarea, 1)
+  // Ctrl on Linux/Windows, Cmd on macOS; holding both covers whichever the test platform reads.
+  fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true, ctrlKey: true, metaKey: true })
+  expect(textarea.value).toBe('a\nb')
+  expect(emit).not.toHaveBeenCalledWith('submit', expect.anything())
+})
+
+it('hides uncontrolled diagnostics after an edit until the guest has seen it', () => {
+  const props: Props = {
+    ...base,
+    defaultValue: 'abc',
+    diagnostics: [{ from: 0, to: 3, message: 'bad' }],
+    $edit: 0
+  }
+  const emit = vi.fn()
+  const { container, rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  const underlines = (): number => container.querySelectorAll('[data-tone]').length
+  expect(underlines()).toBe(1)
+
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '\nabc' } })
+  expect(emit).toHaveBeenCalledWith('change', ['\nabc'], { edit: 1 })
+  expect(underlines()).toBe(0)
+
+  rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
+  expect(underlines()).toBe(0)
+
+  rerender(
+    <PluginDeclarativeCodeInput
+      props={{ ...props, diagnostics: [{ from: 1, to: 4, message: 'bad' }], $edit: 1 }}
+      emit={emit}
+    />
+  )
+  expect(underlines()).toBe(1)
+})
+
+it('hides diagnostics for good after an edit the guest cannot hear', () => {
+  const { onChange: _, ...rest } = base
+  const { textarea } = field({
+    ...rest,
+    defaultValue: 'abc',
+    diagnostics: [{ from: 0, to: 3, message: 'bad' }]
+  })
+  expect(document.querySelectorAll('[data-tone]').length).toBe(1)
+  fireEvent.change(textarea, { target: { value: 'abcd' } })
+  expect(document.querySelectorAll('[data-tone]').length).toBe(0)
+})
+
+it('numbers edits past what the guest saw before a remount', () => {
+  const props: Props = {
+    ...base,
+    defaultValue: 'abc',
+    diagnostics: [{ from: 0, to: 3, message: 'bad' }],
+    $edit: 5
+  }
+  const emit = vi.fn()
+  const { container, rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'abcd' } })
+  expect(emit).toHaveBeenCalledWith('change', ['abcd'], { edit: 6 })
+  rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
+  expect(container.querySelectorAll('[data-tone]').length).toBe(0)
+})
+
+it('counts offsets on CRLF text the way the textarea does', () => {
+  const { textarea } = field({ ...base, completions: [{ label: '$gt' }], defaultValue: 'a\r\n$g' })
+  suggest(textarea, 4)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('a\n$gt')
+})
+
+it('underlines diagnostics given against CRLF text where the guest meant', () => {
+  field({ ...base, defaultValue: 'a\r\nbad', diagnostics: [{ from: 3, to: 6, message: 'bad' }] })
+  const marks = [...document.querySelectorAll('[data-tone]')]
+  expect(marks.map((mark) => mark.textContent)).toEqual(['bad'])
+})
+
+it('trims an accepted suggestion to maxLength when it sets the value itself', () => {
+  const { textarea, emit } = field({ ...base, defaultValue: 'to', maxLength: 3 })
+  suggest(textarea, 2)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('tot')
+  expect(emit).toHaveBeenLastCalledWith('change', ['tot'], expect.anything())
+})
+
+it('trims an accepted suggestion with CRLF breaks to maxLength as the textarea counts them', () => {
+  const { textarea, emit } = field({
+    ...base,
+    completions: [{ label: 'total', insert: 'to\r\nxy' }],
+    defaultValue: 'to',
+    maxLength: 5
+  })
+  suggest(textarea, 2)
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('to\nxy')
+  expect(emit).toHaveBeenLastCalledWith('change', ['to\nxy'], expect.anything())
+})
+
+it('offers every suggestion on Ctrl+Space and still replaces the typed word', () => {
+  const { textarea } = field({
+    ...base,
+    completions: [{ label: 'name' }, { label: 'total' }],
+    defaultValue: 'zz'
+  })
+  suggest(textarea, 2)
+  expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+    'name',
+    'total'
+  ])
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('name')
+})
+
+it('still filters suggestions while typing', () => {
+  const { textarea } = field({ ...base, completions: [{ label: 'name' }, { label: 'total' }] })
+  textarea.focus()
+  fireEvent.input(textarea, { target: { value: 'na' }, inputType: 'insertText', data: 'a' })
+  expect(screen.queryAllByRole('option').map((option) => option.textContent)).toEqual(['name'])
+})
+
+it('drops suggestions opened on text the guest has since replaced', () => {
+  const props: Props = { ...base, completions: [{ label: 'name' }], value: 'na' }
+  const emit = vi.fn()
+  const { rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  const textarea = rendered()
+  suggest(textarea, 2)
+  expect(screen.getByRole('option').textContent).toBe('name')
+  rerender(<PluginDeclarativeCodeInput props={{ ...props, value: '{}' }} emit={emit} />)
+  placeCaret(textarea, 2)
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.keyDown(textarea, { key: 'Tab' })
+  expect(textarea.value).toBe('{}')
+})
+
+it('does not bring back suggestions when the guest restores the text they opened on', () => {
+  const props: Props = {
+    ...base,
+    completions: [{ label: 'name' }],
+    value: 'na',
+    onSubmit: { $callback: 'submit' }
+  }
+  const emit = vi.fn()
+  const { rerender } = render(<PluginDeclarativeCodeInput props={props} emit={emit} />)
+  const textarea = rendered()
+  suggest(textarea, 2)
+  expect(screen.getByRole('option').textContent).toBe('name')
+  rerender(<PluginDeclarativeCodeInput props={{ ...props, value: '{}' }} emit={emit} />)
+  rerender(<PluginDeclarativeCodeInput props={{ ...props }} emit={emit} />)
+  textarea.setSelectionRange(2, 2)
+  expect(screen.queryByRole('option')).toBeNull()
+  fireEvent.keyDown(textarea, { key: 'Enter' })
+  expect(textarea.value).toBe('na')
+  expect(emit).toHaveBeenCalledWith('submit', ['na'])
+})

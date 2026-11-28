@@ -32,7 +32,7 @@ export const PLUGIN_DECLARATIVE_MESSAGES = {
 } as const
 
 /** Grows with the component catalog, so plugins can feature-detect with `ui.catalog`. */
-export const PLUGIN_DECLARATIVE_CATALOG_VERSION = 4
+export const PLUGIN_DECLARATIVE_CATALOG_VERSION = 5
 
 /** Each catalog component's prop names, mirrored by the zod catalog (parity-tested). */
 export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
@@ -180,6 +180,25 @@ export const PLUGIN_DECLARATIVE_COMPONENT_PROPS = {
     'border',
     'radius',
     'background'
+  ],
+  // Catalog 5.
+  CodeInput: [
+    'label',
+    'labelHidden',
+    'value',
+    'defaultValue',
+    'placeholder',
+    'language',
+    'rows',
+    'maxRows',
+    'maxLength',
+    'invalid',
+    'disabled',
+    'completions',
+    'quotes',
+    'diagnostics',
+    'onChange',
+    'onSubmit'
   ]
 } as const satisfies Record<string, readonly string[]>
 
@@ -192,6 +211,7 @@ export type PluginDeclarativeComponentTag = keyof typeof PLUGIN_DECLARATIVE_COMP
 export const PLUGIN_DECLARATIVE_VALUE_CONTROLS = {
   Input: { value: 'value', change: 'onChange' },
   Textarea: { value: 'value', change: 'onChange' },
+  CodeInput: { value: 'value', change: 'onChange' },
   Switch: { value: 'checked', change: 'onChange' },
   Checkbox: { value: 'checked', change: 'onChange' },
   Select: { value: 'value', change: 'onChange' },

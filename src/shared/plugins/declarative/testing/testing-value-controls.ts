@@ -68,7 +68,10 @@ export function createValueControls() {
       : isControlValue(seeded)
         ? seeded
         : fallbackOf(element)
-    const state = { value, sent: 0 }
+    // The guest keeps its edit count across remounts, as the panel does: a recreated control's
+    // next edit id must pass the acknowledgement it was rendered with.
+    const acked = element.props[PLUGIN_DECLARATIVE_EDIT_PROP]
+    const state = { value, sent: typeof acked === 'number' ? acked : 0 }
     states.set(element.path, state)
     return state
   }
@@ -106,16 +109,34 @@ export function createValueControls() {
     valueOf: (element: TestElement): ControlValue => current(element).value,
     edit,
     typeInto(element: TestElement, text: string, replace: boolean): ControlEdit[] {
-      if (element.type !== 'Input' && element.type !== 'Textarea') {
-        throw new Error(`type: a ${element.type} takes no text; expected an Input or Textarea`)
+      if (!['Input', 'Textarea', 'CodeInput'].includes(element.type)) {
+        throw new Error(
+          `type: a ${element.type} takes no text; expected an Input, Textarea or CodeInput`
+        )
       }
-      let value = replace ? '' : String(current(element).value)
+      const base = replace ? '' : String(current(element).value)
+      // A rendered CodeInput holds its text with `\n` only, both the seed its edits build on
+      // and the line breaks typed into it.
+      const lf = (raw: string) => raw.replace(/\r\n?/g, '\n')
+      const code = element.type === 'CodeInput'
+      let value = code ? lf(base) : base
+      const typed = code ? lf(text) : text
       const edits: ControlEdit[] = []
       if (replace) {
         edits.push(edit(element, value))
       }
-      for (const character of text) {
+      // A rendered text field drops a keystroke that would pass `maxLength`, as its textarea does.
+      const maxLength =
+        typeof element.props.maxLength === 'number' ? element.props.maxLength : Infinity
+      for (const character of typed) {
+        if (value.length + character.length > maxLength) {
+          continue
+        }
         value += character
+        edits.push(edit(element, value))
+      }
+      if (edits.length === 0 && value !== base) {
+        // Nothing typed, yet the stored seed still holds `\r` breaks the panel renders as `\n`.
         edits.push(edit(element, value))
       }
       return edits

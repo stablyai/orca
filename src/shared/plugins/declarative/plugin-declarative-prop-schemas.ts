@@ -40,6 +40,8 @@ export const size = lazyZodSchema(() => z.enum(['xs', 'sm', 'md']).optional())
 export const variant = lazyZodSchema(() => z.enum(['solid', 'outline', 'ghost']).optional())
 export const flag = lazyZodSchema(() => z.boolean().optional())
 export const text = lazyZodSchema(() => z.string().max(LIMITS.maxTextLength))
+/** A language id Orca highlights (built in or from a syntax plugin); unknown ones stay plain. */
+export const languageId = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_+#.-]{1,64}$/))
 /** A fixed-height scroll area for long content, so it does not push the rest of the panel away. */
 export const maxHeight = lazyZodSchema(() => z.enum(['sm', 'md', 'lg', 'none']).optional())
 /** A row or item identity: what selection, sorting and events name. */
