@@ -3270,6 +3270,23 @@ html.native-shell .app-layout {
   padding: 0 4px;
 }
 
+/* The lowest pinned sidebar header fades cards passing beneath it so the cut reads as a header,
+ * not a torn card. The attr marks the bottom of the pinned stack (host alone, or group under host). */
+[data-worktree-sticky-header-bottom]::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 16px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    var(--worktree-sidebar),
+    color-mix(in srgb, var(--worktree-sidebar) 0%, transparent)
+  );
+}
+
 .worktree-item {
   display: flex;
   flex-direction: column;
