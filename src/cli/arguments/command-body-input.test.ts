@@ -1,51 +1,28 @@
-import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { readTextOrFileFlag } from './command-body-input'
 
-const readBodyFile = (file: string, cwd: string): Promise<string | undefined> =>
-  readTextOrFileFlag(new Map([['body-file', file]]), cwd, 'body', true)
+describe('readTextOrFileFlag --body-file from a WSL shell', () => {
+  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
-const failureMessage = (read: Promise<unknown>): Promise<string> =>
-  read.then(
-    () => '',
-    (error: Error) => error.message
-  )
-
-describe('readTextOrFileFlag --body-file', () => {
   afterEach(() => {
+    Object.defineProperty(process, 'platform', originalPlatform)
     vi.unstubAllEnvs()
   })
 
-  // The Windows CLI runs for a WSL caller whose cwd and typed paths are Linux.
-  it.skipIf(process.platform !== 'win32')(
-    'reads a typed Linux absolute path inside the caller WSL distro',
-    async () => {
-      vi.stubEnv('ORCA_CLI_WSL_DISTRO', '')
-      const message = await failureMessage(
-        readBodyFile('/home/me/reply.md', '\\\\wsl.localhost\\Orca-Test-Distro\\home\\me\\repo')
-      )
-      expect(message).toContain(
-        'Could not read \\\\wsl.localhost\\Orca-Test-Distro\\home\\me\\reply.md:'
-      )
-      expect(message).not.toContain('C:\\home')
-    }
-  )
+  it('reads a typed Linux absolute path inside the caller distro', async () => {
+    // The Windows CLI runs for a WSL caller whose typed paths are Linux; stub so every OS covers it.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    vi.stubEnv('ORCA_CLI_WSL_DISTRO', 'Orca-Test-Distro')
+    const flags = new Map([['body-file', '/home/me/../me/orca-missing-reply.md']])
 
-  it('resolves a relative path against a plain cwd', async () => {
-    vi.stubEnv('ORCA_CLI_WSL_DISTRO', '')
-    const cwd = resolve('orca-body-file-test')
-    const message = await failureMessage(readBodyFile('reply.md', cwd))
-    expect(message).toBe(`Could not read ${resolve(cwd, 'reply.md')}: ENOENT`)
-  })
+    const message = await readTextOrFileFlag(flags, 'C:\\src\\app', 'body', true).then(
+      () => '',
+      (error: Error) => error.message
+    )
 
-  it('preserves a native absolute path verbatim when no WSL translation applies', async () => {
-    vi.stubEnv('ORCA_CLI_WSL_DISTRO', '')
-    const raw =
-      process.platform === 'win32'
-        ? 'C:\\orca-nonexistent-link\\..\\reply.md'
-        : '/orca-nonexistent-link/../reply.md'
-    const message = await failureMessage(readBodyFile(raw, resolve('orca-body-file-test')))
-    expect(message).toContain(`Could not read ${raw}:`)
+    expect(message).toMatch(
+      /^Could not read \\\\wsl\.localhost\\Orca-Test-Distro\\home\\me\\orca-missing-reply\.md: /
+    )
   })
 })

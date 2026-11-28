@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { resolveCallerLocalPath } from '../../shared/file-access/caller-local-path'
 import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
+import { resolveCallerFilePath } from './caller-file-path'
 import { readStdin } from './flag-or-stdin-payload'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -67,12 +67,11 @@ export async function readTextOrFileFlag(
 
 async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
-    const wslDistro = getWslCallerDistro(cwd)
-    const isWslAbsolute = Boolean(wslDistro && path.startsWith('/') && !path.startsWith('//'))
-    // Keep native absolute paths unnormalized so symlinks before `..` resolve via the OS;
-    // a WSL caller's Linux path still translates to a distro UNC or drive path.
-    const resolved =
-      !isWslAbsolute && isAbsolute(path) ? path : resolveCallerLocalPath(path, cwd, wslDistro)
+    const isWslLinuxPath = Boolean(
+      getWslCallerDistro(cwd) && path.startsWith('/') && !path.startsWith('//')
+    )
+    // Native absolute paths stay verbatim as before; WSL Linux paths are normalized while translating.
+    const resolved = !isWslLinuxPath && isAbsolute(path) ? path : resolveCallerFilePath(path, cwd)
     try {
       return await readFile(resolved, 'utf8')
     } catch (error) {
