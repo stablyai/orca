@@ -39,6 +39,7 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import type { NativeChatEventBadge } from '../events/NativeChatEventRow'
+import { NATIVE_CHAT_READABLE_MIN } from '../events/native-chat-inline-chip'
 import { NativeChatAgentMessageRow } from './NativeChatAgentMessageRow'
 import { ItemChip } from '../../bot-items/NativeChatBotItemNoteRow'
 import {
@@ -155,9 +156,20 @@ export function NativeChatAgentMessageCard({
               <span aria-hidden={!spoken || undefined} className="shrink-0 font-normal">
                 {forItems}
               </span>
-              {items.map((item) => (
-                <ItemChip key={item.uid} item={item} />
-              ))}
+              {/* Overflow chips wrap out of view whole but scroll into view when focused. The items take
+                  free room before the name grows past its floor. */}
+              <span
+                data-agent-start-items
+                className={`${NATIVE_CHAT_READABLE_MIN} flex max-h-5 max-w-fit grow-[calc(infinity)] basis-0 flex-wrap gap-1 overflow-clip focus-within:overflow-hidden`}
+              >
+                {items.map((item) => (
+                  <ItemChip
+                    key={item.uid}
+                    item={item}
+                    className="max-w-fit flex-1 basis-0 focus-visible:ring-inset"
+                  />
+                ))}
+              </span>
             </>
           ) : null}
         </>

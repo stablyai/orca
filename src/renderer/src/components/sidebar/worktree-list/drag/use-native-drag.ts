@@ -57,8 +57,9 @@ export function useWorktreeNativeDrag(args: {
           .closest<HTMLElement>('[data-worktree-host-identity]')
           ?.getAttribute('data-worktree-host-identity') ??
         uniqueDraggedKeys(draggedCopies.filter((copy) => copy.id === worktreeId))[0]
+      const { getWorktreeDragGroups } = ctx
       const sourceGroupKey = worktreeKey
-        ? (ctx.worktreeDragGroups.find((group) => group.worktreeIds.includes(worktreeKey))?.key ??
+        ? (getWorktreeDragGroups().find((group) => group.worktreeIds.includes(worktreeKey))?.key ??
           null)
         : null
       if (!worktreeKey || !sourceGroupKey) {
@@ -99,7 +100,7 @@ export function useWorktreeNativeDrag(args: {
         pointerY: null
       })
     },
-    [ctx.worktreeDragGroups, scrollRef, session, setWorktreeDragState]
+    [ctx, scrollRef, session, setWorktreeDragState]
   )
 
   const handleWorktreeDragOver = useCallback(
@@ -220,7 +221,7 @@ export function useWorktreeNativeDrag(args: {
             worktreeIds: dragSession.reorderDraggedIds,
             status: target.status,
             dropIndex: statusDrop.dropIndex,
-            groups: ctx.worktreeDragGroups
+            groups: ctx.getWorktreeDragGroups()
           })
           clearWorktreeDrag()
           return
@@ -237,11 +238,11 @@ export function useWorktreeNativeDrag(args: {
           dragSession.sourceGroupKey
         ) ?? rawDropPoint
       ctx.onReorderWorktrees({
-        groups: ctx.worktreeDragGroups,
+        groups: ctx.getWorktreeDragGroups(),
         sourceGroupKey: dragSession.sourceGroupKey,
         draggedKeys: dragSession.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
-          groups: ctx.worktreeDragUnitGroups,
+          groups: ctx.getWorktreeDragUnitGroups(),
           sourceGroupKey: dragSession.sourceGroupKey,
           dropIndex: drop.dropIndex
         })

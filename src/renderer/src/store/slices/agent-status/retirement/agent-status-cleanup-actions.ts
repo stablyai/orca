@@ -1,3 +1,16 @@
+import {
+  CHAT_PANE_ADDRESS_PREFIX,
+  chatPaneKeySessionId
+} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  CHAT_READ_MARK_FIELDS,
+  someChatReadMarkAlias,
+  type ChatReadMarks
+} from '../../../../../../shared/agent-session/view/chat-read-mark-move'
+import {
+  chatReadMarkAliases,
+  removeChatReadMark
+} from '../structured-sessions/chat-read-mark-aliases'
 import type { AgentStatusSlice } from '../contracts/agent-status-slice-contract'
 import type { AgentStatusRuntime } from '../status-ownership/agent-status-runtime'
 import { collectWorktreeIdsForConnection } from './agent-status-connection-worktree-scope'
@@ -7,6 +20,20 @@ import {
   removePaneKeysByTabPrefix
 } from '../pane-authority/agent-status-pane-keyed-records'
 import { agentProcessRetirementPatch } from './agent-status-process-retirement'
+
+function hasChatReadMark(marks: ChatReadMarks, key: string): boolean {
+  return (
+    key.startsWith(CHAT_PANE_ADDRESS_PREFIX) &&
+    chatPaneKeySessionId(key) !== null &&
+    CHAT_READ_MARK_FIELDS.some(
+      (field) =>
+        Object.hasOwn(marks[field], key) ||
+        someChatReadMarkAlias(chatReadMarkAliases(field, key), (alias) =>
+          Object.hasOwn(marks[field], alias)
+        )
+    )
+  )
+}
 
 /** Actions for removing transient rows and migration-era cache entries. */
 export function createAgentStatusCleanupActions(
@@ -59,6 +86,7 @@ export function createAgentStatusCleanupActions(
       if (
         !current.agentStatusByPaneKey.has(paneKey) &&
         !(paneKey in current.agentLaunchConfigByPaneKey) &&
+        !hasChatReadMark(current, paneKey) &&
         !Object.values(current.migrationUnsupportedByPtyId).some(
           (entry) => entry.paneKey === paneKey
         )
@@ -74,10 +102,21 @@ export function createAgentStatusCleanupActions(
           changedPaneKeys.add(paneKey)
         }
         const processRetirement = agentProcessRetirementPatch(s, paneKey)
-        const paneKeys = new Set([paneKey])
-        const nextAck = removePaneKeys(s.acknowledgedAgentsByPaneKey, paneKeys)
-        const nextClearedAt = removePaneKeys(s.activityClearedAtByPaneKey, paneKeys)
-        const nextManualUnread = removePaneKeys(s.manuallyUnreadTurnsByPaneKey, paneKeys)
+        const nextAck = removeChatReadMark(
+          s.acknowledgedAgentsByPaneKey,
+          'acknowledgedAgentsByPaneKey',
+          paneKey
+        )
+        const nextClearedAt = removeChatReadMark(
+          s.activityClearedAtByPaneKey,
+          'activityClearedAtByPaneKey',
+          paneKey
+        )
+        const nextManualUnread = removeChatReadMark(
+          s.manuallyUnreadTurnsByPaneKey,
+          'manuallyUnreadTurnsByPaneKey',
+          paneKey
+        )
         return {
           agentStatusByPaneKey: next,
           ...processRetirement.patch,

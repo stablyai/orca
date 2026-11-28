@@ -37,7 +37,6 @@ import {
 import { releaseTerminalCreateLock } from './terminal-create-lock'
 import { hostViewModeForNewAgentTab } from '../../../storage/session-view-preferences'
 import { placeCreatedSessionTab } from '../../../../../src/shared/workspace-layout/tab-groups/session-tab-placement'
-import '../../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {

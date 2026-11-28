@@ -23,7 +23,6 @@ import {
   resolveWorktreeHostId,
   type WorktreeHostContextOf
 } from '../../worktree/row-presentation/worktree-host-context-labels'
-import '../../worktree/workspace-list/workspace-list-sections'
 import { filterWorktrees } from '../../worktree/workspace-list/workspace-row-filtering'
 import {
   rowFiltersForView,

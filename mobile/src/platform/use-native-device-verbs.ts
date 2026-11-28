@@ -18,7 +18,11 @@ import { recomputeOn } from '../hooks/recompute-on'
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,
-  'native.storage.read' | 'native.pdf.view' | 'native.image.act' | typeof BRIDGE_STORE_VERB
+  | 'native.storage.read'
+  | 'native.pdf.view'
+  | 'native.file.share'
+  | 'native.image.act'
+  | typeof BRIDGE_STORE_VERB
 >
 
 // Tie stateful audio/media handlers to the page session so replacement documents cannot inherit abandoned microphones or staged handles.

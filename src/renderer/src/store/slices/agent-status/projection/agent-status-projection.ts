@@ -1,9 +1,4 @@
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../../types'
-import {
-  movedAgentSenderChannels,
-  samePublishingHosts
-} from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   readTerminalLeafAgentTypes,
@@ -34,17 +29,31 @@ import { captureProjectionState } from './agent-status-projection-capture'
 import { stageProjectionTopology } from './agent-status-projection-topology'
 import { stageProjectionRows } from './agent-status-projection-rows'
 import { stageProjectionCounts } from './agent-status-projection-counts'
+import {
+  detectProjectionSenderChanges,
+  isAgentStatusProjectionNoop
+} from './agent-status-projection-noop'
 import { publishProjectionTopology } from './agent-status-projection-publish-topology'
 import { publishProjectionRows } from './agent-status-projection-publish-rows'
 import { publishProjectionArrangement } from './agent-status-projection-publish-arrangement'
+import { notifyProjectionListeners } from './agent-status-projection-notify'
 
 import { KeyedChangeJournal } from '../../../../../../shared/collections/keyed-change-journal'
+
+const EMPTY_DASHBOARD_ROWS: DashboardAgentRow[] = []
 
 /** Live keyed derivatives; historical views capture explicitly. */
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
   private changes = new KeyedChangeJournal()
   private worktreeJournal = new KeyedChangeJournal()
+  private pendingNoopInputs: AppState | null = null
+  private readonly commitNoop = (): void => {
+    if (this.pendingNoopInputs !== null) {
+      this.data.inputs = this.pendingNoopInputs
+      this.pendingNoopInputs = null
+    }
+  }
   /** Workspaces whose rows, arrangement or summary moved, by commit; null when any may have. */
   readonly worktreeChanges: Pick<KeyedChangeJournal, 'cursor' | 'since'> = this.worktreeJournal
   changeCursor(): number {
@@ -89,57 +98,7 @@ export class AgentStatusProjection {
     }
   }
   notify(): void {
-    if (this.data.notifying) {
-      return
-    }
-    this.data.notifying = true
-    try {
-      while (
-        this.data.notices.size ||
-        this.data.changedKeys.size ||
-        this.data.fullResync ||
-        this.data.transitionBatches.length
-      ) {
-        const transitions = this.data.transitionBatches.splice(0)
-        for (const batch of transitions) {
-          for (const listener of Array.from(this.data.transitionListeners)) {
-            if (this.data.transitionListeners.has(listener)) {
-              try {
-                listener(batch)
-              } catch (error) {
-                console.error('Agent transition observer failed', error)
-              }
-            }
-          }
-        }
-        const keys = this.data.fullResync ? null : new Set(this.data.changedKeys)
-        this.data.fullResync = false
-        this.data.changedKeys.clear()
-        for (const listener of Array.from(this.data.changeListeners)) {
-          if (this.data.changeListeners.has(listener) && (keys === null || keys.size)) {
-            try {
-              listener(keys)
-            } catch (error) {
-              console.error('Agent status observer failed', error)
-            }
-          }
-        }
-        const channels = [...this.data.notices]
-        this.data.notices.clear()
-        const listeners = new Set(
-          channels.flatMap((channel) => Array.from(this.data.listeners.get(channel) ?? []))
-        )
-        for (const listener of listeners) {
-          try {
-            listener()
-          } catch (error) {
-            console.error('Agent presentation observer failed', error)
-          }
-        }
-      }
-    } finally {
-      this.data.notifying = false
-    }
+    notifyProjectionListeners(this.data)
   }
   mobileSource(key: string, tabId: string) {
     const worktreeId = this.data.mobileOwners.get(key)
@@ -147,10 +106,10 @@ export class AgentStatusProjection {
     return worktreeId && tab ? { worktreeId, tab } : undefined
   }
   tabKeys(tabId: string): Iterable<string> {
-    return this.data.acceptedByTab.get(tabId) ?? []
+    return this.data.acceptedByTab.get(tabId) ?? EMPTY_KEYS
   }
   orphanKeys(owner: string): Iterable<string> {
-    return this.data.orphansByOwner.get(owner) ?? []
+    return this.data.orphansByOwner.get(owner) ?? EMPTY_KEYS
   }
   handleKeys(handle: string): Iterable<string> {
     return this.data.keysByHandle.get(handle) ?? EMPTY_KEYS
@@ -190,20 +149,32 @@ export class AgentStatusProjection {
       .map((key) => this.data.icons.get(key)!.pane))
   }
   list(worktreeId: string): DashboardAgentRow[] {
+    const keys = this.keys(worktreeId)
+    if (keys.length === 0) {
+      return EMPTY_DASHBOARD_ROWS
+    }
     const revision = this.revision(worktreeId),
       cached = this.data.fullRows.get(worktreeId)
     if (cached?.revision === revision) {
       return cached.rows
     }
-    const rows = this.keys(worktreeId).map((key) => this.data.rows.get(key)!)
+    const rows: DashboardAgentRow[] = []
+    for (let i = 0; i < keys.length; i += 1) {
+      rows.push(this.data.rows.get(keys[i])!)
+    }
     this.data.fullRows.set(worktreeId, { revision, rows })
     return rows
   }
   entries(worktreeId: string, statuses: ReadonlyMap<string, AgentStatusEntry>): AgentStatusEntry[] {
-    return this.keys(worktreeId).flatMap((key) => {
-      const row = statuses.get(key)
-      return row ? [row] : []
-    })
+    const keys = this.keys(worktreeId)
+    const result: AgentStatusEntry[] = []
+    for (let i = 0; i < keys.length; i += 1) {
+      const row = statuses.get(keys[i])
+      if (row) {
+        result.push(row)
+      }
+    }
+    return result
   }
   attention(worktreeId: string, lastActivityAt = 0, now = Date.now()): WorktreeAttention {
     return readProjectionAttention(this.data, worktreeId, lastActivityAt, now)
@@ -234,32 +205,20 @@ export class AgentStatusProjection {
     fullResync = false
   ): () => void {
     const data = this.data
+    if (isAgentStatusProjectionNoop(data, state, changes, refreshKeys, fullResync)) {
+      this.pendingNoopInputs = state
+      return this.commitNoop
+    }
     const topology = stageProjectionTopology(data, state, changes, refreshKeys)
     const publishTerminalTypes = stageTerminalLeafAgentTypes(data, state, topology.changedKeys)
     const publishTransitions = stageAcceptedAgentTransitions(data, state, changes)
     const rows = stageProjectionRows(data, state, topology)
-    const { previous } = topology
-    const ownerInputs = structuredAgentSessionOwnerInputs(state)
-    const oldOwnerInputs = previous ? structuredAgentSessionOwnerInputs(previous) : []
-    const sendersChanged =
-      previous?.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost
-    const senderLocationsChanged =
-      !previous ||
-      (sendersChanged && !samePublishingHosts(previous, state)) ||
-      previous.tabsByWorktree !== state.tabsByWorktree ||
-      previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
-      ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
-      changes.some(
-        (change) =>
-          change.previous?.terminalHandle !== change.current?.terminalHandle ||
-          (Boolean(change.previous?.terminalHandle || change.current?.terminalHandle) &&
-            change.previous?.worktreeId !== change.current?.worktreeId)
-      )
-    // Only a publication moved: notify the senders whose answer it moved, not every card.
-    const movedSenders =
-      previous && sendersChanged && !senderLocationsChanged
-        ? movedAgentSenderChannels(previous, state, data.listeners.keys())
-        : []
+    const { senderLocationsChanged, movedSenders } = detectProjectionSenderChanges(
+      data,
+      topology.previous,
+      state,
+      changes
+    )
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
       const changed = new Set(topology.changedKeys)

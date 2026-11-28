@@ -52,7 +52,8 @@ export function createReadOwner(
   let disposed = false
   const activity = createStructuredAgentSessionReadActivity(
     () => !disposed,
-    () => snapshot.state
+    () => snapshot.state,
+    () => deleteIfUnused()
   )
   const observePRLinks = target
     ? createStructuredAgentSessionPRLinkObserver(sessionId, target)

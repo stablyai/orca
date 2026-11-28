@@ -8,7 +8,8 @@ const LARGE_BINDING_BYTES = 64 * 1024
 
 function hasLargeBinding(parameters: SqliteBindings): boolean {
   let bytes = 0
-  for (const value of parameters) {
+  for (let i = 0; i < parameters.length; i += 1) {
+    const value = parameters[i]
     bytes +=
       typeof value === 'string' ? value.length : ArrayBuffer.isView(value) ? value.byteLength : 0
     if (bytes > LARGE_BINDING_BYTES) {
@@ -51,8 +52,10 @@ export class NodeSqliteStatement implements SqliteStatement {
     } finally {
       exitSyncCall(call, this.database, this.sql)
     }
-    for (const row of rows) {
-      this.integers.row(row)
+    if (!this.integers.readBigInts) {
+      for (let i = 0; i < rows.length; i += 1) {
+        this.integers.row(rows[i])
+      }
     }
     return rows
   }

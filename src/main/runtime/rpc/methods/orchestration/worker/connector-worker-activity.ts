@@ -28,7 +28,10 @@ import { sessionWorkerState } from './session-worker-state'
 export type SessionWorkerActivityFacts = Pick<
   OrchestrationSessionWorker,
   'state' | 'activity' | 'pendingQuestion'
->
+> & {
+  /** Workers it started are still open: an idle lead waiting on them still has work running. */
+  helpersRunning: boolean
+}
 
 /**
  * The connector-started workers of each of these chats that may still run, by chat: their database
@@ -59,6 +62,9 @@ export async function readConnectorWorkerActivity(
   const parties = prefetchedSessionParties(db, chatParties)
   const sessionOf = new Map(
     candidates.map((candidate) => [candidate.row.dispatchId, candidate.sessionId])
+  )
+  const helpersOf = new Set(
+    candidates.flatMap((candidate) => (candidate.openChildren ? [candidate.row.dispatchId] : []))
   )
   // Projected in as few passes as keep each conversation's status owners its own (see packConversations),
   // one after another: a later pass then finds a paired host that missed its deadline marked overdue
@@ -103,7 +109,8 @@ export async function readConnectorWorkerActivity(
                 chatStatusRows
               )
             : 'unknown',
-        pendingQuestion: hasPendingQuestion(worker)
+        pendingQuestion: hasPendingQuestion(worker),
+        helpersRunning: helpersOf.has(projected.dispatchId)
       })
     }
   }

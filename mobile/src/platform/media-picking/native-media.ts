@@ -9,7 +9,6 @@ import {
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
-import '../../mobile-web-shell/native-capabilities/media-handle-registry'
 import type {
   MediaHandleRegistry,
   StagedMedia

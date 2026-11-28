@@ -1,7 +1,7 @@
 // Chats on any method but a Google account run agy in a home Orca owns (`--gemini-dir`), whose
 // settings.json picks the method, so the person's own ~/.gemini login and settings stay untouched.
 
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import type { AntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { resolveAntigravityChatAuthConfig } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import {
@@ -81,7 +81,7 @@ const isGoogle = (method: AntigravityChatAuthConfig['method']): boolean =>
 /** An Orca home's binding: before every start or listing, settings.json for the saved method and
  *  that method's credential. A key chat without a key is refused: agy would fall back to its own
  *  saved login. A Google method uses agy's login; gcloud's ADC is agy's to find. */
-function orcaHomeAccount(folderName: string): AcpAccountBinding {
+function orcaHomeAccount(folderName: string, role: 'chat' | 'naming' = 'chat'): AcpAccountBinding {
   const folder = hostFolderAccountBinding(VARIABLE, folderName, [ANTIGRAVITY_ACP_HOME])
   return {
     ...folder,
@@ -97,15 +97,21 @@ function orcaHomeAccount(folderName: string): AcpAccountBinding {
       }
       await folder.prepare?.(env)
       const user = antigravityUserHome(env)
-      await linkAntigravityUserSkills(home, user, process.platform, AGY_HOME_SKILL_FOLDERS)
-      // agy reads the user's rules from its home, as from ~/.gemini.
-      await copyAntigravityUserRules(home, user)
+      if (role === 'chat') {
+        await linkAntigravityUserSkills(home, user, process.platform, AGY_HOME_SKILL_FOLDERS)
+        // agy reads the user's rules from its home, as from ~/.gemini.
+        await copyAntigravityUserRules(home, user)
+      }
       await writeAntigravityChatSettings(home, auth, env, assertCurrent)
       // Google chats here use agy's login too, so they follow the selected account like terminals.
-      if (purpose === 'chat' && isGoogle(auth.method)) {
+      if (role === 'chat' && purpose === 'chat' && isGoogle(auth.method)) {
         await restoreAntigravityAccountForChat(env)
       }
-      await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
+      const copied = await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
+      // A fresh naming home has no earlier copy to fall back on.
+      if (!copied && role === 'naming') {
+        throw new Error("agy's login could not be copied into the naming home")
+      }
     }
   }
 }
@@ -114,3 +120,12 @@ export const antigravityAgyOrcaAccount = orcaHomeAccount(ANTIGRAVITY_AGY_CHAT_HO
 
 /** Chats Orca's retired server started; agy resumes them in place. */
 export const antigravityLegacyOrcaAccount = orcaHomeAccount(ANTIGRAVITY_CHAT_HOME_FOLDER)
+
+/** A chat-naming run's own home, removed with everything agy kept there once agy exits: the chat's
+ *  sign-in method and login, without its skills, rules or account restore. */
+export function antigravityAgyNamingAccount(home: string): AcpAccountBinding {
+  return {
+    ...orcaHomeAccount(basename(home), 'naming'),
+    resolve: async () => ({ variable: VARIABLE, path: home })
+  }
+}

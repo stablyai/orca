@@ -15,6 +15,13 @@ export const stylesSheet = themedStyleSheet((colors) => ({
   group: {
     backgroundColor: colors.bgPanel
   },
+  groupNote: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    lineHeight: 18,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingTop: spacing.sm
+  },
   footerHint: {
     flexDirection: 'row',
     alignItems: 'flex-start',

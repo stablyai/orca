@@ -1,4 +1,7 @@
-import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { dispatchReportMailbox } from '../../workers/reports/dispatch-report-mailbox'
 import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -12,6 +15,7 @@ export type ConsumedCoordinatorMessage = {
   id: string
   sequence: number
   threadId: string | null
+  replyTo: string | null
   from: string
   createdAt: string
 }
@@ -65,7 +69,7 @@ function readCoordinatorMessages(
   const workers = nonCreatorRunWorkers(db, dispatchId)
   const read = db.db
     .prepare(
-      `SELECT id, sequence, thread_id, from_handle, sender_pane_key, created_at
+      `SELECT id, sequence, thread_id, reply_to, from_handle, sender_pane_key, created_at
          FROM messages WHERE to_handle = ? AND read = 1 ORDER BY sequence ASC`
     )
     .all(`dispatch:${dispatchId}`)
@@ -88,7 +92,16 @@ function readCoordinatorMessages(
     ) {
       return []
     }
-    return [{ id, sequence: message.sequence, threadId: text(message.thread_id), from, createdAt }]
+    return [
+      {
+        id,
+        sequence: message.sequence,
+        threadId: text(message.thread_id),
+        replyTo: text(message.reply_to),
+        from,
+        createdAt
+      }
+    ]
   })
 }
 
@@ -141,10 +154,56 @@ export function coordinatorRecipients(
   return recipients
 }
 
+/** Whether mail to `to` reaches this Dispatch's coordinator: a recipient, or another Run whose current
+ *  coordinator is one. Live workers of this Run are not its coordinator, as in `coordinatorRecipients`. */
+export function coordinatorReach(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  recipients: ReadonlySet<string>
+): (to: string) => boolean {
+  const byRun = new Map<string, boolean>()
+  const liveWorkers = new Set(
+    nonCreatorRunWorkers(db, dispatch.id).flatMap((worker) => {
+      if (!Number.isNaN(worker.completedAt)) {
+        return []
+      }
+      const session = worker.assignee_orca_session_id
+      return session && isOrcaSessionId(session)
+        ? [worker.assignee_handle, formatOrcaSessionAddress(session)]
+        : [worker.assignee_handle]
+    })
+  )
+  const reachesRun = (runId: string): boolean => {
+    const run = db.getRun(runId)
+    if (!run) {
+      return false
+    }
+    const session = currentRunCoordinatorOrcaSessionId(run)
+    return [run.coordinator_handle, session && formatOrcaSessionAddress(session)].some(
+      (handle) => !!handle && !liveWorkers.has(handle) && recipients.has(handle)
+    )
+  }
+  return (to) => {
+    if (recipients.has(to)) {
+      return true
+    }
+    if (!to.startsWith('run:')) {
+      return false
+    }
+    const runId = to.slice('run:'.length)
+    let reaches = byRun.get(runId)
+    if (reaches === undefined) {
+      reaches = reachesRun(runId)
+      byRun.set(runId, reaches)
+    }
+    return reaches
+  }
+}
+
 function nonCreatorRunWorkers(db: OrchestrationDb, dispatchId: string) {
   return db.db
     .prepare(
-      `SELECT d.id, d.assignee_handle, d.assignee_pane_key, d.created_at, d.completed_at
+      `SELECT d.id, d.assignee_handle, d.assignee_pane_key, d.assignee_orca_session_id, d.created_at, d.completed_at
          FROM dispatch_contexts d JOIN dispatch_contexts own ON own.id = ?
         WHERE d.run_id = own.run_id AND d.id IS NOT own.creator_dispatch_id`
     )
@@ -158,6 +217,7 @@ function nonCreatorRunWorkers(db: OrchestrationDb, dispatchId: string) {
               id,
               assignee_handle: handle,
               assignee_pane_key: text(row.assignee_pane_key),
+              assignee_orca_session_id: text(row.assignee_orca_session_id),
               createdAt: parseDispatchUtcMs(text(row.created_at)),
               completedAt: Date.parse(text(row.completed_at) ?? '')
             }

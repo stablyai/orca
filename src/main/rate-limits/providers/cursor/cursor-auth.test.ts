@@ -131,3 +131,52 @@ it('reports a failed encryption-key read instead of expired-login guidance', asy
     error: 'Unable to read the Cursor IDE encryption key'
   })
 })
+
+it('reuses a cached Linux keyring error on normal reads but recovers on retryLinuxKeyringError after unlock', async () => {
+  vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+  const authPath = join(dir, 'auth.json')
+  writeFileSync(authPath, JSON.stringify({ storedIn: 'os-secret-store' }))
+  const lockedOutput = '[/org/freedesktop/secrets/collection/login/1]\nlabel = cursor\n'
+  const unlockedOutput = `[/org/freedesktop/secrets/collection/login/1]\nsecret = ${JSON.stringify({ accessToken: jwt })}\n`
+  vi.mocked(runProcess)
+    .mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: lockedOutput,
+      stderr: '',
+      timedOut: false
+    })
+    .mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: unlockedOutput,
+      stderr: '',
+      timedOut: false
+    })
+
+  const options = {
+    cliAuthPath: authPath,
+    cliConfigPath: join(dir, 'cli-config.json'),
+    desktopStateDbPath: join(dir, 'state.vscdb')
+  }
+  const first = await readCursorAuthSession(options)
+  expect(first.status).toBe('error')
+
+  // Background poll reuses the cached error without re-running secret-tool while auth.json mtime is unchanged.
+  const second = await readCursorAuthSession(options)
+  expect(second).toEqual(first)
+  expect(vi.mocked(runProcess)).toHaveBeenCalledTimes(1)
+
+  // Explicit user refresh bypasses the settled error and caches the unlocked token for subsequent reads.
+  const retried = await readCursorAuthSession({ ...options, retryLinuxKeyringError: true })
+  expect(retried).toMatchObject({
+    status: 'ok',
+    session: { source: 'keychain', token: { raw: jwt } }
+  })
+  expect(vi.mocked(runProcess)).toHaveBeenCalledTimes(2)
+
+  // Subsequent normal read hits the newly cached ok token without calling secret-tool again.
+  const afterUnlock = await readCursorAuthSession(options)
+  expect(afterUnlock).toEqual(retried)
+  expect(vi.mocked(runProcess)).toHaveBeenCalledTimes(2)
+})

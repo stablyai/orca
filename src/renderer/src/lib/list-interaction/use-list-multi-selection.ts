@@ -24,6 +24,8 @@ export type ListMultiSelection<T> = {
   selectForContextMenu: (item: T) => readonly T[]
 }
 
+const EMPTY_SELECTED_ITEMS: never[] = []
+
 // Keep getKey/getScope identities stable while selecting by render order.
 export function useListMultiSelection<T>({
   items,
@@ -36,46 +38,56 @@ export function useListMultiSelection<T>({
   getScope: () => Element | null
 }): ListMultiSelection<T> {
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
-  const entryByKey = useMemo(() => {
-    const entries = new Map<string, { item: T; index: number }>()
-    items.forEach((item, index) => {
+  const { itemByKey, orderedKeys } = useMemo(() => {
+    const map = new Map<string, T>()
+    const keys: string[] = []
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i]
       const key = getKey(item)
-      if (!entries.has(key)) {
-        entries.set(key, { item, index })
+      if (!map.has(key)) {
+        map.set(key, item)
+        keys.push(key)
       }
-    })
-    return entries
+    }
+    return { itemByKey: map, orderedKeys: keys }
   }, [items, getKey])
-  const visibleKeys = useReusedArrayIdentity(
-    useMemo(() => Array.from(entryByKey.keys()), [entryByKey])
-  )
-  const visibleKeySet = useMemo(() => new Set(visibleKeys), [visibleKeys])
-  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const visibleKeys = useReusedArrayIdentity(orderedKeys)
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set())
   const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | null>(null)
 
-  const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, visibleKeySet)
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
-  if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
-    setSelectedKeys(prunedSelection.selectedIds)
-  }
-  if (selectionAnchorKey !== prunedSelection.anchorId) {
-    setSelectionAnchorKey(prunedSelection.anchorId)
+  if (selectedKeys.size > 0 || selectionAnchorKey !== null) {
+    const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, itemByKey)
+    if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
+      setSelectedKeys(prunedSelection.selectedIds)
+    }
+    if (selectionAnchorKey !== prunedSelection.anchorId) {
+      setSelectionAnchorKey(prunedSelection.anchorId)
+    }
   }
 
   // Reuse empty/unchanged selections so context-menu/drag callbacks and row memoization remain stable.
   const selectedItems = useReusedArrayIdentity(
     useMemo(() => {
-      const selected: { item: T; index: number }[] = []
-      for (const key of selectedKeys) {
-        const entry = entryByKey.get(key)
-        if (entry) {
-          selected.push(entry)
+      if (selectedKeys.size === 0) {
+        return EMPTY_SELECTED_ITEMS
+      }
+      if (selectedKeys.size === 1) {
+        const onlyKey = selectedKeys.values().next().value
+        const item = onlyKey !== undefined ? itemByKey.get(onlyKey) : undefined
+        return item !== undefined ? [item] : EMPTY_SELECTED_ITEMS
+      }
+      const selected: T[] = []
+      // Map insertion order matches render order, so one scan preserves order without index wrappers or sorting.
+      for (const [key, item] of itemByKey) {
+        if (selectedKeys.has(key)) {
+          selected.push(item)
         }
       }
-      return selected.sort((a, b) => a.index - b.index).map(({ item }) => item)
-    }, [entryByKey, selectedKeys])
+      return selected
+    }, [itemByKey, selectedKeys])
   )
-  const getItemForKey = useCallback((key: string) => entryByKey.get(key)?.item, [entryByKey])
+  const getItemForKey = useCallback((key: string) => itemByKey.get(key), [itemByKey])
 
   useEffect(() => {
     if (selectedKeys.size === 0) {
@@ -98,19 +110,35 @@ export function useListMultiSelection<T>({
   }, [selectedKeys.size, getScope])
 
   // Why read through a ref: every plain click replaces the selection, and selection-keyed callbacks would re-render every memoized row.
-  const latestSelectionRef = useRef({
-    visibleKeys,
-    selectedKeys,
-    selectionAnchorKey,
-    selectedItems
-  })
+  const latestSelectionRef = useRef<{
+    visibleKeys: string[]
+    selectedKeys: Set<string>
+    selectionAnchorKey: string | null
+    selectedItems: T[]
+  } | null>(null)
   useLayoutEffect(() => {
-    latestSelectionRef.current = { visibleKeys, selectedKeys, selectionAnchorKey, selectedItems }
+    const current = latestSelectionRef.current
+    if (current) {
+      current.visibleKeys = visibleKeys
+      current.selectedKeys = selectedKeys
+      current.selectionAnchorKey = selectionAnchorKey
+      current.selectedItems = selectedItems
+    } else {
+      latestSelectionRef.current = {
+        visibleKeys,
+        selectedKeys,
+        selectionAnchorKey,
+        selectedItems
+      }
+    }
   })
 
   const updateSelectionForGesture = useCallback(
     (event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>, item: T): boolean => {
       const latest = latestSelectionRef.current
+      if (!latest) {
+        return false
+      }
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       const result = updateSelection({
         visibleIds: latest.visibleKeys,
@@ -131,7 +159,7 @@ export function useListMultiSelection<T>({
     (item: T): readonly T[] => {
       const latest = latestSelectionRef.current
       const key = getKey(item)
-      if (latest.selectedKeys.has(key) && latest.selectedKeys.size > 1) {
+      if (latest && latest.selectedKeys.has(key) && latest.selectedKeys.size > 1) {
         return latest.selectedItems
       }
       setSelectedKeys(new Set([key]))

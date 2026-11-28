@@ -45,7 +45,7 @@ function commitStatusOrPinDrop(
     worktreeIds: drag.reorderDraggedIds,
     status: target.status,
     dropIndex,
-    groups: ctx.worktreeDragGroups
+    groups: ctx.getWorktreeDragGroups()
   })
 }
 
@@ -122,11 +122,11 @@ export function commitWorktreePointerDrop(args: PointerDropCommitArgs): void {
         ctx.captureFolderRetention?.(rawDropPoint, drag.pickedCopies, drag.sourceGroupKey) ??
         rawDropPoint
       ctx.onReorderWorktrees({
-        groups: ctx.worktreeDragGroups,
+        groups: ctx.getWorktreeDragGroups(),
         sourceGroupKey: drag.sourceGroupKey,
         draggedKeys: drag.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
-          groups: ctx.worktreeDragUnitGroups,
+          groups: ctx.getWorktreeDragUnitGroups(),
           sourceGroupKey: drag.sourceGroupKey,
           dropIndex: drop.dropIndex
         })

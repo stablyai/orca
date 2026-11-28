@@ -1470,7 +1470,7 @@
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade",
-      "tapToPairAgain": "Toque para parear novamente com seu desktop"
+      "tapToPairAgain": "Toque para parear novamente"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Verificando a compatibilidade do host"
@@ -2109,7 +2109,9 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "loading": "Carregando arquivos…"
+      "loading": "Carregando arquivos…",
+      "more": "Mais",
+      "newEntry": "Novo"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
@@ -2124,7 +2126,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",
-      "copyRelativePath": "Copiar Caminho Relativo"
+      "copyRelativePath": "Copiar Caminho Relativo",
+      "newFile": "Novo arquivo",
+      "newFolder": "Nova pasta",
+      "rename": "Renomear",
+      "duplicate": "Duplicar",
+      "create": "Criar",
+      "fileName": "Nome do arquivo",
+      "folderName": "Nome da pasta",
+      "deleteTitle": "Excluir {{name}}?",
+      "deleteFileDetail": "Isso exclui o arquivo permanentemente. Não é possível desfazer.",
+      "deleteFolderDetail": "Isso exclui a pasta e seu conteúdo permanentemente. Não é possível desfazer.",
+      "duplicateFailed": "Não foi possível duplicar {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "A cópia pode estar incompleta. Verifique-a e tente novamente.",
+      "deleteFailed": "Não foi possível excluir {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Ainda está lá. Verifique a pasta e tente novamente.",
+      "renameFailed": "Não foi possível renomear {{name}}. {{reason}}",
+      "newFileFailed": "Não foi possível criar o arquivo. {{reason}}",
+      "newFolderFailed": "Não foi possível criar a pasta. {{reason}}",
+      "share": "Compartilhar",
+      "shareFailed": "Não foi possível compartilhar {{name}}",
+      "shareTooLarge": "Arquivos maiores que 256 MB não podem ser compartilhados pelo celular",
+      "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
@@ -5253,7 +5276,7 @@
       "started": "Iniciado",
       "trigger": "Acionador",
       "output": "Saída",
-      "noOutput": "Nenhum conteúdo de saída disponível.",
+      "noOutput": "Saída indisponível.",
       "loadingRuns": "Carregando execuções…",
       "loading": "Carregando…",
       "hourly": "De hora em hora",

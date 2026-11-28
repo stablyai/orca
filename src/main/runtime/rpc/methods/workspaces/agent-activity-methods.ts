@@ -16,7 +16,10 @@ export const AGENT_ACTIVITY_METHODS = [
     handler: async (params, { runtime }) => {
       await runtime.applyAgentPaneActivity({
         kind: params.read ? 'read' : 'unread',
-        paneKeys: params.paneKeys
+        paneKeys: params.paneKeys,
+        ...(params.read && params.upToTimestamp !== undefined
+          ? { upToTimestamp: params.upToTimestamp }
+          : {})
       })
       return { applied: true }
     }

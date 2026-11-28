@@ -26,12 +26,18 @@ export function botOfHomeWorkspace<B extends Pick<Bot, 'folderWorkspaceId'>>(
     : null
 }
 
+export function isBotHome(workspace: BotHomeWorkspace, bot: BotHomeOwner): boolean {
+  return bot.folderWorkspaceId === workspace.id && getRepoExecutionHostId(workspace) === bot.hostId
+}
+
 /** A bot's or a group's home is listed as its owner, never as a workspace. */
 export function isHome(workspace: BotHomeWorkspace, candidates: readonly BotHomeOwner[]): boolean {
-  return candidates.some(
-    (bot) =>
-      bot.folderWorkspaceId === workspace.id && getRepoExecutionHostId(workspace) === bot.hostId
-  )
+  for (let i = 0; i < candidates.length; i += 1) {
+    if (isBotHome(workspace, candidates[i])) {
+      return true
+    }
+  }
+  return false
 }
 
 /** New bots on top, newest first, as Manual sort stamps a new workspace; then the bots a drag placed, in that order. */
@@ -62,7 +68,7 @@ export function getBotHomes<B extends BotHomeOwner, W extends BotHomeWorkspace>(
   folderWorkspaces: readonly W[]
 ): { bot: B; home: W }[] {
   return sortBotsBySidebarOrder(bots).flatMap((bot) => {
-    const home = folderWorkspaces.find((workspace) => isHome(workspace, [bot]))
+    const home = folderWorkspaces.find((workspace) => isBotHome(workspace, bot))
     return home ? [{ bot, home }] : []
   })
 }

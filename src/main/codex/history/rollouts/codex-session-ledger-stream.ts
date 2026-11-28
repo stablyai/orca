@@ -2,39 +2,105 @@ import { createReadStream } from 'node:fs'
 
 const LEDGER_READ_CHUNK_BYTES = 64 * 1024
 
+export function bufferSliceContains(
+  buf: Buffer,
+  start: number,
+  end: number,
+  needle: Buffer
+): boolean {
+  const needleLen = needle.length
+  if (needleLen === 0) {
+    return true
+  }
+  const limit = end - needleLen
+  if (limit < start) {
+    return false
+  }
+  const firstByte = needle[0]
+  for (let i = start; i <= limit; i += 1) {
+    if (buf[i] !== firstByte) {
+      continue
+    }
+    let j = 1
+    while (j < needleLen && buf[i + j] === needle[j]) {
+      j += 1
+    }
+    if (j === needleLen) {
+      return true
+    }
+  }
+  return false
+}
+
 /** Stream growing ledgers in 64 KiB chunks to avoid whole-file reads and per-line promise churn. */
 export async function forEachCodexSessionLedgerRecord(
   filePath: string,
   onRecord: (record: Record<string, unknown>) => void,
-  options: { throwOnReadFailure?: boolean } = {}
+  options: {
+    throwOnReadFailure?: boolean
+    shouldParseLine?: (raw: string) => boolean
+    shouldParseBuffer?: (buf: Buffer, start: number, end: number) => boolean
+    /** Optional zero-alloc buffer consumer; return true when handled to skip toString + JSON.parse. */
+    onLineBuffer?: (buf: Buffer, start: number, end: number) => boolean
+  } = {}
 ): Promise<void> {
+  const { shouldParseLine, shouldParseBuffer, onLineBuffer } = options
   const stream = createReadStream(filePath, {
-    encoding: 'utf-8',
     highWaterMark: LEDGER_READ_CHUNK_BYTES
   })
-  let remainder = ''
+  const remainderChunks: Buffer[] = []
   try {
-    for await (const chunk of stream) {
-      const text = typeof chunk === 'string' ? chunk : chunk.toString('utf-8')
+    for await (const rawChunk of stream) {
+      const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk)
       let start = 0
-      while (start < text.length) {
-        const newlineIndex = text.indexOf('\n', start)
+      while (start < chunk.length) {
+        const newlineIndex = chunk.indexOf(0x0a, start)
         if (newlineIndex === -1) {
-          remainder += text.slice(start)
+          remainderChunks.push(chunk.subarray(start))
           break
         }
-        if (remainder.length > 0) {
-          const line = remainder + text.slice(start, newlineIndex)
-          remainder = ''
-          emitLedgerLine(line, onRecord)
+        if (remainderChunks.length > 0) {
+          if (newlineIndex > start) {
+            remainderChunks.push(chunk.subarray(start, newlineIndex))
+          }
+          const lineBuf =
+            remainderChunks.length === 1 ? remainderChunks[0] : Buffer.concat(remainderChunks)
+          remainderChunks.length = 0
+          emitLedgerLineBuffer(
+            lineBuf,
+            0,
+            lineBuf.length,
+            onRecord,
+            shouldParseBuffer,
+            shouldParseLine,
+            onLineBuffer
+          )
         } else if (newlineIndex > start) {
-          emitLedgerLine(text.slice(start, newlineIndex), onRecord)
+          emitLedgerLineBuffer(
+            chunk,
+            start,
+            newlineIndex,
+            onRecord,
+            shouldParseBuffer,
+            shouldParseLine,
+            onLineBuffer
+          )
         }
         start = newlineIndex + 1
       }
     }
-    if (remainder.length > 0) {
-      emitLedgerLine(remainder, onRecord)
+    if (remainderChunks.length > 0) {
+      const lineBuf =
+        remainderChunks.length === 1 ? remainderChunks[0] : Buffer.concat(remainderChunks)
+      emitLedgerLineBuffer(
+        lineBuf,
+        0,
+        lineBuf.length,
+        onRecord,
+        shouldParseBuffer,
+        shouldParseLine,
+        onLineBuffer
+      )
     }
   } catch (error) {
     if (options.throwOnReadFailure && !isNotFoundError(error)) {
@@ -46,7 +112,28 @@ export async function forEachCodexSessionLedgerRecord(
   }
 }
 
-function emitLedgerLine(raw: string, onRecord: (record: Record<string, unknown>) => void): void {
+function emitLedgerLineBuffer(
+  buf: Buffer,
+  start: number,
+  end: number,
+  onRecord: (record: Record<string, unknown>) => void,
+  shouldParseBuffer?: (buf: Buffer, start: number, end: number) => boolean,
+  shouldParseLine?: (raw: string) => boolean,
+  onLineBuffer?: (buf: Buffer, start: number, end: number) => boolean
+): void {
+  if (end <= start || (end - start === 1 && buf[start] === 0x0d)) {
+    return
+  }
+  if (shouldParseBuffer && !shouldParseBuffer(buf, start, end)) {
+    return
+  }
+  if (onLineBuffer && onLineBuffer(buf, start, end)) {
+    return
+  }
+  const raw = buf.toString('utf-8', start, end)
+  if (shouldParseLine && !shouldParseLine(raw)) {
+    return
+  }
   const record = parseLedgerRecord(raw)
   if (record) {
     onRecord(record)

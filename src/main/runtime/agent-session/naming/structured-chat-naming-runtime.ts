@@ -6,6 +6,7 @@ import {
   sanitizeGeneratedConversationName
 } from '../../../../shared/source-control/ai/generation/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { chatNamingFailure } from '../../../../shared/text-generation/chat-naming-failure-copy'
 import {
@@ -34,7 +35,8 @@ export function structuredChatNamingDeps(
   getStore: () => {
     getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
       AgentLaunchProfileSettings &
-      ReturnType<StructuredChatNamingDeps['getSettings']>
+      ReturnType<StructuredChatNamingDeps['getSettings']> &
+      Pick<GlobalSettings, 'antigravityChatNaming'>
   },
   runtime: StructuredChatNamingRuntime,
   logger: StructuredAgentSessionLogger
@@ -93,6 +95,12 @@ export function structuredChatNamingDeps(
       ) {
         return null
       }
+      // agy names a chat by sending Orca's prompt on the chat's sign-in, so only once opted in.
+      const agyNamingAllowed = (): boolean =>
+        getStore().getSettings().antigravityChatNaming === true
+      if (useChatAgent && record.provider === 'antigravity' && !agyNamingAllowed()) {
+        return null
+      }
       if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {
         const generateText = getStructuredAgentSessionHost()?.deps.adapter.generateText
         try {
@@ -106,7 +114,11 @@ export function structuredChatNamingDeps(
             agent: record.provider,
             accountHome: record.accountHome,
             prompt: renderConversationNamePrompt({ firstPrompt }, recipe),
-            shouldExecute
+            // Turning it off stops a run that hasn't sent its prompt yet.
+            shouldExecute:
+              record.provider === 'antigravity'
+                ? () => agyNamingAllowed() && shouldExecute?.() !== false
+                : shouldExecute
           })
           if (output === null) {
             return null

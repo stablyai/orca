@@ -15,6 +15,9 @@ import { observeWorker } from './worker-presence-report'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { readChatWorkerUsageLimit } from './chat-worker-usage-limit-read'
+import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
 
@@ -54,6 +57,33 @@ function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | un
   return now !== null && now.generation !== seen && !now.fence?.startsWith(REQUEST_FENCE)
 }
 
+/** This Dispatch's latest mail to its coordinator is its usage-limit escalation, and the worker
+ *  was sent nothing since: no new work met the limit. */
+function lastReportWasUsageLimit(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  from: string
+): boolean {
+  const row = db.db
+    .prepare(
+      `SELECT sequence,
+         CASE WHEN json_valid(payload) THEN json_extract(payload, '$.failureKind') END AS kind,
+         CASE WHEN json_valid(payload) THEN json_extract(payload, '$.dispatchId') END AS dispatch
+         FROM messages WHERE to_handle = ? AND from_handle = ? ORDER BY sequence DESC LIMIT 1`
+    )
+    .get(dispatchReportMailbox(db, dispatch), from)
+  if (row?.kind !== 'usageLimitReached' || row.dispatch !== dispatch.id) {
+    return false
+  }
+  const sentSince = db.db
+    .prepare(
+      'SELECT 1 FROM messages WHERE to_handle = ? AND sequence > ? AND from_handle != ? LIMIT 1'
+    )
+    // A background task's wake is no new work.
+    .get(`dispatch:${dispatch.id}`, row.sequence, BACKGROUND_WAKE_SENDER)
+  return sentSince === undefined
+}
+
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
 export async function escalateChatWorkerError(
   request: StructuredAgentSessionRequestFailure,
@@ -85,6 +115,10 @@ export async function escalateChatWorkerError(
     const { kind } = error
     const text = redactFailure(error.text)
     const detail = error.detail && redactFailure(error.detail)
+    const limit =
+      kind === 'usageLimitReached' && request.kind === 'turn'
+        ? await readChatWorkerUsageLimit(request.sessionId, request.id)
+        : null
     for (const { dispatch, from } of targets) {
       // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)
@@ -103,6 +137,11 @@ export async function escalateChatWorkerError(
           fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
           legacyStopKey: `request:${request.kind}:${request.id}`,
           legacyReportId: escalationId(dispatch.id, request),
+          // The limit was the worker's last news and Orca still continues it: no news. Safe for any
+          // turn because coordinator mail waits behind a usage-limited turn (readFailedTurnHold).
+          ...(limit?.continues && lastReportWasUsageLimit(db, dispatch, from)
+            ? { unreported: true as const }
+            : {}),
           rest: {
             from,
             reason: 'errored',
@@ -111,6 +150,7 @@ export async function escalateChatWorkerError(
               text,
               ...(detail ? { detail } : {}),
               ...(kind ? { kind } : {}),
+              ...(limit ? { usageLimit: limit } : {}),
               facts: {
                 sessionId: request.sessionId,
                 agent: request.agent,
@@ -118,7 +158,14 @@ export async function escalateChatWorkerError(
                 requestId: request.id,
                 ...(kind ? { failureKind: kind } : {}),
                 error: text,
-                ...(detail ? { detail } : {})
+                ...(detail ? { detail } : {}),
+                ...(limit?.resetsAt !== undefined
+                  ? { resetsAt: new Date(limit.resetsAt).toISOString() }
+                  : {}),
+                ...(limit?.continuesAt !== undefined
+                  ? { continuesAt: new Date(limit.continuesAt).toISOString() }
+                  : {}),
+                ...(limit?.continues ? { orcaContinues: true } : {})
               }
             }
           }

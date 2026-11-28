@@ -66,7 +66,7 @@ function nextIntent(
 }
 
 /** A new bot's agent, model and permissions on `hostId`. Follows that computer's default agent (else
- *  its first) on its defaults, until the owner picks one it has; a pick made for another computer
+ *  by priority) on its defaults, until the owner picks one it has; a pick made for another computer
  *  starts over, since its model and options may not be offered there.
  *  With `keptPermission` (a bot from a link), the owner's permission is kept apart from the agent:
  *  it starts there and follows every agent that offers it, until the owner picks another. */

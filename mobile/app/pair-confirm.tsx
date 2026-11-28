@@ -3,6 +3,7 @@ import { View, BackHandler, ScrollView, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, CircleAlert, Laptop } from 'lucide-react-native'
+import { pairConfirmServerName } from '../src/pairing/pair-confirm-server-name'
 import {
   resolvePairConfirmRouteState,
   type PairConfirmRouteState
@@ -42,15 +43,24 @@ const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 export default function PairConfirmScreen() {
   const t = useMobileTranslation()
   const params = useLocalSearchParams<{ code?: string | string[] }>()
+  const code = typeof params.code === 'string' ? params.code : undefined
   return (
     <PairConfirmContent
-      key={typeof params.code === 'string' ? params.code : undefined}
+      key={code}
+      // Named only when this phone's own page asked that server for the pairing.
+      serverName={pairConfirmServerName(code)}
       routeState={resolvePairConfirmRouteState(params.code, t)}
     />
   )
 }
 
-function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState }) {
+function PairConfirmContent({
+  routeState,
+  serverName
+}: {
+  routeState: PairConfirmRouteState
+  serverName: string | null
+}) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
@@ -176,7 +186,13 @@ function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState 
       <>
         <MobileStateView
           icon={Laptop}
-          title={t('app.pairConfirm.pairThisComputer', 'Pair with this computer?')}
+          title={
+            serverName
+              ? t('app.pairConfirm.pairNamedServer', 'Pair with {{server}}?', {
+                  server: serverName
+                })
+              : t('app.pairConfirm.pairThisComputer', 'Pair with this computer?')
+          }
           message={t('app.pairConfirm.onlyYourOwn', 'Only pair with a computer you trust.')}
         />
         <View style={[styles.foot, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>

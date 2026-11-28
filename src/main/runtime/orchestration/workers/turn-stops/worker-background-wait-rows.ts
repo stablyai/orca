@@ -1,8 +1,9 @@
 import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentBackgroundWait } from '../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
+import { backgroundStopRequestedSince } from '../../../../native-chat/agent-session-wire/termination/background-stop-requests'
 
 type StatusRows = {
   getStatusSnapshotForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
@@ -11,7 +12,7 @@ type StatusRows = {
 /** A chat whose turn its own background tasks hold open, by its status row. */
 export function chatWaitsOnBackground(rows: StatusRows, sessionId: string): boolean {
   return rows
-    .getStatusSnapshotForPane(structuredAgentSessionStatusPaneKey(sessionId))
+    .getStatusSnapshotForPane(chatPaneKey(sessionId))
     .some((row) => agentBackgroundWait(row) !== null)
 }
 
@@ -29,8 +30,9 @@ export function rowsShowWait(
 /** The report deps that read background waits from this host's status rows. */
 export function backgroundWaitReportDeps(
   rows: StatusRows = agentHookServer
-): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground'> {
+): Pick<WorkerTurnStopReportDeps, 'chatWaitsOnBackground' | 'backgroundStopRequestedSince'> {
   return {
-    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId)
+    chatWaitsOnBackground: (sessionId) => chatWaitsOnBackground(rows, sessionId),
+    backgroundStopRequestedSince
   }
 }

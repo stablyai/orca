@@ -5,25 +5,27 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import {
   getProviderUsageStatusLabel,
-  isClaudeUsageWaitingForClaude
+  isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection } from './usage-headline-sections'
+import { getUsageRosterRowState } from './usage-roster-row-state'
 
-/** "<Provider>: <message>" for a chip that shows only the alert, else null. */
-export function getUsageErrorAlertLabel(p: ProviderRateLimits, t: Translate): string | null {
-  if (
-    p.status !== 'error' ||
-    p.usageMetadata?.ownerNotSetUp ||
-    isClaudeUsageWaitingForClaude(p) ||
-    getTightestUsageSection(p, t, 'all')
-  ) {
+/** "<Provider>: <message>" for a chip whose message lives only in the usage menu (alert or "--"), else null. */
+export function getUsageChipDescription(p: ProviderRateLimits, t: Translate): string | null {
+  const describe =
+    p.status === 'unavailable' ||
+    (p.status === 'error' && !isUsageWaitingForCli(p) && !getTightestUsageSection(p, t, 'all'))
+  if (!describe) {
     return null
   }
-  return `${getProviderDisplayName(p.provider)}: ${getProviderUsageStatusLabel(p, t)}`
+  // Why the row's label: the menu row is where the message is read, so the description must match it.
+  const message =
+    getUsageRosterRowState(p, false, t).statusLabel ?? getProviderUsageStatusLabel(p, t)
+  return `${getProviderDisplayName(p.provider)}: ${message}`
 }
 
 /**
- * Muted alert that replaces a chip's error text; a click falls through to the usage menu, whose rows
+ * Muted alert that replaces a chip's error text (real failures only; other states show "--"); a click falls through to the usage menu, whose rows
  * carry the message, and that menu's button describes every alert for screen readers.
  */
 export function UsageErrorAlert({ label }: { label: string }): React.JSX.Element {

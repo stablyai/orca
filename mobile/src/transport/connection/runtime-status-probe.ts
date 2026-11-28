@@ -1,5 +1,4 @@
 import type { HostStatusReply } from '../hosts/host-status-reply-schema'
-import './stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from './logical-client-cutover-error'
 import {
   connectionHostStatus,

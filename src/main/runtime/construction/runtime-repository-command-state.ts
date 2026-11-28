@@ -1,4 +1,8 @@
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { runtimeVisibleRepos } from '../workspaces/catalog/runtime-visible-catalog'
 import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { HostPRCache } from '../../github/pull-requests/refresh/host-pr-cache-backfill'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import {
   LazyRuntimeGitHubRepositoryQueryCommands,
@@ -28,6 +32,7 @@ import {
 } from '../integrations/git/runtime-branch-switch-host'
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -112,8 +117,17 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
         repoId,
         meta: { prNumber: number, prUrl: url }
       })
-    }
+    },
+    recordPROutcome: (...args) => this.hostPRCache?.record(...args)
   })
+
+  /** Set only on a renderer-less host (orcad), whose served PR reads must fill its own cache. */
+  hostPRCache: HostPRCache | null = null
+
+  /** The rows orcad's PR cache backfill reads; the resolved snapshot is shared with worktree.ps. */
+  async listHostPRCacheWorktrees(): Promise<{ worktrees: readonly Worktree[]; repos: Repo[] }> {
+    return { worktrees: await this.listResolvedWorktrees(), repos: runtimeVisibleRepos(this.store) }
+  }
 
   protected readonly gitHubRepositoryQueries = new LazyRuntimeGitHubRepositoryQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
@@ -164,6 +178,10 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly repositoryHooks = new LazyRuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    resolveProjectGroupOwner: (groupId) => {
+      const group = this.store?.getProjectGroups?.().find((entry) => entry.id === groupId)
+      return group ? projectGroupHookOwner(group) : null
+    },
     readCreateSourceHooks: async (repo, source) => {
       const { readCreateSourceSetupHooks } =
         await import('../../workspace-hooks/create-source-setup-hooks')

@@ -120,12 +120,14 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
-  // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
+  // An `agy` login signs in only chats on agy's own home (`system`); Orca's homes keep their own.
   {
     agent: 'antigravity',
     loginCommand: [],
     systemLoginCommand: ['agy'],
-    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' }
+    loginEnv: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
+    installCommand: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    windowsInstallScript: 'https://antigravity.google/cli/install.ps1'
   }
 ] as const
 

@@ -46,13 +46,7 @@ export function NativeChatAntigravityAuthChip({
   const project = chatMethod === 'agent-platform' ? auth.detection?.adc.project : null
   const shown = project ? `${label} · ${project}` : label
   // The host's current version; a chat started before an upgrade runs the older one until it restarts.
-  const program = auth.agy
-    ? antigravityProgramLabel(
-        auth.agy === 'orcas',
-        auth.detection?.agyVersion ?? (auth.agy === 'orcas' ? auth.managedVersion : null),
-        t
-      )
-    : null
+  const program = antigravityProgramLabel(auth.detection?.agyVersion, t)
   const Icon = ICONS[chatMethod]
   const newChatsDiffer = chatMethod !== method
   return (

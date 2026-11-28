@@ -33,7 +33,7 @@ export class AgentStatusProjectionState {
   activeAgentCount = 0
   readonly transitionListeners = new Set<AgentStatusChangeListener>()
   readonly transitionBatches: (readonly AgentStatusChange[])[] = []
-  activeDashboardOwners = new Set<string>()
+  activeDashboardOwners: Set<string> | null = new Set<string>()
   readonly countedRows = new Map<string, CountedRow>()
   readonly countsByWorktree = new Map<string, DashboardCounts>()
   dashboardTotals: DashboardCounts = EMPTY_COUNTS
@@ -54,6 +54,8 @@ export class AgentStatusProjectionState {
   readonly handleByKey = new Map<string, string>()
   readonly keysByHandle = new Map<string, Set<string>>()
   readonly acceptedByTab = new Map<string, Set<string>>()
+  /** The tab each accepted key is filed under: a chat's tab can't be re-derived once it changed. */
+  readonly acceptedTabByKey = new Map<string, string>()
   readonly worktrees = new Map<string, Bucket>()
   readonly mobileKeys = new Map<string, Set<string>>()
   readonly mobileOwners = new Map<string, string>()

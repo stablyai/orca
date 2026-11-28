@@ -104,25 +104,33 @@ export function updateBotShare(
   )
 }
 
-/** Stops a link; with `botId`, this computer forgets that bot's last published picks too. */
-export function stopBotShare(shareId: string, botId?: string): Promise<boolean> {
+/** Stops a link; with `bot`, its host forgets that bot's last published picks too. */
+export function stopBotShare(shareId: string, bot?: BotRef): Promise<boolean> {
   return value(
-    callRuntimeRpc<SkillCloudOperation<boolean>>(ownBotHost().target, 'bots.share.stop', {
-      shareId,
-      ...(botId ? { botId } : {})
-    })
+    bot
+      ? callBotRpc<SkillCloudOperation<boolean>>(bot, 'bots.share.stop', {
+          shareId,
+          botId: bot.id
+        })
+      : callRuntimeRpc<SkillCloudOperation<boolean>>(ownBotHost().target, 'bots.share.stop', {
+          shareId
+        })
   )
 }
 
-/** Every live bot link the owner has, read from Orca Cloud; with `botId`, that bot's link also
- *  carries its version's publish time and digest. */
-export function listBotShares(botId?: string): Promise<BotOwnedShare[]> {
+/** Every live bot link the owner has, read from Orca Cloud; with `bot`, read on that bot's host
+ *  so its link carries its version's publish time and digest. */
+export function listBotShares(bot?: BotRef): Promise<BotOwnedShare[]> {
   return value(
-    callRuntimeRpc<SkillCloudOperation<BotOwnedShare[]>>(
-      ownBotHost().target,
-      'bots.share.status',
-      botId ? { botId } : {}
-    )
+    bot
+      ? callBotRpc<SkillCloudOperation<BotOwnedShare[]>>(bot, 'bots.share.status', {
+          botId: bot.id
+        })
+      : callRuntimeRpc<SkillCloudOperation<BotOwnedShare[]>>(
+          ownBotHost().target,
+          'bots.share.status',
+          {}
+        )
   )
 }
 

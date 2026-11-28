@@ -1541,7 +1541,7 @@
       "unlockHint": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin",
       "offlineSameWifiOnly": "Çevrimdışı · yalnızca aynı Wi-Fi",
-      "tapToPairAgain": "Masaüstünüzle yeniden eşleştirmek için dokunun"
+      "tapToPairAgain": "Yeniden eşleştirmek için dokunun"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Sunucu uyumluluğu kontrol ediliyor"
@@ -2214,7 +2214,9 @@
       "truncatedList": "{{worktreeLabel}} - İlk 5000 dosya gösteriliyor",
       "loading": "Dosyalar yükleniyor…",
       "searching": "Aranıyor…",
-      "searchPlaceholder": "Dosyalarda ara"
+      "searchPlaceholder": "Dosyalarda ara",
+      "more": "Daha Fazla",
+      "newEntry": "Yeni"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
@@ -2229,7 +2231,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Adı Kopyala",
-      "copyRelativePath": "Göreli Yolu Kopyala"
+      "copyRelativePath": "Göreli Yolu Kopyala",
+      "newFile": "Yeni Dosya",
+      "newFolder": "Yeni Klasör",
+      "rename": "Yeniden Adlandır",
+      "duplicate": "Çoğalt",
+      "create": "Oluştur",
+      "fileName": "Dosya adı",
+      "folderName": "Klasör adı",
+      "deleteTitle": "{{name}} silinsin mi?",
+      "deleteFileDetail": "Bu, dosyayı kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "deleteFolderDetail": "Bu, klasörü ve içindekileri kalıcı olarak siler. Bu işlem geri alınamaz.",
+      "duplicateFailed": "{{name}} çoğaltılamadı. {{reason}}",
+      "duplicateUnconfirmed": "Kopya tamamlanmamış olabilir. Kontrol edip tekrar deneyin.",
+      "deleteFailed": "{{name}} silinemedi. {{reason}}",
+      "deleteUnconfirmed": "Hâlâ orada. Klasörü kontrol edip tekrar deneyin.",
+      "renameFailed": "{{name}} yeniden adlandırılamadı. {{reason}}",
+      "newFileFailed": "Dosya oluşturulamadı. {{reason}}",
+      "newFolderFailed": "Klasör oluşturulamadı. {{reason}}",
+      "share": "Paylaş",
+      "shareFailed": "{{name}} paylaşılamadı",
+      "shareTooLarge": "256 MB’tan büyük dosyalar telefondan paylaşılamaz",
+      "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
@@ -5445,7 +5468,7 @@
       "started": "Başladı",
       "trigger": "Tetikleyici",
       "output": "Çıktı",
-      "noOutput": "Çıktı içeriği yok.",
+      "noOutput": "Gösterilecek çıktı yok.",
       "loadingRuns": "Çalıştırmalar yükleniyor…",
       "loading": "Yükleniyor…",
       "hourly": "Saatlik",
@@ -6667,7 +6690,7 @@
       "composerPlaceholder": "Gruba mesaj yazın; bir bottan bahsetmek için @ kullanın",
       "repliesValue": "Yanıtlar: {{value0}}",
       "whoAnswers": "Mesajlarınızı kim yanıtlar?",
-      "peerAsked": "{{from}} bir soru sordu. Sorunun yöneltildiği bot: {{to}}",
+      "peerAsked": "{{from}}, {{to}} botuna sordu",
       "peerFollowedUp": "{{bot}} takip mesajı gönderdi",
       "deleteTitle": "{{name}} silinsin mi?",
       "deleteDescription": "Gruptaki botlar silinmez.",
@@ -6683,7 +6706,6 @@
       "suggestThree": "{{a}}, {{b}} ve {{c}}",
       "suggestMore": "{{a}}, {{b}} ve {{count}} tane daha",
       "pickOne": "Bir bot seçin",
-      "needsTwoBots": "{{host}} üzerinde 2 bot gerekir",
       "peerReadItems": "{{bot}}, öğeleriyle ilgili bir güncellemeyi okudu",
       "remoteReplied": "{{computer}} üzerinde yanıt verdi",
       "remoteNotice": "{{computer}} üzerinde yanıt vermedi",

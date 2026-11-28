@@ -35,10 +35,12 @@ export function patchStoredSession(
   stored: WorkspaceSessionState,
   before: WorkspaceSessionState,
   after: WorkspaceSessionState,
-  touched?: TouchedSessionRecords
+  touched?: TouchedSessionRecords,
+  /** The only workspaces the edit can touch; absent means any. */
+  workspaces?: readonly string[]
 ): WorkspaceSessionState {
   const patched = patchRecords(stored, before, after, touched)
-  const adopted = adoptTouchedFoldedRows(stored, patched, before)
+  const adopted = adoptTouchedFoldedRows(stored, patched, before, workspaces)
   return adopted === stored ? patched : patchRecords(adopted, before, after, touched)
 }
 

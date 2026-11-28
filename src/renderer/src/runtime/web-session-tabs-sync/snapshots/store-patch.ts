@@ -196,11 +196,9 @@ export function applyWebSessionTabsStorePatch(
         }
       }
     }
+    const nextTabsByWorktree = patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree
     for (const key of new Set(affectedWorkspaces)) {
-      retireRemovedNativeChatTabs(
-        state.unifiedTabsByWorktree[key] ?? [],
-        (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
-      )
+      retireRemovedNativeChatTabs(state.unifiedTabsByWorktree, nextTabsByWorktree, key)
     }
     return patch
   }

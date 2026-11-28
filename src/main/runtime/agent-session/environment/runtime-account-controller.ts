@@ -211,6 +211,7 @@ export class RuntimeAccountController {
       movesRunningSessions?: true
       runningSessions?: ClaudeAccountSwitchRunningSessions
       answersAsk?: true
+      answersAskId?: string
     } = {}
   ): Promise<ClaudeAccountSelectResult> {
     const { claudeAccounts } = this.requireServices()
@@ -229,7 +230,8 @@ export class RuntimeAccountController {
       before: { state: before, accountId: getSelectedClaudeAccountIdInState(before, target) },
       after: { state: after, accountId: getSelectedClaudeAccountIdInState(after, target) },
       ...(options.runningSessions ? { runningSessions: options.runningSessions } : {}),
-      ...(options.answersAsk ? { answersAskFor: accountId } : {})
+      ...(options.answersAsk ? { answersAskFor: accountId } : {}),
+      ...(options.answersAsk && options.answersAskId ? { answersAskId: options.answersAskId } : {})
     })
     return runningSessions ? { ...after, runningSessions } : after
   }
@@ -251,7 +253,9 @@ export class RuntimeAccountController {
   ): Promise<CodexRateLimitResetRpcResult> {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
+    // A phone replaces its whole snapshot with this one, so it keeps the OpenCode and Devin profiles.
     const snapshot = {
+      ...this.streamDataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
       rateLimits: result.rateLimits

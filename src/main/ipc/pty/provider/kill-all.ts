@@ -11,7 +11,8 @@ export function hasInProcessTerminalSessions(): boolean {
 
 /** Terminals whose shell lives in this process, so a quit ends them; daemon terminals outlive it. */
 export function inProcessTerminalPtyIds(): string[] {
-  return [...ptyProcesses.keys()]
+  // Quit also cancels spawns still in flight (killAllLocalPtys).
+  return [...new Set([...ptyProcesses.keys(), ...pendingLocalPtySpawns.keys()])]
 }
 
 /** Kill in-process PTYs while daemon-backed sessions survive disconnect. */

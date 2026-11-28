@@ -26,7 +26,9 @@ export function projectGroupHookOwner(group: ProjectGroup): WorkspaceHookOwner |
 
 const GROUP_HOOK_PREFIX = 'group-hooks:'
 
-export function projectGroupHookTrustKey(group: ProjectGroup): string {
+export function projectGroupHookTrustKey(
+  group: Pick<ProjectGroup, 'id'> & Partial<Pick<ProjectGroup, 'executionHostId' | 'connectionId'>>
+): string {
   return `${GROUP_HOOK_PREFIX}${JSON.stringify([getRepoExecutionHostId(group), group.id])}`
 }
 

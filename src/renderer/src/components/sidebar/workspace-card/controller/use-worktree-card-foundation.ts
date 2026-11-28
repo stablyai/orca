@@ -21,33 +21,46 @@ import {
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
-import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import {
+  EMPTY_WORKSPACE_PORTS,
+  shouldBeginWorktreeRename,
+  type WorktreeCardProps
+} from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+
+// Non-hook helper so React Compiler does not treat `useAppStore.getState()` as a bare hook reference.
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
 
 export function useWorktreeCardFoundation({
   worktree,
   repo,
-  compactLine = false
-}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'>) {
-  const openModal = useAppStore((s) => s.openModal)
-  const openTaskPage = useAppStore((s) => s.openTaskPage)
-  const openAutomationsPage = useAppStore((s) => s.openAutomationsPage)
-  const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const setWorkspaceUnreadByUser = useAppStore((s) => s.setWorkspaceUnreadByUser)
-  const deleteFolderWorkspace = useAppStore((s) => s.deleteFolderWorkspace)
-  const setActiveWorktree = useAppStore((s) => s.setActiveWorktree)
-  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
-  const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
-  const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
+  compactLine = false,
+  renameRowKey
+}: Pick<WorktreeCardProps, 'worktree' | 'repo' | 'compactLine'> & { renameRowKey?: string }) {
+  // Static store actions never trigger re-renders; read once without registering 12 per-card subscriptions.
+  const {
+    openModal,
+    openTaskPage,
+    openAutomationsPage,
+    setPendingAutomationRunNavigation,
+    updateWorktreeMeta,
+    setWorkspaceUnreadByUser,
+    deleteFolderWorkspace,
+    setActiveWorktree,
+    setRenamingWorktreeId,
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    fetchLinearIssue
+  } = getAppStoreState()
+  const shouldBeginRename = useAppStore((s) =>
+    shouldBeginWorktreeRename(s.renamingWorktreeId, worktree.id, renameRowKey)
+  )
   const settings = useAppStore((s) => s.settings)
-  const fetchIssue = useAppStore((s) => s.fetchIssue)
-  const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
-  const projectGroups = useAppStore((s) => s.projectGroups)
+  const hasProjectGroups = useAppStore((s) => s.projectGroups.length > 0)
   // A one-line card is always the Compact card, which only the default style has.
   const drawsNewCards = useAppStore(selectDrawsNewWorktreeCards)
   const newCardStyle = drawsNewCards && !compactLine
@@ -159,11 +172,12 @@ export function useWorktreeCardFoundation({
   })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
-  const workspacePorts = useAppStore(
-    (s) =>
-      getWorkspacePortsByWorktreeId(s.workspacePortScan?.result).get(worktree.id) ??
-      EMPTY_WORKSPACE_PORTS
-  )
+  const workspacePorts = useAppStore((s) => {
+    const scanResult = s.workspacePortScan?.result
+    return scanResult
+      ? (getWorkspacePortsByWorktreeId(scanResult).get(worktree.id) ?? EMPTY_WORKSPACE_PORTS)
+      : EMPTY_WORKSPACE_PORTS
+  })
 
   // Avoid per-card host-qualified scans; twins use direct SSH status for this status-only chip.
   const sshOwnerEnvironmentId = useAppStore((s) =>
@@ -222,7 +236,7 @@ export function useWorktreeCardFoundation({
     setWorkspaceUnreadByUser,
     deleteFolderWorkspace,
     setActiveWorktree,
-    renamingWorktreeId,
+    shouldBeginRename,
     setRenamingWorktreeId,
     fetchHostedReviewForBranch,
     settings,
@@ -230,7 +244,7 @@ export function useWorktreeCardFoundation({
     fetchLinearIssue,
     cardProps,
     agentActivityDisplayMode,
-    projectGroups,
+    hasProjectGroups,
     newCardStyle,
     compactCards,
     cardDetails,

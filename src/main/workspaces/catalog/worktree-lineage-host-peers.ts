@@ -38,30 +38,51 @@ export function projectWorktreeLineageWithHostPeers<T extends Worktree>(
   return withInlineFolderLineage(store, projectWorktreeLineage(store, repo, rows))
 }
 
+function hasOwnKeys(record: Readonly<Record<string, unknown>>): boolean {
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      return true
+    }
+  }
+  return false
+}
+
 function projectWorktreeLineage<T extends Worktree>(
   store: HostPeerStore,
   repo: Repo,
   rows: readonly T[]
 ) {
   const lineageById = store.getAllWorktreeLineage?.() ?? {}
-  if (rows.length === 0) {
+  if (rows.length === 0 || !hasOwnKeys(lineageById)) {
     return projectResolvedWorktreeLineage(rows, lineageById)
   }
-  const relatedIds = getConnectedWorktreeLineageIds(
-    rows.map((row) => row.id),
-    lineageById
-  )
-  const ownIds = new Set(rows.map((row) => row.id))
-  if ([...relatedIds].every((id) => ownIds.has(id) || getRepoIdFromWorktreeId(id) === repo.id)) {
+  const seedIds: string[] = []
+  const ownIds = new Set<string>()
+  for (const row of rows) {
+    seedIds.push(row.id)
+    ownIds.add(row.id)
+  }
+  const relatedIds = getConnectedWorktreeLineageIds(seedIds, lineageById)
+  let hasExternalPeer = false
+  for (const id of relatedIds) {
+    if (!ownIds.has(id) && getRepoIdFromWorktreeId(id) !== repo.id) {
+      hasExternalPeer = true
+      break
+    }
+  }
+  if (!hasExternalPeer) {
     return projectResolvedWorktreeLineage(rows, lineageById)
   }
   const hostId = getRepoExecutionHostId(repo)
   const repos = store.getRepos()
   const reposById = new Map<string, Repo[]>()
   for (const candidate of repos) {
-    const owners = reposById.get(candidate.id) ?? []
-    owners.push(candidate)
-    reposById.set(candidate.id, owners)
+    const owners = reposById.get(candidate.id)
+    if (owners) {
+      owners.push(candidate)
+    } else {
+      reposById.set(candidate.id, [candidate])
+    }
   }
   const metaById = readAllWorktreeMetaForHost(store, hostId)
   const peers: Worktree[] = []
@@ -70,22 +91,31 @@ function projectWorktreeLineage<T extends Worktree>(
       continue
     }
     const owners = reposById.get(getRepoIdFromWorktreeId(id)) ?? []
-    const evidence = owners.map(resolveRepoOwnershipEvidence)
-    const hostOwners = owners.filter((_, index) => {
-      const owner = evidence[index]
-      return owner?.status === 'owned' && owner.hostId === hostId
-    })
+    let owner: Repo | undefined
+    let hostOwnerCount = 0
+    let invalidOwner = false
+    for (const candidate of owners) {
+      const evidence = resolveRepoOwnershipEvidence(candidate)
+      if (evidence.status !== 'owned') {
+        invalidOwner = true
+        break
+      }
+      if (evidence.hostId === hostId) {
+        owner = candidate
+        hostOwnerCount += 1
+      }
+    }
     const meta = metaById[id]
     if (
-      evidence.some((owner) => owner.status !== 'owned') ||
-      hostOwners.length !== 1 ||
+      invalidOwner ||
+      hostOwnerCount !== 1 ||
+      !owner ||
       !meta ||
-      (!meta.instanceId && !isFolderRepo(hostOwners[0])) ||
+      (!meta.instanceId && !isFolderRepo(owner)) ||
       (!meta.hostId && owners.length > 1)
     ) {
       continue
     }
-    const owner = hostOwners[0]
     if (isFolderRepo(owner)) {
       if (isFolderWorkspaceIdForRepo(owner, id)) {
         const peerMeta =

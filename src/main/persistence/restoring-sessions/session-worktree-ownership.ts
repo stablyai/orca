@@ -89,21 +89,36 @@ export function createWorktreeOwnerCandidateCollector(
   platform: NodeJS.Platform = process.platform,
   owners: Set<string> = new Set<string>()
 ): WorktreeOwnerCandidateCollector {
+  if (candidateIds.size === 0) {
+    return {
+      owners,
+      addOwner: () => {}
+    }
+  }
   const candidateIdsByComparisonKey = new Map<string, string[]>()
   for (const candidateId of candidateIds) {
     const comparisonKey = worktreeRetentionIdComparisonKey(candidateId, platform)
     if (!comparisonKey) {
       continue
     }
-    const matches = candidateIdsByComparisonKey.get(comparisonKey) ?? []
-    matches.push(candidateId)
-    candidateIdsByComparisonKey.set(comparisonKey, matches)
+    const matches = candidateIdsByComparisonKey.get(comparisonKey)
+    if (matches) {
+      matches.push(candidateId)
+    } else {
+      candidateIdsByComparisonKey.set(comparisonKey, [candidateId])
+    }
   }
+  const seenOwnerKeys = new Set<string>()
   return {
     owners,
     addOwner: (ownerKey) => {
-      const worktreeId =
-        ownerKey && candidateIds.has(ownerKey) ? ownerKey : getPersistedWorktreeOwnerId(ownerKey)
+      if (!ownerKey || seenOwnerKeys.has(ownerKey)) {
+        return
+      }
+      seenOwnerKeys.add(ownerKey)
+      const worktreeId = candidateIds.has(ownerKey)
+        ? ownerKey
+        : getPersistedWorktreeOwnerId(ownerKey)
       if (!worktreeId) {
         return
       }
@@ -126,8 +141,13 @@ function collectRecordKeys(
   value: unknown,
   add: (ownerKey: string | null | undefined) => void
 ): void {
-  for (const ownerKey of Object.keys((value ?? {}) as Record<string, unknown>)) {
-    add(ownerKey)
+  if (!value || typeof value !== 'object') {
+    return
+  }
+  for (const ownerKey in value) {
+    if (Object.hasOwn(value, ownerKey)) {
+      add(ownerKey)
+    }
   }
 }
 
