@@ -25878,6 +25878,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Agregar cambios al stage",
+      "unstageChanges": "Quitar cambios del stage",
+      "discardChanges": "Descartar cambios"
+    },
     "sectionAgentStarted": "Iniciado en {{value0}}",
     "actionSaveFailed": "No se pudo guardar esta acción. Intenta guardarla de nuevo en Ajustes.",
     "discard": {

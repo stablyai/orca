@@ -25760,6 +25760,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Добавить изменения в индекс",
+      "unstageChanges": "Убрать изменения из индекса",
+      "discardChanges": "Отменить изменения"
+    },
     "sectionAgentStarted": "Запущено в {{value0}}",
     "actionSaveFailed": "Не удалось сохранить действие. Повторите сохранение в настройках.",
     "discard": {

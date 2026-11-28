@@ -1,6 +1,6 @@
 import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import React, { useCallback } from 'react'
-import { Copy, ExternalLink, Eye, FolderOpen } from 'lucide-react'
+import { Copy, ExternalLink, Eye, FolderOpen, Minus, Plus } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -30,6 +30,13 @@ type SourceControlEntryContextMenuProps = {
   hasWorkingTreeFile: boolean
   connectionId?: string | null
   onView?: () => void
+  onStage?: () => void
+  onUnstage?: () => void
+  discard?: {
+    label: string
+    icon: React.ComponentType<{ className?: string }>
+    onSelect: () => void
+  }
   conflictResolutions?: readonly ConflictResolution[]
   onResolveConflict?: (resolution: ConflictResolution) => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -44,6 +51,9 @@ export function SourceControlEntryContextMenu({
   hasWorkingTreeFile,
   connectionId,
   onView,
+  onStage,
+  onUnstage,
+  discard,
   conflictResolutions,
   onResolveConflict,
   onRevealInExplorer,
@@ -113,7 +123,27 @@ export function SourceControlEntryContextMenu({
               )
             })}
           </>
+        ) : onStage || onUnstage || discard ? (
+          <ContextMenuSeparator />
         ) : null}
+        {onStage && (
+          <ContextMenuItem onSelect={onStage}>
+            <Plus className="size-3.5" />
+            {t('sourceControl.fileMenu.stageChanges', 'Stage Changes')}
+          </ContextMenuItem>
+        )}
+        {onUnstage && (
+          <ContextMenuItem onSelect={onUnstage}>
+            <Minus className="size-3.5" />
+            {t('sourceControl.fileMenu.unstageChanges', 'Unstage Changes')}
+          </ContextMenuItem>
+        )}
+        {discard && (
+          <ContextMenuItem variant="destructive" onSelect={discard.onSelect}>
+            <discard.icon className="size-3.5" />
+            {discard.label}
+          </ContextMenuItem>
+        )}
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={handleCopyPath} disabled={!absolutePath}>
           <Copy className="size-3.5" />

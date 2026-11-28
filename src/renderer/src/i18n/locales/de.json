@@ -24934,6 +24934,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Änderungen vormerken",
+      "unstageChanges": "Vormerkung für Änderungen aufheben",
+      "discardChanges": "Änderungen verwerfen"
+    },
     "sectionAgentStarted": "In {{value0}} gestartet",
     "actionSaveFailed": "Diese Aktion konnte nicht gespeichert werden. In den Einstellungen erneut speichern.",
     "discard": {

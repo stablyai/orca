@@ -25310,6 +25310,11 @@
     }
   },
   "sourceControl": {
+    "fileMenu": {
+      "stageChanges": "Stager les modifications",
+      "unstageChanges": "Déstager les modifications",
+      "discardChanges": "Abandonner les modifications"
+    },
     "sectionAgentStarted": "Démarré dans {{value0}}",
     "actionSaveFailed": "Impossible d’enregistrer cette action. Réessayez dans les paramètres.",
     "unlinkedPr": {
