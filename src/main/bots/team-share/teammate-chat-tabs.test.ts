@@ -410,3 +410,27 @@ it('keeps a teammate’s chat closed after a start when the close comes before t
   expect(fresh.mine().chats).toEqual([B])
   expect(fresh.mineSaved()).toEqual([B])
 })
+
+it('keeps a chat closed when its save lands after the restore, as under a main-owned layout', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  await r.reveal('mate-desk', B)
+  const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
+  // Saves land later, in order, as main's layout queue applies them.
+  const save = fresh.runtime['changeWindowlessChatTabs'].bind(fresh.runtime)
+  const held: (() => Promise<void>)[] = []
+  fresh.runtime['changeWindowlessChatTabs'] = (...args) =>
+    new Promise<void>((resolve) => held.push(() => save(...args).then(resolve)))
+
+  const closing = fresh.call('mate-desk', 'agentSession.close', { sessionId: C })
+  await vi.waitFor(() => expect(held).toHaveLength(1))
+  await fresh.runtime.restoreStructuredAgentSessionTabs()
+  expect(fresh.mine().chats).toEqual([B])
+  for (const land of held.splice(0)) {
+    await land()
+  }
+  await closing
+
+  expect(fresh.mine().chats).toEqual([B])
+  expect(fresh.mineSaved()).toEqual([B])
+})
