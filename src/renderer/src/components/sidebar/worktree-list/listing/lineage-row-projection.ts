@@ -112,7 +112,7 @@ export function buildLineageRowProjection(
           1 +
           padding +
           LINEAGE_CHILDREN_INLINE_OFFSET
-        right = ancestor.right + 7
+        right = ancestor.right
         // Why: the parent card already carries pb-1.5 + 1px border below the children toggle; avoid double-counting.
         before = parent === index - 1 ? (newCardStyle ? 0 : 6) : 4
       } else if (row.type === 'folder-workspace') {

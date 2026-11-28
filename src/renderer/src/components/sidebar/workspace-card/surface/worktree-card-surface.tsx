@@ -130,20 +130,10 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       ) : (
         parentCardContent
       )}
-
-      {lineageChildren ? (
-        <div
-          className={cn('space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
-          data-worktree-lineage-children=""
-          style={lineageChildrenStyle}
-        >
-          {lineageChildren}
-        </div>
-      ) : null}
     </div>
   )
 
-  return affiliateListMode ? (
+  const surface = affiliateListMode ? (
     cardBody
   ) : (
     <WorktreeContextMenu
@@ -155,5 +145,30 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     >
       {cardBody}
     </WorktreeContextMenu>
+  )
+
+  if (!lineageChildren) {
+    return surface
+  }
+
+  const parentPaddingLeft = cardStyle?.paddingLeft ?? 0
+  const childMarginLeft = lineageChildrenStyle?.marginLeft ?? 0
+  // A descendant starts where it did inside the parent surface, but its box now spans the row.
+  const fullWidthChildMarginLeft = `calc(0.25rem + 1px + ${parentPaddingLeft} + ${childMarginLeft})`
+
+  return (
+    <>
+      {surface}
+      <div
+        className={cn('relative space-y-1', newCardStyle ? 'mt-1.5' : 'mt-3')}
+        data-worktree-lineage-children=""
+        style={{
+          marginLeft: fullWidthChildMarginLeft,
+          width: `calc(100% - ${fullWidthChildMarginLeft})`
+        }}
+      >
+        {lineageChildren}
+      </div>
+    </>
   )
 }
