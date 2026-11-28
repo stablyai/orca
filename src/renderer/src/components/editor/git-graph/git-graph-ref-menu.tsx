@@ -59,18 +59,24 @@ export function GitGraphRefs({
   const current = references.find((ref) => ref.id === currentRefId)
   const inline = current ? [current] : []
   for (const ref of references) {
-    if (inline.length === 2) {
+    if (inline.length === 3) {
       break
     }
     if (workspaces.has(ref.id) && ref !== current) {
       inline.push(ref)
     }
   }
+  // A remote copy of a local branch on the same commit says nothing new inline; it stays under +N.
+  const locals = new Set(
+    references.filter((ref) => ref.id.startsWith('refs/heads/')).map((ref) => ref.name)
+  )
   for (const ref of references) {
-    if (inline.length === 2) {
+    if (inline.length === 3) {
       break
     }
-    if (!inline.includes(ref)) {
+    const remoteCopy =
+      ref.id.startsWith('refs/remotes/') && locals.has(ref.name.slice(ref.name.indexOf('/') + 1))
+    if (!inline.includes(ref) && !remoteCopy) {
       inline.push(ref)
     }
   }
@@ -82,11 +88,11 @@ export function GitGraphRefs({
           setMenuRef(ref)
         }}
         className={cn(
-          'inline-flex min-w-0 max-w-full shrink items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
+          'inline-flex min-w-0 max-w-full shrink items-center gap-1 overflow-hidden rounded-full border px-1.5 text-2xs text-muted-foreground',
           ref.id === currentRefId && 'bg-accent font-medium text-foreground'
         )}
       >
-        <span className="min-w-0 truncate" title={ref.name}>
+        <span className="max-w-44 min-w-0 truncate" title={ref.name}>
           {ref.name}
         </span>
         {workspaces.has(ref.id) && (
@@ -117,7 +123,7 @@ export function GitGraphRefs({
         }
       }}
     >
-      <div className="flex w-full min-w-0 gap-1">
+      <div className="flex min-w-0 gap-1">
         {inline.map(badge)}
         {references.length > inline.length && (
           <Popover open={open} onOpenChange={setOpen}>
