@@ -171,6 +171,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const model = agent.entry.model?.trim() ?? ''
   // The model is secondary to the name: always in the hover, inline only when the card asks for it.
   const hoverTitle = model ? `${rowTitle}\n${model}` : rowTitle
+  // The disabled reason replaces the row hover, so keep the model with it when it is not shown inline.
+  const disabledTitle =
+    sendTargetDisabledReason && model && !showModel
+      ? `${sendTargetDisabledReason}\n${model}`
+      : sendTargetDisabledReason
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
@@ -330,7 +335,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason}
+      title={disabledTitle}
     >
       {rowBody}
     </div>
