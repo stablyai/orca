@@ -7,6 +7,7 @@ import {
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../publication/session-tabs-change-publication'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { onStructuredSessionTabsShown } from '../../../native-chat/agent-session-wire/host/structured-session-tabs-shown'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
@@ -38,6 +39,11 @@ export type AgentLaunchScope = Parameters<
 >[0]
 
 export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRuntimeWithGetStructuredAgentSessionCreateSupport {
+  /** A re-added project's chats get their tabs back: draw their rows (#40409). */
+  protected readonly stopTabsShownListener = onStructuredSessionTabsShown((sessionIds) =>
+    this.reprojectStructuredAgentSessionTabs(sessionIds)
+  )
+
   protected abstract notifyMobileSessionTabSnapshots(
     ...args: Parameters<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabSnapshots']>
   ): ReturnType<ScheduleMobileSessionTabsChangedMethods['notifyMobileSessionTabSnapshots']>
@@ -164,6 +170,22 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
             : [{ worktreeId: input.workspaceId, tabId }]
       }
     })
+  }
+
+  /** Chats whose durable tabs were shown again (a re-added project, #40409): publish each raw tab, in the
+   *  order given, so windows and phones draw their rows. Closing a project dropped them from every snapshot. */
+  reprojectStructuredAgentSessionTabs(sessionIds: readonly string[]): void {
+    const host = getStructuredAgentSessionHost()
+    if (!host) {
+      return
+    }
+    const bySession = new Map(host.listSessionTabs().map((tab) => [tab.sessionId, tab] as const))
+    for (const sessionId of sessionIds) {
+      const session = bySession.get(sessionId)
+      if (session && host.isSessionTabVisible(sessionId)) {
+        this.projectStructuredAgentSessionTab({ ...session, activate: false })
+      }
+    }
   }
 
   /** The caller owns the store write; this publishes only its current raw surface. */

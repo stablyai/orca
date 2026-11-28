@@ -477,3 +477,52 @@ describe('chat delete', () => {
     expect(reopened.getRecord('session-alpha')).toBeNull()
   })
 })
+
+describe('workspace re-key of a saved chat (re-added project)', () => {
+  const FROM = 'old-repo::/work/app'
+  const TO = 'new-repo::/work/app'
+  const AT_OLD: AgentSessionExecutionLocation = { ...NATIVE, workspaceId: FROM }
+
+  it('moves the chat to the new workspace id in memory, in its scope and in its saved record', async () => {
+    const store = await open()
+    await establishOwner(store, { location: AT_OLD })
+    const head = () =>
+      withTestAgentSessionDatabase(
+        directory,
+        (db) =>
+          db
+            .prepare('SELECT workspace_id FROM journal_chat_state WHERE session_id=?')
+            .get('session-alpha')?.workspace_id ?? null
+      )
+    if ((await head()) === null) {
+      await withTestAgentSessionDatabase(directory, (db) =>
+        db
+          .prepare(
+            `INSERT INTO journal_chat_state(session_id,workspace_id,epoch,last_activity_at)
+              VALUES('session-alpha',?,'current',1)`
+          )
+          .run(FROM)
+      )
+    }
+    expect(await head()).toBe(FROM)
+    await store.updateRecord('session-alpha', { kind: 'workspace', from: FROM, to: TO })
+    expect(store.getRecord('session-alpha')?.location.workspaceId).toBe(TO)
+    // The journal head names the workspace too and moves in the same write.
+    expect(await head()).toBe(TO)
+    expect(store.listWorkspaceSessions({ ...AT_OLD, workspaceId: TO }).sessionIds).toEqual([
+      'session-alpha'
+    ])
+    expect(store.listWorkspaceSessions(AT_OLD).sessionIds).toEqual([])
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records['session-alpha'].location
+        .workspaceId
+    ).toBe(TO)
+  })
+
+  it('leaves a chat that is no longer at the planned workspace id where it is', async () => {
+    const store = await open()
+    await establishOwner(store, { location: AT_OLD })
+    await store.updateRecord('session-alpha', { kind: 'workspace', from: 'other::/x', to: TO })
+    expect(store.getRecord('session-alpha')?.location.workspaceId).toBe(FROM)
+  })
+})

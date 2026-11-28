@@ -34,6 +34,12 @@ export function applyJournalWriterStoreEffect(
     commitAgentSessionPublicationFence(input.command.writerFence)
   }
   writeAgentSessionStoreRows(db, resolved.writes)
+  if (input.kind === 'record' && input.command.kind === 'workspace' && resolved.changed) {
+    // The journal head names the workspace too; it moves with the record in the same transaction.
+    db.prepare(
+      'UPDATE journal_chat_state SET workspace_id=? WHERE session_id=? AND workspace_id=?'
+    ).run(input.command.to, input.sessionId, input.command.from)
+  }
   const forgotten =
     input.kind === 'command' && resolved.value === true
       ? input.command.kind === 'forget-idle'
