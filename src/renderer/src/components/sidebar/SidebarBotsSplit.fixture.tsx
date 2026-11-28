@@ -14,6 +14,8 @@ import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
 import { SidebarContentViewport } from './SidebarContentViewport'
 import SidebarHeader from './chrome/SidebarHeader'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 function bot(id: string, name: string, mascot: BotMascotId, sidebarOrder: number): Bot {
   return {
@@ -48,12 +50,12 @@ const BOTS = [
 function ProjectsStandIn(): React.JSX.Element {
   return (
     <div className="worktree-sidebar-scrollbar h-full overflow-y-auto overflow-x-hidden pl-1 scrollbar-sleek">
-      {Array.from({ length: 12 }, (_, index) => (
+      {Array.from({ length: 2 }, (_, index) => (
         <div
           key={index}
           className="my-0.5 rounded-md bg-worktree-sidebar-accent px-2 py-1.5 text-xs"
         >
-          Project workspace {index + 1}
+          Project {index + 1}
         </div>
       ))}
     </div>
@@ -85,6 +87,12 @@ function splitAt(sidebarBotsHeight: number | null, { folded = false } = {}) {
     width: 300,
     store: {
       sidebarBotsHeight,
+      groupBy: 'repo',
+      settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' },
+      repos: [
+        { ...TEST_REPO, displayName: 'Orca' },
+        { ...TEST_REPO, id: 'repo2', path: '/repo2', displayName: 'Website' }
+      ],
       ...(folded ? { collapsedGroups: new Set([BOTS_GROUP_KEY]) } : {}),
       // An active row paints its full width.
       activeWorkspaceKey: folderWorkspaceKey('fw-builder'),

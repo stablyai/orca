@@ -42,6 +42,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
+  const projectCount = useAppStore((s) => s.repos.length)
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
@@ -86,6 +87,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   return (
     <SidebarSectionHeader
       title={sidebarTitle}
+      count={groupBy === 'repo' ? projectCount : undefined}
       sectionId={groupBy === 'repo' ? 'projects' : 'workspaces'}
       reorderable={collapsible}
       fold={fold}
