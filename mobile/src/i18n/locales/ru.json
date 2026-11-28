@@ -6068,7 +6068,6 @@
       "suggestThree": "{{a}}, {{b}} и {{c}}",
       "suggestMore": "{{a}}, {{b}} и ещё {{count}}",
       "pickOne": "Выберите бота",
-      "needsTwoBots": "Нужно 2 бота на {{host}}",
       "remoteReplied": "Ответ получен ({{computer}})",
       "remoteNotice": "Нет ответа ({{computer}})",
       "remoteNotSent": "Не отправлено на {{computer}}",
