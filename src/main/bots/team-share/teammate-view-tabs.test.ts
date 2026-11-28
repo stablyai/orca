@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { BOT_HOME_NAME, ownerHomeName } from '../../../shared/bots/bot-home-of'
 import { HOME_CHAT_TITLE } from '../../../shared/bots/bot-chat-tree-model'
+import { NO_HOME_CHAT_ID } from '../../../shared/bots/bot-chat-tree-homes'
 import { sessionTabPaneKey } from '../../../shared/remote-runtime/session-graph/session-tab-pane-key'
 import type { TabListPerson } from './teammate-rules'
 import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
@@ -147,9 +148,28 @@ it('keeps the owner’s tab when a teammate’s first call after a start opens t
 
 it('leaves the owner’s read marks to the owner when a teammate opens and reads a chat', async () => {
   const r = await rig()
-  // The two writers of the owner's marks: a thread's "new" and notification attention.
-  const seen = vi.spyOn(r.runtime, 'markBotThreadSeen')
-  const acknowledged = vi.spyOn(r.runtime, 'acknowledgeNotificationAttention')
+  // O came from a linked thread the owner has not opened yet: it shows as new.
+  r.profile.updateFolderWorkspace(r.folderId, {
+    externalConversations: [
+      {
+        source: 'slack',
+        externalId: 'C1:1',
+        sessionId: O,
+        agent: 'codex',
+        paneKey: O,
+        createdAt: 1,
+        seenAt: null
+      }
+    ]
+  })
+  const threadIsNew = () =>
+    r.profile.getFolderWorkspace(r.folderId)?.externalConversations?.[0]?.seenAt === null
+  const acknowledged = vi.fn()
+  r.runtime.onClientEvent((event) => {
+    if (event.type === 'notificationAttentionAcknowledged') {
+      acknowledged()
+    }
+  })
   const read = (deviceId: string) =>
     r.call(deviceId, 'agentSession.acknowledgeAttention', {
       sessionId: O,
@@ -158,12 +178,12 @@ it('leaves the owner’s read marks to the owner when a teammate opens and reads
 
   await r.reveal('mate-desk', O)
   await read('mate-desk')
-  expect(seen).not.toHaveBeenCalled()
+  expect(threadIsNew()).toBe(true)
   expect(acknowledged).not.toHaveBeenCalled()
 
   await r.reveal('owner-desk', O)
   await read('owner-desk')
-  expect(seen).toHaveBeenCalledWith(O)
+  expect(threadIsNew()).toBe(false)
   expect(acknowledged).toHaveBeenCalledTimes(1)
 })
 
@@ -184,6 +204,8 @@ it('lists a teammate every chat of the agent, each by whose it is, with their ow
   expect(byId.get(C)?.person).toMatchObject(MATE)
   expect(byId.has(O)).toBe(true)
   expect(byId.get(O)?.person).toBeUndefined()
+  // Mate's Home is not made yet: its row still says it is theirs.
+  expect(byId.get(NO_HOME_CHAT_ID)?.person).toMatchObject(MATE)
 })
 
 it('pins each person’s own Home in their list, never another person’s Home', async () => {
@@ -259,6 +281,10 @@ it('marks the host’s unread chats only on an owner’s phone reading its own l
   const paneKey = sessionTabPaneKey(
     z.looseObject({ type: z.string(), id: z.string() }).parse(shown)
   )
+  const unreadIn = (frames: Tabs[]) =>
+    frames.at(-1)!.tabs.flatMap((tab) => (tab.unread === true ? [tab.sessionId] : []))
+  const ownersStream = await r.subscribe('owner-phone', false, undefined, 'mobile')
+  const matesStream = await r.subscribe('mate-phone', false, undefined, 'mobile')
   // The owner's desktop Agents list holds O unread.
   r.runtime.setAgentListPublication({
     publishedAt: 1,
@@ -278,6 +304,9 @@ it('marks the host’s unread chats only on an owner’s phone reading its own l
       tab.unread === true ? [tab.sessionId] : []
     )
 
+  // Live, to the owner's phone alone.
+  await vi.waitFor(() => expect(unreadIn(ownersStream)).toEqual([O]))
+  expect(matesStream.flatMap((frame) => unreadIn([frame]))).toEqual([])
   expect(await unread('owner-phone')).toEqual([O])
   // Watched lists go as they are; a teammate never gets the owner's marks.
   expect(await unread('owner-phone', MATE)).toEqual([])

@@ -69,8 +69,8 @@ const BOT_CHATS_SEEN_METHOD = defineMethod({
   permission: 'workspace',
   share: 'not-shared',
   params: BotChatsSeen,
-  handler: (params, { runtime }) => {
-    params.sessionIds.forEach((sessionId) => runtime.markBotThreadSeen(sessionId))
+  handler: (params, { runtime, callerScope }) => {
+    params.sessionIds.forEach((sessionId) => runtime.markBotThreadSeen(sessionId, callerScope))
     return { ok: true as const }
   }
 })

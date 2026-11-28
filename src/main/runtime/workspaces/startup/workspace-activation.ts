@@ -40,6 +40,8 @@ import {
   watchLaunchComposer,
   type FreshComposerPtyHost
 } from '../../terminal/wait/launch-composer-watch'
+import { ownsHostReadMarks } from '../../../bots/team-share/teammate-rules'
+import type { RpcCallerScope } from '../../rpc/callers/rpc-caller-scope'
 
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithForegroundInspection {
   protected abstract toAgentSessionOptions(
@@ -56,7 +58,9 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       notifyClients?: boolean
       clientKind?: 'mobile' | 'runtime'
       navigation?: RuntimeNavigationTarget
-    } = {}
+      /** Whose read clears the unread mark: a teammate's leaves the owner's (rule 6). */
+      reader: RpcCallerScope | undefined
+    }
   ): Promise<{
     repoId: string
     worktreeId: string
@@ -82,6 +86,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
     const target = this.store ? worktreeRowTarget(this.store, worktree) : undefined
     if (
       !targetsHost &&
+      ownsHostReadMarks(opts.reader) &&
       target &&
       this.store?.getWorktreeMetaForHost?.(target.id, target.hostId)?.isUnread
     ) {

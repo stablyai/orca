@@ -29,7 +29,7 @@
 //     acts for them (`botShareAsker`).
 //  6. Read marks. The host's read marks (a chat's unread, notification attention, a workspace's unread,
 //     a thread's "new") are the owner's: a teammate's open or read never writes them, and none is read
-//     out to them as theirs (`ownsHostReadMarks`).
+//     out to them as theirs (`ownsHostReadMarks`, checked inside each writer on the reader it is handed).
 import classes from '../../runtime/rpc/callers/teammate-method-classes.json'
 import { z } from 'zod'
 import {

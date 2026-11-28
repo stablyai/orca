@@ -191,7 +191,12 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
     )
   /** A device's live frames: one workspace's stream (its own list, or with `person` the list it
    *  watches), or with `all` its census stream. */
-  const subscribe = async (deviceId: string, all = false, person?: TabListPerson) => {
+  const subscribe = async (
+    deviceId: string,
+    all = false,
+    person?: TabListPerson,
+    clientKind?: 'runtime' | 'mobile'
+  ) => {
     const frames: Tabs[] = []
     // As a desktop reads its stream: a frame's tabs may come as a delta of the one before.
     const tabDelta = createSessionTabsTabDeltaDecoder()
@@ -212,7 +217,7 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
           frames.push(...All.parse(frame).snapshots)
         }
       },
-      context(deviceId)
+      context(deviceId, clientKind)
     )
     await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0))
     return frames

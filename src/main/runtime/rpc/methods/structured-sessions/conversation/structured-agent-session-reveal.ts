@@ -1,5 +1,5 @@
 import { assertBotLinkOpenAuthority } from '../../../../../bots/bot-link-open-authority'
-import { callerTabPerson, ownsHostReadMarks } from '../../../../../bots/team-share/teammate-rules'
+import { callerTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { holdAgentSessionPublicationFence } from '../../../../agent-session/agent-session-publication-fence'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { StructuredWorkspaceUnavailable } from '../../../../session-tabs/chat/structured-workspace-authority'
@@ -173,11 +173,9 @@ export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
           throw new Error('Could not publish the chat to its caller.')
         }
         check()
-        // A thread is no longer new once its owner opens it anywhere (rule 6).
-        if (ownsHostReadMarks(ctx.callerScope)) {
-          for (const id of new Set([params.sessionId, revealed.sessionId])) {
-            ctx.runtime.markBotThreadSeen(id)
-          }
+        // A thread is no longer new once its owner opens it anywhere.
+        for (const id of new Set([params.sessionId, revealed.sessionId])) {
+          ctx.runtime.markBotThreadSeen(id, ctx.callerScope)
         }
         // Return named fields only; private journal-open reasons stay on the host.
         const { sessionId, workspaceId, agent, readable } = revealed

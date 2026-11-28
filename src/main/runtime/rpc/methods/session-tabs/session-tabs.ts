@@ -124,7 +124,7 @@ export const SESSION_TAB_METHODS = [
         // Switch point: a phone holding the workspace's session open is looking at it.
         const closePhoneSession =
           ORCA_SIDEBAR_INPUTS_IS_MAIN && clientKind === 'mobile' && !watching
-            ? runtime.sidebarFacts?.readAndHoldPhoneSession(worktreeId)
+            ? runtime.sidebarFacts?.readAndHoldPhoneSession(worktreeId, callerScope)
             : undefined
         runtime.registerSubscriptionCleanup(
           subscriptionId,

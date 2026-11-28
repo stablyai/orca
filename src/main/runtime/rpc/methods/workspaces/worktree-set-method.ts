@@ -2,7 +2,6 @@ import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/workt
 import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
 import { getWorkspaceStatusWarning } from '../../../../../shared/workspace/status/workspace-status-warning'
 import { defineMethod } from '../../core'
-import { ownsHostReadMarks } from '../../../../bots/team-share/teammate-rules'
 
 export const WORKTREE_SET_METHOD = defineMethod({
   name: 'worktree.set',
@@ -10,10 +9,8 @@ export const WORKTREE_SET_METHOD = defineMethod({
   share: 'not-shared',
   params: WorktreeSet,
   handler: async (params, { runtime, callerScope }) => {
-    // A workspace's unread and attention are the owner's: a teammate's read never writes them (rule 6).
-    const readMarks = ownsHostReadMarks(callerScope)
     const acknowledgement =
-      readMarks && params.acknowledgeAttention === true && params.isUnread === false
+      params.acknowledgeAttention === true && params.isUnread === false
         ? await runtime
             .prepareWorkspaceAttentionAcknowledgement(params.worktree)
             .catch((error: unknown) => {
@@ -21,67 +18,73 @@ export const WORKTREE_SET_METHOD = defineMethod({
               return undefined
             })
         : undefined
-    const worktree = await runtime.updateManagedWorktreeMeta(params.worktree, {
-      displayName: params.displayName,
-      ...(params.firstAgentMessageRenameError === null
-        ? { firstAgentMessageRenameError: null }
-        : {}),
-      ...(params.displayName !== undefined
-        ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
-        : {}),
-      linkedIssue: params.linkedIssue,
-      linkedPR: params.linkedPR,
-      suppressedGitHubPR: params.suppressedGitHubPR,
-      linkedLinearIssue: params.linkedLinearIssue,
-      linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
-      linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
-      linkedGitLabMR: params.linkedGitLabMR,
-      linkedGitLabIssue: params.linkedGitLabIssue,
-      linkedBitbucketPR: params.linkedBitbucketPR,
-      linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
-      linkedGiteaPR: params.linkedGiteaPR,
-      linkedWorkItem: params.linkedWorkItem,
-      linkedItems: params.linkedItems,
-      ...(params.linkedItemsBase !== undefined ? { linkedItemsBase: params.linkedItemsBase } : {}),
-      ...(params.linkedItemsSelectionChanged !== undefined
-        ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
-        : {}),
-      linkedTaskSourceContext: params.linkedTaskSourceContext,
-      comment: params.comment,
-      isArchived: params.isArchived,
-      isUnread: readMarks ? params.isUnread : undefined,
-      isPinned: params.isPinned,
-      sortOrder: params.sortOrder,
-      manualOrder: params.manualOrder,
-      lastActivityAt: params.lastActivityAt,
-      createdAt: params.createdAt,
-      sparseDirectories: params.sparseDirectories,
-      sparseBaseRef: params.sparseBaseRef,
-      sparsePresetId: params.sparsePresetId,
-      baseRef: params.baseRef,
-      workspaceStatus: params.workspaceStatus,
-      pushTarget: params.pushTarget,
-      diffComments: params.diffComments,
-      ...(params.diffCommentsBase !== undefined
-        ? { diffCommentsBase: params.diffCommentsBase }
-        : {}),
-      mobileDiffReview: params.mobileDiffReview,
-      lineage:
-        params.parentWorktree || params.crossStoreParent || params.noParent === true
-          ? {
-              parentWorktree: params.parentWorktree,
-              matchFolderWorkspaces: params.matchFolderWorkspaces === true,
-              ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
-              ...(params.crossStoreParentIsBotHome ? { crossStoreParentIsBotHome: true } : {}),
-              noParent: params.noParent === true,
-              ...(params.ifParentWorkspace !== undefined
-                ? { ifParentWorkspace: params.ifParentWorkspace }
-                : {})
-            }
-          : undefined
-    })
+    const worktree = await runtime.updateManagedWorktreeMeta(
+      params.worktree,
+      {
+        displayName: params.displayName,
+        ...(params.firstAgentMessageRenameError === null
+          ? { firstAgentMessageRenameError: null }
+          : {}),
+        ...(params.displayName !== undefined
+          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
+          : {}),
+        linkedIssue: params.linkedIssue,
+        linkedPR: params.linkedPR,
+        suppressedGitHubPR: params.suppressedGitHubPR,
+        linkedLinearIssue: params.linkedLinearIssue,
+        linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
+        linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,
+        linkedGitLabMR: params.linkedGitLabMR,
+        linkedGitLabIssue: params.linkedGitLabIssue,
+        linkedBitbucketPR: params.linkedBitbucketPR,
+        linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
+        linkedGiteaPR: params.linkedGiteaPR,
+        linkedWorkItem: params.linkedWorkItem,
+        linkedItems: params.linkedItems,
+        ...(params.linkedItemsBase !== undefined
+          ? { linkedItemsBase: params.linkedItemsBase }
+          : {}),
+        ...(params.linkedItemsSelectionChanged !== undefined
+          ? { linkedItemsSelectionChanged: params.linkedItemsSelectionChanged }
+          : {}),
+        linkedTaskSourceContext: params.linkedTaskSourceContext,
+        comment: params.comment,
+        isArchived: params.isArchived,
+        isUnread: params.isUnread,
+        isPinned: params.isPinned,
+        sortOrder: params.sortOrder,
+        manualOrder: params.manualOrder,
+        lastActivityAt: params.lastActivityAt,
+        createdAt: params.createdAt,
+        sparseDirectories: params.sparseDirectories,
+        sparseBaseRef: params.sparseBaseRef,
+        sparsePresetId: params.sparsePresetId,
+        baseRef: params.baseRef,
+        workspaceStatus: params.workspaceStatus,
+        pushTarget: params.pushTarget,
+        diffComments: params.diffComments,
+        ...(params.diffCommentsBase !== undefined
+          ? { diffCommentsBase: params.diffCommentsBase }
+          : {}),
+        mobileDiffReview: params.mobileDiffReview,
+        lineage:
+          params.parentWorktree || params.crossStoreParent || params.noParent === true
+            ? {
+                parentWorktree: params.parentWorktree,
+                matchFolderWorkspaces: params.matchFolderWorkspaces === true,
+                ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
+                ...(params.crossStoreParentIsBotHome ? { crossStoreParentIsBotHome: true } : {}),
+                noParent: params.noParent === true,
+                ...(params.ifParentWorkspace !== undefined
+                  ? { ifParentWorkspace: params.ifParentWorkspace }
+                  : {})
+              }
+            : undefined
+      },
+      callerScope
+    )
     if (acknowledgement) {
-      runtime.acknowledgeNotificationAttention(acknowledgement)
+      runtime.acknowledgeNotificationAttention(acknowledgement, callerScope)
     }
     const warning = getWorkspaceStatusWarning(
       params.workspaceStatus,

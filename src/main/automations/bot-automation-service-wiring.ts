@@ -8,6 +8,7 @@ import { bindGoogleTriggersToAutomations } from '../google/google-trigger-runtim
 import { runtimeBotRunRefusals, runtimeBotRunResults } from '../bots/bot-run-results'
 import { runtimeBotWaits } from '../bots/bot-waits'
 import { runtimeChatHost } from '../external-conversations/external-conversation-chat'
+import { OWNER_RPC_CALLER_SCOPE } from '../runtime/rpc/callers/rpc-caller-scope'
 
 /** The scheduler's bot side: runs that open in a bot's chat, and the alert when one cannot. */
 export function botAutomationServiceOptions(runtime: OrcaRuntimeService) {
@@ -21,7 +22,7 @@ export function botAutomationServiceOptions(runtime: OrcaRuntimeService) {
             runtime.getExternalConversationSeam()?.adoptRun(conversation, chat, text) ?? false
           if (adopted) {
             // A run's thread is the run's, never a new thread waiting to be opened.
-            runtime.markBotThreadSeen(chat.sessionId)
+            runtime.markBotThreadSeen(chat.sessionId, OWNER_RPC_CALLER_SCOPE)
           }
           return adopted
         },
