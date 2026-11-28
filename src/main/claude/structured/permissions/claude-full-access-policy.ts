@@ -41,6 +41,8 @@ export function createClaudeFullAccessPolicy(
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
   let mode: string | null | undefined
+  // Claude keeps bypass through Plan entered from Full access; undefined before its first report.
+  let runsFullAccess: boolean | undefined
   let reattached = live
   let closed = false
   let partial = ''
@@ -57,10 +59,7 @@ export function createClaudeFullAccessPolicy(
     const requestId = readClaudeFrameString(request, 'request_id')
     // A redelivered id keeps its first position.
     if (requestId && !modeAtRequest.has(requestId)) {
-      modeAtRequest.set(
-        requestId,
-        picked && (mode === undefined ? !reattached : mode === 'full-access')
-      )
+      modeAtRequest.set(requestId, picked && (runsFullAccess ?? !reattached))
     }
   }
 
@@ -96,10 +95,13 @@ export function createClaudeFullAccessPolicy(
     ) {
       return
     }
-    // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
+    // Absent keeps the last report; ask, dontAsk and unknown modes suspend Full access, and Plan
+    // keeps whatever ran before it.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
       // In wire order, ahead of any request Claude sends in that mode.
+      runsFullAccess =
+        reported === 'full-access' || (reported === 'plan' && (runsFullAccess ?? !reattached))
       mode = reported
     }
   }
