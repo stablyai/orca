@@ -21,10 +21,17 @@ export class PluginWorkerSlotPool {
   private leased = 0
   private disposed = false
 
-  constructor(private readonly capacity: number) {
+  constructor(
+    private readonly capacity: number,
+    private readonly onWait?: () => void
+  ) {
     if (!Number.isInteger(capacity) || capacity <= 0) {
       throw new Error('plugin worker capacity must be a positive integer')
     }
+  }
+
+  get hasWaiters(): boolean {
+    return this.waiters.length > 0
   }
 
   get leasedCount(): number {
@@ -63,6 +70,7 @@ export class PluginWorkerSlotPool {
         }
       }
       this.waiters.push(waiter)
+      this.onWait?.()
       signal.addEventListener('abort', waiter.onAbort, { once: true })
     })
   }
@@ -118,9 +126,14 @@ export class PluginWorkerSlots {
 
   constructor(
     maxActive: number,
-    private readonly maxKeepWarm = PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT
+    private readonly maxKeepWarm = PLUGIN_WORKER_MAX_KEEP_WARM_DEFAULT,
+    onWait?: () => void
   ) {
-    this.active = new PluginWorkerSlotPool(maxActive)
+    this.active = new PluginWorkerSlotPool(maxActive, onWait)
+  }
+
+  get ordinaryWorkerWaiting(): boolean {
+    return this.active.hasWaiters
   }
 
   for(spec: { keepWarm?: true }, log: (level: 'warn', line: string) => void): PluginWorkerSlotPool {

@@ -1,3 +1,4 @@
+import { PluginWorkerIdleReport } from './plugin-worker-idle-report'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import {
@@ -34,8 +35,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-worker-hooks'
 import {
   createPluginWorkerApiTables,
-  createPluginWorkerOrcaApi,
-  type PluginWorkerOrcaApi
+  createPluginWorkerOrcaApi
 } from '../../../../shared/plugins/workers/plugin-worker-orca-api'
 
 export type PluginHostCallError = Error & {
@@ -91,6 +91,7 @@ export function createPluginWorkerRuntime(
   const pendingHostCalls = new Map<number, (response: PluginResponse) => void>()
   const runningCommands = new Map<number, AbortController>()
   let nextHostCallId = 0
+  const idle = new PluginWorkerIdleReport(tables, pendingHostCalls, send)
   let initialized = false
   let shuttingDown = false
   let deactivate: (() => unknown) | null = null
@@ -105,6 +106,7 @@ export function createPluginWorkerRuntime(
         pendingHostCalls.delete(id)
         send(pluginCancel(id))
         reject(hostCallError(CANCELLED))
+        idle.afterHostCall()
       }
       signal?.addEventListener('abort', abort, { once: true })
       pendingHostCalls.set(id, (response) => {
@@ -143,7 +145,7 @@ export function createPluginWorkerRuntime(
       throw new Error(`plugin entry ${input.mainEntry} has a non-function deactivate export`)
     }
     deactivate = deactivateExport === undefined ? null : () => deactivateExport()
-    const orca: PluginWorkerOrcaApi = createPluginWorkerOrcaApi({
+    const orca = createPluginWorkerOrcaApi({
       tables,
       hostCall: (method, params, callOptions) => hostCall(method, params, callOptions?.signal),
       postToPanels: (post) => send(pluginEvent(WORKER_EVENTS.panelPost, post)),
@@ -153,6 +155,8 @@ export function createPluginWorkerRuntime(
     })
     await activate(orca)
     send(pluginEvent(WORKER_EVENTS.ready, { commands: [...commandHandlers.keys()] }))
+    idle.enabled = readExport(module, 'sleepWhenIdle') === true
+    idle.report()
   }
 
   async function handleRequest(request: PluginRequest): Promise<void> {
@@ -250,6 +254,7 @@ export function createPluginWorkerRuntime(
       return
     }
     shuttingDown = true
+    idle.enabled = false
     try {
       await deactivate?.()
     } catch (error) {
@@ -288,12 +293,13 @@ export function createPluginWorkerRuntime(
             return
           }
           case 'req':
-            await handleRequest(message)
+            await idle.handleRequest(message, handleRequest)
             return
           case 'res': {
             const settle = pendingHostCalls.get(message.id)
             pendingHostCalls.delete(message.id)
             settle?.(message)
+            idle.afterHostCall()
             return
           }
           case 'cancel':
@@ -308,6 +314,8 @@ export function createPluginWorkerRuntime(
   }
 }
 
-function readExport(module: unknown, name: 'default' | 'activate' | 'deactivate'): unknown {
+type WorkerExport = 'default' | 'activate' | 'deactivate' | 'sleepWhenIdle'
+
+function readExport(module: unknown, name: WorkerExport): unknown {
   return typeof module === 'object' && module !== null && name in module ? module[name] : undefined
 }

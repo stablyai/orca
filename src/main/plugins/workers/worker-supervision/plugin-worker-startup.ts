@@ -39,6 +39,7 @@ export type PluginWorkerFactory = (options: {
   grantedCapabilities: readonly PluginCapabilityKind[]
   allowProposed?: boolean
   executeHostCall: PluginWorkerHostCallExecutor
+  onSleepable?: () => void
   onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
   signal: AbortSignal
@@ -60,6 +61,7 @@ export async function startPluginWorkerAttempt(options: {
   entryPath: string
   factory?: PluginWorkerFactory
   executeHostCall: PluginWorkerHostCallExecutor
+  onSleepable?: () => void
   onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
   assertActive: () => void
@@ -85,6 +87,7 @@ export async function startPluginWorkerAttempt(options: {
       allowProposed: options.spec.allowProposed === true,
       executeHostCall: options.executeHostCall,
       onPanelPost: options.onPanelPost,
+      onSleepable: options.onSleepable,
       log: options.log,
       signal: options.signal
     })

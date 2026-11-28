@@ -7,16 +7,12 @@ import {
   type PluginRestartDecision,
   type PluginRunState
 } from './worker-supervision/plugin-supervisor'
-import type {
-  PluginWorkerHandle,
-  PluginWorkerHostCallExecutor
-} from './parent-process/plugin-host-process-types'
-import type { PluginWorkerPanelPost } from '../../../shared/plugins/workers/plugin-panel-bridge-protocol'
+import type { PluginWorkerHandle } from './parent-process/plugin-host-process-types'
+import type { PluginWorkerManagerOptions } from './plugin-worker-manager-options'
 import { PluginWorkerSlots } from './worker-supervision/plugin-worker-slot-pool'
 import {
   startPluginWorkerAttempt,
   type PluginWorkerAdmission,
-  type PluginWorkerFactory,
   type PluginWorkerSpawnSpec,
   type StartedPluginWorker
 } from './worker-supervision/plugin-worker-startup'
@@ -30,24 +26,10 @@ import {
   finishPluginWorkerActivation,
   pluginWorkerErrorText
 } from './worker-supervision/plugin-worker-lifecycle'
+import { createWorkerPressureCheck } from './worker-supervision/plugin-worker-pressure-check'
 import { PluginWorkerIdleClock } from './worker-supervision/plugin-worker-idle-clock'
 
-export type PluginWorkerManagerOptions = {
-  entryPath: string
-  maxActive?: number
-  idleReapMs?: number
-  workerFactory?: PluginWorkerFactory
-  executeHostCall: (
-    pluginKey: string,
-    method: string,
-    params: unknown,
-    signal?: AbortSignal
-  ) => ReturnType<PluginWorkerHostCallExecutor>
-  onPanelPost?: (pluginKey: string, post: PluginWorkerPanelPost) => void
-  log: (pluginKey: string) => (level: 'info' | 'warn' | 'error', line: string) => void
-  onWorkerStateChange: (pluginKey: string) => void
-}
-
+export type { PluginWorkerManagerOptions } from './plugin-worker-manager-options'
 type ActivationRecord = {
   spec: PluginWorkerSpawnSpec
   generation: number
@@ -65,9 +47,19 @@ export class PluginWorkerManager {
   private readonly slots: PluginWorkerSlots
   private readonly idleClock: PluginWorkerIdleClock
   private disposed = false
+  private readonly schedulePressureCheck = createWorkerPressureCheck({
+    waiting: () =>
+      !this.disposed && this.slots.ordinaryWorkerWaiting && this.stoppingWorkers.size === 0,
+    workers: this.workers,
+    stop: (worker) => this.stopIdleWorker(worker, 'idle worker yielded to a queued activation')
+  })
 
   constructor(private readonly options: PluginWorkerManagerOptions) {
-    this.slots = new PluginWorkerSlots(options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT)
+    this.slots = new PluginWorkerSlots(
+      options.maxActive ?? PLUGIN_WORKER_MAX_ACTIVE_DEFAULT,
+      undefined,
+      this.schedulePressureCheck
+    )
     this.idleClock = new PluginWorkerIdleClock(options.idleReapMs ?? PLUGIN_WORKER_IDLE_REAP_MS)
   }
 
@@ -162,6 +154,7 @@ export class PluginWorkerManager {
           slots: this.slots.for(spec, log),
           entryPath: this.options.entryPath,
           factory: this.options.workerFactory,
+          onSleepable: this.schedulePressureCheck,
           executeHostCall: (method, params, callSignal) =>
             this.options.executeHostCall(spec.pluginKey, method, params, callSignal),
           onPanelPost: (post) => this.options.onPanelPost?.(spec.pluginKey, post),
@@ -252,23 +245,29 @@ export class PluginWorkerManager {
   }
 
   reapIdle(now = Date.now()): void {
-    for (const [pluginKey, record] of this.idleClock.idleWorkers(this.workers, now)) {
-      this.nextGeneration(pluginKey)
-      this.known.delete(pluginKey)
-      this.workers.delete(pluginKey)
-      this.supervisor.markExited(pluginKey, { crashed: false })
-      this.options.log(pluginKey)('info', 'worker reaped after idle period')
-      this.options.onWorkerStateChange(pluginKey)
-      const stopping = record.handle
-        .dispose()
-        .catch(() => undefined)
-        .finally(() => record.lease.release())
-      this.stoppingWorkers.add(stopping)
-      void stopping.then(() => {
-        this.stoppingWorkers.delete(stopping)
-        this.forgetGenerationIfIdle(pluginKey)
-      })
+    for (const [, record] of this.idleClock.idleWorkers(this.workers, now)) {
+      this.stopIdleWorker(record, 'worker reaped after idle period')
     }
+  }
+
+  private stopIdleWorker(record: StartedPluginWorker, reason: string): void {
+    const { pluginKey } = record.spec
+    this.nextGeneration(pluginKey)
+    this.known.delete(pluginKey)
+    this.workers.delete(pluginKey)
+    this.supervisor.markExited(pluginKey, { crashed: false })
+    this.options.log(pluginKey)('info', reason)
+    this.options.onWorkerStateChange(pluginKey)
+    const stopping = record.handle
+      .dispose()
+      .catch(() => undefined)
+      .finally(() => record.lease.release())
+    this.stoppingWorkers.add(stopping)
+    void stopping.then(() => {
+      this.stoppingWorkers.delete(stopping)
+      this.forgetGenerationIfIdle(pluginKey)
+      this.schedulePressureCheck()
+    })
   }
 
   async disposeAll(): Promise<void> {
