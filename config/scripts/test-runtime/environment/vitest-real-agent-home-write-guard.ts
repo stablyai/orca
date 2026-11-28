@@ -16,7 +16,13 @@ const AGENT_HOME_ENTRIES = [
   '.cursor',
   '.copilot',
   '.gemini',
-  '.qoder'
+  '.qoder',
+  '.factory',
+  '.grok',
+  '.pi',
+  '.omp',
+  '.hermes',
+  '.commandcode'
 ]
 // Guard Claude file/temp prefixes beside .claude directory, not only inside it.
 const AGENT_HOME_FILE_PREFIXES = ['.claude.json']
@@ -25,7 +31,16 @@ const INHERITED_STATE_ENV = [
   'ORCA_USER_DATA_PATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'CLAUDE_CONFIG_DIR'
+  'CLAUDE_CONFIG_DIR',
+  'GROK_HOME',
+  'PI_CODING_AGENT_DIR',
+  'PI_CONFIG_DIR',
+  'OMP_CODING_AGENT_DIR',
+  'ORCA_PI_SOURCE_AGENT_DIR',
+  'ORCA_PI_CODING_AGENT_DIR',
+  'ORCA_OMP_CODING_AGENT_DIR',
+  'HERMES_HOME',
+  'FACTORY_HOME_OVERRIDE'
 ]
 // Why: an Orca terminal points this at the live app's CLI, which a test's child shell would run.
 const INHERITED_LIVE_CLI_ENV = ['ORCA_CODEX_LAUNCH_PREFLIGHT']
