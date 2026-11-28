@@ -31,6 +31,34 @@ function chatAccountId(state: AntigravityAccountState): string | null {
   return state.selectedAccountId ?? state.activeAccountId
 }
 
+/** Selects `accountId` for a chat once it may still move: the new rows, null when it may not, or
+ *  undefined when the select failed (its toast says why). */
+async function selectChatAccount(
+  owner: ChatAccountAction['target'],
+  chatAction: ChatAccountAction,
+  accountId: string,
+  t: ReturnType<typeof useTranslate>
+): Promise<AntigravityAccountState | null | undefined> {
+  try {
+    if (!(await chatAction.canSwitch())) {
+      toast.error(
+        t(
+          'components.native-chat.usageLimitActions.accountUnavailable',
+          'This chat cannot move to another account. Hand it off to another agent instead.'
+        )
+      )
+      return null
+    }
+    const next = await callAntigravityAccounts(owner, HOST, 'Select', accountId)
+    announceAntigravityAccountSwitch(next, accountId)
+    return next
+  } catch (cause) {
+    console.error('Failed to switch the Antigravity account from the chat:', cause)
+    announceAntigravityAccountSwitchFailure(cause)
+    return undefined
+  }
+}
+
 /** A usage-limited Antigravity chat's switcher: the chat host's saved accounts; a pick moves the
  *  chat at its next message. Remount it (key) when the chat's host changes. */
 export function AntigravityChatSwitcherMenu({
@@ -70,29 +98,15 @@ export function AntigravityChatSwitcherMenu({
       return
     }
     setSwitching(true)
-    try {
-      if (!(await chatAction.canSwitch())) {
-        toast.error(
-          t(
-            'components.native-chat.usageLimitActions.accountUnavailable',
-            'This chat cannot move to another account. Hand it off to another agent instead.'
-          )
-        )
-        return
-      }
-      const next = await callAntigravityAccounts(owner, HOST, 'Select', accountId)
-      if (mounted.current) {
+    const next = await selectChatAccount(owner, chatAction, accountId, t)
+    if (mounted.current) {
+      if (next) {
         setState(next)
       }
-      announceAntigravityAccountSwitch(next, accountId)
-    } catch (cause) {
-      console.error('Failed to switch the Antigravity account from the chat:', cause)
-      announceAntigravityAccountSwitchFailure(cause)
+      setSwitching(false)
+    }
+    if (next === undefined) {
       void load()
-    } finally {
-      if (mounted.current) {
-        setSwitching(false)
-      }
     }
   }
 
