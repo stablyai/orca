@@ -1,0 +1,43 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "tapd-tasks",
+  "name": "TAPD Tasks",
+  "version": "0.1.0",
+  "description": "Read TAPD requirements, bugs, and tasks from the Orca Tasks page.",
+  "engines": { "orca": ">=1.4.246" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "taskSources": [{ "id": "tapd", "title": "TAPD", "icon": "list" }],
+    "panels": [
+      {
+        "id": "tapd-connection",
+        "title": "TAPD Connection",
+        "icon": "settings",
+        "entry": "connection.html"
+      }
+    ],
+    "settings": [
+      {
+        "key": "tapdProjectId",
+        "title": "TAPD project ID",
+        "description": "The numeric project ID in the TAPD project URL.",
+        "type": "string",
+        "default": ""
+      },
+      {
+        "key": "orcaProjectPath",
+        "title": "Orca project folder",
+        "description": "An absolute folder path of a project already added to Orca.",
+        "type": "string",
+        "default": ""
+      }
+    ]
+  },
+  "capabilities": [
+    { "kind": "tasks:provide" },
+    { "kind": "settings:own" },
+    { "kind": "secrets:own" }
+  ]
+}

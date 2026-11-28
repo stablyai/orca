@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TAPD Connection</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+      body {
+        margin: 1rem;
+        font-family: system-ui, sans-serif;
+      }
+      label,
+      input {
+        display: block;
+      }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        margin-block: 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <form>
+      <label for="token">TAPD personal access token</label>
+      <input id="token" type="password" autocomplete="off" required />
+      <button type="submit">Save token</button>
+      <button id="clear" type="button">Remove token</button>
+      <p role="status"></p>
+    </form>
+    <script src="connection.js"></script>
+  </body>
+</html>
