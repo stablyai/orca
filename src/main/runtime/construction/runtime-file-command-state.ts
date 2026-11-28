@@ -28,6 +28,7 @@ import { RuntimeStagedFileSaves } from '../files/staged-file-save-commands'
 import { RuntimeFileWatches } from '../files/watch/file-watches'
 import { RuntimeTerminalPathResolver } from '../terminal/terminal-path-resolver'
 import type { RuntimeFileCommandHost } from '../files/file-command-host'
+import { windowOwns } from '../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected abstract hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
@@ -129,7 +130,7 @@ export abstract class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreserv
       if (isChatScratchWorktreeId(worktreeId)) {
         throw new Error('chat_scratch_not_openable')
       }
-      if (!this.notifier?.openDiff) {
+      if (!windowOwns(worktreeId) || !this.notifier?.openDiff) {
         throw new Error('renderer_unavailable')
       }
       this.notifier.openDiff(

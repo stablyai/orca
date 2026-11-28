@@ -14,7 +14,11 @@ import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobil
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import type { TabListRef } from '../../../bots/team-share/teammate-rules'
-import { mobileTerminalTabPaneKey } from '../../session-lifecycle/projection/runtime-mobile-session-projection'
+import {
+  savedHostSessionHoldingPane,
+  snapshotHoldingPane,
+  tabListRefOfWorkspace
+} from './status-pane-placement'
 import { structuredAgentSessionIdOfTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
@@ -172,12 +176,17 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     if (pty) {
       return { workspaceId: pty.worktreeId, holder: pty.holder }
     }
-    const hostPane = sessionId
+    const placed = sessionId
       ? null
       : (this.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
-        this.hostSnapshotHoldingPane(identity.paneKey, identity.worktreeId))
-    if (hostPane) {
-      return { workspaceId: hostPane, holder: undefined }
+        snapshotHoldingPane(
+          this.mobileSessionTabsByWorktree,
+          identity.paneKey,
+          identity.worktreeId
+        ) ??
+        savedHostSessionHoldingPane(this.store, identity.paneKey, identity.worktreeId))
+    if (placed) {
+      return tabListRefOfWorkspace(placed)
     }
     if (!this.unplacedStatusLogged) {
       this.unplacedStatusLogged = true
@@ -186,20 +195,6 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
       )
     }
     return null
-  }
-
-  /** The workspace whose host session list holds a terminal tab by this pane key (a sleeping or
-   *  restored one with no PTY or window pane, or a legacy numeric pane). Held terminals are never in
-   *  it (`withoutPersonSurfaces`). */
-  private hostSnapshotHoldingPane(paneKey: string, worktreeId?: string): string | null {
-    const candidates = worktreeId ? [worktreeId] : [...this.mobileSessionTabsByWorktree.keys()]
-    return (
-      candidates.find((candidate) =>
-        this.mobileSessionTabsByWorktree
-          .get(candidate)
-          ?.tabs.some((tab) => tab.type === 'terminal' && mobileTerminalTabPaneKey(tab) === paneKey)
-      ) ?? null
-    )
   }
 
   protected mobileSessionSnapshotHasSurface(

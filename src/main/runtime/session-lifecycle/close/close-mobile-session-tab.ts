@@ -22,6 +22,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/chat/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithCloseMobileRowInMainLayout {
   abstract retireStructuredAgentSessionTabFromSnapshot(
@@ -180,10 +181,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             (options.reason === undefined || options.reason === 'user'),
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })
-        this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+        this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
         return finishCommittedClose()
       }
-      if (closingWholeParent && this.notifier?.closeTerminalTab) {
+      if (closingWholeParent && windowOwns(worktreeId) && this.notifier?.closeTerminalTab) {
         // Commit the acknowledged identity even if renderer flush rebased its omission.
         const acknowledgeRetirement = this.captureTerminalTabRetirement(worktreeId, tab.parentTabId)
         // Await renderer pin guard, retirement and forced session flush.
@@ -198,13 +199,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             : () => {}
         try {
           await (options.localPtyTeardownOwnedExternally
-            ? this.notifier.closeTerminalTab(tab.parentTabId, {
+            ? this.notifier.closeTerminalTab(tab.parentTabId, worktreeId, {
                 localPtyTeardownOwnedExternally: true,
                 ...(options.force ? { force: true } : {})
               })
             : options.force
-              ? this.notifier.closeTerminalTab(tab.parentTabId, { force: true })
-              : this.notifier.closeTerminalTab(tab.parentTabId))
+              ? this.notifier.closeTerminalTab(tab.parentTabId, worktreeId, { force: true })
+              : this.notifier.closeTerminalTab(tab.parentTabId, worktreeId))
         } finally {
           releasePublicationThrottle()
         }
@@ -233,7 +234,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+          this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
         } else if (retirement.hasPersistedTab) {
           // Cover acknowledged tabs absent from renderer inventory; concurrent durable removal is idempotent.
           await this.closeTerminalSurface(
@@ -259,10 +260,10 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
             force: options.force,
             ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
           })
-          this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
+          this.notifyRendererOfHeadlessTerminalClose(worktreeId, tab.parentTabId)
           return finishCommittedClose()
         }
-        this.notifier.closeTerminal(tab.parentTabId)
+        this.notifier.closeTerminal(tab.parentTabId, worktreeId)
         this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
         return delegatedMobileSessionTabClose()
       }
@@ -282,7 +283,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         await this.offscreenBrowserBackend!.closeTab(tab.browserPageId!).catch(() => {})
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, tab.browserPageId!)
       } else {
-        if (!this.notifier?.closeSessionTab) {
+        if (!windowOwns(worktreeId) || !this.notifier?.closeSessionTab) {
           throw new Error('runtime_unavailable')
         }
         await this.notifier.closeSessionTab(tab.id, worktreeId)
@@ -294,13 +295,13 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         reason: options.reason,
         local: () => this.workspaceSessions.tryGetHostId(worktreeId) === LOCAL_EXECUTION_HOST_ID,
         rows: () => this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
-        notifier: this.notifier,
+        notifier: this.windowNotifierFor(worktreeId),
         runtime: this
       })
       if (!committed) {
         return delegatedMobileSessionTabClose()
       }
-    } else if (!this.notifier?.closeSessionTab) {
+    } else if (!windowOwns(worktreeId) || !this.notifier?.closeSessionTab) {
       // Headless editors retire through the host-owned session.
       if (!retireHeadlessMobileSessionEditorTab(this, worktreeId, tab, options.force)) {
         throw new Error('runtime_unavailable')

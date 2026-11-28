@@ -16,6 +16,7 @@ import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
 } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
   protected abstract getListedBrowserTabsByPageId(
@@ -156,7 +157,11 @@ export abstract class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab ex
     tab: RuntimeMobileSessionBrowserTab
   ): boolean {
     // A closed window's webviews are gone, so its rows need live pages like any other.
-    if (tab.placement?.kind === 'client' || !this.hasAuthoritativeWindow()) {
+    if (
+      tab.placement?.kind === 'client' ||
+      !windowOwns(snapshot.worktree) ||
+      !this.hasAuthoritativeWindow()
+    ) {
       return false
     }
     return !this.isHeadlessOwnedMobileBrowserTab(snapshot, tab)

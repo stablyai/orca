@@ -266,7 +266,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           })
         }
         const reveal = revealCreatedTerminal({
-          notifier: this.notifier,
+          notifier: this.windowNotifierFor(pty ?? workspace.id),
           workspace,
           ptyId: result.id,
           handle,

@@ -17,6 +17,7 @@ import {
   sameStringRecord,
   terminalLayoutNodeEqual
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
+import { windowOwns } from '../person/person-workspace-target'
 
 type HeadlessPaneLayoutEdit = {
   tabId: string
@@ -67,7 +68,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
       return { updated: true }
     }
-    const authoritativeWindow = this.hasAuthoritativeWindow()
+    const authoritativeWindow = windowOwns(worktreeId) && this.hasAuthoritativeWindow()
     if (
       authoritativeWindow &&
       (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)
@@ -87,7 +88,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
     if (authoritativeWindow) {
       if (customTitle !== undefined) {
-        this.notifier?.renameTerminal(hostTabId, customTitle)
+        this.notifier?.renameTerminal(hostTabId, customTitle, worktreeId)
       }
       return { updated: true }
     }
@@ -221,9 +222,10 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       // A new epoch retires the publisher, so an attached window keeps its own.
-      publicationEpoch: this.hasAuthoritativeWindow()
-        ? snapshot.publicationEpoch
-        : `headless:${Date.now().toString(36)}`,
+      publicationEpoch:
+        windowOwns(worktreeId) && this.hasAuthoritativeWindow()
+          ? snapshot.publicationEpoch
+          : `headless:${Date.now().toString(36)}`,
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs
     }

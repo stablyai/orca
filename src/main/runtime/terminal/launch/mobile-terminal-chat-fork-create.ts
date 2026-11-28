@@ -22,6 +22,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 function resolveSavedChatForkAnchor(
   session: WorkspaceSessionState | null,
@@ -105,7 +106,7 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           }),
           opts.terminalImageViewerSupported
         )
-        const windowId = this.getAvailableAuthoritativeWindowId()
+        const windowId = windowOwns(worktreeId) ? this.getAvailableAuthoritativeWindowId() : null
         const placement = resolveSavedChatForkAnchor(
           this.getWorkspaceSessionForWorktree(worktreeId),
           worktreeId,

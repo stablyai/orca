@@ -233,17 +233,22 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
   publishAgentLaunchTab(
     request: Omit<AgentLaunchTabPublishRequest, 'requestId'>
   ): Promise<AgentLaunchTabPublished> | null {
-    if (!this.notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
+    const notifier = this.windowNotifierFor(request.worktreeId)
+    if (!notifier?.publishAgentLaunchTab || !this.hasAuthoritativeWindow()) {
       return null
     }
-    return this.notifier.publishAgentLaunchTab(request)
+    return notifier.publishAgentLaunchTab(request)
   }
 
   /** The window follows a listed active chat only on its own intent (#5435), so a focused launch names it. */
   focusLaunchedChatInHostWindow(worktreeId: string, sessionId: string): void {
-    this.notifier?.focusEditorTab?.(structuredAgentSessionHostTabId(sessionId), worktreeId, {
-      userInitiated: true
-    })
+    this.windowNotifierFor(worktreeId)?.focusEditorTab?.(
+      structuredAgentSessionHostTabId(sessionId),
+      worktreeId,
+      {
+        userInitiated: true
+      }
+    )
   }
 
   /** Retain final verdicts, clear settled ones, and remove withdrawn panes without removing split siblings. */
