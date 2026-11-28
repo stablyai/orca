@@ -30,6 +30,7 @@ import {
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionOptionModels } from '../../../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { finishedListingIds } from '../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
+import { agentSessionHoldsProviderConversation } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
   defineMethod({
@@ -65,7 +66,12 @@ export const STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS = [
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
       const options = await host.readOptions(params.sessionId, { readsWithoutModel })
       const conversation = host.deps.store.getConversation(params.sessionId)
-      const result = { ...options, sessionNeverStarted: conversation?.neverStarted }
+      const result = {
+        ...options,
+        sessionNeverStarted: conversation?.neverStarted,
+        holdsProviderConversation:
+          conversation && agentSessionHoldsProviderConversation(conversation)
+      }
       if (result.current.model === undefined && !readsWithoutModel) {
         return {
           ...result,

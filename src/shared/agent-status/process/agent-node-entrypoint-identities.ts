@@ -58,5 +58,11 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
     pattern: /(?:^|\/)node_modules\/command-code\/dist\/index\.mjs$/,
     agent: 'command-code',
     processName: 'command-code'
+  },
+  // Ouro's `ouro` shim (npm bin, or the ~/.ouro-cli launcher's versioned install) runs node on this entry.
+  {
+    pattern: /(?:^|\/)node_modules\/@ouro\.bot\/cli\/dist\/heart\/daemon\/ouro-entry\.js$/,
+    agent: 'ouro',
+    processName: 'ouro'
   }
 ]

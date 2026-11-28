@@ -16,7 +16,7 @@ import { BOT_AGENT_SUCCESSORS, BOT_RETIRED_AGENTS, isBotRetiredAgent } from './b
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = [] as const
+export const BOT_HELD_BACK_AGENTS = ['ouro'] as const
 
 /** Bots run in a native chat; every native-chat agent but the held-back ones. */
 export const BOT_AGENTS = [

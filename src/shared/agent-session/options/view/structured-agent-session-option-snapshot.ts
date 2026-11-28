@@ -29,6 +29,7 @@ import { listedModelDescribing } from '../model-catalog/structured-agent-session
 import { structuredAgentSessionPermissionDescriptor } from '../permissions/structured-agent-session-permission-option'
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
+import { optionHeldByChat, withServingAgentLock } from './structured-agent-session-option-locks'
 import { modelPlaceholder } from './structured-agent-session-model-placeholder'
 
 /** A session that lists no models picks one itself; display-only, so Send never captures it. */
@@ -263,7 +264,7 @@ export function structuredAgentSessionOptionSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
   const permission = structuredAgentSessionPermissionDescriptor(state)
-  const options = modelOptionSnapshot(state).map((option) =>
+  const options = withServingAgentLock(state, modelOptionSnapshot(state)).map((option) =>
     state.fastModeRestricted && option.id === 'fastMode'
       ? { ...option, settable: false }
       : option.id === 'model' && state.fallbackModel
@@ -294,7 +295,7 @@ export function canSetStructuredAgentSessionOption(
   interactionReady = true,
   pending = false
 ): boolean {
-  if (!interactionReady || pending || (id === 'fastMode' && state.fastModeRestricted)) {
+  if (!interactionReady || pending || optionHeldByChat(state, id)) {
     return false
   }
   if (id === 'permissionMode' || id === 'interactionMode') {

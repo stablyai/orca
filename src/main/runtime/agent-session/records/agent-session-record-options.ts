@@ -2,6 +2,8 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
+import { agentSessionHoldsProviderConversation } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { modelNamesServingAgent } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 export function replaceAgentSessionRecordOptions(
   record: AgentSessionRecord,
@@ -12,6 +14,21 @@ export function replaceAgentSessionRecordOptions(
   const atRest = lease.claimStatus === 'released' && lease.ownerProcess === null
   if (lease.runtimeFence !== replacement.fence || (lease.claimStatus !== 'live' && !atRest)) {
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
+  }
+  // Every reopen serves the saved agent, so a conversation one agent holds can't pass to another.
+  const servingAgent = record.options?.model
+  if (
+    'options' in replacement &&
+    modelNamesServingAgent(record.provider) &&
+    agentSessionHoldsProviderConversation(record) &&
+    servingAgent !== undefined &&
+    replacement.options.model !== servingAgent
+  ) {
+    throw agentSessionRefusalError(
+      'agent_session_operation_invalid',
+      { reason: 'optionRejected' },
+      `this ${record.provider} chat stays with ${servingAgent}; start a new chat for another agent`
+    )
   }
   return 'options' in replacement
     ? { ...record, options: { ...replacement.options }, updatedAt: replacement.now }

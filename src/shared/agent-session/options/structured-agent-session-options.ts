@@ -47,6 +47,7 @@ export type StructuredAgentSessionOptionState = AgentSessionChildPermissionField
   record: StructuredAgentSessionOptionRecord
   optionsAnswerPresent?: true
   sessionNeverStarted?: boolean
+  holdsProviderConversation?: boolean
   /** Latest catalog observation, separate from static old-host seed knowledge. */
   catalogNamesConfiguredModel?: boolean
   acceptedInputSources?: Partial<
@@ -208,6 +209,7 @@ export function applyStructuredAgentSessionOptions(
     optionsAnswerPresent: true,
     interactionModeSupported: current.interactionMode !== undefined,
     sessionNeverStarted: result.sessionNeverStarted,
+    holdsProviderConversation: result.holdsProviderConversation,
     reportedEffort: state.record.agent === 'pi' ? current.reportedEffort : undefined,
     fallbackModel: current.fallbackModel,
     catalog: keepCatalog ? state.catalog : answeredCatalog,

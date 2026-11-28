@@ -24,6 +24,8 @@ export type AgentSessionOptionsResult = {
   accountUsage?: true
   /** Fresh host observation; absent means an older host or unknown conversation. */
   sessionNeverStarted?: boolean
+  /** The agent minted a conversation handle; absent means an older host or unknown conversation. */
+  holdsProviderConversation?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport

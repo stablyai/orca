@@ -278,8 +278,10 @@ export function acpStructuredLaunchPart(
     const { mcpServers, toolsKey } = await acpLaunchServers(tools, ownServers, toolsOff, ownRead)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
-    // before it opens; resumed chats apply their model through the session instead.
-    const model = spec.launchesWithModel && !head ? record.options?.model : undefined
+    // before it opens; resumed chats apply their model through the session instead, unless the
+    // model is what the process serves.
+    const model =
+      spec.launchesWithModel && (!head || spec.reopensWithModel) ? record.options?.model : undefined
     const args = [
       ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
       ...(skill?.args ?? []),

@@ -88,7 +88,9 @@ export function structuredChatNamingDeps(
           'qwen-code',
           'cline',
           'devin',
-          'codebuddy'
+          'codebuddy',
+          // An Ouro agent is live: a naming prompt would be a real turn of its conversation.
+          'ouro'
         ].includes(record.provider)
       ) {
         return null

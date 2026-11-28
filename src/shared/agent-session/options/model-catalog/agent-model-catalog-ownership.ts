@@ -31,3 +31,8 @@ export function confirmsListedEffortAtSend(agent: string): boolean {
 export function usesInstalledAgentModelCatalog(agent: string, coherentCatalog?: boolean): boolean {
   return coherentCatalog === true && independentAgentModelCatalog(agent)
 }
+
+/** Ouro's model names the agent who serves the chat; a conversation stays with the agent that holds it. */
+export function modelNamesServingAgent(agent: string): boolean {
+  return agent === 'ouro'
+}

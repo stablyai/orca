@@ -120,6 +120,8 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  // Ouro has no sign-in of its own; its bootstrap installs `ouro` and starts the daemon.
+  { agent: 'ouro', loginCommand: [], installCommand: 'npx ouro.bot@latest up' },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',
