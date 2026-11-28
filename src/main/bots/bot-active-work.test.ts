@@ -120,7 +120,9 @@ describe('an In progress item nothing runs for', () => {
     expect(say(next, [{ ...item, status: 'done', lastEventId: 'e13' }]).action).toBeNull()
 
     const missingId = 'deleted-chat'
-    const gone = [{ ...item, chat: { ...owner, id: missingId, gone: true }, lastEventId: 'e14' }]
+    const gone: (typeof item)[] = [
+      { ...item, chat: { ...owner, id: missingId, gone: true }, lastEventId: 'e14' }
+    ]
     unavailable.add(missingId)
     expect(say(bot.chatSessionId, gone).action).toBeNull()
     unavailable.delete(missingId)
