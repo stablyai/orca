@@ -66,6 +66,8 @@ export type ListedHostBots = {
   createRefusal?: NewBotRefusal
   /** The host makes bots from template packages (`bots.templates.v2`). */
   takesTemplates?: boolean
+  /** The host takes `pinned` on bots.update; an older one has no Pin from this phone. */
+  takesPin?: boolean
   /** Its groups, which list as their rooms among its bots, never as folders; absent while their read fails. */
   groups?: readonly BotGroup[]
   /** The host's word while it is down (e.g. "Disconnected"): its last-read bots stay, dimmed. */

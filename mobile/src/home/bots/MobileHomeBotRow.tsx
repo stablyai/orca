@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import { Pin } from 'lucide-react-native'
 import { botHomeWorktreeId } from '../../bots/host-bots-read'
 import { mobileBotRowLimitText } from '../../bots/mobile-bot-row-line'
 import { useMobileBotUsageLimitStop } from '../../bots/use-mobile-bot-usage-limit-stop'
@@ -83,7 +84,18 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
       dimmed={row.offline === true || (row.kind === 'bot' && row.bot.paused)}
       divider={props.divider}
       onPress={() => props.onOpen(row)}
-      titleTrailing={row.needsYou > 0 ? <MobileBotNeedsYouCount count={row.needsYou} /> : null}
+      titleTrailing={
+        <>
+          {row.kind === 'bot' && row.bot.pinned ? (
+            <Pin
+              size={12}
+              color={colors.textMuted}
+              accessibilityLabel={t('hostScreen.hostScreenOverlays.pin', 'Pin')}
+            />
+          ) : null}
+          {row.needsYou > 0 ? <MobileBotNeedsYouCount count={row.needsYou} /> : null}
+        </>
+      }
     />
   )
 })

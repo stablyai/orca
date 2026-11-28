@@ -139,6 +139,8 @@ export const BotUpdate = lazyZodSchema(() =>
         avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
         paused: z.boolean().optional(),
         sidebarOrder: z.number().int().nonnegative().optional(),
+        /** false clears the pin. */
+        pinned: z.boolean().optional(),
         /** null clears the override. */
         permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).nullable().optional(),
         /** null clears it; a new agent without one clears it too, since it belongs to the old agent. */

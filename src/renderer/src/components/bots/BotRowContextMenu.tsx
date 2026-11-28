@@ -7,6 +7,8 @@ import {
   Copy,
   Pause,
   Pencil,
+  Pin,
+  PinOff,
   Play,
   Settings,
   Trash2
@@ -20,7 +22,9 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot } from '@/lib/bot-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
+import { useBotHostHas } from '@/lib/bot-host-status'
 import { useAppStore } from '@/store'
+import { BOTS_PIN_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
 import type { Bot } from '../../../../shared/bot-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
@@ -76,11 +80,22 @@ export function BotRowMenuItems({
   offline: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  // An older host's strict bots.update refuses `pinned`, so Pin shows only where the host takes it.
+  const takesPin = useBotHostHas(bot.hostId, BOTS_PIN_RUNTIME_CAPABILITY)
   const run = (work: Promise<unknown>): void => {
     work.catch((error: unknown) => toast.error(botErrorMessage(error)))
   }
   return (
     <>
+      {takesPin ? (
+        <ContextMenuItem
+          disabled={offline}
+          onSelect={() => run(updateBot(bot, { pinned: bot.pinned !== true }))}
+        >
+          {bot.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {bot.pinned ? t('bots.row.unpin', 'Unpin') : t('bots.row.pin', 'Pin')}
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
         <Settings className="size-3.5" />
         {t('bots.row.settings', 'Bot settings…')}

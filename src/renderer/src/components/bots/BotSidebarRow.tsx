@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Pin } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
@@ -7,6 +8,7 @@ import { WorktreeCardNotificationsMutedBadge } from '@/components/sidebar/worksp
 import { WorktreeTitleInlineRename } from '@/components/sidebar/workspace-card/identity/WorktreeTitleInlineRename'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -36,6 +38,8 @@ export type BotSidebarRowProps = {
   actionsDisabled?: boolean
   /** The Bots section's reorder: this row is where a drag starts. */
   dragHandle?: boolean
+  /** A pin keeps this bot at the top of the list. */
+  pinned?: boolean
   /** Set for a row that folds: whether it is unfolded. */
   expanded?: boolean
   onOpen: (event: { detail: number; target: EventTarget; repeat?: boolean }) => void
@@ -69,6 +73,7 @@ export function BotSidebarRow({
   dimmed = false,
   actionsDisabled = false,
   dragHandle = false,
+  pinned = false,
   onOpen,
   onRename,
   beginRename = false,
@@ -80,6 +85,7 @@ export function BotSidebarRow({
   menuItems,
   menuFooter
 }: BotSidebarRowProps): React.JSX.Element {
+  const t = useTranslate()
   const [renameRequested, setRenameRequested] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [hoverOpen, setHoverOpen] = useState(false)
@@ -165,6 +171,12 @@ export function BotSidebarRow({
                         onBeginRenameConsumed?.()
                       }}
                     />
+                    {pinned ? (
+                      <Pin
+                        className="size-3 shrink-0 text-muted-foreground"
+                        aria-label={t('bots.row.pinned', 'Pinned')}
+                      />
+                    ) : null}
                     <WorktreeCardNotificationsMutedBadge worktreeId={workspaceId} />
                     {age ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">

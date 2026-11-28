@@ -91,6 +91,7 @@ export function BotRow({
       dimmed={bot.paused || offline}
       actionsDisabled={offline}
       dragHandle={dragHandle}
+      pinned={bot.pinned === true}
       beginRename={beginRename}
       onBeginRenameConsumed={onBeginRenameConsumed}
       onOpen={open}

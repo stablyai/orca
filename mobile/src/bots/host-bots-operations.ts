@@ -22,6 +22,8 @@ export const phoneBotSchema = z.looseObject({
   // A newer host's outfit this phone doesn't draw reads as none.
   avatarOutfit: BotSchema.shape.avatarOutfit,
   paused: z.boolean(),
+  /** Stays at the top of the list. Absent from an older host, which is unpinned. */
+  pinned: z.boolean().optional(),
   agent: z.string(),
   permissionMode: salvagedOptional('permissionMode', z.enum(AGENT_CHAT_PERMISSION_MODES)),
   launch: BotSchema.shape.launch,
@@ -60,7 +62,7 @@ export type PhoneBot = z.output<typeof phoneBotSchema>
 /** What the host list draws of a bot. */
 export type ListedBot = Pick<
   PhoneBot,
-  'id' | 'name' | 'folderWorkspaceId' | 'avatar' | 'paused' | 'chatSessionId'
+  'id' | 'name' | 'folderWorkspaceId' | 'avatar' | 'paused' | 'pinned' | 'chatSessionId'
 > &
   Partial<Pick<PhoneBot, 'avatarColor' | 'sharedFrom' | 'createdAt'>>
 

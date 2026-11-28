@@ -45,7 +45,9 @@ const keptAnswerSchema = z.object({
       view: z.unknown().transform(normalizeBotSidebarView),
       enabled: z.boolean(),
       takesCreate: z.boolean(),
-      takesTemplates: z.boolean()
+      takesTemplates: z.boolean(),
+      // Kept answers written before Pin existed have no say; Home only draws them until the host is read.
+      takesPin: z.boolean().catch(false)
     }),
     z.object({ kind: z.literal('no-capability') })
   ])
@@ -71,7 +73,8 @@ function serializeComputer(kept: KeptComputerBots): string {
                 view: entry.answer.view,
                 enabled: entry.answer.enabled,
                 takesCreate: entry.answer.takesCreate,
-                takesTemplates: entry.answer.takesTemplates
+                takesTemplates: entry.answer.takesTemplates,
+                takesPin: entry.answer.takesPin
               }
             }
           ]

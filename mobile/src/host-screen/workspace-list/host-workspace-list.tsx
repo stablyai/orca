@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, type ReactElement } from 'react'
 import { AccessibilityInfo, Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
+import { useMobileBotPinSheet } from '../../bots/use-mobile-bot-pin-sheet'
 import { TransientToast } from '../../components/feedback/TransientToast'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
@@ -137,6 +138,11 @@ export function HostWorkspaceList({
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
   const { setActionTarget } = state
+  const pin = useMobileBotPinSheet({
+    client: controller.client,
+    hostCapabilities: controller.hostCapabilities,
+    onError: setActionError
+  })
   const { openWorktreeSession, openNewWorktreeModal, setWorktreeUnread, togglePin } = actions
   const canCreate = connState === 'connected' && !isReadOnly
   const { pinnedIds } = state
@@ -209,7 +215,19 @@ export function HostWorkspaceList({
             onAgentPress={openWorktreeSession}
             statusLive={statusLive && !view.hostContextHealthLabel}
             // A bot's home goes through the bot's own delete, not the workspace menu.
-            onLongPress={item.botHome === true || view.botFacts ? undefined : setActionTarget}
+            // A listed bot pins from here; its home folder still has no workspace menu.
+            onLongPress={
+              view.botFacts
+                ? () => {
+                    const facts = view.botFacts
+                    if (facts) {
+                      pin.open(facts, item.displayName, isReadOnly)
+                    }
+                  }
+                : item.botHome === true
+                  ? undefined
+                  : setActionTarget
+            }
             onToggleLineage={toggleWorktreeLineage}
             unsavedName={unsavedRename(renameDrafts, hostId, item)}
             pairedHostId={hostId ?? null}
@@ -240,6 +258,7 @@ export function HostWorkspaceList({
       openWorktreeSession,
       statusLive,
       setActionTarget,
+      pin.open,
       toggleWorktreeLineage,
       offline
     ]
@@ -323,6 +342,7 @@ export function HostWorkspaceList({
         />
       )}
       {bots.sheets}
+      {pin.sheet}
       <TransientToast message={notice} bottomInset={bottomBarHeight} />
     </>
   )
