@@ -112,7 +112,32 @@ export function NativeChatComposerField({
     editorDraftRef.current = value
     onDraftChange(value, input)
   })
-  const editorSelect = useLatestHandler(onTextareaSelect)
+  // Why: Cmd/Ctrl+B bolds selected text; with no selection it still toggles the sidebar.
+  const boldChordOwned = useRef(false)
+  const ownBoldChord = (owned: boolean): void => {
+    if (boldChordOwned.current !== owned) {
+      boldChordOwned.current = owned
+      window.api.ui.setMarkdownEditorFocused(owned)
+    }
+  }
+  useLayoutEffect(
+    () => () => {
+      if (boldChordOwned.current) {
+        window.api.ui.setMarkdownEditorFocused(false)
+      }
+    },
+    []
+  )
+  const editorSelect = useLatestHandler((input: Parameters<typeof onTextareaSelect>[0]) => {
+    ownBoldChord(input.selectionStart !== input.selectionEnd)
+    onTextareaSelect(input)
+  })
+  const editorFocus = useLatestHandler(() => {
+    const input = textareaRef.current
+    if (input) {
+      ownBoldChord(input.selectionStart !== input.selectionEnd)
+    }
+  })
   // An open picker takes Tab first, so the suggestion only shows and accepts while none is.
   const suggestion = autocomplete.mode === 'none' ? promptSuggestion : undefined
   const editorKeyDownCapture = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -129,6 +154,7 @@ export function NativeChatComposerField({
     }
   })
   const editorBlur = useLatestHandler(() => {
+    ownBoldChord(false)
     const compositionWasActive = imeEnterGesture.isComposing()
     imeEnterGesture.reset()
     if (compositionWasActive) {
@@ -263,6 +289,7 @@ export function NativeChatComposerField({
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}
+              onFocus={editorFocus}
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onPasteCapture={editorPaste}

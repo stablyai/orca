@@ -8,6 +8,8 @@ import {
 } from 'react'
 import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { handleNativeChatListKey } from './native-chat-composer-list-keys'
 import { isMacPlatform } from '../../pane/routing/native-chat-shortcut'
 import type { NativeChatMentionFiles } from '../pickers/use-native-chat-mention-files'
 import type { NativeChatComposerSendIntent } from '../submit/native-chat-composer-send-intent'
@@ -29,6 +31,8 @@ export type UseNativeChatComposerKeyDownArgs = {
   /** Image chips count as composer content, like typed text. */
   hasAttachments?: boolean
   recall?: NativeChatComposerRecall | undefined
+  /** The editor, for list and bold/italic edits on its plain text. */
+  getInput?: () => NativeChatComposerInput | null
   isComposing: () => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
@@ -54,6 +58,7 @@ export function useNativeChatComposerKeyDown({
   draft,
   hasAttachments = false,
   recall,
+  getInput,
   isComposing,
   completePickerItem,
   dispatchPickerCommand,
@@ -134,6 +139,9 @@ export function useNativeChatComposerKeyDown({
         interrupt?.()
         return
       }
+      if (autocomplete.mode === 'none' && handleNativeChatListKey(event, getInput?.() ?? null)) {
+        return
+      }
       const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
       // Why before Shift+Enter: that adds a newline, and this chord leaves the draft alone.
       if (modified && event.shiftKey) {
@@ -198,6 +206,7 @@ export function useNativeChatComposerKeyDown({
       draft,
       hasAttachments,
       interrupt,
+      getInput,
       isComposing,
       mentionFiles,
       send,
