@@ -124,6 +124,7 @@ export function initializeMainProcessObservers(store: Store): void {
       track('main_thread_hang_detected', {
         unresponsive_ms: Math.round(marker.unresponsiveMs),
         self_recovered: marker.selfRecovered,
+        ...(marker.appVersion ? { detected_app_version: marker.appVersion } : {}),
         ...details
       })
     }

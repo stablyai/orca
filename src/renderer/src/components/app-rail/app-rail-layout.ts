@@ -23,6 +23,7 @@ export const APP_RAIL_DESTINATION_IDS = [
   'automations',
   'artifacts',
   'skills',
+  'plugins',
   'mobile'
 ] as const
 export type AppRailDestinationId = (typeof APP_RAIL_DESTINATION_IDS)[number]

@@ -1,6 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   useRepoLabelsBySlug,
@@ -16,9 +21,11 @@ import {
   type PRFilterChange,
   type SectionKey
 } from '@/components/github/PRFilterSections'
+import { PRFilterValueMenu } from '@/components/github/PRFilterValueMenu'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -27,7 +34,7 @@ type Props = {
   parsed: ParsedTaskQuery
   defaultFilters: ParsedTaskQuery
   activeCount: number
-  presets: React.ReactNode
+  presets?: React.ReactNode
   kind: 'prs' | 'issues'
   authorLogins: string[]
   // Scope metadata to the first selected repo; one popover cannot enumerate every repo’s labels and users.
@@ -35,6 +42,7 @@ type Props = {
   /** Host that owns the repo the primary slug came from. */
   ownerTarget?: RuntimeClientTarget | null
   onChange: (change: PRFilterChange) => void
+  onSetDefaultPreset?: (preset: TaskViewPresetId) => void
 }
 
 export type { PRFilterChange } from '@/components/github/PRFilterSections'
@@ -77,6 +85,31 @@ function ActivePill({
   )
 }
 
+const DRILL_IN_FOCUSABLE_SELECTOR =
+  'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+function cycleDrillInFocus(container: HTMLElement | null, reverse: boolean): void {
+  if (!container) {
+    return
+  }
+  const focusables = Array.from(
+    container.querySelectorAll<HTMLElement>(DRILL_IN_FOCUSABLE_SELECTOR)
+  ).filter((el) => el.offsetParent !== null)
+  if (focusables.length === 0) {
+    return
+  }
+  const activeIndex = focusables.findIndex(
+    (el) => el === document.activeElement || el.contains(document.activeElement)
+  )
+  const nextIndex =
+    activeIndex === -1
+      ? reverse
+        ? focusables.length - 1
+        : 0
+      : (activeIndex + (reverse ? -1 : 1) + focusables.length) % focusables.length
+  focusables[nextIndex]?.focus()
+}
+
 export default function PRFilterDropdowns({
   parsed,
   defaultFilters,
@@ -86,12 +119,26 @@ export default function PRFilterDropdowns({
   authorLogins,
   primarySlug,
   ownerTarget,
-  onChange
+  onChange,
+  onSetDefaultPreset
 }: Props): React.JSX.Element {
   const [openSection, setOpenSection] = useState<SectionKey | null>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const drillInRef = useRef<HTMLDivElement>(null)
   // Each author pick reloads the list, so keep the authors visible at open as candidates.
   const [authorLoginsAtOpen, setAuthorLoginsAtOpen] = useState<string[]>([])
+
+  useEffect(() => {
+    if (kind !== 'prs' || !popoverOpen || openSection === null) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      drillInRef.current
+        ?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')
+        ?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [kind, popoverOpen, openSection])
   const owner = primarySlug?.owner ?? null
   const repo = primarySlug?.repo ?? null
   const hasPrimarySlug = popoverOpen && owner !== null && repo !== null
@@ -153,18 +200,108 @@ export default function PRFilterDropdowns({
     setOpenSection(null)
   }
 
-  return (
-    <Popover
-      open={popoverOpen}
-      onOpenChange={(next) => {
-        setPopoverOpen(next)
-        if (next) {
-          setAuthorLoginsAtOpen(authorLogins)
-        } else {
-          setOpenSection(null)
+  const handleOpenChange = (next: boolean): void => {
+    setPopoverOpen(next)
+    if (next) {
+      setAuthorLoginsAtOpen(authorLogins)
+    } else {
+      setOpenSection(null)
+    }
+  }
+
+  const handlePickSection = (s: SectionKey): void => {
+    // Reset reviewer mode to the parsed query on each menu visit.
+    if (s === 'reviewer') {
+      setReviewerModeOverride(null)
+    }
+    setOpenSection(s)
+  }
+
+  const clearAll =
+    activeCount > 0
+      ? () => {
+          onChange({
+            authors: defaultFilters.authors,
+            assignee: defaultFilters.assignee,
+            reviewer: getReviewer(defaultFilters),
+            labels: defaultFilters.labels,
+            state: defaultFilters.state ?? 'all',
+            draft: defaultFilters.draft
+          })
+          setReviewerModeOverride(null)
+          setPopoverOpen(false)
         }
-      }}
-    >
+      : null
+
+  const sectionDetail =
+    openSection !== null ? (
+      <SectionDetail
+        section={openSection}
+        parsed={parsed}
+        authorOpts={authorOpts}
+        userOpts={userOpts}
+        labelOpts={labelOpts}
+        labelsLoading={hasPrimarySlug && labelsState.loading}
+        labelsError={hasPrimarySlug ? labelsState.error : null}
+        usersLoading={hasPrimarySlug && assigneesState.loading}
+        usersError={hasPrimarySlug ? assigneesState.error : null}
+        reviewerMode={reviewerMode}
+        setReviewerMode={setReviewerModeOverride}
+        onBack={() => setOpenSection(null)}
+        onSelect={handleSelect}
+      />
+    ) : null
+
+  if (kind === 'prs') {
+    return (
+      <DropdownMenu open={popoverOpen} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <RailPageFilterButton activeCount={activeCount} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          density="comfortable"
+          variant={openSection ? 'picker' : 'default'}
+          className="w-[300px] max-w-(--radix-dropdown-menu-content-available-width)"
+        >
+          {openSection === null ? (
+            <PRFilterValueMenu
+              parsed={parsed}
+              reviewerActive={reviewerActive}
+              reviewerKind={reviewerKind}
+              onChange={onChange}
+              onPick={handlePickSection}
+              onClearAll={clearAll}
+              onSetDefaultPreset={onSetDefaultPreset}
+            />
+          ) : (
+            <div
+              ref={drillInRef}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  return
+                }
+                if (event.key === 'Tab') {
+                  // Radix DropdownMenu calls preventDefault() on Tab; manage drill-in focus order directly.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  cycleDrillInFocus(drillInRef.current, event.shiftKey)
+                  return
+                }
+                // Keep Command search typing and arrow navigation out of Radix menu typeahead.
+                event.stopPropagation()
+              }}
+            >
+              {sectionDetail}
+            </div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <RailPageFilterButton activeCount={activeCount} />
       </PopoverTrigger>
@@ -177,47 +314,12 @@ export default function PRFilterDropdowns({
               kind={kind}
               reviewerActive={reviewerActive}
               reviewerKind={reviewerKind}
-              onPick={(s) => {
-                // Reset reviewer mode to the parsed query on each menu visit.
-                if (s === 'reviewer') {
-                  setReviewerModeOverride(null)
-                }
-                setOpenSection(s)
-              }}
-              onClearAll={
-                activeCount > 0
-                  ? () => {
-                      onChange({
-                        authors: defaultFilters.authors,
-                        assignee: defaultFilters.assignee,
-                        reviewer: getReviewer(defaultFilters),
-                        labels: defaultFilters.labels,
-                        state: defaultFilters.state ?? 'all',
-                        draft: defaultFilters.draft
-                      })
-                      setReviewerModeOverride(null)
-                      setPopoverOpen(false)
-                    }
-                  : null
-              }
+              onPick={handlePickSection}
+              onClearAll={clearAll}
             />
           </>
         ) : (
-          <SectionDetail
-            section={openSection}
-            parsed={parsed}
-            authorOpts={authorOpts}
-            userOpts={userOpts}
-            labelOpts={labelOpts}
-            labelsLoading={hasPrimarySlug && labelsState.loading}
-            labelsError={hasPrimarySlug ? labelsState.error : null}
-            usersLoading={hasPrimarySlug && assigneesState.loading}
-            usersError={hasPrimarySlug ? assigneesState.error : null}
-            reviewerMode={reviewerMode}
-            setReviewerMode={setReviewerModeOverride}
-            onBack={() => setOpenSection(null)}
-            onSelect={handleSelect}
-          />
+          sectionDetail
         )}
       </PopoverContent>
     </Popover>

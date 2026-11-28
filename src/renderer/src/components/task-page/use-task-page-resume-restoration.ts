@@ -1,7 +1,7 @@
 import type { TaskPageJiraListStateModel } from './jira/use-task-page-jira-list-state'
 import { useEffect } from 'react'
 import { resolveVisibleTaskProvider } from '../../../../shared/work-items/task-providers'
-import { normalizeGitHubTaskPreset } from '../../../../shared/work-items/task-github-search'
+import { resolveGitHubLandingPreset } from '../../../../shared/work-items/task-github-search'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { loadLinearIssueView } from './linear/filters/linear-issue-view-storage'
 import { translate } from '@/i18n/i18n'
@@ -70,7 +70,7 @@ export function useTaskPageResumeRestoration(model: TaskPageJiraListStateModel) 
       setAppliedTaskSearch(query)
       setActiveTaskPreset(null)
     } else {
-      const presetId = normalizeGitHubTaskPreset(preset ?? settings.defaultTaskViewPreset)
+      const presetId = resolveGitHubLandingPreset(preset, settings.defaultTaskViewPreset)
       const query = getTaskPresetQuery(presetId)
       setTaskSearchInput(query)
       setAppliedTaskSearch(query)

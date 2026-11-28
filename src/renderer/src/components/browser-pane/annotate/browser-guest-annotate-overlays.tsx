@@ -108,9 +108,11 @@ export function BrowserGuestAnnotateOverlays({
     handleIncludePageDetailsChange,
     handleBrowserAnnotationsSentToAgent,
     handleBrowserAnnotationsHandedOff,
+    canSendBrowserAnnotations,
     handleCopyBrowserAnnotations,
     browserAnnotationsCopied,
-    handleClearBrowserAnnotations,
+    createBrowserAnnotationsClearRequest,
+    sendableAnnotationCount,
     handleDeleteBrowserAnnotation,
     handleUpdateBrowserAnnotation
   } = annotationSend
@@ -247,6 +249,7 @@ export function BrowserGuestAnnotateOverlays({
                         onIncludePageDetailsChange={handleIncludePageDetailsChange}
                         onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                         onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                        canSendPrompt={canSendBrowserAnnotations}
                       />
                     }
                   />
@@ -351,9 +354,11 @@ export function BrowserGuestAnnotateOverlays({
           handleIncludePageDetailsChange={handleIncludePageDetailsChange}
           handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
           handleBrowserAnnotationsHandedOff={handleBrowserAnnotationsHandedOff}
+          canSendBrowserAnnotations={canSendBrowserAnnotations}
           handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
           browserAnnotationsCopied={browserAnnotationsCopied}
-          handleClearBrowserAnnotations={handleClearBrowserAnnotations}
+          createBrowserAnnotationsClearRequest={createBrowserAnnotationsClearRequest}
+          sendableAnnotationCount={sendableAnnotationCount}
           handleDeleteBrowserAnnotation={handleDeleteBrowserAnnotation}
           handleUpdateBrowserAnnotation={handleUpdateBrowserAnnotation}
         />

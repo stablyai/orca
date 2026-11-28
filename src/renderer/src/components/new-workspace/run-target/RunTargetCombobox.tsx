@@ -207,6 +207,7 @@ export default function RunTargetCombobox({
       <PopoverContent
         align="start"
         sideOffset={4}
+        wheelScroll
         className={cn(
           'flex w-(--radix-popover-trigger-width) min-w-[min(18rem,var(--radix-popover-content-available-width))] max-w-(--radix-popover-content-available-width) flex-col',
           COMBOBOX_POPOVER_SURFACE

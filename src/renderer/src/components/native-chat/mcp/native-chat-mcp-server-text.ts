@@ -6,6 +6,7 @@ import {
   agentSessionMcpServerDisplayName,
   ORCA_MCP_SOURCE
 } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import { urlHost } from '@/components/settings/mcp-servers/mcp-server-words'
 import type { Translate } from '@/i18n/use-translate'
 
 export function mcpSourceLabel(source: string, t: Translate): string {
@@ -29,8 +30,13 @@ export function mcpSourceLabel(source: string, t: Translate): string {
   }
 }
 
-/** The row's dot already says connected, so a connected server shows its tools. */
-export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate): string {
+/** The row's dot already says connected, so a connected server shows its tools. `hostName`: the
+ *  chat's host, which a command of Orca's that won't start is missing from. */
+export function mcpServerStatusLine(
+  server: AgentSessionMcpServer,
+  t: Translate,
+  hostName?: string
+): string {
   switch (server.status) {
     case 'connected':
       return server.toolCount === null
@@ -50,6 +56,18 @@ export function mcpServerStatusLine(server: AgentSessionMcpServer, t: Translate)
             'Needs sign-in. Send a message to sign in here.'
           )
     case 'failed':
+      // Orca's own check found it before the agent started, in the words its settings use.
+      if (server.orca && !server.error) {
+        return server.orca.url !== null
+          ? t('settings.mcpServers.status.unreachable', 'Can’t reach {{host}}', {
+              host: urlHost(server.orca.url)
+            })
+          : hostName
+            ? t('settings.mcpServers.status.commandFailed', 'Command not found on {{host}}', {
+                host: hostName
+              })
+            : t('components.native-chat.mcp.status.failed', 'Failed')
+      }
       return server.error
         ? t('components.native-chat.mcp.status.failedReason', 'Failed: {{error}}', {
             error: server.error

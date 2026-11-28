@@ -108,7 +108,8 @@ export function SettingsGroupHeader({
           </p>
         ) : null}
       </div>
-      {action ? <div className="shrink-0">{action}</div> : null}
+      {/* A wrapped action takes its own line and may not be wider than the pane. */}
+      {action ? <div className={cn('shrink-0', wrapAction && 'max-w-full')}>{action}</div> : null}
     </div>
   )
 }
