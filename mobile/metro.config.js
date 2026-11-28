@@ -1,4 +1,3 @@
-const fs = require('node:fs')
 const path = require('node:path')
 const { getDefaultConfig } = require('expo/metro-config')
 
@@ -52,22 +51,12 @@ config.resolver.extraNodeModules = {
 }
 
 const defaultResolveRequest = config.resolver.resolveRequest
-const lucideIconsPrefix = 'lucide-react-native/dist/esm/icons/'
-const lucideIconsDir = fs.realpathSync(
-  path.join(projectRoot, 'node_modules', 'lucide-react-native', 'dist', 'esm', 'icons')
-)
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === 'expo-router/_ctx' && (platform === 'android' || platform === 'ios')) {
     return {
       type: 'sourceFile',
       filePath: path.join(projectRoot, 'scripts', `expo-router-ctx.${platform}.js`)
-    }
-  }
-  if (moduleName.startsWith(lucideIconsPrefix)) {
-    return {
-      type: 'sourceFile',
-      filePath: path.join(lucideIconsDir, moduleName.slice(lucideIconsPrefix.length))
     }
   }
   if (
