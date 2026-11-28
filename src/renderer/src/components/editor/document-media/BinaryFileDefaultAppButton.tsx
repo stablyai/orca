@@ -1,15 +1,19 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { useAppStore } from '@/store/index'
 import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   isClientLocalRuntimeFile,
   openRuntimeFileWithDefaultApp
 } from '@/runtime/files/reads/runtime-file-default-app-open'
+import { fileTypeOfPath } from '../../../../../shared/plugins/contributions/plugin-file-type'
+import { prefersExternalAppForFile } from '../../../../../shared/file-access/external-app-file-preference'
 
 async function openWithDefaultApp(
   source: RuntimeFileReadArgs
@@ -30,6 +34,11 @@ export function BinaryFileDefaultAppButton({
   const t = useTranslate()
   const [pending, setPending] = useState(false)
   const [openFailed, setOpenFailed] = useState(false)
+  const alwaysExternalId = useId()
+  const fileType = fileTypeOfPath(source.filePath)
+  const externalAppFileTypes = useAppStore((state) => state.settings?.externalAppFileTypes)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const alwaysExternal = prefersExternalAppForFile(source.filePath, externalAppFileTypes)
   // Why: a paired web client has no OS app to hand the file to.
   if (isPairedWebClientWindow()) {
     return null
@@ -62,6 +71,30 @@ export function BinaryFileDefaultAppButton({
           ? t('auto.components.editor.BinaryFileDefaultAppButton.open', 'Open with default app')
           : t('auto.components.editor.BinaryFileDefaultAppButton.downloadOpen', 'Download & open')}
       </Button>
+      {local && fileType && (
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={alwaysExternalId}
+            checked={alwaysExternal}
+            onCheckedChange={(next) => {
+              const current = useAppStore.getState().settings?.externalAppFileTypes ?? []
+              void updateSettings({
+                externalAppFileTypes:
+                  next === true
+                    ? [...current.filter((entry) => entry !== fileType), fileType]
+                    : current.filter((entry) => entry !== fileType)
+              })
+            }}
+          />
+          <label htmlFor={alwaysExternalId} className="text-xs text-muted-foreground">
+            {t(
+              'auto.components.editor.BinaryFileDefaultAppButton.alwaysExternal',
+              'Always open .{{value0}} links with the default app',
+              { value0: fileType }
+            )}
+          </label>
+        </div>
+      )}
       {openFailed && (
         <p className="text-xs text-muted-foreground" role="alert">
           {t(

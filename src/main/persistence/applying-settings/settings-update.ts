@@ -29,6 +29,7 @@ import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/vi
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
 import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import { normalizeExternalAppFileSettings } from '../../../shared/file-access/external-app-file-preference'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -147,6 +148,7 @@ export function updateSettings(
     )
   }
   Object.assign(sanitizedUpdates, normalizePluginOwnedSettings(updates))
+  Object.assign(sanitizedUpdates, normalizeExternalAppFileSettings(updates))
   Object.assign(
     sanitizedUpdates,
     legacyMatchTerminalSidebarWrite(operations.state.settings, sanitizedUpdates)

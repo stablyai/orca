@@ -10,9 +10,11 @@ import {
   installedPluginDisplayNames,
   isLivePlugin,
   keyedPluginContribution,
-  usePluginListDerived
+  usePluginListDerived,
+  usePluginPanelsStore
 } from '../catalog/plugin-contribution-catalog'
-import { usePluginFramesIsolated } from '../frames/plugin-frame-isolation'
+import { usePluginFramesIsolated, pluginFramesIsolatedNow } from '../frames/plugin-frame-isolation'
+import { useAppStore } from '@/store/index'
 
 /** A custom editor from an enabled plugin. `key` is unique across plugins; `iconUrl` is its own
  *  tab icon, else the plugin's. */
@@ -68,6 +70,19 @@ export function customEditorsForFile(
     ...matching.filter((editor) => editor.priority === 'default').sort(byPlugin),
     ...matching.filter((editor) => editor.priority !== 'default')
   ]
+}
+
+/** Whether an enabled plugin's editor claims this file by default, from the catalog as it is now. */
+export function fileHasDefaultPluginEditor(filePath: string): boolean {
+  if (useAppStore.getState().settings?.pluginSystemEnabled !== true) {
+    return false
+  }
+  const editors = customEditorsForFile(
+    filePath,
+    collectActivePluginCustomEditors(usePluginPanelsStore.getState().plugins),
+    pluginFramesIsolatedNow()
+  )
+  return editors.some((editor) => editor.priority === 'default' && !editor.frameUnavailable)
 }
 
 /** The editor a file shows: the user's pick while it still exists, else the first default one. */

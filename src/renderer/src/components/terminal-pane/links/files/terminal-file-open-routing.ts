@@ -23,13 +23,9 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
-import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
-import {
-  CLIENT_LOCAL_FILE_TARGET,
-  hostGrantedEditorFields,
-  resolveHostWorkspaceFile
-} from '../../host-files/terminal-host-workspace-file'
-import type { HostWorkspaceFile } from '../../host-files/terminal-host-workspace-file'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { resolveLinkFileLocation } from '../../host-files/terminal-link-file-location'
+import type { ResolvedLinkFile } from '../../host-files/terminal-link-file-location'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
 import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/links/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
@@ -41,6 +37,8 @@ import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-li
 import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
 import type { FileOpenFailure } from './terminal-file-open-failure'
+import { prefersExternalAppForFile } from '../../../../../../shared/file-access/external-app-file-preference'
+import { fileHasDefaultPluginEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
@@ -106,8 +104,8 @@ export function openDetectedFilePath(
       terminalFileSourceHost(useAppStore.getState(), fileContext) ??
       getConnectionExecutionHostId(fileContext.connectionId)
     const sourceRuntimeOwnerId = runtimeTargetEnvironmentId(fileContext.target)
-    let hostWorkspaceFile: HostWorkspaceFile | null = null
-    let hostGrant: ReturnType<typeof hostGrantedEditorFields> | null = null
+    let hostWorkspaceFile: ResolvedLinkFile['hostWorkspaceFile'] = null
+    let hostGrant: ResolvedLinkFile['hostGrant'] = null
     let clientLocal = false
     if (!fileContext.sourceHostResolved) {
       if (refuseExplicitNonEditorRoute()) {
@@ -143,31 +141,19 @@ export function openDetectedFilePath(
     }
 
     try {
-      const linkOwner = await resolveHostWorkspaceFile(fileContext, mappedFilePath, {
+      ;({
+        fileContext,
+        mappedFilePath,
+        worktreeId,
+        worktreePath,
+        hostWorkspaceFile,
+        hostGrant,
+        clientLocal,
+        statResult
+      } = await resolveLinkFileLocation(fileContext, mappedFilePath, {
         ...deps,
         openWithSystemDefault
-      })
-      if (linkOwner?.kind === 'grant') {
-        hostGrant = hostGrantedEditorFields(linkOwner)
-        mappedFilePath = linkOwner.absolutePath
-        statResult = { isDirectory: false, escapesWorktree: true }
-      } else if (linkOwner?.kind === 'client') {
-        clientLocal = true
-        fileContext = {
-          ...fileContext,
-          target: CLIENT_LOCAL_FILE_TARGET,
-          connectionId: undefined
-        }
-        statResult = { isDirectory: linkOwner.isDirectory, escapesWorktree: false }
-      } else if (linkOwner) {
-        hostWorkspaceFile = linkOwner
-        // Why: the host already stat'ed the path inside the workspace that holds it; open it there.
-        ;({ worktreeId, worktreePath, absolutePath: mappedFilePath } = hostWorkspaceFile)
-        fileContext = { ...fileContext, worktreeId, worktreePath }
-        statResult = { isDirectory: hostWorkspaceFile.isDirectory, escapesWorktree: false }
-      } else {
-        statResult = await statUserOpenedPath(fileContext, mappedFilePath)
-      }
+      }))
     } catch (error) {
       if (isCurrentRequest() && deps.onOpenFailure) {
         // Why: loss of contact with the host is not evidence the file is gone.
@@ -205,9 +191,21 @@ export function openDetectedFilePath(
         ? (deps.browserDestination ??
           httpLinkDirectClickDestination(localHtmlFileDestinations(), openWithSystemDefault))
         : null
+    // A remembered opt-in routes like Shift only after resolution proves the file is this
+    // computer's; a client-local fallback or a host swap re-decides from the resolved context.
+    // An installed plugin editor that claims the file wins over the remembered external app.
+    const rememberedExternalOpen =
+      !openWithSystemDefault &&
+      !explicitGroupRequest &&
+      !isPairedWebClientWindow() &&
+      prefersExternalAppForFile(
+        mappedFilePath,
+        useAppStore.getState().settings?.externalAppFileTypes
+      ) &&
+      !fileHasDefaultPluginEditor(mappedFilePath)
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
-      : openWithSystemDefault
+      : openWithSystemDefault || rememberedExternalOpen
     // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
     if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
@@ -244,6 +242,7 @@ export function openDetectedFilePath(
     }
 
     // Shift+Cmd/Ctrl must match popover’s Download & open with default app; OS cannot directly launch remote paths.
+    // The remembered opt-in stays off this branch: a remote download-and-launch needs an explicit choice per click.
     if (openWithSystemDefault && !canOpenWithSystemDefault) {
       const download = { grant: hostGrant, isCurrent: isCurrentRequest }
       if (await downloadAndOpenRemoteTerminalFile(fileContext, mappedFilePath, download)) {
