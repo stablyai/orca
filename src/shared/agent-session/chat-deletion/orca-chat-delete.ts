@@ -5,8 +5,15 @@ export const AGENT_SESSION_PHONE_DELETE_RUNTIME_CAPABILITY =
   'agent-session.delete.phone.v1' as const
 
 /** `workers`: the chat is a worker an orchestration still waits on; `group`: a group room member's
- *  chat, which the room still uses; `home`: a managed agent's live Home Chat. */
-export type OrcaChatDeleteRefusal = 'workers' | 'group' | 'home' | 'not-found' | 'unavailable'
+ *  chat, which the room still uses; `home`: a managed agent's live Home Chat; `helpers`: a helper
+ *  still running on the chat's shared server can't be tied to a chat yet. */
+export type OrcaChatDeleteRefusal =
+  | 'workers'
+  | 'group'
+  | 'home'
+  | 'helpers'
+  | 'not-found'
+  | 'unavailable'
 
 export type ChatDeleteSettings = {
   /** Why: a deleted chat never comes back; keep this skip separate from other deletions. */
@@ -33,6 +40,12 @@ export function orcaChatDeleteRefusalText(
   }
   if (reason === 'home') {
     return t('chats.delete.home', "A managed agent's Home Chat can't be deleted")
+  }
+  if (reason === 'helpers') {
+    return t(
+      'chats.delete.helperUnknown',
+      "A helper still running on this chat's server can't be identified yet. Try deleting again shortly."
+    )
   }
   // A reason from a newer host falls back to the plain failure.
   return reason === 'workers'

@@ -54,6 +54,11 @@ export class CodexSharedServerRecovery {
     return this.heldBytes
   }
 
+  /** Groups whose owner isn't known yet. */
+  get unresolvedCount(): number {
+    return this.unresolved.size
+  }
+
   get identities(): number {
     return this.groupOf.size
   }

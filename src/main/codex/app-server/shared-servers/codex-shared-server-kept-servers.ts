@@ -11,6 +11,7 @@ import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import type { CodexSharedServerHandedBack } from './codex-shared-server-handback'
+import type { SharedProviderRelayStop } from '../../../provider-relay/provider-relay-shared-agents'
 import {
   codexDeletedPooledRelay,
   codexExpectedChats,
@@ -40,7 +41,7 @@ export class CodexKeptServers {
   /** Hand-backs under way; an open of one of their chats waits, so it reattaches seeded. */
   private readonly handing = new Map<string, Promise<boolean>>()
   /** Deletes stopping a chat's kept run; a second delete or a reopen waits for the first. */
-  private readonly stopping = new Map<string, Promise<boolean>>()
+  private readonly stopping = new Map<string, Promise<SharedProviderRelayStop>>()
 
   constructor(private readonly host: PoolHost) {}
 
@@ -102,7 +103,7 @@ export class CodexKeptServers {
    * once that server is attached (by this ask, or one already under way). False when that run may
    * still be kept but can't be reached, so the delete waits rather than leave it running.
    */
-  stopDeleted(record: AgentSessionRecord): Promise<boolean> {
+  stopDeleted(record: AgentSessionRecord): Promise<SharedProviderRelayStop> {
     const { sessionId } = record
     let stop = this.stopping.get(sessionId)
     if (!stop) {
@@ -112,10 +113,10 @@ export class CodexKeptServers {
     return stop
   }
 
-  private async stopRun(record: AgentSessionRecord): Promise<boolean> {
+  private async stopRun(record: AgentSessionRecord): Promise<SharedProviderRelayStop> {
     const run = codexRecordPooledRun(record)
     if (!run) {
-      return true
+      return 'stopped'
     }
     await this.handing.get(run.relayId)
     let server = this.byRelay.get(run.relayId)
@@ -125,7 +126,7 @@ export class CodexKeptServers {
         if (relay === 'gone') {
           this.handedBack.delete(run.relayId)
         }
-        return relay === 'gone'
+        return relay === 'gone' ? 'stopped' : 'unreachable'
       }
       server = this.byRelay.get(run.relayId)
       if (!server || server.exited) {
@@ -139,9 +140,16 @@ export class CodexKeptServers {
       () => false
     )
     if (!(await withTimeout(ready, DELETE_ATTACH_TIMEOUT_MS, false))) {
-      return false
+      return 'unreachable'
     }
-    return server.keep.stopExpected(record.sessionId)
+    // A helper no chat holds yet may be this chat's: placed first, and checked again after.
+    if (!(await helpersPlaced(server))) {
+      return 'helpers'
+    }
+    if (!(await server.keep.stopExpected(record.sessionId))) {
+      return 'unreachable'
+    }
+    return (await helpersPlaced(server)) ? 'stopped' : 'helpers'
   }
 
   private reattachServer(
@@ -214,4 +222,12 @@ export class CodexKeptServers {
       })
     }
   }
+}
+
+/** Every loaded thread on the server has a known owner, after one read of those still unknown. */
+async function helpersPlaced(server: CodexSharedServer): Promise<boolean> {
+  if (server.recovery.unresolvedCount > 0) {
+    await server.keep.retryUnresolved()
+  }
+  return server.recovery.unresolvedCount === 0
 }

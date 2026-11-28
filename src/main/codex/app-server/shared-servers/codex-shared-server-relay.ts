@@ -24,7 +24,7 @@ registerReattachableProviderRelayAgent(CODEX_SHARED_RELAY_AGENT, {
   provider: 'codex',
   shared: {
     dropped: (chatKey, relay) => chats?.dropped(chatKey, relay),
-    stop: async (record) => (await chats?.stop?.(record)) ?? true
+    stop: async (record) => (await chats?.stop?.(record)) ?? 'stopped'
   }
 })
 

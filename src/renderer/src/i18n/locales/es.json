@@ -28979,6 +28979,7 @@
       "action": "Eliminar",
       "groupRoom": "El chat de una sala de grupo no se puede eliminar",
       "workerOwed": "Una orquestación aún espera a este chat",
+      "helperUnknown": "Aún no se puede identificar un ayudante que sigue en ejecución en el servidor de este chat. Inténtalo de nuevo en un momento.",
       "home": "El chat de inicio de un agente gestionado no se puede eliminar"
     }
   },

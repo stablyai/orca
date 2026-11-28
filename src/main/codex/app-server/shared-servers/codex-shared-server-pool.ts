@@ -280,5 +280,5 @@ onCodexSharedRelayChats({
   dropped: (chatKey, relay) => pool?.kept.dropped(chatKey, relay),
   // A deleted chat's run may be kept from an earlier run before any chat here built the pool.
   stop: async (record) =>
-    codexRecordPooledRun(record) ? sharedCodexServerPool().kept.stopDeleted(record) : true
+    codexRecordPooledRun(record) ? sharedCodexServerPool().kept.stopDeleted(record) : 'stopped'
 })

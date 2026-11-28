@@ -7327,7 +7327,8 @@
       "failed": "Não foi possível excluir o chat",
       "groupRoom": "O chat de uma sala de grupo não pode ser excluído",
       "home": "O Home Chat de um agente gerenciado não pode ser excluído",
-      "workerOwed": "Uma orquestração ainda aguarda este chat"
+      "workerOwed": "Uma orquestração ainda aguarda este chat",
+      "helperUnknown": "Ainda não é possível identificar um ajudante em execução no servidor deste chat. Tente excluir novamente em instantes."
     }
   },
   "mcpServers": {

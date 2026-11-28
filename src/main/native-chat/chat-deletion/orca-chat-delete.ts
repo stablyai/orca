@@ -5,7 +5,10 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { isOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address'
 import { isBotGroupMemberSession } from '../../../shared/bots/bot-group'
-import type { OrcaChatDeleteResult } from '../../../shared/agent-session/chat-deletion/orca-chat-delete'
+import type {
+  OrcaChatDeleteRefusal,
+  OrcaChatDeleteResult
+} from '../../../shared/agent-session/chat-deletion/orca-chat-delete'
 import { createCanonicalOrcaSessionResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { readAgentSessionRecordStore } from '../../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { dropUnreadBotRequests } from '../../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
@@ -104,23 +107,24 @@ async function stopChat(
   runtime: OrcaRuntimeService,
   host: ChatHost,
   records: readonly AgentSessionRecord[]
-): Promise<boolean> {
+): Promise<OrcaChatDeleteRefusal | null> {
   for (const record of records) {
     const { sessionId } = record
     if (host.hasSession(sessionId) || host.isSessionTabVisible(sessionId)) {
       const closed = await closeStructuredAgentSessionChild(sessionId, { runtime })
       if (!closed.stopped) {
         console.warn('[chat-delete] could not stop the chat', closed.reason)
-        return false
+        return 'unavailable'
       }
     }
-    // Its part of a shared server kept from an earlier run ends too; unreachable, the delete waits.
-    if (!(await stopSharedProviderRelayRuns(record))) {
-      console.warn('[chat-delete] could not stop its kept shared run')
-      return false
+    // Its part of a shared server kept from an earlier run ends too; until then the delete waits.
+    const shared = await stopSharedProviderRelayRuns(record)
+    if (shared !== 'stopped') {
+      console.warn('[chat-delete] could not stop its kept shared run', shared)
+      return shared === 'helpers' ? 'helpers' : 'unavailable'
     }
   }
-  return true
+  return null
 }
 
 /** Deletes the chat `sessionId` belongs to, stopping it first when it runs. */
@@ -152,8 +156,9 @@ export async function deleteOrcaChat(
   }
   let committed: Commit = 'reopened'
   for (let attempt = 0; attempt < STOP_ATTEMPTS && committed === 'reopened'; attempt++) {
-    if (!(await stopChat(runtime, host, chat.records))) {
-      return { outcome: 'refused', reason: 'unavailable' }
+    const refused = await stopChat(runtime, host, chat.records)
+    if (refused) {
+      return { outcome: 'refused', reason: refused }
     }
     committed = await commitChatDeletion(host, chat.root, chat.records)
   }

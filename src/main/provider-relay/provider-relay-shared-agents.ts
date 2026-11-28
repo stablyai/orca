@@ -5,11 +5,15 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 /** `relay` null: the chat wasn't listed here, so every shared integration is told. */
 type Dropped = (chatKey: string, relay: KeptProviderRelay | null) => void
 
+/** How a chat's kept run on a shared agent ended before deletion: `unreachable`, it may still run
+ *  and can't be reached; `helpers`, a helper on that agent can't be tied to a chat yet. */
+export type SharedProviderRelayStop = 'stopped' | 'unreachable' | 'helpers'
+
 /** A shared integration's side of a chat: `dropped` hears one that no longer wants its part, and
- *  `stop` ends a chat's kept run before deletion (false: it may still run and can't be reached). */
+ *  `stop` ends a chat's kept run before deletion. */
 export type SharedProviderRelayAgent = {
   dropped: Dropped
-  stop?: (record: AgentSessionRecord) => Promise<boolean>
+  stop?: (record: AgentSessionRecord) => Promise<SharedProviderRelayStop>
 }
 
 /** Integrations whose one agent serves many chats: a chat's drop never closes it, its owner does. */
@@ -55,12 +59,20 @@ export function sharedProviderRelayChatDropped(chatKey: string): void {
   }
 }
 
-/** Before a chat is deleted, each shared integration ends its kept run; false refuses the delete. */
-export async function stopSharedProviderRelayRuns(record: AgentSessionRecord): Promise<boolean> {
-  const stopped = await Promise.all(
+/** Before a chat is deleted, each shared integration ends its kept run; anything but `stopped`
+ *  refuses the delete. */
+export async function stopSharedProviderRelayRuns(
+  record: AgentSessionRecord
+): Promise<SharedProviderRelayStop> {
+  const results = await Promise.all(
     [...sharedAgents.values()].map(
-      ({ stop }) => stop?.(record).catch(() => false) ?? Promise.resolve(true)
+      ({ stop }): Promise<SharedProviderRelayStop> =>
+        stop?.(record).catch(() => 'unreachable' as const) ?? Promise.resolve('stopped' as const)
     )
   )
-  return stopped.every(Boolean)
+  return results.includes('unreachable')
+    ? 'unreachable'
+    : results.includes('helpers')
+      ? 'helpers'
+      : 'stopped'
 }

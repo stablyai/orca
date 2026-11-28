@@ -28969,6 +28969,7 @@
       "action": "Supprimer",
       "groupRoom": "Le chat d'un salon de groupe ne peut pas être supprimé",
       "workerOwed": "Une orchestration attend encore ce chat",
+      "helperUnknown": "Un assistant encore actif sur le serveur de ce chat ne peut pas encore être identifié. Réessayez de le supprimer dans un instant.",
       "home": "Le Home Chat d'un agent géré ne peut pas être supprimé"
     }
   },
