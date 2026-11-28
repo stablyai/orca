@@ -22,6 +22,7 @@ export type BotWorkerSummary = {
   server: string | null
   pr: BotWorkPullRequest | null
   startedAt: number | null
+  closedAt?: number
   /** Where the turn that started it was asked: Orca itself (titled when it was one of the bot's
    *  chats), or a connector's conversation. */
   source: { source: ConnectorSource | 'app'; title: string | null }
@@ -33,6 +34,7 @@ export type BotWorkListResult = {
   workspaces?: { id: string; name: string; agent: string | null }[]
   /** The bot whose work this is. */
   botName: string
+  historyIncluded?: boolean
 }
 
 const STATE_WORDS: Record<OrchestrationSessionWorkerState, string> = {
@@ -69,6 +71,7 @@ export function formatBotWorkerSummary(item: BotWorkerSummary, now: number): str
     `${item.id} ${who}`,
     item.idle ? 'idle' : item.state ? STATE_WORDS[item.state] : 'state unknown',
     ...(item.state === 'working' && item.progressNote ? [item.progressNote] : []),
+    ...(item.closedAt === undefined ? [] : ['history']),
     ...(where ? [where] : []),
     ...(item.pr ? [prWords(item.pr)] : []),
     ...(item.startedAt !== null ? [age(item.startedAt, now)] : []),

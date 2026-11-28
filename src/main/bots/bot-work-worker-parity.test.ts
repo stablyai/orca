@@ -132,6 +132,83 @@ describe('the work record through the bots DB worker', () => {
     expect(rows.map((row) => row.dispatchId).sort()).toEqual(ids)
     expect(rows.filter((row) => row.current)).toHaveLength(1)
   })
+
+  it('lists work as history once when it closes during the live listing', async () => {
+    const work = workerBotWork(storePath())
+    opened.push(work)
+    await work.store.makeCurrent({ botId: 'bot-1', address: THREAD, ...start('d-live') }, 1)
+    const closing = await work.store.makeCurrent(
+      { botId: 'bot-1', address: CHAT, ...start('d-closing') },
+      2
+    )
+    if (!closing) {
+      throw new Error('The work to close was not recorded')
+    }
+    let stopped: Promise<boolean> | undefined
+    const record = new BotWorkRecord({
+      store: () => work.store,
+      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+      workspaces: () => async () => null,
+      conversationTitle: (address) => {
+        if (address.source === 'chat') {
+          stopped ??= work.store.close(closing, 'stopped', 3)
+        }
+        return null
+      },
+      turnAddress: async () => null
+    })
+
+    const list = await record.list('bot-1', true)
+
+    expect(await stopped).toBe(true)
+    expect(list.map(({ dispatchId, closedAt }) => [dispatchId, closedAt])).toEqual([
+      ['d-live', undefined],
+      ['d-closing', 3]
+    ])
+  })
+
+  it('forgets newer closed work alongside a superseded live row in the same conversation', async () => {
+    const work = workerBotWork(storePath())
+    opened.push(work)
+    const turn = { botId: 'bot-1', address: THREAD }
+    await work.store.makeCurrent({ ...turn, ...start('d-old') }, 1)
+    const newer = await work.store.makeCurrent({ ...turn, ...start('d-newer') }, 2)
+    if (!newer) {
+      throw new Error('The newer generation was not recorded')
+    }
+    await work.store.close(newer, 'stopped', 3)
+    const other = await work.store.makeCurrent(
+      { botId: 'bot-1', address: CHAT, ...start('d-other') },
+      4
+    )
+    if (!other) {
+      throw new Error('Work in the other conversation was not recorded')
+    }
+    await work.store.close(other, 'stopped', 5)
+    const record = new BotWorkRecord({
+      store: () => work.store,
+      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
+      workspaces: () => async () => null,
+      conversationTitle: () => null,
+      turnAddress: async () => turn
+    })
+    record.handedOver('slack-chat', { origin: 'connector' })
+
+    expect(await record.forget('slack-chat')).toBe(true)
+    expect((await record.list('bot-1', true)).map((row) => row.dispatchId)).toEqual(['d-other'])
+
+    const later = await work.store.makeCurrent({ ...turn, ...start('d-later') }, 6)
+    if (!later) {
+      throw new Error('New work in the conversation was not recorded')
+    }
+    await work.store.close(later, 'stopped', 7)
+    expect((await record.list('bot-1', true)).map((row) => row.dispatchId)).toEqual([
+      'd-later',
+      'd-other'
+    ])
+    expect(await record.forget('slack-chat')).toBe(true)
+    expect((await record.list('bot-1', true)).map((row) => row.dispatchId)).toEqual(['d-other'])
+  })
 })
 
 function start(dispatchId: string) {

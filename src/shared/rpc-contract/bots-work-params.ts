@@ -1,12 +1,13 @@
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
-import { OptionalString, requiredString } from './rpc-param-primitives'
+import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 
 /** `orca bot work list`: the work a bot started; from its chat when no bot is named. */
 export const BotWorkList = lazyZodSchema(() =>
   z.object({
     botId: OptionalString,
-    callerSessionId: OptionalString
+    callerSessionId: OptionalString,
+    all: OptionalBoolean
   })
 )
 

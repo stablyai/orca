@@ -6,8 +6,9 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { ownPullRequest } from './bot-work-pr-match'
 import type { BotWorkPullRequest } from '../../shared/bots/bot-work-pull-request'
 import type { BotWorkAddress, BotWorkHost, BotWorkRow } from './bot-work-store'
-import { botWorkTurnNote, cleanBotWorkText } from './bot-work-turn-note'
+import { botWorkTurnNote } from './bot-work-turn-note'
 import { readBotWorkRows } from './bot-work-row-read'
+import { readBotWorkHistory, summarizeBotWork } from './bot-work-history'
 import type { BotTurnAddress, BotWorkCheck, BotWorkRecordDeps } from './bot-work-types'
 
 export type {
@@ -112,38 +113,19 @@ export class BotWorkRecord {
   }
 
   /** The work a bot started that is still its conversations', newest first. */
-  async list(botId: string): Promise<BotWorkerSummary[]> {
+  async list(botId: string, includeHistory = false): Promise<BotWorkerSummary[]> {
     const items: BotWorkerSummary[] = []
     for await (const { row, worker, workspace } of this.checkAll(
       await this.deps.store().liveRows(botId)
     )) {
-      // A chat's own name; a connector conversation's only when its connector asked.
-      const linked =
-        row.askedInApp && row.address.source !== 'chat'
-          ? null
-          : this.deps.conversationTitle(row.address)
-      const title = linked ? cleanBotWorkText(linked) : null
-      items.push({
-        id: row.rowId,
-        title: cleanBotWorkText(worker?.title ?? `dispatch:${row.dispatchId}`),
-        agent: worker?.agent ?? null,
-        state: worker?.state ?? null,
-        ...(worker?.idle ? { idle: true } : {}),
-        ...(worker?.state === 'working' && worker.progressNote
-          ? { progressNote: cleanBotWorkText(worker.progressNote) }
-          : {}),
-        dispatchId: worker?.dispatchId ?? row.dispatchId,
-        workspace: workspace ? cleanBotWorkText(workspace.name) : null,
-        server: worker?.hostName ? cleanBotWorkText(worker.hostName) : null,
-        pr: workspace ? ownPullRequest(workspace) : null,
-        startedAt: worker?.startedAt ?? null,
-        source: {
-          source: row.askedInApp || row.address.source === 'chat' ? 'app' : row.address.source,
-          title
-        }
-      })
+      items.push(summarizeBotWork(this.deps, { row, worker, workspace }))
     }
-    return items
+    if (!includeHistory) {
+      return items
+    }
+    const history = await readBotWorkHistory(this.deps, botId)
+    const closedIds = new Set(history.map((item) => item.id))
+    return [...items.filter((item) => !closedIds.has(item.id)), ...history]
   }
 
   /** The pull requests a conversation's live work opened, as its workspaces' rows show them; read
@@ -172,10 +154,7 @@ export class BotWorkRecord {
    *  starts fresh. */
   async forget(sessionId: string): Promise<boolean> {
     const turn = await this.turnOf(sessionId)
-    const store = this.deps.store()
-    const rows = turn ? await store.addressRows(turn.botId, turn.address) : []
-    const closed = await Promise.all(rows.map((row) => store.close(row, 'owner_reset')))
-    return closed.some(Boolean)
+    return turn ? this.deps.store().forgetAddress(turn.botId, turn.address) : false
   }
 
   /** A deleted bot's rows; never rejects, so its caller needn't wait. Rows a failure leaves open

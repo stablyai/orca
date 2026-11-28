@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS bot_work (
   created_at INTEGER NOT NULL,
   closed_at INTEGER,
   close_reason TEXT,
+  forgotten INTEGER NOT NULL DEFAULT 0,
   UNIQUE (bot_id, source, external_id, generation)
 );
 DROP INDEX IF EXISTS bot_work_live_address;
@@ -79,5 +80,6 @@ export function rowOf(row: SqliteRow): BotWorkRow | null {
 
 export const ADDED_COLUMNS = [
   ['current', 'INTEGER NOT NULL DEFAULT 1'],
-  ['asked_in_app', 'INTEGER NOT NULL DEFAULT 0']
+  ['asked_in_app', 'INTEGER NOT NULL DEFAULT 0'],
+  ['forgotten', 'INTEGER NOT NULL DEFAULT 0']
 ] as const
