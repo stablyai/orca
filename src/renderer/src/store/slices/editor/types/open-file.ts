@@ -4,7 +4,8 @@ import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
-  GitCommitCompareSummary
+  GitCommitCompareSummary,
+  GitDiffEncoding
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
@@ -54,6 +55,8 @@ export type OpenFile = {
   /** Hash fragment to reveal when a preview tab opens from a link (`./guide.md#setup`); kept on tab state so repeat opens can retarget it. */
   markdownPreviewAnchor?: string
   diffSource?: DiffSource
+  /** Decoding override for this single-file diff; legacy encodings are preview-only. */
+  diffEncoding?: Exclude<GitDiffEncoding, 'utf-8'>
   branchCompare?: BranchCompareSnapshot
   commitCompare?: CommitCompareSnapshot
   branchOldPath?: string
@@ -92,6 +95,10 @@ export type OpenFile = {
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
+}
+
+export function isReadOnlyEditorView(file: OpenFile): boolean {
+  return file.readOnly === true || file.csvPreviewOnly === true || file.diffEncoding === 'gb18030'
 }
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'

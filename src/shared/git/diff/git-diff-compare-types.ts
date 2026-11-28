@@ -44,8 +44,12 @@ export type GitCommitCompareResult = {
   entries: GitBranchChangeEntry[]
 }
 
+export type GitDiffEncoding = 'utf-8' | 'gb18030'
+
 export type GitDiffTextResult = {
   kind: 'text'
+  /** Present when the host honors a non-UTF-8 encoding. */
+  encoding?: GitDiffEncoding
   originalContent: string
   modifiedContent: string
   originalIsBinary: false

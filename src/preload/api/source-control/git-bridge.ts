@@ -100,15 +100,7 @@ export const gitApi = {
   ): Promise<ContinueRebaseResult> => ipcRenderer.invoke('git:continueRebase', args),
   rebaseAutoStash: (args: { worktreePath: string; connectionId?: string }): Promise<boolean> =>
     ipcRenderer.invoke('git:rebaseAutoStash', args),
-  diff: (args: {
-    worktreePath: string
-    filePath: string
-    staged: boolean
-    compareAgainstHead?: boolean
-    oldPath?: string
-    connectionId?: string
-    wakeWslDistro?: boolean
-  }) => ipcRenderer.invoke('git:diff', args),
+  diff: (args) => ipcRenderer.invoke('git:diff', args),
   branchCompare: (args: { worktreePath: string; baseRef: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:branchCompare', args),
   commitCompare: (args: { worktreePath: string; commitId: string; connectionId?: string }) =>
@@ -154,23 +146,8 @@ export const gitApi = {
     baseRef: string
     connectionId?: string
   }): Promise<RebaseFromBaseResult> => ipcRenderer.invoke('git:rebaseFromBase', args),
-  branchDiff: (args: {
-    worktreePath: string
-    compare: { baseRef: string; baseOid: string; headOid: string; mergeBase: string }
-    filePath: string
-    oldPath?: string
-    connectionId?: string
-    wakeWslDistro?: boolean
-  }) => ipcRenderer.invoke('git:branchDiff', args),
-  commitDiff: (args: {
-    worktreePath: string
-    commitOid: string
-    parentOid?: string | null
-    filePath: string
-    oldPath?: string
-    connectionId?: string
-    wakeWslDistro?: boolean
-  }) => ipcRenderer.invoke('git:commitDiff', args),
+  branchDiff: (args) => ipcRenderer.invoke('git:branchDiff', args),
+  commitDiff: (args) => ipcRenderer.invoke('git:commitDiff', args),
   commit: (args: {
     worktreePath: string
     message: string

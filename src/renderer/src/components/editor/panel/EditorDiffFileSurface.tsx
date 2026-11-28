@@ -1,7 +1,13 @@
 import { DiffTooLargeNotice } from '../diff/large-files/DiffTooLargeNotice'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { GitDiffResult } from '../../../../../shared/git/diff/git-diff-compare-types'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type DiffContent,
+  type ReloadContentOptions
+} from '../loading/editor-panel-content-types'
+import { EditorFileLoadErrorView } from '../loading/EditorFileLoadErrorView'
 import { getDiffContentSignature } from '../diff/sections/diff-content-signature'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from '../editor-lazy-views'
 import { ExternalFileChangeBanner } from '../external-changes/ExternalFileChangeBanner'
@@ -29,7 +35,7 @@ export function EditorDiffFileSurface({
   reloadContent
 }: {
   activeFile: OpenFile
-  diffContent: GitDiffResult | undefined
+  diffContent: DiffContent | undefined
   editBuffer: string | undefined
   resolvedLanguage: string
   sideBySide: boolean
@@ -43,10 +49,10 @@ export function EditorDiffFileSurface({
   markdownDocuments: MarkdownDocumentsController
   onContentChange: (content: string) => void
   onSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  if (!diffContent) {
+  if (!diffContent || diffContent.requestedEncoding !== activeFile.diffEncoding) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
         {t('auto.components.editor.EditorContent.c88c73a0d3', 'Loading diff...')}
@@ -54,7 +60,19 @@ export function EditorDiffFileSurface({
     )
   }
 
-  const isEditable = activeFile.diffSource === 'unstaged'
+  if (diffContent.loadError) {
+    return (
+      <EditorFileLoadErrorView
+        message={diffContent.loadError}
+        worktreeId={activeFile.worktreeId}
+        onRetry={() => reloadContent(activeFile, USER_RETRY)}
+        onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
+      />
+    )
+  }
+
+  const isEditable =
+    activeFile.diffSource === 'unstaged' && !activeFile.diffEncoding && !activeFile.readOnly
   if (diffContent.kind === 'binary') {
     if (diffContent.tooLarge) {
       return <DiffTooLargeNotice forConnection={diffContent.tooLargeForConnection} />
@@ -92,14 +110,16 @@ export function EditorDiffFileSurface({
     )
   }
 
-  const modifiedDiffContent = editBuffer ?? diffContent.modifiedContent
+  const modifiedDiffContent = activeFile.diffEncoding
+    ? diffContent.modifiedContent
+    : (editBuffer ?? diffContent.modifiedContent)
   const largeDiffSaveContentAvailable = !(
     diffContent.largeDiffRenderLimit?.limited === true &&
     editBuffer === undefined &&
     diffContent.modifiedContent.length === 0
   )
   const externalChangeBanner =
-    activeFile.externalMutation === 'changed' ? (
+    !activeFile.diffEncoding && activeFile.externalMutation === 'changed' ? (
       <ExternalFileChangeBanner
         file={activeFile}
         currentContent={modifiedDiffContent}
@@ -170,7 +190,7 @@ export function EditorDiffFileSurface({
       onSave={isEditable ? (isMarkdown ? markdownDocuments.mdSave : onSave) : undefined}
     />
   )
-  if (activeFile.externalMutation !== 'changed') {
+  if (!externalChangeBanner) {
     return diffViewer
   }
   return (

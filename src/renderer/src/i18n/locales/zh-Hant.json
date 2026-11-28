@@ -17903,7 +17903,11 @@
           "631dab0df3": "下一個變更"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "檔案操作"
+          "fileActions": "檔案操作",
+          "textEncoding": "文字編碼",
+          "utf8": "UTF-8",
+          "gb18030": "GBK / GB18030（唯讀）",
+          "updateHost": "請更新工作區主機上的 Orca，以 GB18030 檢視此差異。"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "匯出為 PDF",

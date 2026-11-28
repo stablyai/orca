@@ -63,11 +63,17 @@ export const GitResolveConflict = lazyZodSchema(() =>
   })
 )
 
-export const GitDiff = lazyZodSchema(() =>
+const GitDiffFilePath = lazyZodSchema(() =>
   GitFilePath.extend({
+    oldPath: z.string().optional(),
+    encoding: z.enum(['utf-8', 'gb18030']).optional()
+  })
+)
+
+export const GitDiff = lazyZodSchema(() =>
+  GitDiffFilePath.extend({
     staged: z.boolean(),
-    compareAgainstHead: z.boolean().optional(),
-    oldPath: z.string().optional()
+    compareAgainstHead: z.boolean().optional()
   })
 )
 
@@ -155,22 +161,20 @@ export const GitHistory = lazyZodSchema(() =>
 )
 
 export const GitBranchDiff = lazyZodSchema(() =>
-  GitFilePath.extend({
+  GitDiffFilePath.extend({
     compare: z.object({
       baseRef: z.string().optional(),
       baseOid: FullGitObjectId.optional(),
       headOid: FullGitObjectId,
       mergeBase: FullGitObjectId
-    }),
-    oldPath: z.string().optional()
+    })
   })
 )
 
 export const GitCommitDiff = lazyZodSchema(() =>
-  GitFilePath.extend({
+  GitDiffFilePath.extend({
     commitOid: FullGitObjectId,
-    parentOid: FullGitObjectId.nullable().optional(),
-    oldPath: z.string().optional()
+    parentOid: FullGitObjectId.nullable().optional()
   })
 )
 

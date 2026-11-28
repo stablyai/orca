@@ -43,7 +43,7 @@ function inFlightDiffKey(
     file.diffSource === 'commit' && file.commitCompare
       ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${file.branchOldPath ?? ''}::${branch}::${commit}`
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${file.diffEncoding ?? 'utf-8'}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${file.branchOldPath ?? ''}::${branch}::${commit}`
 }
 
 export function useEditorPanelDiffContentLoader({
@@ -80,6 +80,7 @@ export function useEditorPanelDiffContentLoader({
               file,
               worktreePath
             )
+            const encodingArgs = file.diffEncoding ? { encoding: file.diffEncoding } : {}
             const gitScope = getRuntimeGitScope(fileTarget, connectionId)
             const effectiveDiffSource: typeof file.diffSource =
               file.mode === 'edit' ? 'unstaged' : file.diffSource
@@ -115,6 +116,7 @@ export function useEditorPanelDiffContentLoader({
                         {
                           commitOid: commitCompare.commitOid,
                           parentOid: commitCompare.parentOid,
+                          ...encodingArgs,
                           filePath: file.relativePath,
                           oldPath: file.branchOldPath
                         },
@@ -136,6 +138,7 @@ export function useEditorPanelDiffContentLoader({
                             headOid: branchCompare.headOid!,
                             mergeBase: branchCompare.mergeBase!
                           },
+                          ...encodingArgs,
                           filePath: file.relativePath,
                           oldPath: file.branchOldPath
                         },
@@ -149,6 +152,7 @@ export function useEditorPanelDiffContentLoader({
                           connectionId
                         },
                         {
+                          ...encodingArgs,
                           filePath: file.relativePath,
                           staged: effectiveDiffSource === 'staged',
                           compareAgainstHead,
@@ -170,9 +174,21 @@ export function useEditorPanelDiffContentLoader({
             if (diffReadGenerationRef.current[file.id] !== generation) {
               return
             }
-            setDiffContents((prev) => ({ ...prev, [file.id]: result }))
+            const content: DiffContent = { ...result, requestedEncoding: file.diffEncoding }
+            if (
+              result.kind === 'text' &&
+              file.diffEncoding &&
+              result.encoding !== file.diffEncoding
+            ) {
+              content.loadError = translate(
+                'auto.components.editor.EditorPanelActionsMenu.updateHost',
+                'Update Orca on the workspace host to view this diff in GB18030.'
+              )
+            }
+            setDiffContents((prev) => ({ ...prev, [file.id]: content }))
             // Why: an unstaged diff saves its modified side to the working-tree file, so that side is its baseline.
             if (
+              !file.diffEncoding &&
               file.diffSource === 'unstaged' &&
               result.kind === 'text' &&
               result.largeDiffRenderLimit === undefined
@@ -187,16 +203,27 @@ export function useEditorPanelDiffContentLoader({
               return
             }
             setDiffContents((prev) => {
-              // A poll's reload refused for a stopped WSL distro keeps the diff already shown.
-              if (prev[file.id] && isWslDistroNotRunningRefusal(err)) {
+              const cached = prev[file.id]
+              // Keep a draft's comparison or a stopped WSL host's last read across a failed refresh.
+              if (
+                cached &&
+                cached.requestedEncoding === file.diffEncoding &&
+                (isWslDistroNotRunningRefusal(err) ||
+                  (file.diffSource === 'unstaged' &&
+                    cached.kind === 'text' &&
+                    !cached.loadError &&
+                    useAppStore.getState().editorDrafts[file.id] !== undefined))
+              ) {
                 return prev
               }
               return {
                 ...prev,
                 [file.id]: {
+                  requestedEncoding: file.diffEncoding,
                   kind: 'text',
                   originalContent: '',
-                  modifiedContent: translate(
+                  modifiedContent: '',
+                  loadError: translate(
                     'auto.components.editor.EditorPanel.diffLoadError',
                     'Error loading diff: {{error}}',
                     {

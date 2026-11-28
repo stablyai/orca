@@ -17801,7 +17801,11 @@
           "listFailed": "无法列出 Markdown 文档"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "文件操作"
+          "fileActions": "文件操作",
+          "textEncoding": "文本编码",
+          "utf8": "UTF-8",
+          "gb18030": "GBK / GB18030（只读）",
+          "updateHost": "请更新工作区主机上的 Orca，以 GB18030 查看此差异。"
         },
         "ReviewNotesSendMenu": {
           "terminalGone": "终端已不可用",

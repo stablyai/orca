@@ -18121,7 +18121,11 @@
           "631dab0df3": "Next change"
         },
         "EditorPanelActionsMenu": {
-          "fileActions": "File actions"
+          "fileActions": "File actions",
+          "textEncoding": "Text encoding",
+          "utf8": "UTF-8",
+          "gb18030": "GBK / GB18030 (read-only)",
+          "updateHost": "Update Orca on the workspace host to view this diff in GB18030."
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",

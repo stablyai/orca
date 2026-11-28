@@ -5,6 +5,7 @@ import type {
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffEncoding,
   GitDiffResult
 } from '../../../shared/git/diff/git-diff-compare-types'
 import type {
@@ -72,7 +73,8 @@ export type IGitProvider = {
     filePath: string,
     staged: boolean,
     compareAgainstHead?: boolean,
-    oldPath?: string
+    oldPath?: string,
+    encoding?: GitDiffEncoding
   ): Promise<GitDiffResult>
   getBlame(worktreePath: string, filePath: string, knownHeadOid?: string): Promise<GitBlameResult>
   stageFile(worktreePath: string, filePath: string): Promise<void>
@@ -135,7 +137,8 @@ export type IGitProvider = {
   ): Promise<GitDiffResult[]>
   getCommitDiff(
     worktreePath: string,
-    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string }
+    args: { commitOid: string; parentOid?: string | null; filePath: string; oldPath?: string },
+    encoding?: GitDiffEncoding
   ): Promise<GitDiffResult>
   listWorktrees(repoPath: string, options?: { signal?: AbortSignal }): Promise<GitWorktreeInfo[]>
   addWorktree(

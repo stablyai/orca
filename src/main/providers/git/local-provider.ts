@@ -94,10 +94,11 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
       recoverSequencer(worktreePath, operation, action, interactive, request),
     completeMerge: (worktreePath) => completeMerge(worktreePath, interactive),
     getStagedCommitContext: (worktreePath) => getStagedCommitContext(worktreePath, interactive),
-    getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath) =>
+    getDiff: (worktreePath, filePath, staged, compareAgainstHead, oldPath, encoding) =>
       getDiff(worktreePath, filePath, staged, compareAgainstHead, {
         ...interactive,
-        ...(oldPath ? { oldPath } : {})
+        oldPath,
+        encoding
       }),
     getBlame: (worktreePath, filePath, knownHeadOid) =>
       getBlame(worktreePath, filePath, base, knownHeadOid),
@@ -156,7 +157,8 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
     fetchRemote: (worktreePath, pushTarget) => gitFetch(worktreePath, pushTarget, interactive),
     syncForkDefaultBranch: (worktreePath, expectedUpstream) =>
       gitSyncForkDefaultBranch(worktreePath, expectedUpstream, interactive),
-    getCommitDiff: (worktreePath, args) => getCommitDiff(worktreePath, args, interactive),
+    getCommitDiff: (worktreePath, args, encoding) =>
+      getCommitDiff(worktreePath, args, { ...interactive, encoding }),
     listWorktrees: (repoPath, listOptions) =>
       listWorktrees(repoPath, listOptions?.signal ? { ...base, signal: listOptions.signal } : base),
     isGitRepo: (path) => isGitRepo(path),

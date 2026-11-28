@@ -15,7 +15,10 @@ import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 
 const UNAVAILABLE: GitBlameResult = { kind: 'unavailable' }
 // No filter or textconv pass, and no attribute lookup to decide one.
-const RAW_BLOB: BlobConversion = { mode: 'checkout', hasDriver: Promise.resolve(false) }
+const RAW_BLOB: BlobConversion = {
+  mode: 'checkout',
+  attributes: Promise.resolve({ hasTextconv: false, storesUtf8: false })
+}
 
 // Keyed by commit, so entries never go stale; HEAD moving produces a new key.
 const blameCache = new GitBlameResultCache()

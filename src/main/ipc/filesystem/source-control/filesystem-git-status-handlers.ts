@@ -6,7 +6,10 @@ import type {
   GitStagingArea,
   GitStatusResult
 } from '../../../../shared/git/status/git-status-types'
-import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type {
+  GitDiffEncoding,
+  GitDiffResult
+} from '../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } from '../../worktrees/git/worktree-git-status-ref-watch'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { getStatus } from '../../../git/source-control/status/status-read'
@@ -260,6 +263,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         staged: boolean
         compareAgainstHead?: boolean
         oldPath?: string
+        encoding?: GitDiffEncoding
         connectionId?: string
         /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
         wakeWslDistro?: boolean
@@ -279,6 +283,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
             {
               ...gitOptions,
               admissionTier: 'interactive',
+              encoding: args.encoding,
               ...(args.oldPath
                 ? { oldPath: validateGitRelativeFilePath(worktreePath, args.oldPath) }
                 : {})

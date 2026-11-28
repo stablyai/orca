@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/editor/saving/editor-auto-save-delay'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isAutosavePausedForNonUtf8File } from './editor-non-utf8-autosave-pause'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { isReadOnlyEditorView, type OpenFile } from '@/store/slices/editor/types/open-file'
 
 export const ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT = 'orca:editor-quiesce-file-saves'
 export const ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT = 'orca:editor-external-file-change'
@@ -103,7 +103,7 @@ export function isExternalReloadableEditorTab(file: OpenFile): boolean {
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
   // Never autosave provider-owned transcripts or CSV preview placeholders; either can overwrite content the editor does not own.
-  if (file.readOnly === true || file.csvPreviewOnly === true) {
+  if (isReadOnlyEditorView(file)) {
     return false
   }
   // Only edit and unstaged single-file diffs have one write target; multi-file surfaces need separate save coordination.

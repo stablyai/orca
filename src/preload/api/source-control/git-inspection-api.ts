@@ -2,6 +2,7 @@ import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffEncoding,
   GitDiffResult
 } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
@@ -92,6 +93,7 @@ export type GitInspectionApi = {
     staged: boolean
     compareAgainstHead?: boolean
     oldPath?: string
+    encoding?: GitDiffEncoding
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
@@ -121,6 +123,7 @@ export type GitInspectionApi = {
     }
     filePath: string
     oldPath?: string
+    encoding?: GitDiffEncoding
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>
@@ -130,6 +133,7 @@ export type GitInspectionApi = {
     parentOid?: string | null
     filePath: string
     oldPath?: string
+    encoding?: GitDiffEncoding
     connectionId?: string
     wakeWslDistro?: boolean
   }) => Promise<GitDiffResult>

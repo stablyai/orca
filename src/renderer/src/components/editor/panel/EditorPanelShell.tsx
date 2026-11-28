@@ -106,6 +106,10 @@ export function EditorPanelShell({
           viewStateId={activeViewStateId ?? activeFile.id}
           copiedPathVisible={copiedPathVisible}
           isSingleDiff={model.isSingleDiff}
+          showDiffEncoding={
+            model.isSingleDiff &&
+            (activeFile.diffEncoding !== undefined || diffContents[activeFile.id]?.kind === 'text')
+          }
           isDiffSurface={model.isDiffSurface}
           isMarkdown={model.isMarkdown}
           isCsv={model.isCsv}
