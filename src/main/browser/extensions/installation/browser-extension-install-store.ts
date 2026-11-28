@@ -10,6 +10,8 @@ import type { InstalledBrowserExtension } from '../../../../shared/browser/exten
 
 const INSTALLED_FILE_NAME = 'installed.json'
 const REMOVALS_FILE_NAME = 'uninstalled.json'
+const UNREADABLE_LIST_ERROR =
+  'The installed browser extension list could not be read; refusing to overwrite it. Restart Orca and try again.'
 
 const installedExtensionSchema = lazyZodSchema(() =>
   z.object({
@@ -56,11 +58,11 @@ export class BrowserExtensionInstallStore {
   }
 
   list(): InstalledBrowserExtension[] {
-    return [...this.load().values()]
+    return [...(this.load()?.values() ?? [])]
   }
 
   get(extensionId: string): InstalledBrowserExtension | null {
-    return this.load().get(extensionId) ?? null
+    return this.load()?.get(extensionId) ?? null
   }
 
   /** Monotonic uninstall markers survive reinstall and are shared by every Orca profile. */
@@ -96,7 +98,7 @@ export class BrowserExtensionInstallStore {
   }
 
   save(extension: InstalledBrowserExtension, updated = false): InstalledBrowserExtension {
-    const entries = this.load()
+    const entries = this.loadForWrite()
     const previous = entries.get(extension.id)
     const latest = Math.max(0, ...[...entries.values()].map((entry) => entry.installTime ?? 0))
     const installTime = updated
@@ -113,7 +115,7 @@ export class BrowserExtensionInstallStore {
 
   /** Forgets the extension and deletes the folders Orca owns (never the user's unpacked folder). */
   async remove(extensionId: string): Promise<InstalledBrowserExtension | null> {
-    const entries = this.load()
+    const entries = this.loadForWrite()
     const existing = entries.get(extensionId)
     if (!existing) {
       return null
@@ -138,23 +140,38 @@ export class BrowserExtensionInstallStore {
     return existing
   }
 
-  private load(): Map<string, InstalledBrowserExtension> {
+  /** Null means the list exists but could not be read; that is not an empty list. */
+  private load(): Map<string, InstalledBrowserExtension> | null {
     if (this.cache) {
       return this.cache
     }
     const entries = new Map<string, InstalledBrowserExtension>()
+    let raw: unknown
     try {
-      const raw: unknown = JSON.parse(
-        readFileSync(join(this.rootDirectory, INSTALLED_FILE_NAME), 'utf8')
-      )
-      for (const candidate of Array.isArray(raw) ? raw : []) {
-        const parsed = installedExtensionSchema.safeParse(candidate)
-        if (parsed.success) {
-          entries.set(parsed.data.id, parsed.data)
-        }
+      raw = JSON.parse(readFileSync(join(this.rootDirectory, INSTALLED_FILE_NAME), 'utf8'))
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        this.cache = entries
+        return entries
       }
-    } catch {
-      // Missing or unreadable list: start empty.
+      // Why not cached: a later read may succeed, and an empty list here would authorize writes.
+      return null
+    }
+    if (!Array.isArray(raw)) {
+      return null
+    }
+    let skipped = 0
+    for (const candidate of raw) {
+      const parsed = installedExtensionSchema.safeParse(candidate)
+      if (parsed.success) {
+        entries.set(parsed.data.id, parsed.data)
+      } else {
+        skipped += 1
+      }
+    }
+    // Why: understanding none of it means this is not a list we can safely replace.
+    if (raw.length > 0 && skipped === raw.length) {
+      return null
     }
     // Legacy list order was install order; persist it once so all profiles use the same precedence.
     let legacyTime = 0
@@ -170,6 +187,15 @@ export class BrowserExtensionInstallStore {
       this.persist(entries)
     }
     this.cache = entries
+    return entries
+  }
+
+  /** Writes replace the whole list, so they need a list that was actually read. */
+  private loadForWrite(): Map<string, InstalledBrowserExtension> {
+    const entries = this.load()
+    if (!entries) {
+      throw new Error(UNREADABLE_LIST_ERROR)
+    }
     return entries
   }
 
