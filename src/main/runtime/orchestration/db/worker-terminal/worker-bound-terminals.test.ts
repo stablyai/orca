@@ -29,6 +29,7 @@ import {
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 import { bindTerminalToCallingWorker } from '../../workers/lifecycle/worker-created-terminal-owner'
+import { dispatchHasBotLineage } from '../bot-dispatch-lineage'
 
 describe('terminals bound to a worker', () => {
   let directory: string
@@ -167,7 +168,9 @@ describe('terminals bound to a worker', () => {
       .prepare('UPDATE dispatch_contexts SET retry_of_dispatch_id = ? WHERE id = ?')
       .run(helper.dispatchId, retry.dispatchId)
 
-    expect(workerStartedByBot(db, retry.dispatchId, isBotChat)).toBe(true)
+    expect(workerStartedByBot(db, retry.dispatchId, isBotChat)).toBe(false)
+    expect(workerKeepOpenByDefault(db, 'new-child', retry.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, retry.dispatchId, isBotChat)).toBe(true)
   })
 
   it('keeps bot commit-credit lineage when a helper receives a follow-up', () => {
@@ -178,7 +181,9 @@ describe('terminals bound to a worker', () => {
       .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
       .run(helper.dispatchId, followUp.dispatchId)
 
-    expect(workerStartedByBot(db, followUp.dispatchId, isBotChat)).toBe(true)
+    expect(workerStartedByBot(db, followUp.dispatchId, isBotChat)).toBe(false)
+    expect(workerKeepOpenByDefault(db, 'new-child', followUp.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, followUp.dispatchId, isBotChat)).toBe(true)
   })
 
   it('keeps walking other ancestors when one recorded ancestor is missing', () => {
@@ -191,6 +196,7 @@ describe('terminals bound to a worker', () => {
       .run(worker.dispatchId, 'ctx_missing', helper.dispatchId)
 
     expect(workerStartedByBot(db, helper.dispatchId, isBotChat)).toBe(true)
+    expect(dispatchHasBotLineage(db, helper.dispatchId, isBotChat)).toBe(true)
   })
 
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {

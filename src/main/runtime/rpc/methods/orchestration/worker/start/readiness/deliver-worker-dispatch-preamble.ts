@@ -19,7 +19,7 @@ import { OrchestrationError } from '../../../../../../orchestration/orchestratio
 import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import { botOfSession } from '../../../../../../../bots/bot-session-tabs'
-import { workerStartedByBot } from '../worker-keep-open-default'
+import { dispatchHasBotLineage } from '../../../../../../orchestration/db/bot-dispatch-lineage'
 import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../../../../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
@@ -74,7 +74,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     devMode: args.devMode,
     ...runtime.getTerminalOrchestrationCliTarget(terminalHandle),
     unreadMail: args.db.getLatestUnreadMessageSequence(`dispatch:${args.dispatchId}`) !== undefined,
-    preserveHumanCommitCredit: workerStartedByBot(
+    preserveHumanCommitCredit: dispatchHasBotLineage(
       args.db,
       args.dispatchId,
       (sessionId) => botOfSession(runtime.bots, sessionId) !== null

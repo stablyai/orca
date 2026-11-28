@@ -36,7 +36,6 @@ import { reportFailedWorkerStart } from '../workers/turn-stops/failed-worker-sta
 import { dispatchWorkerStarted, prepareWorkerStartCard } from '../workers/launch/worker-start-card'
 import * as workerLaunch from '../workers/launch/worker-launch-observation'
 import * as lineage from './federated-worker-chat-lineage'
-import { startsInChatLineage } from '../../rpc/methods/orchestration/worker/start/worker-chat-lineage'
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
@@ -118,7 +117,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       : supportsControlMail
         ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
         : 1
-  const chatLineage = startsInChatLineage(runtime, db, params, args.callerSession)
   const botLineage = lineage.federatedWorkerChatLineage(runtime, db, params, args.callerSession)
   const runId = args.bindRunId()
   const started = db.createStartingWorkerDispatch({
@@ -131,7 +129,6 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     taskParentId: params.parent,
     taskRunId: runId,
     retryOf: params.retryOf,
-    chatLineage,
     botLineage,
     startOptions: {
       on: server.environmentId,

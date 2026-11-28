@@ -1,6 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
-import { dispatchHasBotLineage } from '../../../../../orchestration/db/bot-dispatch-lineage'
 import { botOfSession } from '../../../../../../bots/bot-session-tabs'
 
 /** Whether a started worker stays open after it reports when the caller asked nothing. A worker in its
@@ -42,7 +41,26 @@ export function workerStartedByBot(
   dispatchId: string,
   isBotChat: (sessionId: string) => boolean
 ): boolean {
-  return dispatchHasBotLineage(db, dispatchId, isBotChat)
+  const seen = new Set<string>()
+  let id: string | null = dispatchId
+  while (id && !seen.has(id) && seen.size < 100) {
+    seen.add(id)
+    const context = db.getDispatchContextById(id)
+    if (!context) {
+      return db.getRemoteDispatchAttachment(id)?.chat_lineage === 1
+    }
+    if (context.chat_lineage === 1) {
+      return true
+    }
+    const session =
+      context.creator_orca_session_id ??
+      (context.creator_dispatch_id ? null : db.getRun(context.run_id)?.coordinator_orca_session_id)
+    if (session && isBotChat(session)) {
+      return true
+    }
+    id = context.creator_dispatch_id
+  }
+  return false
 }
 
 export const startedForBot = workerStartedByBot

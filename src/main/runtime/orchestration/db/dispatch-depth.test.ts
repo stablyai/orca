@@ -130,6 +130,7 @@ describe('creator lineage', () => {
         paneKey: 'pane:remote',
         processIncarnation: 'remote:1'
       },
+      botLineage: true,
       maxDepth: Number.MAX_SAFE_INTEGER
     })
     db.db.prepare("UPDATE dispatch_contexts SET status = 'dispatched' WHERE id = ?").run(helper.id)
@@ -140,6 +141,7 @@ describe('creator lineage', () => {
       paneKey: helper.assignee_pane_key ?? undefined
     } as const
     expect(helper.chat_lineage).toBeNull()
+    expect(helper.bot_lineage).toBe(1)
     expect(db.creatorStartsChatWorkers(creator)).toBe(false)
     expect(db.creatorHasBotLineage(creator)).toBe(true)
   })

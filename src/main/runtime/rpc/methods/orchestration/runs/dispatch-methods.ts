@@ -25,7 +25,7 @@ import {
 import { sendChatTask } from '../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import { startsInChatLineage } from '../worker/start/worker-chat-lineage'
-import { workerStartedByBot } from '../worker/start/worker-keep-open-default'
+import { dispatchHasBotLineage } from '../../../../orchestration/db/bot-dispatch-lineage'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
 
 export function dispatchStartsChatWorkers(
@@ -68,14 +68,6 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     ) => {
       const db = runtime.getOrchestrationDb()
       const creator = resolveDispatchCreator(runtime, params.from, orchestrationCaller)
-      const chatLineage = dispatchStartsChatWorkers(runtime, db, params.from, orchestrationCaller)
-      const preserveHumanCommitCredit = dispatchPreservesHumanCommitCredit(
-        runtime,
-        db,
-        creator,
-        params.from,
-        orchestrationCaller
-      )
       const assigneeParty = params.to ? resolveDispatchAssigneeParty(params.to, db) : undefined
       const assignee = assigneeParty?.address
       // A chat has no pane, process or agent to probe: it is reached as mail to it is.
@@ -96,7 +88,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
           workerHandle: assignee ? orcaSessionIdOrHandle(assignee, db) : 'worker',
           devMode: params.devMode,
-          preserveHumanCommitCredit,
+          preserveHumanCommitCredit: dispatchPreservesHumanCommitCredit(
+            runtime,
+            db,
+            creator,
+            params.from,
+            orchestrationCaller
+          ),
           ...(assignee ? runtime.getTerminalOrchestrationCliTarget(assignee) : {})
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
@@ -177,7 +175,13 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           ? JSON.stringify(dispatchAuthority.hostScope)
           : null,
         creator,
-        chatLineage,
+        botLineage: dispatchPreservesHumanCommitCredit(
+          runtime,
+          db,
+          creator,
+          params.from,
+          orchestrationCaller
+        ),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
 
@@ -190,7 +194,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         coordinatorHandle: orcaSessionIdOrHandle(params.from ?? 'coordinator', db),
         workerHandle: orcaSessionIdOrHandle(to, db),
         devMode: params.devMode,
-        preserveHumanCommitCredit: workerStartedByBot(
+        preserveHumanCommitCredit: dispatchHasBotLineage(
           db,
           ctx.id,
           (sessionId) => botOfSession(runtime.bots, sessionId) !== null
@@ -280,7 +284,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           devMode: params.devMode,
           preserveHumanCommitCredit:
             ctx !== undefined &&
-            workerStartedByBot(
+            dispatchHasBotLineage(
               db,
               ctx.id,
               (sessionId) => botOfSession(runtime.bots, sessionId) !== null
