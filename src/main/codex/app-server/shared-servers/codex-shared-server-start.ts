@@ -4,6 +4,7 @@ import type { KeptProviderRelay } from '../../../provider-relay/app-provider-rel
 import type { CodexSharedServer } from './codex-shared-server'
 import type { CodexRecoveredChat } from './codex-shared-recovery-group'
 import { recoverCodexSharedServerThreads } from './codex-shared-server-reattach'
+import { readProcessStartTimeMs } from '../../../runtime/agent-session/ownership/agent-session-process-identity-probe'
 import {
   restoreCodexSharedRecovery,
   type CodexSharedServerHandedBack
@@ -56,6 +57,10 @@ export async function startCodexSharedServer(
     throw error
   })
   server.physicalConnection = connection
+  if (relayed && connection.pid !== undefined) {
+    // Its chats' runs name it; their exit proof needs its start time, or a reused pid stays "maybe".
+    server.keep.serverStartTimeMs = (await readProcessStartTimeMs(connection.pid)) ?? undefined
+  }
   try {
     await initializeCodexAppServerConnection(connection, INITIALIZE_TIMEOUT_MS)
   } catch (error) {

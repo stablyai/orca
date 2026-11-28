@@ -120,4 +120,21 @@ describe('a reattached shared server holding its chats threads', () => {
     expect(texts(delivered)).toEqual(['c1'])
     expect(lease.recoveryCut).toBe(true)
   })
+
+  it('reconnects a helper whose unloaded ancestors are found one read at a time', () => {
+    const { recovery, router, leases, output } = reattachedRouter()
+    recovery.expect({ sessionId: 'chat', threadId: 'root', workload: 'w' })
+    recovery.holdUnowned('child')
+    output('child', 'c1')
+    // Each retry reads one more parent: child → a → b → root.
+    router.ownerFound('child', 'a')
+    router.ownerFound('a', 'b')
+    router.ownerFound('b', 'root')
+
+    const { lease, delivered } = chatLease()
+    leases.add(lease)
+    router.claim('root', lease, true)
+    expect(texts(delivered)).toEqual(['c1'])
+    expect(recovery.empty).toBe(true)
+  })
 })

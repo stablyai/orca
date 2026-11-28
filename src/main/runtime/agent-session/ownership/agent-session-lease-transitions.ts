@@ -1,4 +1,7 @@
-import type { AgentSessionRunPlacementLaunch } from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
+import type {
+  AgentSessionRunPlacement,
+  AgentSessionRunPlacementLaunch
+} from '../../../../shared/agent-session/lifecycle/agent-session-run-placement'
 import { acquiredAccountAcrossLease } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 /** Pure transitions applied by the store in one durable transaction.
  * Writer admission requires reservation, observed process identity and provider-handle proof at one fence. */
@@ -127,7 +130,7 @@ export function commitAgentSessionProcessIdentity(
     }),
     lastRunPlacement:
       launch.kind === 'relayed'
-        ? { ...launch, fence: args.fence, agent: args.process }
+        ? relayedPlacement(launch, args)
         : { kind: 'direct', fence: args.fence }
   }
 }
@@ -265,4 +268,17 @@ function releasedAgentSessionLease(
     handoffOperationId: null,
     deathEvidence
   })
+}
+
+/** The run's agent as its exit proof needs it: a shared agent's start time, which its chat's owner
+ *  identity leaves out, so a reused pid never reads as that agent. */
+function relayedPlacement(
+  { agentStartTimeMs, ...launch }: Extract<AgentSessionRunPlacementLaunch, { kind: 'relayed' }>,
+  args: { fence: number; process: AgentSessionProcessIdentity }
+): AgentSessionRunPlacement {
+  const agent =
+    agentStartTimeMs !== undefined && args.process.processStartTimeMs === null
+      ? { ...args.process, processStartTimeMs: agentStartTimeMs }
+      : args.process
+  return { ...launch, fence: args.fence, agent }
 }

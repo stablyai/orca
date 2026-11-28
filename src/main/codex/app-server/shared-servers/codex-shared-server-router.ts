@@ -174,8 +174,11 @@ export class CodexSharedServerRouter {
     const owner = this.owners.get(parent)
     if (owner?.routable) {
       this.claim(threadId, owner)
-    } else {
-      this.recovery?.join(threadId, parent)
+    } else if (this.recovery && !this.recovery.join(threadId, parent)) {
+      // An ancestor no group holds yet (an unloaded helper between): it becomes the family's
+      // unresolved root, so the next retry reads its own parent.
+      this.recovery.holdUnowned(parent)
+      this.recovery.join(threadId, parent)
     }
   }
 

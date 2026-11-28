@@ -205,7 +205,13 @@ export class CodexKeptServers {
       }
     }
     if (placement && server.relay && lease.keepable) {
-      setProviderRelayRunPlacement(sessionId, { ...placement, kind: 'relayed', workload: lease.id })
+      const startedAt = server.keep.serverStartTimeMs
+      setProviderRelayRunPlacement(sessionId, {
+        ...placement,
+        kind: 'relayed',
+        workload: lease.id,
+        ...(startedAt === undefined ? {} : { agentStartTimeMs: startedAt })
+      })
     }
   }
 }

@@ -32,7 +32,15 @@ export type AgentSessionRunPlacement =
 /** What a launch knows before the process commit adds the fence and the agent's identity. */
 export type AgentSessionRunPlacementLaunch =
   | { kind: 'direct' }
-  | { kind: 'relayed'; relayId: string; daemon: AgentSessionRunDaemon; workload?: string }
+  | {
+      kind: 'relayed'
+      relayId: string
+      daemon: AgentSessionRunDaemon
+      workload?: string
+      /** A shared agent's start time: its chat's owner identity has none (recovery never signals
+       *  a server other chats share), but its run's exit proof needs one. */
+      agentStartTimeMs?: number
+    }
 
 const positiveInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0
