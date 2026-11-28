@@ -62,6 +62,8 @@ export type RemoteServerUpdatesSlice = {
   remoteServerUpdatesChecking: boolean
   remoteServerUpdatesRunning: boolean
   remoteServerUpdateDialogOpen: boolean
+  /** Bumped synchronously on every open/close, so results from an earlier opening can be told apart. */
+  remoteServerUpdateDialogOpeningId: number
   remoteServerUpdatesLastCheckedAt: number | null
   setRemoteServerUpdateDialogOpen: (open: boolean) => void
   refreshRemoteServerUpdates: (
@@ -86,13 +88,17 @@ export const createRemoteServerUpdatesSlice: StateCreator<
   remoteServerUpdatesChecking: false,
   remoteServerUpdatesRunning: false,
   remoteServerUpdateDialogOpen: false,
+  remoteServerUpdateDialogOpeningId: 0,
   remoteServerUpdatesLastCheckedAt: null,
 
   setRemoteServerUpdateDialogOpen: (open) =>
-    set({
+    set((state) => ({
       remoteServerUpdateDialogOpen: open,
+      remoteServerUpdateDialogOpeningId:
+        state.remoteServerUpdateDialogOpeningId +
+        (open === state.remoteServerUpdateDialogOpen ? 0 : 1),
       ...(open ? {} : { remoteServerUpdateCheckOptions: null })
-    }),
+    })),
 
   refreshRemoteServerUpdates: async (options, behavior) => {
     if (get().remoteServerUpdatesChecking || get().remoteServerUpdatesRunning) {

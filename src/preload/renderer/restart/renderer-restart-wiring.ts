@@ -64,7 +64,14 @@ export function prepareAndInvokeUpdaterInstall(
   if (inFlight) {
     return inFlight
   }
-  const request = (async () => {
+  // Published before preparation runs: preparation dispatches restart events synchronously, and a
+  // listener that asks to install again must join this request rather than start a second one.
+  let settle!: { resolve: () => void; reject: (error: unknown) => void }
+  const request = new Promise<void>((resolve, reject) => {
+    settle = { resolve, reject }
+  })
+  updaterInstallsInFlight.set(eventTarget, request)
+  const run = async (): Promise<void> => {
     await prepareRendererForAppRestart(eventTarget, {
       startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
       abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
@@ -77,10 +84,12 @@ export function prepareAndInvokeUpdaterInstall(
       relay.abort()
       throw error
     }
-  })().finally(() => {
-    updaterInstallsInFlight.delete(eventTarget)
-  })
-  updaterInstallsInFlight.set(eventTarget, request)
+  }
+  void run()
+    .then(settle.resolve, settle.reject)
+    .finally(() => {
+      updaterInstallsInFlight.delete(eventTarget)
+    })
   return request
 }
 

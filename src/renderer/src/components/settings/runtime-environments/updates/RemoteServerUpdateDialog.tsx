@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -112,42 +112,36 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   // Updates act only on targets and live-session counts this dialog checked itself: it owns the
   // check its own refresh returned, for the current revision. A refresh skipped because another
   // check or update was running is retried once that work ends; a failed one waits for Retry.
+  // The opening id is bumped synchronously by the store on every open and close, so a check or
+  // failure from an earlier opening never counts for this one, even across a batched reopen.
   const revision = useAppStore((state) => state.remoteServerUpdatesCheckRevision)
-  const [ownedCheck, setOwnedCheck] = useState<RemoteServerUpdateCheck | null>(null)
-  const [refreshFailed, setRefreshFailed] = useState(false)
-  if (!open && (ownedCheck !== null || refreshFailed)) {
-    // Each opening checks afresh.
-    setOwnedCheck(null)
-    setRefreshFailed(false)
-  }
-  const currentCheck = ownedCheck?.revision === revision ? ownedCheck : null
-  // Bumped on every open and close, so a result from an earlier opening is ignored.
-  const opening = useRef(0)
-  useEffect(() => {
-    opening.current += 1
-  }, [open])
+  const openingId = useAppStore((state) => state.remoteServerUpdateDialogOpeningId)
+  const [owned, setOwned] = useState<{ check: RemoteServerUpdateCheck; openingId: number } | null>(
+    null
+  )
+  const [failedIn, setFailedIn] = useState<number | null>(null)
+  const refreshFailed = failedIn === openingId
+  const currentCheck =
+    owned?.openingId === openingId && owned.check.revision === revision ? owned.check : null
   const runRefresh = useCallback((): void => {
-    const startedIn = opening.current
-    setRefreshFailed(false)
+    const startedIn = useAppStore.getState().remoteServerUpdateDialogOpeningId
+    setFailedIn(null)
     void refresh().then(
       (check) => {
-        if (check && startedIn === opening.current) {
-          setOwnedCheck(check)
+        if (check) {
+          setOwned({ check, openingId: startedIn })
         }
       },
-      () => {
-        if (startedIn === opening.current) {
-          setRefreshFailed(true)
-        }
-      }
+      () => setFailedIn(startedIn)
     )
   }, [refresh])
+  // Each opening gets its own check, so the opening id is a dependency too.
   const needsCheck = open && currentCheck === null && !refreshFailed && !checking && !running
   useEffect(() => {
     if (needsCheck) {
       runRefresh()
     }
-  }, [needsCheck, runRefresh])
+  }, [needsCheck, openingId, runRefresh])
   const updatesBlocked = currentCheck === null || checking || running
 
   return (
