@@ -33,7 +33,8 @@ import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launc
 import { deliverAntigravityInstructions } from '../acp/launch/acp-instructions'
 import { scrubAgyOrcaHomeEnvironment } from './antigravity-agy-orca-home-environment'
 import { ANTIGRAVITY_LAUNCH_GATE } from './antigravity-chat-account'
-import { restoreAntigravityAccountForChat } from './native-account-launch'
+import { AGY_HOST_SELECTION } from './agy-account-selection'
+import { restoreSelectedAntigravityAccount } from './native-account-launch'
 import { discardAgyListingSession } from './agy-listing-session-discard'
 import { antigravityChatNamingHome } from './antigravity-chat-naming-home'
 import { AGY_ACP_CLIENT_INFO } from './antigravity-acp-runtime-probe'
@@ -113,9 +114,9 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
       }
       return env
     },
-    // An older agy may have written its own login back over the selected account (#50100).
-    prepare: (env, _auth, _assertCurrent, purpose = 'chat') =>
-      purpose === 'chat' ? restoreAntigravityAccountForChat(env) : Promise.resolve()
+    // An agy still on a previous account may have written its login back over the selected one
+    // (#50100); a listing reads the account's models, so it starts on the selected account too.
+    prepare: (env) => restoreSelectedAntigravityAccount(env)
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ env, homePath }) => [
@@ -136,6 +137,8 @@ const ANTIGRAVITY_AGY_LAUNCH_SPEC = {
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   launchGate: ANTIGRAVITY_LAUNCH_GATE,
+  // Saved accounts swap agy's one login, which Orca's homes share too, so the home can't tell them apart.
+  launchAccount: AGY_HOST_SELECTION,
   keepsEverySession: true
 } satisfies AcpLaunchSpec
 

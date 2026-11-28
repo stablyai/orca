@@ -24,6 +24,13 @@ import type {
   McpServer
 } from '../generated/acp-protocol.generated'
 
+/** Opaque account keys: what a start now records, and what a running child should match (null
+ *  while that is unknown). */
+export type AcpLaunchAccount = {
+  atLaunch(): Promise<string>
+  current(): string | null
+}
+
 export type AcpLaunchSpec = {
   agent: TuiAgent
   command: string
@@ -119,6 +126,9 @@ export type AcpLaunchSpec = {
     signal?: AbortSignal
   }): Promise<Readonly<Record<string, unknown>> | undefined>
   launchGate?: AcpLaunchGate
+  /** For an agent whose saved accounts swap one login inside one home, so the home can't tell
+   *  which account a child launched on. */
+  launchAccount?: AcpLaunchAccount
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
   /** Lets an agent that keeps every session run naming tasks anyway, each on a home of its own in

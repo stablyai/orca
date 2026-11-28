@@ -952,6 +952,7 @@
       }
     },
     "notice": {
+      "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
     "queuedMessages": {

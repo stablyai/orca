@@ -19,7 +19,7 @@ import {
 import { hasAntigravityChatApiKey } from './antigravity-chat-api-key-store'
 import { envHasGeminiApiKey } from './antigravity-chat-credential'
 import { copyAgyLoginIntoOrcaHome } from './agy-login-copy'
-import { restoreAntigravityAccountForChat } from './native-account-launch'
+import { restoreSelectedAntigravityAccount } from './native-account-launch'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { writeAntigravityChatSettings } from './antigravity-chat-account'
 import {
@@ -103,9 +103,10 @@ function orcaHomeAccount(folderName: string, role: 'chat' | 'naming' = 'chat'): 
         await copyAntigravityUserRules(home, user)
       }
       await writeAntigravityChatSettings(home, auth, env, assertCurrent)
-      // Google chats here use agy's login too, so they follow the selected account like terminals.
-      if (role === 'chat' && purpose === 'chat' && isGoogle(auth.method)) {
-        await restoreAntigravityAccountForChat(env)
+      // Google chats here use agy's login too, so they (and their listings) follow the selected
+      // account like terminals; naming runs have their own home and leave agy's login alone.
+      if (role === 'chat' && isGoogle(auth.method)) {
+        await restoreSelectedAntigravityAccount(env)
       }
       const copied = await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
       // A fresh naming home has no earlier copy to fall back on.

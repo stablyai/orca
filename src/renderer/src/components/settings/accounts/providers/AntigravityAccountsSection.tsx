@@ -18,6 +18,10 @@ import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/ag
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { useOnLaterChange } from './use-on-later-change'
 import { useAntigravityAccountRun } from './use-antigravity-account-run'
+import {
+  announceAntigravityAccountSwitch,
+  announceAntigravityAccountSwitchFailure
+} from '@/lib/provider-accounts/antigravity-account-switch-toasts'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
 import {
   AntigravityAgyAccountRows,
@@ -113,7 +117,13 @@ export function AntigravityAccountsSection({
       if (mounted.current) {
         setState(next)
       }
+      if (action === 'Select' && accountId) {
+        announceAntigravityAccountSwitch(next, accountId)
+      }
     } catch (cause) {
+      if (action === 'Select') {
+        announceAntigravityAccountSwitchFailure(cause)
+      }
       if (action === 'Select' || action === 'Remove' || action === 'AddCurrent') {
         try {
           const observed = await callAntigravityAccounts(owner, target, 'List')
@@ -126,8 +136,8 @@ export function AntigravityAccountsSection({
           }
         }
       }
-      // A background re-read fails quietly; the next one or Refresh shows the answer.
-      if (mounted.current && !keepShown) {
+      // A background re-read fails quietly, and a failed switch says why in its toast.
+      if (mounted.current && !keepShown && action !== 'Select') {
         setError(cause instanceof Error ? cause.message : 'Antigravity account action failed.')
       }
     }

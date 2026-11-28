@@ -8,12 +8,13 @@ import { ACP_SESSION_UPDATE_METHODS } from './acp-session-update-fields'
 
 /**
  * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in
- * link (Gemini's) is read from stderr as it arrives, which a relay only sends at exit.
+ * link is read from stderr as it arrives, which a relay only sends at exit; an agent whose launches
+ * record an account must be seen to exit before an account switch writes its login.
  */
 export function acpSpecRelays(
-  spec: Pick<AcpLaunchSpec, 'privateTempDirectory' | 'signIn'>
+  spec: Pick<AcpLaunchSpec, 'privateTempDirectory' | 'signIn' | 'launchAccount'>
 ): boolean {
-  return !spec.privateTempDirectory && !spec.signIn
+  return !spec.privateTempDirectory && !spec.signIn && !spec.launchAccount
 }
 
 /** Recorded with each ACP relay, per agent, so a build can stop relaying one and still end its relay. */

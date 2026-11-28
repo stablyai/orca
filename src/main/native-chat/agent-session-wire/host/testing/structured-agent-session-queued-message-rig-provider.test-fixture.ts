@@ -21,6 +21,8 @@ import {
 
 export type QueuedRigProviderOptions = {
   acquiredAccountHome?: () => AgentSessionAccountHome
+  /** The saved account each child launches on, and what a start would record now. */
+  accountKey?: () => string
   agent?: 'claude'
   rewind?: NonNullable<StructuredAgentSessionAdapter['rewind']>
   recoverRewind?: NonNullable<StructuredAgentSessionAdapter['recoverRewind']>
@@ -104,6 +106,7 @@ export function createQueuedRigProvider(
         ? `${THREAD}-context-${record!.providerContextBoundary!.operationId}`
         : (context?.head?.handle.nativeId ?? THREAD)
       const accountHome = options.acquiredAccountHome?.()
+      const accountKey = options.accountKey?.()
       return {
         process: {
           hostId: 'local',
@@ -116,6 +119,7 @@ export function createQueuedRigProvider(
             ? KEPT_ENDED_GENERATION
             : 'generation-1',
         ...(accountHome ? { accountHome } : {}),
+        ...(accountKey === undefined ? {} : { accountKey }),
         link: {
           linkId: `link-${fence}`,
           handle:
@@ -129,6 +133,7 @@ export function createQueuedRigProvider(
       }
     },
     dispatch,
+    ...(options.accountKey ? { launchAccountKey: options.accountKey } : {}),
     captureMessageSteeringInputs: () => ({
       kind: 'codex',
       compiler: {

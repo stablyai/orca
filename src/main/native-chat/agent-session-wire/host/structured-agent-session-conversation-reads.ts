@@ -212,6 +212,9 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         : child?.accountHome
     },
     childLaunchPermissionMode: (id: string) => context().sessions.get(id)?.child?.permissionMode,
+    /** The saved account a running child launched on, when its agent names one. */
+    childAccountKey: (id: string): string | undefined =>
+      context().sessions.get(id)?.child?.accountKey,
     holdsSessions: () => context().deps.store.holdsRecords(),
     openConversationCount: () => context().sessions.size,
     /** Its agent is still starting: acquiring its process, or attached but not yet answering. */

@@ -39,6 +39,8 @@ export async function startAcpStructuredSession(
   const generation = deps.mintGeneration?.() ?? randomUUID()
   children.endings.admit(sessionId, generation)
   try {
+    // Inside the launch gate, before the spawn: the account this child launches on.
+    const accountKey = await deps.spec.launchAccount?.atLaunch()
     const { acquisition, session } = await acquireAcpStructuredSession({
       acquire: input,
       deps: deps,
@@ -76,7 +78,7 @@ export async function startAcpStructuredSession(
     } else {
       children.endedBeforeAcquire.delete(sessionId)
     }
-    return acquisition
+    return accountKey === undefined ? acquisition : { ...acquisition, accountKey }
   } catch (error) {
     children.endings.retire(sessionId, generation)
     const { connection } = attempt

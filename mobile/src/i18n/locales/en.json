@@ -3538,6 +3538,7 @@
       "safetyReview": "{{agent}} reported a safety review warning. View details.",
       "autoReviewDenied": "{{agent}}'s automatic review denied: {{action}}",
       "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
+      "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",
       "signIn": "Sign in",
