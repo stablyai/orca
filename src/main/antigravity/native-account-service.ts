@@ -12,8 +12,10 @@ import type {
   StoredAntigravityAccount
 } from './native-account-store'
 import {
+  AntigravityLaunchRestoreError,
   AntigravityLoginReader,
   antigravityAccountState,
+  type AntigravityLoginEvidence as LoginEvidence,
   antigravityLoginMatches,
   type AntigravityQuietRead
 } from './native-account-login-view'
@@ -40,8 +42,6 @@ export class AntigravityAccountService {
   private readonly rewrittenLogins = new AntigravityRewrittenLoginIdentity(
     () => this.lookupIdentity
   )
-  // The login the latest reconcile read; undefined while one reads.
-  private lastLogin: AntigravityNativeCredential | null | undefined
 
   constructor(
     private readonly store: AntigravityAccountStore,
@@ -87,15 +87,12 @@ export class AntigravityAccountService {
     await this.store.read()
   }
 
-  /** The saved account agy's login holds, as far as Orca can tell without a keychain dialog. */
-  async loginHolderWithoutPrompt(): Promise<string | null> {
-    const quiet = await this.backend.readWithoutPrompt?.().catch(() => undefined)
-    const vault = await this.store.read()
-    if (quiet && 'fingerprint' in quiet) {
-      return (await this.logins.known(vault, quiet.fingerprint, false))?.accountId ?? null
-    }
-    const login = quiet ? quiet.credential : this.lastLogin
-    return login ? this.logins.view(vault, login).accountId : null
+  /** The saved account agy's login holds; only where reading it raises no dialog (Windows). */
+  readLoginHolder(): Promise<string | null> {
+    return this.serialize(async () => {
+      const { vault, current } = await this.reconcile()
+      return current ? this.logins.view(vault, current).accountId : null
+    }, false)
   }
 
   /** Reads agy's login even where that may raise a keychain dialog; only for an explicit request. */
@@ -185,10 +182,24 @@ export class AntigravityAccountService {
    *  other account work runs, reads agy's login only briefly, and not again once that failed. */
   /** The selected account ('' when none) agy's login was found or put on; null when `quiet` left
    *  it unread. */
-  async prepareForLaunch({
-    mayPrompt = true,
-    quiet = false
-  }: { mayPrompt?: boolean; quiet?: boolean } = {}): Promise<string | null> {
+  async prepareForLaunch(
+    options: { mayPrompt?: boolean; quiet?: boolean } = {}
+  ): Promise<string | null> {
+    const seen: LoginEvidence = {}
+    try {
+      return await this.prepareLogin(options, seen)
+    } catch (error) {
+      throw new AntigravityLaunchRestoreError(
+        error,
+        await this.logins.holderAfterFailure(seen).catch(() => null)
+      )
+    }
+  }
+
+  private async prepareLogin(
+    { mayPrompt = true, quiet = false }: { mayPrompt?: boolean; quiet?: boolean },
+    seen: LoginEvidence
+  ): Promise<string | null> {
     const early = mayPrompt ? undefined : await this.backend.readWithoutPrompt?.()
     const settled = await this.logins.settlesLaunch(early, false)
     if (settled !== null) {
@@ -210,6 +221,7 @@ export class AntigravityAccountService {
         return settled
       }
       const { vault, current } = await this.reconcile(undefined, quiet)
+      seen.login = current
       const selected = vault.accounts.find((account) => account.id === vault.selectedAccountId)
       if (!vault.selectedAccountId || (selected && current && this.matches(selected, current))) {
         return vault.selectedAccountId ?? ''
@@ -226,6 +238,8 @@ export class AntigravityAccountService {
       if (this.launchRestore.signInHoldsLogin()) {
         throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
       }
+      // From the write on, what this restore read no longer names agy's login.
+      delete seen.login
       await this.switchNative(selected, current)
       // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
       if ((await this.store.read()).selectedAccountId !== selected.id) {
@@ -270,14 +284,12 @@ export class AntigravityAccountService {
 
   /** `quiet`: what the caller already read without a prompt, so it isn't read twice. */
   private async reconcile(selectedId?: string, quiet?: AntigravityQuietRead) {
-    this.lastLogin = undefined
     const native = await this.logins.read(quiet)
     const current = await this.rewrittenLogins.identify(
       native.current,
       (await this.store.read()).accounts,
       (account, login) => this.matches(account, login)
     )
-    this.lastLogin = current
     this.logins.note(native.fingerprint, current)
     // Re-read after native I/O so a delayed read never restores an older vault.
     const vault = await this.store.read()

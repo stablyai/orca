@@ -38,6 +38,9 @@ export type AcpLaunchAccount = {
   target(): string | null
   /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
   usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
+  /** Before a person's send in a chat on `childKey`: one bounded attempt to reach a selection a
+   *  failed move holds chats off. */
+  retry?(childKey: string): Promise<void>
   /** A chat's process spawned on `key`; `prepared` when its preparation said so. */
   spawned?(
     process: { onExit(listener: () => void): void },

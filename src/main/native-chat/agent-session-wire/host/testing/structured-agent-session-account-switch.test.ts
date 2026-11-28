@@ -382,6 +382,43 @@ it("replaces an agent on another saved account at the next send's handover", asy
   expect(chat.child()?.accountKey).toBe('account-b')
 })
 
+it("tries the selected account once per person's send in a chat a failed move held back, and moves it once that works", async () => {
+  await rig?.dispose()
+  let selected = 'account-a'
+  // A failed move to `account-b` holds chats where they are until a launch reaches it.
+  let held = false
+  let reaches = false
+  const retryLaunchAccount = vi.fn(async () => {
+    held = !reaches
+  })
+  const current = await createQueuedMessageTestRig({
+    agent: 'claude',
+    restartable: true,
+    accountKey: () => selected,
+    launchAccountKey: () => (held ? null : selected),
+    retryLaunchAccount
+  })
+  rig = current
+  await current.settleAccepted(await current.workingSend(), 'one')
+  const child = () => current.host.collaboratorsForTests().sessions.get(SESSION)?.child
+  const starts = current.starts.mock.calls.length
+  selected = 'account-b'
+  held = true
+  retryLaunchAccount.mockClear()
+
+  await current.settleAccepted(await current.workingSend(), 'two')
+  expect(retryLaunchAccount).toHaveBeenCalledOnce()
+  expect(retryLaunchAccount).toHaveBeenCalledWith(SESSION, 'account-a')
+  expect(current.starts.mock.calls.length).toBe(starts)
+  expect(child()?.accountKey).toBe('account-a')
+
+  reaches = true
+  await current.settleAccepted(await current.workingSend(), 'three')
+  expect(retryLaunchAccount).toHaveBeenCalledTimes(2)
+  expect(current.starts.mock.calls.length).toBe(starts + 1)
+  expect(child()?.accountKey).toBe('account-b')
+})
+
 it('lets a running turn finish on its saved account, and keeps one note in the chat that follows the selection', async () => {
   const chat = await idleChatOnSavedAccount()
   await chat.rig.workingSend()
