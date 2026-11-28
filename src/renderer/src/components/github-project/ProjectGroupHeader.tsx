@@ -1,12 +1,19 @@
-import React from 'react'
+import React, { useRef, useState } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { isSidebarLabelTruncated } from '@/components/ui/truncated-sidebar-label'
 import {
   EMPTY_PROJECT_GROUP_KEY,
   isIterationCurrent,
   type ProjectGroup
 } from '../../../../shared/github/projects/project-group-sort'
 import { useTranslate } from '@/i18n/use-translate'
+
+// Why: the label track's 0 minimum keeps a long label from widening the table, while the
+// fixed parts still set the table's minimum width so rows cover them in a narrow pane.
+const TABLE_BAND_ROW_CLASS =
+  'grid min-w-0 grid-flow-col grid-cols-[auto_minmax(0,max-content)] auto-cols-max whitespace-nowrap'
 
 type Props = {
   group: ProjectGroup
@@ -30,13 +37,14 @@ export default function ProjectGroupHeader({
   const dateRange = group.iteration
     ? formatDateRange(group.iteration.startDate, group.iteration.duration)
     : null
+  const inTable = bandWidth == null
+  const labelRef = useRef<HTMLSpanElement>(null)
+  const [labelTooltipOpen, setLabelTooltipOpen] = useState(false)
   const label =
     group.key === EMPTY_PROJECT_GROUP_KEY
       ? t('projectBoard.noField', 'No {{field}}', { field: groupFieldName })
       : group.label || t('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')
-  // Only the table truncates the label; everything else in the band keeps its size.
-  const fixedPartClass = bandWidth == null ? 'shrink-0' : undefined
-  return (
+  const band = (
     <button
       type="button"
       onClick={onToggle}
@@ -44,41 +52,21 @@ export default function ProjectGroupHeader({
         'flex items-center border-b border-border/50 bg-muted/40 px-3 py-1.5 text-left text-xs',
         'hover:bg-muted/60',
         // Keep the band painted to the pane’s edge when the timeline is narrower.
-        // Why: in the table, contain-inline-size keeps a long label from widening the shared table width.
-        bandWidth == null ? 'w-full contain-inline-size' : 'min-w-full'
+        bandWidth == null ? 'w-full' : 'min-w-full'
       )}
       style={bandWidth == null ? undefined : { width: bandWidth }}
     >
       <span
-        className={cn(
-          'flex items-center gap-2',
-          bandWidth == null ? 'min-w-0 whitespace-nowrap' : 'sticky left-3'
-        )}
+        className={cn('items-center gap-2', inTable ? TABLE_BAND_ROW_CLASS : 'flex sticky left-3')}
       >
-        {expanded ? (
-          <ChevronDown className={cn('size-3.5', fixedPartClass)} />
-        ) : (
-          <ChevronRight className={cn('size-3.5', fixedPartClass)} />
-        )}
-        <span
-          className={cn('font-medium', bandWidth == null && 'truncate')}
-          title={bandWidth == null ? label : undefined}
-        >
+        {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+        <span ref={labelRef} className={cn('font-medium', inTable && 'truncate')}>
           {label}
         </span>
-        <span
-          className={cn(
-            'rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground',
-            fixedPartClass
-          )}
-        >
+        <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {group.rows.length}
         </span>
-        {dateRange ? (
-          <span className={cn('text-[10px] text-muted-foreground', fixedPartClass)}>
-            {dateRange}
-          </span>
-        ) : null}
+        {dateRange ? <span className="text-[10px] text-muted-foreground">{dateRange}</span> : null}
         {isCurrent ? (
           <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 text-[10px] text-emerald-700 dark:text-emerald-300">
             {t('auto.components.github.project.ProjectGroupHeader.82a22d2079', 'Current')}
@@ -86,6 +74,27 @@ export default function ProjectGroupHeader({
         ) : null}
       </span>
     </button>
+  )
+  if (!inTable) {
+    return band
+  }
+  // Show the full label on hover or keyboard focus, only when the table truncated it.
+  return (
+    <Tooltip
+      open={labelTooltipOpen}
+      onOpenChange={(open) =>
+        setLabelTooltipOpen(open && !!labelRef.current && isSidebarLabelTruncated(labelRef.current))
+      }
+    >
+      <TooltipTrigger asChild>{band}</TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        align="start"
+        className="max-w-80 whitespace-normal break-all text-left"
+      >
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
