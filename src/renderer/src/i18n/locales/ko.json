@@ -5657,6 +5657,15 @@
             "runningSkills_one": "스킬 {{count}}개 업데이트 중…",
             "runningSkills_other": "스킬 {{count}}개 업데이트 중…"
           },
+          "DefaultAgentStatusSegment": {
+            "auto": "Auto",
+            "blank": "Blank",
+            "ariaLabel": "Default agent: {{value0}}",
+            "tooltip": "Default agent — {{value0}}",
+            "title": "Default Agent",
+            "blankTerminal": "No agent (blank terminal)",
+            "settings": "Agent settings…"
+          },
           "RuntimeHostStatusRow": {
             "previous_connection_closed": "이전 연결이 종료되었습니다.",
             "workspace_window_closed": "워크스페이스 창이 닫혔습니다.",
