@@ -4,6 +4,7 @@ import { settleRelayedReplay } from '../../provider-relay/relayed-provider-repla
 
 export type { AcpRelayedProcess }
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
+import { AcpAuthRequiredError, AcpConnectionClosedError } from '../transport/acp-errors'
 import type { AcpPendingCalls } from '../transport/acp-pending-calls'
 import {
   PromptResponseSchema,
@@ -140,7 +141,7 @@ export class AcpKeptSession {
 
   /** The answer to the earlier app's prompt(s), by id; none listed means it never reached the
    *  agent (the earlier app quit before writing it), so its turn fails instead of hanging. */
-  earlierPrompt(): Promise<PromptResponse> {
+  earlierPrompt(isSessionLost?: (error: unknown) => boolean): Promise<PromptResponse> {
     const ids = this.kept.earlierPromptIds
     if (ids.length === 0) {
       return Promise.reject(new Error('The message did not reach the agent before Orca restarted'))
@@ -160,6 +161,16 @@ export class AcpKeptSession {
       return adopted[0]
     }
     return Promise.allSettled(adopted).then((outcomes) => {
+      for (const outcome of outcomes) {
+        if (
+          outcome.status === 'rejected' &&
+          (isSessionLost?.(outcome.reason) ||
+            outcome.reason instanceof AcpAuthRequiredError ||
+            outcome.reason instanceof AcpConnectionClosedError)
+        ) {
+          throw outcome.reason
+        }
+      }
       for (let i = outcomes.length - 1; i >= 0; i -= 1) {
         const outcome = outcomes[i]
         if (outcome?.status === 'fulfilled') {

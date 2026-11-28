@@ -10,6 +10,7 @@ import {
 import { applyAcpLivePermissionMode } from '../../options/acp-live-permission-mode'
 import { carryKeptAcpBackgroundWork } from './acp-kept-background-work'
 import { probeAcpChildStops } from '../../turns/acp-structured-child-stop'
+import { AcpAgentError } from '../../transport/acp-errors'
 import { assertAcpStartingSession, type AcpStructuredChild } from '../children/acp-structured-child'
 
 /** The translator's turn from the journal's spelling of its id; null for host turns and for ids
@@ -107,8 +108,11 @@ export async function carryOnKeptAcpAgent<Opened>(
     // Output is acked only past an open message's or call's start, so the replay rewrites each row
     // whole; a turn whose first lines were acked anyway (the daemon's cap) numbers rows anew.
     const renumber = journaled && !kept.promptReplayedWhole ? kept.replayKey : undefined
+    const isSessionLost = (error: unknown): boolean =>
+      error instanceof AcpAgentError && (child.lane?.translator.sessionLost(error) ?? false)
     const answered = () =>
-      child.connection.earlierPrompt?.(work?.sentAt ?? undefined) ?? kept.earlierPrompt()
+      child.connection.earlierPrompt?.(work?.sentAt ?? undefined) ??
+      kept.earlierPrompt(isSessionLost)
     child.turns.adoptEarlier(clientMessageId, answered, command?.turnId, journaled, renumber)
   } else {
     // A turn the agent began itself, which this run's translator doesn't know: it ends as the open

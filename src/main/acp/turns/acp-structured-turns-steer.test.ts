@@ -683,4 +683,65 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     const nextFloor = relay.ackFloor()
     expect(nextFloor.promptId).toBeNull()
   })
+
+  it('preserves calls started after batched concurrent prompt answers', async () => {
+    const relay = new AcpRelayTurns()
+    const floor = relay.ackFloor()
+    const first = Promise.withResolvers<string>()
+    const second = Promise.withResolvers<string>()
+    const p1 = relay.track(
+      (onId) => {
+        onId(201)
+        return first.promise
+      },
+      false,
+      true
+    )
+    const p2 = relay.track(
+      (onId) => {
+        onId(202)
+        return second.promise
+      },
+      false,
+      true
+    )
+
+    const toolCall = (toolCallId: string) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'session/update',
+        params: {
+          sessionId: PROVIDER_SESSION_ID,
+          update: {
+            sessionUpdate: 'tool_call',
+            toolCallId,
+            title: toolCallId,
+            status: 'in_progress'
+          }
+        }
+      })
+
+    // Both answers and a subsequent call arrive synchronously before either completion runs.
+    floor.observe(1, toolCall('call-p1'))
+    floor.observe(
+      2,
+      JSON.stringify({ jsonrpc: '2.0', id: 201, result: { stopReason: 'end_turn' } })
+    )
+    floor.observe(3, toolCall('call-p2'))
+    floor.observe(
+      4,
+      JSON.stringify({ jsonrpc: '2.0', id: 202, result: { stopReason: 'end_turn' } })
+    )
+    floor.observe(5, toolCall('call-after-both'))
+
+    first.resolve('done-1')
+    second.resolve('done-2')
+    await expect(p1).resolves.toBe('done-1')
+    await expect(p2).resolves.toBe('done-2')
+
+    // Calls from prompts 201 and 202 clear, while the call after prompt 202's answer stays held.
+    expect(floor.floor(5)).toBe(5)
+    floor.endCall('call-after-both')
+    expect(floor.floor(5)).toBeNull()
+  })
 })

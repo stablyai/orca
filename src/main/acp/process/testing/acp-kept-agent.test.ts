@@ -10,6 +10,7 @@ import type { AcpSessionEvent } from '../../protocol/acp-session-events'
 import { ANTIGRAVITY_ACP_DIALECT } from '../../acp-dialects/antigravity-dialect'
 import { AcpStructuredLane } from '../../journal/acp-structured-lane'
 import { AcpStructuredTurns } from '../../turns/acp-structured-turns'
+import { AcpAgentError } from '../../transport/acp-errors'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { acpKeptAgent, restorableAcpSession } from '../acp-kept-agent'
 import { AcpRelayTurns } from '../acp-relay-turns'
@@ -286,6 +287,137 @@ describe('kept ACP agent reattach', () => {
       await vi.waitFor(() => expect(floor.promptId).toBeNull())
     } finally {
       lane.dispose()
+    }
+  })
+
+  it('surfaces a session-loss rejection from any adopted pre-restart prompt while keeping ordinary refusals non-fatal', async () => {
+    const cases: {
+      name: string
+      reply10: Record<string, unknown>
+      reply11: Record<string, unknown>
+      expectLost: boolean
+    }[] = [
+      {
+        name: 'earlier fulfills, later rejects with session loss',
+        reply10: { id: 10, result: { stopReason: 'end_turn' } },
+        reply11: {
+          id: 11,
+          error: { code: -32603, message: 'Internal error', data: 'Session not found: s1' }
+        },
+        expectLost: true
+      },
+      {
+        name: 'earlier rejects with session loss, later rejects with ordinary refusal',
+        reply10: {
+          id: 10,
+          error: { code: -32603, message: 'Internal error', data: 'Session not found: s1' }
+        },
+        reply11: { id: 11, error: { code: -32602, message: 'Invalid params' } },
+        expectLost: true
+      },
+      {
+        name: 'earlier fulfills, later rejects with ordinary steer refusal',
+        reply10: { id: 10, result: { stopReason: 'end_turn' } },
+        reply11: { id: 11, error: { code: -32602, message: 'Invalid params' } },
+        expectLost: false
+      }
+    ]
+
+    for (const tc of cases) {
+      const { child, writes, deliver } = keptAgent(false, {
+        outstanding: [
+          { id: 10, method: 'session/prompt', replayedWhole: false },
+          { id: 11, method: 'session/prompt', replayedWhole: false }
+        ],
+        maxClientRequestId: 11
+      })
+      await child.start(1)
+      const relayTurns = new AcpRelayTurns()
+      const connection = createAcpAgentConnection(
+        { command: 'agent', args: [], cwd: '/tmp' },
+        {
+          concurrentPrompts: true,
+          relayed: {
+            managed: relayedManagedProcess(child),
+            child,
+            reattached: true,
+            turns: relayTurns
+          }
+        }
+      )
+      await connection.initialize()
+      await connection.start({ cwd: '/tmp', mcpServers: [], sessionId: 's1' })
+      const keptSession = connection.kept
+      expect(keptSession, tc.name).not.toBeNull()
+      if (!keptSession) {
+        return
+      }
+
+      let clock = 200
+      const sessionLosses: Error[] = []
+      let turns!: AcpStructuredTurns
+      const lane = new AcpStructuredLane({
+        sink: {
+          tryAppendTransition: (transition) => {
+            transition.onPublished?.()
+            return { accepted: true }
+          }
+        },
+        sessionId: 'sess-reattach-loss',
+        agent: 'antigravity',
+        agentName: 'Antigravity',
+        generation: 'gen-loss',
+        providerSessionId: 's1',
+        dialect: ANTIGRAVITY_ACP_DIALECT,
+        logger: createStructuredAgentSessionLogger(),
+        now: () => ++clock,
+        onInputAccepted: (clientMessageId) => turns.accept(clientMessageId),
+        onFailed: (reason) => {
+          throw new Error(`lane failed unexpectedly (${tc.name}): ${reason}`)
+        }
+      })
+      turns = new AcpStructuredTurns({
+        connection,
+        withdrawRequests: () => {},
+        lane,
+        agentName: 'Antigravity',
+        dialect: ANTIGRAVITY_ACP_DIALECT,
+        now: () => ++clock,
+        settle: () => {},
+        sessionLost: (error) => sessionLosses.push(error)
+      })
+
+      try {
+        const isSessionLost = (error: unknown): boolean =>
+          error instanceof AcpAgentError && lane.translator.sessionLost(error)
+        turns.adoptEarlier('m-adopted', () => keptSession.earlierPrompt(isSessionLost))
+        keptSession.releaseOutput()
+        turns.dispatch(
+          {
+            clientMessageId: 'm-next',
+            prompt: [{ type: 'text', text: 'queued after reattach' }],
+            requestedAt: 201
+          },
+          'mail'
+        )
+
+        deliver(5, line(tc.reply10))
+        deliver(6, line(tc.reply11))
+
+        if (tc.expectLost) {
+          await vi.waitFor(() => expect(sessionLosses, tc.name).toHaveLength(1))
+          expect(sessionLosses[0], tc.name).toBeInstanceOf(AcpAgentError)
+          expect(writes, tc.name).toEqual([])
+          expect(turns.running, tc.name).toBe(false)
+        } else {
+          await vi.waitFor(() => expect(writes, tc.name).toHaveLength(1))
+          expect(sessionLosses, tc.name).toEqual([])
+          deliver(7, line({ id: 12, result: { stopReason: 'end_turn' } }))
+          await vi.waitFor(() => expect(turns.running, tc.name).toBe(false))
+        }
+      } finally {
+        lane.dispose()
+      }
     }
   })
 })

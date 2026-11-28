@@ -1,6 +1,6 @@
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
 import { acpCutKeyNames, CONTINUED_ID, type AcpRelayItem as Item } from './acp-relay-cut-key-names'
-import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
+import { AcpRelayAnswerBoundaries } from './acp-relay-answer-boundaries'
 import {
   ACP_MESSAGE_BOUNDARIES,
   ACP_MESSAGE_CHUNKS,
@@ -77,8 +77,8 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
   private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
-  /** The running prompt's answer and any next-turn lines already observed after it. */
-  private afterAnswer: { at: number; start: number | null; numbered: boolean } | null = null
+  /** Answer boundaries per outstanding prompt id, and any next-turn lines observed after each. */
+  private readonly answers = new AcpRelayAnswerBoundaries()
   /** The running prompt's request id, whose answer line ends its turn (ids never repeat). */
   promptId: number | null = null
   /** An earlier cut named fewer than it split: this attach's cuts say so too. */
@@ -102,15 +102,12 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const update = acpSessionUpdateFields(line)
     const kind = update?.sessionUpdate
     if (!update || !kind) {
-      // The running prompt's own answer, a result or an error.
-      if (this.promptId !== null && !update && jsonRpcAnswerId(line) === this.promptId) {
-        this.afterAnswer = { at: seq, start: null, numbered: false }
+      if (!update) {
+        this.answers.observeAnswer(seq, line, this.promptId)
       }
       return
     }
-    if (this.afterAnswer && seq > this.afterAnswer.at) {
-      this.afterAnswer.start ??= seq
-    }
+    this.answers.observeUpdate(seq, ACP_MESSAGE_CHUNKS.has(kind) && update.messageId === undefined)
     const session = update.sessionId
     if (ACP_MESSAGE_ENDS.has(kind)) {
       this.closeMessages(session)
@@ -127,9 +124,6 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
       const id = update.messageId
       if (id === undefined) {
         this.numbered = true
-        if (this.afterAnswer && seq > this.afterAnswer.at) {
-          this.afterAnswer.numbered = true
-        }
       } else {
         this.givesIds = true
         if (this.endedByTurn.has(id)) {
@@ -307,12 +301,15 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
 
   /** The call reported its final status. */
   endCall = (toolCallId: string) => void this.calls.delete(toolCallId)
+  watchPrompt = (id: number) => this.answers.watch(id)
+  forgetPrompt = (id: number) => this.answers.forget(id)
 
   /** Answered or failed: its calls Orca backgrounds are restated from their saved rows instead.
    *  `answered`: ended by an answer the app reads after it (a promise's turn), so what the agent
    *  began after the last answer line belongs to its next turn and stays. */
-  endTurn(answered = false, nextPending = false): void {
-    const after = answered ? (this.afterAnswer?.at ?? null) : null
+  endTurn(answered = false, nextPending = false, endedPromptId?: number | null): void {
+    const boundary = this.answers.consume(endedPromptId ?? this.promptId, nextPending)
+    const after = answered ? (boundary?.at ?? null) : null
     const next = (seq?: number) => after !== null && seq !== undefined && seq > after
     for (const [id, call] of this.calls) {
       if (!next(call.seq)) {
@@ -337,11 +334,10 @@ export class AcpRelayAckFloor implements ProviderRelayAckFloor {
     // An earlier cut's unnamed messages can resume no more once its prompt ended, but a child's can.
     const cuts = [...this.cutMessages.values(), ...this.pausedCuts.values()]
     this.carriedOverflow &&= this.overflowChildren.size > 0 || cuts.some((item) => item.child)
-    const carried = nextPending && answered ? this.afterAnswer : null
+    const carried = nextPending && answered ? boundary : null
     this.turnStart = carried?.start && carried.start > this.ackable ? carried.start : null
     this.turnPending = nextPending && this.turnStart === null
     this.numbered = carried?.numbered === true
-    this.afterAnswer = null
   }
 
   /** Ends a session's messages, all but `except`. */

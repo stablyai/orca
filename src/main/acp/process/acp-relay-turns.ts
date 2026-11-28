@@ -26,6 +26,11 @@ export class AcpRelayTurns {
     if (this.running && this.promptId !== null) {
       this.current.promptId = this.promptId
     }
+    for (const id of this.active.values()) {
+      if (id !== null) {
+        this.current.watchPrompt(id)
+      }
+    }
     return this.current
   }
 
@@ -53,14 +58,18 @@ export class AcpRelayTurns {
       if (!this.active.has(serial)) {
         return
       }
+      const endedId = this.active.get(serial) ?? null
       const wasFront = this.active.keys().next().value === serial
       this.active.delete(serial)
       if (!wasFront) {
+        if (endedId !== null) {
+          this.current?.forgetPrompt(endedId)
+        }
         return
       }
       const next = this.active.entries().next().value
       if (next !== undefined) {
-        this.current?.endTurn(true, true)
+        this.current?.endTurn(true, true, endedId)
         this.promptId = next[1]
         if (this.current) {
           this.current.promptId = next[1]
@@ -70,10 +79,10 @@ export class AcpRelayTurns {
       if (this.running) {
         this.running = false
         this.promptId = null
+        this.current?.endTurn(true, false, endedId)
         if (this.current) {
           this.current.promptId = null
         }
-        this.current?.endTurn(true)
         this.onAgentTurnOver?.()
       }
     }
@@ -82,6 +91,7 @@ export class AcpRelayTurns {
         return
       }
       this.active.set(serial, id)
+      this.current?.watchPrompt(id)
       if (this.active.keys().next().value === serial) {
         this.promptId = id
         if (this.current) {
