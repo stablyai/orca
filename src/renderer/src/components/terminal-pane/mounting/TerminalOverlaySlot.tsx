@@ -56,16 +56,17 @@ export const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 
   // Drop with the reveal in one render, or a later lease release re-runs resume and steals focus.
   const prewarm = isVisible || activityTerminalPortal !== null ? null : hiddenPrewarm
+  const portalShown = activityTerminalPortal !== null && activityTerminalPortal.hidden !== true
   const terminalPane = (
     <TerminalPane
       key={`${terminalTabId}-${terminalGeneration ?? 0}`}
       tabId={terminalTabId}
       worktreeId={worktreeId}
       cwd={startupCwd ?? worktreePath}
-      isActive={isActive || activityTerminalPortal?.active === true}
+      isActive={isActive || (portalShown && activityTerminalPortal.active)}
       // Retain TerminalPane outside reparented group subtrees to preserve TUI state; visibility still throttles hidden rendering.
-      isVisible={isVisible || activityTerminalPortal !== null}
-      isWorktreeActive={isWorktreeActive || activityTerminalPortal !== null}
+      isVisible={isVisible || portalShown}
+      isWorktreeActive={isWorktreeActive || portalShown}
       isolatedPaneKey={activityTerminalPortal?.paneKey ?? null}
       measureWhileHidden={prewarm !== null}
       warmRendererWhileHidden={prewarm === 'warm'}

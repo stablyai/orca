@@ -23,6 +23,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/i
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from '../workbench/terminal-workspace-model'
 import { isAgentTerminalPreviewTarget } from '../../dashboard/terminal-preview/agent-terminal-preview-target'
+import { closeCrossWorkspacePaneFromKeyTarget } from '../../cross-workspace-pane/cross-workspace-pane-close-shortcut'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
@@ -206,7 +207,11 @@ export function handleTerminalWorkspaceKeyDown(
     if (previewOwnsClose || floatingWorkspaceFocused) {
       return
     }
-    if (dispatchWorkspaceTabCommand({ type: 'close', context })) {
+    // The side pane's tab is another workspace's: Close returns it there and leaves it open.
+    if (
+      closeCrossWorkspacePaneFromKeyTarget(event.target) ||
+      dispatchWorkspaceTabCommand({ type: 'close', context })
+    ) {
       event.preventDefault()
       notifyTerminalCapture('tab.close')
     }

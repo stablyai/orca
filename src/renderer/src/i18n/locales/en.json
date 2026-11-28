@@ -21048,6 +21048,26 @@
         "noWslDistros": "No WSL distros found",
         "wslDistro": "WSL distro",
         "wslDistroHint": "A Linux distro on this PC"
+      },
+      "cross": {
+        "workspace": {
+          "pane": {
+            "CrossWorkspacePane": {
+              "removeFromSidePane": "Remove from side pane",
+              "sidePane": "Side pane",
+              "tabUnavailable": "This tab is not open. It may have been closed, or its workspace is not loaded.",
+              "workspaceAsleep": "This workspace is asleep. Select it in the sidebar to wake it."
+            },
+            "CrossWorkspacePaneHomeNotice": {
+              "inSidePane": "This tab is in the side pane.",
+              "showHere": "Show here"
+            },
+            "CrossWorkspacePaneMenuItem": {
+              "removeFromSidePane": "Remove from Side Pane",
+              "keepInSidePane": "Keep in Side Pane"
+            }
+          }
+        }
       }
     },
     "i18n": {

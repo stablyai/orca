@@ -16,6 +16,7 @@ import type { NativeChatTabSession } from '../session-actions/tab-session-histor
 import { CopyTabIdMenuItem } from '../pane-actions/CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
+import { CrossWorkspacePaneMenuItem } from '../../cross-workspace-pane/CrossWorkspacePaneMenuItem'
 
 const TAB_COLORS = [
   {
@@ -211,6 +212,7 @@ export function SortableTabContextMenu({
             : t('auto.components.tab.bar.SortableTabContextMenu.60f958ec75', 'Pin Tab')}
         </ContextMenuItem>
       ) : null}
+      <CrossWorkspacePaneMenuItem worktreeId={tab.worktreeId} unifiedTabId={unifiedTabId} />
       {onAllowAutoClose ? (
         <ContextMenuItem onSelect={onAllowAutoClose}>
           <Timer className="size-3.5 shrink-0" />

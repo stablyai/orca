@@ -7,7 +7,8 @@ import {
   focusRuntimeTerminalSurface
 } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 
-export function focusActiveWorkspaceSurfaceFromSidebar(list: HTMLElement): void {
+/** Puts the keyboard in the active workspace's terminal or chat; false when neither takes it. */
+export function focusActiveWorkspaceSurface(): boolean {
   const state = useAppStore.getState()
   const tab = state.activeWorktreeId ? state.getActiveTab(state.activeWorktreeId) : null
   if (
@@ -16,20 +17,23 @@ export function focusActiveWorkspaceSurfaceFromSidebar(list: HTMLElement): void 
     !tab ||
     (tab.contentType !== 'terminal' && tab.contentType !== 'agent-session')
   ) {
-    return
+    return false
   }
   const manager =
     tab.contentType === 'terminal'
       ? findRegisteredTerminalTab(tab.id, state.activeWorktreeId)?.tab.getManager()
       : null
   if (manager && !activePaneIsCoveredByNativeChat(manager)) {
-    if (focusRuntimeTerminalSurface(tab.id, null, state.activeWorktreeId)) {
-      list.removeAttribute('data-keyboard-navigation')
-    }
-    return
+    return focusRuntimeTerminalSurface(tab.id, null, state.activeWorktreeId)
   }
-  list.removeAttribute('data-keyboard-navigation')
   requestNativeChatComposerFocus(tab.id)
+  return true
+}
+
+export function focusActiveWorkspaceSurfaceFromSidebar(list: HTMLElement): void {
+  if (focusActiveWorkspaceSurface()) {
+    list.removeAttribute('data-keyboard-navigation')
+  }
 }
 
 /** A folded Projects list is hidden and cannot take focus; unfold it, then focus once it lays out. */

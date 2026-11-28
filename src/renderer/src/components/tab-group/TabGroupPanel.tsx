@@ -33,6 +33,7 @@ import { EditorRevealFlash } from './editor-reveal/EditorRevealFlash'
 import { SplitPaneLanding } from './landing/SplitPaneLanding'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { holdTabStripPointerGestureUntilRelease } from '../tab-bar/strip/tab-strip-pointer-gesture'
+import { CrossWorkspacePaneHomeNotice } from '../cross-workspace-pane/CrossWorkspacePaneHomeNotice'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -77,7 +78,10 @@ export default function TabGroupPanel({
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
-  const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
+  // The cross-workspace pane takes the window's top-right corner and reserves it itself.
+  const crossWorkspacePaneOpen = useAppStore((state) => state.crossWorkspacePane !== null)
+  const reserveRightTitlebarSpace =
+    reserveClosedExplorerToggleSpace && !rightSidebarOpen && !crossWorkspacePaneOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
   const bot = useBotForWorkspace(reserveClosedExplorerToggleSpace ? worktreeId : null)
@@ -404,6 +408,8 @@ export default function TabGroupPanel({
             onClosePane={hasSplitGroups ? commands.closeGroup : undefined}
           />
         ) : null}
+
+        <CrossWorkspacePaneHomeNotice worktreeId={worktreeId} tabId={activeTab?.id} />
       </div>
     </div>
   )

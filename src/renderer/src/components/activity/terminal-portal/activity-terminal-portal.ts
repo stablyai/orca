@@ -7,11 +7,16 @@ export type ActivityTerminalPortalTarget = {
   worktreeId: string
   tabId: string
   // Carry the durable leaf paneKey; TerminalPane resolves its current numeric handle immediately before isolation.
-  paneKey: string
+  /** Null shows the whole tab. */
+  paneKey: string | null
   forceUnavailable?: boolean
   active: boolean
+  /** The target's page is off screen: the terminal stays mounted in it without rendering as visible. */
+  hidden?: boolean
 }
 
+let activityTargets: ActivityTerminalPortalTarget[] = []
+let crossWorkspacePaneTarget: ActivityTerminalPortalTarget | null = null
 let currentTargets: ActivityTerminalPortalTarget[] = []
 const emptyTargets: ActivityTerminalPortalTarget[] = []
 const subscribers = new Set<() => void>()
@@ -31,7 +36,8 @@ const ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS: readonly ActivityTerminalPortalFiel
     tabId: (left, right) => left.tabId === right.tabId,
     paneKey: (left, right) => left.paneKey === right.paneKey,
     forceUnavailable: (left, right) => left.forceUnavailable === right.forceUnavailable,
-    active: (left, right) => left.active === right.active
+    active: (left, right) => left.active === right.active,
+    hidden: (left, right) => left.hidden === right.hidden
   } satisfies Record<keyof ActivityTerminalPortalTarget, ActivityTerminalPortalFieldEquals>)
 
 function haveSameActivityTerminalPortals(
@@ -50,8 +56,10 @@ function haveSameActivityTerminalPortals(
   )
 }
 
-// Publish worktree/tab routing with the target; deriving it from global active state briefly portaled the wrong terminal when activation writes arrived separately.
-export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget[]): void {
+function publishTerminalPortals(): void {
+  const targets = crossWorkspacePaneTarget
+    ? [...activityTargets, crossWorkspacePaneTarget]
+    : activityTargets
   // Why: semantic no-ops must not synchronously bounce through Terminal and back into Activity.
   if (currentTargets === targets || haveSameActivityTerminalPortals(currentTargets, targets)) {
     return
@@ -60,6 +68,20 @@ export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget
   for (const subscriber of subscribers) {
     subscriber()
   }
+}
+
+// Publish worktree/tab routing with the target; deriving it from global active state briefly portaled the wrong terminal when activation writes arrived separately.
+export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget[]): void {
+  activityTargets = targets
+  publishTerminalPortals()
+}
+
+/** The cross-workspace pane borrows its tab's terminal the way an Activity slot does. */
+export function setCrossWorkspacePaneTerminalPortal(
+  target: ActivityTerminalPortalTarget | null
+): void {
+  crossWorkspacePaneTarget = target
+  publishTerminalPortals()
 }
 
 function subscribeActivityTerminalPortals(onStoreChange: () => void): () => void {
@@ -92,9 +114,12 @@ export function findActivityTerminalPortal(
     requestToken?: string
   }
 ): ActivityTerminalPortalTarget | null {
-  const matchingTab = targets.filter(
+  const sameTab = targets.filter(
     (target) => target.worktreeId === query.worktreeId && target.tabId === query.tabId
   )
+  // A target on screen wins, so Activity can show a tab the hidden cross-workspace pane also holds.
+  const shown = sameTab.filter((target) => !target.hidden)
+  const matchingTab = shown.length > 0 ? shown : sameTab
   if (
     query.slotId !== undefined ||
     query.paneKey !== undefined ||
