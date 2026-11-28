@@ -52,15 +52,17 @@ function isRecordedStatus(
 }
 
 /** Refused before `--file` attachments are claimed: a recorded status takes none. */
-export function assertNoStatusFiles(
+export async function assertNoStatusFiles(
   runtime: OrcaRuntimeService,
   mail: { params: { type?: string; files?: readonly string[] }; messageId?: string; to: string },
   sender: OrchestrationPartyIdentity,
   callerSessionId: string | undefined
-): void {
-  if (!mail.params.files?.length) {
+): Promise<void> {
+  if (!mail.params.files?.length || mail.params.type !== 'status') {
     return
   }
+  // Which chat is a bot's is read from the session host, so it is up before the sender is placed.
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   const creator = creatorSession(runtime.getOrchestrationDb(), sender).sessionId
   const sessionId = creator ?? callerSessionId
   if (!sessionId || !botOfSession(runtime.bots, sessionId) || !isRecordedStatus(mail, sessionId)) {

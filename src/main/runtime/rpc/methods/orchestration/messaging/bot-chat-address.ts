@@ -45,7 +45,7 @@ export async function routeBotMail(
 ): Promise<{ to: string; body?: string } | { receipt: unknown }> {
   const chat = await chatForItem(context.runtime, input.to, input.params)
   const callerSessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId
-  assertNoStatusFiles(context.runtime, input, input.sender, callerSessionId)
+  await assertNoStatusFiles(context.runtime, input, input.sender, callerSessionId)
   const mail = await withItemMailFiles(context.runtime, input)
   const newChat = chat === BOT_NEW_CHAT
   let to = mail.to
