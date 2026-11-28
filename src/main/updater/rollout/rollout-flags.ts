@@ -133,7 +133,10 @@ export function cachedRolloutConfig(): RolloutConfig | null {
 /** Saves each readable block; a failed fetch or unreadable block keeps the last one so a kill switch can't lift. */
 export function recordRolloutPayload(payload: unknown): Promise<void> {
   // One at a time, so an older write can't land after (and overwrite) a newer block.
-  recording = recording.then(() => saveRolloutPayload(payload))
+  recording = recording
+    .then(() => saveRolloutPayload(payload))
+    // A failed save must not stop later ones (a later kill switch still has to land).
+    .catch((error: unknown) => console.warn('[rollout] could not save rollout flags', error))
   return recording
 }
 

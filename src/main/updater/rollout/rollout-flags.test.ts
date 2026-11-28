@@ -62,6 +62,13 @@ it('saves the newest of two overlapping payloads, so a kill switch is not lost',
     rollout: { version: 1, flags: { 'mac-menu-bar-helper': { state } } }
   })
   try {
+    const throwing = {
+      get rollout(): never {
+        throw new Error('unreadable payload')
+      }
+    }
+    // A save that throws must not stop the ones after it.
+    await recordRolloutPayload(throwing)
     await recordRolloutPayload(payload('off'))
     // The newer 'off' matches the saved text while the older 'on' is still being written.
     await Promise.all([recordRolloutPayload(payload('on')), recordRolloutPayload(payload('off'))])
