@@ -23286,8 +23286,8 @@
         "imageNotReady": "The image isn’t ready yet.",
         "closeNoMessageBox": "No message box to add notes to.",
         "closeEditingQueued": "Finish the queued edit first.",
-        "closeGoal": "Setting a goal takes no images.",
-        "closeCommand": "The box holds a command.",
+        "closeGoal": "Goals can’t include images.",
+        "closeCommand": "Message box has a command.",
         "closeFailed": "Couldn’t add the marked image.",
         "closeTooLarge": "Too large to draw notes on.",
         "goneNotAdded": "Notes on {{name}} weren’t added."

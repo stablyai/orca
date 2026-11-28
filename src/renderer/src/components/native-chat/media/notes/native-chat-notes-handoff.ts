@@ -51,6 +51,23 @@ export function nativeChatNotesComposer(from: Element | null): NativeChatNotesCo
     : null
 }
 
+/** The mounted message box of this draft, wherever it is now (it may have remounted); null when
+ *  none is mounted. */
+export function nativeChatNotesComposerForScope(scopeKey: string): NativeChatNotesComposer | null {
+  for (const element of document.querySelectorAll<HTMLElement>(
+    '[data-native-chat-composer-scope]'
+  )) {
+    if (element.dataset.nativeChatComposerScope !== scopeKey) {
+      continue
+    }
+    const box = nativeChatNotesComposer(element)
+    if (box?.scopeKey === scopeKey) {
+      return box
+    }
+  }
+  return null
+}
+
 /** What one hand-off put in the draft: its marked images and the notes text after the message. */
 export type NativeChatNotesAdded = { ids: readonly string[]; text: string }
 

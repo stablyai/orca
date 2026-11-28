@@ -8,28 +8,31 @@ import {
   nativeChatWorktreeNotReadyNotice
 } from '../attachments/intake/native-chat-attachment-notices'
 
+/** The chat can't take an image now; `message` says why. Shown by the notes viewer, the one place
+ *  that reports a marked image that wasn't added. */
+export class NativeChatGeneratedImageRefusedError extends Error {}
+
 type PasteParts = Pick<
   ReturnType<typeof useNativeChatComposerPaste>,
   'startImageChip' | 'saveClipboardImage' | 'canPaste'
 >
 
 /** A marked notes image Orca drew: a chip like a pasted picture, saved from its own bytes and
- *  never from the clipboard. Resolves its attachment id. */
+ *  never from the clipboard. Resolves its attachment id, or null when it wasn't attached. Posts no
+ *  message-box notice of its own: the viewer that asked reports the failure. */
 export function useNativeChatGeneratedImageAttach(
   { startImageChip, saveClipboardImage, canPaste }: PasteParts,
-  resolveAttachmentOwner: UseNativeChatComposerPasteArgs['resolveAttachmentOwner'],
-  setNotice: UseNativeChatComposerPasteArgs['setNotice']
+  resolveAttachmentOwner: UseNativeChatComposerPasteArgs['resolveAttachmentOwner']
 ): (image: Blob) => Promise<string | null> {
   return useCallback(
     async (image: Blob): Promise<string | null> => {
       const owner = resolveAttachmentOwner()
       if (!ownerAcceptsClipboardImage(owner)) {
-        setNotice(
+        throw new NativeChatGeneratedImageRefusedError(
           owner.kind === 'not-ready'
             ? (owner.notice ?? nativeChatWorktreeNotReadyNotice())
             : nativeChatLocalAttachmentUnsupportedNotice()
         )
-        return null
       }
       // Read before the chip starts, so a failed read leaves no pending chip behind.
       const png = new Uint8Array(await image.arrayBuffer())
@@ -45,6 +48,6 @@ export function useNativeChatGeneratedImageAttach(
         ? pendingId
         : null
     },
-    [canPaste, resolveAttachmentOwner, saveClipboardImage, setNotice, startImageChip]
+    [canPaste, resolveAttachmentOwner, saveClipboardImage, startImageChip]
   )
 }

@@ -22215,11 +22215,11 @@
         "goalHeld": "メッセージ欄で目標を設定中です。目標には画像を含められません。先に完了するか終了してください。",
         "annotateTooLarge": "この画像は大きすぎるためメモを描けません（3,300万画素超）。",
         "imageNotReady": "画像の準備がまだできていません。",
-        "closeNoMessageBox": "メモを追加するメッセージ欄がありません。",
+        "closeNoMessageBox": "メッセージ欄がありません。",
         "closeEditingQueued": "先にキューの編集を終えてください。",
         "closeGoal": "目標の設定では画像を使えません。",
         "closeCommand": "メッセージ欄にコマンドがあります。",
-        "closeFailed": "マーク付きの画像を追加できませんでした。",
+        "closeFailed": "画像を追加できませんでした。",
         "closeTooLarge": "大きすぎてメモを描けません。",
         "goneNotAdded": "{{name}} のメモは追加されませんでした。"
       }

@@ -53,10 +53,10 @@ const closed = (width: number, key: string, fallback: string) =>
     )
   })
 
-export const commandHeld320 = closed(320, 'closeCommand', 'The box holds a command.')
-export const commandHeld360 = closed(360, 'closeCommand', 'The box holds a command.')
+export const commandHeld320 = closed(320, 'closeCommand', 'Message box has a command.')
+export const commandHeld360 = closed(360, 'closeCommand', 'Message box has a command.')
 export const noMessageBox320 = closed(320, 'closeNoMessageBox', 'No message box to add notes to.')
-export const goalHeld320 = closed(320, 'closeGoal', 'Setting a goal takes no images.')
+export const goalHeld320 = closed(320, 'closeGoal', 'Goals can’t include images.')
 export const queuedEdit320 = closed(320, 'closeEditingQueued', 'Finish the queued edit first.')
 export const failed320 = closed(320, 'closeFailed', 'Couldn’t add the marked image.')
 export const notReady320 = closed(320, 'imageNotReady', 'The image isn’t ready yet.')

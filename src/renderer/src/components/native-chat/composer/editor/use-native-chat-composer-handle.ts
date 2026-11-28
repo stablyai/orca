@@ -81,8 +81,7 @@ export function useNativeChatComposerHandle(
   })
   const attachGeneratedImage = useNativeChatGeneratedImageAttach(
     pasteParts,
-    args.resolveAttachmentOwner,
-    args.setNotice
+    args.resolveAttachmentOwner
   )
 
   useImperativeHandle(

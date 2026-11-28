@@ -88,9 +88,13 @@ function chat(
   return { handle, opener: { current: tile } }
 }
 
-function viewer(opener: { current: Element | null }, onOpenChange: (open: boolean) => void) {
+function viewer(
+  opener: { current: Element | null },
+  onOpenChange: (open: boolean) => void,
+  notes: readonly NativeChatMediaNote[] = NOTES
+) {
   return renderHook(() => {
-    const editor = useNativeChatNotesEditor({ notes: NOTES })
+    const editor = useNativeChatNotesEditor({ notes })
     const delivery = useNativeChatNotesDelivery({
       opener,
       loaded: LOADED,
@@ -194,7 +198,7 @@ it('Close while the message box holds a command says why, adds nothing, and offe
   expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
   expect(draft()).toEqual({ text: '', ids: [] })
   const status = view.result.current.editor.status
-  expect(status?.kind === 'error' && status.message).toBe('The box holds a command.')
+  expect(status?.kind === 'error' && status.message).toBe('Message box has a command.')
   act(() => {
     if (status?.kind === 'error') {
       status.discard?.()
@@ -297,4 +301,72 @@ it('notes of a viewer that goes away while the message box can’t take them say
   view.unmount()
   await vi.waitFor(() => expect(line.result.current?.text).toBe('Notes on a.png weren’t added.'))
   expect(handle.attachGeneratedImage).not.toHaveBeenCalled()
+})
+
+it('a note still being typed when its viewer goes away reaches the message box too', async () => {
+  const { handle, opener } = chat()
+  const view = viewer(opener, vi.fn(), [])
+  act(() => {
+    view.result.current.editor.place({ kind: 'pin', x: 0.5, y: 0.5 })
+  })
+  act(() => view.result.current.editor.setDraftText('look here'))
+  // Nothing added yet: the note is only typed.
+  expect(view.result.current.editor.notes).toEqual([])
+  view.unmount()
+  await vi.waitFor(() => expect(handle.attachGeneratedImage).toHaveBeenCalledTimes(1), {
+    timeout: 10_000
+  })
+  await vi.waitFor(() => expect(draft().text).toContain(NOTES_TEXT), { timeout: 10_000 })
+})
+
+it('a changed note not yet saved goes with its viewer as changed', async () => {
+  const { opener } = chat()
+  const view = viewer(opener, vi.fn())
+  act(() => {
+    view.result.current.editor.open('n1')
+  })
+  act(() => view.result.current.editor.setDraftText('look there'))
+  view.unmount()
+  await vi.waitFor(() => expect(draft().text).toContain('1. look there'), { timeout: 10_000 })
+  expect(draft().text).not.toContain('look here')
+})
+
+it('notes of a viewer that goes away after its message box remounted reach the new box', async () => {
+  const first = chat()
+  const view = viewer(first.opener, vi.fn())
+  const root = first.opener.current?.parentElement
+  root?.querySelector('[data-native-chat-composer-scope]')?.remove()
+  const box = document.createElement('div')
+  box.dataset.nativeChatComposerScope = SCOPE
+  root?.prepend(box)
+  const remounted: Handle = {
+    ...first.handle,
+    attachGeneratedImage: vi.fn(first.handle.attachGeneratedImage)
+  }
+  registerNativeChatComposerDestination(box, { current: remounted }, true, SCOPE)
+  // The row (and the viewer's opener with it) goes too.
+  first.opener.current?.remove()
+  view.unmount()
+  await vi.waitFor(() => expect(remounted.attachGeneratedImage).toHaveBeenCalledTimes(1), {
+    timeout: 10_000
+  })
+  await vi.waitFor(() => expect(draft().text).toContain(NOTES_TEXT), { timeout: 10_000 })
+})
+
+it('a hand-off that fails after its viewer went says so in the message box', async () => {
+  const attach = Promise.withResolvers<string | null>()
+  const { opener } = chat({ attach: () => attach.promise })
+  const view = viewer(opener, vi.fn())
+  const line = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  let closing!: Promise<void>
+  act(() => {
+    closing = view.result.current.delivery.close()
+  })
+  view.unmount()
+  await act(async () => {
+    attach.resolve(null)
+    await closing
+  })
+  await vi.waitFor(() => expect(line.result.current?.text).toBe('Notes on a.png weren’t added.'))
+  expect(draft()).toEqual({ text: '', ids: [] })
 })

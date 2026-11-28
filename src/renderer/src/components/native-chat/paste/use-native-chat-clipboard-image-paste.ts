@@ -126,8 +126,11 @@ export function useNativeChatClipboardImagePaste({
         besideText,
         ready,
         eventImage,
+        // A notes image's failure is reported by its viewer alone.
         canNotify: () =>
-          canComplete() && (!pendingId || pendingClipboardImages.get(pendingId) !== 'removed'),
+          !png &&
+          canComplete() &&
+          (!pendingId || pendingClipboardImages.get(pendingId) !== 'removed'),
         setNotice,
         ...(png ? { png } : {})
       })

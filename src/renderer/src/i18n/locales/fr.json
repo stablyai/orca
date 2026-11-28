@@ -23107,12 +23107,12 @@
         "goalHeld": "Votre zone de message définit un objectif, qui ne peut pas inclure d’images. Terminez-le ou quittez-le d’abord.",
         "annotateTooLarge": "Cette image est trop grande pour y dessiner des notes (plus de 33 mégapixels).",
         "imageNotReady": "L’image n’est pas encore prête.",
-        "closeNoMessageBox": "Aucune zone de message pour les notes.",
-        "closeEditingQueued": "Terminez d’abord la modification en attente.",
-        "closeGoal": "Un objectif n’accepte pas d’images.",
-        "closeCommand": "La zone de message contient une commande.",
-        "closeFailed": "Impossible d’ajouter l’image annotée.",
-        "closeTooLarge": "Trop grande pour y dessiner des notes.",
+        "closeNoMessageBox": "Aucune zone de message.",
+        "closeEditingQueued": "Terminez l’édition en attente.",
+        "closeGoal": "Un objectif refuse les images.",
+        "closeCommand": "Commande dans le message.",
+        "closeFailed": "Impossible d’ajouter l’image.",
+        "closeTooLarge": "Trop grande pour des notes.",
         "goneNotAdded": "Les notes sur {{name}} n’ont pas été ajoutées."
       }
     },

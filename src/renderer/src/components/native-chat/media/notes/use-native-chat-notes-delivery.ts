@@ -18,6 +18,7 @@ import {
   attachNativeChatNotes,
   captureNativeChatNotesSend,
   nativeChatNotesComposer,
+  nativeChatNotesComposerForScope,
   nativeChatNotesCloseErrorText,
   nativeChatNotesHandOffErrorText,
   nativeChatNotesStillInDraft,
@@ -67,19 +68,23 @@ export function useNativeChatNotesDelivery({
   }, [onOpenChange])
   // A viewer can go without closing: its message row unmounts (scrolled out of a long chat, or
   // replaced as output arrives), or something closes it past the guard. Its added notes then go to
-  // the chat's message box as Close would put them, or the box says they couldn't.
-  const latest = useRef({ notes, loaded, composer, title })
+  // the chat's message box as Close would put them, or the box says they couldn't. A note still
+  // being typed goes with them: nothing the user wrote is dropped without a word.
+  const latest = useRef({ notes: nativeChatNotesWithUnadded(editor), loaded, composer, title })
   useLayoutEffect(() => {
-    latest.current = { notes, loaded, composer, title }
+    latest.current = { notes: nativeChatNotesWithUnadded(editor), loaded, composer, title }
   })
-  useEffect(
-    () => () => {
+  // Set once the viewer is gone, so a hand-off still in flight reports in the message box instead.
+  const gone = useRef(false)
+  useEffect(() => {
+    gone.current = false
+    return () => {
+      gone.current = true
       if (!settled.current && !busyRef.current && latest.current.notes.length > 0) {
         void handOffFromGoneViewer(latest.current, translate)
       }
-    },
-    []
-  )
+    }
+  }, [])
   const showError = useCallback(
     (message: string, discard?: () => void): void => {
       editor.setStatus({ kind: 'error', message, ...(discard ? { discard } : {}) })
@@ -147,10 +152,13 @@ export function useNativeChatNotesDelivery({
         }
       } catch (error) {
         console.error('[native-chat] notes hand-off failed', error)
-        // Closing never keeps the user here: Discard closes without these notes.
-        if (send) {
+        if (gone.current) {
+          // The viewer went while the hand-off ran: nothing is left here to show the failure in.
+          showGoneNotAdded(composer.scopeKey, title, t)
+        } else if (send) {
           showError(nativeChatNotesHandOffErrorText(t, error))
         } else {
+          // Closing never keeps the user here: Discard closes without these notes.
           showError(nativeChatNotesCloseErrorText(t, error), closeViewer)
         }
       }
@@ -221,15 +229,17 @@ async function handOffFromGoneViewer(
   t: typeof translate
 ): Promise<void> {
   const { notes, loaded, title } = gone
-  const box = gone.composer?.element ? nativeChatNotesComposer(gone.composer.element) : null
-  const scopeKey = box?.scopeKey ?? gone.composer?.scopeKey
+  const saved = gone.composer
+  // The box element saved at open is detached if the box remounted meanwhile: find it by its draft.
+  const box = saved?.element?.isConnected
+    ? nativeChatNotesComposer(saved.element)
+    : saved
+      ? nativeChatNotesComposerForScope(saved.scopeKey)
+      : null
+  const scopeKey = box?.scopeKey ?? saved?.scopeKey
   const lost = (): void => {
     if (scopeKey) {
-      showNativeChatNotesNotice(scopeKey, {
-        text: t('components.native-chat.notes.goneNotAdded', 'Notes on {{name}} weren’t added.', {
-          name: title
-        })
-      })
+      showGoneNotAdded(scopeKey, title, t)
     }
   }
   if (!box || !loaded || blockedIn(box) !== null) {
@@ -250,4 +260,29 @@ async function handOffFromGoneViewer(
     console.error('[native-chat] notes hand-off failed', error)
     lost()
   }
+}
+
+function showGoneNotAdded(scopeKey: string, title: string, t: typeof translate): void {
+  showNativeChatNotesNotice(scopeKey, {
+    text: t('components.native-chat.notes.goneNotAdded', 'Notes on {{name}} weren’t added.', {
+      name: title
+    })
+  })
+}
+
+/** The viewer's notes with the one still being typed (a new note, or a changed one) as written. */
+export function nativeChatNotesWithUnadded(
+  editor: Pick<Editor, 'notes' | 'pending' | 'editing' | 'draftText' | 'hasUnadded'>
+): readonly NativeChatMediaNote[] {
+  if (!editor.hasUnadded) {
+    return editor.notes
+  }
+  const text = editor.draftText.trim()
+  if (editor.pending) {
+    return [...editor.notes, { ...editor.pending, text }]
+  }
+  const editing = editor.editing
+  return editing
+    ? editor.notes.map((note) => (note.id === editing.id ? { ...note, text } : note))
+    : editor.notes
 }

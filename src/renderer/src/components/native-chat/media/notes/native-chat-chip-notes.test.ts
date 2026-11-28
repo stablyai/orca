@@ -24,8 +24,7 @@ it('reads a drawn image’s bytes before it starts a chip, so a failed read leav
   const { result } = renderHook(() =>
     useNativeChatGeneratedImageAttach(
       { startImageChip, saveClipboardImage, canPaste: () => true },
-      () => ({ kind: 'local' }),
-      vi.fn()
+      () => ({ kind: 'local' })
     )
   )
   const image = new Blob(['png'], { type: 'image/png' })

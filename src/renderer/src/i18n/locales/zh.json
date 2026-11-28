@@ -22099,7 +22099,7 @@
         "imageNotReady": "图片尚未准备好。",
         "closeNoMessageBox": "没有可添加备注的消息框。",
         "closeEditingQueued": "请先完成队列中的编辑。",
-        "closeGoal": "设定目标时不能添加图片。",
+        "closeGoal": "设置目标时不能添加图片。",
         "closeCommand": "消息框中有一条命令。",
         "closeFailed": "无法添加标注后的图片。",
         "closeTooLarge": "图片太大，无法绘制备注。",

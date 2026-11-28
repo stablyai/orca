@@ -68,8 +68,8 @@ export function nativeChatNotesCloseBlockedText(
     case 'editing':
       return t('components.native-chat.notes.closeEditingQueued', 'Finish the queued edit first.')
     case 'goal':
-      return t('components.native-chat.notes.closeGoal', 'Setting a goal takes no images.')
+      return t('components.native-chat.notes.closeGoal', 'Goals can’t include images.')
     case 'command':
-      return t('components.native-chat.notes.closeCommand', 'The box holds a command.')
+      return t('components.native-chat.notes.closeCommand', 'Message box has a command.')
   }
 }

@@ -22817,12 +22817,12 @@
         "goalHeld": "Dein Nachrichtenfeld legt gerade ein Ziel fest, das keine Bilder enthalten kann. Schließe es zuerst ab oder verlasse es.",
         "annotateTooLarge": "Dieses Bild ist zu groß, um Notizen darauf zu zeichnen (über 33 Megapixel).",
         "imageNotReady": "Das Bild ist noch nicht bereit.",
-        "closeNoMessageBox": "Kein Nachrichtenfeld für die Notizen.",
+        "closeNoMessageBox": "Kein Nachrichtenfeld.",
         "closeEditingQueued": "Beende zuerst die Bearbeitung.",
         "closeGoal": "Ein Ziel nimmt keine Bilder an.",
-        "closeCommand": "Im Nachrichtenfeld steht ein Befehl.",
-        "closeFailed": "Das markierte Bild konnte nicht hinzugefügt werden.",
-        "closeTooLarge": "Zu groß, um Notizen darauf zu zeichnen.",
+        "closeCommand": "Befehl im Nachrichtenfeld.",
+        "closeFailed": "Bild nicht hinzugefügt.",
+        "closeTooLarge": "Zu groß für Notizen.",
         "goneNotAdded": "Die Notizen zu {{name}} wurden nicht hinzugefügt."
       }
     },
