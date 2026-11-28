@@ -30,7 +30,7 @@ export class PiRpcSessionStartup {
 
   constructor(
     private readonly input: StructuredAgentSessionAcquireInput,
-    private readonly connection: PiRpcConnection,
+    private readonly connection: Pick<PiRpcConnection, 'request' | 'closed'>,
     private readonly deps: PiRpcSessionDeps,
     /** A new Pi session starts on its config's model; a resumed or forked one keeps its own. */
     private readonly resolvesConfig: boolean,
@@ -94,14 +94,14 @@ export class PiRpcSessionStartup {
   }
 
   reportAfterOpen(generation: string, opening: AgentSessionOptionsResult['current']): void {
-    void this.readAfterOpen(generation, opening).catch((error: unknown) =>
+    // Extension commands do not depend on the potentially slow model catalog.
+    void this.readCommands()
+    void this.readOptionsAfterOpen(generation, opening).catch((error: unknown) =>
       this.warn('Pi startup reports failed', 'pi-startup-reports', error)
     )
   }
 
-  /** After the open: the listing and the `/` commands reach the host as later reports, and a read
-   *  that fails only leaves the chat without them. */
-  private async readAfterOpen(
+  private async readOptionsAfterOpen(
     generation: string,
     opening: AgentSessionOptionsResult['current']
   ): Promise<void> {
@@ -123,7 +123,6 @@ export class PiRpcSessionStartup {
       )
       this.reportOptions(generation, adopted ? options.current : {}, catalogListing)
     }
-    await this.readCommands()
   }
 
   reportOptions(
