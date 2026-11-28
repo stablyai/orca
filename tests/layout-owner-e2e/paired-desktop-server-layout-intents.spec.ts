@@ -3,12 +3,10 @@
  * to the server's main (H5c-1): a tab drag and a move into a new split change the server's own
  * layout, and the desktop draws the result from the server's frames, never the session.tabs mirror.
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-layout-intents.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -26,10 +24,8 @@ import {
   type Tree
 } from './helpers/paired-desktop-server-layout'
 import { waitForWorktree } from './helpers/paired-desktop-server-terminal-tab'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 
 function desktopTab(page: Page, webTabId: string) {
@@ -62,7 +58,7 @@ async function showWorkspace(client: PairedElectronClient, worktreeId: string, w
 }
 
 test.describe('paired desktop sends tab moves to a switch-on server’s main', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('a drag and a move into a split change the server’s layout, drawn from its frames', async ({
     testRepoPath

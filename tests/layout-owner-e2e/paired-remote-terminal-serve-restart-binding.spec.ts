@@ -1,5 +1,5 @@
 // Retain verified mirrored PTY bindings while serve restart republishes pending surfaces; the surviving daemon must keep appending durable history.
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
@@ -36,13 +36,11 @@ import {
   type PairedTerminalSnapshotReceipt
 } from './helpers/paired-terminal-restart-renderer-probes'
 import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 const scratch = createRetentionFixtureDirectory()
 const fixturePath = path.join(scratch, 'serve-restart-binding-terminal.mjs')
 const sinkPath = path.join(scratch, 'serve-restart-binding-terminal.log')
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 writeFileSync(
   fixturePath,
@@ -558,7 +556,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
       hostPidBeforeRestart
     )
     // Layout-owner main restores the live binding from its tab row, so this build publishes ready immediately.
-    if (!LAYOUT_OWNER_BUILD) {
+    if (!LAYOUT_OWNER_SWITCH_ON) {
       let pendingReceipt: PairedTerminalSnapshotReceipt | null = null
       await expect
         .poll(
@@ -602,7 +600,7 @@ test('retains a verified mirrored PTY binding through a serve restart pending sn
       ptyId: terminal.ptyId,
       status: 'ready'
     })
-    if (LAYOUT_OWNER_BUILD) {
+    if (LAYOUT_OWNER_SWITCH_ON) {
       const { receipts } = await readPairedTerminalSnapshotProbe(client.page)
       expect(receipts.filter((receipt) => receipt.status === 'pending-handle')).toEqual([])
     }

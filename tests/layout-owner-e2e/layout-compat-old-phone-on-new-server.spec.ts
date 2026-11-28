@@ -1,7 +1,5 @@
 // P3 baseline: emulate mobile-android-v0.0.52 capabilities and request shapes against current serve, not a released app.
 // Record terminal/file operations, pin handling and selection across restart against main’s shapes.
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
@@ -18,6 +16,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-run
 import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 /** What mobile-android-v0.0.52 advertises (its mobile-runtime-client-capabilities.ts). */
 const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
@@ -41,9 +40,6 @@ const OLD_PHONE_CAPABILITIES: readonly RuntimeCapability[] = [
 ]
 
 // A layout-owner build's main opens the file itself, so the open succeeds and its tab is listed.
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 // Set until the restarted host hears from its paired hosts, or a deadline passes: timing, not shape.
 const TRANSIENT_FIELDS = new Set(['clientHostedPagesUnreconciled'])
@@ -188,7 +184,7 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
 
     // Windowless main opens a Markdown row; rebuilt session rows name tab2 Terminal 2. Layout-owner builds list it immediately.
     const opened = await reply(phone, 'files.open', { worktree, relativePath: 'README.md' })
-    if (LAYOUT_OWNER_BUILD) {
+    if (LAYOUT_OWNER_SWITCH_ON) {
       const listed = await phone.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
         worktree
       })
@@ -230,7 +226,7 @@ test('old-phone-on-new-server: create, activate, rename, focus, close, open a fi
       : { ok: false, error: 'no terminal.list row for the tab' }
     await record('phone closes the first terminal', closedLast)
 
-    const scenario = LAYOUT_OWNER_BUILD
+    const scenario = LAYOUT_OWNER_SWITCH_ON
       ? 'old-phone-on-new-server.layout-owner'
       : 'old-phone-on-new-server'
     await expectLayoutCompatBaseline(testInfo, scenario, {

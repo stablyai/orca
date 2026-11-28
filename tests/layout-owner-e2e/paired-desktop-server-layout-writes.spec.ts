@@ -4,12 +4,10 @@
  * own layout: a close also stops the closed terminal, session.tabs on the server agrees, and the
  * desktop draws every result from the server's frames.
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-layout-writes.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
@@ -38,10 +36,7 @@ import {
   openTab,
   waitForWorktree
 } from './helpers/paired-desktop-server-terminal-tab'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 function desktopTab(page: Page, webTabId: string) {
   return page.locator(`[data-testid="sortable-tab"][data-tab-id="${webTabId}"]`)
@@ -92,7 +87,7 @@ async function serverLivePtyIds(host: HeadlessPairedRuntimeHost, worktreeId: str
 }
 
 test.describe('paired desktop writes to a switch-on server’s workspace land in its main', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('close, rename, split and create change the server’s layout, drawn from its frames', async ({
     testRepoPath

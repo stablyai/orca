@@ -31,6 +31,7 @@ import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/ru
 import type { RuntimeTerminalRead } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
+import { expectServerTookLayoutOwner } from './helpers/layout-owner-build'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -142,6 +143,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       launchedServeApp.evaluate(({ app }) => app.getPath('home'))
     )
     assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    await expectServerTookLayoutOwner(launchedServeApp, env)
     // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
     forwardElectronProcessLogs(serveApp, testInfo)
     const ownerPid = serveApp.process().pid
