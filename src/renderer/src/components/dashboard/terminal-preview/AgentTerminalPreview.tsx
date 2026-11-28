@@ -38,7 +38,6 @@ const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
 const RESYNC_RETRY_DELAY_MS = 150
-const WATCH_ONLY = { schedule: (): void => {}, dispose: (): void => {} }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -51,8 +50,7 @@ export function AgentTerminalPreview({
   className,
   onRequestClose,
   linkSource,
-  onBrowserForeground,
-  claimsGrid = true
+  onBrowserForeground
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
@@ -61,8 +59,6 @@ export function AgentTerminalPreview({
   onRequestClose?: () => void
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
-  /** False: watch at the holder's grid, scaled to fit; never resize their terminal. */
-  claimsGrid?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -153,9 +149,11 @@ export function AgentTerminalPreview({
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
 
-    const gridClaim = claimsGrid
-      ? createPreviewGridClaim({ ptyId, container, getTerminal: () => terminal })
-      : WATCH_ONLY
+    const gridClaim = createPreviewGridClaim({
+      ptyId,
+      container,
+      getTerminal: () => terminal
+    })
     // Box growth/shrink (window resize) changes the reachable grid.
     const boxResizeObserver =
       typeof ResizeObserver === 'undefined'
@@ -337,7 +335,6 @@ export function AgentTerminalPreview({
     }
   }, [
     ptyId,
-    claimsGrid,
     terminalTheme,
     terminalMode,
     terminalMinimumContrastRatio,

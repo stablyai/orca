@@ -31040,7 +31040,9 @@
       "closeTab": "Close {{title}}",
       "close": "Close",
       "unavailable": "Their tabs can’t be read right now.",
-      "empty": "{{name}} has no tabs open here."
+      "empty": "{{name}} has no tabs open here.",
+      "teammate": "Teammate",
+      "save": "Save"
     }
   },
   "plugins": {

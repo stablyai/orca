@@ -144,13 +144,7 @@ export function ViewedTabListSurface({
         </div>
       </div>
       {shown ? (
-        <ViewedTabBody
-          key={shown.id}
-          bot={bot}
-          homeKey={homeKey}
-          tab={shown}
-          holderName={holderName}
-        />
+        <ViewedTabBody key={shown.id} bot={bot} tab={shown} holderName={holderName} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
           {read.state === 'failed'

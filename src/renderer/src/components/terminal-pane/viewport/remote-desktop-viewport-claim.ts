@@ -1,4 +1,5 @@
 import type { FitHoldMode } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
+import { isPassiveTerminalInputReport } from '../input/terminal-passive-input-report'
 
 type TerminalGrid = { cols: number; rows: number }
 
@@ -19,5 +20,17 @@ export function shouldClaimRemoteDesktopViewport(args: {
     args.paneVisible &&
     args.documentVisible &&
     args.documentFocused
+  )
+}
+
+/** Typing takes the grid back from the peer holding it: the paired-terminal rule for every viewer of
+ *  another host's terminal. Focus and hover reports after a resize are not typing (#26469). */
+export function claimsRemoteDesktopViewportOnInput(
+  holdMode: FitHoldMode | undefined,
+  input?: string
+): boolean {
+  return (
+    holdMode === 'remote-desktop-fit' &&
+    (input === undefined || !isPassiveTerminalInputReport(input))
   )
 }

@@ -6,7 +6,13 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { physicalReload } from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import {
+  physicalReload,
+  root
+} from '../../runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { getRuntimeBrowserPageRegistry } from '../../runtime/browser/client-pages/runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from '../../runtime/browser-host/leases/browser-host-lease-registry-instance'
@@ -521,6 +527,35 @@ it('stops, closes or sleeps only the host’s terminals of a Home, and never for
   expect(live(ownersTerminal.ptyId)).toBe(false)
   expect(live(matesTerminal.ptyId)).toBe(true)
   expect(tabIds(await r.list('mate-desk'))).toEqual([matesTerminal.id])
+})
+
+it('saves a teammate’s file edit only over the text it started from', async () => {
+  const r = await rig()
+  const path = join(root, 'plan.md')
+  await writeFile(path, 'first')
+  await openFile(r, 'mate-desk', 'plan.md')
+  // Read when Mate started editing, then someone else saved over it.
+  const startedFrom = z.object({ content: z.string() }).parse(
+    await r.call('mate-desk', 'files.read', {
+      worktree: `id:${r.workspace}`,
+      relativePath: 'plan.md'
+    })
+  ).content
+  await writeFile(path, 'theirs')
+  const save = (content: string, over: string) =>
+    r.call('mate-desk', 'files.writeIfUnchanged', {
+      worktree: `id:${r.workspace}`,
+      relativePath: 'plan.md',
+      content,
+      expectedExecutionHostId: 'local',
+      diskPrecondition: { expectedSignature: getDiskBaselineSignature(over) }
+    })
+
+  expect(await save('mine', startedFrom)).toEqual({ ok: false, diskConflict: 'changed' })
+  expect(await readFile(path, 'utf8')).toBe('theirs')
+  // Keeping theirs as the base, the save lands.
+  expect(await save('mine', 'theirs')).toMatchObject({ ok: true })
+  expect(await readFile(path, 'utf8')).toBe('mine')
 })
 
 it('ends a teammate’s terminal that exits on its own in their list alone', async () => {

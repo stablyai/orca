@@ -6,6 +6,11 @@ import type {
   RemoteRuntimeMultiplexedTerminalCallbacks
 } from '@/runtime/hosted-terminals/streams/remote-terminal-stream-contracts'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  claimPreviewViewport,
+  sendPreviewInput,
+  type PreviewViewportHold
+} from './preview-viewport-hold'
 import type {
   TerminalPreviewConnectResult,
   TerminalPreviewDataPayload,
@@ -39,6 +44,7 @@ type PreviewSession = {
   /** Transport credit per emitted chunk, returned in order as the preview parses them. */
   credits: (() => void)[]
   grid: { cols: number; rows: number } | null
+  hold: PreviewViewportHold
 }
 
 const sessions = new Map<string, PreviewSession>()
@@ -143,7 +149,8 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
     gate: [],
     snapshotSeq: undefined,
     credits: [],
-    grid: null
+    grid: null,
+    hold: { mode: undefined, claimed: null }
   }
   sessions.set(ptyId, session)
   let initialized = false
@@ -204,6 +211,7 @@ function openSession(ptyId: string, environmentId: string, handle: string) {
             }
           },
           onFitOverrideChanged: (event) => {
+            session.hold.mode = event.mode
             if (event.cols !== session.grid?.cols || event.rows !== session.grid?.rows) {
               emit({ type: 'resync', ptyId })
             }
@@ -298,10 +306,10 @@ export const remoteRuntimeTerminalPreviewApi: TerminalPreviewApi = {
     }
     return openSession(ptyId, parts.environmentId, parts.handle)
   },
-  input: (ptyId, data) => Promise.resolve(sessions.get(ptyId)?.stream?.sendInput(data) ?? false),
+  input: (ptyId, data) => Promise.resolve(sendPreviewInput(sessions.get(ptyId), data)),
   fit: (ptyId, cols, rows) => {
     // Why: the host answers the claim with a fit-override event, which triggers the resync repaint.
-    const claimed = sessions.get(ptyId)?.stream?.claimViewport(cols, rows) ?? false
+    const claimed = claimPreviewViewport(sessions.get(ptyId), cols, rows)
     return Promise.resolve(claimed ? { cols, rows } : null)
   },
   // Why in order: the preview acknowledges chunks as xterm parses them, which is emit order.
