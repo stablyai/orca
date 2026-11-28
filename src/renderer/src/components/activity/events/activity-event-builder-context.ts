@@ -201,8 +201,8 @@ export function patchActivityTabIndexes(
 }
 
 export function resolveActivityExecutionHostId(
-  context: ActivityTabContext,
-  entry: AgentStatusEntry,
+  context: { worktreeId: string; tab: { id: string } },
+  entry: Pick<AgentStatusEntry, 'connectionId'>,
   terminalPtyId: string | null | undefined,
   tabHostIndex: ActivityTabHostIndex
 ): ExecutionHostId | undefined {

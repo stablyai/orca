@@ -65,6 +65,9 @@ export function getWorkspaceCleanupAgentEvidence(
 ): Map<string, WorkspaceCleanupAgentEvidence> {
   const evidence = new Map<string, WorkspaceCleanupAgentEvidence>()
   let hostIndex: ReturnType<typeof buildActivityTabHostIndex> | undefined
+  const representedTabs = state.unifiedTabsByWorktree
+    ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
+    : undefined
   const candidatesByWorktreeId = new Map<string, WorkspaceCleanupCandidate[]>()
   for (const candidate of candidates) {
     const group = candidatesByWorktreeId.get(candidate.worktreeId) ?? []
@@ -74,12 +77,47 @@ export function getWorkspaceCleanupAgentEvidence(
     })
     candidatesByWorktreeId.set(candidate.worktreeId, group)
   }
+
+  const record = (
+    worktreeId: string,
+    worktreeCandidates: readonly WorkspaceCleanupCandidate[],
+    hostId: ReturnType<typeof resolveActivityExecutionHostId>,
+    isLive: boolean
+  ): void => {
+    for (const candidate of worktreeCandidates) {
+      const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+      const candidateHost = resolveWorkspaceCleanupRemovalHostId(candidate)
+      const facts = evidence.get(identity)!
+      if (!hostId || !candidateHost) {
+        if (isLive) {
+          facts.status = 'unknown'
+        }
+        facts.finishedAgentCount = null
+      } else {
+        const owner =
+          findIndexedWorktreeOwnerForHost(
+            selectWorktreesByRepo(state),
+            worktreeId,
+            candidateHost
+          ) ??
+          findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).find(
+            (worktree) => isExecutionHostAliasForWorktree(candidateHost, worktree)
+          )
+        if (isExecutionHostAliasForWorktree(hostId, owner ?? { hostId: candidateHost })) {
+          if (isLive && facts.status !== 'unknown') {
+            facts.status = 'live'
+          } else if (!isLive && facts.finishedAgentCount !== null) {
+            facts.finishedAgentCount += 1
+          }
+        }
+      }
+    }
+  }
+
   for (const [worktreeId, worktreeCandidates] of candidatesByWorktreeId) {
     const rows = buildWorktreeAgentRows({
       tabs: state.tabsByWorktree[worktreeId] ?? [],
-      representedTabs: state.unifiedTabsByWorktree
-        ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
-        : undefined,
+      representedTabs,
       entries: selectLiveAgentStatusEntriesForWorktree(state, worktreeId),
       runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
       ptyIdsByTabId: state.ptyIdsByTabId,
@@ -116,34 +154,50 @@ export function getWorkspaceCleanupAgentEvidence(
             hostIndex
           )
         : undefined
-      for (const candidate of worktreeCandidates) {
-        const identity = getWorkspaceCleanupCandidateIdentity(candidate)
-        const candidateHost = resolveWorkspaceCleanupRemovalHostId(candidate)
-        const facts = evidence.get(identity)!
-        if (!hostId || !candidateHost) {
-          if (isLive) {
-            facts.status = 'unknown'
-          }
-          facts.finishedAgentCount = null
-        } else {
-          const owner =
-            findIndexedWorktreeOwnerForHost(
-              selectWorktreesByRepo(state),
-              worktreeId,
-              candidateHost
-            ) ??
-            findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), worktreeId).find(
-              (worktree) => isExecutionHostAliasForWorktree(candidateHost, worktree)
-            )
-          if (isExecutionHostAliasForWorktree(hostId, owner ?? { hostId: candidateHost })) {
-            if (isLive && facts.status !== 'unknown') {
-              facts.status = 'live'
-            } else if (!isLive && facts.finishedAgentCount !== null) {
-              facts.finishedAgentCount += 1
-            }
-          }
-        }
+      record(worktreeId, worktreeCandidates, hostId, isLive)
+    }
+
+    const tabsById = new Map(
+      (state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab] as const)
+    )
+    for (const [paneKey, orchestration] of Object.entries(
+      state.runtimeAgentOrchestrationByPaneKey ?? {}
+    )) {
+      if (
+        orchestration.dispatchStatus !== 'pending' &&
+        orchestration.dispatchStatus !== 'dispatched'
+      ) {
+        continue
       }
+      const parsed = parsePaneKey(paneKey)
+      if (!parsed) {
+        continue
+      }
+      const tab = tabsById.get(parsed.tabId)
+      const represented = representedTabs?.get(paneKey)
+      const paneTab = tab ?? (represented?.worktreeId === worktreeId ? represented : undefined)
+      if (!paneTab) {
+        continue
+      }
+      hostIndex ??= buildActivityTabHostIndex(state.unifiedTabsByWorktree)
+      const ptyIds = (tab && state.ptyIdsByTabId[tab.id]) ?? []
+      const ptyId =
+        (tab &&
+          parsed.leafId &&
+          state.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId?.[parsed.leafId]) ||
+        tab?.ptyId ||
+        (ptyIds.length === 1 ? ptyIds[0] : undefined)
+      record(
+        worktreeId,
+        worktreeCandidates,
+        resolveActivityExecutionHostId(
+          { worktreeId, tab: paneTab },
+          state.agentStatusByPaneKey.get(paneKey) ?? { connectionId: undefined },
+          ptyId,
+          hostIndex
+        ),
+        true
+      )
     }
   }
   return evidence
