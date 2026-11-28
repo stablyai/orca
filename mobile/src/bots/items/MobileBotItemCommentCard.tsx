@@ -1,7 +1,7 @@
 // One comment in an item's Activity, as a chat-style row: who and when with a labeled Quote, the reply it
 // quotes, its words at chat's prose size with its images and files, a question's lines, and for a comment
 // sent from the box that didn't reach the host, Not sent · Retry · Discard.
-import { useEffect, useRef, type Ref } from 'react'
+import { useEffect, useRef, useState, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
 import { CircleAlert, Quote } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
@@ -13,6 +13,7 @@ import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/m
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import {
   mobileBotItemCommentWords,
@@ -26,8 +27,6 @@ import { useMobileMessageTime } from '../../session/native-chat/transcript/messa
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
-// Quote's 28 pt pill grown to a 44 pt touch target.
-const QUOTE_HIT_SLOP = { top: 8, bottom: 8, left: 4, right: 4 }
 
 export function MobileBotItemCommentCard({
   item,
@@ -73,6 +72,8 @@ export function MobileBotItemCommentCard({
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
   const proseScale = useBotItemProseScale()
+  // Quote's width, kept clear at the end of the name line.
+  const [quoteWidth, setQuoteWidth] = useState(0)
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
@@ -81,29 +82,18 @@ export function MobileBotItemCommentCard({
         entry.beside === undefined ? event.data : { ...event.data, text: entry.beside }
       ).trim()
     : ''
+  const quotable = onQuote !== undefined && quoted !== ''
   return (
-    <View ref={ref} style={styles.row}>
+    <View ref={ref} style={[styles.row, quotable && styles.quotableRow]}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
       <View style={styles.body}>
-        <View style={styles.head}>
+        <View style={[styles.head, quotable && { paddingEnd: quoteWidth }]}>
           <Text style={styles.author} numberOfLines={1}>
             {botItemActorName(event, item, t)}
           </Text>
           <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
             {time.label(event.at)}
           </Text>
-          {onQuote && quoted ? (
-            <Pressable
-              style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
-              hitSlop={QUOTE_HIT_SLOP}
-              accessibilityRole="button"
-              accessibilityLabel={t('chat.selectionQuote.action', 'Quote')}
-              onPress={() => onQuote(quoted)}
-            >
-              <Quote size={14} color={colors.textSecondary} />
-              <Text style={styles.quoteLabel}>{t('chat.selectionQuote.action', 'Quote')}</Text>
-            </Pressable>
-          ) : null}
         </View>
         {replyTo ? (
           <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
@@ -151,6 +141,24 @@ export function MobileBotItemCommentCard({
           </View>
         ) : null}
       </View>
+      {quotable ? (
+        // On the row, not the 20 pt name line, so its 44 pt target lies inside its parents: a child's touch area
+        // never reaches past its parent on native, and the web has no hitSlop.
+        <Pressable
+          style={styles.quote}
+          onLayout={(event) => setQuoteWidth(event.nativeEvent.layout.width)}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.selectionQuote.action', 'Quote')}
+          onPress={() => onQuote?.(quoted)}
+        >
+          {({ pressed }) => (
+            <View style={[styles.quotePill, pressed && styles.pressed]}>
+              <Quote size={14} color={colors.textSecondary} />
+              <Text style={styles.quoteLabel}>{t('chat.selectionQuote.action', 'Quote')}</Text>
+            </View>
+          )}
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -181,7 +189,7 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
   return <Animated.View pointerEvents="none" style={[styles.flash, { opacity }]} />
 }
 
-// Comments span the row; the Activity's event lines keep their glyph column (MobileBotItemActivity).
+// Rows sit on the list rows' inset, under the Activity header; event lines keep their glyph column.
 const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
@@ -194,15 +202,22 @@ const stylesSheet = themedStyleSheet((colors) => ({
   },
   row: {
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs
+    paddingHorizontal: LIST_ROW_PADDING
   },
   body: { flex: 1, minWidth: 0, gap: spacing.xs },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  // A labeled pill at the row's end, pulled back so the 20 pt line keeps its height and its label meets the text edge.
+  // A row with Quote is at least its 44 pt target tall.
+  quotableRow: { minHeight: 44 },
+  // A 44 pt box from the row's top, its pill centred on the name line (the row's 8 pt inset plus half the
+  // 20 pt line); the pill's label meets the text edge.
   quote: {
-    marginLeft: 'auto',
-    marginVertical: -4,
-    marginRight: -spacing.sm,
+    position: 'absolute',
+    top: 0,
+    end: LIST_ROW_PADDING - spacing.sm,
+    height: 44,
+    paddingTop: spacing.sm + 20 / 2 - 28 / 2
+  },
+  quotePill: {
     height: 28,
     flexDirection: 'row',
     alignItems: 'center',

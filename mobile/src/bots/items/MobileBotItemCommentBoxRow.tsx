@@ -32,7 +32,8 @@ export function MobileBotItemCommentBoxRow({
         style={
           open
             ? styles.field
-            : [styles.field, styles.lineField, { left: leadWidth, right: trailWidth }]
+            : // Start and end, so the field stays between the controls in a right-to-left layout too.
+              [styles.field, styles.lineField, { start: leadWidth, end: trailWidth }]
         }
       >
         {field}
@@ -72,12 +73,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   actionsBelow: { marginTop: spacing.sm },
-  lead: { paddingRight: spacing.sm },
+  lead: { paddingEnd: spacing.sm },
   slot: { height: COMPOSER_COMPACT_CONTROL_SIZE, justifyContent: 'center' },
   trail: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingLeft: spacing.sm
+    paddingStart: spacing.sm
   }
 })

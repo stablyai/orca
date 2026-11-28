@@ -14,7 +14,7 @@ export type MobileNativeChatComposerFieldProps = Omit<
   // Dictation heard so far, shown between the draft's halves without becoming part of its value.
   dictationPreview?: { before: string; text: string; after: string } | null
   ref?: RefObject<TextInputInstance | null>
-  /** Caps the field's height below the composer's own cap; it scrolls past it. */
+  /** Lowers the field's height cap (never raises it, on either platform); it scrolls past it. */
   maxHeight?: number
 }
 

@@ -44,6 +44,7 @@ import { fieldName, statusWord, str } from './bot-item-activity-words'
 import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { spacing, typography } from '../../theme/mobile-theme'
+import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
@@ -386,12 +387,12 @@ const stylesSheet = themedStyleSheet((colors) => ({
     alignItems: 'flex-start',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs
+    paddingHorizontal: LIST_ROW_PADDING
   },
   eventIcon: { width: 16, height: 20, alignItems: 'center', justifyContent: 'center' },
   eventBody: { flex: 1, minWidth: 0 },
   line: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textMuted },
-  none: { paddingHorizontal: spacing.xs, paddingTop: spacing.xs },
+  none: { paddingHorizontal: LIST_ROW_PADDING, paddingTop: spacing.xs },
   actor: { fontWeight: '500', color: colors.textSecondary },
   inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   chevronClosed: { transform: [{ rotate: '-90deg' }] },
