@@ -47,11 +47,12 @@ export function startWslMoveOrchestratorWithHostService(
       const created = build()
       orchestrator = created
       followHostReadiness(created)
-      wire(created)
+      // Before wire: a throw there must not strand the opens that arrived early.
       for (const distro of pendingProjectOpened) {
         void created.trigger(distro, 'project-opened')
       }
       pendingProjectOpened.clear()
+      wire(created)
     } catch (error) {
       console.warn('[wsl-move] Move orchestrator did not start:', error)
     }
@@ -61,9 +62,16 @@ export function startWslMoveOrchestratorWithHostService(
 /** T1 and T3: a host reaching ready, or already ready at start, on whichever service is installed. */
 function followHostReadiness(created: WslMoveOrchestrator): void {
   const ready = new Set<string>()
+  let seen = getWslHostService()
   const observe = (trigger: 'connect' | 'startup'): void => {
+    const service = getWslHostService()
+    // A new service's hosts reaching ready are new connects, not ones already seen.
+    if (service !== seen) {
+      seen = service
+      ready.clear()
+    }
     const now = new Set<string>()
-    for (const status of getWslHostService()?.getStatuses() ?? []) {
+    for (const status of service?.getStatuses() ?? []) {
       if (status.state !== 'ready') {
         continue
       }

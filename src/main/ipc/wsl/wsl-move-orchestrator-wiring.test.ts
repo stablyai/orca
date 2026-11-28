@@ -90,7 +90,7 @@ describe('registerWslMoveOrchestrator', () => {
   it('builds the orchestrator once when the host service is set after registration', async () => {
     const { register, installService, list } = await load()
     register()
-    expect(list()).toEqual([])
+    expect(list()).toBeNull()
     expect(state.constructed).toBe(0)
 
     installService()

@@ -200,8 +200,9 @@ export function registerWslMoveOrchestrator(
   const isMainWindow = (sender: WebContents | undefined): boolean =>
     !!sender && getTrustedUIRendererWebContents()?.id === sender.id
   // Not setting-gated: a move already in flight when the setting turns off stays visible.
-  ipcMain.handle('wslMoveOrchestrator:list', (): WslMoveOrchestratorRecord[] =>
-    wslHostsGateOpen() ? (currentWslMoveOrchestrator()?.list() ?? []) : []
+  // Null before construction: the first publish is then the window's snapshot, not a change.
+  ipcMain.handle('wslMoveOrchestrator:list', (): WslMoveOrchestratorRecord[] | null =>
+    wslHostsGateOpen() ? (currentWslMoveOrchestrator()?.list() ?? null) : []
   )
   // T2: the window opened a bridge project of this distro; the orchestrator checks it is running.
   ipcMain.handle(

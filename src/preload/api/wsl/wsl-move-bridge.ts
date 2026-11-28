@@ -47,8 +47,8 @@ export type WslMoveApi = {
     /** Workspaces with unsaved files; main refuses if the move brings any of them back. */
     unsavedWorkspaceIds?: string[]
   }) => Promise<WslMoveUseLocallyResult>
-  /** The general migration's per-distro state (D3a); empty while the gate is closed. */
-  listOrchestrator: () => Promise<WslMoveOrchestratorRecord[]>
+  /** Per-distro state (D3a); empty while the gate is closed, null until the orchestrator exists. */
+  listOrchestrator: () => Promise<WslMoveOrchestratorRecord[] | null>
   /** Null when refused (gate closed, not the main window, unknown action). */
   orchestratorUserAction: (request: {
     distro: string
