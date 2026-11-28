@@ -22529,7 +22529,6 @@
           "dialog": {
             "createToken": "作成する",
             "environmentManagedLine": "ORCA_BITBUCKET_* 環境変数で設定されています。ここで保存するには解除してください。",
-            "savedLocallyOnly": "このコンピューターにのみ保存されます。",
             "accessTokenNeeds": "プルリクエストの読み取り権限が必要です。",
             "atlassianEmail": "Atlassian のメールアドレス",
             "requiredScopes": "必要なスコープ",

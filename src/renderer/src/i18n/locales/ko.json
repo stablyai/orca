@@ -23386,7 +23386,6 @@
           "dialog": {
             "createToken": "만들기",
             "environmentManagedLine": "ORCA_BITBUCKET_* 환경 변수로 설정되어 있습니다. 여기에 저장하려면 해제하세요.",
-            "savedLocallyOnly": "이 컴퓨터에만 저장됩니다.",
             "accessTokenNeeds": "풀 리퀘스트 읽기 권한이 필요합니다.",
             "atlassianEmail": "Atlassian 이메일",
             "requiredScopes": "필요한 범위",
