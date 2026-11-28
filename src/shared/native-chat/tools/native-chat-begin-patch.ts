@@ -22,7 +22,10 @@ export function unwrapBeginPatch(
   if (start === -1) {
     return null
   }
-  const end = source.indexOf(END, start)
+  // A diff row may quote the marker as added, removed, or context text. Only
+  // column-zero markers delimit the envelope; shell wrappers may follow it.
+  const endLine = source.indexOf(`\n${END}`, start + BEGIN.length)
+  const end = endLine === -1 ? -1 : endLine + 1
   if (end === -1) {
     // Require the end marker so trailing shell syntax cannot become fictitious file content.
     return null
