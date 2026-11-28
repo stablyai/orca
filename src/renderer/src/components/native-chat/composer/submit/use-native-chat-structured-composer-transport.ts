@@ -1,3 +1,4 @@
+import { useNativeChatCrossVendorControl } from '../../session/options/cross-vendor/use-native-chat-cross-vendor-control'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -128,6 +129,12 @@ export function useNativeChatStructuredComposerTransport(args: {
     hostAgent?.capabilities.mcpServers === true &&
     (props.target.kind === 'local' || remoteManagesMcp)
   const mcpTray = useNativeChatMcpTray(props.sessionId, props.isVisible)
+  const crossVendor = useNativeChatCrossVendorControl({
+    pane: props,
+    worktreeId: worktreeId ?? null,
+    isWorking: controller.isWorking,
+    reportError: onError
+  })
   const { fork, sideChat } = forks
   // Turned off while one shows: the read restarts without asking, and this hides what it held.
   const showsPromptSuggestions = useAppStore((state) =>
@@ -213,6 +220,7 @@ export function useNativeChatStructuredComposerTransport(args: {
             }
           }
         : {}),
+      crossVendor,
       sendOut: controller.sendOut,
       sendFollowUp: controller.sendFollowUp,
       ...(sendBlockedReason !== null ? { sendBlockedReason } : {}),
@@ -246,6 +254,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   }, [
     acceptsImages,
     controller,
+    crossVendor,
     managesMcp,
     mcpTray,
     fork,

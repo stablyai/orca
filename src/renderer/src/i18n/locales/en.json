@@ -23221,6 +23221,22 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "crossVendor": {
+        "cancelled": "The switch was cancelled.",
+        "failed": "Couldn't switch this chat to {{agent}}",
+        "vendors": "Agents",
+        "currentAgent": "{{agent}} · this chat",
+        "hint": "Continue this conversation with {{agent}}. Earlier messages stay here and are shared as context.",
+        "loadingModels": "Loading {{agent}} models…",
+        "modelsUnknown": "{{agent}} didn't list its models; it starts with its default.",
+        "switchDefault": "Switch to {{agent}}",
+        "effortFor": "Reasoning for {{model}}",
+        "notSignedIn": "Not signed in",
+        "cliMissing": "Not installed on this host",
+        "notRunnable": "Cannot start on this host",
+        "waitForTurn": "Wait for the current reply to finish, or stop it, before switching agents.",
+        "botUnsupported": "Bots can't run on this agent yet."
       }
     },
     "tab": {

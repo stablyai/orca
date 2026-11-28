@@ -1,3 +1,4 @@
+import type { NativeChatCrossVendorControl } from '../../session/options/cross-vendor/native-chat-cross-vendor-context'
 import type { NativeChatMcpTrayState } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
 import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
@@ -19,6 +20,8 @@ import type { NativeChatComposerErrorDetail } from '../controls/native-chat-comp
 import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
 
 export type NativeChatStructuredComposerTransport = {
+  /** Continues this chat with another vendor's agent from the model menu; absent where it can't. */
+  crossVendor?: NativeChatCrossVendorControl | null
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean

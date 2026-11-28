@@ -29,6 +29,11 @@ import type { CatalogOwner } from '../model-catalog/structured-agent-model-catal
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime-contract'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { observePRWatchCommittedRows } from '../lifecycle/pr-watch-runtime'
+import {
+  createCrossVendorHandoffSeeds,
+  installCrossVendorHandoffSeeds,
+  withCrossVendorHandoffTurnContext
+} from '../../../native-chat/agent-session-wire/cross-vendor/cross-vendor-handoff-seeds'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -37,6 +42,8 @@ export async function installOnJournal(
 ): Promise<InstalledRuntime> {
   const envResolvers = catalogOwner.environment
   let host: StructuredAgentSessionHost | null = null
+  const handoffSeeds = createCrossVendorHandoffSeeds(deps.stateDirectory)
+  installCrossVendorHandoffSeeds(handoffSeeds)
   const lifecycle = createStructuredAgentSessionLifecycleDelivery({
     handle: (event) => host?.handleAdapterEvent(event),
     logger: deps.logger,
@@ -98,7 +105,7 @@ export async function installOnJournal(
     ...(deps.conversationNaming
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
       : {}),
-    ...(deps.turnContext ? { turnContext: deps.turnContext } : {}),
+    turnContext: withCrossVendorHandoffTurnContext(deps.turnContext, handoffSeeds),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.quietTurnEnd ? { quietTurnEnd: deps.quietTurnEnd } : {}),
     ...(deps.isBotHome ? { isBotHome: deps.isBotHome } : {}),
