@@ -83,6 +83,11 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     return structuredLaunchSeedOptions(this.requireStore().getSettings(), agent)
   }
 
+  private assertResumeWritersExited(input: StructuredAgentSessionCreateIntentInput, id: string) {
+    const panes = input.allowClosingPaneKeys ? input.resumeFrom?.closingPaneKeys : undefined
+    return this.assertStructuredAdoptionTerminalWritersExited(input.agent, id, panes)
+  }
+
   async resolveStructuredAgentSessionCreateIntent(
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
@@ -97,7 +102,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         })
       } catch (ownerConflict) {
         // Refuse transfer from a live terminal or the chat's first send starts a second writer.
-        await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
+        await this.assertResumeWritersExited(input, providerSessionId)
         throw ownerConflict
       }
     }
@@ -191,9 +196,8 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
-    const host = getStructuredAgentSessionHost()
     const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
-      host,
+      host: getStructuredAgentSessionHost(),
       ...input,
       location,
       ...(options ? { options } : {})
@@ -203,10 +207,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     }
     const resumeFrom = input.resumeFrom
     if (resumeFrom) {
-      await this.assertStructuredAdoptionTerminalWritersExited(
-        input.agent,
-        resumeFrom.providerSessionId
-      )
+      await this.assertResumeWritersExited(input, resumeFrom.providerSessionId)
     }
     const workspaceCwd = resumeFrom
       ? (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
@@ -229,6 +230,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
                 evidence: input.structuredAgentCliSourceEvidence
               }),
             prepareCodexResume: this.prepareAiVaultSessionResumeFn ?? undefined,
+            writerGate: (id) => this.assertStructuredAdoptionTerminalWritersExited(input.agent, id),
             selectedAccountHome,
             launchEnv: await resolveHostStructuredAgentLaunchEnvironment(input.agent, settings),
             workspaceCwd: workspaceCwd

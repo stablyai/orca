@@ -6,10 +6,16 @@ import { structuredChatUnavailableToast } from '@/lib/agent-session/launch/struc
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
-import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import {
+  structuredAgentSessionHostSupports,
+  supportsStructuredAgentSessionCreateMessage
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { probePtyRunningWork } from '../../terminal/tab-lifecycle/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
-import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import {
+  STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CREATE_CLOSING_PANES_RUNTIME_CAPABILITY
+} from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { namesCliConversation } from '../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   cliChatResumeCloseFromProbe,
@@ -95,15 +101,27 @@ export async function admitCliChatResumeClose(
   isCurrent: () => boolean,
   signal: AbortSignal
 ): Promise<CliChatResumeClose | null> {
-  const closeSupported = await waitForPromiseWithSignal(
-    structuredAgentSessionHostSupports(
-      target,
-      STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY
-    ),
-    signal
-  )
-  // An agent that already quit leaves nothing to stop, so its terminal stays and main's create runs.
-  const close = closeSupported ? await paneClose(source, signal) : 'keep'
+  const [closeSupported, createClosingPanesSupported, createMessageSupported] =
+    await waitForPromiseWithSignal(
+      Promise.all([
+        structuredAgentSessionHostSupports(
+          target,
+          STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY
+        ),
+        structuredAgentSessionHostSupports(
+          target,
+          STRUCTURED_AGENT_SESSION_CREATE_CLOSING_PANES_RUNTIME_CAPABILITY
+        ),
+        supportsStructuredAgentSessionCreateMessage(target)
+      ]),
+      signal
+    )
+  // An agent that already quit leaves nothing to stop; older hosts that cannot create at rest before
+  // closing also keep the terminal so a failed create never loses both surfaces.
+  const close =
+    closeSupported && createClosingPanesSupported && createMessageSupported
+      ? await paneClose(source, signal)
+      : 'keep'
   if (!isCurrent()) {
     return null
   }
@@ -132,7 +150,7 @@ export async function admitCliChatResumeClose(
   }
   // The host's create refuses another terminal running the conversation, or one saved in another
   // folder; asked now, this terminal stays open. Its own panes are left out: the close stops them
-  // before create.
+  // after create succeeds.
   const support = await waitForPromiseWithSignal(
     admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent, {
       providerSessionId: source.providerSessionId,

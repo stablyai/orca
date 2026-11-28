@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { rm, stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
@@ -37,6 +40,8 @@ export type StructuredAgentSessionCreateIntentInput = {
   callerKey?: string
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Only an at-rest create without an opening turn may exempt panes the caller closes after create succeeds. */
+  allowClosingPaneKeys?: boolean
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
 }
 
@@ -114,7 +119,10 @@ export function requireUnownedStructuredAgentSessionAdoption(input: {
 }
 
 export async function resolveStructuredAgentSessionAdoptionForCreate(
-  input: StructuredAgentSessionAdoptionInput
+  input: StructuredAgentSessionAdoptionInput & {
+    /** Refuses while a terminal still writes the conversation; consulted when the chat gets a copy. */
+    writerGate?: (providerSessionId: string) => Promise<void>
+  }
 ) {
   try {
     const { adoption, candidates } = await findStructuredAgentSessionAdoptionTranscript(input)
@@ -141,6 +149,14 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
         source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
       })
     ])
+    const { writerGate } = input
+    // A copy misses whatever a closing pane appends after it, so a live writer or post-copy write must refuse the create.
+    await assertAdoptedSnapshotCurrent({
+      sourcePath: adoption.transcriptPath,
+      preparedPath: prepared.transcriptPath,
+      writerGate: writerGate ? () => writerGate(input.providerSessionId) : undefined,
+      removeCopyOnRefusal: prepared.copiedRollout === true
+    })
     return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
@@ -152,6 +168,77 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
       error instanceof Error ? error.message : String(error)
     )
   }
+}
+
+/** Refuse a copied rollout if a writer is still live or appended to the source before exiting. */
+export async function assertAdoptedSnapshotCurrent(input: {
+  sourcePath: string
+  preparedPath: string
+  writerGate?: () => Promise<void>
+  /** Only a copy this create installed is its own to remove; a link or a file found in place is shared. */
+  removeCopyOnRefusal?: boolean
+}): Promise<void> {
+  if (!(await isSnapshotOfSource(input.sourcePath, input.preparedPath))) {
+    return
+  }
+  try {
+    await input.writerGate?.()
+    if (!(await transcriptFilesHaveSameContents(input.sourcePath, input.preparedPath))) {
+      throw agentSessionRefusalError(
+        'agent_session_identity_required',
+        { reason: 'transcriptUnreadable' },
+        'The conversation changed after its transcript copy was prepared.'
+      )
+    }
+  } catch (error) {
+    if (input.removeCopyOnRefusal) {
+      // Kept, a refused copy fails every later attempt as a different rollout occupying the path.
+      await rm(input.preparedPath, { force: true }).catch((cleanupError: unknown) => {
+        console.warn('[agent-session] A refused transcript copy stays in place:', cleanupError)
+      })
+    }
+    throw error
+  }
+}
+
+/** A prepared copy (hard link refused) stops seeing what the source's writer appends after preparation. */
+export async function isSnapshotOfSource(
+  sourcePath: string,
+  preparedPath: string
+): Promise<boolean> {
+  if (sourcePath === preparedPath) {
+    return false
+  }
+  const [source, prepared] = await Promise.all([
+    stat(sourcePath, { bigint: true }),
+    stat(preparedPath, { bigint: true })
+  ])
+  return source.dev !== prepared.dev || source.ino !== prepared.ino
+}
+
+async function transcriptFilesHaveSameContents(
+  sourcePath: string,
+  preparedPath: string
+): Promise<boolean> {
+  const [source, prepared] = await Promise.all([stat(sourcePath), stat(preparedPath)])
+  if (source.size !== prepared.size) {
+    return false
+  }
+  const [sourceDigest, preparedDigest] = await Promise.all([
+    sha256File(sourcePath),
+    sha256File(preparedPath)
+  ])
+  return sourceDigest === preparedDigest
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(filePath)) {
+    if (typeof chunk === 'string' || chunk instanceof Uint8Array) {
+      hash.update(chunk)
+    }
+  }
+  return hash.digest('hex')
 }
 
 const ADOPTED_CONVERSATION_NAME_TIMEOUT_MS = 2_000

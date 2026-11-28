@@ -101,7 +101,7 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
       record.location.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
       this.workspaceSessions.tryGetHostId(record.location.workspaceId) !== LOCAL_EXECUTION_HOST_ID
     ) {
-      throw new Error('Chat presentation scope is unavailable')
+      return null
     }
     const snapshot = this.mobileSessionTabsByWorktree.get(record.location.workspaceId)
     if (!snapshot) {
