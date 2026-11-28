@@ -6331,7 +6331,7 @@
       "tidyUpBadTopic": "Das letzte Aufräumen nannte eine Themendatei, die Orca nicht schreiben kann, daher hat sich nichts geändert.",
       "tidyUpTooLong": "Die MEMORY.md des letzten Aufräumens hatte über {{max}} Zeilen und wurde nicht kürzer, daher hat sich nichts geändert.",
       "tidyUpTooManyRemoved": "Das letzte Aufräumen hat zu viele Zeilen auf einmal entfernt, daher hat sich nichts geändert.",
-      "tidyUpTooManyAdded": "Das letzte Aufräumen hat zu viele neue Zeilen auf einmal hinzugefügt, daher hat sich nichts geändert.",
+      "tidyUpTooManyAdded": "Das letzte Aufräumen hat MEMORY.md auf einmal um mehr als {{max}} neue Zeilen wachsen lassen, daher hat sich nichts geändert.",
       "tidyUpNotCopied": "Das letzte Aufräumen hat eine Zeile abgelegt, die nicht in MEMORY.md steht; neue Fakten gehören in MEMORY.md, daher hat sich nichts geändert.",
       "tidyUpTooManyFiled": "Das letzte Aufräumen hat mehr als {{max}} Zeilen auf einmal abgelegt, daher hat sich nichts geändert.",
       "tidyUpChanged": "MEMORY.md hat sich während des letzten Aufräumens geändert, daher hat sich nichts geändert.",

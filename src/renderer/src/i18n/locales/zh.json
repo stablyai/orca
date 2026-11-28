@@ -30593,7 +30593,7 @@
       "tidyUpBadTopic": "上次整理指定了 Orca 无法写入的主题文件，因此没有任何变化",
       "tidyUpTooLong": "上次整理的 MEMORY.md 超过 {{max}} 行且没有变短，因此没有任何变化",
       "tidyUpTooManyRemoved": "上次整理一次删去了太多行，因此没有任何变化",
-      "tidyUpTooManyAdded": "上次整理一次添加了太多新行，因此没有任何变化",
+      "tidyUpTooManyAdded": "上次整理一次让 MEMORY.md 增加了超过 {{max}} 行新行，因此没有任何变化。",
       "tidyUpNotCopied": "上次整理归档了一行 MEMORY.md 中没有的内容；新信息应写进 MEMORY.md，因此没有任何变化",
       "tidyUpTooManyFiled": "上次整理一次归档了超过 {{max}} 行，因此没有任何变化",
       "tidyUpChanged": "上次整理期间 MEMORY.md 发生了变化，因此没有任何变化",

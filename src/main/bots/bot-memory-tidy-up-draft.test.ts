@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { applyBotMemoryChange } from '../../shared/bot-memory-lines'
-import { TIDY_UP_FAILURES } from './bot-memory-tidy-up'
+import {
+  TIDY_UP_FAILURES,
+  TIDY_UP_MAX_FILED,
+  TIDY_UP_MAX_NEW_FACTS,
+  tidyUpPrompt
+} from './bot-memory-tidy-up'
 import { applyTidyUpDraft } from './bot-memory-tidy-up-apply'
 
 const fact = (n: number): string => `- 2026-01-${String((n % 28) + 1).padStart(2, '0')} fact ${n}`
@@ -73,5 +78,42 @@ describe('nightly memory tidy-up over the line cap', () => {
     const { outcome, file } = await tidy(twice, memoryOf(range(0, 140)))
     expect(outcome).not.toHaveProperty('error')
     expect(file.trimEnd().split('\n')).toHaveLength(140)
+  })
+})
+
+describe('what a tidy-up is told about the limits it is checked against', () => {
+  const prompt = (): string =>
+    tidyUpPrompt({ memory: fact(0), files: [], chats: [], today: '2026-11-28' })
+
+  it('states the new lines a run may add, which the draft check enforces', () => {
+    expect(prompt()).toContain(`at most ${TIDY_UP_MAX_NEW_FACTS} new lines`)
+  })
+
+  it('states the lines a run may file, which the draft check enforces', () => {
+    expect(prompt()).toContain(`At most ${TIDY_UP_MAX_FILED} lines a night`)
+  })
+
+  it('says a deferred fact is not read again, since through moves past its chat', () => {
+    // A run that applies sets through to its start, so a fact it did not add is not offered
+    // again by next night's read.
+    expect(prompt()).toContain('add the newest facts first')
+  })
+})
+
+describe('a tidy-up that adds more new lines than it may', () => {
+  const before = memoryOf(range(0, 3))
+  const added = (count: number): string => memoryOf([...range(0, 3), ...range(100, 100 + count)])
+
+  it('names the number it may add, so the owner can tell what went wrong', async () => {
+    const { outcome, file } = await tidy(before, added(TIDY_UP_MAX_NEW_FACTS + 1))
+    expect(outcome).toEqual({ error: TIDY_UP_FAILURES.tooManyAdded, alerted: false })
+    expect(TIDY_UP_FAILURES.tooManyAdded).toContain(String(TIDY_UP_MAX_NEW_FACTS))
+    expect(file).toBe(before)
+  })
+
+  it('takes a draft that adds exactly the number it may', async () => {
+    const { outcome, file } = await tidy(before, added(TIDY_UP_MAX_NEW_FACTS))
+    expect(outcome).not.toHaveProperty('error')
+    expect(file.trimEnd().split('\n')).toHaveLength(3 + TIDY_UP_MAX_NEW_FACTS)
   })
 })

@@ -47,6 +47,7 @@ export const TIDY_UP_REPLACED_BLOCK = 'REPLACED'
 
 export const TIDY_UP_FAILURE_CODES = {
   unfinished: botFailure('tidyUpUnfinished'),
+  tooManyAdded: botFailure('tidyUpTooManyAdded', { max: TIDY_UP_MAX_NEW_FACTS }),
   timedOut: botFailure('tidyUpTimedOut', { minutes: TIDY_UP_RUN_LIMIT_MS / 60_000 }),
   couldNotStart: botFailure('tidyUpCouldNotStart'),
   asleep: botFailure('tidyUpAsleep'),
@@ -57,7 +58,6 @@ export const TIDY_UP_FAILURE_CODES = {
   badTopic: botFailure('tidyUpBadTopic'),
   tooLong: botFailure('tidyUpTooLong', { max: BOT_MEMORY_INDEX_LINE_CAP }),
   tooManyRemoved: botFailure('tidyUpTooManyRemoved'),
-  tooManyAdded: botFailure('tidyUpTooManyAdded'),
   notCopied: botFailure('tidyUpNotCopied'),
   tooManyFiled: botFailure('tidyUpTooManyFiled', { max: TIDY_UP_MAX_FILED }),
   changed: botFailure('tidyUpChanged'),
@@ -342,6 +342,7 @@ export function tidyUpPrompt(input: {
     `- Leave out at most a fifth of the lines; when MEMORY.md is over ${TIDY_UP_TARGET_FACTS} lines, move the oldest details to topic files first. Orca keeps every line you leave out in memory/archive.md.`,
     `- When MEMORY.md is over ${BOT_MEMORY_INDEX_LINE_CAP} lines, make it shorter within these limits; it may stay over ${BOT_MEMORY_INDEX_LINE_CAP} tonight, and the next tidy-up carries on.`,
     `- Add only facts your owner stated, decisions they made, and lessons from their corrections in the chats below, each as "- ${input.today} <fact>". Never add a question, a task, a hypothetical, anything from someone other than your owner, anything the archive already retired, or a password, key or token.`,
+    `- Add at most ${TIDY_UP_MAX_NEW_FACTS} new lines in this run, counting past the old lines you replace or merge away. Orca refuses the whole reply when you add more, and a chat that goes quiet is not read again, so when more than that is worth keeping, add the newest facts first.`,
     '',
     'Reply with only these blocks, each marker on its own line: the whole new MEMORY.md, then one block for each topic file with only the lines to add to it, then the replaced lines. Leave out blocks you have nothing for. If nothing should change, reply with MEMORY.md unchanged.',
     block(TIDY_UP_INDEX_BLOCK, '<the whole new MEMORY.md>'),
