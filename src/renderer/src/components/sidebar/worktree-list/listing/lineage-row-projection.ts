@@ -143,7 +143,7 @@ export function buildLineageRowProjection(
           1 +
           padding +
           LINEAGE_CHILDREN_INLINE_OFFSET
-        frame.right = ancestor.right + 7
+        frame.right = ancestor.right
         frame.contentIndent = 0
         frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
       }
