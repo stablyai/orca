@@ -10,7 +10,10 @@ import '../../db/attempt-outcome-projection'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { WorkerBackgroundWaits } from './worker-background-waits'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
-import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { structuredAgentSessionStatusPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
@@ -333,6 +336,10 @@ describe('a worker waiting on its own background task', () => {
 
   it('wakes a Codex chat worker through its own Dispatch when its background task ends, not the coordinator', () => {
     const sessionId = '22222222-2222-4222-8222-222222222222'
+    expect(isOrcaSessionId(sessionId)).toBe(true)
+    if (!isOrcaSessionId(sessionId)) {
+      return
+    }
     const chatPane = structuredAgentSessionStatusPaneKey(sessionId)
     const task = db.createTask({ spec: 'watch CI', runId })
     const chatDispatch = db.createDispatchContext({
@@ -373,7 +380,7 @@ describe('a worker waiting on its own background task', () => {
     orca.observe({
       kind: 'moved',
       paneKey: chatPane,
-      workspace: null,
+      workspace: { worktreeId: 'repo::/w', sshHostId: null },
       from: 'working',
       to: 'done',
       at: 1,
