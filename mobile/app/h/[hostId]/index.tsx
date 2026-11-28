@@ -5,6 +5,8 @@ import { shellScreenRoute } from '../../../src/mobile-web-shell/routing/shell-sc
 import { PageRouteUnavailableScreen } from '../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { useBotLinkNotice } from '../../../src/bots/use-bot-link-notice'
 import { useHostDocumentOpenTarget } from '../../../src/mobile-web-shell/routing/use-host-document-open-target'
+import { useHostOrcaRestartingTo } from '../../../src/host-screen/identity/updates/host-orca-update'
+import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 
 // Encode decoded hostId so ?, # and whitespace cannot form a pathname the page refuses; shell gates unsupported bundles.
 function HostListScreen() {
@@ -14,7 +16,13 @@ function HostListScreen() {
     linkNotice?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
-  const notice = useBotLinkNotice(hostId, firstParam(params.linkNotice))
+  const t = useMobileTranslation()
+  const linkNotice = useBotLinkNotice(hostId, firstParam(params.linkNotice))
+  // A restart the phone asked for must not read as a failure while the computer reconnects.
+  const restartingTo = useHostOrcaRestartingTo(hostId)
+  const notice = restartingTo
+    ? t('host.updates.updatingTo', 'Updating to {{version}}…', { version: restartingTo })
+    : linkNotice
   const { routeParams, onRouteParamClear, onPageLocation } = useHostDocumentOpenTarget(hostId)
 
   // Validate through bridge schema: encoding cannot make dot/dot-dot host ids valid.

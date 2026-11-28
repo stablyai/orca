@@ -12,6 +12,11 @@ import {
   agentCliUpdateStartable,
   type AgentCliUpdateHostRow
 } from '../../../../../src/shared/agent-launch/installation/agent-cli-update-runs'
+import {
+  REMOTE_SERVER_UPDATE_CAPABILITY,
+  REMOTE_SERVER_UPDATE_MOBILE_CAPABILITY
+} from '../../../../../src/shared/remote-runtime/host-catalog/remote-server-update'
+import { useRpcClientContext } from '../../../transport/connection/client-context'
 import { useHostProtocolGates } from '../../../components/host-connection/host-protocol-gates-context'
 import { LIST_LEADING_INSET, ListRow } from '../../../components/list/ListGroup'
 import { OrcaLogo } from '../../../components/icons/OrcaLogo'
@@ -20,12 +25,23 @@ import { hostManualUpdateSteps } from '../../../host-descriptors/host-manual-upd
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useClipboardWriter } from '../../../platform/clipboard/clipboard'
 import { SettingsSection } from '../../../settings/settings-screen-frame'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { HostAgentCliUpdateRow } from './HostAgentCliUpdateRow'
 import {
   HostAgentCliUpdateFailureSheet,
   type HostAgentCliUpdateFailure
 } from './HostAgentCliUpdateFailureSheet'
+import { HostOrcaUpdateSheet } from './HostOrcaUpdateSheet'
+import { offeredOrcaVersion } from './host-orca-update-snapshot'
+import {
+  downloadHostOrcaUpdate,
+  readHostOrcaUpdate,
+  refreshHostOrcaRestartImpact,
+  restartHostOrcaUpdate,
+  settleHostOrcaUpdate,
+  useHostOrcaUpdate
+} from './host-orca-update'
 import {
   checkHostAgentCliUpdates,
   forgetDoneHostAgentCliUpdates,
@@ -47,6 +63,7 @@ export function HostUpdatesSection(props: {
   showToast: (message: string) => void
 }) {
   const t = useMobileTranslation()
+  const colors = useMobileColors()
   const clipboard = useClipboardWriter()
   // The host route already read status; reusing its gates keeps the last version across a drop.
   const { desktopAppVersion, hostCapabilities, hostUpdateSupport } = useHostProtocolGates()
@@ -54,6 +71,10 @@ export function HostUpdatesSection(props: {
   const { hostId, client, online } = props
   const state = useHostAgentCliUpdates(hostId)
   const [failureAgent, setFailureAgent] = useState<AgentCliUpdateAgent | null>(null)
+  const connections = useRpcClientContext()
+  const orcaUpdates = hostCapabilities.includes(REMOTE_SERVER_UPDATE_MOBILE_CAPABILITY)
+  const orca = useHostOrcaUpdate(hostId)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   useEffect(() => {
     forgetDoneHostAgentCliUpdates(hostId)
@@ -64,8 +85,20 @@ export function HostUpdatesSection(props: {
       if (cliUpdates && online && client) {
         void checkHostAgentCliUpdates(hostId, client)
       }
-    }, [cliUpdates, online, client, hostId])
+      // Reads the computer's own updater only: a check there would also start one on its screen.
+      if (orcaUpdates && online && client) {
+        void readHostOrcaUpdate(client, hostId)
+      }
+    }, [cliUpdates, orcaUpdates, online, client, hostId])
   )
+  const updatedTo = orca.entry?.phase === 'updated' ? orca.entry.currentVersion : null
+  const { showToast } = props
+  useEffect(() => {
+    if (updatedTo && !sheetOpen) {
+      showToast(t('host.updates.updatedTo', 'Updated to {{version}}', { version: updatedTo }))
+      settleHostOrcaUpdate(hostId)
+    }
+  }, [updatedTo, sheetOpen, hostId, showToast, t])
 
   const rows = cliUpdates ? agentCliUpdateHostRows(state) : []
   // An update that landed on this visit keeps its place in the list as "Updated to".
@@ -107,19 +140,62 @@ export function HostUpdatesSection(props: {
         }
       : null
 
-  if (!desktopAppVersion && listed.length === 0) {
+  const installed = orca.snapshot?.appVersion ?? desktopAppVersion
+  const offered = offeredOrcaVersion(orca.snapshot)
+  // A sheet already under way keeps its row, even once the computer stops offering the version.
+  const latest = orca.entry && orca.entry.phase !== 'updated' ? orca.entry.targetVersion : offered
+  const support = orca.snapshot?.support ?? hostUpdateSupport
+  const automatic =
+    orcaUpdates &&
+    hostCapabilities.includes(REMOTE_SERVER_UPDATE_CAPABILITY) &&
+    support?.automatic === true
+  const orcaDue = latest !== null && latest !== installed
+  const closeSheet = () => {
+    setSheetOpen(false)
+    settleHostOrcaUpdate(hostId)
+  }
+  const sheet = (
+    <HostOrcaUpdateSheet
+      visible={sheetOpen}
+      hostName={props.hostName}
+      update={orca}
+      online={online}
+      onClose={closeSheet}
+      onDownload={() => void downloadHostOrcaUpdate(connections, hostId, props.hostName)}
+      onRestart={() => void restartHostOrcaUpdate(connections, hostId)}
+    />
+  )
+  const openSheet = () => {
+    setSheetOpen(true)
+    // The confirm names what's running now, not when the download finished.
+    if (orca.entry?.phase === 'downloaded') {
+      void refreshHostOrcaRestartImpact(connections, hostId)
+    } else if (!orca.entry && orca.snapshot?.status.state === 'downloaded') {
+      // Already downloaded on the computer: straight to who restarts.
+      void downloadHostOrcaUpdate(connections, hostId, props.hostName)
+    }
+  }
+
+  if (!installed && listed.length === 0) {
     return null
   }
   const updateSteps = hostManualUpdateSteps(hostUpdateSupport, hostCapabilities, t)
-  if (listed.length === 0) {
+  if (listed.length === 0 && !orcaDue) {
+    const upToDate = orca.snapshot?.status.state === 'not-available'
     return (
-      <SettingsSection footer={updateSteps ?? undefined}>
-        <ListRow
-          key="version"
-          title={t('host.edit.orcaVersion', 'Orca version')}
-          value={desktopAppVersion ?? undefined}
-        />
-      </SettingsSection>
+      <>
+        <SettingsSection
+          footer={updateSteps ?? (upToDate ? t('host.updates.upToDate', 'Up to date') : undefined)}
+        >
+          <ListRow
+            key="version"
+            title={t('host.edit.orcaVersion', 'Orca version')}
+            value={installed ?? undefined}
+          />
+        </SettingsSection>
+        {/* Stays mounted so a finished update closes itself and says so, once the row stops offering it. */}
+        {sheet}
+      </>
     )
   }
   return (
@@ -154,12 +230,26 @@ export function HostUpdatesSection(props: {
             : (updateSteps ?? undefined)
         }
       >
-        {desktopAppVersion ? (
+        {installed ? (
           <ListRow
             key="orca"
             title={t('host.updates.orca', 'Orca')}
             leading={<OrcaLogo size={13} />}
-            subtitle={desktopAppVersion}
+            subtitle={
+              orcaDue
+                ? t('host.updates.versions', '{{installed}} → {{latest}}', {
+                    installed,
+                    latest
+                  })
+                : installed
+            }
+            {...(orcaDue && automatic
+              ? {
+                  value: t('host.updates.update', 'Update'),
+                  valueColor: colors.accentBlue,
+                  onPress: openSheet
+                }
+              : {})}
           />
         ) : null}
         {listed.map(({ row, updatedTo }) => (
@@ -174,6 +264,7 @@ export function HostUpdatesSection(props: {
           />
         ))}
       </SettingsSection>
+      {sheet}
       <HostAgentCliUpdateFailureSheet
         failure={failure}
         hostName={props.hostName}
