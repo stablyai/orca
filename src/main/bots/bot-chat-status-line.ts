@@ -12,21 +12,28 @@ export function noteInChat(sessionId: string | undefined, text: string): void {
 export function writeInChat(
   sessionId: string | undefined,
   body: AgentJournalPlainStatusItem,
-  idPrefix: string
+  idPrefix: string,
+  options: {
+    /** A caller-chosen id, so a retry with the same id writes one row; defaults to a fresh one. */
+    messageId?: string
+    /** The warning shown when the write fails. */
+    failureLog?: string
+  } = {}
 ): void {
   if (!sessionId) {
     return
   }
+  const failureLog = options.failureLog ?? '[bots] chat status line failed'
   try {
     const host = getStructuredAgentSessionHost()
     const destination = host?.captureAgentStartDestination(sessionId)
     if (host && destination) {
-      const line = { body, messageId: `${idPrefix}:${randomUUID()}` }
+      const line = { body, messageId: options.messageId ?? `${idPrefix}:${randomUUID()}` }
       void destination
         .then((captured) => captured && host.appendAgentStart(captured, line, Date.now()))
-        .catch((error: unknown) => console.warn('[bots] chat status line failed', error))
+        .catch((error: unknown) => console.warn(failureLog, error))
     }
   } catch (error) {
-    console.warn('[bots] chat status line failed', error)
+    console.warn(failureLog, error)
   }
 }
