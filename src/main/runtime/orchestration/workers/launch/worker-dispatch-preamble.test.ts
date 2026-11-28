@@ -14,7 +14,7 @@ describe('buildDispatchPreamble', () => {
     const botWorker = buildDispatchPreamble({ ...base, preserveHumanCommitCredit: true })
     const otherWorker = buildDispatchPreamble(base)
 
-    expect(botWorker).toContain('do not add AI/model co-author or generated-by trailers')
+    expect(botWorker).toContain('do not add AI/model co-author or generated-by lines or trailers')
     expect(botWorker).toContain('genuine human contributor whose work you carry')
     expect(otherWorker).not.toContain('AI/model co-author')
   })

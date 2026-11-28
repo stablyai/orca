@@ -59,9 +59,10 @@ describe('a chat-lineage start on a paired server', () => {
     const takesGuidance = runtimeWith([ORCHESTRATION_BOT_LINEAGE_RUNTIME_CAPABILITY])
 
     expect(await forwardedChatLineage(takesGuidance, db, params, home, server)).toEqual({})
-    expect(await forwardedBotLineage(takesGuidance, db, params, home, server)).toEqual({
+    expect(await forwardedBotLineage(true, takesGuidance, server)).toEqual({
       botLineage: true
     })
+    expect(await forwardedBotLineage(true, runtimeWith([]), server)).toEqual({})
   })
 
   it('is honoured on the server only from the paired Orca coordinating the Run', () => {
