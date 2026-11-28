@@ -145,14 +145,21 @@ export function buildWorktreeComparator(
     compareSmart: (a, b) => {
       const aw = attentionByWorktree.get(a.id) ?? IDLE
       const bw = attentionByWorktree.get(b.id) ?? IDLE
-      return (
+      if (aw.cls !== bw.cls) {
         // Lower class outranks higher.
-        aw.cls - bw.cls ||
-        // Latest attention wins within a class.
-        bw.attentionTimestamp - aw.attentionTimestamp ||
-        // Idle falls back to recency/create grace before labels.
-        effectiveRecentActivity(b, now) - effectiveRecentActivity(a, now)
-      )
+        return aw.cls - bw.cls
+      }
+      if (aw.attentionTimestamp > bw.attentionTimestamp) {
+        // Latest attention wins within a class (Smi return avoids HeapNumber boxing).
+        return -1
+      }
+      if (aw.attentionTimestamp < bw.attentionTimestamp) {
+        return 1
+      }
+      // Idle falls back to recency/create grace before labels.
+      const aRec = effectiveRecentActivity(a, now)
+      const bRec = effectiveRecentActivity(b, now)
+      return aRec > bRec ? -1 : aRec < bRec ? 1 : 0
     }
   })
 }
