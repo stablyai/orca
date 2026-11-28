@@ -135,6 +135,14 @@ function fleet(): WorkspaceSessionState {
   // A workspace storing the same row twice; the Loader keeps one.
   addTerminal(session, key(26), 't26', [leaf(26)])
   session.tabsByWorktree[key(26)]!.push({ ...session.tabsByWorktree[key(26)]![0]! })
+  // A legacy row folded into the tab-bar terminal whose process it claims; the saved selections name it.
+  addTerminal(session, key(27), 'tC', [leaf(271)])
+  addTerminal(session, key(27), 'tD', [leaf(272)], { rowOnly: true })
+  session.tabsByWorktree[key(27)]!.forEach((row) => (row.ptyId = 'pty-27'))
+  session.terminalLayoutsByTabId.tC!.ptyIdsByLeafId = { [leaf(271)]: 'pty-27' }
+  session.terminalLayoutsByTabId.tD!.ptyIdsByLeafId = { [leaf(272)]: 'pty-27' }
+  session.activeTabId = 'tD'
+  session.activeTabIdByWorktree = { ...session.activeTabIdByWorktree, [key(27)]: 'tD' }
   // The withdrawn pane holds the slice's only incarnation; another workspace's must survive.
   session.terminalPtyIncarnationsByPaneKey = {
     [`t22:${leaf(122)}`]: 'incarnation-22',
@@ -214,6 +222,10 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
         tabId: 't26',
         leafId: leaf(26)
       })
+  ],
+  [
+    'a new tab beside a folded row the selections name',
+    (s) => admit(s, create(key(27), 'new-tab'))
   ],
   [
     'a withdrawn pane',
@@ -303,4 +315,23 @@ describe.each([
       )
     }
   })
+})
+
+it('keeps the redirect to the tab-bar terminal when a sliced window-owned write drops a folded row', () => {
+  mode.main = false
+  vi.useFakeTimers({ now: 1_800_000_000_000, toFake: ['Date'] })
+  const session = fleet()
+  mode.slice = false
+  mode.minted = 0
+  const whole = admit(session, create(key(27), 'new-tab'))()
+  mode.slice = true
+  mode.minted = 0
+  const sliced = admit(session, create(key(27), 'new-tab'))()
+  vi.useRealTimers()
+
+  expect(whole.session?.activeTabIdByWorktree?.[key(27)]).not.toBe('tD')
+  expect(sliced.session?.activeTabIdByWorktree?.[key(27)]).toBe(
+    whole.session?.activeTabIdByWorktree?.[key(27)]
+  )
+  expect(sliced.session?.activeTabId).toBe(whole.session?.activeTabId)
 })

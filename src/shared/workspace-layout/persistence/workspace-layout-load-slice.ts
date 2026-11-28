@@ -7,7 +7,7 @@ import { CARRIED_SESSION_FIELDS, FACT_SESSION_FIELDS } from './workspace-layout-
 import { resolveWorktreeId } from './workspace-layout-load-records'
 
 /** The workspace-keyed maps, in the order that sets partition order (workspaceKeys). */
-export const WORKSPACE_FIELDS = [
+const WORKSPACE_FIELDS = [
   'tabsByWorktree',
   'unifiedTabs',
   'tabGroups',
