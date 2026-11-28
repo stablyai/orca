@@ -44,8 +44,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Runs release-source code, so it only builds the tag locally; the keyed cut job verifies and pushes it.
-  prepare:
+  # Runs no release-source code: it pins the source commit before any source code runs, and publishes complete RC
+  # drafts with the workflow commit's own scripts, so prepare can run source code with a read-only token.
+  resolve:
     # Limit version/tag mutations to canonical repo; fork schedules must not diverge their main and conflict upstream.
     if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
@@ -53,12 +54,72 @@ jobs:
     permissions:
       contents: write
     outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      published_count: ${{ steps.publish_drafts.outputs.published_count }}
+      skipped_count: ${{ steps.publish_drafts.outputs.skipped_count }}
+      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+    steps:
+      - name: Resolve the source commit
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/${REF:-main}" --jq .sha)"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve ref $REF."; exit 1; }
+          echo "sha=$sha" >>"$GITHUB_OUTPUT"
+
+      # The draft publisher reads HEAD and tags, so it runs in a source checkout with the workflow commit's scripts.
+      - name: Checkout source for draft recovery
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+          fetch-depth: 0
+          filter: blob:none
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Restore draft-publish scripts from the workflow ref
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          git fetch -q --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            config/scripts/release/publication/publish-complete-draft-releases.mjs \
+            config/scripts/release/publication/verify-release-required-assets.mjs
+
+      - name: Setup Node.js
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+
+      - name: Publish complete release-cut RC drafts from prior runs
+        id: publish_drafts
+        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
+
+  # Runs release-source code with a read-only token, so it only builds the tag locally; cut verifies and pushes it.
+  prepare:
+    needs: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
       new_tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.version.outputs.version || steps.dry-run-version.outputs.version }}
       release_sha: ${{ steps.release-commit.outputs.sha }}
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ (steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '') && steps.dry-run-version.outputs.version == '' }}
-      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
       # new tag) so approvers know what they're signing and who cut it.
       source_ref: ${{ steps.resolve.outputs.ref }}
@@ -84,7 +145,7 @@ jobs:
       - name: Checkout ref
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          ref: ${{ needs.resolve.outputs.sha }}
           fetch-depth: 0
           # Version recovery needs complete history and tags, but not historical file contents.
           filter: blob:none
@@ -297,18 +358,10 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
-      - name: Publish complete release-cut RC drafts from prior runs
-        id: publish_drafts
-        # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
-        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
-
       - name: Compute next version
         id: version
         # Stop after RC-only draft recovery; stable dispatch still cuts its requested version.
-        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && steps.publish_drafts.outputs.published_count != '0' && steps.publish_drafts.outputs.skipped_count == '0')
+        if: steps.window.outputs.allowed == 'true' && steps.existing.outputs.already_ran != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && !((github.event_name == 'schedule' || inputs.kind == 'rc') && needs.resolve.outputs.published_count != '0' && needs.resolve.outputs.skipped_count == '0')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
@@ -681,7 +734,9 @@ jobs:
   # and binds what it pushes to the dispatch inputs and GitHub itself, not to prepare's word: prepare runs source code.
   # Why the App: GITHUB_TOKEN can't push a tag whose commit carries .github/workflows changes versus main.
   cut:
-    needs: prepare
+    needs:
+      - resolve
+      - prepare
     # Dry runs from other branches stop at prepare: only main may enter the release environment.
     if: needs.prepare.outputs.should_release == 'true' || ((github.event_name == 'workflow_dispatch' && inputs.dry_run) && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
@@ -694,11 +749,12 @@ jobs:
       should_release: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && needs.prepare.outputs.should_release == 'true' }}
       release_sha: ${{ steps.remote-tag.outputs.sha }}
       source_ref: ${{ needs.prepare.outputs.source_ref }}
-      source_sha: ${{ needs.prepare.outputs.source_sha }}
+      source_sha: ${{ needs.resolve.outputs.sha }}
       source_short_sha: ${{ needs.prepare.outputs.source_short_sha }}
       ships_orcad_template: ${{ needs.prepare.outputs.ships_orcad_template }}
     env:
-      SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+      SOURCE_SHA: ${{ needs.resolve.outputs.sha }}
+      PREPARED_SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
       RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
       TAG: ${{ needs.prepare.outputs.tag }}
     defaults:
@@ -709,26 +765,15 @@ jobs:
         working-directory: .
         run: |
           set -euo pipefail
-          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::prepare gave no source commit."; exit 1; }
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ || "$PREPARED_SOURCE_SHA" != "$SOURCE_SHA" ]]; then
+            echo "::error::prepare built from '$PREPARED_SOURCE_SHA', not the resolved source $SOURCE_SHA."
+            exit 1
+          fi
           git init -q release
           cd release
           git config core.hooksPath /dev/null
           git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           git fetch -q --no-tags --depth=1 origin "$SOURCE_SHA"
-
-      - name: Require the source commit to be on the requested ref
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
-        run: |
-          set -euo pipefail
-          ref_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/${REF:-main}" --jq .sha)"
-          [[ "$ref_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve ref $REF."; exit 1; }
-          status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$ref_sha" --jq .status)"
-          if [[ "$status" != identical && "$status" != ahead ]]; then
-            echo "::error::Source $SOURCE_SHA is not on the history of $REF ($ref_sha, compare: $status)."
-            exit 1
-          fi
 
       - name: Download release tag bundle
         if: needs.prepare.outputs.new_tag != ''
@@ -737,37 +782,50 @@ jobs:
           name: release-tag-bundle
           path: ${{ runner.temp }}/bundle
 
+      # Runs for recovered tags too: an existing tag is held to the same content rules as a new one.
       - name: Verify the tag is only a version bump of the source
-        if: needs.prepare.outputs.new_tag != ''
         env:
-          VERSION: ${{ needs.prepare.outputs.version }}
+          NEW_TAG: ${{ needs.prepare.outputs.new_tag }}
+          PREPARED_VERSION: ${{ needs.prepare.outputs.version }}
           DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
           EXPLICIT_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
           VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
         run: |
           set -euo pipefail
-          fail() { echo "::error::Refusing to push $TAG: $1" >&2; exit 1; }
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "tag/version mismatch"
+          fail() { echo "::error::Refusing $TAG: $1" >&2; exit 1; }
+          if [[ -n "$NEW_TAG" ]]; then
+            VERSION="$PREPARED_VERSION"
+            [[ "$NEW_TAG" == "$TAG" && "$TAG" == "v$VERSION" ]] || fail "tag/version mismatch"
+            bundle="$RUNNER_TEMP/bundle/release-tag.bundle"
+            git bundle verify -q "$bundle"
+            git -c transfer.fsckObjects=true fetch -q --no-tags "$bundle" "refs/tags/$TAG:refs/tags/$TAG"
+            [[ "$(git cat-file -t "refs/tags/$TAG")" == tag ]] || fail "not an annotated tag"
+          else
+            VERSION="${TAG#v}"
+            git -c transfer.fsckObjects=true fetch -q --no-tags --depth=1 origin "+refs/tags/$TAG:refs/tags/$TAG"
+          fi
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+(\.[0-9A-Za-z]+)?)?$ && "$TAG" == "v$VERSION" ]] || fail "not a release version tag"
           # Bind the version's shape to what was dispatched; the exact number comes from prepare's release math.
           if [[ "$DRY_RUN" == true ]]; then
-            [[ "$VERSION" == "0.0.0-rc.$GITHUB_RUN_ID" ]] || fail "a dry run must use its placeholder version"
+            [[ -n "$NEW_TAG" && "$VERSION" == "0.0.0-rc.$GITHUB_RUN_ID" ]] || fail "a dry run must use its placeholder version"
           elif [[ -n "$EXPLICIT_VERSION" ]]; then
             [[ "$VERSION" == "${EXPLICIT_VERSION#v}${VERSION_SUFFIX:+.$VERSION_SUFFIX}" ]] || fail "version is not the requested $EXPLICIT_VERSION"
           elif [[ "$KIND" == rc ]]; then
-            [[ "$VERSION" == *-rc.* && ( -z "$VERSION_SUFFIX" || "$VERSION" == *".$VERSION_SUFFIX" ) ]] || fail "an rc cut must be an rc version"
+            # A recovered RC may predate the requested suffix, as recover_unpublished_tag allows.
+            [[ "$VERSION" == *-rc.* && ( -z "$NEW_TAG" || -z "$VERSION_SUFFIX" || "$VERSION" == *".$VERSION_SUFFIX" ) ]] || fail "an rc cut must be an rc version"
           else
             [[ "$VERSION" != *-* ]] || fail "a $KIND cut must be a stable version"
           fi
-          bundle="$RUNNER_TEMP/bundle/release-tag.bundle"
-          git bundle verify -q "$bundle"
-          git -c transfer.fsckObjects=true fetch -q --no-tags "$bundle" "refs/tags/$TAG:refs/tags/$TAG"
-          [[ "$(git cat-file -t "refs/tags/$TAG")" == tag ]] || fail "not an annotated tag"
-          [[ "$(git cat-file -p "refs/tags/$TAG" | sed -n '2s/^type //p')" == commit ]] || fail "tag does not point at a commit"
           commit="$(git rev-parse "refs/tags/$TAG^{commit}")"
           [[ "$commit" == "$RELEASE_SHA" ]] || fail "tag commit $commit is not prepare's $RELEASE_SHA"
-          [[ "$(git rev-list --parents -n 1 "$commit")" == "$commit $SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
-          changed="$(git diff-tree --no-commit-id --name-only -r "$commit")"
+          if [[ -z "$NEW_TAG" && "$commit" == "$SOURCE_SHA" ]]; then
+            echo "Recovered tag $TAG is the source commit itself."
+            exit 0
+          fi
+          # Raw object and two-tree reads: a depth-1 fetch grafts away parents.
+          [[ "$(git cat-file -p "$commit" | awk '/^parent /{ print $2 }')" == "$SOURCE_SHA" ]] || fail "release commit is not a single-parent child of $SOURCE_SHA"
+          changed="$(git diff-tree --name-only -r "$SOURCE_SHA" "$commit")"
           [[ -z "$changed" || "$changed" == package.json ]] || fail "release commit changes more than package.json"
           # Byte-for-byte: the source package.json with only its version line replaced.
           cmp -s <(git show "$commit:package.json") <(git show "$SOURCE_SHA:package.json" |
@@ -852,11 +910,6 @@ jobs:
           remote_sha="$(git rev-parse "refs/remotes/origin-tags/$TAG^{commit}")"
           if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$remote_sha" != "$RELEASE_SHA" ]]; then
             echo "::error::Remote tag $TAG resolves to $remote_sha, not the verified release commit $RELEASE_SHA."
-            exit 1
-          fi
-          # A recovered tag must be the source or its version-bump child, as recover_unpublished_tag requires.
-          if [[ "$remote_sha" != "$SOURCE_SHA" && "$(git cat-file -p "$remote_sha" | awk '/^parent /{ print $2; exit }')" != "$SOURCE_SHA" ]]; then
-            echo "::error::Tag $TAG ($remote_sha) was not cut from source $SOURCE_SHA."
             exit 1
           fi
           echo "sha=$RELEASE_SHA" >>"$GITHUB_OUTPUT"
@@ -2572,13 +2625,13 @@ jobs:
 
   homebrew-bump-published-rc-draft:
     needs:
-      - prepare
+      - resolve
     # Why: publish-complete-draft-releases can expose a recovered RC without
     # running the build/publish jobs; still advance the RC cask to that tag.
-    if: ${{ needs.prepare.outputs.latest_published_rc_tag != '' }}
+    if: ${{ needs.resolve.outputs.latest_published_rc_tag != '' }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
-      tag: ${{ needs.prepare.outputs.latest_published_rc_tag }}
+      tag: ${{ needs.resolve.outputs.latest_published_rc_tag }}
     secrets: inherit
 
   homebrew-bump:
