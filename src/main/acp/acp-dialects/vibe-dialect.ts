@@ -4,10 +4,16 @@ import type { AcpDialect, AcpRequestPresentation, AcpTurnEnding } from './acp-di
 
 const APPROVAL_NAME = /^Requesting (?:approval|permission) to (.+)$/iu
 
-// The command or path is only in this action line of the tool call's text.
+// vibe-acp 3.1.x sends no content on the permission tool call, so fall back to its title or the
+// tool name it puts in toolCallId; the action line is used when a build does send content.
 const approvalRequest = (method: string, params: unknown): AcpRequestPresentation | undefined =>
-  approvalRequestPresentation(method, params, (request) =>
-    approvalNameFromToolCall(APPROVAL_NAME, request)
+  approvalRequestPresentation(
+    method,
+    params,
+    (request) =>
+      approvalNameFromToolCall(APPROVAL_NAME, request) ??
+      request.toolCall.title ??
+      request.toolCall.toolCallId
   )
 
 // JSON-RPC's reserved cancel code, or the user-stop wording, marks a cancelled turn. A provider

@@ -88,8 +88,19 @@ it('skips malformed jsonl lines and decodes tool_calls, keeping raw arguments on
     ],
     JSON.stringify({ session_id: 'full-1' })
   )
-  const session = await parseVibeSessionFile(file, 'linux')
+  const pushed: { role: string; text: string }[] = []
+  const sink = {
+    active: true,
+    push: (message: { role: string; text: string }) => {
+      pushed.push(message)
+    }
+  }
+  const session = await parseVibeSessionFile(file, 'linux', sink)
   expect(session?.sessionId).toBe('full-1')
   // The malformed line is skipped, so only the two parseable records count.
   expect(session?.messageCount).toBe(2)
+  // Each tool_call becomes a tool message carrying the tool name and its decoded arguments.
+  const toolTexts = pushed.filter((m) => m.role === 'tool').map((m) => m.text)
+  expect(toolTexts).toContain('shell: ls')
+  expect(toolTexts.some((t) => t.startsWith('read'))).toBe(true)
 })

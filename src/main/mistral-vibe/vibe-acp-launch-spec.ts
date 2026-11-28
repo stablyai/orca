@@ -46,6 +46,8 @@ export const VIBE_ACP_LAUNCH_SPEC: AcpLaunchSpec = {
   // vibe-acp lists its models only as a session's model config option.
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
   instructions: deliverVibeInstructions,
+  // The delivery writes AGENTS.md in the chat's own folder; Orca never adds visuals text there.
+  instructionsInWorkspace: true,
   compaction: true,
   compactionInstructions: true,
   // Vibe's session journal format is not documented; transcript import is off until it is.

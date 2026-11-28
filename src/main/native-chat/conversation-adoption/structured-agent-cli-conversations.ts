@@ -142,10 +142,11 @@ export function ownOptionsInclude(args: readonly string[], flags: readonly strin
 }
 
 /** Parse marker values, including --marker=value, or target-less flags, with exact CLI option
- *  matching. A marker target wins over a target-less flag: `--resume id -c` resumed `id`. */
+ *  matching. With `markerTargetWins`, a marker target beats a target-less flag (`--resume id -c`
+ *  resumed `id`); by default any target-less flag wins, as it always has. */
 export function resumeInvocationFromOptions(
   args: readonly string[],
-  options: { targetless: readonly string[]; markers: readonly string[] }
+  options: { targetless: readonly string[]; markers: readonly string[]; markerTargetWins?: boolean }
 ): StructuredAgentResumeInvocation | null {
   const inline = args.find((token) =>
     options.markers.some((marker) => token.startsWith(`${marker}=`))
@@ -158,7 +159,7 @@ export function resumeInvocationFromOptions(
     args,
     args.findIndex((token) => options.markers.includes(token))
   )
-  if (marker?.target != null) {
+  if (options.markerTargetWins && marker?.target != null) {
     return marker
   }
   if (args.some((token) => options.targetless.includes(token))) {

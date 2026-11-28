@@ -11,7 +11,7 @@ import {
   rm,
   writeFile
 } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
@@ -34,9 +34,8 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
   if (range) {
     return existing.slice(0, range.start) + block + existing.slice(range.end)
   }
-  // An empty file gets the block alone, so removal can give the empty file back byte-for-byte.
-  const base = existing.trimEnd()
-  return `${base === '' ? '' : `${base}\n\n`}${block}\n`
+  // An exactly empty file gets the block alone, so removal can give it back byte-for-byte.
+  return `${existing === '' ? '' : `${existing.trimEnd()}\n\n`}${block}\n`
 }
 
 function orcaBlockRange(existing: string): { start: number; end: number } | null {
@@ -59,7 +58,7 @@ export async function writeFolderContextFile(
   agentName: string,
   text: string
 ): Promise<void> {
-  const realCwd = await realpath(cwd).catch(() => cwd)
+  const realCwd = await realpath(cwd).catch(() => resolve(cwd))
   const folders = dirname(path)
     .split(/[\\/]/)
     .filter((segment) => segment && segment !== '.')
@@ -89,7 +88,11 @@ const folderContextSlots = new Map<string, Promise<void>>()
  *  runs, which a session-open hook runs only after the open read the file, so two chats starting
  *  in the same folder cannot read each other's text. */
 export async function acquireFolderContextSlot(cwd: string, path: string): Promise<() => void> {
-  const target = join(await realpath(cwd).catch(() => cwd), path)
+  const target = join(await realpath(cwd).catch(() => resolve(cwd)), path)
+  return slotForTarget(target)
+}
+
+async function slotForTarget(target: string): Promise<() => void> {
   const previous = folderContextSlots.get(target) ?? Promise.resolve()
   let release!: () => void
   const gate = new Promise<void>((resolve) => {
@@ -108,27 +111,60 @@ export async function acquireFolderContextSlot(cwd: string, path: string): Promi
 
 /** Serializes a folder-context file across the whole chain of folders an agent walking up from
  *  `cwd` would read it in: holds the slot for `path` in `cwd` and in every ancestor, acquired
- *  deepest first so concurrent chains cannot deadlock. Release runs the releases in reverse. */
+ *  deepest first so concurrent chains cannot deadlock. Because every chain includes the
+ *  filesystem root, two vibe opens never overlap at all; the open is short and abortable, so the
+ *  serialization is deliberate. Release runs the releases in reverse. On `signal` abort the slots
+ *  taken so far are released and the error is thrown. */
 export async function acquireFolderContextSlotChain(
   cwd: string,
-  path: string
+  path: string,
+  signal?: AbortSignal
 ): Promise<() => void> {
-  const realCwd = await realpath(cwd).catch(() => cwd)
+  // One resolution for the whole chain; ancestors of a resolved path are already canonical.
+  const realCwd = await realpath(cwd).catch(() => resolve(cwd))
   const releases: (() => void)[] = []
+  const releaseAll = (): void => {
+    for (const release of releases.toReversed()) {
+      release()
+    }
+  }
   let dir = realCwd
   for (;;) {
-    releases.push(await acquireFolderContextSlot(dir, path))
+    if (signal?.aborted) {
+      releaseAll()
+      throw signal.reason ?? new Error('aborted')
+    }
+    const slot = slotForTarget(join(dir, path))
+    if (!signal) {
+      releases.push(await slot)
+    } else {
+      const aborted = abortRejection(signal)
+      try {
+        releases.push(await Promise.race([slot, aborted]))
+      } catch (error) {
+        releaseAll()
+        throw error
+      }
+    }
     const parent = dirname(dir)
     if (parent === dir) {
       break
     }
     dir = parent
   }
-  return () => {
-    for (const release of releases.toReversed()) {
-      release()
-    }
+  return releaseAll
+}
+
+/** Rejects with the signal's reason, immediately when the signal is already aborted. */
+function abortRejection(signal: AbortSignal): Promise<never> {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? new Error('aborted'))
   }
+  return new Promise<never>((_, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason ?? new Error('aborted')), {
+      once: true
+    })
+  })
 }
 
 /** Takes Orca's text back out of `cwd`'s `path`: deletes a file Orca wrote for `agentName`, or
@@ -140,7 +176,7 @@ export async function removeFolderContextFile(
   path: string,
   agentName: string
 ): Promise<boolean> {
-  const target = join(await realpath(cwd).catch(() => cwd), path)
+  const target = join(await realpath(cwd).catch(() => resolve(cwd)), path)
   await replaceWhileUnchanged(
     target,
     async () => {
@@ -150,8 +186,9 @@ export async function removeFolderContextFile(
     (existing) => (existing === null ? undefined : withoutOrcaText(existing, agentName))
   )
   const info = await lstat(target).catch(() => null)
-  // Absent, or not a regular file Orca could have written, leaves nothing of ours behind.
-  if (!info || !info.isFile()) {
+  // Absent, or not a file Orca could have written, leaves nothing of ours behind. A symlink is
+  // read through: the agent follows it, so a block in the link's target is still live.
+  if (!info || (!info.isFile() && !info.isSymbolicLink())) {
     return true
   }
   const current = await readUtf8(target).catch(() => undefined)

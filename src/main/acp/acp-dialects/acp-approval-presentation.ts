@@ -22,16 +22,19 @@ export function approvalRequestPresentation(
     : undefined
 }
 
-/** The first text block of the tool call that `pattern` captures a description from. */
+/** The first trimmed, non-empty capture of `pattern` in the tool call's text blocks. The pattern
+ *  must not carry /g: lastIndex is reset per block so results never depend on call order. */
 export function approvalNameFromToolCall(
   pattern: RegExp,
   request: RequestPermissionRequest
 ): string | undefined {
   return request.toolCall.content
-    ?.map((block) =>
-      block.type === 'content' && block.content.type === 'text'
-        ? pattern.exec(block.content.text)?.[1]
-        : undefined
-    )
+    ?.map((block) => {
+      if (block.type !== 'content' || block.content.type !== 'text') {
+        return undefined
+      }
+      pattern.lastIndex = 0
+      return pattern.exec(block.content.text)?.[1]?.trim()
+    })
     .find(Boolean)
 }

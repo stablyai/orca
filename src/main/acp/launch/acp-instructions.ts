@@ -32,41 +32,62 @@ export type AcpInstructionsLaunch = {
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
   /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */
   sessionMetaOptional?: true
-  /** Runs around every `session/new` and `session/load` in the session's folder; returns what undoes it. */
-  aroundSessionOpen?: (cwd: string) => Promise<() => Promise<void>>
+  /** Runs around every `session/new` and `session/load` in the session's folder; returns what undoes it.
+   *  Must reject on `signal` abort, releasing anything it already took. */
+  aroundSessionOpen?: (cwd: string, signal?: AbortSignal) => Promise<() => Promise<void>>
   /** Removes what this launch wrote once its child has exited or the launch is abandoned. */
   release?: () => Promise<void>
 }
 
 /** Opens a session with what `aroundSessionOpen` places there for the open. A failed undo never
  *  fails the open: an accepted reopen must not be replaced by a new session over it. On `signal`
- *  abort the open is abandoned and the undo still runs, so a wedged start releases its folder
- *  slot instead of blocking later opens in the same folder. */
+ *  abort — before the call, while the hook places its file, or while the open runs — the open is
+ *  abandoned and the undo still runs, so a wedged start releases its folder slot instead of
+ *  blocking later opens in the same folder. */
 export async function withAcpSessionOpen<T>(
   launch: Pick<AcpInstructionsLaunch, 'aroundSessionOpen'>,
   cwd: string,
   open: () => Promise<T>,
   signal?: AbortSignal
 ): Promise<T> {
-  const undo = await launch.aroundSessionOpen?.(cwd)
+  if (signal?.aborted) {
+    throw signal.reason ?? new Error('aborted')
+  }
+  const aborted = signal ? abortRejection(signal) : null
+  const around = Promise.resolve(launch.aroundSessionOpen?.(cwd, signal))
+  let undo: (() => Promise<void>) | undefined
+  try {
+    undo = aborted ? await Promise.race([around, aborted]) : await around
+  } catch (error) {
+    // Abandoned while the hook was still placing its file: undo it if the hook finishes anyway.
+    void around.then(
+      (late) => late?.().catch(() => undefined),
+      () => undefined
+    )
+    throw error
+  }
   const opening = open()
   // Keep a rejection of the abandoned open from surfacing as unhandled.
   opening.catch(() => undefined)
   try {
-    if (!signal) {
-      return await opening
-    }
-    const aborted = new Promise<never>((_, reject) => {
-      signal.addEventListener('abort', () => reject(signal.reason ?? new Error('aborted')), {
-        once: true
-      })
-    })
-    return await Promise.race([opening, aborted])
+    return await (aborted ? Promise.race([opening, aborted]) : opening)
   } finally {
     await undo?.().catch((error: unknown) => {
       console.warn('[acp] removing what a session open placed failed', error)
     })
   }
+}
+
+/** Rejects with the signal's reason, immediately when the signal is already aborted. */
+function abortRejection(signal: AbortSignal): Promise<never> {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? new Error('aborted'))
+  }
+  return new Promise<never>((_, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason ?? new Error('aborted')), {
+      once: true
+    })
+  })
 }
 
 export type AcpInstructionsDelivery = {

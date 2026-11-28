@@ -17,10 +17,10 @@ export const deliverVibeInstructions: AcpInstructionsDelivery = {
   eachStart: false,
   runsWithoutText: true,
   launch: async ({ text }) => ({
-    aroundSessionOpen: async (cwd) => {
+    aroundSessionOpen: async (cwd, signal) => {
       // One resolution for the whole open, so the slot keys and the write target cannot diverge.
       const realCwd = await realpath(cwd).catch(() => cwd)
-      const release = await acquireFolderContextSlotChain(realCwd, 'AGENTS.md')
+      const release = await acquireFolderContextSlotChain(realCwd, 'AGENTS.md', signal)
       try {
         if (text) {
           await writeFolderContextFile(realCwd, 'AGENTS.md', 'Mistral Vibe', text)

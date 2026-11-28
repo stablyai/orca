@@ -13,6 +13,8 @@ export const VIBE_SESSION_HISTORY: StructuredAgentSessionHistory = {
   parseResumeArgs: (args) =>
     resumeInvocationFromOptions(args, {
       targetless: ['-c', '--continue'],
-      markers: ['--resume']
+      markers: ['--resume'],
+      // Vibe's `--resume id -c` resumes id, so the marker target wins over the targetless flag.
+      markerTargetWins: true
     })
 }

@@ -18,16 +18,24 @@ describe('Vibe dialect', () => {
     expect(result).toBeUndefined()
   })
 
-  it('request returns undefined when no approval name matches', () => {
+  it('request returns undefined for malformed permission params', () => {
+    const result = VIBE_ACP_DIALECT.request?.('session/request_permission', { nope: true })
+    expect(result).toBeUndefined()
+  })
+
+  it('request falls back to the toolCallId when no action line matches (vibe-acp 3.1.x sends no content)', () => {
     const result = VIBE_ACP_DIALECT.request?.('session/request_permission', {
       sessionId: 'session-1',
+      requestId: 'req-1',
       toolCall: {
-        toolCallId: 'call-1',
+        toolCallId: 'shell',
+        name: 'shell',
+        status: 'pending',
         content: [{ type: 'content', content: { type: 'text', text: 'some other text' } }]
       },
       options: []
     })
-    expect(result).toBeUndefined()
+    expect(result?.body).toMatchObject({ kind: 'approval', description: 'shell' })
   })
 
   it('request presents the approval name from session/request_permission', () => {

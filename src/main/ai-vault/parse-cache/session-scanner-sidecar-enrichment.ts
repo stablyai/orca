@@ -38,6 +38,7 @@ export function reuseUnchangedSidecarSession(
   if (
     previous.title === next.title &&
     previous.cwd === next.cwd &&
+    previous.branch === next.branch &&
     previous.createdAt === next.createdAt &&
     previous.updatedAt === next.updatedAt &&
     previous.resumeCommand === next.resumeCommand &&
@@ -50,6 +51,7 @@ export function reuseUnchangedSidecarSession(
     ...previous,
     title: next.title,
     cwd: next.cwd,
+    branch: next.branch,
     createdAt: next.createdAt,
     updatedAt: next.updatedAt,
     resumeCommand: next.resumeCommand,
@@ -65,6 +67,12 @@ export function sidecarEnrichesWithoutReparse(candidate: SessionFileCandidate): 
     candidate.agent === 'droid' ||
     candidate.agent === 'mistral-vibe'
   )
+}
+
+/** The parser already applied the sidecar to the fold it built, so re-enriching after a full
+ *  parse would only re-read the sidecar for nothing. */
+export function sidecarAppliedByParser(candidate: SessionFileCandidate): boolean {
+  return candidate.agent === 'mistral-vibe'
 }
 
 export async function enrichSessionFromSidecar(
@@ -178,6 +186,7 @@ async function enrichVibeSessionFromMeta(
     ...foldSession,
     title: normalizeTitleText(extractString(meta.title) ?? '') || foldSession.title,
     cwd,
+    branch: extractString(meta.git_branch) ?? foldSession.branch,
     createdAt: Number.isFinite(startMs) ? new Date(startMs).toISOString() : foldSession.createdAt,
     updatedAt: Number.isFinite(endMs) ? new Date(endMs).toISOString() : foldSession.updatedAt,
     model: extractString(asRecord(meta.config)?.active_model) ?? foldSession.model,

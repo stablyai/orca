@@ -71,6 +71,21 @@ describe('deliverVibeInstructions', () => {
 })
 
 describe('withAcpSessionOpen', () => {
+  it('rejects an already-aborted signal without placing or holding anything', async () => {
+    const controller = new AbortController()
+    controller.abort(new Error('stop'))
+    const launch = await launchFor('rules')
+    await expect(
+      withAcpSessionOpen(launch, dir, () => Promise.resolve('opened'), controller.signal)
+    ).rejects.toThrow('stop')
+    // Nothing was written, and the folder slot is free for the next open.
+    await expect(readFile(join(dir, 'AGENTS.md'), 'utf8')).rejects.toThrow()
+    const next = await launchFor('next rules')
+    const undo = await next.aroundSessionOpen!(dir)
+    expect(await readFile(join(dir, 'AGENTS.md'), 'utf8')).toContain('next rules')
+    await undo()
+  })
+
   it('releases what the open placed when the signal aborts a hung open', async () => {
     const controller = new AbortController()
     const launch = await launchFor('rules')

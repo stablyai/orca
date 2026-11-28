@@ -278,4 +278,26 @@ describe('acquireFolderContextSlotChain', () => {
     nestedAgain()
     rootAgain()
   })
+
+  it('releases the slots taken so far when the signal aborts mid-chain', async () => {
+    const nested = join(dir, 'a', 'b')
+    await mkdir(nested, { recursive: true })
+    const controller = new AbortController()
+    const pending = acquireFolderContextSlotChain(nested, 'AGENTS.md', controller.signal)
+    // Abort while the chain is still walking up: the leaf slot must be released again.
+    controller.abort(new Error('stop'))
+    await expect(pending).rejects.toThrow('stop')
+    const leaf = await acquireFolderContextSlot(nested, 'AGENTS.md')
+    const ancestor = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    leaf()
+    ancestor()
+  })
+
+  it('reports not-clean when a stale block is readable through a symlinked context file', async () => {
+    const real = join(dir, 'real.md')
+    await writeFile(real, 'user notes\n<!-- orca:begin -->\nstale bot text\n<!-- orca:end -->\n')
+    await symlink(real, join(dir, 'AGENTS.md'))
+    // The removal leaves the symlink alone, but the block behind it is still readable.
+    await expect(removeFolderContextFile(dir, 'AGENTS.md', 'Gemini')).resolves.toBe(false)
+  })
 })
