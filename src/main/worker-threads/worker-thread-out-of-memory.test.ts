@@ -104,7 +104,9 @@ describe('spawnWorkerThread heap limit', () => {
     try {
       setFlagsFromString('--max-old-space-size=0')
       if (launchOverrides) {
-        launchOldSpaceMb = limitAt32 - ((await workerHeapLimitMb(32)) - 32)
+        const limitAfterClear = await workerHeapLimitMb(32)
+        // Unchanged means another flag (e.g. --max-heap-size) set the limit, not old space.
+        launchOldSpaceMb = limitAfterClear === limitAt32 ? 0 : limitAt32 - (limitAfterClear - 32)
       }
       await expect(queue.dispatch((id) => ({ id, exhaust: true }), 30_000)).rejects.toMatchObject({
         code: 'ERR_WORKER_OUT_OF_MEMORY'
