@@ -4,10 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { isAgentSessionProviderHandleField } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type {
-  AgentSessionProviderHandle,
-  AgentSessionProviderHandleLink
-} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAcquireInput
@@ -40,7 +37,7 @@ export type ZcodeAdapterDeps = {
   persistResumePoint: (input: {
     sessionId: string
     fence: number
-    handle: AgentSessionProviderHandle
+    link: AgentSessionProviderHandleLink
   }) => Promise<void>
   onSettled: (input: {
     sessionId: string
@@ -70,6 +67,11 @@ export class ZcodeAnchor {
   }
   get pid(): number | undefined {
     return this.managed.child.pid
+  }
+  /** The supervised launcher mints the leader pid only after bootstrap; wait it out or surface the launch failure. */
+  waitSpawnedPid(): Promise<number | undefined> {
+    const child = this.managed.child
+    return child.ready ? child.ready.then(() => child.pid) : Promise.resolve(child.pid)
   }
   get live(): boolean {
     return this.managed.rootVerdict !== 'exited'
@@ -203,7 +205,7 @@ export class ZcodeHostedSession {
       await this.deps.persistResumePoint({
         sessionId: this.input.identity.sessionId,
         fence: this.input.fence,
-        handle: handle.handle
+        link: handle
       })
     } catch (error) {
       this.deps.logger.warn('ZCode resume point could not be persisted', {

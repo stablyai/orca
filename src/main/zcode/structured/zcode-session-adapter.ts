@@ -105,7 +105,10 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
         'ZCode',
         this.deps.readProcessStartTime
       )
-      const pid = anchor.pid
+      const pid = await waitForPromiseWithSignal(anchor.waitSpawnedPid(), attempt.signal)
+      if (attempt.signal.aborted) {
+        throw new AgentSessionPreSpawnError(new Error('ZCode chat closed while starting'))
+      }
       if (pid !== undefined) {
         await spawned.onSpawned(pid)
       }

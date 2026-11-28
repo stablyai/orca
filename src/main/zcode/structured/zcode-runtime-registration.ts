@@ -68,11 +68,15 @@ function createZcodeAdapter(context: StructuredAgentAdapterContext): StructuredA
       structuredAgentLaunchSources(context),
       zcodeLaunchPart()
     ),
-    persistResumePoint: async ({ sessionId, fence, handle }) => {
-      await context.store.updateRecord(sessionId, {
-        kind: 'resume-point',
-        args: { fence, handle, now: Date.now() }
-      })
+    persistResumePoint: async ({ sessionId, fence, link }) => {
+      // A first conversation has no chain head to revise; its resume point opens the chain.
+      const fresh = (context.store.getRecord(sessionId)?.providerHandleChain.length ?? 0) === 0
+      await context.store.updateRecord(
+        sessionId,
+        fresh
+          ? { kind: 'provider-handle', args: { fence, link, now: Date.now() }, launched: null }
+          : { kind: 'resume-point', args: { fence, handle: link.handle, now: Date.now() } }
+      )
     },
     onSettled: ({ sessionId, clientMessageId, outcome }) => {
       if (outcome.state !== 'admitted') {
