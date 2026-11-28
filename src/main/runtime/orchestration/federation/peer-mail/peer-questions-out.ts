@@ -104,7 +104,12 @@ export function tellUnpairedPeerQuestions(
     const threadKey = typeof row.thread_id === 'string' ? row.thread_id : id
     const conversation = db.getPeerMailConversation(String(row.conversation_id))
     const handle = conversation ? peerMailLocalRecipient(runtime, conversation) : String(row.asker)
-    const recipient = resolveBareOrchestrationRecipient({ runtime, db, handle })
+    const recipient = resolveBareOrchestrationRecipient({
+      runtime,
+      db,
+      handle,
+      keepLegacyAttachedRouting: true
+    })
     const told = runLifecycleWriteTransaction(db.db, 'peer_question_unpaired', () => {
       const settled = db.db
         .prepare(

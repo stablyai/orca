@@ -81,9 +81,9 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   in any state: a working worker gets it when its current turn ends; a finished
   or closed one gets it as a follow-up Task and reports with `worker_done` (do
   not pass `--on` for a Dispatch follow-up). The receipt says which.
-  If a legacy paired-server attachment refuses `send` with `dispatch_inactive`,
-  start new work there with `worker-start --on <server>` (load
-  `references/placement-and-remote.md` first).
+  If a legacy paired-server attachment refuses `send --to dispatch:<id>` with
+  `dispatch_inactive`, start new work there with `worker-start --on <server>`
+  (load `references/placement-and-remote.md` first).
 
 Never:
 

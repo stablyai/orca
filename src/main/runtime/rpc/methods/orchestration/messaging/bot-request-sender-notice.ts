@@ -9,7 +9,7 @@ import { botRequestUnansweredText } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { botRequestRecord } from './bot-request-record'
-import { resolveReplyRecipient } from './recipient-routing'
+import { resolveBareOrchestrationRecipient, resolveReplyRecipient } from './recipient-routing'
 import { mayNameSession } from './session-recipient'
 import {
   peerMailSender,
@@ -30,6 +30,7 @@ import {
 import { lookupOrcaAgentSession } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
 import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifecycle-write-transaction-runner'
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
+import { isLegacyAttachmentRefusal } from './legacy-attachment-recipient-refusal'
 
 // Session senders resolve against the session records, which a restart leaves uninstalled until asked.
 export async function ensureSenderRecords(
@@ -149,7 +150,24 @@ function reachableSender(
     })
   } catch (error) {
     if (error instanceof OrchestrationError) {
-      return senderLineageUnproven(request.from_handle) ? 'unverified' : 'gone'
+      const from = request.from_handle
+      // The notice keeps main's routing for a sender working another Orca's Task: it reads it after.
+      // Only a bare sender's resolution gives these codes for an attachment.
+      const bare = !from.startsWith('run:') && !from.startsWith('dispatch:')
+      if (bare && isLegacyAttachmentRefusal(error)) {
+        const kept = resolveBareOrchestrationRecipient({
+          runtime,
+          db,
+          handle: from,
+          senderRunId: request.run_id,
+          terminalRecipient: null,
+          keepLegacyAttachedRouting: true
+        })
+        if (kept.ok) {
+          return { to: kept.to, runId: kept.runId ?? request.run_id }
+        }
+      }
+      return senderLineageUnproven(from) ? 'unverified' : 'gone'
     }
     throw error
   }

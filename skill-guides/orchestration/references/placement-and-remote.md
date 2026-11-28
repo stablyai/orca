@@ -36,7 +36,8 @@ so; the worker is fine to use. `current` is not valid with `--on`.
 workspace, and the start output names the workspace it created.
 
 After start, address a remote worker only by Dispatch ID, never by a terminal
-handle.
+handle. On a server, mail to a terminal that is working another Orca's Task is
+refused with nothing sent; message that Task's coordinator instead.
 
 ## Which machine
 

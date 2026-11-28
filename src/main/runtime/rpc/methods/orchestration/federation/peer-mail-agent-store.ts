@@ -4,6 +4,7 @@ import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contrac
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
 import { prepareSessionRecipient } from '../messaging/session-recipient'
+import { refuseLegacyAttachedRecipient } from '../messaging/legacy-attachment-recipient-refusal'
 
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 
@@ -31,6 +32,8 @@ export async function storePeerMailForAgent<R>(
     senderSnapshot: string | undefined
     /** Whether the resolved recipient may take it; otherwise it is dropped with a warning. */
     admits?: (to: string) => boolean
+    /** A reply coming home to this Orca's own asker keeps its routing. */
+    keepLegacyAttachedRouting?: true
   },
   landedAgain: () => R | null | Promise<R | null>,
   received?: (to: string, takenByWaiter: boolean) => R | Promise<R>
@@ -47,7 +50,8 @@ export async function storePeerMailForAgent<R>(
     runtime,
     db,
     handle: to,
-    terminalRecipient
+    terminalRecipient,
+    ...(params.keepLegacyAttachedRouting ? { keepLegacyAttachedRouting: true } : {})
   })
   if (!recipient.ok) {
     throw new OrchestrationError(
@@ -62,15 +66,16 @@ export async function storePeerMailForAgent<R>(
     )
     return null
   }
-  const paneKey = runtime.getLiveTerminalPaneKey(recipient.to)
-  if (paneKey && db.findActiveRemoteAttachmentForPane(paneKey)) {
-    // Its mailbox is its Dispatch, which only its Run home writes to.
-    throw new OrchestrationError(
-      'invalid_argument',
-      `${to} is a worker for another Orca's Run; message it through that Run's coordinator. Nothing was delivered.`,
-      NOTHING_DELIVERED
-    )
-  }
+  // Its mailbox is its Dispatch, which only its Run home writes to. A reply coming home keeps
+  // main's check: the live pane only.
+  const byRetainedHandle = !params.keepLegacyAttachedRouting
+  refuseLegacyAttachedRecipient(
+    runtime,
+    db,
+    recipient.to,
+    'Nothing was delivered.',
+    byRetainedHandle
+  )
   // Before storing, as a local send does: a waiter the arrival resolves is gone by the time the receipt reads.
   const takenByWaiter = runtime.hasMessageWaiterFor(recipient.to, params.type ?? 'status')
   const stored = db.insertPeerMailMessage({

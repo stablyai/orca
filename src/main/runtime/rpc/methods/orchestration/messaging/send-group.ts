@@ -19,6 +19,10 @@ import {
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
+import {
+  isLegacyAttachmentRefusal,
+  legacyAttachmentError
+} from './legacy-attachment-recipient-refusal'
 
 import type { SendParams } from './send-params'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
@@ -261,6 +265,14 @@ export async function sendGroupMessage(args: {
     return true
   })
   if (uniqueRecipients.length === 0) {
+    // A member another Orca's Task holds names where its mail goes; say that instead of no recipient.
+    const legacy = resolvedRecipients.flatMap((resolution) =>
+      !resolution.ok && isLegacyAttachmentRefusal(resolution) ? [resolution] : []
+    )
+    if (legacy.length > 0) {
+      const message = legacy.map((resolution) => resolution.message).join(' ')
+      throw legacyAttachmentError({ code: legacy[0].code, message }, 'Nothing was sent.')
+    }
     throw new OrchestrationError(
       'terminal_not_found',
       `No recipient of ${groupAddress} resolved to a live terminal or durable Run/Dispatch mailbox.`

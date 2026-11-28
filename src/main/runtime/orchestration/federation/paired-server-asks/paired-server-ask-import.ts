@@ -238,7 +238,8 @@ export async function importPairedServerItem(
           peerFingerprint: asks.pairing,
           environmentId: asks.environmentId,
           senderSnapshot: peerMailSenderSnapshot(data.senderLabel, data.sender),
-          admits: (to) => tookPart(db, item.conversationId, to)
+          admits: (to) => tookPart(db, item.conversationId, to),
+          keepLegacyAttachedRouting: true
         },
         () => (db.getPeerMailMessage(item.messageId) ? true : null)
       )

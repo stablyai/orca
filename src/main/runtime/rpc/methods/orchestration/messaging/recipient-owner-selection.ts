@@ -8,6 +8,8 @@ export function selectBareRecipientOwner(params: {
   explicitRunId?: string
   boundRuns: () => readonly { id: string }[]
   dispatches: () => Pick<DispatchContextRow, 'id' | 'run_id'>[]
+  /** A refusal for a terminal another Orca's Task holds; local owners above still take precedence. */
+  legacyAttachment?: () => BareRecipientResolution | undefined
   ownerRunIds: () => string[]
   fallback: () => BareRecipientResolution
 }): BareRecipientResolution {
@@ -31,6 +33,11 @@ export function selectBareRecipientOwner(params: {
   if (dispatch) {
     const mismatch = runMismatch(handle, dispatch.run_id, params.explicitRunId)
     return mismatch ?? { ok: true, to: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
+  }
+
+  const legacyAttachment = params.legacyAttachment?.()
+  if (legacyAttachment) {
+    return legacyAttachment
   }
 
   const ownerRunIds = params.ownerRunIds()
