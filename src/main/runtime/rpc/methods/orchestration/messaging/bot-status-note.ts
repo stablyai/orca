@@ -134,11 +134,14 @@ async function recordBotStatusNote(
   const text = `Status from ${acting.bot.name} for ${target.name}: ${mail.subject}${mail.body?.trim() ? `\n\n${mail.body}` : ''}`
   await store.orcaComment(item.uid, text, 'bot-status')
   const owner = runtime.bots.list().find((bot) => bot.id === item.ownerBotId)?.name ?? 'its bot'
+  const n = item.number
+  // The bot's own other chat is the reader there, not the bot by name.
+  const reader = target.id === acting.bot.id ? 'Your other chat' : target.name
   return {
     recorded: { item: item.number, bot: owner },
     messages: [],
     recipients: 0,
-    next: `Done: recorded on item ${item.number} of ${owner}. A status wakes no one by design: ${target.name} reads it with \`orca bot item show ${item.number}\` when it needs it, so don't send it again. Only if ${target.name} must act or answer, send --type question or --type handoff.`
+    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${reader} must act or answer now, send --type question or --type handoff.`
   }
 }
 
@@ -217,7 +220,7 @@ function pickOne(open: OpenItems): BotItemRecord {
   }
   throw new OrchestrationError(
     'invalid_argument',
-    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Comment on the right one: \`orca bot item comment <n> --text "..."\`.`
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record.`
   )
 }
 

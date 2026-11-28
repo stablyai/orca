@@ -83,9 +83,11 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     expect(comments(uid)).toHaveLength(1)
     expect(comments(uid)[0]!.data.text).toContain('PR is up')
     expect(receipt.recorded).toEqual({ item: number, bot: 'Ranger' })
-    expect(receipt.next).toContain(`Done: recorded on item ${number} of Ranger`)
+    expect(receipt.next).toMatch(
+      new RegExp(`^Done: (Docs|Your other chat) has this on item ${number} `)
+    )
     expect(receipt.next).toContain(`orca bot item show ${number}`)
-    expect(receipt.next).toContain("don't send it again")
+    expect(receipt.next).toContain("don't resend it")
   })
 
   it('refuses, naming the items, when the chat has several open items or none', async () => {
@@ -96,7 +98,9 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     const second = items.get(addItem('Two').uid)!.number
     await expect(
       mail.send(RANGER_THREAD, { to: 'bot:Docs', type: 'status', body: 'b' })
-    ).rejects.toThrow(new RegExp(`${second} \\(Two\\), ${first} \\(One\\).*orca bot item comment`))
+    ).rejects.toThrow(
+      new RegExp(`${second} \\(Two\\), ${first} \\(One\\).*Send it again once, with --item <n>`)
+    )
     expect(messageCount()).toEqual({ n: 0 })
     expect(mail.runtime.notifyMessageArrived).not.toHaveBeenCalled()
   })
