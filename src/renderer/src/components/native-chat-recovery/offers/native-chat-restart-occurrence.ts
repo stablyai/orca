@@ -10,9 +10,11 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
 import {
-  beginResumeRun,
+  nextResumeRun,
   resumeRunInFlight,
   resumeRunPendingIds,
+  settledResumeRun,
+  unsentResumeIds,
   withoutResumeRunSessions,
   type ResumeRun,
   type ResumeRunStarter
@@ -26,9 +28,10 @@ import {
 } from './native-chat-remote-restart-offer'
 import {
   continueRestartChunks,
-  type RestartContinuationBatchResult
+  NO_RESTART_CONTINUATION
 } from '../runs/native-chat-restart-continuation-chunks'
 import { watchResumeRunStatus } from '../runs/native-chat-resume-run-status-watch'
+import { createRestartActionTurn } from './native-chat-restart-action-turn'
 
 let nextOccurrence = 0
 
@@ -49,8 +52,7 @@ export function createNativeChatRestartOccurrence(
   let offer: NativeChatRestartOffer = EMPTY
   /** Continue and dismiss calls, begun and settled. Each ends by publishing the host's answer, which
    *  a re-read that raced it must neither pre-empt nor undo. */
-  let actionsBegun = 0
-  let actionsSettled = 0
+  const turn = createRestartActionTurn()
   let readSequence = 0
   /** Memory-only history: retires after viewing and closing its finished summary, or on replacement. */
   let run: ResumeRun | null = null
@@ -106,9 +108,9 @@ export function createNativeChatRestartOccurrence(
       new Set([...offer.candidates, ...offer.failed].map((entry) => entry.sessionId)),
     listedAt: () => offer.listedAt,
     refresh: () => {
-      if (current() && actionsBegun === actionsSettled) {
-        const issued = actionsBegun
-        void readNativeChatRestartOffer(() => actionsBegun === issued)
+      if (current() && turn.idle()) {
+        const issued = turn.begun()
+        void readNativeChatRestartOffer(() => turn.begun() === issued)
       }
     }
   })
@@ -135,15 +137,15 @@ export function createNativeChatRestartOccurrence(
     allowed = () => true,
     refreshAttribution = false
   ): Promise<HostOfferRead> {
-    const issued = actionsBegun
-    const settled = actionsSettled
+    const issued = turn.begun()
+    const settled = turn.settled()
     const reading = ++readSequence
     const mayPublish = () =>
       current() &&
       allowed() &&
       reading === readSequence &&
-      issued === actionsBegun &&
-      settled === actionsSettled
+      issued === turn.begun() &&
+      settled === turn.settled()
     if (!mayPublish()) {
       return { ...EMPTY, available: false }
     }
@@ -188,15 +190,24 @@ export function createNativeChatRestartOccurrence(
     startedBy: ResumeRunStarter = 'user',
     took?: NativeChatRestartOffer['candidates']
   ): Promise<void> {
-    const requested = [...new Set(sessionIds)]
-    if (!current() || requested.length === 0) {
+    const hostTook = took !== undefined
+    // The host's own launch action already started its chats: it waits its turn, never drops.
+    // Re-checked after each wait: another action may take the turn first. From here to begin()
+    // nothing awaits, so the launch acquires the turn the moment it sees it free.
+    while (hostTook && current() && !turn.idle()) {
+      await turn.waitIdle(() => !current())
+    }
+    // Checked before any further await, so an activation while one is in flight sends nothing.
+    const requested = hostTook ? [...new Set(sessionIds)] : unsentResumeIds(run, sessionIds)
+    if (!current() || requested.length === 0 || !turn.idle()) {
       return
     }
-    const issued = ++actionsBegun
-    const actionCurrent = () => current() && actionsBegun === issued
+    const issued = turn.begin()
+    const actionCurrent = () => current() && turn.begun() === issued
     forgetUnsentResumes(requested)
     const rows = new Map([...offer.candidates, ...offer.failed].map((row) => [row.sessionId, row]))
-    let actionRun = beginResumeRun(
+    let actionRun = nextResumeRun(
+      run,
       took ?? requested.flatMap((sessionId) => rows.get(sessionId) ?? []),
       Date.now(),
       startedBy
@@ -215,11 +226,7 @@ export function createNativeChatRestartOccurrence(
     if (target.kind === 'local') {
       markNativeChatLaunchResumeDecided()
     }
-    let outcomes: RestartContinuationBatchResult = {
-      attempted: [],
-      continued: [],
-      skipped: new Set()
-    }
+    let outcomes = NO_RESTART_CONTINUATION
     try {
       outcomes = await continueRestartChunks(target, requested, {
         followHostLaunch: took !== undefined,
@@ -238,23 +245,20 @@ export function createNativeChatRestartOccurrence(
       })
     } finally {
       release()
+      turn.end(current())
       if (current()) {
         if (releaseRunStatus === release) {
           releaseRunStatus = undefined
         }
-        actionsSettled += 1
-        const attemptedIds = new Set(outcomes.attempted)
         if (run === actionRun) {
-          setRun({
-            ...actionRun,
-            entries: actionRun.entries.filter(
-              (entry) =>
-                attemptedIds.has(entry.candidate.sessionId) &&
-                !outcomes.skipped.has(entry.candidate.sessionId)
-            ),
-            inFlight: false,
-            continued: outcomes.continued
-          })
+          setRun(
+            settledResumeRun(
+              actionRun,
+              new Set(outcomes.attempted),
+              outcomes.skipped,
+              outcomes.continued
+            )
+          )
         }
       }
     }
@@ -279,7 +283,11 @@ export function createNativeChatRestartOccurrence(
       releaseFinishedNativeChatRestartRun()
       return
     }
-    actionsBegun += 1
+    // One action owns the occurrence; a dismissal racing a resume would discard its reply.
+    if (!turn.idle()) {
+      return
+    }
+    turn.begin()
     try {
       const result = await dismissRestartHostOffer(target, sessionIds)
       if (!current()) {
@@ -301,9 +309,7 @@ export function createNativeChatRestartOccurrence(
         await refreshNativeChatRestartOffer()
       }
     } finally {
-      if (current()) {
-        actionsSettled += 1
-      }
+      turn.end(current())
     }
   }
 
@@ -314,10 +320,11 @@ export function createNativeChatRestartOccurrence(
         requestNativeChatResumeOnRestartDialog()
       }
     },
-    currentAction: () => actionsBegun
+    currentAction: () => turn.begun()
   })
   function dispose(): void {
     live = false
+    turn.wake()
     discovery.dispose()
     releaseRunStatus?.()
     offeredChatWatch.release()

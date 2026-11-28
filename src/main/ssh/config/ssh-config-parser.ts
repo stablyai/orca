@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { expandSshConfigIncludes } from './ssh-config-include-expander'
 import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
+import { splitOpenSshArguments } from './ssh-config-arguments'
 
 export type SshConfigHost = {
   host: string
@@ -191,51 +192,6 @@ function parseScalarConfigValue(input: string): string {
 
 function splitHostPatterns(input: string): string[] {
   return splitOpenSshArguments(input)
-}
-
-function splitOpenSshArguments(input: string): string[] {
-  const args: string[] = []
-  let current = ''
-  let inQuotes = false
-
-  for (let index = 0; index < input.length; index++) {
-    const char = input[index]
-    if (char === '\\') {
-      const next = input[index + 1]
-      // Match OpenSSH argv_split: other backslashes, e.g. Windows path separators, stay literal.
-      if (next === '"' || next === "'" || next === '\\' || (!inQuotes && next === ' ')) {
-        current += next
-        index++
-        continue
-      }
-    }
-
-    if (char === '"') {
-      inQuotes = !inQuotes
-      continue
-    }
-
-    // Inline comments must not become imported aliases.
-    if (!inQuotes && char === '#') {
-      break
-    }
-
-    if (!inQuotes && /\s/.test(char)) {
-      if (current) {
-        args.push(current)
-        current = ''
-      }
-      continue
-    }
-
-    current += char
-  }
-
-  if (current) {
-    args.push(current)
-  }
-
-  return args
 }
 
 /** Read and parse the user's ~/.ssh/config file. Returns empty array if not found. */

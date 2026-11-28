@@ -14,9 +14,10 @@ const { browser, results, open, check, assert } = await createFixtureSession({
   fixture: 'native-chat/tools/tasks/dock/DockAlignment'
 })
 
-// The first bordered box at or under each row's root; the folded chip hugs, so it has no right edge.
+// The first bordered box at or under each row's root. The folded chip hugs its label and sits
+// centered over the rows, so it is checked for its center instead of its edges.
 const ROWS = [
-  ['chip', '[data-worker-dock-pill][aria-expanded="false"]'],
+  ['chip', '[data-worker-dock-morph="closed"]'],
   ['panel', '[data-worker-dock-card]'],
   ['goal', '[data-native-chat-thread-goal]'],
   ['queued', '[data-native-chat-queue]'],
@@ -46,7 +47,7 @@ const measure = (page) =>
         {
           name,
           left: Math.round(rect.left * 10) / 10,
-          right: name === 'chip' ? null : Math.round(rect.right * 10) / 10,
+          right: Math.round(rect.right * 10) / 10,
           icon: icon ? Math.round(icon.getBoundingClientRect().left * 10) / 10 : null
         }
       ]
@@ -70,10 +71,21 @@ for (const width of [320, 390, 720]) {
           rows.some((row) => row.name === 'composer' || row.name === 'prompt'),
           'no base row'
         )
-        const lefts = rows.map((row) => row.left)
-        const rights = rows.flatMap((row) => (row.right === null ? [] : [row.right]))
+        const edged = rows.filter((row) => row.name !== 'chip')
+        const lefts = edged.map((row) => row.left)
+        const rights = edged.map((row) => row.right)
         assert(Math.max(...lefts) - Math.min(...lefts) <= 1, `left edges differ: ${lefts}`)
         assert(Math.max(...rights) - Math.min(...rights) <= 1, `right edges differ: ${rights}`)
+        const chip = rows.find((row) => row.name === 'chip')
+        const center = (Math.min(...lefts) + Math.max(...rights)) / 2
+        assert(
+          !chip || Math.abs((chip.left + chip.right) / 2 - center) <= 1,
+          `chip centered at ${chip && (chip.left + chip.right) / 2}, rows at ${center}`
+        )
+        assert(
+          !chip || (chip.left >= Math.min(...lefts) - 1 && chip.right <= Math.max(...rights) + 1),
+          'chip runs past the rows'
+        )
         if (shots) {
           await page.evaluate(
             ([left, right]) => {

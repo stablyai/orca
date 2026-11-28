@@ -16,6 +16,7 @@ import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { callBots } from './bot'
+import { resolveCallerFilePath } from '../arguments/caller-file-path'
 
 function requireCaller(): string {
   const callerSessionId = readInjectedAgentSessionId()
@@ -134,7 +135,9 @@ export const BOT_IMPORT_HANDLERS: Record<string, CommandHandler> = {
   },
   'bot import read': async ({ flags, cwd }) => {
     const path = getRequiredStringFlag(flags, 'path')
-    process.stdout.write(`${await readForImport(path === '-' ? path : resolve(cwd, path))}\n`)
+    process.stdout.write(
+      `${await readForImport(path === '-' ? path : resolveCallerFilePath(path, cwd))}\n`
+    )
   },
   'bot import plan': async ({ flags, client, json }) => {
     const callerSessionId = requireCaller()

@@ -172,7 +172,8 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
       ),
     [githubProjectAvailableSummaryFields, githubProjectHiddenFieldIds]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     projectDetailCommentGroups,
     requestedTaskSource,
     linearMetadataItem,
@@ -194,7 +195,7 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     githubProjectFieldVisibilityScope,
     githubProjectHiddenFieldIds,
     githubProjectSummaryFields
-  })
+  }
 }
 
 export type ProjectProjectionModel = ReturnType<typeof useMobileTasksProjectProjection>

@@ -52,6 +52,7 @@ export type ManagedRuntimeInstallObservation =
     }
 
 // Installs and removals whose agent list was read again; shared by every observer of one.
+const MAX_RE_DETECTED_OPERATIONS = 128
 const reDetectedAfter = new Set<string>()
 
 const INACTIVE: ManagedRuntimeInstallObservation = { kind: 'inactive' }
@@ -149,6 +150,12 @@ export function useManagedRuntimeInstall(
   useEffect(() => {
     if (!settled || reDetectedAfter.has(settled)) {
       return
+    }
+    if (reDetectedAfter.size >= MAX_RE_DETECTED_OPERATIONS) {
+      const oldest = reDetectedAfter.values().next().value
+      if (oldest !== undefined) {
+        reDetectedAfter.delete(oldest)
+      }
     }
     reDetectedAfter.add(settled)
     const store = useAppStore.getState()

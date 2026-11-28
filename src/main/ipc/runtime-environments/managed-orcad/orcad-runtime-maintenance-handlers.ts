@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { registerManagedServerActions } from '../../../runtime/hosts/management/managed-server-actions-registry'
 import {
   createManagedOrcadActions,
@@ -8,11 +9,14 @@ import {
 } from './managed-orcad-actions'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 
-export function registerOrcadRuntimeMaintenanceHandlers(options: ManagedOrcadActionOptions): void {
+export function registerOrcadRuntimeMaintenanceHandlers(
+  options: ManagedOrcadActionOptions,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const actions = createManagedOrcadActions(options)
   // CLI runtime RPC uses these same managedServer actions.
   registerManagedServerActions(actions)
-  ipcMain.handle(
+  ipc.handle(
     'runtimeEnvironments:updateOrcad',
     async (
       _event,
@@ -38,18 +42,18 @@ export function registerOrcadRuntimeMaintenanceHandlers(options: ManagedOrcadAct
       )
     }
   )
-  ipcMain.handle('runtimeEnvironments:rollbackOrcad', async (_event, args: { selector: string }) =>
+  ipc.handle('runtimeEnvironments:rollbackOrcad', async (_event, args: { selector: string }) =>
     actions.rollback(requiredString(args?.selector, 'Server'))
   )
-  ipcMain.handle(
+  ipc.handle(
     'runtimeEnvironments:recoverOrcad',
     async (_event, args: { selector: string; acceptChangedState?: boolean }) =>
       actions.recover(requiredString(args?.selector, 'Server'), args?.acceptChangedState === true)
   )
-  ipcMain.handle('runtimeEnvironments:restartOrcad', async (_event, args: { selector: string }) =>
+  ipc.handle('runtimeEnvironments:restartOrcad', async (_event, args: { selector: string }) =>
     restartManagedOrcad(options, requiredString(args?.selector, 'Server'))
   )
-  ipcMain.handle(
+  ipc.handle(
     'runtimeEnvironments:reclaimOrcadStaleLock',
     async (_event, args: { selector: string; yes?: boolean; expectNonce?: string }) =>
       reclaimManagedOrcadStaleLock(
@@ -61,15 +65,13 @@ export function registerOrcadRuntimeMaintenanceHandlers(options: ManagedOrcadAct
           : { yes: false }
       )
   )
-  ipcMain.handle('runtimeEnvironments:stopOrcad', async (_event, args: { selector: string }) =>
+  ipc.handle('runtimeEnvironments:stopOrcad', async (_event, args: { selector: string }) =>
     actions.stop(requiredString(args?.selector, 'Server'))
   )
-  ipcMain.handle(
-    'runtimeEnvironments:cancelOrcadStop',
-    async (_event, args: { selector: string }) =>
-      actions.cancelStop(requiredString(args?.selector, 'Server'))
+  ipc.handle('runtimeEnvironments:cancelOrcadStop', async (_event, args: { selector: string }) =>
+    actions.cancelStop(requiredString(args?.selector, 'Server'))
   )
-  ipcMain.handle('runtimeEnvironments:forgetOrcad', async (_event, args: { selector: string }) =>
+  ipc.handle('runtimeEnvironments:forgetOrcad', async (_event, args: { selector: string }) =>
     actions.forget(requiredString(args?.selector, 'Server'))
   )
 }

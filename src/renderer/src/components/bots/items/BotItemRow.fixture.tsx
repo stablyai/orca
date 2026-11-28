@@ -102,3 +102,23 @@ export const actionsOverLongTitle = defineFixture({
     frame.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ focusVisible: false })
   }
 })
+
+// A narrow sidebar: Done, Snooze, and Cancel still fit over the title's end.
+export const actionsNarrow = defineFixture({
+  width: 240,
+  render: () => (
+    <div role="list" className="@container bg-sidebar p-1">
+      <Row
+        item={makeTestBotItem(10, {
+          title: 'Pick a name for the Items tab',
+          status: 'needs_you',
+          question: { eventId: 'e4', text: 'Items or Tasks? Items matches the CLI.' },
+          lastActivityAt: now - 12 * min
+        })}
+      />
+    </div>
+  ),
+  interact: (frame) => {
+    frame.querySelector<HTMLElement>('[data-bot-item-open]')?.focus({ focusVisible: true })
+  }
+})

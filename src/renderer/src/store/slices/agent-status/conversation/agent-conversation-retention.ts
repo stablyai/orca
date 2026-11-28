@@ -28,8 +28,26 @@ export function withAgentConversationRetention(
       (...args: StoreSetArgs<AppState>): void => {
         if (args[1] === true) {
           const [partial] = args
+          if (typeof partial !== 'function') {
+            const current = get()
+            if (
+              partial.agentConversationsByPaneKey === current.agentConversationsByPaneKey &&
+              partial.terminalLayoutsByTabId === current.terminalLayoutsByTabId &&
+              index.matches(current)
+            ) {
+              write(partial, true)
+              return
+            }
+          }
           write((state) => {
             const requested = typeof partial === 'function' ? partial(state) : partial
+            if (
+              requested.agentConversationsByPaneKey === state.agentConversationsByPaneKey &&
+              requested.terminalLayoutsByTabId === state.terminalLayoutsByTabId &&
+              index.matches(state)
+            ) {
+              return requested
+            }
             const entries = cap(requested, state)
             return entries === requested.agentConversationsByPaneKey
               ? requested

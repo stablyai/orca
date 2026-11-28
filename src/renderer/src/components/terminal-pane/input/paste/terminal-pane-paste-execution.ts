@@ -19,7 +19,10 @@ import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import { scheduleImagePasteWebglAtlasRecovery } from '../../render-health/terminal-webgl-atlas-recovery'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { createTerminalClipboardCopiedFiles } from '../../clipboard/terminal-clipboard-copied-files'
-import type { ReadClipboardTextOptions } from '../../../../../../shared/clipboard/clipboard-text'
+import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../../../../shared/clipboard/clipboard-paste-content'
 import type { TerminalPaneCloseController } from '../../layout/close/use-terminal-pane-close-actions'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
@@ -151,12 +154,14 @@ export function createTerminalPanePasteExecution(
     pane: ManagedPane,
     source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
     {
-      readClipboardText = window.api.ui.readClipboardText,
+      readClipboardContent = window.api.ui.readClipboardPasteContent,
       eventCopiedFilePaths,
       eventCarriedFiles = false,
       isUnreadWindowsClipboardFallback = false
     }: {
-      readClipboardText?: (options?: ReadClipboardTextOptions) => Promise<string>
+      readClipboardContent?: (
+        options: ReadClipboardPasteContentOptions
+      ) => Promise<ClipboardPasteContent>
       eventCopiedFilePaths?: string[]
       eventCarriedFiles?: boolean
       isUnreadWindowsClipboardFallback?: boolean
@@ -170,7 +175,7 @@ export function createTerminalPanePasteExecution(
     )
     const activeElementAtDispatch = document.activeElement
     void pasteTerminalClipboard({
-      readClipboardText,
+      readClipboardContent,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       eventCopiedFilePaths,

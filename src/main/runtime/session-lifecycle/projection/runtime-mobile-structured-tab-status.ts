@@ -1,13 +1,10 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionAgentTabStatus
 } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** A chat tab with the state it shows: the host's own structured row for its session, as desktop draws it. */
 export function withStructuredChatStatus(
@@ -15,10 +12,7 @@ export function withStructuredChatStatus(
   worktreeId: string,
   getRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
 ): RuntimeMobileSessionAgentTab {
-  const paneKey = structuredAgentSessionPaneKey(
-    structuredAgentSessionTabId(tab.sessionId),
-    tab.sessionId
-  )
+  const paneKey = chatPaneKey(tab.sessionId)
   let row: AgentStatusIpcPayload | undefined
   for (const candidate of getRowsForPane(paneKey)) {
     if (

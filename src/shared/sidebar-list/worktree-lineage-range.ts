@@ -45,6 +45,10 @@ const rangesByPlan = new WeakMap<
   WorktreeOccurrencePlan<Worktree>,
   Map<string, WorktreeLineageRange>
 >()
+const sectionTreesByPlan = new WeakMap<
+  WorktreeOccurrencePlan<Worktree>,
+  Map<string, WorktreeLineageTree>
+>()
 
 let previousPlan: WorktreeOccurrencePlan<Worktree> | undefined
 
@@ -57,10 +61,22 @@ export function buildWorktreeLineageRanges(
     return cached
   }
   const result = new Map<string, WorktreeLineageRange>()
+  const sectionTrees = new Map<string, WorktreeLineageTree>()
   const previousRanges = previousPlan ? rangesByPlan.get(previousPlan) : undefined
+  const previousTrees = previousPlan ? sectionTreesByPlan.get(previousPlan) : undefined
   for (const [sectionKey, occurrences] of plan.bySection) {
+    let hasLineage = false
+    for (const occurrence of occurrences) {
+      if (occurrence.childCount > 0 || occurrence.depth > 0) {
+        hasLineage = true
+        break
+      }
+    }
+    if (!hasLineage) {
+      continue
+    }
     const previous = previousPlan?.bySection.get(sectionKey)
-    const previousTree = previous?.[0] && previousRanges?.get(previous[0].key)?.tree
+    const previousTree = previousTrees?.get(sectionKey)
     // Review/group labels and row replacements (unread, activity) rebuild the plan without
     // changing its lineage: same order, depth and identities keep the tree and its ranges.
     if (
@@ -89,8 +105,12 @@ export function buildWorktreeLineageRanges(
       if (replaced.length > 0) {
         ;(previousTree.replacedRows ??= []).push(replaced)
       }
+      sectionTrees.set(sectionKey, previousTree)
       for (const { key } of occurrences) {
-        result.set(key, previousRanges.get(key)!)
+        const previousRange = previousRanges.get(key)
+        if (previousRange) {
+          result.set(key, previousRange)
+        }
       }
       continue
     }
@@ -111,12 +131,16 @@ export function buildWorktreeLineageRanges(
     for (const index of stack) {
       tree.ends[index] = occurrences.length
     }
+    sectionTrees.set(sectionKey, tree)
     occurrences.forEach((occurrence, index) => {
-      const range = { tree, index, length: tree.ends[index]! - index - 1 }
-      result.set(occurrence.key, range)
+      const length = tree.ends[index]! - index - 1
+      if (length > 0) {
+        result.set(occurrence.key, { tree, index, length })
+      }
     })
   }
   rangesByPlan.set(plan, result)
+  sectionTreesByPlan.set(plan, sectionTrees)
   previousPlan = plan
   return result
 }

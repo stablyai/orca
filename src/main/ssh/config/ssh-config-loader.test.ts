@@ -83,6 +83,28 @@ Host unquoted-key
     ])
   })
 
+  it('tokenizes quotes, escaped spaces and # like OpenSSH', () => {
+    const home = makeHome()
+    writeFile(home, '.ssh/my configs/a', 'Host single-include\n')
+    writeFile(home, '.ssh/my configs/b', 'Host escaped-include\n')
+    writeFile(
+      home,
+      '.ssh/config',
+      String.raw`Include '~/.ssh/my configs/a'
+Include ~/.ssh/my\ configs/b
+Host 'quoted-key' team#1 # comment
+  IdentityFile '/keys/my "work" key'
+`
+    )
+
+    expect(loadUserSshConfig()).toEqual([
+      { host: 'single-include' },
+      { host: 'escaped-include' },
+      { host: 'quoted-key', identityFile: '/keys/my "work" key' },
+      { host: 'team#1', identityFile: '/keys/my "work" key' }
+    ])
+  })
+
   it('supports OrbStack includes, Include= syntax, quoted paths, and multiple pathnames', () => {
     const home = makeHome()
     writeFile(

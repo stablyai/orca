@@ -22,7 +22,7 @@ export {
   type BotReadSettled
 } from './bot-host-read-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const NO_SUBSCRIPTION = (): (() => void) => () => {}
 /** The changes the store sees first: a read of none of them (items) re-reads on its host's notices only. */
@@ -59,8 +59,8 @@ export function useBotHostRead<T, S = T>(
   const key = bot ? botRefKey(bot) : null
   const workspaceId = bot ? folderWorkspaceKey(bot.folderWorkspaceId) : null
   const chatSessionId = bot?.chatSessionId ?? null
-  const chatPaneKey = useMemo(
-    () => (chatSessionId ? structuredAgentSessionStatusPaneKey(chatSessionId) : null),
+  const statusPaneKey = useMemo(
+    () => (chatSessionId ? chatPaneKey(chatSessionId) : null),
     [chatSessionId]
   )
   // A new chat, thread or turn of the Home chat re-reads at once, for a read that shows them.
@@ -82,7 +82,7 @@ export function useBotHostRead<T, S = T>(
       : ''
   )
   const chatState = useAppStore((s) =>
-    followsChats && chatPaneKey ? s.agentStatusByPaneKey.get(chatPaneKey)?.state : undefined
+    followsChats && statusPaneKey ? s.agentStatusByPaneKey.get(statusPaneKey)?.state : undefined
   )
   const subscribe = useCallback(
     (listener: () => void) =>

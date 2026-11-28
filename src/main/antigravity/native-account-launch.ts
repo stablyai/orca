@@ -14,6 +14,8 @@ export async function prepareAntigravityAccountForLaunch(args: {
   env?: NodeJS.ProcessEnv
   envIsComplete?: boolean
   envToDelete?: readonly string[]
+  /** False skips a restore that would read a login whose read could raise a keychain dialog. */
+  mayPrompt?: boolean
 }): Promise<void> {
   // Windows account selection applies the host default; the shell and agent own each launch.
   if (process.platform === 'win32') {
@@ -48,16 +50,24 @@ export async function prepareAntigravityAccountForLaunch(args: {
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
-  await (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch()
+  await (
+    await getAntigravityAccountService({ runtime: 'host' })
+  ).prepareForLaunch({
+    mayPrompt: args.mayPrompt ?? true
+  })
 }
 
-/** Chats never had the launch gate: put the selected account back when that's safe, else start on
- *  agy's current login as before. */
+/** Chats never had the launch gate: put the selected account back when that's safe and raises no
+ *  keychain dialog, else start on agy's current login as before. */
 export async function restoreAntigravityAccountForChat(
   env: Readonly<Record<string, string>>
 ): Promise<void> {
   try {
-    await prepareAntigravityAccountForLaunch({ launchAgent: 'antigravity', env: { ...env } })
+    await prepareAntigravityAccountForLaunch({
+      launchAgent: 'antigravity',
+      env: { ...env },
+      mayPrompt: false
+    })
   } catch (error) {
     console.warn("[antigravity] chat starts on agy's current login:", error)
   }

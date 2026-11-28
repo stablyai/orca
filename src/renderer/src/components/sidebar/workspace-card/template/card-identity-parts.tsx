@@ -23,12 +23,19 @@ const LazyAutoNameFailedIndicator = lazyWithRetry(
     })),
   { reloadKey: 'auto-name-failed-indicator' }
 )
+
+const LazyWorktreeCardSshHostControl = lazyWithRetry(
+  () =>
+    import('../host/WorktreeCardSshHostControl').then((module) => ({
+      default: module.WorktreeCardSshHostControl
+    })),
+  { reloadKey: 'worktree-card-ssh-host-control' }
+)
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
 } from '../metadata/worktree-card-meta-items'
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
-import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import {
@@ -81,15 +88,17 @@ function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React
     return null
   }
   return (
-    <WorktreeCardSshHostControl
-      targetId={repo.connectionId}
-      targetLabel={card.sshTargetLabel || repo.displayName}
-      status={card.sshStatus}
-      targetRemoved={card.sshTargetRemoved}
-      sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
-      iconOnly={props.iconOnly === true}
-      onPointerDown={card.stopQuickActionPointerPropagation}
-    />
+    <React.Suspense fallback={null}>
+      <LazyWorktreeCardSshHostControl
+        targetId={repo.connectionId}
+        targetLabel={card.sshTargetLabel || repo.displayName}
+        status={card.sshStatus}
+        targetRemoved={card.sshTargetRemoved}
+        sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
+        iconOnly={props.iconOnly === true}
+        onPointerDown={card.stopQuickActionPointerPropagation}
+      />
+    </React.Suspense>
   )
 }
 

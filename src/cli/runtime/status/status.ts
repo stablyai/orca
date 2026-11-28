@@ -8,6 +8,8 @@ import {
   type RuntimeMetadata
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { tryReadMetadata } from '../profile/metadata'
+import { readActiveRuntimeRestart } from '../connection/runtime-restart-wait'
+import { runtimeRestartingData } from '../connection/runtime-restarting-error'
 import { sendRequest } from '../connection/transport'
 import { resolveDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
@@ -24,25 +26,46 @@ export async function getCliStatus(
   const metadata = tryReadMetadata(userDataPath, { throwOnAccessDenied: true })
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
-    return buildCliStatusResponse({
-      app: {
-        running: false,
-        pid: null
-      },
-      runtime: {
-        // Existing metadata proves the runtime started at least once.
-        state: metadata ? 'stale_bootstrap' : 'not_running',
-        reachable: false,
-        runtimeId: null
-      },
-      graph: {
-        state: 'not_running'
-      }
-    })
+    return await offlineStatus(userDataPath, metadata ? 'stale_bootstrap' : 'not_running')
   }
-
-  const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+  let response: RuntimeRpcResponse<RuntimeStatus>
+  try {
+    response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+  } catch (error) {
+    // A relaunch can leave its metadata behind, as can an app that exited and never came back.
+    if (
+      error instanceof RuntimeClientError &&
+      error.code === 'runtime_unavailable' &&
+      ((await readActiveRuntimeRestart(userDataPath)) || !isProcessRunning(metadata.pid))
+    ) {
+      return await offlineStatus(userDataPath, 'stale_bootstrap')
+    }
+    throw error
+  }
   return projectConnectedStatus(metadata, response)
+}
+
+async function offlineStatus(
+  userDataPath: string,
+  state: 'stale_bootstrap' | 'not_running'
+): Promise<RuntimeRpcSuccess<CliStatusResult>> {
+  const restart = await readActiveRuntimeRestart(userDataPath)
+  return buildCliStatusResponse({
+    app: {
+      running: false,
+      pid: null,
+      ...(restart ? { restarting: runtimeRestartingData(restart, Date.now()) } : {})
+    },
+    runtime: {
+      // Existing metadata proves the runtime started at least once.
+      state,
+      reachable: false,
+      runtimeId: null
+    },
+    graph: {
+      state: 'not_running'
+    }
+  })
 }
 
 export type OfflineRuntimeAdmission = {

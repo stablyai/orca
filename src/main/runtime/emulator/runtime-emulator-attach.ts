@@ -7,7 +7,7 @@ import {
   resolveEmulatorOpeningPreference
 } from '../../emulator/emulator-opening-preference'
 import type { RuntimeEmulatorCommandHost } from './runtime-emulator-commands'
-import type { EmulatorSessionInfo } from '../../emulator/emulator-types'
+import type { EmulatorBackendKind, EmulatorSessionInfo } from '../../emulator/emulator-types'
 import {
   getEmulatorOpeningMode,
   type EmulatorSelectionRequired
@@ -15,6 +15,8 @@ import {
 
 export type RuntimeEmulatorAttachParams = {
   device?: string
+  /** Only devices of this backend; a paired desktop shows a server's iOS simulators only. */
+  backend?: EmulatorBackendKind
   worktree?: string
   focus?: boolean
   userInitiated?: boolean
@@ -23,6 +25,25 @@ type Result = {
   attached: boolean
   info?: EmulatorSessionInfo
   selectionRequired?: EmulatorSelectionRequired
+}
+
+type ListedDevice = Awaited<ReturnType<EmulatorBridge['listAllDevices']>>[number]
+
+/** A device's id, or an Android AVD's name, which Android attaches also accept. */
+function namesDevice(item: ListedDevice, device: string): boolean {
+  return (
+    item.id === device ||
+    (item.backend === 'android' &&
+      ['avd', 'emulator'].includes(item.detail ?? '') &&
+      item.name === device)
+  )
+}
+
+function otherBackendError(backend: EmulatorBackendKind | undefined): EmulatorError {
+  return new EmulatorError(
+    'emulator_backend_unsupported',
+    `This emulator is ${backend === 'android' ? 'an Android' : 'an iOS'} device, which this window can't show.`
+  )
 }
 
 export class RuntimeEmulatorAttach {
@@ -43,6 +64,8 @@ export class RuntimeEmulatorAttach {
     if (settings.mobileEmulatorEnabled === false) {
       throw new EmulatorError('emulator_disabled', emulatorFailureText('disabled'))
     }
+    const ofBackend = (item: { backend?: EmulatorBackendKind }) =>
+      !params.backend || item.backend === params.backend
     const choiceGeneration =
       params.userInitiated && params.device ? ++this.choiceGeneration : undefined
     const bridge = this.requireBridge()
@@ -58,7 +81,7 @@ export class RuntimeEmulatorAttach {
         )
       }
     }
-    let selectedDevice: Awaited<ReturnType<EmulatorBridge['listAllDevices']>>[number] | undefined
+    let selectedDevice: ListedDevice | undefined
     const remember = () => {
       if (
         choiceGeneration === undefined ||
@@ -83,6 +106,12 @@ export class RuntimeEmulatorAttach {
       assertCurrent()
       let device = params.device
       if (!device && worktreeId) {
+        // Another backend's session is someone else's (an agent's attach, say), streaming or not;
+        // never switch it away.
+        const current = bridge.getActiveForWorktree(worktreeId)
+        if (current && !ofBackend(current)) {
+          throw otherBackendError(current.backend)
+        }
         const active = await bridge.getReusableActiveForWorktree(worktreeId)
         assertCurrent()
         if (active) {
@@ -90,38 +119,58 @@ export class RuntimeEmulatorAttach {
           return { attached: true, info: active }
         }
       }
+      // Listing runs simctl and adb, so one attach lists at most once.
+      let listed: Promise<ListedDevice[]> | undefined
+      const listAll = (): Promise<ListedDevice[]> => (listed ??= bridge.listAllDevices())
+      const explicit = device
+      if (explicit && params.backend) {
+        const named = (await listAll()).find((item) => namesDevice(item, explicit))
+        assertCurrent()
+        if (named && !ofBackend(named)) {
+          throw otherBackendError(named.backend)
+        }
+      }
       if (params.userInitiated) {
-        const devices = await bridge.listAllDevices()
+        const all = await listAll()
+        const devices = all.filter(ofBackend)
         assertCurrent()
         if (!device) {
-          const selection = resolveEmulatorOpeningPreference(
-            settings,
-            devices,
-            worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined
-          )
+          const current = worktreeId
+            ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid
+            : undefined
+          const selection = resolveEmulatorOpeningPreference(settings, devices, current)
           if ('selectionRequired' in selection) {
-            return { attached: false, ...selection }
+            // A saved device of a backend this caller can't show is still there, not missing.
+            // The saved device is still there when the full list finds it; it is just another backend.
+            const unfiltered = resolveEmulatorOpeningPreference(settings, all, current)
+            const hidden =
+              selection.selectionRequired === 'missing' &&
+              !('selectionRequired' in unfiltered && unfiltered.selectionRequired === 'missing')
+            return {
+              attached: false,
+              selectionRequired: hidden ? 'ask' : selection.selectionRequired
+            }
           }
           device = selection.device
         }
-        selectedDevice = devices.find(
-          (item) =>
-            item.id === device ||
-            (item.backend === 'android' &&
-              ['avd', 'emulator'].includes(item.detail ?? '') &&
-              item.name === device)
-        )
+        const chosen = device
+        selectedDevice = devices.find((item) => namesDevice(item, chosen))
         if (!selectedDevice || selectedDevice.isAvailable === false) {
           return { attached: false, selectionRequired: selectedDevice ? 'unavailable' : 'missing' }
         }
       } else {
-        device ??= await resolveDefaultAttachDevice(bridge, {
-          current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
-          configured:
-            getEmulatorOpeningMode(settings) === 'specific'
-              ? (settings.mobileEmulatorDefaultDeviceUdid ?? undefined)
-              : undefined
-        })
+        const listAllDevices = async () => (await listAll()).filter(ofBackend)
+        device ??= await resolveDefaultAttachDevice(
+          { listAllDevices },
+          {
+            current: worktreeId ? bridge.getActiveForWorktree(worktreeId)?.deviceUdid : undefined,
+            // The configured device skips the device list, so a backend-limited attach ignores it.
+            configured:
+              !params.backend && getEmulatorOpeningMode(settings) === 'specific'
+                ? (settings.mobileEmulatorDefaultDeviceUdid ?? undefined)
+                : undefined
+          }
+        )
       }
       if (!device) {
         throw new EmulatorError(
@@ -136,6 +185,11 @@ export class RuntimeEmulatorAttach {
           remember()
           this.notify(worktreeId, reusable, params.focus)
           return { attached: true, info: reusable }
+        }
+        // An agent may have attached another backend since the check above; never switch it away.
+        const switching = bridge.getActiveForWorktree(worktreeId)
+        if (!params.device && switching && !ofBackend(switching)) {
+          throw otherBackendError(switching.backend)
         }
         await bridge.stopActiveForSwitch(worktreeId)
         assertCurrent()

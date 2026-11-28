@@ -1,4 +1,10 @@
-import { chatWorkspaceByTabId as findTerminalTabWorktreeId } from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
+import {
+  chatWorkspaceByTabId as findTerminalTabWorktreeId,
+  structuredChatTabBySessionId,
+  structuredChatWorkspacesBySessionId
+} from '../../../../lib/agent-session/tab-identity/structured-chat-tab-index'
+import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { structuredAgentSessionIdOfDraftScope } from '../../drafts/native-chat-draft-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { getKnownExecutionHostIdForWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '../../../../lib/workspace/ownership/resolve-owner'
@@ -187,4 +193,33 @@ export function resolveNativeChatRuntimeSessionAttachmentOwner(session: {
     pairingRevision,
     sessionId: session.sessionId
   }
+}
+
+/** Resolve the chat named by a draft even when the composer that started a paste has gone. */
+export function resolveNativeChatStructuredDraftAttachmentOwner(
+  scopeKey: string
+): NativeChatAttachmentOwner | undefined {
+  const sessionId = structuredAgentSessionIdOfDraftScope(scopeKey)
+  if (sessionId === null) {
+    return undefined
+  }
+  const state = useAppStore.getState()
+  const workspaces = structuredChatWorkspacesBySessionId(state.unifiedTabsByWorktree, sessionId)
+  if (!workspaces.length) {
+    return undefined
+  }
+  if (workspaces.length !== 1) {
+    return { kind: 'not-ready' }
+  }
+  const tab = structuredChatTabBySessionId(state.unifiedTabsByWorktree, workspaces[0], sessionId)
+  const target = tab && structuredAgentSessionTargetForTab(state, tab)
+  if (!target) {
+    return { kind: 'not-ready' }
+  }
+  return target.kind === 'local'
+    ? { kind: 'local', structuredSessionId: sessionId }
+    : resolveNativeChatRuntimeSessionAttachmentOwner({
+        sessionId,
+        runtimeEnvironmentId: target.environmentId
+      })
 }
