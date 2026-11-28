@@ -800,7 +800,12 @@
         "customCommandDescription": "Command line shared by recipes that select Custom command. Use {prompt} to pass the input as an argument; otherwise it is piped to stdin.",
         "saveFailed": "Could not save chat name settings.",
         "searchAgent": "agent",
-        "searchTemplate": "command template"
+        "searchTemplate": "command template",
+        "antigravity": "Generate chat titles with Antigravity",
+        "antigravityEnterprise": "Sends each chat’s first message to Antigravity to name it, which uses your Gemini Enterprise quota.",
+        "antigravityApiKey": "Sends each chat’s first message to Antigravity to name it, billed to your Gemini API key.",
+        "antigravityAgentPlatform": "Sends each chat’s first message to Antigravity to name it, billed to your Google Cloud project.",
+        "antigravityGoogle": "Sends each chat’s first message to Antigravity to name it, which uses your Antigravity quota on your Google account."
       },
       "providers": {
         "title": "Providers",

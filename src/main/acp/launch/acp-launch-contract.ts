@@ -121,6 +121,10 @@ export type AcpLaunchSpec = {
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true
+  /** Lets an agent that keeps every session run naming tasks anyway, each on a home of its own in
+   *  `folder`, which Orca removes with everything the agent kept there once the task's process
+   *  exits. Null runs none for this chat. */
+  textTaskHome?(chatHome: AgentSessionAccountHome, folder: string): AcpTextTaskHome | null
   /** A program on the host preferred for new chats; chats whose account home it pins keep it. */
   hostBackend?: AcpHostBackend
   /** Whether Orca may bring an installed `managedRuntime` up to its pin by itself; absent means it may. */
@@ -155,6 +159,19 @@ export type AcpHostBackendInput = {
   /** The question comes from someone using the agent, so it may start the program to answer;
    *  otherwise only what is already known (files, earlier answers) decides. */
   startsProgram: boolean
+}
+
+/** See `AcpLaunchSpec.textTaskHome`. */
+export type AcpTextTaskHome = {
+  home: AgentSessionAccountHome
+  spec: AcpLaunchSpec
+  /** Read before anything is written to the home; false runs no task, as when the agent could
+   *  ask for a login or would sign in differently than the chat. */
+  admits(launch: {
+    env: Readonly<Record<string, string>>
+    envToDelete: readonly string[]
+    antigravityChatAuth?: AntigravityChatAuthConfig
+  }): Promise<boolean>
 }
 
 export type AcpHostBackend = {
