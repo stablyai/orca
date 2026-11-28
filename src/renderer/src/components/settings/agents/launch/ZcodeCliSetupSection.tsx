@@ -51,6 +51,7 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
                 )
               }
             )
+            setLoadingChoice(null)
             return
           }
         }
@@ -69,9 +70,8 @@ export function ZcodeCliSetupSection(): React.JSX.Element {
                 'Could not resolve the installed ZCode CLI.'
               )
         )
-      } finally {
-        setLoadingChoice(null)
       }
+      setLoadingChoice(null)
     },
     [commandOverride, t]
   )

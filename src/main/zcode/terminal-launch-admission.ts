@@ -1,4 +1,4 @@
-import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { readZCodeInteractiveCapability } from './interactive-capability'
 import { resolveZcodeCliInvocation, type ZcodeCliInvocation } from './zcode-cli-invocation'
 
@@ -8,7 +8,7 @@ export type ZcodeTerminalLaunchAdmission =
 
 export async function readZcodeTerminalLaunchAdmission(
   options: {
-    commandSettings?: StructuredAgentCommandSettings
+    commandSettings?: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
     pathEnv?: string
   } = {}
 ): Promise<ZcodeTerminalLaunchAdmission> {
@@ -26,7 +26,7 @@ export async function readZcodeTerminalLaunchAdmission(
 
 export async function assertZcodeTerminalLaunchAvailable(
   options: {
-    commandSettings?: StructuredAgentCommandSettings
+    commandSettings?: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
     pathEnv?: string
   } = {}
 ): Promise<void> {

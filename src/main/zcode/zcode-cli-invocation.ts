@@ -8,7 +8,7 @@ import {
   resolveExecutableCommandAsync
 } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import type { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
-import type { StructuredAgentCommandSettings } from '../native-chat/agent-launch/structured-agent-command-resolution'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import {
   probeZcodeOfficialRuntimes,
   resolveZcodeOfficialRuntime,
@@ -30,7 +30,7 @@ export function zcodeDesktopTerminalRefusal(invocation: ZcodeCliInvocation): str
 }
 
 export type ResolveZcodeCliInvocationOptions = {
-  commandSettings?: StructuredAgentCommandSettings
+  commandSettings?: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>>
   resolveCommand?: typeof resolveCliCommand
   pathEnv?: string
   homePath?: string
