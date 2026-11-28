@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -17,18 +17,30 @@ let dir: string
 let server: Server
 let port: number
 let posts: Post[]
-let responseDelayMs: number
+let holdResponses: boolean
+let releaseResponses: (() => void)[]
+let responded: number
 
 beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'orca-agy-script-'))
   posts = []
-  responseDelayMs = 0
+  holdResponses = false
+  releaseResponses = []
+  responded = 0
   server = createServer((req, res) => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
       posts.push({ token: req.headers['x-orca-agent-hook-token'], body })
-      setTimeout(() => res.writeHead(204).end(), responseDelayMs)
+      const reply = (): void => {
+        responded += 1
+        res.writeHead(204).end()
+      }
+      if (holdResponses) {
+        releaseResponses.push(reply)
+      } else {
+        reply()
+      }
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -40,6 +52,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  releaseResponses.forEach((release) => release())
   server.closeAllConnections()
   await new Promise((resolve) => server.close(resolve))
   rmSync(dir, { recursive: true, force: true })
@@ -56,21 +69,14 @@ function run(
   script: string,
   stdin: string,
   env: Record<string, string> = {}
-): Promise<{ stdout: string; code: number | null; ms: number }> {
+): Promise<{ stdout: string; code: number | null }> {
   return new Promise((resolve) => {
-    const started = performance.now()
     const child = spawn('/bin/sh', [script], {
       env: { PATH: process.env.PATH ?? '', TMPDIR: dir, ...env }
     })
     const chunks: Buffer[] = []
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
-    child.on('close', (code) =>
-      resolve({
-        stdout: Buffer.concat(chunks).toString('utf8'),
-        code,
-        ms: performance.now() - started
-      })
-    )
+    child.on('close', (code) => resolve({ stdout: Buffer.concat(chunks).toString('utf8'), code }))
     child.stdin.end(stdin)
   })
 }
@@ -89,28 +95,47 @@ async function settle(ms = 700): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-describe('Antigravity status-line script', () => {
-  it('passes the original command stdout and exit code through unchanged', async () => {
+// The script runs through a POSIX shell, which agy only does on macOS and Linux.
+describe.skipIf(process.platform === 'win32')('Antigravity status-line script', () => {
+  it.each([
+    ['a JSON line with a trailing newline', '{"quota":1,"name":"ünï"}\n'],
+    ['JSON without a trailing newline', '{"quota":1}'],
+    ['blank lines and backslashes', '\n\nline \\n one\n\n']
+  ])('hands the original command %s byte for byte', async (_name, stdin) => {
     const original = "printf 'left|'; cat; printf '|right\\n'; exit 7"
-    const stdin = JSON.stringify({ quota: QUOTA, name: 'ünï' })
     const direct = spawnSync('sh', ['-c', original], { input: stdin })
     const wrapped = await run(writeScript(original), stdin, orcaEnv())
     expect(Buffer.from(wrapped.stdout)).toEqual(direct.stdout)
+    expect(wrapped.code).toBe(direct.status)
     expect(wrapped.code).toBe(7)
-    expect(wrapped.stdout).toBe(`left|${stdin}|right\n`)
-    expect(
-      readdirSync(dir).filter((name) => name.startsWith('orca-antigravity-statusline.'))
-    ).toEqual([])
   })
 
-  it('prints a default-style footer row for an empty slot', async () => {
-    const script = writeScript(null)
-    const full = JSON.stringify({ cycle_mode: 'auto', model: MODEL, terminal_width: 111 })
-    const withRow = await run(script, full)
-    expect(withRow.stdout).toBe(`? for shortcuts${' '.repeat(69)}auto · Gemini 4 Neon · high\n`)
-    const noModel = await run(script, JSON.stringify({ cycle_mode: 'auto', terminal_width: 111 }))
-    expect(noModel.stdout).toBe('? for shortcuts\n')
-    expect(noModel.code).toBe(0)
+  it('keeps stdin a pipe for the original command', async () => {
+    const original = '[ -p /dev/stdin ] && printf pipe || printf other'
+    expect((await run(writeScript(original), '{}')).stdout).toBe('pipe')
+  })
+
+  it.each([
+    [
+      'mode, model and effort',
+      { cycle_mode: 'auto', model: MODEL, terminal_width: 111 },
+      `? for shortcuts${' '.repeat(69)}auto · Gemini 4 Neon · high\n`
+    ],
+    [
+      'mode and model without effort',
+      { cycle_mode: 'auto', model: { display_name: 'Gemini 4 Neon' }, terminal_width: 60 },
+      `? for shortcuts${' '.repeat(25)}auto · Gemini 4 Neon\n`
+    ],
+    [
+      'only the mode',
+      { cycle_mode: 'auto', terminal_width: 40 },
+      `? for shortcuts${' '.repeat(21)}auto\n`
+    ],
+    ['nothing to show', { terminal_width: 40 }, '? for shortcuts\n']
+  ])('prints the default footer row for an empty slot with %s', async (_name, payload, row) => {
+    const result = await run(writeScript(null), JSON.stringify(payload))
+    expect(result.stdout).toBe(row)
+    expect(result.code).toBe(0)
   })
 
   it('posts once per pane per window, and only when the payload has quota', async () => {
@@ -145,11 +170,13 @@ describe('Antigravity status-line script', () => {
     expect(result.stdout.startsWith('? for shortcuts')).toBe(true)
   })
 
-  it('returns before a slow server answers', async () => {
-    responseDelayMs = 2000
+  it('exits while the server has not answered yet', async () => {
+    holdResponses = true
     const result = await run(writeScript("printf 'x'"), JSON.stringify({ quota: QUOTA }), orcaEnv())
-    expect(result.ms).toBeLessThan(200)
+    // The run closed its pipes, yet the server is still holding the request it received.
+    expect(responded).toBe(0)
     expect(result.stdout).toBe('x')
     await expect.poll(() => posts.length).toBe(1)
+    expect(responded).toBe(0)
   })
 })
