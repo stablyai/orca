@@ -3,7 +3,12 @@ import { useCallback, useRef } from 'react'
 export type KeyboardPersistingTaps = 'always' | 'handled'
 
 // Why: native and test renderers have no DOM, so reaching HTMLElement there throws.
+// A native host ref can still sit under a defined HTMLElement without addEventListener.
 const hasDom = (): boolean => typeof HTMLElement !== 'undefined'
+
+function isDomElement(node: unknown): node is HTMLElement {
+  return hasDom() && node instanceof HTMLElement && typeof node.addEventListener === 'function'
+}
 
 export function isTextField(element: Element | null): boolean {
   if (!hasDom() || !(element instanceof HTMLElement)) {
@@ -57,8 +62,7 @@ export function useKeyboardPersistingTaps(mode: KeyboardPersistingTaps) {
   return useCallback(
     (node: unknown) => {
       releaseRef.current?.()
-      releaseRef.current =
-        hasDom() && node instanceof HTMLElement ? keepTextFocusThroughTaps(node, mode) : null
+      releaseRef.current = isDomElement(node) ? keepTextFocusThroughTaps(node, mode) : null
     },
     [mode]
   )
