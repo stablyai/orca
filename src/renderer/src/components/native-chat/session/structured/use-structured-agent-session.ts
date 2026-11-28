@@ -152,7 +152,6 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     fence: transportState.fence,
     cursor: state.cursor,
     submissions: transportState.submissions,
-    receipts,
     queuedMessageIds,
     queue,
     historyLoaded: transportEnabled && state.status === 'ready',
