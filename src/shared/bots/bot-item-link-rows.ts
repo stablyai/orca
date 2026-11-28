@@ -149,7 +149,7 @@ export function botItemLinkPage(
   links: readonly BotItemLinkView[],
   shown: number
 ): { rows: BotItemLinkRow[]; more: number } {
-  const { rows, newestAt } = linkRowsWithRecency(links)
+  const { rows, newestAt } = botItemLinkRowsWithRecency(links)
   if (rows.length <= BOT_ITEM_LINK_ROWS) {
     return { rows, more: 0 }
   }
@@ -163,11 +163,11 @@ export function botItemLinkPage(
 }
 
 export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkRow[] {
-  return linkRowsWithRecency(links).rows
+  return botItemLinkRowsWithRecency(links).rows
 }
 
 /** The rows, and by row key the newest link each one stands for (its index in `links`). */
-function linkRowsWithRecency(links: readonly BotItemLinkView[]): {
+export function botItemLinkRowsWithRecency(links: readonly BotItemLinkView[]): {
   rows: BotItemLinkRow[]
   newestAt: Map<string, number>
 } {
@@ -291,13 +291,17 @@ function markOtherRepos(rows: BotItemLinkRow[]): void {
   }
 }
 
-const WORKER_STATES: Record<BotItemWorkerState, BotChatTreeWorker['state']> = {
+const WORKER_STATES = {
   working: 'running',
   completed: 'done',
   failed: 'failed',
   stopped: 'failed',
   unknown: 'unreachable',
   missing: 'done'
+} as const satisfies Record<BotItemWorkerState, BotChatTreeWorker['state']>
+
+export function botItemWorkerState(state: BotItemWorkerState) {
+  return WORKER_STATES[state]
 }
 
 /** A linked worker as the chats tree draws its workers. */
@@ -307,7 +311,7 @@ export function botItemWorkerRow(
   return {
     key: link.ref,
     title: link.title ?? link.ref,
-    state: WORKER_STATES[link.state],
+    state: botItemWorkerState(link.state),
     startedAt: link.startedAt ?? 0,
     ...(link.settledAt !== null ? { settledAt: link.settledAt } : {}),
     dispatchId: link.latest ?? link.ref,

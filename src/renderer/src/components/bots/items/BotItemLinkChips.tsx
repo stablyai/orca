@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
+import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import {
   BOT_ITEM_LINK_ROWS,
   botItemLinkPage,
@@ -17,6 +17,7 @@ import {
   botItemWorkerRow,
   type BotItemLinkRow
 } from '../../../../../shared/bots/bot-item-link-rows'
+import { botItemLinkChipOrder } from '../../../../../shared/bots/bot-item-link-order'
 import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import {
   botChatTreeWorkerOpen,
@@ -131,21 +132,6 @@ function LinkChips({
     </div>
   )
 }
-
-/** The list's order, but a worker that has finished goes last: with many links, the ones still
- *  moving and the PRs keep their place in view, and a finished worker is the first behind "+N". */
-export function botItemLinkChipOrder(rows: readonly BotItemLinkRow[]): BotItemLinkRow[] {
-  const settled = (row: BotItemLinkRow): boolean =>
-    row.kind === 'worker' && SETTLED_WORKER.has(row.link.state)
-  return [...rows.filter((row) => !settled(row)), ...rows.filter(settled)]
-}
-
-const SETTLED_WORKER: ReadonlySet<BotItemWorkerState> = new Set([
-  'completed',
-  'failed',
-  'stopped',
-  'missing'
-])
 
 /** How many chips, from the first, sit wholly inside the list's box. Read on mount and when the list or
  *  a chip changes size, never on scroll; a clipped chip has nothing to read later but its own box. */

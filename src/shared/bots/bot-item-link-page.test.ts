@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { BotItemLinkView } from './bot-items'
 import { BOT_ITEM_LINK_ROWS, botItemLinkPage, botItemLinkRows } from './bot-item-link-rows'
+import { botItemLinkPreview, botItemLinksByImportance } from './bot-item-link-order'
+import { botItemLinkSearch, botItemLinkSearchIndex } from './bot-item-link-search'
 
 const worker = (
   i: number,
@@ -31,7 +33,7 @@ const worker = (
         }
 })
 
-/** Every row the list draws after opening `pages` pages, as the desktop and phone lists call it. */
+/** Every row the desktop list draws after opening `pages` pages. */
 function opened(links: readonly BotItemLinkView[], pages: number) {
   return botItemLinkPage(links, pages * BOT_ITEM_LINK_ROWS)
 }
@@ -87,4 +89,37 @@ describe('a worker chain on a Links page', () => {
     const keys = opened(links, 1).rows.map((row) => row.key)
     expect(keys.slice(0, 2)).toEqual(['dispatch:ctx_first', 'pr:acme/app#7'])
   })
+})
+
+it('cuts the mobile preview after five ranked rows and preserves that order in filtered results', () => {
+  const links: BotItemLinkView[] = [
+    { ...worker(1, 42), title: 'Audit search', state: 'working' },
+    { ...worker(2), title: 'Audit files', state: 'failed' },
+    { ...worker(3), title: 'Audit history' },
+    { ...worker(4, 43), title: 'Check links', state: 'working' },
+    { kind: 'file', ref: 'notes/audit.md' },
+    { kind: 'url', ref: 'https://example.com/audit' }
+  ]
+  const rows = botItemLinksByImportance(links)
+  expect(botItemLinkPreview(rows).map((row) => row.key)).toEqual([
+    'dispatch:ctx_4',
+    'dispatch:ctx_1',
+    'dispatch:ctx_2',
+    'pr:acme/app#43',
+    'pr:acme/app#42'
+  ])
+  expect(botItemLinkPreview(rows.slice(0, 4))).toHaveLength(4)
+  expect(rows.slice(5).map((row) => row.kind)).toEqual(['web', 'file', 'worker'])
+
+  const index = botItemLinkSearchIndex(rows)
+  const result = botItemLinkSearch(index, ' AUDIT ', 'workers')
+  expect(result.counts).toEqual({ all: 5, workers: 3, prs: 0, files: 1 })
+  expect(result.rows.map((row) => row.key)).toEqual([
+    'dispatch:ctx_1',
+    'dispatch:ctx_2',
+    'dispatch:ctx_3'
+  ])
+  expect(botItemLinkSearch(index, 'acme/app #42', 'prs').rows.map((row) => row.key)).toEqual([
+    'pr:acme/app#42'
+  ])
 })

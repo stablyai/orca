@@ -37,7 +37,7 @@ import { botItemOpenAsk, useMobileBotItemAskSlot } from './MobileBotItemAskCard'
 import { botItemAskCardKey } from './bot-item-ask-card-drafts'
 import { MobileNativeChatOpenFileContext } from '../../session/native-chat/links/mobile-native-chat-open-file-context'
 import { MobileNativeChatPromptStrip } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
-import { MobileBotItemLinks } from './MobileBotItemLinks'
+import { useMobileBotItemLinks } from './MobileBotItemLinks'
 import { botItemChatName, type BotItemSheet } from './MobileBotItemSheets'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
@@ -162,6 +162,7 @@ export function MobileBotItemPage({
     // In the tap itself: iOS opens the keyboard only for a focus the gesture made.
     commentField.current?.focus()
   }
+  const links = useMobileBotItemLinks({ bot, links: view.item?.links, onOpenWorker, onOpenFile })
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
@@ -193,7 +194,7 @@ export function MobileBotItemPage({
   const chatTitle = botItemChatName(item, t)
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
   const closed = item.status === 'done' || item.status === 'canceled'
-  return (
+  return links.around(
     // Paths in the item's text open as the item's file links do, as chat's do in chat.
     <MobileNativeChatOpenFileContext value={onOpenFile}>
       <View style={styles.page}>
@@ -300,19 +301,7 @@ export function MobileBotItemPage({
                   <Text style={styles.doneMeansText}>{item.doneMeans}</Text>
                 </View>
               ) : null}
-              {item.links.length > 0 ? (
-                <>
-                  <SectionHeader
-                    title={`${t('bots.items.view.links', 'Links')} ${item.links.length}`}
-                  />
-                  <MobileBotItemLinks
-                    bot={bot}
-                    links={item.links}
-                    onOpenWorker={onOpenWorker}
-                    onOpenFile={onOpenFile}
-                  />
-                </>
-              ) : null}
+              {links.section}
               <SectionHeader title={t('bots.items.view.activity', 'Activity')} />
               {view.hasEarlier ? (
                 <MobileBotTextButton

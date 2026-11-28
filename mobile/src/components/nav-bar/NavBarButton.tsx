@@ -23,6 +23,7 @@ type NavBarButtonProps = {
   icon: ComponentType<IconProps>
   accessibilityLabel: string
   onPress: () => void
+  size?: number
   /** The screen or panel this button opens is showing. */
   active?: boolean
   disabled?: boolean
@@ -38,6 +39,7 @@ export function NavBarButton({
   icon: Icon,
   accessibilityLabel,
   onPress,
+  size = NAV_BAR_BUTTON_SIZE,
   active = false,
   disabled = false,
   iconColor,
@@ -51,6 +53,7 @@ export function NavBarButton({
       ref={ref}
       style={({ pressed }) => [
         styles.button,
+        size !== NAV_BAR_BUTTON_SIZE && { width: size, height: size },
         onSheet && styles.onSheet,
         active && styles.active,
         pressed && styles.pressed,
