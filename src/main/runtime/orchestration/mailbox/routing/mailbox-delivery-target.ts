@@ -153,28 +153,29 @@ export class OrchestrationMailboxDeliveryTarget {
       probeShell ? probeShell.read() : false
     ])
       .then(([absent, shellInFront]) => {
-        this.probeDeferrals.delete(ptyId)
-        if (absent) {
+        // Any delivery after the read may be the agent's return edge; a shell verdict keeps mail
+        // unread only when none joined.
+        if (absent || (shellInFront && !deferral.joinedInFlight)) {
+          this.probeDeferrals.delete(ptyId)
           return
         }
-        const joined = deferral.joinedInFlight && !deferral.forced
-        // Held mail stays unread for the next agent status edge, unless one already arrived.
-        if (shellInFront && !joined) {
-          return
-        }
-        // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
+        // Stays registered until the timer turn, so an arrival in between joins rather than racing it.
         setTimeout(() => {
-          // A delivery that joined after the read began may postdate it either way: the agent may
-          // have exited meanwhile, which leaves the PTY's incarnation unchanged.
+          this.probeDeferrals.delete(ptyId)
+          // A joiner may postdate an "agent in front" read: the agent may have exited meanwhile,
+          // which leaves the PTY's incarnation unchanged. Only one such re-read per batch, so a
+          // stream of deliveries still types.
+          const staleAgent = deferral.joinedInFlight && !deferral.forced
           const stale =
             shellInFront ||
-            joined ||
+            staleAgent ||
             (probeShell !== null &&
               this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
-          if (joined) {
+          if (!shellInFront && staleAgent) {
             this.forcedRereads.add(ptyId)
           }
           try {
+            // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
             for (const [deferredMailbox, reserved] of deferral.mailboxes) {
               redeliver(deferredMailbox, stale, reserved)
             }

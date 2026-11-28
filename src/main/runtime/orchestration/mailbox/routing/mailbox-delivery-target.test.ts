@@ -112,4 +112,32 @@ describe('deferForTerminalProbe', () => {
       vi.useRealTimers()
     }
   })
+  it('re-reads when the agent returns during a forced read that saw a shell', async () => {
+    vi.useFakeTimers()
+    try {
+      const verdicts = [false, true, false]
+      let reads = 0
+      const typed: string[] = []
+      let delivery: OrchestrationMailboxDeliveryTarget
+      const deliver = (mailbox: string): void => {
+        delivery.deferForTerminalProbe('pty-1', mailbox, false, (probed, reprobe) =>
+          reprobe ? deliver(probed) : typed.push(probed)
+        )
+      }
+      // The first two reads each see a later delivery join: new mail, then the agent's return edge.
+      delivery = target(async () => {
+        reads += 1
+        await Promise.resolve()
+        if (reads <= 2) {
+          deliver(`run:r${reads}`)
+        }
+        return verdicts[reads - 1] ?? false
+      })
+      deliver('term_a')
+      await vi.runAllTimersAsync()
+      expect({ reads, typed }).toEqual({ reads: 3, typed: ['term_a', 'run:r1', 'run:r2'] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
