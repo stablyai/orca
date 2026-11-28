@@ -242,7 +242,7 @@ async function readDirectoryVerdict(
   budget: ComparisonBudget
 ): Promise<EntryVerdict> {
   try {
-    // Streamed so a huge directory costs at most the entry budget, never a full listing.
+    // Streamed so a huge directory costs at most the entry budget (Windows lists it in full).
     for await (const child of await openDirectory(worktreeDirectory)) {
       if (isRegenerableEntry(child.name, child.isDirectory())) {
         if (!spendBudgetEntry(budget)) {
