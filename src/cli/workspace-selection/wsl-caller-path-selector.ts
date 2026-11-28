@@ -3,7 +3,7 @@ import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/ru
 import {
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
-} from '../../shared/file-access/cross-platform-path'
+} from '../../shared/file-access/wsl-path-aliases'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
