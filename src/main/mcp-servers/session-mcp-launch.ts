@@ -11,7 +11,11 @@ import {
 } from '../bots/bot-tools-revision'
 import { onMcpHostListSignInChanged } from './mcp-host-list-sign-in'
 import { botToolRelay, type BotToolRelay } from '../bots/tool-relay/bot-tool-relay'
-import { mcpServersWithDigestsForLaunch } from './mcp-host-list-launch'
+import {
+  mcpHostListAtEpoch,
+  mcpServersWithDigestsForLaunch,
+  type McpHostListRead
+} from './mcp-host-list-launch'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { botHostMcpAccess } from './bot-host-mcp-access'
 import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
@@ -45,7 +49,8 @@ type HostRead = { host: SessionHostMcpServers; launched: HostLaunchedTools }
 async function hostServersFor(
   agent: string,
   workspace: HostWorkspace,
-  given: string | undefined
+  given: string | undefined,
+  read?: (folder: string, epoch: number) => ReturnType<McpHostListRead>
 ): Promise<HostRead | undefined> {
   if (!isMcpServersFeatureEnabled()) {
     return undefined
@@ -57,7 +62,8 @@ async function hostServersFor(
     const { servers, sharedProcesses, digests } = await mcpServersWithDigestsForLaunch(
       agent,
       workspace,
-      folder
+      folder,
+      read ? (listFolder) => read(listFolder, epoch) : undefined
     )
     return {
       host: { folder, servers, sharedProcesses },
@@ -150,7 +156,7 @@ export async function sessionLaunchToolsChanged(
     host.epoch = epoch
     return false
   }
-  const now = await hostServersFor(host.agent, host.workspace, host.folder)
+  const now = await hostServersFor(host.agent, host.workspace, host.folder, mcpHostListAtEpoch)
   if (!now && isMcpServersFeatureEnabled()) {
     // The list can't be read now: the next turn compares again, so a change isn't lost.
     return false
@@ -163,6 +169,70 @@ export async function sessionLaunchToolsChanged(
   // Not this session's, or the switch went off: nothing to act on.
   host.epoch = epoch
   return false
+}
+
+type HostChanges = ReadonlyMap<string, 'removed' | 'changed'>
+const NO_CHANGES: HostChanges = new Map()
+/** The last comparison per launch, by list epoch: a tray polls status while nothing moves it. */
+const comparedAt = new WeakMap<
+  HostLaunchedTools,
+  { epoch: number; changes: Promise<HostChanges> }
+>()
+
+/**
+ * The host-list servers this running session got that Orca has since removed or changed, by name:
+ * the session keeps the launch's copy until its next turn restarts it. Compares only after Orca
+ * wrote or signed in to the list, once per list epoch, and moves nothing on, so
+ * `sessionLaunchToolsChanged` still acts.
+ */
+export function sessionHostMcpChanges(
+  launched: SessionLaunchedTools,
+  delivered: ReadonlySet<string> | 'ignored' | undefined
+): Promise<HostChanges> {
+  const host = launched.host
+  if (!host || delivered === 'ignored') {
+    return Promise.resolve(NO_CHANGES)
+  }
+  const epoch = botToolsEpoch(host.folder)
+  if (epoch === host.epoch) {
+    return Promise.resolve(NO_CHANGES)
+  }
+  const seen = comparedAt.get(host)
+  if (seen?.epoch === epoch) {
+    return seen.changes
+  }
+  // Not knowing what it got, count every server it launched with as its own.
+  const got = delivered ?? new Set(Object.keys(host.digests))
+  if (got.size === 0) {
+    return Promise.resolve(NO_CHANGES)
+  }
+  const changes = compareHostServers(host, got).then((compared) => {
+    // A list that can't be read now is compared again on the next poll.
+    if (compared === null) {
+      comparedAt.delete(host)
+    }
+    return compared ?? NO_CHANGES
+  })
+  comparedAt.set(host, { epoch, changes })
+  return changes
+}
+
+async function compareHostServers(
+  host: HostLaunchedTools,
+  got: ReadonlySet<string>
+): Promise<HostChanges | null> {
+  const now = await hostServersFor(host.agent, host.workspace, host.folder, mcpHostListAtEpoch)
+  if (!now) {
+    return null
+  }
+  const after = now.launched.digests
+  return new Map(
+    Object.entries(host.digests).flatMap(([name, digest]) =>
+      !got.has(name) || after[name] === digest
+        ? []
+        : [[name, Object.hasOwn(after, name) ? 'changed' : 'removed'] as const]
+    )
+  )
 }
 
 /** A new server whose name the agent's own config already has restarts once; reading the agent's

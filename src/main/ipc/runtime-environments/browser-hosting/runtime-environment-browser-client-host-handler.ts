@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import {
   BrowserClientHostPlacementPreparationRequest,
   type BrowserPageCreationPlacement
@@ -6,11 +7,14 @@ import {
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 
-export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {
-  getUserDataPath: () => string
-  getSettings: () => Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'>
-}): void {
-  ipcMain.handle(
+export function registerRuntimeEnvironmentBrowserClientHostHandler(
+  options: {
+    getUserDataPath: () => string
+    getSettings: () => Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'>
+  },
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'runtimeEnvironments:prepareBrowserClientHostPlacement',
     async (_event, input: unknown): Promise<BrowserPageCreationPlacement> => {
       const args = BrowserClientHostPlacementPreparationRequest.parse(input)

@@ -129,7 +129,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   )
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
-  const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
   // The project being picked keeps its own views, so cancelling leaves the active project's list intact.
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] = useState<{
     project: GitHubProjectRef
@@ -159,12 +158,11 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectMutating, setProjectMutating] = useState(false)
   const [projectRepoNotInOrca, setProjectRepoNotInOrca] =
     useState<ProjectRepoNotInOrcaPrompt | null>(null)
-  const taskDetailHandoff = useBottomDrawerFollowUp(() => model.setActionItem(null))
   const projectRowHandoff = useBottomDrawerFollowUp(() => setProjectRowItem(null))
   const repoPickerHandoff = useBottomDrawerFollowUp(() => setWorkspaceRepoPickerItem(null))
 
-  return Object.assign(model, {
-    taskDetailHandoff,
+  return {
+    ...model,
     projectRowHandoff,
     repoPickerHandoff,
     workspaceRepoPickerItem,
@@ -289,8 +287,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setShowGitHubProjectPicker,
     showGitHubProjectViewPicker,
     setShowGitHubProjectViewPicker,
-    showGitHubProjectFieldsPicker,
-    setShowGitHubProjectFieldsPicker,
     pendingGitHubProjectViewSelection,
     setPendingGitHubProjectViewSelection,
     projectRowItem,
@@ -339,7 +335,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setProjectMutating,
     projectRepoNotInOrca,
     setProjectRepoNotInOrca
-  })
+  }
 }
 
 export type WorkspaceAndProjectStateModel = ReturnType<

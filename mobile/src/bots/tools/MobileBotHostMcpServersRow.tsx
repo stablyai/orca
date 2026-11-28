@@ -4,12 +4,11 @@ import { useEffect, useState } from 'react'
 import { Server } from 'lucide-react-native'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { ListRow } from '../../components/list/ListGroup'
-import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { mcpServersListRead } from '../../mcp-servers/mcp-server-operations'
 import { mcpServerTitle } from '../../mcp-servers/mcp-server-words'
-import { colors } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { botToolSetHostMcpServers } from './bot-tool-operations'
 
@@ -22,7 +21,8 @@ export function MobileBotHostMcpServersRow(props: {
   showToast: (message: string) => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const colors = useMobileColors()
   const { client } = props
   const [names, setNames] = useState<string[] | null>(null)
   // The flip shows at once; the tools read after it confirms or puts it back.
@@ -64,7 +64,7 @@ export function MobileBotHostMcpServersRow(props: {
           ? undefined
           : names.length === 0
             ? t('bots.tools.none', 'None')
-            : new Intl.ListFormat(getUiIntlLocale(), { type: 'unit', style: 'short' }).format(names)
+            : new Intl.ListFormat(intlLocale, { type: 'unit', style: 'short' }).format(names)
       }
       subtitleLines={1}
       leading={<Server size={17} color={colors.textMuted} />}

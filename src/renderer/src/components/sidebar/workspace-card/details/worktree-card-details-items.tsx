@@ -84,6 +84,7 @@ export function WorktreeCardMetaDetailsHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       bot={card.metaBot}
+      autoNameFailure={card.autoNameFailure}
       detailsAfter={card.hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
       hoverControl={card.detailsHoverControl}
       onEditIssue={affiliateListMode ? undefined : card.handleEditIssue}
@@ -140,6 +141,7 @@ export function WorktreeCardIdentityHover({
       automationProvenance={card.metaAutomationProvenance}
       cliProvenance={card.metaCliProvenance}
       bot={card.metaBot}
+      autoNameFailure={card.autoNameFailure}
       branchName={branchName}
       workspaceTitle={workspaceTitle}
       workspaceTitleRenameDisabled={card.isDeleting || affiliateListMode}

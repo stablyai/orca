@@ -2,7 +2,11 @@ import { translate } from '@/i18n/i18n'
 import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatMessageCopyText } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-copy-text'
-import { agentMessageRowLead } from '../rows/agent-message-row-lead'
+import {
+  agentMessageHeading,
+  agentMessageSavedName
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
+import { agentMessageRowLead, agentMessageRowFallback } from '../rows/agent-message-row-lead'
 import { nativeChatStoppedBeforeStartLabel } from '../rows/native-chat-stopped-before-start-row'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
@@ -26,11 +30,10 @@ export function nativeChatRowCopyText(message: NativeChatMessage): string {
     return text
   }
   // A start joined to its item link copies what its row says: "Started <worker> for <item>".
-  const worker =
-    message.from.senders[0]?.name ??
-    translate('components.native-chat.agentMessage.unnamedSender', 'an agent')
+  const heading = agentMessageHeading(message.from, message)
+  const worker = agentMessageSavedName(message.from.senders[0]) ?? agentMessageRowFallback(heading)
   const row = [
-    agentMessageRowLead(message.from, message),
+    agentMessageRowLead(heading),
     worker,
     translate('components.native-chat.agentMessage.row.forItems', 'for'),
     items.map((item) => item.title).join(', ')

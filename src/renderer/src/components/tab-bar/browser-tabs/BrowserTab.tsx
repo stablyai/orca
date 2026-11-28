@@ -1,13 +1,9 @@
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CopyX, Files, X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger
-} from '@/components/ui/context-menu'
+import { X, Volume2, VolumeX } from 'lucide-react'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { TabHoverCard } from '../strip/TabHoverCard'
 import '../../../../../shared/orca-profiles/constants'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
@@ -26,20 +22,20 @@ import '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
-import { TabWorkspaceLayoutMenuSection } from '../pane-actions/TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
-import { cn } from '@/lib/class-names'
 import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { AgentCursorGlyph } from '../../browser-pane/agent-cursor/agent-cursor-glyph'
 import {
   useBrowserAgentControllerHost,
   useBrowserAgentDrivesAnyPage
 } from '../../browser-pane/agent-cursor/browser-agent-activity-state'
-import { CopyTabIdMenuItem } from '../pane-actions/CopyTabIdMenuItem'
-import { BrowserTabOpenExternallyItem } from './browser-tab-open-externally-item'
-import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store/index'
+
+const LazyBrowserTabContextMenu = lazyWithRetry(
+  () => import('./BrowserTabContextMenu').then((m) => ({ default: m.BrowserTabContextMenu })),
+  { reloadKey: 'browser-tab-context-menu' }
+)
 
 import { formatBrowserTabUrlLabel, getBrowserTabLabel } from './browser-tab-label'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
@@ -85,6 +81,7 @@ export default function BrowserTab({
     data: dragData
   })
   const [menuOpen, setMenuOpen] = useState(false)
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
 
   const tabLabel = getBrowserTabLabel(tab, t)
   const audible = useAppStore((s) =>
@@ -179,7 +176,6 @@ export default function BrowserTab({
           fallbackClassName="text-blue-500"
         />
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
@@ -245,55 +241,27 @@ export default function BrowserTab({
           )}
         </div>
       </ContextMenuTrigger>
-      <ContextMenuContent
-        animation="none"
-        className={cn(
-          'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
-          'min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap'
-        )}
-      >
-        <TabWorkspaceLayoutMenuSection
-          unifiedTabId={dragData.unifiedTabId}
-          groupId={dragData.groupId}
-          trailingSeparator
-        />
-        {onDuplicate ? (
-          <>
-            <ContextMenuItem onSelect={onDuplicate}>
-              <Files className="size-3.5" />
-              {t('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-            </ContextMenuItem>
-            <ContextMenuSeparator />
-          </>
-        ) : null}
-        <ContextMenuItem onSelect={onTogglePin}>
-          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-          {isPinned
-            ? t('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
-            : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
-        </ContextMenuItem>
-        {showAudioControl ? (
-          <ContextMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
-            {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
-            {toggleAudioMutedLabel}
-          </ContextMenuItem>
-        ) : null}
-        <CopyTabIdMenuItem menuKind="context" unifiedTabId={dragData.unifiedTabId} />
-        <ContextMenuSeparator />
-        <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-          <X className="size-3.5" />
-          {t('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
-        </ContextMenuItem>
-        <ContextMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
-          <CopyX className="size-3.5" />
-          {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
-        </ContextMenuItem>
-        <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
-        <BrowserTabOpenExternallyItem
-          tab={tab}
-          onOpen={(url) => void window.api.shell.openUrl(url)}
-        />
-      </ContextMenuContent>
+      {hasOpenedMenu ? (
+        <React.Suspense fallback={null}>
+          <LazyBrowserTabContextMenu
+            tab={tab}
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+            isPinned={isPinned}
+            tabCount={tabCount}
+            showAudioControl={showAudioControl}
+            audioMuted={audioMuted}
+            toggleAudioMutedLabel={toggleAudioMutedLabel}
+            onToggleAudioMuted={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}
+            onDuplicate={onDuplicate}
+            onTogglePin={onTogglePin}
+            onClose={onClose}
+            onCloseOthers={onCloseOthers}
+            onCloseSplitPane={onCloseSplitPane}
+            onOpenExternally={(url) => void window.api.shell.openUrl(url)}
+          />
+        </React.Suspense>
+      ) : null}
     </ContextMenu>
   )
 }

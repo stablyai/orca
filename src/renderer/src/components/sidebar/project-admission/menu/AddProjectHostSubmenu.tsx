@@ -28,14 +28,11 @@ import {
   canConnectAddRepoHost,
   canSelectAddRepoHost
 } from '../host-selection/add-repo-host-availability'
-import { getAddRepoHostStatusDetail } from '../host-selection/AddRepoHostSelector'
+import { getAddRepoHostStatusDetail } from '../host-selection/add-repo-host-status-detail'
 import type { useAddRepoHostSelection } from '../host-selection/use-add-repo-host-selection'
+import { ADD_PROJECT_MENU_ATTRIBUTE, isWithinAddProjectMenu } from './add-project-menu-dom'
 
-export const ADD_PROJECT_MENU_ATTRIBUTE = 'data-add-project-menu'
-
-export function isWithinAddProjectMenu(target: EventTarget | null): boolean {
-  return target instanceof Element && target.closest(`[${ADD_PROJECT_MENU_ATTRIBUTE}]`) !== null
-}
+export { ADD_PROJECT_MENU_ATTRIBUTE, isWithinAddProjectMenu }
 
 type AddProjectHostSubmenuProps = {
   hostSelection: ReturnType<typeof useAddRepoHostSelection>
@@ -241,7 +238,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
-                        'Use an existing machine over SSH.'
+                        'Connect to a machine over SSH.'
                       )}
                     </span>
                   </span>
@@ -257,7 +254,7 @@ export function AddProjectHostSubmenu({
                     <span className="text-[11px] text-muted-foreground">
                       {t(
                         'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
-                        'Pair with Orca running on another computer.'
+                        'Orca on another computer, no SSH needed.'
                       )}
                     </span>
                   </span>

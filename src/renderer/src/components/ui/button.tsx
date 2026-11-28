@@ -7,6 +7,9 @@ import { cn } from '@/lib/class-names'
 const outlineButtonClasses =
   'border border-border bg-background text-foreground shadow-xs hover:border-muted-foreground/35 hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50'
 
+const mutedGhostButtonClasses =
+  'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50'
+
 const disabledOnAccentButtonClasses =
   'disabled:bg-accent disabled:text-muted-foreground disabled:opacity-100 disabled:hover:bg-accent disabled:hover:text-muted-foreground'
 
@@ -35,8 +38,9 @@ const buttonVariants = cva(
           'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A quiet secondary action under a title, such as a toast's "Show list": muted until hovered.
-        'ghost-muted':
-          'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        'ghost-muted': mutedGhostButtonClasses,
+        // `ghost-muted` for a Details toggle that stays filled while its list is open.
+        'ghost-muted-disclosure': `${mutedGhostButtonClasses} aria-expanded:bg-accent aria-expanded:text-accent-foreground`,
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
         // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
@@ -48,7 +52,7 @@ const buttonVariants = cva(
         'ghost-inset': `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors ${insetFocusRingClasses}`,
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
-          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
+          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground aria-pressed:bg-foreground/15 aria-pressed:text-foreground data-[active=true]:bg-foreground/15 data-[active=true]:text-foreground',
         // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
@@ -72,20 +76,20 @@ const buttonVariants = cva(
           'text-destructive hover:bg-destructive/10 hover:text-destructive dark:hover:bg-destructive/15',
         // A status that is also its fix, e.g. "Update in Slack": loud colour, link weight.
         'warning-link': 'text-status-warning-foreground underline-offset-4 hover:underline',
+        // An inline action in a menu row, e.g. an account's Sign in: accent text, underlined while hovered or highlighted.
+        'theme-accent-link': `text-theme-accent underline-offset-4 hover:underline focus:underline ${insetFocusRingClasses}`,
         // A chat notice's quiet icon tool: faint until hovered or open; pressed fills like a toggle.
         'chat-tool':
           'text-chat-foreground-faint hover:bg-accent hover:text-chat-foreground aria-expanded:bg-accent aria-expanded:text-chat-foreground aria-pressed:bg-foreground/10 aria-pressed:text-primary aria-pressed:hover:text-primary dark:aria-pressed:bg-accent',
-        // The worktree card's "rename failed" chip, for a failure the user can open.
+        // A small red failure chip the user can open, e.g. a failed rebase.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
-        // An item's way to what is waiting on the owner: the open ask's amber, which means only that. The
-        // faint fill keeps its amber text at 4.5:1 in the light theme.
-        'needs-you':
-          'border border-agent-question/45 bg-agent-question/6 text-agent-question-text hover:bg-agent-question/20 hover:text-foreground'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        // `xs` at 13px with a 6px radius, for the one action in a 36px browser notice bar.
+        'xs-notice': 'h-6 gap-1 rounded-sm px-2.5 text-[13px]',
         // `xs` trimmed to its text, for an action inside a 32px status line.
         'xs-compact':
           "h-5 gap-1 rounded-md px-1.5 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3",
@@ -99,9 +103,14 @@ const buttonVariants = cva(
         // A ghost name inside a row label: `inline`'s height, padded so its hover fill clears the text.
         inlineChip: 'h-6 gap-1 px-1.5',
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
+        // A rail page's header and toolbar bands: every control there is 28px.
+        toolbar: 'h-7 gap-1.5 rounded-md px-2.5 text-xs has-[>svg]:px-2',
         'responsive-sm':
           'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
         pill: "h-7 gap-1.5 rounded-full px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
+        // The shared "Send N notes" button; send-notes-sm is for rows shorter than 36px.
+        'send-notes': 'h-7 gap-1.5 rounded-md px-2.5 text-xs font-medium has-[>svg]:px-2.5',
+        'send-notes-sm': 'h-6 gap-1.5 rounded-md px-2.5 text-xs font-medium has-[>svg]:px-2.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
         'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',
@@ -111,6 +120,8 @@ const buttonVariants = cva(
         // The dictation pill's round finish button.
         'icon-xs-round': "size-6 rounded-full [&_svg:not([class*='size-'])]:size-3",
         'icon-sm': 'size-8',
+        // Icon form of `toolbar`, for a rail page's 28px bands.
+        'icon-toolbar': 'size-7 rounded-md',
         // The chat composer's round Send/Stop/Steer, and its compact form for one-line boxes.
         'icon-round': 'size-8 rounded-full pointer-coarse:size-10',
         'icon-round-compact': 'size-6 rounded-full pointer-coarse:size-8',

@@ -1,75 +1,176 @@
 import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 import type { BrowserSetGrabModeResult } from '../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserCleanPageCapture } from '../../../shared/browser/element-grab/browser-grab-clean-capture'
+import { grabDocumentScope, retireGrabOverlay } from './grab-guest-execution'
+import {
+  disposeGrabModeStateForPage,
+  grabModeIntents as intents,
+  grabModeOperationByPageId,
+  grabModeOwners as owners,
+  resetGrabModeState,
+  retireGrabModeAdmission,
+  queueGrabModeOperation,
+  supersededGrabMode,
+  type GrabModeOwner as ModeOwner
+} from './browser-grab-mode-admission'
 
-const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
-const grabModeOperationByPageId = new Map<string, Promise<void>>()
-
-function queueGrabModeOperation(
-  browserPageId: string,
-  operation: () => Promise<BrowserSetGrabModeResult>
-): Promise<BrowserSetGrabModeResult> {
-  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
-  const result = previous.then(operation)
-  const completion = result.then(
-    () => {},
-    () => {}
-  )
-  grabModeOperationByPageId.set(browserPageId, completion)
-  return result.finally(() => {
-    if (grabModeOperationByPageId.get(browserPageId) === completion) {
-      grabModeOperationByPageId.delete(browserPageId)
-    }
-  })
+type ModeOptions = {
+  requestId?: string
+  paletteKeys?: boolean
+  owner?: string
+  destination?: Electron.WebContents
+  onPolicyRetired?: () => void
+  afterClean?: (guest: Electron.WebContents, signal: AbortSignal) => Promise<boolean>
 }
+export { disposeGrabModeStateForPage, resetGrabModeState }
 
-export function resetGrabModeState(): void {
-  grabModeIntentByPageId.clear()
-  // Retired registrations must not leave chains blocking new operations.
-  grabModeOperationByPageId.clear()
-}
-
-export function disposeGrabModeStateForPage(browserPageId: string): void {
-  grabModeIntentByPageId.delete(browserPageId)
-  // Reused page IDs must not queue behind destroyed guests.
-  grabModeOperationByPageId.delete(browserPageId)
-}
-
-/** Arms or tears down a page's picker; the latest request wins, whoever hosts the viewer. */
+/** The same bounded request/document owner for a local renderer or an authorized runtime viewer. */
 export async function setBrowserGrabMode(
   browserPageId: string,
   enabled: boolean,
   resolveGuest: () => Electron.WebContents | null,
-  waitForGuest?: () => Promise<void>
+  waitForGuest?: (signal: AbortSignal) => Promise<void>,
+  options: ModeOptions = {}
 ): Promise<BrowserSetGrabModeResult> {
-  const intent = {
-    generation: (grabModeIntentByPageId.get(browserPageId)?.generation ?? 0) + 1,
-    enabled
+  const previous = owners.get(browserPageId)
+  const identity = options.owner ?? 'runtime'
+  if (previous && previous.identity !== identity && !resolveGuest()) {
+    return { ok: false, reason: 'not-authorized' }
   }
-  grabModeIntentByPageId.set(browserPageId, intent)
-  const isCurrentIntent = (): boolean => grabModeIntentByPageId.get(browserPageId) === intent
-  let guest = resolveGuest()
-  if (!guest && enabled && waitForGuest) {
-    await waitForGuest()
-    if (!isCurrentIntent()) {
-      return { ok: true }
-    }
-    guest = resolveGuest()
+  const owner: ModeOwner = { requestId: options.requestId, identity, armed: false }
+  const intent = { enabled }
+  const isCurrent = (): boolean => intents.get(browserPageId) === intent
+  const admit = (): void => {
+    owners.set(browserPageId, owner)
+    intents.set(browserPageId, intent)
   }
-  if (!guest) {
-    return enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
-  }
-  return queueGrabModeOperation(browserPageId, async () => {
-    if (!isCurrentIntent()) {
-      return { ok: true }
+  return queueGrabModeOperation(
+    browserPageId,
+    async (signal) => {
+      let guest = resolveGuest()
+      if (!guest && enabled && waitForGuest) {
+        await waitForGuest(signal).catch(() => {})
+        guest = resolveGuest()
+      }
+      if (!guest && owners.get(browserPageId) === owner) {
+        // No page to arm (it closed, or the wait gave up): nothing will ever retire this owner.
+        owners.delete(browserPageId)
+      }
+      if (!isCurrent() || signal.aborted) {
+        return supersededGrabMode()
+      }
+      if (!guest) {
+        return enabled ? supersededGrabMode() : { ok: true, clean: false }
+      }
+      owner.scope = grabDocumentScope(guest)
+      const success = await browserManager.setGrabMode(
+        browserPageId,
+        enabled,
+        guest,
+        options.destination,
+        () => resolveGuest() === guest,
+        signal,
+        () => {
+          if (owners.get(browserPageId) === owner) {
+            options.onPolicyRetired?.()
+          }
+        },
+        options.paletteKeys
+      )
+      if (!isCurrent() || signal.aborted) {
+        return supersededGrabMode()
+      }
+      owner.armed = success && enabled
+      // Still inside this admission: a later arm waits for the capture and supersedes its result.
+      if (success && !enabled && options.afterClean) {
+        const captured = await options.afterClean(guest, signal)
+        if (
+          !captured ||
+          !isCurrent() ||
+          signal.aborted ||
+          owner.scope?.current !== true ||
+          owner.scope !== grabDocumentScope(guest) ||
+          resolveGuest() !== guest
+        ) {
+          return supersededGrabMode()
+        }
+      }
+      return success ? { ok: true, clean: !enabled } : { ok: false, reason: 'injection-failed' }
+    },
+    admit
+  ).finally(() => {
+    if (isCurrent()) {
+      intents.delete(browserPageId)
     }
-    const current = resolveGuest()
-    if (!current) {
-      return enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
-    }
-    const success = await browserManager.setGrabMode(browserPageId, enabled, current)
-    if (!isCurrentIntent()) {
-      return { ok: true }
-    }
-    return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
   })
+}
+
+/** Draw's page image of the very document and guest this request cleaned, never one a later arm touched. */
+export async function captureCleanBrowserPage(
+  browserPageId: string,
+  resolveGuest: () => Electron.WebContents | null,
+  options: ModeOptions = {}
+): Promise<BrowserCleanPageCapture | null> {
+  let image: BrowserCleanPageCapture | null = null
+  const result = await setBrowserGrabMode(browserPageId, false, resolveGuest, undefined, {
+    ...options,
+    afterClean: async (guest, signal) => {
+      image = await browserManager.captureCleanPage(guest, signal)
+      return image !== null
+    }
+  })
+  return result.ok && result.clean === true ? image : null
+}
+
+export function isCurrentBrowserGrabRequest(
+  browserPageId: string,
+  guest: Electron.WebContents,
+  requestId: string | undefined,
+  identity: string
+): boolean {
+  if (requestId === undefined) {
+    return true
+  }
+  const owner = owners.get(browserPageId)
+  return (
+    owner?.requestId === requestId &&
+    owner.identity === identity &&
+    owner.armed &&
+    owner.scope?.current === true &&
+    owner.scope === grabDocumentScope(guest)
+  )
+}
+
+export function cancelBrowserGrabMode(
+  browserPageId: string,
+  resolveGuest: () => Electron.WebContents | null,
+  requestId: string | undefined,
+  identity: string
+): boolean {
+  const owner = owners.get(browserPageId)
+  const guest = resolveGuest()
+  if (requestId !== undefined) {
+    if (!owner || owner.requestId !== requestId || owner.identity !== identity) {
+      return false
+    }
+  } else if (!guest) {
+    return false
+  }
+  const admission = grabModeOperationByPageId.get(browserPageId)
+  if (admission) {
+    retireGrabModeAdmission(admission)
+  }
+  intents.delete(browserPageId)
+  if (owner?.scope) {
+    retireGrabOverlay(owner.scope)
+  }
+  owners.delete(browserPageId)
+  // A request-bound cancel reaches page work only on the registration that request bound.
+  if (
+    requestId === undefined ||
+    (guest && owner?.scope?.current === true && owner.scope === grabDocumentScope(guest))
+  ) {
+    browserManager.cancelGrabOp(browserPageId, 'user')
+  }
+  return true
 }

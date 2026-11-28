@@ -96,6 +96,9 @@ export const CONNECTOR_LIMITS = {
   maxBotShares: 50,
   // A bot's purpose, as its owner wrote it, in its hello and on a teammate's share list.
   maxBotPurposeLength: 1000,
+  // An agent card's ids (mascot, color, outfit, service) and how many services it lists.
+  maxAgentCardIdLength: 32,
+  maxAgentCardServices: 8,
   maxShareEmailLength: 254,
   // One held message, sealed and in base64, with room for its request beside it under maxRequestBytes.
   maxHeldMessageChars: 1024 * 1024 - 4 * 1024,

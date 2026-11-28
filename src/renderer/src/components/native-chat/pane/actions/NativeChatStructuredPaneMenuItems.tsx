@@ -1,5 +1,4 @@
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useMemo } from 'react'
 import { PanelBottomClose, PanelRightClose, X } from 'lucide-react'
 import {
   DropdownMenuItem,
@@ -8,10 +7,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { NativeChatProviderSessionIdMenuItem } from './NativeChatProviderSessionIdMenuItem'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
 import { useStructuredChatPaneActions } from './use-structured-chat-pane-actions'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export function NativeChatStructuredPaneMenuItems({
   pane,
@@ -28,10 +27,7 @@ export function NativeChatStructuredPaneMenuItems({
   const actions = useStructuredChatPaneActions(pane.tabId, pane.worktreeId, pane.groupId)
   const closeShortcut = useShortcutLabel('tab.close')
   // Why: hashing the key inside the selector would rerun it on every store write.
-  const paneKey = useMemo(
-    () => structuredAgentSessionPaneKey(pane.tabId, pane.sessionId),
-    [pane.tabId, pane.sessionId]
-  )
+  const paneKey = chatPaneKey(pane.sessionId)
   const providerSessionId = useAgentStatus(paneKey)?.providerSession?.id
   return (
     <>

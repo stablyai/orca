@@ -3,7 +3,7 @@
 // agent), and takes them back out when the server goes, is turned off for the agent, or the consent
 // is withdrawn. Entries another Orca or the user owns are never touched. With the switch off, nothing
 // is written; entries left from before answer as servers with no tools.
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -12,7 +12,10 @@ import { MCP_FILE_AGENTS, type McpFileAgent } from '../../../shared/mcp-servers/
 import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-launcher'
 import {
   readAgentConfigText,
-  writeAgentConfigIfUnchanged
+  removeAgentConfigIfUnchanged,
+  restoreHeldAgentConfig,
+  writeAgentConfigIfUnchanged,
+  type AgentConfigRemoval
 } from '../agent-configs/agent-config-file-write'
 import {
   agentMcpConfigLocations,
@@ -25,6 +28,7 @@ import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import {
   mcpAgentFileEntry,
   mcpAgentFileEntryName,
+  mcpAgentFileHeldPath,
   mcpAgentFileMarkers,
   mcpHostServerNameOfEntry,
   type McpAgentFileEntry
@@ -135,6 +139,11 @@ async function syncFileOnce(
   deps: McpAgentFileSyncDeps
 ): Promise<boolean> {
   const record = (await deps.ledger.read()).files[path] ?? null
+  const held = mcpAgentFileHeldPath(path, deps.userDataPath)
+  if (record) {
+    // A removal that stopped mid-way (a quit or crash) left the file held: it goes back first.
+    await restoreHeldAgentConfig(held, path)
+  }
   // Without a record a JSON entry can't be told from the user's; a TOML block's markers still can.
   const nothingToDo = !record && wanted.size === 0
   if (nothingToDo && edit.format === 'json') {
@@ -193,7 +202,10 @@ async function syncFileOnce(
     added !== null && adding.size === 0 && created && isEmptyMcpAgentFile(edit, added)
       ? null
       : added
-  if (next !== current && !(await publish(path, next, current))) {
+  if (
+    next !== current &&
+    !(await publish(path, next, current, { held, emptyText: edit.format === 'toml' ? '' : '{}\n' }))
+  ) {
     return false
   }
   await deps.ledger.set(
@@ -218,7 +230,8 @@ async function syncFileOnce(
 async function publish(
   path: string,
   next: string | null,
-  current: string | null
+  current: string | null,
+  removal: AgentConfigRemoval
 ): Promise<boolean> {
   if (current === null) {
     await mkdir(dirname(path), { recursive: true })
@@ -232,14 +245,9 @@ async function publish(
       throw error
     }
   }
-  if (next === null) {
-    if ((await readAgentConfigText(path)) !== current) {
-      return false
-    }
-    await rm(path, { force: true })
-    return true
-  }
-  return await writeAgentConfigIfUnchanged(path, next, current)
+  return next === null
+    ? await removeAgentConfigIfUnchanged(path, current, removal)
+    : await writeAgentConfigIfUnchanged(path, next, current)
 }
 
 /**

@@ -1,4 +1,4 @@
-import { lstatSync, opendirSync, realpathSync } from 'node:fs'
+import { lstatSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { parentPort } from 'node:worker_threads'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
@@ -13,6 +13,7 @@ import type {
   CodexHistoryDiskUsageWorkerRequest,
   CodexHistoryDiskUsageWorkerResponse
 } from './codex-history-disk-usage-worker-protocol'
+import { openDirectorySync } from '../../../../shared/open-directory'
 
 // Sync calls on purpose: this file runs only on its worker thread, and per-file async stats would
 // cost ~50x more and occupy the libuv pool Electron main shares.
@@ -47,7 +48,7 @@ function addHistoryFolders(walk: Walk, home: string, folders: string[]): boolean
   folders.push(...HISTORY_FOLDERS.map((name) => join(home, name)))
   let handle
   try {
-    handle = opendirSync(home)
+    handle = openDirectorySync(home)
   } catch (error) {
     noteFailure(walk, error)
     return true
@@ -91,7 +92,7 @@ function walkFolder(
   // mid-listing would otherwise send the stats below outside history.
   const found: { key: string; bytes: number }[] = []
   let withinBudget = true
-  const handle = opendirSync(dir)
+  const handle = openDirectorySync(dir)
   try {
     for (let child = handle.readSync(); child; child = handle.readSync()) {
       // Out of budget mid-folder: stop listing, but keep what this folder already counted.

@@ -8,6 +8,10 @@ import {
   type AgentSessionRewindInput
 } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import { sayNativeChatRewind } from './native-chat-rewind-copy'
+import {
+  useNativeChatViewGuard,
+  useNativeChatViewGuardRef
+} from '../../pane/ownership/native-chat-view-memory'
 import type {
   CaptureStructuredAgentSessionPresentation,
   StructuredAgentSessionWriteOutcome
@@ -28,9 +32,18 @@ export type RewindInput = Omit<
   }) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>
 }
 
+// Kept with the chat tab and its conversation: a view released mid-rewind returns still refusing sends, and a
+// late reply for a replaced conversation never blocks the new one.
 const useAgentSessionRewind = createAgentSessionRewindHook(
   { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState },
-  sayNativeChatRewind
+  sayNativeChatRewind,
+  {
+    useGuardRef: (name, initial) => useNativeChatViewGuardRef(`rewind-${name}`, initial),
+    useGuardState: (name, initial) => {
+      const [value, set] = useNativeChatViewGuard(`rewind-${name}`, initial)
+      return [value, set]
+    }
+  }
 )
 const notify = { error: toast.error, message: toast.message }
 

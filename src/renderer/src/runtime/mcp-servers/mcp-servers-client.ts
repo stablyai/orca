@@ -9,7 +9,12 @@ import type {
   McpServer,
   McpServerWorkspaces
 } from '../../../../shared/mcp-servers/mcp-servers'
+import {
+  emitMcpServersChangedWindowEvent,
+  onMcpServersChanged
+} from '@/lib/mcp-servers-changed-window-event'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { getRuntimeTargetHostId } from '../rpc/targets/runtime-client-target'
 import { RuntimeRpcCallError } from '../rpc/calls/runtime-rpc-result'
 
 /** A server as a later host may send it: `plugin` names the plugin that contributes it. */
@@ -45,8 +50,30 @@ function call<T>(
   return callRuntimeRpc<T>(target, `mcpServers.${method}`, params)
 }
 
-// Changes need no local re-read: the host tells every client, this one included (mcpServersChanged).
-const change = call
+/**
+ * The host tells every client of a write (mcpServersChanged), but a change that writes nothing (a
+ * stale view's switch already set there) tells none: then the asking window re-reads its list itself.
+ */
+async function change<T>(
+  target: RuntimeClientTarget,
+  method: string,
+  params: McpCallParams = {}
+): Promise<T> {
+  const hostId = getRuntimeTargetHostId(target)
+  let told = false
+  const stop = onMcpServersChanged(() => {
+    told = true
+  }, hostId)
+  try {
+    const result = await call<T>(target, method, params)
+    if (!told) {
+      emitMcpServersChangedWindowEvent(hostId)
+    }
+    return result
+  } finally {
+    stop()
+  }
+}
 
 const served = (server: { server: McpServerView }): McpServerView => server.server
 
@@ -110,9 +137,10 @@ export async function setMcpServerAgent(
 export async function setMcpServerWorkspaces(
   target: RuntimeClientTarget,
   id: string,
-  workspaces: McpServerWorkspaces
+  workspaces: McpServerWorkspaces,
+  base: McpServerWorkspaces
 ): Promise<McpServerView> {
-  return served(await change(target, 'setWorkspaces', { id, workspaces }))
+  return served(await change(target, 'setWorkspaces', { id, workspaces, base }))
 }
 
 export async function setMcpServerSharedProcess(
@@ -127,13 +155,17 @@ export async function signOutMcpServer(target: RuntimeClientTarget, id: string):
   await change(target, 'signOut', { id })
 }
 
-/** Move takes the server out of the agents' own files (with a backup); copy leaves them as they are. */
+/**
+ * Move takes the server out of the agents' own files (with a backup); copy leaves them as they are.
+ * A Move names the agents its confirm showed, so the host takes it out of no other.
+ */
 export async function importMcpServer(
   target: RuntimeClientTarget,
-  key: string,
+  server: Pick<DiscoveredMcpServer, 'key' | 'removesFrom'>,
   mode: 'move' | 'copy'
 ): Promise<McpServerView> {
-  return served(await change(target, mode, { key }))
+  const confirmed = mode === 'move' && server.removesFrom ? { agents: server.removesFrom } : {}
+  return served(await change(target, mode, { key: server.key, ...confirmed }))
 }
 
 export async function allowMcpAgentFile(
@@ -147,14 +179,26 @@ export async function allowMcpAgentFile(
 }
 
 /** What each server's check found, by server id; starts the servers, so once per page. */
+/**
+ * `agent`: whose CLI runs the check (Claude Code or Codex; the host picks Claude Code otherwise).
+ * `ids`: check only these servers. `requestId`: lets `cancelMcpServerProblems` end only this check.
+ */
 export async function readMcpServerProblems(
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  scope: { agent?: string; ids?: readonly string[]; requestId?: string } = {}
 ): Promise<Record<string, BotToolProblem>> {
-  return (await call<{ problems: Record<string, BotToolProblem> }>(target, 'problems')).problems
+  const { agent, ids, requestId } = scope
+  const params = {
+    ...(agent === 'claude' || agent === 'codex' ? { agent } : {}),
+    ...(ids ? { ids } : {}),
+    ...(requestId ? { requestId } : {})
+  }
+  return (await call<{ problems: Record<string, BotToolProblem> }>(target, 'problems', params))
+    .problems
 }
 
-export function cancelMcpServerProblems(target: RuntimeClientTarget): void {
-  void call(target, 'cancelProblems').catch(() => {})
+export function cancelMcpServerProblems(target: RuntimeClientTarget, requestId?: string): void {
+  void call(target, 'cancelProblems', requestId ? { requestId } : {}).catch(() => {})
 }
 
 export type McpStaleSessions = { count: number; restartable: number }

@@ -19,6 +19,8 @@ export const EXECUTION_HOST_METHODS = [
   'orcaAccount.status',
   'orcaAccount.subscribe',
   'orcaAccount.unsubscribe',
+  // A relayed phone asks the server itself for its own pairing; the server refuses any other caller.
+  'pairing.delegatedMobileDevice.createOffer',
   'ui.getJiraQuickFilters',
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',
@@ -102,9 +104,18 @@ export const EXECUTION_HOST_METHODS = [
   'files.readTerminalArtifactChunk',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  // Files explorer search inside file contents; the host trims the reply to the phone's content budget.
+  'files.search',
   'files.searchPaths',
+  // Upload into a workspace folder (files.upload.staged.v1): bytes stage outside the worktree, the commit never replaces a file.
+  'files.uploadBegin',
+  'files.saveChunk',
+  'files.uploadCommit',
+  'files.saveAbort',
   'files.stat',
   'files.statTerminalArtifact',
+  // Phone edits of workspace files; the host's disk precondition refuses a save over a newer desktop change.
+  'files.writeIfUnchanged',
   'files.writeTerminalArtifact',
   // A folder row's Delete removes the Orca workspace on its host, as desktop's Remove Workspace does.
   'folderWorkspace.delete',
@@ -279,6 +290,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.createAgentSession',
   'terminal.ensureAgentSession',
   'terminal.focus',
+  'terminal.inspectProcess',
   'terminal.isRunningAgent',
   'terminal.list',
   'terminal.multiplex',

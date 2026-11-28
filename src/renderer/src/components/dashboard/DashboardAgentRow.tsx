@@ -5,6 +5,7 @@ import {
   viewClaudeAgentFromRow
 } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { useClaudeAgentRowView } from './rows/use-claude-agent-row-view'
+import { useAgentSendTargetRow } from './rows/use-agent-send-target-row'
 import {
   AgentStateDot,
   agentStateLabel,
@@ -152,26 +153,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     },
     [onActivate, agent]
   )
-  const handleSendTargetClickCapture = useCallback(
-    (e: React.MouseEvent) => {
-      if (!sendTargetStatus) {
-        return
-      }
-      const target = e.target
-      if (
-        target instanceof Element &&
-        target.closest('button, a, input, textarea, select, [role="button"]')
-      ) {
-        return
-      }
-      e.preventDefault()
-      e.stopPropagation()
-      if (sendTargetStatus === 'eligible') {
-        onSendTargetClick?.(agent.paneKey)
-      }
-    },
-    [agent.paneKey, onSendTargetClick, sendTargetStatus]
-  )
+  const sendTargetRow = useAgentSendTargetRow(agent.paneKey, sendTargetStatus, onSendTargetClick)
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
@@ -271,7 +253,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   return (
     // Why: no role="button" — nested interactive children (buttons, tooltip triggers) would violate ARIA nesting rules.
     <div
-      onClickCapture={handleSendTargetClickCapture}
+      onClickCapture={sendTargetRow.onClickCapture}
+      onMouseDown={sendTargetRow.onMouseDown}
       onClick={handleActivate}
       className={cn(
         // Why: named group scopes the X-reveal to this row, not every row in the card.

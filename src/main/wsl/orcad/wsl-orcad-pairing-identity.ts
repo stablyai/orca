@@ -3,6 +3,7 @@ import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import {
+  OrcadManagedIdentityError,
   orcadIdentityRefusal,
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
@@ -35,19 +36,33 @@ export async function resolveWslOrcadPairing(
     return verified(paired)
   }
   let pairingOffer = ''
-  await buildWithPairingRepair(
-    {
-      ...recovery,
-      ensure: async (environment) => {
-        pairingOffer = await verified(getPreferredPairingOffer(environment))
+  await withWslIdentityWording(launch.distro, () =>
+    buildWithPairingRepair(
+      {
+        ...recovery,
+        ensure: async (environment) => {
+          pairingOffer = await verified(getPreferredPairingOffer(environment))
+        }
+      },
+      recovery.environmentId,
+      async () => {
+        pairingOffer = await verified(paired)
       }
-    },
-    recovery.environmentId,
-    async () => {
-      pairingOffer = await verified(paired)
-    }
+    )
   )
   return pairingOffer
+}
+
+/** An enrolled WSL host's proven refusal names WSL causes and fixes (#49180); a guess stays as it was. */
+async function withWslIdentityWording(distro: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run()
+  } catch (error) {
+    const proven =
+      error instanceof OrcadManagedIdentityError &&
+      (error.sealed || error.kind === 'replaced-server')
+    throw proven ? OrcadManagedIdentityError.wslHostServer(distro, error) : error
+  }
 }
 
 async function verifyWslOrcadPairing(
@@ -58,6 +73,10 @@ async function verifyWslOrcadPairing(
 ): Promise<string> {
   const pairingOffer = tunneledOrcadPairingCode(launch.readiness, localPort, paired)
   const identity = await verifyIdentity(pairingOffer, launch.readiness)
+  // A reset, not a restart: the account's key differed before launch and the server serves another.
+  if (identity.verdict === 'foreign' && launch.pairedKeyChanged && servesOtherKey(launch, paired)) {
+    throw OrcadManagedIdentityError.wslHostKeyChanged(launch.distro, identity.detail)
+  }
   if (identity.verdict === 'foreign' || identity.verdict === 'unpaired') {
     throw orcadIdentityRefusal(launch.port, identity)
   }
@@ -67,6 +86,16 @@ async function verifyWslOrcadPairing(
     )
   }
   return pairingOffer
+}
+
+/** False only when the server's own startup offer names the paired key; unknown counts as other. */
+function servesOtherKey(
+  launch: Extract<WslOrcadLaunch, { outcome: 'ready' }>,
+  paired: PairingOffer | null
+): boolean {
+  const { pairing } = launch.readiness
+  const served = pairing.available ? parsePairingCode(pairing.url)?.publicKeyB64 : undefined
+  return !served || served !== paired?.publicKeyB64
 }
 
 /** Whether the server behind a WSL bridge is the orcad that published `readiness`. */

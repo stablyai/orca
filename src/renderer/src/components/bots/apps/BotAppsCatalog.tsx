@@ -18,6 +18,7 @@ import {
   useComposioBot
 } from '../composio/composio-client'
 import { ComposioSignInWait } from '../composio/ComposioSignInWait'
+import { composioKeyScopeOf, type ComposioKeyScope } from '../composio/composio-key-client'
 import { askBotInChat } from '../webhooks/ask-bot-in-chat'
 import { webhookSetUpDraft } from '../webhooks/use-webhooks-connector'
 import {
@@ -46,8 +47,14 @@ export type BotAppsStep =
   | { kind: 'webhooks' }
   | { kind: 'mcp'; app: Extract<BotDirectApp, { route: 'mcp' }> }
   | { kind: 'custom' }
-  | { kind: 'composio-account'; app?: ComposioPick }
-  | { kind: 'composio-wait'; app: ComposioPick; attempt: number; error: string | null }
+  | { kind: 'composio-account'; app?: ComposioPick; replacing?: ComposioKeyScope }
+  | {
+      kind: 'composio-wait'
+      app: ComposioPick
+      attempt: number
+      error: string | null
+      keyScope?: ComposioKeyScope | null
+    }
 
 /** Mounted only while the dialog shows, so each opening starts on All apps with an empty search. */
 export function BotAppsCatalog({
@@ -116,7 +123,13 @@ export function BotAppsCatalog({
   const connectComposio = (app: ComposioPick, attempt: number): void => {
     setStep({ kind: 'composio-wait', app, attempt, error: null })
     void connectComposioApp(bot, app.slug).catch((error: unknown) =>
-      setStep({ kind: 'composio-wait', app, attempt, error: botToolErrorMessage(error) })
+      setStep({
+        kind: 'composio-wait',
+        app,
+        attempt,
+        error: botToolErrorMessage(error),
+        keyScope: composioKeyScopeOf(error)
+      })
     )
   }
   // How an app signs in is the host's record of it, whichever list the row came from.
@@ -194,21 +207,22 @@ export function BotAppsCatalog({
       <ComposioAccountStep
         bot={bot}
         appName={app?.name}
+        replacing={step.replacing}
         onBack={back}
         onClose={close}
-        onSaved={() => {
+        onSaved={async () => {
           if (app) {
-            startComposio(app, true)
-          } else {
-            setStep(null)
-            setView('catalog')
+            await addComposio(app, true)
+            return
           }
+          setStep(null)
+          setView('catalog')
         }}
       />
     )
   }
   if (step?.kind === 'composio-wait') {
-    const { app, attempt } = step
+    const { app, attempt, keyScope } = step
     return (
       <>
         <BotAppStepHeader onBack={back} onClose={close} />
@@ -219,6 +233,11 @@ export function BotAppsCatalog({
           connectError={step.error}
           onDone={manage}
           onRetry={() => connectComposio(app, attempt + 1)}
+          onChangeKey={
+            keyScope
+              ? () => setStep({ kind: 'composio-account', app, replacing: keyScope })
+              : undefined
+          }
           onClose={close}
         />
       </>

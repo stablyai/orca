@@ -92,7 +92,6 @@ jobs:
     with:
       ref: ${{ needs.preflight.outputs.head_sha }}
       build_template: true
-      fast_runners: false
 
   build-hourly-mac:
     needs:
@@ -419,4 +418,3 @@ jobs:
       ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
       version: ${{ needs.build-hourly-mac.outputs.version }}
       orcad_template: true
-      fast_release: false

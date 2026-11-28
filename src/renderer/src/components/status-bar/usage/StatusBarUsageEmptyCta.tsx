@@ -46,6 +46,18 @@ export function StatusBarUsageEmptyCta({
     dismissUsageEmptyState()
   }, [dismissUsageEmptyState])
 
+  // Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable.
+  const hideButton = (
+    <EyeOffDismissButton
+      label={t(
+        'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
+        'Hide from status bar'
+      )}
+      onClick={handleHide}
+      className="-mr-1 -mt-0.5"
+    />
+  )
+
   return (
     <HoverCard openDelay={150} closeDelay={80}>
       <HoverCardTrigger asChild>
@@ -57,83 +69,83 @@ export function StatusBarUsageEmptyCta({
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
         >
           <BarChart3 className="size-3.5" />
-          <span>{label}</span>
+          {/* Why "--" when remote: an empty host is a placeholder like the chips' "--"; the card says why. */}
+          <span>{remoteOwner ? '--' : label}</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
-        <div className="space-y-2 text-xs leading-[1.45]">
-          <div className="flex items-start justify-between gap-2">
-            <div className="font-semibold text-foreground">
-              {remoteOwner
-                ? t(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.remoteTitle',
-                    'Usage on {{host}}',
-                    { host: remoteOwner.label }
-                  )
-                : t(
-                    'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
-                    'Agent usage limits'
-                  )}
+        {remoteOwner ? (
+          // Why this short: the bar already says the workspace is remote; the card names the host and the fix.
+          <div className="text-xs leading-[1.45]">
+            <div className="flex items-center gap-2">
+              <div
+                className="min-w-0 flex-1 truncate font-semibold text-foreground"
+                title={remoteOwner.label}
+              >
+                {remoteOwner.label}
+              </div>
+              {hideButton}
             </div>
-            {/* Mirror the setup-guide dismiss control so hiding this teaching CTA stays recognizable. */}
-            <EyeOffDismissButton
-              label={t(
-                'auto.components.status.bar.StatusBarUsageEmptyCta.9a542f46c7',
-                'Hide from status bar'
-              )}
-              onClick={handleHide}
-              className="-mr-1 -mt-0.5"
-            />
-          </div>
-          {remoteOwner ? (
-            <p className="text-muted-foreground">
+            <p className="mt-1 text-muted-foreground">
               {t(
-                'auto.components.status.bar.StatusBarUsageEmptyCta.remoteBody',
-                "This workspace runs on {{host}}, so the bar shows that host's usage. Sign in to an agent there, or focus a local workspace to see this computer's usage.",
-                { host: remoteOwner.label }
+                'auto.components.status.bar.StatusBarUsageEmptyCta.remoteNoUsageYet',
+                'No usage yet. Sign in there.'
               )}
             </p>
-          ) : (
-            <>
-              <p className="text-muted-foreground">
+            <div className="mt-2.5 flex justify-end">
+              <Button
+                type="button"
+                variant="default"
+                size="xs"
+                disabled={getUsageOwnerHostScope(remoteOwner) === null}
+                onClick={handleOpenSettings}
+              >
+                {t('auto.components.status.bar.StatusBarUsageEmptyCta.remoteAccounts', 'Accounts')}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 text-xs leading-[1.45]">
+            <div className="flex items-start justify-between gap-2">
+              <div className="font-semibold text-foreground">
                 {t(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
-                  'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
+                  'auto.components.status.bar.StatusBarUsageEmptyCta.84c3b15dca',
+                  'Agent usage limits'
                 )}
-              </p>
-              {/* Name the provider set so setup does not imply support for only one agent. */}
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <span>
-                  {t('auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811', 'Supports:')}
-                </span>
-                <ClaudeIcon size={13} />
-                <OpenAIIcon size={13} />
-                <AgentIcon agent="antigravity" size={13} />
-                <OpenCodeGoIcon size={13} />
-                <AgentIcon agent="kimi" size={13} />
               </div>
-            </>
-          )}
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            disabled={getUsageOwnerHostScope(remoteOwner) === null}
-            onClick={handleOpenSettings}
-            className="mt-0.5 h-7 w-full text-xs"
-          >
-            {remoteOwner
-              ? t(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.remoteOpenAccounts',
-                  'Open {{host}} accounts',
-                  { host: remoteOwner.label }
-                )
-              : t(
-                  'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
-                  'Connect an account'
-                )}
-          </Button>
-        </div>
+              {hideButton}
+            </div>
+            <p className="text-muted-foreground">
+              {t(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.97957ad3a3',
+                'Connect your AI provider accounts to see their usage in real time and easily switch between accounts.'
+              )}
+            </p>
+            {/* Name the provider set so setup does not imply support for only one agent. */}
+            <div className="flex items-center gap-1.5 text-muted-foreground">
+              <span>
+                {t('auto.components.status.bar.StatusBarUsageEmptyCta.caa0f39811', 'Supports:')}
+              </span>
+              <ClaudeIcon size={13} />
+              <OpenAIIcon size={13} />
+              <OpenCodeGoIcon size={13} />
+              <AgentIcon agent="kimi" size={13} />
+            </div>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              disabled={getUsageOwnerHostScope(remoteOwner) === null}
+              onClick={handleOpenSettings}
+              className="mt-0.5 h-7 w-full text-xs"
+            >
+              {t(
+                'auto.components.status.bar.StatusBarUsageEmptyCta.828c764a79',
+                'Connect an account'
+              )}
+            </Button>
+          </div>
+        )}
       </HoverCardContent>
     </HoverCard>
   )

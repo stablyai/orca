@@ -29,7 +29,7 @@ import {
   chatAsksNoApprovals,
   savedChatPermissionMode
 } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { botMembersFrom, type Bot } from '../../../../../shared/bot-types'
+import { botMembersFrom, tidyUpSupported, type Bot } from '../../../../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../../../../shared/bots/bot-look-around'
 import { botTidyUp } from '../../../../../shared/bots/bot-tidy-up'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
@@ -112,20 +112,22 @@ function ScheduleGroup({
   const tidyUpTitle = t('settings.bots.tidyUp.title', 'Memory upkeep')
   return (
     <SettingsInsetGroup title={t('bots.settingsView.schedule', 'Schedule')}>
-      <SettingsInsetRow
-        icon={<Eye />}
-        title={lookAroundTitle}
-        value={lookAroundValue(lookAround)}
-        page="look-around"
-        onOpen={() => open('look-around')}
-        end={
-          <BotSettingsSwitch
-            checked={lookAround.on}
-            aria-label={lookAroundTitle}
-            onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
-          />
-        }
-      />
+      {lookAroundSupported(bot.agent) ? (
+        <SettingsInsetRow
+          icon={<Eye />}
+          title={lookAroundTitle}
+          value={lookAroundValue(lookAround)}
+          page="look-around"
+          onOpen={() => open('look-around')}
+          end={
+            <BotSettingsSwitch
+              checked={lookAround.on}
+              aria-label={lookAroundTitle}
+              onCheckedChange={() => void update({ lookAround: { on: !lookAround.on } })}
+            />
+          }
+        />
+      ) : null}
       <SettingsInsetRow
         icon={<Moon />}
         title={tidyUpTitle}
@@ -378,9 +380,7 @@ export function BotSettingsRoot({
           }
         />
       </SettingsInsetGroup>
-      {lookAroundSupported(bot.agent) ? (
-        <ScheduleGroup bot={bot} update={update} open={open} />
-      ) : null}
+      {tidyUpSupported(bot.agent) ? <ScheduleGroup bot={bot} update={update} open={open} /> : null}
       <BotItemsSettingsGroup bot={bot} update={update} />
       {home ? <SoulAndMemoryGroup home={home} open={open} /> : null}
       <AccessGroup bot={bot} open={open} />

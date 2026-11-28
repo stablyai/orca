@@ -4,7 +4,9 @@ import { useAppStore } from '@/store'
 import { onBotsChanged } from '@/lib/bots-changed-window-event'
 import { botRefKey, botTarget } from '@/lib/bot-hosts'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { findFolderWorkspaceRecord } from '@/store/folder-workspaces/folder-workspace-record-index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   AUTOMATIONS_CHANGED_EVENT,
   automationsChangedWindowDetail
@@ -20,11 +22,29 @@ export {
   type BotReadSettled
 } from './bot-host-read-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const NO_SUBSCRIPTION = (): (() => void) => () => {}
 /** The changes the store sees first: a read of none of them (items) re-reads on its host's notices only. */
 const CHAT_KINDS: readonly BotChangeKind[] = ['chats', 'status', 'threads']
+
+const externalConversationsKeys = new WeakMap<
+  NonNullable<FolderWorkspace['externalConversations']>,
+  string
+>()
+
+function externalConversationsKey(links: FolderWorkspace['externalConversations']): string {
+  if (!links || links.length === 0) {
+    return ''
+  }
+  const cached = externalConversationsKeys.get(links)
+  if (cached !== undefined) {
+    return cached
+  }
+  const key = links.map((link) => link.sessionId ?? link.paneKey).join('|')
+  externalConversationsKeys.set(links, key)
+  return key
+}
 
 /** The read's latest value for the bot, re-read whenever its chats, threads, Home chat or work change;
  *  null until the first read lands, or with no bot. `select` (stable) picks what the caller observes,
@@ -39,8 +59,8 @@ export function useBotHostRead<T, S = T>(
   const key = bot ? botRefKey(bot) : null
   const workspaceId = bot ? folderWorkspaceKey(bot.folderWorkspaceId) : null
   const chatSessionId = bot?.chatSessionId ?? null
-  const chatPaneKey = useMemo(
-    () => (chatSessionId ? structuredAgentSessionStatusPaneKey(chatSessionId) : null),
+  const statusPaneKey = useMemo(
+    () => (chatSessionId ? chatPaneKey(chatSessionId) : null),
     [chatSessionId]
   )
   // A new chat, thread or turn of the Home chat re-reads at once, for a read that shows them.
@@ -52,18 +72,17 @@ export function useBotHostRead<T, S = T>(
           .join('|')
       : ''
   )
+  const folderWorkspaceId = bot?.folderWorkspaceId ?? null
   const threadsKey = useAppStore((s) =>
-    followsChats && bot
-      ? (
-          selectFolderWorkspaces(s).find((workspace) => workspace.id === bot.folderWorkspaceId)
-            ?.externalConversations ?? []
+    followsChats && folderWorkspaceId
+      ? externalConversationsKey(
+          findFolderWorkspaceRecord(selectFolderWorkspaces(s), folderWorkspaceId)
+            ?.externalConversations
         )
-          .map((link) => link.sessionId ?? link.paneKey)
-          .join('|')
       : ''
   )
   const chatState = useAppStore((s) =>
-    followsChats && chatPaneKey ? s.agentStatusByPaneKey.get(chatPaneKey)?.state : undefined
+    followsChats && statusPaneKey ? s.agentStatusByPaneKey.get(statusPaneKey)?.state : undefined
   )
   const subscribe = useCallback(
     (listener: () => void) =>

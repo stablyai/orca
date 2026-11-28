@@ -25,11 +25,13 @@ export async function getConfiguredPushHead(
   repoPath: string,
   branchName: string,
   connectionId: string | null | undefined,
-  localGitOptions: HostedReviewLocalGitOptions
+  localGitOptions: HostedReviewLocalGitOptions,
+  // Manual refresh re-reads only the branch's Git config; owner/repo identity caches stay independent.
+  force = false
 ): Promise<BranchHead | null> {
   let source: Awaited<ReturnType<typeof getReviewBranchSource>>
   try {
-    source = await getReviewBranchSource(repoPath, branchName, connectionId, localGitOptions)
+    source = await getReviewBranchSource(repoPath, branchName, connectionId, localGitOptions, force)
   } catch {
     return null
   }
@@ -72,13 +74,15 @@ export async function getTrackedUpstreamHead(
   branchName: string,
   connectionId: string | null | undefined,
   localGitOptions: HostedReviewLocalGitOptions,
-  originHeadRepo: OwnerRepo | null
+  originHeadRepo: OwnerRepo | null,
+  force = false
 ): Promise<BranchHead | null> {
   const upstreamBranch = await getTrackedUpstreamBranch(
     repoPath,
     branchName,
     connectionId,
-    localGitOptions
+    localGitOptions,
+    force
   )
   if (!upstreamBranch) {
     return null

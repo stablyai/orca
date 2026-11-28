@@ -1,8 +1,9 @@
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { styles } from '../../mobile-native-chat-view-styles'
+import { stylesSheet } from '../../mobile-native-chat-view-styles'
 import type { MobileNativeChatInputLockReason } from '../../MobileNativeChatView'
 import type { MobileNativeChatHostOutage } from '../../status/mobile-native-chat-host-outage'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 /** The line above a locked composer: why it waits, or which host is out. */
 export function MobileNativeChatInputLockStatus({
@@ -14,6 +15,7 @@ export function MobileNativeChatInputLockStatus({
   waitingText: string
   hostOutage: MobileNativeChatHostOutage | null
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const outage = lockReason === 'disconnected' ? hostOutage : null
   const text = lockReason === 'waiting' ? waitingText : (outage?.text ?? null)

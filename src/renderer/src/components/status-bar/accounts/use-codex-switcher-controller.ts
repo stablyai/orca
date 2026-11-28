@@ -154,10 +154,9 @@ export function useCodexSwitcherController(
       }
     } catch (error) {
       console.error('Failed to switch Codex account from status bar:', error)
-    } finally {
-      if (mountedRef.current) {
-        setIsSwitching(false)
-      }
+    }
+    if (mountedRef.current) {
+      setIsSwitching(false)
     }
   }
 

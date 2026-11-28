@@ -32,16 +32,17 @@ export function MobileAgentSessionTabActionSheet({
   return (
     <ActionSheetModal
       visible={tab != null}
-      {...mobileSessionTabMenuHeader(tab, controller.terminals)}
+      {...mobileSessionTabMenuHeader(tab, controller.terminals, t)}
       groupDestructive
       title={forked ? <MobileForkMarkedName name={title} /> : title}
-      titleAccessibilityLabel={forked ? mobileForkAccessibleName(title) : undefined}
+      titleAccessibilityLabel={forked ? mobileForkAccessibleName(title, t) : undefined}
       actions={[
         ...getMobileNativeChatCliForkActions({
           controller,
           tab,
           workspaceOnPairedHost,
-          onDismiss: dismiss
+          onDismiss: dismiss,
+          t
         }),
         ...workerActions,
         ...closeWithBulkActions(tab, dismiss)

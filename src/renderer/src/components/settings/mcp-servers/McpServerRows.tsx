@@ -12,7 +12,10 @@ import {
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { BotToolLogo } from '@/components/bots/apps/BotToolAppRow'
-import type { DiscoveredMcpServer } from '../../../../../shared/mcp-servers/mcp-servers'
+import {
+  mcpMoveRemovesFrom,
+  type DiscoveredMcpServer
+} from '../../../../../shared/mcp-servers/mcp-servers'
 import type { McpRowStatus } from './mcp-server-words'
 import { mcpAgentLabel, mcpServerTitle } from './mcp-server-words'
 
@@ -128,7 +131,10 @@ function shortPath(path: string): string {
   return path.replace(HOME_PREFIX, '~')
 }
 
-/** A server set up in the host's agents: Move to Orca, or from ⋯, copy it or open its files. */
+/**
+ * A server set up in the host's agents: Move to Orca, or from ⋯, copy it or open its files. When
+ * Orca's list reaches none of its agents, Move would take nothing out, so the row offers Copy.
+ */
 export function McpDiscoveredRow({
   server,
   busy,
@@ -145,6 +151,7 @@ export function McpDiscoveredRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const title = mcpServerTitle(server.name)
+  const moves = mcpMoveRemovesFrom(server).length > 0
   // A row lists them ("Claude Code, Codex"); the group's summary says them as a sentence.
   const agents = server.agents.map(mcpAgentLabel).join(', ')
   const line =
@@ -163,11 +170,13 @@ export function McpDiscoveredRow({
           <span className="block truncate text-xs leading-4 text-muted-foreground">{line}</span>
         </span>
         {server.movable ? (
-          <Button variant="outline" size="sm" disabled={busy} onClick={onMove}>
-            {t('settings.mcpServers.found.move', 'Move to Orca')}
+          <Button variant="outline" size="sm" disabled={busy} onClick={moves ? onMove : onCopy}>
+            {moves
+              ? t('settings.mcpServers.found.move', 'Move to Orca')
+              : t('settings.mcpServers.found.copy', 'Copy to Orca')}
           </Button>
         ) : null}
-        {server.movable || (onOpenFile && server.files.length > 0) ? (
+        {(server.movable && moves) || (onOpenFile && server.files.length > 0) ? (
           <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
@@ -182,7 +191,7 @@ export function McpDiscoveredRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {server.movable ? (
+              {server.movable && moves ? (
                 <>
                   <DropdownMenuItem onSelect={onCopy}>
                     <Copy />

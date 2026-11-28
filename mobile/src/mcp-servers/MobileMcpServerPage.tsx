@@ -4,17 +4,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, type HostInstance } from 'react-native'
 import { LogOut, MoreHorizontal, RefreshCw } from 'lucide-react-native'
 import type { BotToolDetails } from '../../../src/shared/bot-tools'
+import { botToolSignInUnreadable } from '../../../src/shared/bot-tool-sign-in'
 import { ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, pressedStyle } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   mcpServerDetailsRead,
@@ -42,7 +43,8 @@ export function MobileMcpServerPage(props: {
   onSignIn: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  const styles = useThemedStyles(stylesSheet)
   const { server, actions, list } = props
   const title = mcpServerTitle(server)
   const details = useServerDetails(props.client, server)
@@ -53,8 +55,10 @@ export function MobileMcpServerPage(props: {
   const locked = !props.online
   const agents = props.agents ?? []
   const off = agents.filter((agent) => server.agentsOff.includes(agent))
+  const unreadable = botToolSignInUnreadable(signIn)
+  // An entry that doesn't open has no sign-in to sign out of; the footer signs in over it.
   const menu =
-    signIn && signIn.state !== 'signed-out'
+    signIn && signIn.state !== 'signed-out' && !unreadable
       ? [
           {
             id: 'again',
@@ -76,7 +80,7 @@ export function MobileMcpServerPage(props: {
     <ListRow
       key="workspaces"
       title={t('mcpServers.workspaces', 'Workspaces')}
-      value={mcpWorkspacesValue(server.workspaces, props.workspaceNames, t)}
+      value={mcpWorkspacesValue(server.workspaces, props.workspaceNames, t, intlLocale)}
       navigates
       disabled={locked}
       onPress={props.onWorkspaces}
@@ -114,7 +118,13 @@ export function MobileMcpServerPage(props: {
           <ListRow
             key="account"
             title={t('mcpServers.account', 'Account')}
-            subtitle={needsSignIn ? t('mcpServers.needsSignIn', 'Needs sign-in') : undefined}
+            subtitle={
+              unreadable
+                ? t('mcpServers.unreadable', 'Saved sign-in or key can’t be opened. Sign in again.')
+                : needsSignIn
+                  ? t('mcpServers.needsSignIn', 'Needs sign-in')
+                  : undefined
+            }
             subtitleIcon={needsSignIn ? <McpStatusDot tone="amber" /> : undefined}
             value={needsSignIn ? undefined : t('mcpServers.signedIn', 'Signed in')}
           />
@@ -156,11 +166,17 @@ export function MobileMcpServerPage(props: {
               <ListRow
                 key={agent}
                 title={name}
-                subtitle={problem?.detail}
-                subtitleIcon={
-                  problem?.kind === 'blocked' ? <McpStatusDot tone="amber" /> : undefined
+                subtitle={
+                  problem?.kind === 'blocked' && agent === 'claude'
+                    ? t('mcpServers.agentBlocked', 'Blocked by your organization’s Claude settings')
+                    : problem?.detail
                 }
-                // The host's short line; two at most, as the org-policy one takes.
+                subtitleIcon={
+                  problem && problem.kind !== 'terminal-off' ? (
+                    <McpStatusDot tone="amber" />
+                  ) : undefined
+                }
+                // Two lines at most, as the org-policy one takes.
                 subtitleLines={2}
                 leading={<MobileAgentIcon agentId={agent} size={18} />}
                 accessory={
@@ -271,6 +287,6 @@ function useServerDetails(client: RpcClient | null, server: PhoneMcpServer): Bot
   return signsIn ? null : details
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   turnAllOn: { fontSize: 13, fontWeight: '600', color: colors.textPrimary }
 }))

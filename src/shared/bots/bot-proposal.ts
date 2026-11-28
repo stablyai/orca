@@ -1,3 +1,4 @@
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 // A new bot, proposed before it exists: by a template or by a bot's
 // `orca bot create --offer` card. The prefilled New bot dialog edits one, and bots.create makes it.
 import * as z from 'zod'
@@ -51,13 +52,15 @@ export const BotProposalSeedSchema = z.object({
 
 export type BotProposalSeed = z.infer<typeof BotProposalSeedSchema>
 
-export const BotProposalSchema = BotProposalSeedSchema.extend({
-  name: BotNameSchema,
-  /** A mascot id; absent, the new bot gets a random one. */
-  mascot: z.string().refine(isBotMascotId).optional(),
-  /** Workspaces it is made for: its first turn offers to take them over. */
-  worktrees: z.array(HandedWorkspaceSchema).max(HANDED_WORKSPACES_MAX).optional()
-})
+export const BotProposalSchema = lazyZodSchema(() =>
+  BotProposalSeedSchema.extend({
+    name: BotNameSchema,
+    /** A mascot id; absent, the new bot gets a random one. */
+    mascot: z.string().refine(isBotMascotId).optional(),
+    /** Workspaces it is made for: its first turn offers to take them over. */
+    worktrees: z.array(HandedWorkspaceSchema).max(HANDED_WORKSPACES_MAX).optional()
+  })
+)
 
 export type BotProposal = z.infer<typeof BotProposalSchema>
 
@@ -189,14 +192,16 @@ export function proposalSoul(name: string, seed: BotProposalSeed): string {
 
 export const BOT_CREATE_OFFER_PRESENTATION = 'bot-create-offer'
 
-export const BotCreateOfferSchema = z.object({
-  /** The bot that proposed it. */
-  botId: z.string().min(1),
-  /** This card's own id: creating from it, directly or through Edit, records the new bot against it. */
-  offerId: z.string().min(1),
-  proposal: BotProposalSchema,
-  offeredAt: z.number()
-})
+export const BotCreateOfferSchema = lazyZodSchema(() =>
+  z.object({
+    /** The bot that proposed it. */
+    botId: z.string().min(1),
+    /** This card's own id: creating from it, directly or through Edit, records the new bot against it. */
+    offerId: z.string().min(1),
+    proposal: BotProposalSchema,
+    offeredAt: z.number()
+  })
+)
 
 export type BotCreateOffer = z.infer<typeof BotCreateOfferSchema>
 

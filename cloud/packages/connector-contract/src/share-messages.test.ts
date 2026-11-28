@@ -157,6 +157,31 @@ describe('bot shares contract', () => {
     expect(listed({ ...share, botPurpose: 'x'.repeat(CONNECTOR_LIMITS.maxBotPurposeLength + 1) })).toBe(false)
   })
 
+  it('carries an optional card from the hello to the share list, and drops one that does not parse', () => {
+    const card = { mascot: 'H1', color: '#f4c4cf', outfit: 'tie', services: ['github', 'slack'] }
+    const helloCard = (agentCard: unknown) =>
+      ConnectorHelloRequestSchema.parse({ ...hello, bots: [{ ...bot, agentCard }] }).bots?.[0]?.agentCard
+    expect(helloCard(card)).toEqual(card)
+    expect(helloCard(undefined)).toBeUndefined()
+    // A card no reader understands costs only the card: the hello still lands.
+    expect(helloCard({ mascot: 'x'.repeat(CONNECTOR_LIMITS.maxAgentCardIdLength + 1) })).toBeUndefined()
+    expect(helloCard({ services: 'github' })).toBeUndefined()
+    const share = {
+      shareId: 's1',
+      botId: 'bot-1',
+      botName: 'Reviewer',
+      ownerName: 'Jinwoo Hong',
+      hostOnline: true,
+      state: 'needs-accept',
+      held: []
+    }
+    const listedCard = (agentCard: unknown) =>
+      ConnectorSharesMineSchema.parse({ v: 1, shares: [{ ...share, agentCard }] }).shares[0]?.agentCard
+    expect(listedCard(card)).toEqual(card)
+    expect(listedCard(undefined)).toBeUndefined()
+    expect(listedCard({ services: Array(CONNECTOR_LIMITS.maxAgentCardServices + 1).fill('github') })).toBeUndefined()
+  })
+
   it('names the shared account a person asked through, on a request and a trigger actor', () => {
     const asker = {
       userId: 'U0ALICE',

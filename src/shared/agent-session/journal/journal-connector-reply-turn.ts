@@ -66,6 +66,14 @@ export function connectorReplyTurnStamps(
   opener: AgentJournalRenderItem | null | undefined,
   turnItemId: string
 ): ConnectorReplyStamp[] {
+  return connectorReplyStampsOf(opener, journalTurnAnsweredMessages(journal, opener, turnItemId))
+}
+
+/** connectorReplyTurnStamps from the turn's already-read journalTurnAnsweredMessages. */
+export function connectorReplyStampsOf(
+  opener: AgentJournalRenderItem | null | undefined,
+  answered: readonly AgentJournalRenderItem[]
+): ConnectorReplyStamp[] {
   const stamps: ConnectorReplyStamp[] = []
   const seen = new Map<string, ConnectorReplyStamp>()
   // Copies, never the journal's own objects; the same delivery seen again keeps any owner proof.
@@ -84,7 +92,7 @@ export function connectorReplyTurnStamps(
   if (opener?.body.kind === 'message') {
     opener.body.connectorClaim?.origin.forEach(addStamp)
   }
-  for (const item of journalTurnAnsweredMessages(journal, opener, turnItemId)) {
+  for (const item of answered) {
     const body = item.body.kind === 'message' ? item.body : null
     if (body?.connectorDelivery) {
       const ownerAsked = body.asker?.role === 'owner'

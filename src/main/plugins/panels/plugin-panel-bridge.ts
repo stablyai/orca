@@ -23,8 +23,9 @@ import {
 import { normalizePluginErrorCode } from '../../../shared/plugins/frames/plugin-protocol'
 import type { PluginJsonValue } from '../../../shared/plugins/workers/plugin-host-api'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
-const PLUGIN_JSON_VALUE = z.json()
+const PLUGIN_JSON_VALUE = lazyZodSchema(() => z.json())
 import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 import { PluginHostCallError } from '../workers/host-api/plugin-host-call-scope'

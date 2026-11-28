@@ -1,4 +1,5 @@
 import { SIMULATOR_DEFAULT_TAB_LABEL } from '@/lib/simulator/tabs/simulator-tab-label'
+import type { EmulatorSelectionRequired } from '../../../../../shared/emulator/emulator-opening-preferences'
 
 export type SimulatorDeviceRow = {
   name: string
@@ -26,6 +27,12 @@ export type EmulatorStreamInfo = {
 export type EmulatorPaneSession = {
   attached: boolean
   info?: EmulatorStreamInfo
+}
+
+export type EmulatorPaneAttachResult = {
+  attached?: boolean
+  info?: EmulatorStreamInfo
+  selectionRequired?: EmulatorSelectionRequired
 }
 
 export type UseEmulatorPaneSessionArgs = {

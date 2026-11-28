@@ -1,7 +1,8 @@
 // What a server's row and page say: its title, its line, its status, and who it's on for.
 import type { Translate } from '@/i18n/use-translate'
 import type { BotToolProblem } from '../../../../../shared/bot-tools'
-import type { McpServer } from '../../../../../shared/mcp-servers/mcp-servers'
+import { botToolSignInUnreadable } from '../../../../../shared/bot-tool-sign-in'
+import type { McpAgentProblem, McpServer } from '../../../../../shared/mcp-servers/mcp-servers'
 import { MCP_SERVER_CATALOG } from '../../../../../shared/mcp-servers/mcp-server-catalog'
 import { botToolTitle } from '../../../../../shared/bots/bot-tool-labels'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
@@ -18,7 +19,8 @@ export function mcpServerLine(server: Pick<McpServer, 'detail' | 'transport'>): 
   return server.transport === 'http' ? server.detail.replace(/^https?:\/\//i, '') : server.detail
 }
 
-function urlHost(detail: string): string {
+/** A server address's host, for "Can’t reach …". */
+export function urlHost(detail: string): string {
   try {
     return new URL(detail).host
   } catch {
@@ -39,12 +41,23 @@ export function mcpServerNeedsSignIn(server: McpServer): boolean {
   return server.signIn !== undefined && server.signIn.state !== 'signed-in'
 }
 
+export function mcpServerUnreadable(server: McpServer): boolean {
+  return botToolSignInUnreadable(server.signIn)
+}
+
 export function mcpServerStatus(
   server: McpServer,
   problem: BotToolProblem | undefined,
   hostName: string,
   t: Translate
 ): McpRowStatus | null {
+  if (mcpServerUnreadable(server)) {
+    return {
+      label: t('settings.mcpServers.signInAgain', 'Sign in again'),
+      tone: 'attention',
+      replacesLine: false
+    }
+  }
   if (mcpServerNeedsSignIn(server) || (!server.signIn && problem?.kind === 'sign-in')) {
     return {
       label: t('settings.mcpServers.status.needsSignIn', 'Needs sign-in'),
@@ -116,6 +129,13 @@ export function mcpWorkspacesSummaryText(summary: McpWorkspacesSummary, t: Trans
         names: summary.names.join(', ')
       })
   }
+}
+
+/** An agent row's problem line: a blocked Claude line in the UI language; anything else in the host's words. */
+export function mcpAgentProblemText(agent: string, problem: McpAgentProblem, t: Translate): string {
+  return problem.kind === 'blocked' && agent === 'claude'
+    ? t('settings.mcpServers.agents.blocked', 'Blocked by your organization’s Claude settings')
+    : problem.detail
 }
 
 /** An agent as the host names it: Orca's label for one it knows, else the host's id. */

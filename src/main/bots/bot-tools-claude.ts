@@ -68,14 +68,14 @@ export async function claudeOwnServerNames(
   configDir: string | null,
   cwd: string
 ): Promise<string[]> {
-  const [user, local, project] = await Promise.all([
-    readClaudeInheritedTools(configDir),
-    readClaudeMirror(configDir, cwd),
+  // The account file holds both the user servers and the folder's local ones: one read serves both.
+  const [config, project] = await Promise.all([
+    readJson(claudeAccountConfigFile(configDir)),
     readJson(join(cwd, '.mcp.json'))
   ])
   return [
-    ...user.filter((tool) => !tool.plugin).map((tool) => tool.name),
-    ...Object.keys(local),
+    ...Object.keys(record(config.mcpServers)),
+    ...Object.keys(claudeMirrorIn(config, cwd)),
     ...Object.keys(record(project.mcpServers))
   ]
 }
@@ -133,7 +133,10 @@ export async function readClaudeMirror(
   configDir: string | null,
   folder: string
 ): Promise<Record<string, unknown>> {
-  const config = await readJson(claudeAccountConfigFile(configDir))
+  return claudeMirrorIn(await readJson(claudeAccountConfigFile(configDir)), folder)
+}
+
+function claudeMirrorIn(config: Record<string, unknown>, folder: string): Record<string, unknown> {
   return record(record(record(config.projects)[toClaudeTrustKey(folder, style)]).mcpServers)
 }
 

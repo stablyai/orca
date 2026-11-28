@@ -4,7 +4,11 @@ import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
-import type { ResumeToastView } from './native-chat-resume-toast-view'
+import {
+  resumeToastShowsDetails,
+  type ResumeToastRow,
+  type ResumeToastView
+} from './native-chat-resume-toast-view'
 import { NativeChatResumeToastRow } from './NativeChatResumeToastRow'
 
 export type NativeChatResumeToastProps = {
@@ -24,67 +28,75 @@ export type NativeChatResumeToastProps = {
   onClose: () => void
 }
 
-function headline(view: ResumeToastView, t: Translate, machineName?: string): string {
+/** Offer lines say why the agents stopped; the rest are one line, naming a lone agent. */
+function headline(
+  view: ResumeToastView,
+  t: Translate,
+  machine: string | undefined,
+  onlyName: string | undefined
+): string {
   const { phase, counts } = view
+  if (phase === 'offer') {
+    return stoppedHeadline(view, t, machine)
+  }
+  if (leftForPerson(view)) {
+    // Beside "M need you", a bare count keeps both outcomes whole at the narrowest width.
+    return counts.resumed === 0
+      ? needYouLine(view, t)
+      : t('auto.components.NativeChatResumeToast.resumedCount', 'Resumed {{count}}', {
+          count: counts.resumed,
+          defaultValue_one: 'Resumed {{count}}'
+        })
+  }
+  return progressLine(view, t, onlyName)
+}
+
+function needYouLine(view: ResumeToastView, t: Translate): string {
+  return t('auto.components.NativeChatResumeToast.needYou', '{{count}} need you', {
+    count: view.counts.needsYou,
+    defaultValue_one: '{{count}} needs you'
+  })
+}
+
+/** Agents left for the person (waiting on an approval) were never tried, so nothing failed. */
+function leftForPerson({ phase, counts }: ResumeToastView): boolean {
+  return phase === 'finished' && counts.failed === 0 && counts.needsYou > 0
+}
+
+function progressLine(view: ResumeToastView, t: Translate, onlyName: string | undefined): string {
+  const { phase, counts } = view
+  const name = { name: onlyName }
   if (phase === 'resuming') {
-    return machineName
-      ? t(
-          'auto.components.NativeChatResumeToast.resumingOn',
-          'Resuming {{count}} agents on {{machine}}…',
-          {
-            count: counts.resuming,
-            machine: machineName,
-            defaultValue_one: 'Resuming {{count}} agent on {{machine}}…'
-          }
-        )
+    return onlyName !== undefined
+      ? t('auto.components.NativeChatResumeToast.resumingOne', 'Resuming {{name}}…', name)
       : t('auto.components.NativeChatResumeToast.resuming', 'Resuming {{count}} agents…', {
           count: counts.resuming,
           defaultValue_one: 'Resuming {{count}} agent…'
         })
   }
-  if (phase === 'finished' && counts.needsYou === 0) {
-    if (machineName) {
-      return t(
-        'auto.components.NativeChatResumeToast.resumedOn',
-        'Resumed {{count}} agents on {{machine}}.',
-        {
-          count: counts.resumed,
-          machine: machineName,
-          defaultValue_one: 'Resumed {{count}} agent on {{machine}}.'
-        }
-      )
-    }
-    return view.interruptedByUpdate
-      ? t(
-          'auto.components.NativeChatResumeToast.resumedUpdate',
-          'Resumed {{count}} agents after the update.',
-          {
-            count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} agent after the update.'
-          }
-        )
+  if (counts.failed > 0) {
+    return onlyName !== undefined
+      ? t('auto.components.NativeChatResumeToast.failedOne', 'Couldn’t resume {{name}}', name)
       : t(
-          'auto.components.NativeChatResumeToast.resumedRestart',
-          'Resumed {{count}} agents after the restart.',
+          'auto.components.NativeChatResumeToast.failedSome',
+          'Couldn’t resume {{count}} of {{total}}',
           {
-            count: counts.resumed,
-            defaultValue_one: 'Resumed {{count}} agent after the restart.'
+            count: counts.failed,
+            total: counts.total,
+            defaultValue_one: 'Couldn’t resume {{count}} of {{total}}'
           }
         )
   }
-  if (phase === 'finished' && counts.resumed > 0) {
-    const text = t(
-      'auto.components.NativeChatResumeToast.partial',
-      'Resumed {{resumed}} of {{total}} agents. {{count}} need you.',
-      {
-        resumed: counts.resumed,
-        total: counts.total,
-        count: counts.needsYou,
-        defaultValue_one: 'Resumed {{resumed}} of {{total}} agents. {{count}} needs you.'
-      }
-    )
-    return machineName ? `${machineName}: ${text}` : text
-  }
+  return onlyName !== undefined
+    ? t('auto.components.NativeChatResumeToast.resumedOne', 'Resumed {{name}}', name)
+    : t('auto.components.NativeChatResumeToast.resumedMany', 'Resumed {{count}} agents', {
+        count: counts.resumed,
+        defaultValue_one: 'Resumed {{count}} agent'
+      })
+}
+
+function stoppedHeadline(view: ResumeToastView, t: Translate, machineName?: string): string {
+  const { counts } = view
   if (machineName) {
     return t(
       'auto.components.NativeChatResumeToast.stoppedOn',
@@ -130,7 +142,7 @@ function HeadlineIcon({ view }: { view: ResumeToastView }): React.JSX.Element {
   return <RotateCcw className="size-4 shrink-0 text-muted-foreground" />
 }
 
-/** The resume-on-restart report: one line, a Resume when nothing was sent, chats behind Details. */
+/** The resume-on-restart report: one line once resuming starts, any other agents behind Details. */
 export function NativeChatResumeToast({
   view,
   machineName,
@@ -157,27 +169,93 @@ export function NativeChatResumeToast({
       setMoreBelow(hasMoreBelow(listRef.current))
     }
   }, [expanded, rowCount])
+  const rowName = (row: ResumeToastRow): string =>
+    nameFor(
+      row.candidate.sessionId,
+      firstLine(row.candidate.latestPrompt) ||
+        t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
+    )
   const offering = view.phase === 'offer'
+  const onlyRow = rowCount === 1 ? view.rows[0] : undefined
+  const namesAgent = onlyRow !== undefined && !offering && !leftForPerson(view)
+  const title = headline(view, t, machineName, namesAgent ? rowName(onlyRow) : undefined)
   const showResume = offering && view.resumable.length > 0
+  const needYou = leftForPerson(view) && view.counts.resumed > 0 ? needYouLine(view, t) : undefined
+  const showRetry = view.phase === 'finished' && view.retryable.length > 0
+  const showDetails = resumeToastShowsDetails(view)
   const showDismissAll = onDismissAll !== undefined && offering
+  const detailsButton = showDetails && (
+    <Button
+      variant={offering ? 'ghost' : 'ghost-muted-disclosure'}
+      size={offering ? 'xs' : 'xs-compact'}
+      className={offering && !showResume ? '-ml-2' : undefined}
+      aria-expanded={expanded}
+      aria-controls={listId}
+      onClick={() => {
+        if (!expanded) {
+          onDetailsOpened?.()
+        }
+        setExpanded(!expanded)
+      }}
+    >
+      {t('auto.components.NativeChatResumeToast.details', 'Details')}
+    </Button>
+  )
   return (
     <section
       aria-labelledby={titleId}
       className="w-full overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating"
     >
-      <div className="flex min-w-0 items-start gap-2.5 py-2.5 pr-2 pl-3.5">
-        <span className="mt-0.5 inline-flex">
+      <div
+        className={`flex min-w-0 py-2 pr-1 pl-3 ${offering ? 'items-start gap-2' : 'items-center gap-1.5'}`}
+      >
+        <span className={`inline-flex shrink-0 ${offering ? 'mt-0.5' : 'mr-0.5'}`}>
           <HeadlineIcon view={view} />
         </span>
         <div className="min-w-0 flex-1">
-          {/* The status line is what changes, so it alone is announced. */}
+          {/* The status line is what changes, so it alone is announced; it stays mounted across phases. */}
           <div role="status">
-            <p
-              id={titleId}
-              className="text-[13px] leading-snug font-medium break-keep [overflow-wrap:anywhere]"
-            >
-              {headline(view, t, machineName)}
-            </p>
+            {offering ? (
+              <p
+                id={titleId}
+                className="text-[13px] leading-snug font-medium break-keep [overflow-wrap:anywhere]"
+              >
+                {title}
+              </p>
+            ) : (
+              <p
+                id={titleId}
+                className="@container flex min-w-0 items-baseline gap-1.5 text-[13px] leading-snug font-medium"
+              >
+                <span
+                  className={
+                    namesAgent || needYou ? 'min-w-0 truncate' : 'max-w-full shrink-0 truncate'
+                  }
+                  title={machineName ? `${title} · ${machineName}` : title}
+                >
+                  {title}
+                </span>
+                {/* Who still needs the person matters most, so it never gives way. */}
+                {needYou && (
+                  <span className="shrink-0 font-normal whitespace-nowrap text-muted-foreground">
+                    {needYou}
+                  </span>
+                )}
+                {/* A server's name yields first: capped beside a name, only announced where it can't be read. */}
+                {machineName && (
+                  <span
+                    className={
+                      needYou
+                        ? 'sr-only'
+                        : `sr-only min-w-0 truncate font-normal text-muted-foreground @[13rem]:not-sr-only @[13rem]:overflow-hidden @[13rem]:whitespace-nowrap ${namesAgent ? 'max-w-[40%] shrink-0' : ''}`
+                    }
+                    title={machineName}
+                  >
+                    {machineName}
+                  </span>
+                )}
+              </p>
+            )}
             {offering && (
               <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                 {t(
@@ -187,30 +265,23 @@ export function NativeChatResumeToast({
               </p>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {showResume && (
-              <Button variant="theme-accent" size="xs" onClick={() => onResume(view.resumable)}>
-                {t('auto.components.NativeChatResumeToast.resume', 'Resume')}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="xs"
-              // Alone, it lines up with the text above rather than its own padding.
-              className={showResume ? undefined : '-ml-2'}
-              aria-expanded={expanded}
-              aria-controls={listId}
-              onClick={() => {
-                if (!expanded) {
-                  onDetailsOpened?.()
-                }
-                setExpanded(!expanded)
-              }}
-            >
-              {t('auto.components.NativeChatResumeToast.details', 'Details')}
-            </Button>
-          </div>
+          {offering && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              {showResume && (
+                <Button variant="theme-accent" size="xs" onClick={() => onResume(view.resumable)}>
+                  {t('auto.components.NativeChatResumeToast.resume', 'Resume')}
+                </Button>
+              )}
+              {detailsButton}
+            </div>
+          )}
         </div>
+        {showRetry && (
+          <Button variant="theme-accent" size="xs-compact" onClick={() => onResume(view.retryable)}>
+            {t('auto.components.NativeChatResumeToast.retry', 'Retry')}
+          </Button>
+        )}
+        {!offering && detailsButton}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -221,50 +292,34 @@ export function NativeChatResumeToast({
           <X className="size-3.5" />
         </Button>
       </div>
-      <div id={listId} hidden={!expanded} className="border-t border-border">
-        <div className="relative">
-          <ul
-            ref={listRef}
-            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
-            className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
-            onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
-          >
-            {view.rows.map((row) => (
-              <NativeChatResumeToastRow
-                key={row.candidate.sessionId}
-                row={row}
-                name={nameFor(
-                  row.candidate.sessionId,
-                  firstLine(row.candidate.latestPrompt) ||
-                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled agent')
-                )}
-                age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-                busy={busy}
-                remote={machineName !== undefined}
-                onAction={onRowAction}
-              />
-            ))}
-          </ul>
-          {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
-          {moreBelow && (
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
-          )}
-        </div>
-        <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
-          {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
-          <p className="text-balance break-keep">
-            {offering
-              ? t(
-                  'auto.components.NativeChatResumeToast.willAsk',
-                  'Orca asks agents to continue. Queued messages may be sent.'
-                )
-              : t(
-                  'auto.components.NativeChatResumeToast.asked',
-                  'Orca asked agents to continue. Queued messages may be sent.'
-                )}
-          </p>
+      {showDetails && (
+        <div id={listId} hidden={!expanded} className="border-t border-border">
+          <div className="relative">
+            <ul
+              ref={listRef}
+              aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Agents')}
+              className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
+              onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
+            >
+              {view.rows.map((row) => (
+                <NativeChatResumeToastRow
+                  key={row.candidate.sessionId}
+                  row={row}
+                  name={rowName(row)}
+                  age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
+                  busy={busy}
+                  remote={machineName !== undefined}
+                  onAction={onRowAction}
+                />
+              ))}
+            </ul>
+            {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
+            {moreBelow && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
+            )}
+          </div>
           {(showDismissAll || view.startedBy === 'launch') && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-3 py-2 text-xs text-muted-foreground">
               {view.startedBy === 'launch' && (
                 <span>
                   {t(
@@ -287,7 +342,7 @@ export function NativeChatResumeToast({
             </div>
           )}
         </div>
-      </div>
+      )}
     </section>
   )
 }

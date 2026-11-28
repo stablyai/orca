@@ -18,6 +18,8 @@ export type TreeNode = {
   isSymlink?: boolean
   /** A folder too big for one page shows how many entries it has. */
   entryCount?: number
+  /** A search result names the folder it is in; tree rows show that by indent. */
+  folder?: string
 }
 
 export type DirectoryState = {
@@ -40,17 +42,40 @@ export type InlineStatusNode = {
   message?: string
 }
 
-/** Ends a part-loaded folder: "Show more" in the tree, "Searched N of M" in filter results. */
+/** Ends a part-loaded folder with "Show more". */
 export type FolderPagingNode = {
   id: string
   relativePath: string
   depth: number
-  kind: 'more' | 'searched'
+  kind: 'more'
   loaded: number
   total: number
 }
 
-export type FileExplorerRow = TreeNode | InlineStatusNode | FolderPagingNode
+/** A titled break in the search results, e.g. hits inside files under the name matches. */
+export type SectionNode = { id: string; relativePath: string; depth: 0; kind: 'section' }
+
+/** One line inside a file that the content search matched; opens the file at that line. */
+export type ContentHitNode = {
+  id: string
+  relativePath: string
+  name: string
+  depth: 0
+  kind: 'contentHit'
+  line: number
+  column: number
+  matchLength: number
+  lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
+}
+
+export type FileExplorerRow =
+  | TreeNode
+  | InlineStatusNode
+  | FolderPagingNode
+  | SectionNode
+  | ContentHitNode
 
 /** Rows per "Show more"; a folder bigger than this shows its entry count. */
 export const DIRECTORY_PAGE_SIZE = 500
@@ -121,14 +146,13 @@ function visitDirectory(
       }
     }
   }
-  const paging = folderPagingNode('more', relativePath, depth, state)
+  const paging = folderPagingNode(relativePath, depth, state)
   if (paging) {
     rows.push(paging)
   }
 }
 
 function folderPagingNode(
-  kind: FolderPagingNode['kind'],
   relativePath: string,
   depth: number,
   state: DirectoryState | undefined
@@ -138,10 +162,10 @@ function folderPagingNode(
   }
   const loaded = state.entries.length
   return {
-    id: `${kind}:${relativePath}`,
+    id: `more:${relativePath}`,
     relativePath,
     depth,
-    kind,
+    kind: 'more',
     loaded,
     // A folder that changed between pages can report a total at or below what is shown.
     total: Math.max(state.total ?? 0, loaded + 1)
@@ -149,46 +173,85 @@ function folderPagingNode(
 }
 
 /**
- * Rows whose name contains the query, across every folder loaded so far, with their parent folders.
- * A part-loaded folder always shows, ending in a row that says how much of it was searched.
+ * Paths in folders already listed whose name contains `query`, as the search reports them (folders as `dir/`).
+ * The host's search sees no SSH workspace and none offline; what was opened still answers.
  */
-export function filterDirectoryCache(cache: DirectoryCache, query: string): FileExplorerRow[] {
-  const needle = query.trim().toLowerCase()
-  const rows: FileExplorerRow[] = []
-  if (needle !== '') {
-    collectMatches('', 0, cache, needle, rows)
-  }
-  return rows
-}
-
-function collectMatches(
-  relativePath: string,
-  depth: number,
+export function listedPathMatches(
   cache: DirectoryCache,
-  needle: string,
-  rows: FileExplorerRow[]
-): boolean {
-  const state = getDirectoryCacheState(cache, relativePath)
-  const entries = (state?.entries ?? [])
-    .filter(shouldIncludeMobileFileExplorerEntry)
-    .sort(compareDirectoryEntries)
-  let matched = false
-  for (const entry of entries) {
-    const childPath = joinRelativePath(relativePath, entry.name)
-    const nameMatches = entry.name.toLowerCase().includes(needle)
-    const childRows: FileExplorerRow[] = []
-    const childMatches =
-      entry.isDirectory && collectMatches(childPath, depth + 1, cache, needle, childRows)
-    if (nameMatches || childMatches) {
-      rows.push(toTreeNode(entry, childPath, depth, cache), ...childRows)
-      matched = true
+  query: string,
+  limit: number,
+  /** Paths already shown, which take none of the limit. */
+  skip: ReadonlySet<string>
+): string[] {
+  const needle = query.trim().toLowerCase()
+  const found: string[] = []
+  const visit = (relativePath: string): void => {
+    const entries = getDirectoryCacheState(cache, relativePath)?.entries ?? []
+    for (const entry of [...entries].sort(compareDirectoryEntries)) {
+      if (found.length >= limit || !shouldIncludeMobileFileExplorerEntry(entry)) {
+        continue
+      }
+      const childPath = joinRelativePath(relativePath, entry.name)
+      const path = entry.isDirectory ? `${childPath}/` : childPath
+      if (entry.name.toLowerCase().includes(needle) && !skip.has(path)) {
+        found.push(path)
+      }
+      if (entry.isDirectory) {
+        visit(childPath)
+      }
     }
   }
-  const searched = folderPagingNode('searched', relativePath, depth, state)
-  if (searched) {
-    rows.push(searched)
+  if (needle !== '') {
+    visit('')
   }
-  return matched || searched !== null
+  return found
+}
+
+/** A workspace search's paths as rows, each naming its folder; `dir/` paths are folders. */
+export function searchResultRows(paths: readonly string[]): TreeNode[] {
+  return paths.flatMap((path) => {
+    const isDirectory = path.endsWith('/')
+    const relativePath = isDirectory ? path.slice(0, -1) : path
+    const slash = relativePath.lastIndexOf('/')
+    const name = relativePath.slice(slash + 1)
+    if (!shouldIncludeMobileFileExplorerEntry({ name, isDirectory })) {
+      return []
+    }
+    return [
+      {
+        id: `${isDirectory ? 'dir' : 'file'}:${relativePath}`,
+        name,
+        relativePath,
+        depth: 0,
+        kind: isDirectory ? 'directory' : getMobileFileKind(relativePath),
+        folder: slash === -1 ? '' : relativePath.slice(0, slash)
+      }
+    ]
+  })
+}
+
+/** Content search answer as rows: each file as a result row, then its matched lines. */
+export function contentSearchRows(
+  files: readonly {
+    relativePath: string
+    matches: readonly Omit<ContentHitNode, 'id' | 'relativePath' | 'name' | 'depth' | 'kind'>[]
+  }[]
+): FileExplorerRow[] {
+  return files.flatMap((file) => {
+    const [fileRow] = searchResultRows([file.relativePath])
+    if (!fileRow || file.matches.length === 0) {
+      return []
+    }
+    const hits = file.matches.map((match): ContentHitNode => ({
+      ...match,
+      id: `hit:${file.relativePath}:${match.line}:${match.column}`,
+      relativePath: file.relativePath,
+      name: fileRow.name,
+      depth: 0,
+      kind: 'contentHit'
+    }))
+    return [{ ...fileRow, id: `hit-file:${file.relativePath}` }, ...hits]
+  })
 }
 
 function toTreeNode(

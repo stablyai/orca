@@ -18,10 +18,10 @@ import {
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
-  hasPairedPageHost,
-  openBrowserUrlOnClient
+  hasPairedPageHost
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
 import {
+  openBrowserUrlOnClient,
   opensOnPairedDesktop,
   pairedDesktopTabMismatch
 } from '../../runtime/browser/client-pages/server-agent-tab-placement'

@@ -5,8 +5,7 @@ import { Folder } from 'lucide-react-native'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsSection } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { PhoneMcpServer, PhoneMcpWorkspaces } from './mcp-server-operations'
 import {
   ALL_MCP_WORKSPACES,
@@ -23,19 +22,21 @@ export function MobileMcpWorkspacesPage(props: {
   workspaces: readonly McpWorkspace[]
   online: boolean
   onBack: () => void
-  /** Settles once the host has the choice; writes made meanwhile follow it in order. */
-  onChange: (workspaces: PhoneMcpWorkspaces) => Promise<void>
+  /** Settles once the host has the choice; writes made meanwhile follow it in order. `base` is
+   *  the choice a tap edited; All, and a tick from All (only that one), send none: they set the
+   *  whole choice. */
+  onChange: (workspaces: PhoneMcpWorkspaces, base?: PhoneMcpWorkspaces) => Promise<void>
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
   // Taps build on the last one, not on the host's answer still on its way.
   const [draft, setDraft] = useState<PhoneMcpWorkspaces | null>(null)
   const writes = useRef(0)
   const chosen = draft ?? props.server.workspaces
-  const choose = (next: PhoneMcpWorkspaces) => {
+  const choose = (next: PhoneMcpWorkspaces, base?: PhoneMcpWorkspaces) => {
     setDraft(next)
     const write = (writes.current += 1)
-    void props.onChange(next).finally(() => write === writes.current && setDraft(null))
+    void props.onChange(next, base).finally(() => write === writes.current && setDraft(null))
   }
   const all = isAllMcpWorkspaces(chosen)
   return (
@@ -69,7 +70,9 @@ export function MobileMcpWorkspacesPage(props: {
                 selected={on}
                 accessibilityRole="checkbox"
                 disabled={!props.online}
-                onPress={() => choose(toggleMcpWorkspace(chosen, workspace.key))}
+                onPress={() =>
+                  choose(toggleMcpWorkspace(chosen, workspace.key), all ? undefined : chosen)
+                }
               />
             )
           })}

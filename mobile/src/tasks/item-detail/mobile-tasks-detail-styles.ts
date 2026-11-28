@@ -1,25 +1,12 @@
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing } from '../../theme/mobile-theme'
 import {
-  composerInputStyles,
+  composerInputStylesSheet,
   COMPOSER_TEXT_SIZE
 } from '../../components/composer-input/composer-input-styles'
 import { LIST_ROW_PADDING } from '../../components/list/ListGroup'
 
-export const mobileTasksDetailStyles = themedStyleSheet(() => ({
-  repoPickerTextWrap: {
-    flex: 1,
-    minWidth: 0
-  },
-  repoPickerTitle: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  repoPickerSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 1
-  },
+export const mobileTasksDetailStylesSheet = themedStyleSheet((colors, scheme) => ({
   sheetHeader: {
     paddingHorizontal: spacing.xs,
     marginBottom: spacing.md
@@ -41,59 +28,6 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2
-  },
-  // Lines the header up with the row text of the groups below it.
-  itemHeader: {
-    paddingHorizontal: LIST_ROW_PADDING,
-    marginBottom: spacing.md,
-    gap: 2
-  },
-  itemKindRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  itemKind: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 21,
-    color: colors.textPrimary
-  },
-  itemMeta: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  itemActionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  itemStartButton: {
-    flex: 1,
-    height: 40,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderRadius: radii.control,
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.md
-  },
-  itemStartButtonPressed: {
-    opacity: 0.85
-  },
-  itemStartButtonBusy: {
-    opacity: 0.6
-  },
-  itemStartText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.bgBase
   },
   // Lines prose up with the row text of the groups above it.
   itemSectionBody: {
@@ -193,7 +127,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    ...composerInputStyles.field,
+    ...composerInputStylesSheet.resolve(scheme).field,
     paddingVertical: spacing.sm
   },
   fieldButtonDisabled: {

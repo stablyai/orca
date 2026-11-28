@@ -1,8 +1,9 @@
 import * as z from 'zod'
 import {
   durableDraftRow,
-  fitsDeviceStore,
+  keepDurableDraftRow,
   pageDraftRowBackend,
+  releaseDurableDraftRow,
   workspaceDraftRowKey,
   type DurableDraftRow,
   type WorkspaceDraftScope
@@ -33,14 +34,18 @@ export function fileEditDraftKey(scope: WorkspaceDraftScope, path: string): stri
 
 function slotFor(key: string): Slot {
   let slot = slots.get(key)
-  if (!slot) {
+  if (slot) {
+    // Reopened before a pending release ran, so the row stays with this slot.
+    keepDurableDraftRow(key)
+  } else {
     const created: Slot = {
       draft: null,
       saved: false,
       offered: false,
       row: durableDraftRow(key, {
-        backend: () => pageDraftRowBackend(key),
-        snapshot: () => (created.draft && fitsDeviceStore(created.draft) ? created.draft : null),
+        // The backend clears a draft past the store's cap, so it is encoded once per write.
+        backend: () => pageDraftRowBackend(key, { clearOverCap: true }),
+        snapshot: () => created.draft,
         restore: (value) => {
           const parsed = draftSchema.safeParse(value)
           if (!created.saved && parsed.success) {
@@ -82,4 +87,17 @@ export function dropDocumentEditDraft(key: string): void {
   if (!slot.offered && slot.row.state() === 'loaded') {
     saveDocumentEditDraft(key, null)
   }
+}
+
+/** A closed document with nothing to keep lets its slot and row go once its reads and writes settle. */
+export function releaseDocumentEditDraft(key: string): void {
+  const slot = slots.get(key)
+  if (!slot || slot.draft !== null || slot.offered) {
+    return
+  }
+  releaseDurableDraftRow(key, () => {
+    if (slots.get(key) === slot) {
+      slots.delete(key)
+    }
+  })
 }

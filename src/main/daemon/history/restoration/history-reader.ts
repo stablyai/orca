@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { existsSync, opendirSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import type { TerminalCheckpointFile } from '../../protocol/daemon-checkpoint-file'
 import { getHistorySessionDirName } from '../storage/history-paths'
@@ -34,6 +34,7 @@ import {
 } from './terminal-history-cold-restore-info'
 import { readTerminalHistoryCheckpoint } from './terminal-history-checkpoint-reader'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
+import { openDirectorySync, type DirectoryHandle } from '../../../../shared/open-directory'
 
 export type RestorableHistoryProbe =
   | { status: 'none' }
@@ -157,9 +158,9 @@ export class HistoryReader {
       return []
     }
 
-    let directory: ReturnType<typeof opendirSync>
+    let directory: DirectoryHandle
     try {
-      directory = opendirSync(this.basePath)
+      directory = openDirectorySync(this.basePath)
     } catch {
       return []
     }

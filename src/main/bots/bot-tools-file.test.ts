@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { botToolAppsOf } from '../../shared/bots/bot-connector-entries'
 import { botToolDraftInput, draftFromServer } from '../../shared/bots/bot-tool-draft'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -17,6 +18,7 @@ import { readBotToolDetails } from './bot-tool-details'
 import { addBotTool, updateBotTool, type BotToolsHome } from './bot-tools-host'
 import { sessionMcpLaunchTools } from '../mcp-servers/session-mcp-launch'
 import {
+  botOwnTools,
   botToolsPath,
   changeBotToolServers,
   currentBotToolsRevision,
@@ -70,6 +72,18 @@ describe("a bot's tools file", () => {
     expect(tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'bot-token' })
   })
 
+  it('lists every URL server as an app, one with headers too, and no command', async () => {
+    const folder = tempDir('bot-tools-file-')
+    await writeBotToolServers(folder, [
+      { ...notion, headers: { authorization: SECRET } },
+      { name: 'linear', url: 'https://mcp.linear.app/mcp' },
+      { name: 'sentry', command: 'npx', args: ['-y', '@sentry/mcp-server'] },
+      { name: 'composio', url: 'https://backend.composio.dev/tool_router/abc-123/mcp' }
+    ])
+    const own = botOwnTools(await readBotToolServers(folder), folder)
+    expect(botToolAppsOf(own, {}).map((app) => app.tool.name)).toEqual(['notion', 'linear'])
+  })
+
   it('keeps header values out of the file, sealed in the host store bound to the address', async () => {
     const folder = tempDir('bot-tools-file-')
     await writeBotToolServers(folder, [{ ...notion, headers: { authorization: SECRET } }])
@@ -102,6 +116,30 @@ describe("a bot's tools file", () => {
     expect(readBotToolCredential(folder, id!)?.headers).toEqual({ 'x-api-key': SECRET })
     // Read again: nothing left to move, the same credential stays.
     expect(await readBotToolServers(folder)).toEqual([server])
+  })
+
+  // A hand edit pointed a signed-in row elsewhere and left values inline: the row starts a new
+  // sign-in for its address instead of every read of the file being refused.
+  it('reads a row whose sign-in is for another address, with values left inline', async () => {
+    const folder = tempDir('bot-tools-file-')
+    const credential = newBotToolCredentialId()
+    commitBotToolOAuth(folder, credential, () => ({
+      url: 'https://elsewhere.example.com/mcp',
+      grant: 0,
+      record: { resource: 'https://elsewhere.example.com/mcp' }
+    }))
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    writeFileSync(
+      botToolsPath(folder),
+      JSON.stringify({
+        servers: [{ ...notion, transport: 'http', credential, headers: { 'x-api-key': SECRET } }]
+      })
+    )
+    const [server] = await readBotToolServers(folder)
+    expect(readFileSync(botToolsPath(folder), 'utf8')).not.toContain(SECRET)
+    const id = server && 'credential' in server ? server.credential : ''
+    expect(id).not.toBe(credential)
+    expect(readBotToolOAuth(folder, id!)?.url).toBe(notion.url)
   })
 
   it("drops a removed tool's saved values", async () => {

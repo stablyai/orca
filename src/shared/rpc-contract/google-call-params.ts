@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { OptionalString } from './rpc-param-primitives'
 
 /** Every Google tool call: the bot run's token (a bot's Google may be off), the chat it runs from for
@@ -10,4 +11,4 @@ export const GoogleCallParams = {
 }
 
 /** A Google id, ref or link, as a command takes it. */
-export const GoogleRef = z.string().trim().min(1).max(2_048)
+export const GoogleRef = lazyZodSchema(() => z.string().trim().min(1).max(2_048))

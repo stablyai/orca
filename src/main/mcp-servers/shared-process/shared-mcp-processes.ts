@@ -1,12 +1,11 @@
 // The host's shared command servers, as the relay reaches them: each runs while some agent session
 // uses it, starts again when its command, args or env change, and stops once nothing uses it, it
-// stops being shared, or it's removed. Read from the host list on every request, so an edit made
-// anywhere (another client, a plugin sync, the file itself) applies on the next one.
+// stops being shared, or it's removed. Checked against the host list on every request, so an edit
+// made anywhere (another client, a plugin sync, the file itself) applies on the next one.
 import { createHash } from 'node:crypto'
 import { homedir } from 'node:os'
 import { isAbsolute, resolve as resolvePath } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js'
 import { dropInheritedOrcaIdentityEnv } from '../../ipc/pty/host-env/inherited-orca-identity-env'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import {
@@ -16,10 +15,35 @@ import {
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 import { RelayRefusal } from '../../bots/tool-relay/bot-tool-relay-requests'
 import { answerUnavailable } from '../../bots/tool-relay/bot-tool-relay-sign-in-answer'
-import { sharedMcpProcessServer, type McpCommandServer } from '../mcp-shared-process-servers'
+import { sharedMcpProcessServers, type McpCommandServer } from '../mcp-shared-process-servers'
 import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import { answerNoSession, answerParseError, answerSessionGone } from './shared-mcp-http-answers'
-import { SharedMcpProcess, SharedMcpStartFailed, type SharedMcpLaunch } from './shared-mcp-process'
+import type { isInitializeRequest as IsInitializeRequestFn } from '@modelcontextprotocol/sdk/types.js'
+import type { SharedMcpLaunch, SharedMcpProcess, SharedMcpStartFailed } from './shared-mcp-process'
+
+type SharedMcpRuntimeModules = {
+  isInitializeRequest: typeof IsInitializeRequestFn
+  SharedMcpProcess: typeof SharedMcpProcess
+  SharedMcpStartFailed: typeof SharedMcpStartFailed
+}
+let runtimeModulesLoader: Promise<SharedMcpRuntimeModules> | null = null
+
+function loadSharedMcpRuntimeModules(): Promise<SharedMcpRuntimeModules> {
+  runtimeModulesLoader ??= Promise.all([
+    import('@modelcontextprotocol/sdk/types.js'),
+    import('./shared-mcp-process')
+  ])
+    .then(([{ isInitializeRequest }, { SharedMcpProcess, SharedMcpStartFailed }]) => ({
+      isInitializeRequest,
+      SharedMcpProcess,
+      SharedMcpStartFailed
+    }))
+    .catch((error: unknown) => {
+      runtimeModulesLoader = null
+      throw error
+    })
+  return runtimeModulesLoader
+}
 
 /** A start that failed is answered as failed for this long, so agents retrying can't spawn in a loop. */
 const FAILED_START_MS = 10_000
@@ -43,7 +67,8 @@ export type SharedMcpProcessRequest = {
 
 /** Where the server comes from and how its launch is built: the host list and the login shell. */
 type Deps = {
-  read: (folder: string, id: string) => Promise<McpCommandServer | null>
+  /** The list's shared command servers, by id. */
+  servers: (folder: string) => Promise<ReadonlyMap<string, McpCommandServer>>
   prepare: (server: McpCommandServer) => Promise<SharedMcpLaunch>
 }
 
@@ -77,14 +102,15 @@ async function prepareLaunch(server: McpCommandServer): Promise<SharedMcpLaunch>
 
 export class SharedMcpProcesses {
   private readonly running = new Map<string, SharedMcpProcess>()
-  private readonly failed = new Map<string, { fingerprint: string; until: number }>()
+  /** A server's failed start while its window lasts, which removes it. */
+  private readonly failed = new Map<string, { fingerprint: string; expiry: NodeJS.Timeout }>()
   /** A stopped child's exit, which the next child of that server waits for. */
   private readonly exiting = new Map<string, Promise<void>>()
   private readonly deps: Deps
 
   constructor(deps: Partial<Deps> = {}) {
     this.deps = {
-      read: (folder, id) => sharedMcpProcessServer(id, folder),
+      servers: sharedMcpProcessServers,
       prepare: prepareLaunch,
       ...deps
     }
@@ -124,12 +150,15 @@ export class SharedMcpProcesses {
     parsed: unknown
   ): Promise<boolean> {
     const key = `${folder}\0${serverId}`
-    const server = await this.deps.read(folder, serverId)
-    let process = this.running.get(key)
+    const server = (await this.deps.servers(folder)).get(serverId)
     if (!server) {
-      process?.stop()
+      this.running.get(key)?.stop()
       throw new RelayRefusal(404, 'This server isn’t shared on this computer any more.')
     }
+    const { isInitializeRequest, SharedMcpProcess, SharedMcpStartFailed } =
+      await loadSharedMcpRuntimeModules()
+    // Read after the last await before start(), so concurrent first initializes share one child.
+    let process = this.running.get(key)
     const fingerprint = fingerprintOf(server)
     if (process && process.fingerprint !== fingerprint) {
       process.stop()
@@ -146,18 +175,23 @@ export class SharedMcpProcesses {
         return true
       }
       const failed = this.failed.get(key)
-      if (failed && failed.fingerprint === fingerprint && failed.until > Date.now()) {
+      if (failed?.fingerprint === fingerprint) {
         answerUnavailable(req, res, body)
         return true
       }
-      process = this.start(key, server, fingerprint)
+      process = this.start(key, server, fingerprint, SharedMcpProcess)
     }
     try {
       return await process.handle(req, res, parsed)
     } catch (error) {
       if (error instanceof SharedMcpStartFailed) {
-        console.warn(`[mcp-servers] ${server.name}'s shared process couldn’t start`, error.reason)
-        this.failed.set(key, { fingerprint, until: Date.now() + FAILED_START_MS })
+        // Every agent waiting on that start lands here; the first records it. One a newer start
+        // replaced (its command changed) failed nothing, so it can't hide that start's failure.
+        const latest = this.running.get(key)
+        if (!this.failed.has(key) && (latest === undefined || latest === process)) {
+          console.warn(`[mcp-servers] ${server.name}'s shared process couldn’t start`, error.reason)
+          this.recordFailedStart(key, fingerprint)
+        }
       }
       if (res.headersSent) {
         res.destroy()
@@ -171,17 +205,19 @@ export class SharedMcpProcesses {
   /** Stops the children of servers in `folder` that are gone, no longer shared or changed. */
   async reconcile(folder: string): Promise<void> {
     const prefix = `${folder}\0`
-    await Promise.all(
-      [...this.running].map(async ([key, process]) => {
-        if (!key.startsWith(prefix)) {
-          return
-        }
-        const server = await this.deps.read(folder, key.slice(prefix.length)).catch(() => null)
-        if (!server || fingerprintOf(server) !== process.fingerprint) {
-          process.stop()
-        }
-      })
-    )
+    if (![...this.running.keys()].some((key) => key.startsWith(prefix))) {
+      return
+    }
+    const servers = await this.deps.servers(folder).catch(() => null)
+    for (const [key, process] of this.running) {
+      if (!key.startsWith(prefix)) {
+        continue
+      }
+      const server = servers?.get(key.slice(prefix.length))
+      if (!server || fingerprintOf(server) !== process.fingerprint) {
+        process.stop()
+      }
+    }
   }
 
   /** Orca is quitting: every child is killed now. */
@@ -190,12 +226,30 @@ export class SharedMcpProcesses {
       process.stop(true)
     }
     this.running.clear()
-    this.failed.clear()
+    for (const key of this.failed.keys()) {
+      this.clearFailedStart(key)
+    }
   }
 
-  private start(key: string, server: McpCommandServer, fingerprint: string): SharedMcpProcess {
+  private recordFailedStart(key: string, fingerprint: string): void {
+    const expiry = setTimeout(() => this.failed.delete(key), FAILED_START_MS)
+    expiry.unref()
+    this.failed.set(key, { fingerprint, expiry })
+  }
+
+  private clearFailedStart(key: string): void {
+    clearTimeout(this.failed.get(key)?.expiry)
     this.failed.delete(key)
-    const process = new SharedMcpProcess(
+  }
+
+  private start(
+    key: string,
+    server: McpCommandServer,
+    fingerprint: string,
+    ProcessClass: typeof SharedMcpProcess
+  ): SharedMcpProcess {
+    this.clearFailedStart(key)
+    const process = new ProcessClass(
       server.name,
       fingerprint,
       async () => {

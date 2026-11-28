@@ -4,7 +4,8 @@ import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
   BRIDGE_NAVIGATE_BACK_NOTIFY,
-  BRIDGE_PROTOCOL_VERSION
+  BRIDGE_PROTOCOL_VERSION,
+  bridgeExternalLinkMaxChars
 } from '../protocol/bridge-frame-fields'
 import type { BridgeClientMessage } from '../protocol/bridge-envelope'
 import { readBridgeExternalLinkUrl } from '../protocol/bridge-caps'
@@ -104,7 +105,7 @@ export function createBridgeClientNotifications(
         return false
       }
       // Send the normalized URL the parser checked; stripped controls can make it differ from caller text.
-      const target = readBridgeExternalLinkUrl(url)
+      const target = readBridgeExternalLinkUrl(url, bridgeExternalLinkMaxChars(deps.hasGrant))
       if (target === null) {
         return false
       }

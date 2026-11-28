@@ -3,6 +3,7 @@ import { Alert } from 'react-native'
 import { useRouter } from 'expo-router'
 import { NewWorkspaceLoadingDrawer } from '../new-workspace/NewWorkspaceLoadingDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useBotLinkHostAnswers } from './use-bot-link-host-answers'
 import type { BotSessionLinkTarget } from './bot-link-target'
 import {
@@ -24,8 +25,8 @@ import {
 } from './bot-link-copy'
 import { openMobileStructuredSession } from '../session/native-chat/agent-session/open-mobile-structured-session'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { resolveBotLink } from '../../../src/shared/bots/bot-link-resolution'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 export function BotSessionLinkResolver({
   link,
@@ -155,12 +156,16 @@ export function BotSessionLinkResolver({
           }
         } else if (found.kind === 'update-needed') {
           unavailable(
-            botLinkUpdateNeededLine(t, [
-              found.servingHost
-                ? (hosts.find((host) => host.id === found.home.computer.pairedHostId)?.name ??
-                  t('bots.link.computer', 'your computer'))
-                : nameOf(found.home.computer)
-            ])
+            botLinkUpdateNeededLine(
+              t,
+              [
+                found.servingHost
+                  ? (hosts.find((host) => host.id === found.home.computer.pairedHostId)?.name ??
+                    t('bots.link.computer', 'your computer'))
+                  : nameOf(found.home.computer)
+              ],
+              getUiIntlLocale()
+            )
           )
         } else if (found.kind === 'failed') {
           unavailable(botLinkOpenFailureLine(t, nameOf(found.home.computer)))
@@ -183,7 +188,7 @@ export function BotSessionLinkResolver({
               hostId: computer.pairedHostId,
               executionHost: computer.executionHost,
               worktreeId: opened.target.worktreeId,
-              paneKey: structuredAgentSessionPaneKey(opened.tab.id, sessionId),
+              paneKey: chatPaneKey(sessionId),
               ...(itemId ? { botItem: JSON.stringify({ sessionId, itemId }) } : {})
             })
           } else {
@@ -220,7 +225,8 @@ export function BotSessionLinkResolver({
                 unresolved.matches.flatMap(({ hostId }) => {
                   const computer = computers.get(hostId)
                   return computer ? [nameOf(computer)] : []
-                })
+                }),
+                getUiIntlLocale()
               )
             )
           } else if (unresolved.kind === 'update-needed' || unresolved.kind === 'unreachable') {
@@ -230,10 +236,10 @@ export function BotSessionLinkResolver({
             const only = named.length === 1 ? named[0] : undefined
             unavailable(
               unresolved.kind === 'update-needed'
-                ? botLinkUpdateNeededLine(t, named.map(nameOf))
+                ? botLinkUpdateNeededLine(t, named.map(nameOf), getUiIntlLocale())
                 : only && readClients(only.pairedHostId)?.getState() !== 'connected'
                   ? botLinkOfflineLine(t, nameOf(only))
-                  : botLinkUnreachableLine(t, named.map(nameOf))
+                  : botLinkUnreachableLine(t, named.map(nameOf), getUiIntlLocale())
             )
           } else {
             const known =

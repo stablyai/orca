@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import {
@@ -20,25 +21,31 @@ const EFFORT_LABELS: Readonly<Record<string, string>> = {
 // Fallback only for effort-capable models without an advertised menu.
 const BUILT_IN_EFFORTS = ['minimal', 'low', 'medium', 'high', 'xhigh'] as const
 
-const effortEntrySchema = z.union([
-  z.string().min(1),
+const effortEntrySchema = lazyZodSchema(() =>
+  z.union([
+    z.string().min(1),
+    z.looseObject({
+      value: z.string().min(1),
+      id: z.string().min(1).optional(),
+      label: z.string().min(1).optional(),
+      description: z.string().optional(),
+      default: z.boolean().optional()
+    })
+  ])
+)
+const modelMetaSchema = lazyZodSchema(() =>
   z.looseObject({
-    value: z.string().min(1),
-    id: z.string().min(1).optional(),
-    label: z.string().min(1).optional(),
-    description: z.string().optional(),
-    default: z.boolean().optional()
+    supportsReasoningEffort: z.boolean().optional(),
+    reasoningEffort: z.unknown().optional(),
+    reasoningEfforts: z.array(z.unknown()).optional()
   })
-])
-const modelMetaSchema = z.looseObject({
-  supportsReasoningEffort: z.boolean().optional(),
-  reasoningEffort: z.unknown().optional(),
-  reasoningEfforts: z.array(z.unknown()).optional()
-})
-const modelsListReplySchema = z.looseObject({
-  result: SessionModelStateSchema.nullish(),
-  error: z.unknown().optional()
-})
+)
+const modelsListReplySchema = lazyZodSchema(() =>
+  z.looseObject({
+    result: SessionModelStateSchema.nullish(),
+    error: z.unknown().optional()
+  })
+)
 
 function capitalized(id: string): string {
   return id.charAt(0).toUpperCase() + id.slice(1)

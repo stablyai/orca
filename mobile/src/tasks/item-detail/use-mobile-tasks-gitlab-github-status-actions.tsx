@@ -84,7 +84,7 @@ export function useMobileTasksGitlabGithubStatusActions<
         finish()
       }
     },
-    [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
+    [client, captureTaskListRefresh, tryBeginMutation]
   )
 
   const updateGitHubIssueMetadata = useCallback(
@@ -206,7 +206,7 @@ export function useMobileTasksGitlabGithubStatusActions<
     },
     [claimPublication, client, detailPayload, captureTaskListRefresh, tryBeginMutation]
   )
-  return Object.assign(model, { toggleGitLabStatus, updateGitHubIssueMetadata })
+  return { ...model, toggleGitLabStatus, updateGitHubIssueMetadata }
 }
 
 export type GitlabGithubStatusActionsModel = ProjectFileMergeActionsModel &

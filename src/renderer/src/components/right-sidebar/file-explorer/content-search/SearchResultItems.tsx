@@ -12,6 +12,7 @@ import {
   ContextMenuItem
 } from '@/components/ui/context-menu'
 import { normalizeSearchFileMatchCount } from '../../../../../../shared/file-search/search-match-count'
+import { searchMatchLineParts } from '../../../../../../shared/file-search/search-match-line-parts'
 import type {
   SearchFileResult,
   SearchMatch
@@ -23,31 +24,34 @@ export function ToggleButton({
   onClick,
   title,
   children,
-  ariaExpanded
+  ariaExpanded,
+  ariaControls,
+  highlighted
 }: {
-  active: boolean
+  /** Pressed state; omit for a plain action, such as Clear. */
+  active?: boolean
   onClick: () => void
   title: string
   children: React.ReactNode
   ariaExpanded?: boolean
+  ariaControls?: string
+  /** Tints like pressed without toggle semantics, e.g. a disclosure whose filters are set. */
+  highlighted?: boolean
 }): React.JSX.Element {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant="muted-field-icon"
           size="icon-xs"
-          className={cn(
-            'h-auto w-auto rounded-sm p-0.5 flex-shrink-0',
-            active
-              ? 'bg-accent text-accent-foreground'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-          )}
+          className="shrink-0"
           onClick={onClick}
           aria-label={title}
           aria-pressed={active}
           aria-expanded={ariaExpanded}
+          aria-controls={ariaControls}
+          data-active={highlighted || undefined}
         >
           {children}
         </Button>
@@ -142,34 +146,18 @@ export function MatchResultRow({
   onClick: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const parts = useMemo(() => {
-    const content = match.lineContent
-    const col = (match.displayColumn ?? match.column) - 1
-    const len = match.displayMatchLength ?? match.matchLength
-
-    if (col >= 0 && col + len <= content.length) {
-      // Keep nearby context so long prefixes do not push the match out of view.
-      const BEFORE_MAX = 26
-      const rawBefore = content.slice(0, col).trimStart()
-      const before =
-        rawBefore.length > BEFORE_MAX
-          ? `…${rawBefore.slice(rawBefore.length - BEFORE_MAX)}`
-          : rawBefore
-      return {
-        before,
-        match: content.slice(col, col + len),
-        after: content.slice(col + len)
-      }
-    }
-
-    return { before: content, match: '', after: '' }
-  }, [
-    match.lineContent,
-    match.column,
-    match.matchLength,
-    match.displayColumn,
-    match.displayMatchLength
-  ])
+  const { lineContent, column, matchLength, displayColumn, displayMatchLength } = match
+  const parts = useMemo(
+    () =>
+      searchMatchLineParts({
+        lineContent,
+        column,
+        matchLength,
+        displayColumn,
+        displayMatchLength
+      }),
+    [lineContent, column, matchLength, displayColumn, displayMatchLength]
+  )
 
   return (
     <ContextMenu>

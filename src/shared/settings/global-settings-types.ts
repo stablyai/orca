@@ -442,6 +442,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Share this computer: interface picked for "Another device", kept while it is briefly disconnected. */
+  runtimePairingInterface?: { name: string; address: string } | null
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
   /** Opt-in animated pet overlay; off unmounts it and renderer toggles apply immediately. */

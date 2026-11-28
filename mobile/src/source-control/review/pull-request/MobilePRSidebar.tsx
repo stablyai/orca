@@ -21,8 +21,7 @@ import {
 } from 'lucide-react-native'
 import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { colors } from '../../../theme/mobile-theme'
+import { useMobileColors } from '../../../theme/use-mobile-color-scheme'
 import type { PrSidebarData } from './mobile-pr-sidebar-state'
 import { isPrSidebarDetailsPlaceholder } from './mobile-pr-sidebar-state'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
@@ -49,8 +48,9 @@ import { openExternalLink as openMobilePrUrl } from '../../../platform/external-
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../../components/nav-bar/PullDownMenu'
 import { useBackClaim } from '../../../navigation/use-back-claim'
-import { prTabStyles as styles } from './pr-tab-styles'
-import { mobilePrSidebarStyles as sidebarStyles } from './mobile-pr-sidebar-styles'
+import { prTabStylesSheet } from './pr-tab-styles'
+import { mobilePrSidebarStylesSheet } from './mobile-pr-sidebar-styles'
+import { useThemedStyles } from '../../../theme/themed-styles'
 
 type BranchCompare = { commitsAhead?: number; baseRef: string } | null
 
@@ -74,7 +74,9 @@ export function MobilePrTabBody({
   branchCompare = null,
   footer = null
 }: BodyProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const sidebarStyles = useThemedStyles(mobilePrSidebarStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { state, actions } = tab
   const branch = prSidebarRenderBranch(state)
@@ -164,18 +166,21 @@ function PrTabSections({
   data: PrSidebarData
   onOpenChanges?: () => void
 }) {
-  useMobileColorScheme()
+  const t = useMobileTranslation()
   const pr = data.pr
   const gates = useMemo(
     () =>
-      buildPrGateRows({
-        pr,
-        details: data.details,
-        checks: data.checks,
-        checksError: data.checksError,
-        botAuthorOverrides: tab.botAuthorOverrides
-      }),
-    [data.checks, data.checksError, data.details, pr, tab.botAuthorOverrides]
+      buildPrGateRows(
+        {
+          pr,
+          details: data.details,
+          checks: data.checks,
+          checksError: data.checksError,
+          botAuthorOverrides: tab.botAuthorOverrides
+        },
+        t
+      ),
+    [data.checks, data.checksError, data.details, pr, tab.botAuthorOverrides, t]
   )
   const openGate = (row: PrGateRow): (() => void) | undefined => {
     switch (row.target) {
@@ -214,13 +219,14 @@ function PrTabSections({
 }
 
 function PrTabHeader({ data }: { data: PrSidebarData }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const now = useNow(60_000)
   const { pr, details } = data
   const item = details && !isPrSidebarDetailsPlaceholder(details) ? details.item : null
-  const badge = prStateBadge(pr.state)
-  const badgeColor = statusColor(badge.token)
+  const badge = prStateBadge(pr.state, t)
+  const badgeColor = statusColor(badge.token, colors)
   const author = item?.author ?? null
   const updatedAt = item?.updatedAt || pr.updatedAt
   const meta = [
@@ -275,7 +281,7 @@ const GATE_ICON: Record<Exclude<PrGateTone, 'loading'>, LucideIcon> = {
 }
 
 function GateIcon({ row }: { row: PrGateRow }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   if (row.tone === 'loading') {
     return <ActivityIndicator size="small" color={colors.textSecondary} />
   }
@@ -303,7 +309,7 @@ type SidebarProps = Omit<Parameters<typeof useMobilePrTab>[0], 'onOpenScreen'> &
 
 /** The PR tab outside the Source Control hub (the diff review dock), with its own screens, menu and sheets. */
 export function MobilePRSidebar({ onRetry, bottomInset = 0, ...input }: SidebarProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(prTabStylesSheet)
   const t = useMobileTranslation()
   const [screen, setScreen] = useState<PrTabScreen | null>(null)
   const { refetch } = input

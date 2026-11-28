@@ -3,7 +3,7 @@ import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reade
 import {
   filePreviewImageSchema,
   filePreviewTextSchema,
-  terminalArtifactWriteSchema,
+  fileWriteReplySchema,
   terminalPathResolutionSchema
 } from './file-preview-reply-schema'
 
@@ -56,7 +56,18 @@ export const terminalArtifactWrite = bindDeferredRpcOperation(
     method: 'files.writeTerminalArtifact',
     acceptance: 'success-result-or-skip',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('artifact-written', terminalArtifactWriteSchema)
+    read: rpcResultVariant('artifact-written', fileWriteReplySchema)
+  })
+)
+
+// The reply is { ok } or { ok: false, diskConflict }; parseFileWriteResult reads it, so require no members.
+export const worktreeFileGuardedWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'files.write-if-unchanged-or-skip',
+    method: 'files.writeIfUnchanged',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('file-write-result', fileWriteReplySchema)
   })
 )
 

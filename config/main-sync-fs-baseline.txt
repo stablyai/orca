@@ -15,6 +15,7 @@
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: list and stat the few cache files; not Electron main
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
@@ -47,7 +48,6 @@
 1 src/main/browser/cookies/chromium/import-cookies.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/cookies/sources/browser-cookie-safari-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
@@ -112,7 +112,7 @@
 36 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 6 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 1 src/main/codex-accounts/login/codex-login-auth-snapshot.ts
-4 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
+2 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 5 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
@@ -183,11 +183,11 @@
 2 src/main/daemon/executable-host/macos/macos-daemon-bundle.ts
 9 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
-3 src/main/daemon/executable-host/windows/daemon-host-manifest.ts
+7 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # +4: Windows filtered staging copy walks with readdirSync/statSync/mkdirSync/copyFileSync instead of a filtered cpSync (same per-file sync work, which used opendirSync); once per daemon-host staging; #51222 replaces it
 2 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
 12 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
-4 src/main/daemon/history/restoration/history-reader.ts
+3 src/main/daemon/history/restoration/history-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-checkpoint-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-legacy-scrollback-restore.ts
 1 src/main/daemon/history/storage/history-manager.ts
@@ -252,7 +252,7 @@
 1 src/main/hang-watchdog/previous-hang-detection.ts
 9 src/main/hang-watchdog/renderer-hang-records.ts
 1 src/main/hermes/hermes-default-home.ts
-10 src/main/hermes/hermes-home-filesystem.ts
+7 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hook-service.ts
 2 src/main/host/secret-protection-report.ts
 1 src/main/ipc/app.ts
@@ -266,7 +266,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
@@ -358,7 +357,7 @@
 7 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer.ts
 1 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store.ts
 1 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
-1 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts
+2 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts # one read per load (retried on a wake only while unreadable) and one rename setting an unparseable file aside (#49980)
 6 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback.ts
 2 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-spool-sweep.ts
 5 src/main/persistence/preferences/active-view-preference.ts
@@ -550,7 +549,7 @@
 1 src/shared/agent-hook-listener/providers/muse/muse-session-log.ts
 4 src/shared/agent-hook-listener/reverse-file-region-scan.ts
 3 src/shared/agent-hook-listener/transcript-reader.ts
-3 src/shared/agent-hook-listener/transport/agent-hook-endpoint-temp-cleanup.ts
+2 src/shared/agent-hook-listener/transport/agent-hook-endpoint-temp-cleanup.ts
 13 src/shared/agent-hook-listener/transport/agent-hook-spool.ts
 5 src/shared/agent-hook-listener/transport/endpoint-publication.ts
 1 src/shared/agent-launch/plugins/opencode/opencode-installed-plugin.ts
@@ -565,6 +564,7 @@
 6 src/shared/file-content/node-source-copy-content-equality.ts
 3 src/shared/file-write/windows-retry-file-operations.ts # removeFileWithWindowsRetry: the rmSync moved here from rolling-file-backup.ts, which dropped one
 1 src/shared/file-write/windows-transient-lock-removal.ts
+2 src/shared/open-directory.ts # opendirSync/readdirSync moved from history-reader.ts and agent-hook-endpoint-temp-cleanup.ts (each dropped by 1); Windows lists with readdir (#50997)
 1 src/shared/plugins/declarative/testing/orca-testing.ts
 1 src/shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch.ts
 4 src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-doctor.ts

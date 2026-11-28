@@ -9,12 +9,13 @@ import { useBottomDrawerModalHostBackClaim } from '../../components/bottom-drawe
 import { LoadingSpinner } from '../../components/feedback/LoadingSpinner'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { intlLocaleFor } from '../../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ListedBot, PhoneBot } from '../host-bots-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
@@ -62,8 +63,10 @@ export function MobileBotShareReceiveSheet(props: {
   onCreated: (bot: PhoneBot) => void
   onOpenBot: (bot: ListedBot) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
   const { client } = props
   const [step, setStep] = useState<Step>({ kind: 'paste' })
   const [nav, setNav] = useState<ReviewPage[]>([])
@@ -205,7 +208,7 @@ export function MobileBotShareReceiveSheet(props: {
               {t('bots.share.receive.haveDetail', '{{name}} · made {{date}}', {
                 name: step.bot.name,
                 date: step.bot.createdAt
-                  ? botShareDate(new Date(step.bot.createdAt).toISOString())
+                  ? botShareDate(new Date(step.bot.createdAt).toISOString(), intlLocale)
                   : ''
               })}
             </Text>
@@ -376,7 +379,7 @@ function ReviewSteps(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   loading: { paddingVertical: spacing.xl, alignItems: 'center' },
   hero: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   detail: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },

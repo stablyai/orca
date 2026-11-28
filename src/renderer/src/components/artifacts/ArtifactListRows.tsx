@@ -6,20 +6,24 @@ import { ARTIFACTS_TABLE_ROW_HEIGHT_PX } from './artifacts-table-layout'
 /** Window the append-only artifact list inside the collection scroller; below the threshold, keep natural flow. */
 export function ArtifactListRows({
   artifacts,
-  deletingId,
+  deletingSlugs,
   selectedSlug,
+  checkedSlugs,
   scrollElement,
   hasMore,
   selectArtifact,
+  toggleChecked,
   deleteArtifact
 }: {
   artifacts: readonly ArtifactListItem[]
-  deletingId: string | null
+  deletingSlugs: ReadonlySet<string>
   selectedSlug: string | null
+  checkedSlugs: ReadonlySet<string>
   scrollElement: HTMLDivElement | null
   // Propagate the cursor so rows do not announce loaded count as the total while Load more still exists.
   hasMore: boolean
   selectArtifact: (slug: string) => void
+  toggleChecked: (slug: string, range: boolean) => void
   deleteArtifact: (item: ArtifactListItem) => void
 }): React.JSX.Element {
   // Pages are slug-deduped and renderRow has no index, so identify the last row by its unique slug.
@@ -38,10 +42,13 @@ export function ArtifactListRows({
         <ArtifactListRow
           key={item.artifact.slug}
           item={item}
-          deleting={deletingId === item.artifact.slug}
+          deleting={deletingSlugs.has(item.artifact.slug)}
           isSelected={selectedSlug === item.artifact.slug}
+          checked={checkedSlugs.has(item.artifact.slug)}
+          selecting={checkedSlugs.size > 0}
           showDivider={item.artifact.slug !== lastSlug}
           selectArtifact={selectArtifact}
+          toggleChecked={toggleChecked}
           deleteArtifact={deleteArtifact}
         />
       )}

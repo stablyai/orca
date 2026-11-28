@@ -1,8 +1,9 @@
 import type { Dirent } from 'node:fs'
-import { opendir, readFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
+import { openDirectory } from '../../../shared/open-directory'
 
 const MARKDOWN_EXTENSION = '.md'
 const MAX_SCAN_DEPTH = 24
@@ -15,7 +16,7 @@ async function readEntries(path: string, budget: ScanBudget): Promise<Dirent[]> 
   try {
     const entries: Dirent[] = []
     budget.signal?.throwIfAborted()
-    const directory = await opendir(path)
+    const directory = await openDirectory(path)
     if (budget.signal?.aborted) {
       await directory.close()
       budget.signal.throwIfAborted()

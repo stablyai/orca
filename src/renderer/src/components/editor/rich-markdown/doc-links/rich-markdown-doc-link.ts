@@ -90,9 +90,7 @@ export function createMarkdownDocLink(transport: RichMarkdownSourceTransport) {
 
     addStorage() {
       return {
-        documents: [],
-        _cachedDocs: null,
-        _cachedIndex: null
+        documents: []
       }
     },
 

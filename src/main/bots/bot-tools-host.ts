@@ -30,19 +30,20 @@ import {
   readCodexStdioToolNames
 } from './bot-tools-codex'
 import {
-  botOwnTool,
+  botOwnTools,
   readBotToolServers,
   changeBotToolServers,
   type BotToolNewCredential
 } from './bot-tools-file'
-import { resolveBotToolInput } from './bot-tool-details'
+import { resolveBotToolInput, withSavedBotToolHeaders } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
-import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { botToolCredentialsReader } from './bot-tool-credentials'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type BotToolsFolder = {
   /** The relay grant's owner: the bot, or the host list's reserved owner. */
@@ -75,7 +76,7 @@ export type BotToolsHome =
 export const hasBotToolsCli = (home: BotToolsHome): home is BotToolsCli =>
   home.agent === 'claude' || home.agent === 'codex'
 
-const StartedThread = z.object({ thread: z.object({ id: z.string() }) })
+const StartedThread = lazyZodSchema(() => z.object({ thread: z.object({ id: z.string() }) }))
 
 const CLI_TIMEOUT_MS = 60_000
 
@@ -120,7 +121,7 @@ export async function codexThread(
   rpc: Parameters<Parameters<typeof runCodexAppServerSession>[1]>[0],
   cli: BotToolsCli,
   tools: SessionMcpTools,
-  ownerStdioNames: readonly string[]
+  ownerStdioNames: ReadonlySet<string>
 ): Promise<string> {
   const started = await rpc.request('thread/start', {
     cwd: cli.folder,
@@ -147,8 +148,8 @@ export async function inheritedTools(cli: BotToolsHome): Promise<BotInheritedToo
 }
 
 /** The owner's Codex stdio servers, read from the same config.toml as its inherited tools. */
-export async function codexStdioToolNames(cli: BotToolsCli): Promise<string[]> {
-  return cli.accountHome ? await readCodexStdioToolNames(cli.accountHome) : []
+export async function codexStdioToolNames(cli: BotToolsCli): Promise<ReadonlySet<string>> {
+  return cli.accountHome ? await readCodexStdioToolNames(cli.accountHome) : new Set()
 }
 
 export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
@@ -158,7 +159,7 @@ export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
   ])
   return {
     agent: cli.agent,
-    own: servers.map((server) => botOwnTool(server, cli.folder)),
+    own: botOwnTools(servers, cli.folder),
     inherited
   }
 }
@@ -200,15 +201,17 @@ export async function claudeSignInFolder(
   return folder
 }
 
+type ProblemsScope = { remote?: boolean; only?: ReadonlySet<string>; signal?: AbortSignal }
+
 /**
  * Only the bot's own tools that need something; a working one isn't listed. `remote` checks only
- * the URL servers, so no command is started; `signal` stops the check and closes its session.
+ * the URL servers (no command starts), `only` just those it names; `signal` stops the check.
  */
 export async function botToolProblems(
   cli: BotToolsHome,
-  { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
+  { remote = false, only, signal }: ProblemsScope = {}
 ): Promise<Record<string, BotToolProblem>> {
-  const own = await readBotToolServers(cli.folder)
+  const own = (await readBotToolServers(cli.folder)).filter((tool) => only?.has(tool.name) ?? true)
   // Its chats start without them, so each row says why instead of looking ready.
   const off = acpLaunchSpecFor(cli.agent)?.botToolsOff
   if (off) {
@@ -218,13 +221,14 @@ export async function botToolProblems(
   }
   const scoped = own.filter((server) => !remote || 'url' in server)
   // Codex runs the owner's stdio server of a taken name instead, even for a tool Orca signs in to.
-  const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : []
+  const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : new Set<string>()
   const taken = codexTakenToolProblems(scoped, ownerStdioNames)
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
+  const readOAuth = botToolCredentialsReader(cli.folder).oauth
   const servers = scoped.filter(
     (server) =>
       !Object.hasOwn(taken, server.name) &&
-      !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
+      !('url' in server && server.credential && readOAuth(server.credential))
   )
   // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
   if (servers.length === 0 || !hasBotToolsCli(cli)) {

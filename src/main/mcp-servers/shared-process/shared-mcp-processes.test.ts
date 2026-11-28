@@ -52,7 +52,7 @@ describe('SharedMcpProcesses', () => {
     spawned = 0
     started = Promise.resolve()
     processes = new SharedMcpProcesses({
-      read: async (_folder, id) => (id === ID ? stored : null),
+      servers: async () => new Map(stored ? [[ID, stored]] : []),
       prepare: async (server) => {
         spawned += 1
         await started
@@ -133,8 +133,7 @@ describe('SharedMcpProcesses', () => {
   const stopped = (pid: number) => expect.poll(() => alive(pid), POLL).toBe(false)
 
   it('runs one child for every session and stops it once the last session ends', async () => {
-    const a = await connect()
-    const b = await connect()
+    const [a, b] = await Promise.all([connect(), connect()])
     const fromA = await whoami(a.client)
     const fromB = await whoami(b.client)
     expect(fromB.pid).toBe(fromA.pid)

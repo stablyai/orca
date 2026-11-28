@@ -2,7 +2,7 @@
 // Signing in opens the app's page in the phone's browser and finishes from the address it lands on, pasted here.
 import { useCallback, useEffect, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ExternalLink, Wrench } from 'lucide-react-native'
+import { Copy, ExternalLink, Wrench } from 'lucide-react-native'
 import type { NativeChatBotCardValues } from '../../../../../../src/shared/native-chat/bot-cards/native-chat-bot-card-kind'
 import { botToolAddedCardView } from '../../../../../../src/shared/bots/bot-tool-added-card-view'
 import { botToolSubtitle, botToolTitle } from '../../../../../../src/shared/bots/bot-tool-labels'
@@ -16,8 +16,8 @@ import { botToolSignInActionLabel, botToolSignInLine } from '../../../../bots/to
 import { useBotToolPhoneSignIn } from '../../../../bots/tools/use-bot-tool-phone-sign-in'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { colors, feedback, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { feedback, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import {
   MobileNativeChatEventName,
   MobileNativeChatEventRow
@@ -27,6 +27,8 @@ import { MobileNativeChatNoticePill } from '../notices/MobileNativeChatNoticePil
 import { mobileBotToolAddedSay } from './mobile-bot-card-copy'
 import { useMobileBotCardHost } from './mobile-bot-card-host'
 import { MobileBotCardActions } from './MobileBotCardFrame'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 
 export function MobileBotToolAddedCard({
   added,
@@ -37,6 +39,9 @@ export function MobileBotToolAddedCard({
   timestamp: number | null
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const host = useMobileBotCardHost()
   const client = host?.client ?? null
@@ -140,10 +145,15 @@ export function MobileBotToolAddedCard({
       {view.present && attempt ? (
         <View style={styles.paste}>
           <Text style={[styles.hint, meta]}>
-            {t(
-              'bots.tools.signIn.pasteLanded',
-              'After you sign in, paste the address you landed on.'
-            )}
+            {signIn.opensHere
+              ? t(
+                  'bots.tools.signIn.pasteLanded',
+                  'After you sign in, paste the address you landed on.'
+                )
+              : t(
+                  'bots.tools.signIn.copyThenPaste',
+                  'Copy the link, sign in from your browser, then paste the address you landed on.'
+                )}
           </Text>
           <TextField
             value={address}
@@ -157,6 +167,7 @@ export function MobileBotToolAddedCard({
             returnKeyType="done"
             editable={!attempt.finishing}
             onSubmitEditing={finish}
+            style={composerInputStyles.filledField}
           />
           <MobileBotCardActions>
             <MobileNativeChatNoticePill
@@ -165,7 +176,18 @@ export function MobileBotToolAddedCard({
               disabled={!pasted || attempt.finishing}
               onPress={finish}
             />
-            {attempt.url ? (
+            {attempt.url && !signIn.opensHere ? (
+              // This phone's shell can't open a link this long; the browser finishes the same attempt.
+              <MobileNativeChatNoticePill
+                label={
+                  signIn.copied
+                    ? t('common.copied', 'Copied')
+                    : t('bots.tools.signIn.copyLink', 'Copy link')
+                }
+                Icon={Copy}
+                onPress={signIn.copyLink}
+              />
+            ) : attempt.url ? (
               <MobileNativeChatNoticePill
                 label={t('bots.tools.signIn.openAgain', 'Open page again')}
                 Icon={ExternalLink}
@@ -197,6 +219,7 @@ function RowAction({
   onPress: () => void
   fontScale: number
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       accessibilityRole="button"
@@ -210,7 +233,7 @@ function RowAction({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   action: { color: colors.textPrimary, fontWeight: '500' },
   disabled: { opacity: feedback.disabledOpacity },

@@ -4,9 +4,8 @@ import { useSafeAreaFrame, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { useSharedValue, useAnimatedStyle } from 'react-native-reanimated'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from '../bottom-drawer/bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
@@ -66,7 +65,7 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const progress = useSharedValue(0)
   const fade = useSharedValue(0)
   const reducedMotion = useDrawerReducedMotion()
@@ -167,7 +166,7 @@ function MountedRightDrawer({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   overlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 1000

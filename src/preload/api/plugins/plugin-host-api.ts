@@ -88,6 +88,8 @@ export type PluginMarketplaceHostSourceState = {
 
 export type PluginMarketplaceHostListing = {
   marketplaceSourceId: string
+  /** The Git URL Orca reads the catalog from, never the catalog's own claim. */
+  marketplaceUrl?: string
   marketplaceName: string
   marketplaceOwner: string
   marketplaceCommit: string

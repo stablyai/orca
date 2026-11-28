@@ -261,7 +261,8 @@ type ContributionPointPolicy = {
   /** Catalog type a release declares for this point; null when `main` already implies it. */
   catalogType: PluginCatalogType | null
   /** Its bytes act later under user or agent authority, so approval names the exact content.
-   *  Executable points (panels, events) are bound by their execution profile instead. */
+   *  Executable points (panels, events) are bound by their execution profile instead. A dev folder
+   *  binds only its manifest and the files hashDeclarativePluginContent lists, so add any it reads. */
   bindsContent: boolean
 }
 

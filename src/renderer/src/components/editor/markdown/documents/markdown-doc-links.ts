@@ -1,5 +1,6 @@
 import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { slug as slugMarkdownHeading } from 'github-slugger'
+import { composeQuickOpenText } from '../../../../../../shared/quick-open/quick-open-path-search'
 
 export const MARKDOWN_DOC_LINK_PREFIX = '#orca-doc-link='
 
@@ -31,10 +32,16 @@ export type ParsedMarkdownDocLink = {
   alias: string | null
 }
 
-export type MarkdownDocumentIndex = {
+type MarkdownDocumentKeyMaps = {
   byName: Map<string, MarkdownDocument[]>
   byRelativePath: Map<string, MarkdownDocument[]>
   byRelativePathWithoutExtension: Map<string, MarkdownDocument[]>
+}
+
+export type MarkdownDocumentIndex = MarkdownDocumentKeyMaps & {
+  // Why: macOS lists note names as stored, often decomposed (NFD), while link targets are typed
+  // composed (NFC). A key that changes when composed is indexed here again under the composed key.
+  composed: MarkdownDocumentKeyMaps
 }
 
 export type MarkdownDocLinkResolution =
@@ -100,22 +107,88 @@ function resolveMatches(matches: MarkdownDocument[] | undefined): MarkdownDocLin
     : { status: 'ambiguous', matches }
 }
 
-export function createMarkdownDocumentIndex(documents: MarkdownDocument[]): MarkdownDocumentIndex {
-  const byName = new Map<string, MarkdownDocument[]>()
-  const byRelativePath = new Map<string, MarkdownDocument[]>()
-  const byRelativePathWithoutExtension = new Map<string, MarkdownDocument[]>()
+function createMarkdownDocumentKeyMaps(): MarkdownDocumentKeyMaps {
+  return {
+    byName: new Map<string, MarkdownDocument[]>(),
+    byRelativePath: new Map<string, MarkdownDocument[]>(),
+    byRelativePathWithoutExtension: new Map<string, MarkdownDocument[]>()
+  }
+}
+
+function addComposedDocument(
+  map: Map<string, MarkdownDocument[]>,
+  key: string,
+  document: MarkdownDocument
+): void {
+  const composedKey = composeQuickOpenText(key)
+  if (composedKey !== key) {
+    addIndexedDocument(map, composedKey, document)
+  }
+}
+
+// Why: the editor, the preview and the rich doc-link decorations each need the index of the same
+// listing; building it once per listing offsets the composed keys added for decomposed names.
+const indexByDocuments = new WeakMap<readonly MarkdownDocument[], MarkdownDocumentIndex>()
+
+export function getMarkdownDocumentIndex(
+  documents: readonly MarkdownDocument[]
+): MarkdownDocumentIndex {
+  let index = indexByDocuments.get(documents)
+  if (!index) {
+    index = createMarkdownDocumentIndex(documents)
+    indexByDocuments.set(documents, index)
+  }
+  return index
+}
+
+function createMarkdownDocumentIndex(
+  documents: readonly MarkdownDocument[]
+): MarkdownDocumentIndex {
+  const { byName, byRelativePath, byRelativePathWithoutExtension } = createMarkdownDocumentKeyMaps()
+  const composed = createMarkdownDocumentKeyMaps()
 
   for (const document of documents) {
-    addIndexedDocument(byName, normalizeDocLinkKey(document.name), document)
-    addIndexedDocument(byRelativePath, normalizeDocLinkKey(document.relativePath), document)
-    addIndexedDocument(
-      byRelativePathWithoutExtension,
-      normalizeDocLinkKey(stripMarkdownExtension(document.relativePath)),
-      document
-    )
+    const nameKey = normalizeDocLinkKey(document.name)
+    const relativePathKey = normalizeDocLinkKey(document.relativePath)
+    const extensionlessKey = normalizeDocLinkKey(stripMarkdownExtension(document.relativePath))
+    addIndexedDocument(byName, nameKey, document)
+    addIndexedDocument(byRelativePath, relativePathKey, document)
+    addIndexedDocument(byRelativePathWithoutExtension, extensionlessKey, document)
+    addComposedDocument(composed.byName, nameKey, document)
+    addComposedDocument(composed.byRelativePath, relativePathKey, document)
+    addComposedDocument(composed.byRelativePathWithoutExtension, extensionlessKey, document)
   }
 
-  return { byName, byRelativePath, byRelativePathWithoutExtension }
+  return { byName, byRelativePath, byRelativePathWithoutExtension, composed }
+}
+
+function resolveDocLinkKey(
+  normalizedTarget: string,
+  getMatches: (map: keyof MarkdownDocumentKeyMaps, key: string) => MarkdownDocument[] | undefined
+): MarkdownDocLinkResolution {
+  const extensionlessTarget = stripMarkdownExtension(normalizedTarget)
+
+  // Prefer exact paths so guide.md remains unambiguous when guide.mdx shares its extensionless key.
+  const relativeWithExtension = resolveMatches(getMatches('byRelativePath', normalizedTarget))
+  if (relativeWithExtension) {
+    return relativeWithExtension
+  }
+
+  const relativeWithoutExtension = resolveMatches(
+    getMatches('byRelativePathWithoutExtension', extensionlessTarget)
+  )
+  if (relativeWithoutExtension) {
+    return relativeWithoutExtension
+  }
+
+  if (!normalizedTarget.includes('/')) {
+    const byName = resolveMatches(getMatches('byName', extensionlessTarget))
+    if (byName) {
+      return byName
+    }
+  }
+
+  return { status: 'missing' }
 }
 
 export function resolveMarkdownDocLink(
@@ -123,29 +196,20 @@ export function resolveMarkdownDocLink(
   index: MarkdownDocumentIndex
 ): MarkdownDocLinkResolution {
   const normalizedTarget = normalizeDocLinkKey(getMarkdownDocLinkDocumentTarget(target))
-  const extensionlessTarget = stripMarkdownExtension(normalizedTarget)
-
-  // Prefer exact paths so guide.md remains unambiguous when guide.mdx shares its extensionless key.
-  const relativeWithExtension = resolveMatches(index.byRelativePath.get(normalizedTarget))
-  if (relativeWithExtension) {
-    return relativeWithExtension
+  const exact = resolveDocLinkKey(normalizedTarget, (map, key) => index[map].get(key))
+  if (exact.status !== 'missing') {
+    return exact
   }
 
-  const relativeWithoutExtension = resolveMatches(
-    index.byRelativePathWithoutExtension.get(extensionlessTarget)
-  )
-  if (relativeWithoutExtension) {
-    return relativeWithoutExtension
-  }
-
-  if (!normalizedTarget.includes('/')) {
-    const byName = resolveMatches(index.byName.get(extensionlessTarget))
-    if (byName) {
-      return byName
-    }
-  }
-
-  return { status: 'missing' }
+  // Why: compare composed only when nothing matches exactly, so a composed and a decomposed file
+  // that coexist (possible on Linux and Windows) keep resolving to the spelling that was typed.
+  return resolveDocLinkKey(composeQuickOpenText(normalizedTarget), (map, key) => {
+    const matches = index[map].get(key)
+    const composedMatches = index.composed[map].get(key)
+    return matches && composedMatches
+      ? [...matches, ...composedMatches]
+      : (matches ?? composedMatches)
+  })
 }
 
 export function parseMarkdownDocLink(rawTarget: string): ParsedMarkdownDocLink | null {

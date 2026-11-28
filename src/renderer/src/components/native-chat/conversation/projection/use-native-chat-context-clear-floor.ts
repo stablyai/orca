@@ -1,11 +1,15 @@
 import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
+import { useNativeChatConversationKey } from './use-native-chat-conversation-key'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionContextClearOutstanding,
-  agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
 } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import {
+  rowsBesideStreamedText,
+  streamedRowsFromFloor
+} from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
 export const NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS = 150
@@ -33,10 +37,14 @@ export function useNativeChatContextClearFloor(
   rows: readonly AgentJournalRenderItem[]
   clearing: boolean
   clears: number
+  /** Names the conversation shown: its journal and the live `/clear`s this tab has seen in it. */
+  conversationKey: string
   /** Call as this view's /clear goes out; the returned restore shows the transcript again if refused. */
   onClearSent: () => () => void
 } {
-  const latest = useMemo(() => latestAgentSessionContextClearSequence(items), [items])
+  // A streaming reply never moves the /clear floor, so its text revisions keep this memo.
+  const clearRows = rowsBesideStreamedText(items)
+  const latest = useMemo(() => latestAgentSessionContextClearSequence(clearRows), [clearRows])
   const [state, setState] = useState<ClearFloorState>(() => ({
     epoch,
     floor: latest,
@@ -115,6 +123,13 @@ export function useNativeChatContextClearFloor(
   )
 
   const floor = current.floor
-  const rows = useMemo(() => agentSessionTranscriptRows(items, floor), [floor, items])
-  return { rows, clearing: fading !== null || awaitingDivider, clears: current.clears, onClearSent }
+  const rows = useMemo(() => streamedRowsFromFloor(items, floor), [floor, items])
+  const conversationKey = useNativeChatConversationKey(epoch, current.clears)
+  return {
+    rows,
+    clearing: fading !== null || awaitingDivider,
+    clears: current.clears,
+    conversationKey,
+    onClearSent
+  }
 }

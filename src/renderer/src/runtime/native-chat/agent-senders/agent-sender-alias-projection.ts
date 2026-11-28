@@ -4,10 +4,7 @@ import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerInputs
 } from '../session-ownership/structured-agent-session-owner'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
@@ -98,10 +95,9 @@ export function agentSenderAliasParts(state: AppState): readonly AliasPart[] {
           // The chat's own recorded host, else its workspace's owner, as the sidebar reads it.
           const host = tab.executionHostId ?? hostOf(tab.worktreeId)
           if (host && tab.contentType === 'agent-session') {
-            const pane = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+            const pane = chatPaneKey(tab.entityId)
             chats.push([key(host, pane), tab])
-            const canonical = structuredAgentSessionTabId(tab.entityId)
-            visible.push([key(host, structuredAgentSessionPaneKey(canonical, tab.entityId)), pane])
+            visible.push([key(host, pane), pane])
           }
         }
         return { visible, chats }

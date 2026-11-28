@@ -4,8 +4,8 @@ import type {
 } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeTerminalListResult,
-  RuntimeTerminalOrphanAdoptionClaim
+  RuntimeTerminalOrphanAdoptionClaim,
+  RuntimeTerminalSummaryWithoutPreview
 } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -278,7 +278,7 @@ export function mergeRetainedTerminalSurfaces(
 }
 
 export function hasStrongOrphanIdentity(
-  terminal: RuntimeTerminalListResult['terminals'][number],
+  terminal: RuntimeTerminalSummaryWithoutPreview,
   surface: RecoverySurface,
   worktreeId: string
 ): boolean {

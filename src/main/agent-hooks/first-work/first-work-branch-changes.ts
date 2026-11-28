@@ -30,6 +30,8 @@ type GitRunner = (args: string[], options: GitExecOptions) => Promise<{ stdout: 
 const EVIDENCE_MAX_BUFFER = 256 * 1024
 const UNTRACKED_MAX_BUFFER = 64 * 1024
 const STAT_ARGS = ['--no-ext-diff', '--no-color', '--stat=200', '--stat-count=200']
+// Paths reach the naming model, so non-ASCII names must not be octal-escaped.
+const UNQUOTED_PATHS = ['-c', 'core.quotePath=false']
 
 /** The exit facts the termination-barrier route attaches to a thrown capture error. */
 type GitExitFields = {
@@ -142,11 +144,18 @@ export async function readBranchChangesForNaming(args: {
           `${mergeBase}..HEAD`
         ])
       : Promise.resolve<GitCapture>({ kind: 'ok', stdout: '' }),
-    capture(['diff', ...STAT_ARGS, mergeBase ?? 'HEAD']),
+    capture([...UNQUOTED_PATHS, 'diff', ...STAT_ARGS, mergeBase ?? 'HEAD']),
     // The index is read on its own: staged work can cancel out of the working-tree diff.
-    capture(['diff', '--cached', ...STAT_ARGS]),
+    capture([...UNQUOTED_PATHS, 'diff', '--cached', ...STAT_ARGS]),
     capture(
-      ['ls-files', '--others', '--exclude-standard', '--directory', '--no-empty-directory'],
+      [
+        ...UNQUOTED_PATHS,
+        'ls-files',
+        '--others',
+        '--exclude-standard',
+        '--directory',
+        '--no-empty-directory'
+      ],
       UNTRACKED_MAX_BUFFER
     )
   ])
