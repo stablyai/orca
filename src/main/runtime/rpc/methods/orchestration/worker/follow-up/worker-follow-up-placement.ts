@@ -18,6 +18,8 @@ import type {
   RetainedWorkerTerminal
 } from '../../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import type { RunningStructuredSession } from '../../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { OrchestrationWorkerLaunchReceipt } from '../start/launch/worker-launch-preferences'
+import { reopenedTerminalLaunchReceipt } from './worker-follow-up-launch'
 
 /** What a follow-up continues, and for a closed worker how it comes back once the follow-up holds its Dispatch. */
 export type WorkerFollowUp = {
@@ -32,6 +34,8 @@ export type WorkerFollowUp = {
   /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
   reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
   retainedChat?: RetainedWorkerTerminal
+  /** Effective agent/model/effort and provenance resolved for a reused or reopened follow-up turn. */
+  launchReceipt?: OrchestrationWorkerLaunchReceipt
   /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
   acceptedBy?: { callerFingerprint: string; requestId: string }
   /** The Dispatch whose unread mail this follow-up's Task tells it to check. */
@@ -47,6 +51,8 @@ export type ReopenedWorker = {
   userOpened: boolean
   /** A reopened chat's custody identity; a resumed terminal's comes from its new pane. */
   authority?: { paneKey: string; processIncarnation: string; hostScope: string }
+  /** Provenance parsed from the actual resume launch recipe passed to resumeAgentSessionInWorkspace. */
+  launchReceipt?: OrchestrationWorkerLaunchReceipt
 }
 
 /** Resume a closed terminal worker's conversation in a new background tab; never a shell. Null: start a fresh agent. */
@@ -56,19 +62,29 @@ export async function reopenWorkerTerminal(
   session: WorkerResumeSession,
   dispatchId: string
 ): Promise<ReopenedWorker | null> {
+  const recipe = resolveResumeLaunchRecipe(
+    session.launchConfig,
+    session.agent,
+    session.providerSession
+  )
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
     // Why always a recipe: without its own note the worker resumes unrecorded, never with another pane's.
-    launchConfig: resolveResumeLaunchRecipe(
-      session.launchConfig,
-      session.agent,
-      session.providerSession
-    ),
+    launchConfig: recipe,
     // A retry of this follow-up reconciles the pane it may have started.
     mutationId: dispatchId
   })
   if (resumed.ok) {
-    return { handle: resumed.handle, chat: false, userOpened: false }
+    return {
+      handle: resumed.handle,
+      chat: false,
+      userOpened: false,
+      launchReceipt: reopenedTerminalLaunchReceipt(
+        session.agent,
+        Boolean(session.launchConfig),
+        recipe
+      )
+    }
   }
   switch (resumed.reason) {
     case 'window_owns_wake':

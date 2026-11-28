@@ -5,6 +5,8 @@
 import { isResumableTuiAgent } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
+import type { OrchestrationWorkerLaunchReceipt } from '../start/launch/worker-launch-preferences'
+import { openTerminalLaunchReceipt } from './worker-follow-up-launch'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import {
@@ -53,6 +55,7 @@ export type WorkerFollowUpPlacement = {
   earlierWork?: string
   reopen?: WorkerFollowUp['reopen']
   retainedChat?: WorkerFollowUp['retainedChat']
+  launchReceipt?: OrchestrationWorkerLaunchReceipt
 }
 
 export async function chooseWorkerFollowUpPlacement(
@@ -119,15 +122,31 @@ export async function chooseWorkerFollowUpPlacement(
     resource && !released(resource)
       ? await openWorkerTerminal(runtime, db, resource, release)
       : null
-  if (open) {
-    return { delivery: 'follow_up', worktreeId, terminal: open }
-  }
   // Read after any close above, which saves the conversation the pane last reported.
   const session = readWorkerResumeSession(resource && db.getWorkerTerminalResource(resource.id))
+  if (open) {
+    return {
+      delivery: 'follow_up',
+      worktreeId,
+      terminal: open,
+      launchReceipt: openTerminalLaunchReceipt(runtime, db, options.agent, open, session?.agent)
+    }
+  }
   if (session && isResumableTuiAgent(session.agent)) {
     const userTab = await userTabHoldingSession(runtime, session)
     return userTab
-      ? { delivery: 'follow_up', worktreeId, terminal: userTab }
+      ? {
+          delivery: 'follow_up',
+          worktreeId,
+          terminal: userTab,
+          launchReceipt: openTerminalLaunchReceipt(
+            runtime,
+            db,
+            options.agent,
+            userTab,
+            session.agent
+          )
+        }
       : {
           delivery: 'reopened',
           worktreeId,

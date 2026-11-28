@@ -9,6 +9,14 @@ import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
+export type WorkerLaunchSettingSource = 'session' | 'inherited' | 'default' | 'unavailable'
+
+export type OrchestrationWorkerLaunchSource = {
+  agent: WorkerLaunchSettingSource
+  model: WorkerLaunchSettingSource
+  effort: WorkerLaunchSettingSource
+}
+
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
   model: string | null
@@ -18,6 +26,7 @@ export type OrchestrationWorkerLaunchSelection = {
 export type OrchestrationWorkerLaunchReceipt = {
   requested: OrchestrationWorkerLaunchSelection
   effective: OrchestrationWorkerLaunchSelection | null
+  effectiveSource?: OrchestrationWorkerLaunchSource
 }
 
 export function createWorkerLaunchReceipt(args: {

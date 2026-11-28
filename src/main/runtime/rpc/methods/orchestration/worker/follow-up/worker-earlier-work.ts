@@ -3,7 +3,7 @@ import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schem
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { DispatchContextRow } from '../../../../../orchestration/db/orchestration-records'
-import { parseRecordedWorkerLaunchOptions } from '../start/launch/worker-launch-preferences'
+import type { WorkerLaunchSettingSource } from '../start/launch/worker-launch-preferences'
 
 const EARLIER_WORK_CLIP = 2_000
 
@@ -15,6 +15,44 @@ const WorkerReport = lazyZodSchema(() =>
   })
 )
 
+function knownLaunchSource(
+  value: string | null | undefined
+): WorkerLaunchSettingSource | undefined {
+  return value === 'session' ||
+    value === 'inherited' ||
+    value === 'default' ||
+    value === 'unavailable'
+    ? value
+    : undefined
+}
+
+const RecordedSelection = lazyZodSchema(() =>
+  z.looseObject({
+    agent: z.string().nullish(),
+    model: z.string().nullish(),
+    effort: z.string().nullish()
+  })
+)
+
+const FollowUpStartOptions = lazyZodSchema(() =>
+  z.looseObject({
+    agent: z.string().nullish(),
+    launch: z
+      .looseObject({
+        requested: RecordedSelection.nullish(),
+        effective: RecordedSelection.nullish(),
+        effectiveSource: z
+          .looseObject({
+            agent: z.string().nullish(),
+            model: z.string().nullish(),
+            effort: z.string().nullish()
+          })
+          .nullish()
+      })
+      .nullish()
+  })
+)
+
 function parseJson(raw: string | null): unknown {
   try {
     return raw ? JSON.parse(raw) : null
@@ -23,17 +61,61 @@ function parseJson(raw: string | null): unknown {
   }
 }
 
-/** The agent and launch choices the worker first started with, for a fresh start of the same kind. */
+function nonEmptyOption(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : undefined
+}
+
+function resolveFollowUpSetting(
+  effectiveValue: string | null | undefined,
+  fallbackValue: string | null | undefined,
+  hasEffective: boolean,
+  source: WorkerLaunchSettingSource | null | undefined
+): string | undefined {
+  const resolved = nonEmptyOption(effectiveValue)
+  if (resolved !== undefined) {
+    return resolved
+  }
+  return hasEffective && (source === 'unavailable' || source === 'default')
+    ? undefined
+    : nonEmptyOption(fallbackValue)
+}
+
+/** The agent and launch choices a follow-up inherits, preferring launch.effective over legacy launch.requested. */
 export function parseStartOptions(raw: string): {
   agent?: string
   model?: string
   effort?: string
 } {
-  const parsed = parseRecordedWorkerLaunchOptions(raw)
+  const parsed = FollowUpStartOptions.safeParse(parseJson(raw))
+  if (!parsed.success) {
+    return {}
+  }
+  const launch = parsed.data.launch
+  const requested = launch?.requested
+  const effective = launch?.effective
+  const effectiveSource = launch?.effectiveSource
+  const hasEffective = effective != null
+  const rawAgent = resolveFollowUpSetting(
+    effective?.agent,
+    nonEmptyOption(parsed.data.agent) ?? nonEmptyOption(requested?.agent),
+    hasEffective,
+    knownLaunchSource(effectiveSource?.agent)
+  )
   return {
-    agent: isTuiAgent(parsed.agent) ? parsed.agent : undefined,
-    model: parsed.model,
-    effort: parsed.effort
+    agent: isTuiAgent(rawAgent) ? rawAgent : undefined,
+    model: resolveFollowUpSetting(
+      effective?.model,
+      requested?.model,
+      hasEffective,
+      knownLaunchSource(effectiveSource?.model)
+    ),
+    effort: resolveFollowUpSetting(
+      effective?.effort,
+      requested?.effort,
+      hasEffective,
+      knownLaunchSource(effectiveSource?.effort)
+    )
   }
 }
 

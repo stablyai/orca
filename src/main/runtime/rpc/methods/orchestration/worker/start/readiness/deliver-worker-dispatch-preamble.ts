@@ -21,6 +21,8 @@ import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/
 import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../../../../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
+import type { OrchestrationWorkerLaunchReceipt } from '../launch/worker-launch-preferences'
+import { structuredDeliveryLaunchReceipt } from '../../follow-up/worker-follow-up-launch'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 
 type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
@@ -45,9 +47,12 @@ export async function deliverWorkerDispatchPreamble(args: {
   launchedAgent?: string | null
   /** The caller's readiness budget; a structured worker's start counts against it. */
   readinessTimeoutMs?: number
+  /** Present on follow-up dispatches so structured chat delivery records the admission snapshot. */
+  followUp?: { allowInheritedAgent: boolean; agent: string | null }
 }): Promise<{
   prompt?: RuntimeTerminalSend['prompt']
   structuredTurnStart?: WorkerTurnStartObservation
+  launchReceipt?: OrchestrationWorkerLaunchReceipt
 }> {
   const { runtime, structuredSession, terminalHandle } = args
   // A reused structured worker is a chat too, though its handle is not an Orca session ID.
@@ -82,8 +87,30 @@ export async function deliverWorkerDispatchPreamble(args: {
       )
     }
     const from = workerTaskSource(args)
-    const delivery = await sendChatTask({ db: args.db, dispatch, from, preamble })
-    return { structuredTurnStart: chatTaskTurnStart(delivery) }
+    let launchReceipt: OrchestrationWorkerLaunchReceipt | undefined
+    const delivery = await sendChatTask({
+      db: args.db,
+      dispatch,
+      from,
+      preamble,
+      ...(args.followUp
+        ? {
+            onAdmitted: ({ observedAgent, capturedOptions }) => {
+              launchReceipt = structuredDeliveryLaunchReceipt({
+                observedAgent,
+                ...(args.followUp?.allowInheritedAgent
+                  ? { fallbackAgent: args.followUp.agent }
+                  : {}),
+                capturedOptions
+              })
+            }
+          }
+        : {})
+    })
+    return {
+      structuredTurnStart: chatTaskTurnStart(delivery),
+      ...(launchReceipt ? { launchReceipt } : {})
+    }
   }
   if (structuredSession) {
     // A stop that landed after the start's last wait hands the worker back, as the terminal path does.
