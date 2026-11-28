@@ -16929,14 +16929,18 @@
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
-          "stylePicture": "Resim",
-          "resetAppearance": "Simgeyi ve rengi sıfırla",
+          "styleImage": "Görsel",
           "faviconPlaceholder": "Favicon için web sitesi",
           "lettersInput": "En fazla 2 harf",
           "lettersPlaceholder": "1–2 harf",
           "useLetters": "“{{value0}}” kullan",
-          "usingGitHubAvatar": "GitHub avatarı kullanılıyor",
-          "openSettings": "Ayarları Aç"
+          "openSettings": "Ayarları Aç",
+          "noIconFound": "Simge bulunamadı",
+          "githubAvatar": "GitHub avatarı",
+          "websiteIcon": "Web sitesi simgesi",
+          "fetchIcon": "Getir",
+          "uploadTooLarge": "256 KB'tan büyük",
+          "options": "Seçenekler"
         }
       },
       "pet": {

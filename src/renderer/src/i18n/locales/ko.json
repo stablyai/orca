@@ -16154,14 +16154,18 @@
           "resetDone": "아이콘과 색상이 재설정됨",
           "undo": "실행 취소",
           "styleLetters": "글자",
-          "stylePicture": "사진",
-          "resetAppearance": "아이콘 및 색상 재설정",
+          "styleImage": "이미지",
           "faviconPlaceholder": "파비콘을 가져올 웹사이트",
           "lettersInput": "최대 2글자",
           "lettersPlaceholder": "1–2글자",
           "useLetters": "“{{value0}}” 사용",
-          "usingGitHubAvatar": "GitHub 아바타 사용 중",
-          "openSettings": "설정 열기"
+          "openSettings": "설정 열기",
+          "noIconFound": "아이콘을 찾을 수 없음",
+          "githubAvatar": "GitHub 아바타",
+          "websiteIcon": "웹사이트 아이콘",
+          "fetchIcon": "가져오기",
+          "uploadTooLarge": "256KB 초과",
+          "options": "옵션"
         }
       },
       "pet": {

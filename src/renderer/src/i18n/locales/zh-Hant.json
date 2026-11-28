@@ -16735,14 +16735,18 @@
           "resetDone": "已重設圖示和顏色",
           "undo": "復原",
           "styleLetters": "文字",
-          "stylePicture": "圖片",
-          "resetAppearance": "重設圖示和顏色",
+          "styleImage": "圖片",
           "faviconPlaceholder": "網站網址（用來取得網站圖示）",
           "lettersInput": "最多 2 個字元",
           "lettersPlaceholder": "1–2 個字元",
           "useLetters": "使用「{{value0}}」",
-          "usingGitHubAvatar": "正在使用 GitHub 頭像",
-          "openSettings": "開啟設定"
+          "openSettings": "開啟設定",
+          "noIconFound": "找不到圖示",
+          "githubAvatar": "GitHub 頭像",
+          "websiteIcon": "網站圖示",
+          "fetchIcon": "取得",
+          "uploadTooLarge": "超過 256 KB",
+          "options": "選項"
         }
       },
       "pet": {
