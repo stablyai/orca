@@ -30,7 +30,9 @@ export type InstallRecord = {
   originalCommandLiteral?: string
   installedCommand: string
   /** Keys an install added to an existing statusLine object that lacked a command. */
-  insertedKeys?: string[]
+  insertedKeys?: ('type' | 'command')[]
+  /** The statusLine object was already there, so removal keeps it even when it ends up empty. */
+  statusLineExisted?: boolean
   /** The whole settings file before install (null: Orca created it) and a hash of what Orca wrote. */
   preInstallText: string | null
   postInstallSha256: string
@@ -138,45 +140,64 @@ export async function restoreFileText(
   }
 }
 
-/** Null when there is no record or it is damaged; a file that exists but cannot be read throws. */
+function readInsertedKeys(
+  present: boolean,
+  keys: unknown
+): ('type' | 'command')[] | null | undefined {
+  if (!present) {
+    return undefined
+  }
+  if (!Array.isArray(keys) || new Set(keys).size !== keys.length) {
+    return null
+  }
+  const valid = keys.filter((key): key is 'type' | 'command' => key === 'type' || key === 'command')
+  return valid.length === keys.length ? valid : null
+}
+
+/** Null when there is no record; a record that is unreadable or damaged throws, and is never replaced. */
 export async function readRecord(path: string): Promise<InstallRecord | null> {
   const text = await readTextOrNull(path)
   if (text === null) {
     return null
   }
-  try {
-    const raw: unknown = JSON.parse(text)
-    if (
-      typeof raw === 'object' &&
-      raw !== null &&
-      'installedCommand' in raw &&
-      typeof raw.installedCommand === 'string' &&
-      'originalCommand' in raw &&
-      (raw.originalCommand === null || typeof raw.originalCommand === 'string') &&
-      'postInstallSha256' in raw &&
-      typeof raw.postInstallSha256 === 'string' &&
-      'preInstallText' in raw &&
-      (raw.preInstallText === null || typeof raw.preInstallText === 'string')
-    ) {
-      return {
-        originalCommand: raw.originalCommand,
-        ...('originalCommandLiteral' in raw && typeof raw.originalCommandLiteral === 'string'
-          ? { originalCommandLiteral: raw.originalCommandLiteral }
-          : {}),
-        ...('insertedKeys' in raw &&
-        Array.isArray(raw.insertedKeys) &&
-        raw.insertedKeys.every((key) => typeof key === 'string')
-          ? { insertedKeys: raw.insertedKeys }
-          : {}),
-        installedCommand: raw.installedCommand,
-        preInstallText: raw.preInstallText,
-        postInstallSha256: raw.postInstallSha256
-      }
+  const raw: unknown = JSON.parse(text)
+  const insertedKeys =
+    typeof raw === 'object' && raw !== null
+      ? readInsertedKeys(
+          'insertedKeys' in raw,
+          'insertedKeys' in raw ? raw.insertedKeys : undefined
+        )
+      : null
+  if (
+    typeof raw === 'object' &&
+    raw !== null &&
+    insertedKeys !== null &&
+    'installedCommand' in raw &&
+    typeof raw.installedCommand === 'string' &&
+    'originalCommand' in raw &&
+    (raw.originalCommand === null || typeof raw.originalCommand === 'string') &&
+    'postInstallSha256' in raw &&
+    typeof raw.postInstallSha256 === 'string' &&
+    'preInstallText' in raw &&
+    (raw.preInstallText === null || typeof raw.preInstallText === 'string') &&
+    (!('originalCommandLiteral' in raw) || typeof raw.originalCommandLiteral === 'string') &&
+    (!('statusLineExisted' in raw) || typeof raw.statusLineExisted === 'boolean')
+  ) {
+    return {
+      originalCommand: raw.originalCommand,
+      ...('originalCommandLiteral' in raw && typeof raw.originalCommandLiteral === 'string'
+        ? { originalCommandLiteral: raw.originalCommandLiteral }
+        : {}),
+      ...(insertedKeys ? { insertedKeys } : {}),
+      ...('statusLineExisted' in raw && typeof raw.statusLineExisted === 'boolean'
+        ? { statusLineExisted: raw.statusLineExisted }
+        : {}),
+      installedCommand: raw.installedCommand,
+      preInstallText: raw.preInstallText,
+      postInstallSha256: raw.postInstallSha256
     }
-  } catch {
-    // A damaged record means no restore point.
   }
-  return null
+  throw new Error('Orca restore record is damaged')
 }
 
 // The record and script hold the user's command, so only the owner may read them.

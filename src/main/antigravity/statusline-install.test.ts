@@ -354,6 +354,37 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line installer
     expect(JSON.parse(read()).statusLine).toEqual({ type: 'command', padding: 3 })
   })
 
+  it('keeps an empty statusLine object that was there before install', async () => {
+    seed('{"theme":"dark","statusLine":{}}')
+    await installAntigravityStatusLine(options())
+    writeFileSync(settingsPath, read().replace('"dark"', '"light"'))
+    expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+    expect(JSON.parse(read())).toEqual({ theme: 'light', statusLine: {} })
+  })
+
+  it.each([
+    ['keys other than type and command', ['padding']],
+    ['duplicate keys', ['command', 'command']],
+    ['a value that is not an array', 'command']
+  ])(
+    'treats a record with insertedKeys of %s as damaged and changes nothing',
+    async (_name, keys) => {
+      seed('{"theme":"dark","statusLine":{"padding":2}}')
+      await installAntigravityStatusLine(options())
+      const record = JSON.parse(readFileSync(recordPath, 'utf8'))
+      writeFileSync(recordPath, JSON.stringify({ ...record, insertedKeys: keys }))
+      writeFileSync(settingsPath, read().replace('"dark"', '"light"'))
+      const settings = read()
+      const damaged = readFileSync(recordPath, 'utf8')
+
+      expect((await getAntigravityStatusLineStatus(options())).state).toBe('error')
+      expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+      expect((await installAntigravityStatusLine(options())).state).toBe('error')
+      expect(read()).toBe(settings)
+      expect(readFileSync(recordPath, 'utf8')).toBe(damaged)
+    }
+  )
+
   it('names a turned-off status line in the error', async () => {
     seed('{"statusLine":{"command":"echo hi","enabled":false}}')
     expect((await installAntigravityStatusLine(options())).detail).toContain('turned off')

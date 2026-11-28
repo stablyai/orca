@@ -174,7 +174,8 @@ export function addStatusLineKeys(
  */
 export function removeInsertedStatusLineKeys(
   text: string,
-  keys: readonly string[] = ['command', 'type']
+  keys: readonly string[] = ['command', 'type'],
+  keepEmptyObject = false
 ): string | null {
   let next = text
   for (const key of keys) {
@@ -191,5 +192,7 @@ export function removeInsertedStatusLineKeys(
     }
   }
   const left = rootMembers(next)?.members.find((member) => memberName(member) === 'statusLine')
-  return (left?.children?.[1]?.children ?? []).length === 0 ? removeStatusLineMember(next) : next
+  return !keepEmptyObject && (left?.children?.[1]?.children ?? []).length === 0
+    ? removeStatusLineMember(next)
+    : next
 }

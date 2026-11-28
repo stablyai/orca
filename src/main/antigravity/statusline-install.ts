@@ -83,6 +83,7 @@ function planInstall(text: string | null, slot: StatusLineInspection, paths: Pat
             ...base,
             originalCommand: null,
             insertedKeys: slot.hasType ? ['command'] : ['command', 'type'],
+            statusLineExisted: true,
             postInstallSha256: sha256(next)
           }
         }
@@ -146,9 +147,11 @@ export async function installAntigravityStatusLine(
   }
   let text = await readTextOrNull(resolved.target)
   // Only a missing file counts as absent; one Orca cannot read must not be replaced or rolled back.
+  // A damaged record is just as untouchable: it may still be the only way back for a past install.
   const before = await Promise.all([
     readTextOrNull(paths.record),
-    readTextOrNull(paths.script)
+    readTextOrNull(paths.script),
+    readRecord(paths.record)
   ]).then(
     ([record, script]) => ({ record, script }),
     () => null
@@ -211,7 +214,7 @@ function planRemoval(text: string, record: InstallRecord): RemovalPlan {
   }
   const next =
     record.originalCommandLiteral === undefined
-      ? removeInsertedStatusLineKeys(text, record.insertedKeys)
+      ? removeInsertedStatusLineKeys(text, record.insertedKeys, record.statusLineExisted)
       : (replaceStatusLineCommand(text, record.originalCommandLiteral)?.text ?? null)
   return next === null ? { error: INVALID } : { next }
 }
