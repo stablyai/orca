@@ -37,6 +37,14 @@ on:
         description: Optional base release tag; blank uses this branch build
         type: string
         default: ''
+      scenarios:
+        description: Run the update scenario matrix instead of the single survival proof
+        type: boolean
+        default: false
+      scenarios_release:
+        description: Released base for the scenario matrix's transitional updates
+        type: string
+        default: v1.4.277
 
 permissions:
   contents: read
@@ -47,6 +55,7 @@ concurrency:
 
 jobs:
   survival:
+    if: ${{ !inputs.scenarios }}
     name: update ${{ inputs.from_release || 'branch' }} to branch (${{ inputs.expect || 'survival' }}, policy=${{ inputs.policy || 'inherited' }})
     runs-on: windows-2022
     timeout-minutes: 50
@@ -155,3 +164,124 @@ jobs:
             artifacts/diag/**
           retention-days: 7
           if-no-files-found: warn
+
+  # Real installers, run silently the way electron-updater runs them; see tests/tools/win-update-e2e/scenarios.mjs.
+  scenarios:
+    if: ${{ inputs.scenarios }}
+    name: update scenario matrix (from ${{ inputs.scenarios_release }})
+    runs-on: windows-2022
+    timeout-minutes: 150
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - uses: ./.github/actions/prepare-windows-agent-hook
+
+      # N, N+1 and N+2 are this branch at 1.4.900/901/902 (N+1/N+2 repackage N with a build marker);
+      # main-n/main-n1 are N/N+1 with main's process check; pr-trace is N with the CI-only check trace.
+      - name: Build installers (unsigned)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force installers | Out-Null
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
+          pnpm run build:desktop
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never '-c.extraMetadata.version=1.4.900'
+          if ($LASTEXITCODE) { throw 'build failed' }
+          Copy-Item dist/orca-windows-setup.exe installers/pr-n.exe
+          $asar = 'dist/win-unpacked/resources/app.asar'
+          Copy-Item $asar "$asar.orig"
+          function Repack($version, $marker, $dest) {
+            # Each build gets its own app.asar (version stamped inside), so an update must replace it.
+            Copy-Item "$asar.orig" $asar -Force
+            if ($version -ne '1.4.900') { node tests/tools/win-update-e2e/stamp-asar.mjs $asar 1.4.900 $version; if ($LASTEXITCODE) { throw 'stamp failed' } }
+            Set-Content -NoNewline dist/win-unpacked/resources/e2e-build.txt $marker
+            # A same-version archive would otherwise be updated in place rather than rebuilt.
+            Remove-Item dist/*.nsis.7z -ErrorAction SilentlyContinue
+            pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged dist/win-unpacked "-c.extraMetadata.version=$version"
+            if ($LASTEXITCODE) { throw "repack $marker failed" }
+            Copy-Item dist/orca-windows-setup.exe $dest
+            "$marker asar sha256: $((Get-FileHash $asar).Hash)"
+          }
+          Repack 1.4.901 n1 installers/pr-n1.exe
+          Repack 1.4.902 n2 installers/pr-n2.exe
+          git fetch --depth=1 origin main
+          cmd /c "git show FETCH_HEAD:config/nsis/orca-process-check.nsh > config/nsis/orca-process-check.nsh"
+          Repack 1.4.900 main installers/main-n.exe
+          Repack 1.4.901 main1 installers/main-n1.exe
+          git checkout -- config/nsis
+          node tests/tools/win-update-e2e/trace-installer-branches.mjs
+          Repack 1.4.900 trace installers/pr-trace.exe
+          git checkout -- config/nsis
+          Get-ChildItem installers | Format-Table Name, Length
+
+      - name: Download released base installer
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE: ${{ inputs.scenarios_release }}
+        run: gh release download $env:RELEASE -R ${{ github.repository }} -p orca-windows-setup.exe -D installers/release
+
+      - name: Scenarios 1, 2, 5, 6, 7 (installer matrix)
+        id: matrix
+        continue-on-error: true
+        shell: pwsh
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          New-Item -ItemType Directory -Force artifacts/scenarios | Out-Null
+          node tests/tools/win-update-e2e/scenarios.mjs --release installers/release/orca-windows-setup.exe --pr-n installers/pr-n.exe --pr-n1 installers/pr-n1.exe --pr-n2 installers/pr-n2.exe --main-n installers/main-n.exe --main-n1 installers/main-n1.exe --pr-trace installers/pr-trace.exe --out artifacts/scenarios 2>&1 | Tee-Object -FilePath artifacts/scenarios/matrix.log
+          exit $LASTEXITCODE
+
+      - name: Scenario 4, relocated daemon survives (released to branch)
+        id: relocated
+        continue-on-error: true
+        shell: pwsh
+        env:
+          ORCA_E2E_DIAG_DIR: artifacts/scenarios/diag-relocated
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          node tests/tools/win-update-e2e/run.mjs --from installers/release/orca-windows-setup.exe --to installers/pr-n.exe --expect survival --updated --soak-seconds 30 2>&1 | Tee-Object -FilePath artifacts/scenarios/relocated-daemon.log
+          exit $LASTEXITCODE
+
+      - name: Scenario 3, fallback daemon in the install folder is ended (released to branch)
+        id: fallback
+        continue-on-error: true
+        shell: pwsh
+        env:
+          ORCA_E2E_DIAG_DIR: artifacts/scenarios/diag-fallback
+          ORCA_BACKGROUND_LAUNCH: '1'
+        run: |
+          node tests/tools/win-update-e2e/run.mjs --from installers/release/orca-windows-setup.exe --to installers/pr-n.exe --expect cold-restore --updated --daemon-fallback --soak-seconds 30 2>&1 | Tee-Object -FilePath artifacts/scenarios/fallback-daemon.log
+          exit $LASTEXITCODE
+
+      - name: Upload scenario results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: win-update-scenarios
+          path: artifacts/scenarios/**
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Fail if any scenario failed
+        if: steps.matrix.outcome != 'success' || steps.relocated.outcome != 'success' || steps.fallback.outcome != 'success'
+        run: exit 1

@@ -19,6 +19,8 @@ type WorkerShowFields = {
   liveness?: string
   activity?: string
   lastActivity?: string
+  progress?: string
+  progressUpdatedAt?: string
   terminal?: string
   terminalState?: string
   handedOnTo?: string
@@ -50,6 +52,8 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       liveness: livenessField(value.projection),
       activity: knownActivity(value.projection),
       lastActivity: lastActivity(value.projection),
+      progress: value.dispatch?.progressNote ?? undefined,
+      progressUpdatedAt: value.dispatch?.progressUpdatedAt ?? undefined,
       // Handoff keeps the predecessor's recorded handle; that terminal is the follow-up's now.
       terminal: value.handedOnTo
         ? undefined

@@ -26,6 +26,11 @@ import {
   runningRootTurnItemId
 } from './structured-agent-session-orca-stop-row'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import {
+  detachProviderRelayForQuit,
+  providerRelayHandedOffAtQuit
+} from '../../../provider-relay/app-provider-relays'
+import { quitKeepsStructuredAgent } from './structured-agent-session-quit-keeps-agent'
 
 import {
   recordStopEvent,
@@ -256,12 +261,14 @@ export async function evictOwnedStructuredAgentSessions(
   await Promise.all(
     ownedSessionIds.map(async (sessionId) => {
       try {
-        await context.serialize(sessionId, () =>
-          stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
-            cause: 'evict',
-            quit: trigger
-          })
-        )
+        await context.serialize(sessionId, async () => {
+          if (!(await detachKeptAgentUnderSerialize(context, sessionId))) {
+            await stopStructuredAgentSessionAgentUnderSerialize(context, sessionId, {
+              cause: 'evict',
+              quit: trigger
+            })
+          }
+        })
         retainOnFailure.delete(sessionId)
       } catch (error) {
         failures.push(error)
@@ -271,6 +278,33 @@ export async function evictOwnedStructuredAgentSessions(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'structured agent-session child eviction failed')
   }
+}
+
+/** A relayed agent keeps working under the terminal daemon; no stop row, cut or offer is recorded. */
+async function detachKeptAgentUnderSerialize(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<boolean> {
+  const session = context.sessions.get(sessionId)
+  if (!session || !quitKeepsStructuredAgent(sessionId, session.child)) {
+    return false
+  }
+  // A kept agent still reopening has unknown work, so the daemon never idle-stops it.
+  const reopening = session.child?.phase === 'starting'
+  // Already handed back this quit (a close during the quit did it): still nothing ends here.
+  const handedOff = providerRelayHandedOffAtQuit(sessionId)
+  const working = !reopening && (await runningRootTurnItemId(session.journal)) !== null
+  const open = reopening ? null : (context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null)
+  if (!handedOff && !(await detachProviderRelayForQuit(sessionId, open))) {
+    return false
+  }
+  // The agent goes on: what the adapter would still write here (its own teardown settling the turn,
+  // lines read past the last ack) is dropped, and the unacked lines replay at the next launch.
+  const sink = context.runtimeState.currentEventSink(sessionId)
+  const landed = sink?.drained()
+  sink?.close()
+  await landed
+  return true
 }
 
 async function awaitsReopen(journal: SqlAgentSessionJournal): Promise<boolean> {

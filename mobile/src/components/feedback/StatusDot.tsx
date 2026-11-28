@@ -1,13 +1,13 @@
 import { View, StyleSheet } from 'react-native'
-import { colors, radii } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, type MobilePalette } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import {
   isConnectionDialing,
   type ConnectionVerdict
 } from '../../transport/connection/connection-health'
 
-const stateColors = (): Record<ConnectionState, string> => ({
+const stateColors = (colors: MobilePalette): Record<ConnectionState, string> => ({
   connected: colors.statusGreen,
   connecting: colors.statusAmber,
   handshaking: colors.statusAmber,
@@ -16,14 +16,18 @@ const stateColors = (): Record<ConnectionState, string> => ({
   'auth-failed': colors.statusRed
 })
 
-export function statusDotColor(state: ConnectionState, verdict?: ConnectionVerdict): string {
+export function statusDotColor(
+  colors: MobilePalette,
+  state: ConnectionState,
+  verdict?: ConnectionVerdict
+): string {
   if (verdict?.kind === 'unreachable' || verdict?.kind === 'auth-failed') {
     return colors.statusRed
   }
   if (verdict?.kind === 'warning' || (verdict && isConnectionDialing(verdict))) {
     return colors.statusAmber
   }
-  return stateColors()[state] ?? colors.textMuted
+  return stateColors(colors)[state] ?? colors.textMuted
 }
 
 // Prefer verdict severity over transport color: reconnecting can already mean user-visible error, so dot must match label.
@@ -34,8 +38,8 @@ export function StatusDot({
   state: ConnectionState
   verdict?: ConnectionVerdict
 }) {
-  useMobileColorScheme()
-  const color = statusDotColor(state, verdict)
+  const colors = useMobileColors()
+  const color = statusDotColor(colors, state, verdict)
   return <View style={[styles.dot, { backgroundColor: color }]} />
 }
 

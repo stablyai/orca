@@ -61,6 +61,8 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     onLoadEarlier?: () => void
     // Fence send completion by route identity after tab/view switches.
     sendSurfaceId: string
+    /** The structured session this chat shows, where its cards' answers go; null before it has one. */
+    sessionId?: string | null
     getSendCompletionGeneration: () => number
     getComposerEditGeneration: () => number
     pending: MobileNativeChatPendingItem[]

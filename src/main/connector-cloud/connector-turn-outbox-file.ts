@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import {
   CONNECTOR_TURN_ORIGINS,
   ConnectorConversation,
@@ -25,30 +26,32 @@ type TurnEnded = Extract<ConnectorEvent, { kind: 'turn-ended' }>
 const MAX_PREPARED_TURN_ENDS = 200
 
 // Tagged with the account that produced them, so another account never sends them after a relaunch.
-const StoredOutbox = z.object({
-  account: z.string().min(1),
-  turnEnds: z.array(
-    z.object({
-      kind: z.literal('turn-ended'),
-      conversation: ConnectorConversation,
-      paneKey: z.string().min(1),
-      turnId: z.number(),
-      at: z.number(),
-      stopReason: z.string().min(1).nullable(),
-      lastAssistantMessage: z.string().optional(),
-      presentation: SlackAnswerPresentationSchema.optional().catch(undefined),
-      origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
-      failure: ConnectorFailure.optional().catch(undefined),
-      links: z.array(ConnectorWorkLink).optional().catch(undefined),
-      mirror: z.literal(true).optional().catch(undefined),
-      stateOnly: z.literal(true).optional().catch(undefined),
-      stateOnlyQueued: z.literal(true).optional().catch(undefined),
-      preparedStateOnly: z.literal(true).optional().catch(undefined),
-      turnFor: z.enum(['owner', 'someone_else', 'none']).optional().catch(undefined),
-      resumes: z.literal(true).optional().catch(undefined)
-    })
-  )
-})
+const StoredOutbox = lazyZodSchema(() =>
+  z.object({
+    account: z.string().min(1),
+    turnEnds: z.array(
+      z.object({
+        kind: z.literal('turn-ended'),
+        conversation: ConnectorConversation,
+        paneKey: z.string().min(1),
+        turnId: z.number(),
+        at: z.number(),
+        stopReason: z.string().min(1).nullable(),
+        lastAssistantMessage: z.string().optional(),
+        presentation: SlackAnswerPresentationSchema.optional().catch(undefined),
+        origin: z.enum(CONNECTOR_TURN_ORIGINS).optional(),
+        failure: ConnectorFailure.optional().catch(undefined),
+        links: z.array(ConnectorWorkLink).optional().catch(undefined),
+        mirror: z.literal(true).optional().catch(undefined),
+        stateOnly: z.literal(true).optional().catch(undefined),
+        stateOnlyQueued: z.literal(true).optional().catch(undefined),
+        preparedStateOnly: z.literal(true).optional().catch(undefined),
+        turnFor: z.enum(['owner', 'someone_else', 'none']).optional().catch(undefined),
+        resumes: z.literal(true).optional().catch(undefined)
+      })
+    )
+  })
+)
 
 /** What the file holds; null when there is none. */
 type StoredState = { account: string; turnEnds: readonly TurnEnded[] } | null

@@ -239,14 +239,25 @@ export async function linkedSkillProjects(
 }
 
 /** The bot's links changed: its open chats load the skills before their next turn, and its resting
- *  chats' `/` menus reread them. */
+ *  chats' and item comments' `/` menus reread them. */
 export function relinkBotSkills(
   bot: Pick<Bot, 'id' | 'skillProjects' | 'folderWorkspaceId'>,
   repos: readonly Repo[]
-): void {
-  void linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
-    .catch(() => {})
-    .finally(() => retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId)))
+): Promise<void> {
+  return linkedSkillProjects(bot, repos, botLinkedSkillsFolder(bot.id))
+    .then(
+      () => {},
+      (error: unknown) => {
+        // The folder keeps its last links, which the bot's chats and `/` menus still load.
+        console.warn("[bots] the bot's linked project skills could not be relinked", bot.id, error)
+      }
+    )
+    .finally(async () => {
+      const { clearSkillDiscoveryCaches } =
+        await import('../skills/discovery/skill-discovery-target')
+      clearSkillDiscoveryCaches()
+      retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId))
+    })
 }
 
 /** Projects as Settings shows them, from the same scan a chat's launch uses. */

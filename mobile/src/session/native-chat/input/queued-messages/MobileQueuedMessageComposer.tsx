@@ -12,10 +12,10 @@ import {
 import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
 import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/journal/agent-session-message-source'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
-import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { queuedMessageStylesSheet } from './mobile-native-chat-queued-message-styles'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../../../theme/themed-styles'
 
 export function MobileQueuedMessageComposer({
   editor,
@@ -24,7 +24,7 @@ export function MobileQueuedMessageComposer({
   editor: MobileQueuedMessageInlineEditor
   from: AgentMessageSource | undefined
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(queuedMessageStylesSheet)
   const t = useMobileTranslation()
   const context = useContext(MobileQueuedMessageComposerContext)
   const inputRef = useRef<TextInputInstance>(null)

@@ -18,7 +18,6 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { colors } from '../../theme/mobile-theme'
 import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
 import { BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import type { PhoneBot } from '../host-bots-operations'
@@ -34,6 +33,7 @@ import {
   useGoogleAccountCalls,
   type PhoneGoogle
 } from './phone-google-accounts'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** What a new account asks for: what this one has, as the desktop's Add another Google account. */
 function accountChoices(account: GoogleAccount) {
@@ -61,6 +61,7 @@ export function MobileBotGooglePage(props: {
   /** Google's sign-in; `account`: the account page to come back to. */
   onSignIn: (ask: GoogleSignInAsk, account?: string) => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const { bot, google, hostName } = props
   // An older host signs Google in only itself, so its pages say so instead.

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -14,18 +15,22 @@ import {
   type HistoryCatchUpPlan
 } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 
-const piEntrySchema = z.looseObject({
-  id: z.string().min(1),
-  parentId: z.string().min(1).nullable(),
-  type: z.string()
-})
+const piEntrySchema = lazyZodSchema(() =>
+  z.looseObject({
+    id: z.string().min(1),
+    parentId: z.string().min(1).nullable(),
+    type: z.string()
+  })
+)
 export type PiSessionEntry = z.infer<typeof piEntrySchema>
 
 /** get_entries returns append order, including abandoned branches. */
-export const piEntriesAnswerSchema = z.object({
-  entries: z.array(piEntrySchema),
-  leafId: z.string().min(1).nullable()
-})
+export const piEntriesAnswerSchema = lazyZodSchema(() =>
+  z.object({
+    entries: z.array(piEntrySchema),
+    leafId: z.string().min(1).nullable()
+  })
+)
 export type PiEntriesAnswer = z.infer<typeof piEntriesAnswerSchema>
 
 /** Walk from the leaf to the claim; null requires a whole-tree read to place an earlier rewind. */

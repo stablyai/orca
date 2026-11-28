@@ -6,9 +6,10 @@ import {
   type ConnectorReplyEvent,
   type FilledConnectorReply as Filled
 } from './connector-reply-events'
-import type {
-  ConnectorEvent,
-  ConnectorFailure
+import {
+  cloudConversation,
+  type ConnectorEvent,
+  type ConnectorFailure
 } from '../../shared/connectors/connector-cloud-contract'
 import type {
   JournalConnectorReplyCut,
@@ -287,7 +288,8 @@ export class ConnectorReplyOutbox {
   ): Promise<number | null> {
     let left = owed.length
     for (const row of owed) {
-      if (row.fill.outcome !== 'quiet') {
+      const conversation = cloudConversation(row.conversation)
+      if (row.fill.outcome !== 'quiet' && conversation) {
         // Checked just before the wire: still this account, still the kill switch's hello.
         const route = this.hooks.route()
         const { client, outbox, presentations } = route
@@ -299,12 +301,11 @@ export class ConnectorReplyOutbox {
           this.scheduleRetry()
           continue
         }
-        const body = drainReplyBody(row, client.hostName)
-        const posted = body && (await client.post(body))
+        const posted = await client.post(drainReplyBody(row, conversation, client.hostName))
         if (this.retired) {
           return null
         }
-        if (posted && !posted.ok) {
+        if (!posted.ok) {
           this.scheduleRetry()
           continue
         }

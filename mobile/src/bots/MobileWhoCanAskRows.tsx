@@ -24,9 +24,9 @@ import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
 import { PrCommentAvatar } from '../source-control/review/pull-request/comments/PrCommentAvatar'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { accessRequestGrant, accessRequestLine } from './bot-access-request-copy'
 import { MobileBotAccessDecisionContent } from './MobileBotAccessDecision'
 import { SettingsSection } from '../settings/settings-screen-frame'
@@ -50,7 +50,8 @@ export function MobilePersonFace(props: {
   picture?: string
   mark?: LucideIcon
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const [failed, setFailed] = useState<string | null>(null)
   if (props.mark) {
     const Mark = props.mark
@@ -110,6 +111,7 @@ function RowWithActions(props: {
   busy: boolean
   children: (press: { onPress: () => void; onLongPress: () => void }) => ReactNode
 }) {
+  const colors = useMobileColors()
   const anchor = useRef<HostInstance>(null)
   const [open, setOpen] = useState(false)
   // Mounted from the first open, and kept so its close fade plays: a long list mounts no menus.
@@ -204,6 +206,7 @@ export function MobileWhoCanAskServerRow(props: {
   busy: boolean
   onRemove: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <RowWithActions
@@ -323,11 +326,13 @@ export function MobileWhoCanAskReview(props: {
 
 /** An icon in a face's place, centred under the faces so the titles line up. */
 export function MobileFaceSlot({ children }: { children: ReactNode }) {
+  const styles = useThemedStyles(stylesSheet)
   return <View style={styles.slot}>{children}</View>
 }
 
 /** Add people, its icon in a face's place. */
 export function MobileWhoCanAskAddRow(props: { disabled: boolean; onPress: () => void }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   return (
     <ListRow
@@ -343,7 +348,7 @@ export function MobileWhoCanAskAddRow(props: { disabled: boolean; onPress: () =>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   face: { width: FACE, height: FACE },
   picture: {
     position: 'absolute',

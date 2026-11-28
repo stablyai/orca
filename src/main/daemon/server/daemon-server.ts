@@ -1,17 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import type { Socket } from 'node:net'
 import { setImmediate as waitForImmediate } from 'node:timers/promises'
-import { salvageDroppedDaemonStreamQueries } from '../transport/stream/daemon-stream-query-salvage'
-import {
-  BackgroundTransientFactRelay,
-  BACKGROUND_STREAM_DROP_ENABLED
-} from '../transport/stream/daemon-background-transient-facts'
 import { DaemonClientConnections } from './daemon-client-connections'
+import { createDaemonSessionStreams } from './daemon-session-streams'
+import type { BackgroundTransientFactRelay } from '../transport/stream/daemon-background-transient-facts'
+import type { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import { DaemonEndpointLifecycle } from '../endpoint/publication/daemon-endpoint-lifecycle'
 import { createNoopDaemonFileLog, type DaemonFileLog } from '../observability/daemon-file-log'
 import { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import { DaemonRequestRouter } from './daemon-request-router'
 import { answerProviderRequest } from './daemon-provider-requests'
+import type { ProviderRelayHost } from '../provider-relay/provider-relay-host'
+import { answerProviderRelayRequest } from '../provider-relay/provider-relay-requests'
+import { createDaemonProviderRelays } from '../provider-relay/daemon-provider-relays'
 import { DaemonServerLifecycle } from './daemon-server-lifecycle'
 import type { DaemonServerOptions } from './daemon-server-options'
 import { DaemonSessionAttachments } from './daemon-session-attachments'
@@ -20,7 +21,6 @@ import {
   daemonClientBacklogSampler,
   startDaemonStreamBacklogProbe
 } from '../transport/stream/daemon-stream-backlog-probe'
-import { DaemonStreamDataBatcher } from '../transport/stream/daemon-stream-data-batcher'
 import { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import { checkPtySpawnHealth } from '../pty-subprocess/pty-subprocess'
 import { TerminalHistorySeedTransferRegistry } from '../history/seed-transfer/terminal-history-seed-transfer-registry'
@@ -54,6 +54,7 @@ export class DaemonServer {
   private readonly admission: DaemonTerminalAdmission
   private readonly requestRouter: DaemonRequestRouter
   private readonly providerWork: Parameters<typeof answerProviderRequest>[3]
+  private readonly relays: ProviderRelayHost
   private stopStreamBacklogProbe: () => void = () => {}
   private readonly terminalPolicy: HostTerminalPolicy
   private terminalPolicyNonce = ''
@@ -87,25 +88,13 @@ export class DaemonServer {
         })
     })
     this.attachments = new DaemonSessionAttachments(this.host)
-    this.transientFactRelay = new BackgroundTransientFactRelay((sessionId, fact) =>
-      sendDaemonTransientFact(this.attachments, this.streamDataBatcher, sessionId, fact)
-    )
-    this.streamDataBatcher = new DaemonStreamDataBatcher(
-      (clientId) => this.connections.get(clientId),
-      {
-        onProducerBackpressureChanged: (sessionId, paused, onStallTimeout) =>
-          paused
-            ? this.host.pauseProducer(sessionId, 'stream', onStallTimeout)
-            : this.host.resumeProducer(sessionId, 'stream'),
-        isSessionAttachedToClient: (clientId, sessionId) => {
-          const owner = this.attachments.clientIdForSession(sessionId)
-          return owner === undefined || owner === clientId
-        },
-        isSessionDroppable: (sessionId) =>
-          BACKGROUND_STREAM_DROP_ENABLED && this.transientFactRelay.isBackgrounded(sessionId),
-        salvageDroppedData: salvageDroppedDaemonStreamQueries
-      }
-    )
+    const streams = createDaemonSessionStreams({
+      host: () => this.host,
+      attachments: () => this.attachments,
+      connections: () => this.connections
+    })
+    this.transientFactRelay = streams.transientFactRelay
+    this.streamDataBatcher = streams.streamDataBatcher
     this.preparations = new DaemonPtySpawnPreparations(
       options.preparePtySpawn ?? (() => Promise.resolve())
     )
@@ -123,6 +112,15 @@ export class DaemonServer {
       acceptsProviderWork: () =>
         this.lifecycle.isAcceptingWork() && !this.endpoint.hasLostOwnership()
     }
+    const relays = createDaemonProviderRelays({
+      ...options,
+      protocolVersion,
+      daemonInstance: launchNonce,
+      acceptsWork: this.providerWork.acceptsProviderWork,
+      onLiveCountChanged: () => this.lifecycle.reevaluateIdleShutdown(),
+      log: this.log
+    })
+    this.relays = relays.relays
     this.connections = new DaemonClientConnections({
       token,
       protocolVersion,
@@ -132,7 +130,8 @@ export class DaemonServer {
         entryPath: options.entryPath ?? null,
         appVersion: options.appVersion ?? null,
         spawnerExecPath: options.spawnerExecPath ?? null,
-        ...(this.providerWork.providerSpawn ? { providerSpawn: true as const } : {})
+        ...(this.providerWork.providerSpawn ? { providerSpawn: true as const } : {}),
+        ...relays.identity
       },
       log: this.log,
       streamDataBatcher: this.streamDataBatcher,
@@ -230,7 +229,8 @@ export class DaemonServer {
       }),
       streamDataBatcher: this.streamDataBatcher,
       ptySpawnHealthCheck: options.ptySpawnHealthCheck ?? checkPtySpawnHealth,
-      log: this.log
+      log: this.log,
+      relays: this.relays
     })
     this.stopStreamBacklogProbe = startDaemonStreamBacklogProbe(
       daemonClientBacklogSampler(this.connections, this.streamDataBatcher, this.transientFactRelay)
@@ -261,6 +261,7 @@ export class DaemonServer {
     return (
       this.admission.inFlight === 0 &&
       !this.host.hasLiveSessions() &&
+      this.relays.liveCount === 0 &&
       (this.endpoint.lost || noClients)
     )
   }
@@ -271,9 +272,11 @@ export class DaemonServer {
     this.stopStreamBacklogProbe()
     this.transientFactRelay.dispose()
     this.preparations.cancelAll()
-    try {
-      await this.host.dispose()
-    } catch (error) {
+    // Both finish before shutdown goes on, even when one of them fails.
+    const disposed = await Promise.allSettled([this.host.dispose(), this.relays.dispose()])
+    const failure = disposed.find((result) => result.status === 'rejected')
+    if (failure) {
+      const error: unknown = failure.reason
       this.log.log('shutdown-dispose-failed', {
         error: error instanceof Error ? error.message : String(error)
       })
@@ -303,6 +306,7 @@ export class DaemonServer {
           this.providerWork.acceptsProviderWork
         ) ??
         answerProviderRequest(request, this.connections.get(clientId), socket, this.providerWork) ??
+        answerProviderRelayRequest(request, this.connections.get(clientId), socket, this.relays) ??
         answerAutomaticWorkRequest(request, this.automaticWork, this.endpoint) ??
         this.requestRouter.route(clientId, request),
       () => this.lifecycle.startPendingShutdownReply(clientId, request.id)

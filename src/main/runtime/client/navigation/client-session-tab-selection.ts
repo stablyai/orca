@@ -133,6 +133,18 @@ export class ClientSessionTabSelectionStore {
     }
   }
 
+  /** The top-level tab this client shows in the snapshot's workspace, read without changing its selection. */
+  shownTopLevelTabId(
+    snapshot: RuntimeMobileSessionTabsResult,
+    clientNavigationId: string
+  ): string | null {
+    const state = this.statesByClient.get(clientNavigationId)?.get(snapshot.worktree)
+    // A device that never picked a tab follows the host's selection.
+    const activeTabId = state?.shouldPersist ? state.selection.activeTabId : snapshot.activeTabId
+    const tab = snapshot.tabs.find((candidate) => candidate.id === activeTabId)
+    return tab ? topLevelTabId(tab) : null
+  }
+
   activate(
     snapshot: RuntimeMobileSessionTabsResult,
     clientNavigationId: string,
@@ -188,6 +200,19 @@ export class ClientSessionTabSelectionStore {
       })
     }
     return this.project(snapshot, clientNavigationId)
+  }
+
+  /** The host published this tab again (a chat keeps its id), so no client may keep hiding it. */
+  reopenForAllClients(worktreeId: string, tabId: string): void {
+    for (const statesByWorktree of this.statesByClient.values()) {
+      const state = statesByWorktree.get(worktreeId)
+      if (!state?.closedTabIds.has(tabId)) {
+        continue
+      }
+      const closedTabIds = new Set(state.closedTabIds)
+      closedTabIds.delete(tabId)
+      statesByWorktree.set(worktreeId, { ...state, revision: state.revision + 1, closedTabIds })
+    }
   }
 
   forgetTabs(worktreeId: string, tabIds: readonly string[]): void {

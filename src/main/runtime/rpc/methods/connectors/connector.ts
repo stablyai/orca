@@ -8,6 +8,7 @@ import { botReplyRefusal } from '../../../../external-conversations/external-con
 import {
   ConnectorReply,
   ConnectorReplySlackAnswer,
+  ConnectorWakeReplyPlace,
   CONNECTOR_REPLY_HTML_PAGE_AS_FILE
 } from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
@@ -15,13 +16,15 @@ import { chatPaneKey } from '../../../../external-conversations/external-convers
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { defineMethod, type RpcContext } from '../../core'
 import type { z } from 'zod'
+import { readBotTurnOrigin } from '../orchestration/messaging/bot-turn-origin'
+import { wakeReplyPlace } from '../../../../bots/bot-wake-reply-place'
 import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
-import { splitHtmlDocumentFences } from '../../../../../shared/markdown/html-document-fences'
+import { splitSlackHtmlReply } from '../../../../../shared/connectors/slack-html-reply'
 import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 import { botOfSession } from '../../../../bots/bot-session-tabs'
 import { matchingSlackPresentation } from '../../../../connector-cloud/connector-slack-text'
@@ -87,11 +90,11 @@ async function replyToConversation(
     conversation.source === 'slack' &&
     'sessionId' in params &&
     context.runtime.bots.enabled() &&
-    botOfSession(context.runtime.bots, params.sessionId) &&
     (['actions', 'files.direct', 'reply.files'] satisfies ConnectorCloudFeature[]).every(
       (feature) => features?.has(feature)
     ) &&
-    splitHtmlDocumentFences(text).documents.length > 0
+    botOfSession(context.runtime.bots, params.sessionId) &&
+    splitSlackHtmlReply(text) !== null
   ) {
     throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
   }
@@ -174,6 +177,27 @@ export const CONNECTOR_METHODS = [
     }
   }),
   CONNECTOR_PREPARE_SLACK_ANSWER_METHOD,
+  // `orca orchestration worker-start`: the thread a later turn of its own may tell, if it wants to.
+  defineMethod({
+    name: 'connector.wakeReplyPlace',
+    permission: 'workspace',
+    params: ConnectorWakeReplyPlace,
+    handler: async ({ sessionId }, context) => {
+      const { runtime } = context
+      const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
+      // Only the chat itself names where its own turn started.
+      if (!bot || sessionCallerOf(context.orchestrationCaller)?.sessionId !== sessionId) {
+        return { place: null }
+      }
+      const seam = runtime.getExternalConversationSeam()
+      const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
+      const delivered = seam?.deliveredTurn(sessionId) ?? false
+      const placed = await wakeReplyPlace(bot.id, target, delivered, () =>
+        readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null)
+      )
+      return placed ?? { place: null }
+    }
+  }),
   CONNECTOR_ACT_METHOD,
   CONNECTOR_REACT_METHOD,
   CONNECTOR_LEAVE_THREAD_METHOD

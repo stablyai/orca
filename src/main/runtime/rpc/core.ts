@@ -184,6 +184,8 @@ export type RpcContext = {
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
   pairing?: PairingRpcContext
+  // Authenticated phones only: this host's current direct endpoints, so a moved address can be followed.
+  pairingDirectEndpoints?: () => Promise<string[]>
   pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
@@ -192,6 +194,7 @@ export type RpcContext = {
       reader?: RelayPhoneReader
     ): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
     worktrees(hostId: string, reader?: RelayPhoneReader): Promise<MobileRelayHostWorktreesResult>
+    releaseRowHolds?(connectionId: string): void
   }
   // Authenticated runtime devices see which other desktops share this server.
   peerDesktops?: {
@@ -199,9 +202,13 @@ export type RpcContext = {
     /** Tags this socket with the caller's installation until it closes. */
     declare(clientInstanceId: string): void
   }
-  // Authenticated runtime devices may manage only their own delegated phones.
+  // Authenticated runtime devices manage the phones of the installation they name. A claim is enough:
+  // the same device can already open a terminal here and revoke any device as this host's owner.
   delegatedMobileDevices?: {
-    sync(phones: readonly DelegatedPhone[]): DelegatedMobileDeviceSyncResult
+    sync(
+      phones: readonly DelegatedPhone[],
+      clientInstanceId?: string
+    ): DelegatedMobileDeviceSyncResult
   }
   // Binary terminal transport is absent on Unix and non-E2EE WebSocket paths.
   sendBinary?: RpcBinarySender

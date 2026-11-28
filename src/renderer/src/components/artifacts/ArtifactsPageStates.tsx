@@ -14,7 +14,10 @@ export function ArtifactsPageErrorBanner({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-3 py-2 md:px-5">
+    <div
+      role="alert"
+      className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-destructive/30 bg-destructive/10 px-(--rail-page-gutter) py-2"
+    >
       <p className="min-w-0 flex-1 text-xs text-destructive">{error}</p>
       <Button type="button" variant="outline" size="xs" disabled={loading} onClick={onRetry}>
         {t('auto.components.artifacts.ArtifactsPage.retry', 'Retry')}

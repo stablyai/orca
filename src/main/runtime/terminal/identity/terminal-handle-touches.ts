@@ -16,6 +16,11 @@ export class TerminalHandleTouches {
     }
   }
 
+  /** False with no pending wait, so a graph replacement skips counting the leaves it kept. */
+  get listening(): boolean {
+    return this.listeners.size > 0
+  }
+
   touch(handle: string | null | undefined): void {
     if (handle === undefined) {
       return
@@ -32,7 +37,7 @@ export class TerminalHandleTouches {
     next: ReadonlyMap<string, unknown>,
     bindings: ReadonlyMap<string, string>
   ): void {
-    let dropped = this.listeners.size > 0 ? previous.size - kept : 0
+    let dropped = this.listening ? previous.size - kept : 0
     for (const [key, leaf] of dropped > 0 ? previous : []) {
       if (!next.has(key)) {
         this.leafRemoved(leaf, bindings.get(key))

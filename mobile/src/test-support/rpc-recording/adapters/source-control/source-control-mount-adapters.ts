@@ -1,5 +1,6 @@
 import type * as MobileBranchBaseRefModule from '../../../../source-control/branches/mobile-branch-base-ref'
 import type * as MobileGitHistoryModule from '../../../../source-control/history/mobile-git-history'
+import type * as MobileI18nModule from '../../../../i18n/mobile-i18n'
 import type * as MobileCommitMessageAiModule from '../../../../source-control/commits/mobile-commit-message-ai'
 import type * as MobilePrLinkModule from '../../../../source-control/review/creation/mobile-pr-link'
 import type { MountAdapter } from '../../scenarios/recording-scenario'
@@ -30,11 +31,12 @@ export function sourceControlMountAdapters(
       const history = modules.load<typeof MobileGitHistoryModule>(
         'mobile/src/source-control/history/mobile-git-history.ts'
       )
+      const i18n = modules.load<typeof MobileI18nModule>('mobile/src/i18n/mobile-i18n.ts')
       let rows: unknown = 'unloaded'
       return {
         action: () =>
           history.fetchMobileGitHistory(client, WORKTREE).then((result) => {
-            rows = history.mapMobileCommitRows(result, Date.now())
+            rows = history.mapMobileCommitRows(result, Date.now(), i18n.translate)
             return rows
           }),
         state: () => ({ rows }),

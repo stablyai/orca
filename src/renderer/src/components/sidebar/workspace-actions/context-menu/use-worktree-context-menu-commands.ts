@@ -79,6 +79,21 @@ export function useWorktreeContextMenuCommands(args: {
   const handleCopyName = useCallback(() => {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))
   }, [args])
+  const handleCopyRenameError = useCallback(() => {
+    const stored = args.worktree.firstAgentMessageRenameError
+    if (!stored) {
+      return
+    }
+    // Main keeps this app's fuller CLI output in memory; a paired server's row carries only the stored error.
+    const local = (args.worktree.hostId ?? 'local') === 'local'
+    void (
+      local
+        ? window.api.worktrees
+            .getBranchRenameFailureOutput({ worktreeId: args.worktree.id })
+            .catch(() => null)
+        : Promise.resolve(null)
+    ).then((full) => window.api.ui.writeClipboardText(full ?? stored))
+  }, [args])
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(
       args.worktree.id,
@@ -243,6 +258,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,
+    handleCopyRenameError,
     handleCopyPath,
     handleCreateGroupDialogOpenChange,
     handleCreateGroupFromRepo,

@@ -1,5 +1,6 @@
 /** Stop files reach only the watching orcad; signals from stale PID records could stop an unrelated reused process. */
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { openEnum } from '../../validation/zod-salvage'
 
 /** Plain request in the slot directory: the same graceful stop as SIGTERM. */
@@ -13,26 +14,30 @@ export const ORCAD_COMPLETE_MANAGED_STOP_FLAG = '--complete-managed-stop'
 export const ORCAD_MANAGED_STOP_REQUEST_FILE_FLAG = '--request-file'
 
 /** One orcad process: its PID, start time, and the instance lock record it published. */
-export const OrcadManagedStopInstanceSchema = z.object({
-  pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  startedAtMs: z.number().finite().nonnegative().nullable(),
-  /** Linux only, copied from the lock; older clients omit it and older slots drop it. */
-  linuxStartTicks: z.string().regex(/^\d+$/).max(32).optional().catch(undefined),
-  bootId: z.string().min(1).max(255).optional().catch(undefined),
-  nonce: z.string().min(1).max(255),
-  lockPath: z.string().min(1).max(4096)
-})
+export const OrcadManagedStopInstanceSchema = lazyZodSchema(() =>
+  z.object({
+    pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    startedAtMs: z.number().finite().nonnegative().nullable(),
+    /** Linux only, copied from the lock; older clients omit it and older slots drop it. */
+    linuxStartTicks: z.string().regex(/^\d+$/).max(32).optional().catch(undefined),
+    bootId: z.string().min(1).max(255).optional().catch(undefined),
+    nonce: z.string().min(1).max(255),
+    lockPath: z.string().min(1).max(4096)
+  })
+)
 
 // Older slots drop newer optional request fields rather than refuse the stop.
-export const OrcadManagedStopRequestSchema = z.object({
-  schemaVersion: z.literal(1),
-  transactionId: z.uuid(),
-  version: z.string().min(1).max(255),
-  runtimeId: z.string().min(1).max(255),
-  instance: OrcadManagedStopInstanceSchema,
-  /** Best effort: also retire the terminal daemon if it is provably idle. Never blocks the stop. */
-  retireIdleDaemon: z.literal(true).optional()
-})
+export const OrcadManagedStopRequestSchema = lazyZodSchema(() =>
+  z.object({
+    schemaVersion: z.literal(1),
+    transactionId: z.uuid(),
+    version: z.string().min(1).max(255),
+    runtimeId: z.string().min(1).max(255),
+    instance: OrcadManagedStopInstanceSchema,
+    /** Best effort: also retire the terminal daemon if it is provably idle. Never blocks the stop. */
+    retireIdleDaemon: z.literal(true).optional()
+  })
+)
 
 export type OrcadManagedStopInstance = z.infer<typeof OrcadManagedStopInstanceSchema>
 export type OrcadManagedStopRequest = z.infer<typeof OrcadManagedStopRequestSchema>
@@ -53,41 +58,45 @@ const STOP_VERDICTS = ['live', 'unverifiable', 'exited'] as const
 const RETIREMENT_VERDICTS = ['retired', 'live', 'unverifiable'] as const
 
 /** The execution host's verdict; `exited` only on proof, never on silence. */
-export const OrcadManagedStopVerdictSchema = z.enum(STOP_VERDICTS)
+export const OrcadManagedStopVerdictSchema = lazyZodSchema(() => z.enum(STOP_VERDICTS))
 
 /** `retired` only when the daemon accepted; a busy daemon stays up and keeps its terminals. */
-export const OrcadDaemonRetirementVerdictSchema = z.enum(RETIREMENT_VERDICTS)
+export const OrcadDaemonRetirementVerdictSchema = lazyZodSchema(() => z.enum(RETIREMENT_VERDICTS))
 
 // Read by clients older than the slot that printed them: unknown fields and arms degrade.
-const stopReplyRequestFields = OrcadManagedStopRequestSchema.shape
-
-export const OrcadManagedStopCompletionSchema = z.object({
-  ...stopReplyRequestFields,
-  kind: z.literal('orcad_managed_stop_completion'),
-  verdict: openEnum(STOP_VERDICTS, 'unverifiable'),
-  receiptPersisted: z.boolean(),
-  /** For a request that asked to retire the daemon, the outcome its receipt recorded. */
-  retirement: openEnum(RETIREMENT_VERDICTS, 'unverifiable').optional()
-})
+export const OrcadManagedStopCompletionSchema = lazyZodSchema(() =>
+  z.object({
+    ...OrcadManagedStopRequestSchema.shape,
+    kind: z.literal('orcad_managed_stop_completion'),
+    verdict: openEnum(STOP_VERDICTS, 'unverifiable'),
+    receiptPersisted: z.boolean(),
+    /** For a request that asked to retire the daemon, the outcome its receipt recorded. */
+    retirement: openEnum(RETIREMENT_VERDICTS, 'unverifiable').optional()
+  })
+)
 
 /** What the stopping orcad observed about its daemon, written before it exits. */
-export const OrcadDaemonRetirementRecordSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  kind: z.literal('orcad_managed_stop_retirement'),
-  request: OrcadManagedStopRequestSchema,
-  retirement: OrcadDaemonRetirementVerdictSchema,
-  liveSessions: z.number().int().nonnegative().nullable(),
-  reason: z.string().max(4096).nullable()
-})
+export const OrcadDaemonRetirementRecordSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    kind: z.literal('orcad_managed_stop_retirement'),
+    request: OrcadManagedStopRequestSchema,
+    retirement: OrcadDaemonRetirementVerdictSchema,
+    liveSessions: z.number().int().nonnegative().nullable(),
+    reason: z.string().max(4096).nullable()
+  })
+)
 
-export const OrcadCompletedStopReceiptSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  kind: z.literal('orcad_managed_stop_completed'),
-  request: OrcadManagedStopRequestSchema,
-  exitedAt: z.iso.datetime({ offset: true }),
-  /** Present only when the request asked to retire the daemon. */
-  retirement: OrcadDaemonRetirementVerdictSchema.optional()
-})
+export const OrcadCompletedStopReceiptSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    kind: z.literal('orcad_managed_stop_completed'),
+    request: OrcadManagedStopRequestSchema,
+    exitedAt: z.iso.datetime({ offset: true }),
+    /** Present only when the request asked to retire the daemon. */
+    retirement: OrcadDaemonRetirementVerdictSchema.optional()
+  })
+)
 
 export type OrcadManagedStopVerdict = z.infer<typeof OrcadManagedStopVerdictSchema>
 export type OrcadManagedStopCompletion = z.infer<typeof OrcadManagedStopCompletionSchema>
@@ -100,20 +109,24 @@ export const ORCAD_CANCEL_MANAGED_STOP_FLAG = '--cancel-managed-stop'
 export const ORCAD_STOP_REQUESTS_CAPABILITY = 1
 
 /** Exclusive per-transaction creation ensures only orcad dispatch or client cancellation can win. */
-export const OrcadManagedStopDecisionSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  kind: z.literal('orcad_managed_stop_decision'),
-  request: OrcadManagedStopRequestSchema,
-  decision: z.enum(['dispatched', 'canceled'])
-})
+export const OrcadManagedStopDecisionSchema = lazyZodSchema(() =>
+  z.strictObject({
+    schemaVersion: z.literal(1),
+    kind: z.literal('orcad_managed_stop_decision'),
+    request: OrcadManagedStopRequestSchema,
+    decision: z.enum(['dispatched', 'canceled'])
+  })
+)
 
 /** `dispatched` means orcad already acted on the request; the caller must await its exit. */
-export const OrcadManagedStopCancellationSchema = z.object({
-  ...stopReplyRequestFields,
-  kind: z.literal('orcad_managed_stop_cancellation'),
-  // Unknown degrades to `dispatched`: the caller then awaits exit rather than assume a cancel.
-  outcome: openEnum(['canceled', 'dispatched'], 'dispatched')
-})
+export const OrcadManagedStopCancellationSchema = lazyZodSchema(() =>
+  z.object({
+    ...OrcadManagedStopRequestSchema.shape,
+    kind: z.literal('orcad_managed_stop_cancellation'),
+    // Unknown degrades to `dispatched`: the caller then awaits exit rather than assume a cancel.
+    outcome: openEnum(['canceled', 'dispatched'], 'dispatched')
+  })
+)
 
 export type OrcadManagedStopDecision = z.infer<typeof OrcadManagedStopDecisionSchema>
 export type OrcadManagedStopCancellation = z.infer<typeof OrcadManagedStopCancellationSchema>

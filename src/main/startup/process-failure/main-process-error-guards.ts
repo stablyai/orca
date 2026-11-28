@@ -1,3 +1,4 @@
+import { installElectronNavigationWarningRedaction } from '../../browser/electron-navigation-warning-redaction'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
 import { isNativePtyException } from '../../daemon/pty-subprocess/daemon-native-pty-exception'
@@ -166,6 +167,7 @@ export function installUncaughtExceptionQuitGuard(
 
 /** Node kills unhandled rejections by default; log and preserve other startup chains when one background restore task fails (#9441). */
 export function installUnhandledRejectionLogging(): void {
+  installElectronNavigationWarningRedaction()
   process.on('unhandledRejection', (reason) => {
     recordFatalMainProcessError('main_unhandled_rejection', reason)
   })

@@ -1,7 +1,7 @@
-import { colors, spacing, radii, typography } from '../../../theme/mobile-theme'
+import { spacing, radii, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
-export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
+export const mobileSessionReviewCommentStylesSheet = themedStyleSheet((colors) => ({
   diffCommentAddButton: {
     width: 26,
     height: 22,
@@ -58,9 +58,6 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     marginRight: spacing.sm,
     marginTop: spacing.xs
   },
-  markdownButtonDisabled: {
-    opacity: 0.45
-  },
   markdownFloatingBar: {
     position: 'absolute',
     left: spacing.md,
@@ -99,15 +96,6 @@ export const mobileSessionReviewCommentStyles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs
-  },
-  markdownCopyButton: {
-    backgroundColor: colors.bgRaised,
-    borderWidth: 0
-  },
-  markdownKeyboardDismissButton: {
-    width: 34,
-    justifyContent: 'center',
-    paddingHorizontal: 0
   },
   markdownSaveButton: {
     backgroundColor: colors.bgRaised

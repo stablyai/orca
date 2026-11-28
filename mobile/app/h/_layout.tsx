@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { View, PanResponder, Platform } from 'react-native'
 import { useGlobalSearchParams, usePathname } from 'expo-router'
-import { colors } from '../../src/theme/mobile-theme'
-import { themedStyleSheet } from '../../src/theme/themed-styles'
-import { useMobileColorScheme } from '../../src/theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../src/theme/themed-styles'
 import { useResponsiveLayout } from '../../src/layout/responsive-layout'
 import { useFoldSplit } from '../../src/layout/use-fold-split'
 import {
@@ -37,7 +35,7 @@ function clampSidebarToWindow(width: number, windowWidth: number): number {
 }
 
 export default function HostGroupLayout() {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   // Wide layout = tablet/foldable canvas (see responsive-layout-metrics).
   const { isWideLayout, width: windowWidth } = useResponsiveLayout()
   const { hostId } = useGlobalSearchParams<{ hostId?: string }>()
@@ -158,7 +156,7 @@ export default function HostGroupLayout() {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flex: 1,
     flexDirection: 'row',

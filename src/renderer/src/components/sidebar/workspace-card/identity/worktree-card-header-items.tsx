@@ -3,15 +3,17 @@ import { FolderMinus, House, Server, ServerOff, Star, Trash2 } from 'lucide-reac
 
 import { ProjectPeekPopover } from '@/components/repo/project-peek/ProjectPeekPopover'
 import { RepoMark } from '@/components/repo/RepoMark'
+import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { Badge } from '@/components/ui/badge'
-import { AgentCommandFailedChip } from '@/components/agent-command-failure/AgentCommandFailedChip'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { formatSparseDirectoryPreview } from '../controller/worktree-card-model'
+import { DetachedHeadIcon } from './worktree-card-glyphs'
 
 export function WorktreeCardRepoChip({
   repo,
@@ -111,32 +113,6 @@ export function WorktreeCardRuntimeHostMark({
   )
 }
 
-export function WorktreeCardRenameErrorButton({
-  onPointerDown,
-  onOpen
-}: {
-  onPointerDown: React.PointerEventHandler<HTMLButtonElement>
-  onOpen: React.MouseEventHandler<HTMLButtonElement>
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <AgentCommandFailedChip
-      onPointerDown={onPointerDown}
-      onOpen={onOpen}
-      tooltipSide="right"
-      ariaLabel={t(
-        'auto.components.sidebar.WorktreeCard.02e19349f4',
-        'Auto-rename failed: view error'
-      )}
-      label={t('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
-      tooltip={t(
-        'auto.components.sidebar.WorktreeCard.4eba2ea99e',
-        'Auto-name failed. Click to see details.'
-      )}
-    />
-  )
-}
-
 function primaryWorktreeTooltip(t: Translate = translate): string {
   return t(
     'auto.components.sidebar.WorktreeCard.0777de5970',
@@ -144,13 +120,13 @@ function primaryWorktreeTooltip(t: Translate = translate): string {
   )
 }
 
-type IdentityBadgeProps = {
+export type IdentityBadgeProps = {
   card: Pick<WorktreeCardController, 'newCardStyle' | 'detailsHoverControl'>
   hasHoverDetails: boolean
 }
 
 // Why: an indicator's own popup replaces the card details while hovered, then hands hover back.
-function identityIndicatorHoverHandlers({ card, hasHoverDetails }: IdentityBadgeProps): {
+export function identityIndicatorHoverHandlers({ card, hasHoverDetails }: IdentityBadgeProps): {
   onPointerEnter: () => void
   onPointerLeave: (event: React.PointerEvent<HTMLSpanElement>) => void
   onFocus: () => void
@@ -296,6 +272,37 @@ export function WorktreeCardSparseBadge({
             </div>
           ) : null}
         </div>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+export function WorktreeCardDetachedHeadBadge({
+  card,
+  hasHoverDetails,
+  display
+}: IdentityBadgeProps & {
+  display: Extract<WorktreeGitIdentityDisplay, { kind: 'detached' }>
+}): React.JSX.Element {
+  if (!card.newCardStyle) {
+    return <DetachedHeadBadge display={display} label="sidebar" side="right" className="h-[16px]" />
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {renderIdentityIcon(
+          { card, hasHoverDetails },
+          display.tooltip,
+          <DetachedHeadIcon className="size-3.5" />
+        )}
+      </TooltipTrigger>
+      <TooltipContent
+        side="right"
+        sideOffset={8}
+        className={cn(hasHoverDetails && card.detailsHoverControl.hoverOpen && 'hidden')}
+      >
+        {display.tooltip}
       </TooltipContent>
     </Tooltip>
   )

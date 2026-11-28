@@ -49,6 +49,7 @@ import { ChecksTab } from '../checks/tab'
 import { GHCommentComposer } from '../comments/composer'
 import { ConversationDescription } from './description'
 import { ConversationCommentsList } from './comments-list'
+import { CommentComposerLoading } from './conversation-loading'
 import { postConversationReply } from './reply'
 
 export function ConversationTab({
@@ -108,6 +109,8 @@ export function ConversationTab({
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null)
   const bodyTextareaFocusFrameRef = useRef<number | null>(null)
   const canUseRepoMutationContext = canUseGitHubRepoContext(repoPath, sourceContext)
+  // Why: cold read only; cached details stay on screen while a refresh runs.
+  const detailsPending = loading && !detailsLoaded
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? repoId ?? null, sourceContext))
   )
@@ -336,10 +339,11 @@ export function ConversationTab({
           onDraftChange={setBodyDraft}
         />
 
-        {detailsLoaded ? (
+        {detailsLoaded || detailsPending ? (
           <ConversationCommentsList
             itemType={item.type}
             comments={comments}
+            loadingSkeleton={detailsPending}
             visibleComments={visibleComments}
             visibleCommentGroups={visibleCommentGroups}
             commentFilter={commentFilter}
@@ -363,6 +367,7 @@ export function ConversationTab({
           />
         ) : null}
 
+        {detailsPending && canUseRepoMutationContext && <CommentComposerLoading className="mt-1" />}
         {detailsLoaded && canUseRepoMutationContext && (
           <GHCommentComposer
             className="mt-1"

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/components/settings/navigation/useSettingsNavigationMetadata'
@@ -24,13 +25,23 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import type { Worktree } from '../../../../../shared/worktree/types'
+
+const NO_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
+const NO_WORKSPACES: Worktree[] = []
+const NO_UNIFIED_TABS: AppState['unifiedTabsByWorktree'] = {}
+const NO_BROWSER_PAGES: AppState['browserPagesByWorkspace'] = {}
+const NO_OPEN_FILES: AppState['openFiles'] = []
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
-  lingering
+  lingering,
+  resultsReady
 }: {
   visible: boolean
   lingering: boolean
+  /** False for the opening frame: result sources stay empty so the input paints first. */
+  resultsReady: boolean
 }) {
   useTranslation()
   // Freeze age labels for one palette session; live status dots own their clock separately.
@@ -46,30 +57,35 @@ export function useWorktreeJumpPaletteStoreState({
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   // Why: a VM create's checkout is not a workspace until the create adopts it.
   const worktreesByRepo = useMemo(
-    () => withoutHiddenVmWorktreesByRepo(storedWorktreesByRepo, hiddenVmCheckouts),
-    [storedWorktreesByRepo, hiddenVmCheckouts]
+    () =>
+      resultsReady
+        ? withoutHiddenVmWorktreesByRepo(storedWorktreesByRepo, hiddenVmCheckouts)
+        : NO_WORKTREES_BY_REPO,
+    [storedWorktreesByRepo, hiddenVmCheckouts, resultsReady]
   )
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
   const workspaces = useMemo(
     () =>
-      dedupePaletteWorktrees([
-        ...Object.values(worktreesByRepo).flat(),
-        ...folderWorkspaces.map((folder) => {
-          const result = resolveQualifiedIndexedFolderWorkspace(
-            { folderWorkspaces, repos, projectGroups },
-            folder.id
-          )
-          return getFolderWorkspaceWorktree(
-            folder,
-            result.kind === 'selected' && result.value.workspace === folder
-              ? result.value
-              : undefined
-          )
-        })
-      ]),
-    [folderWorkspaces, projectGroups, repos, worktreesByRepo]
+      resultsReady
+        ? dedupePaletteWorktrees([
+            ...Object.values(worktreesByRepo).flat(),
+            ...folderWorkspaces.map((folder) => {
+              const result = resolveQualifiedIndexedFolderWorkspace(
+                { folderWorkspaces, repos, projectGroups },
+                folder.id
+              )
+              return getFolderWorkspaceWorktree(
+                folder,
+                result.kind === 'selected' && result.value.workspace === folder
+                  ? result.value
+                  : undefined
+              )
+            })
+          ])
+        : NO_WORKSPACES,
+    [folderWorkspaces, projectGroups, repos, worktreesByRepo, resultsReady]
   )
   const projects = useAppStore((state) => state.projects)
   const projectHostSetups = useAppStore((state) => state.projectHostSetups)
@@ -77,7 +93,7 @@ export function useWorktreeJumpPaletteStoreState({
   const pendingWorktreeCreations = useAppStore((state) => state.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
   const pluginNewFiles = usePluginNewFiles()
-  const paletteStatusInputsActive = visible || lingering
+  const paletteStatusInputsActive = (visible || lingering) && resultsReady
   const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStore(
     useShallow((state) => selectPaletteStatusInputs(state, paletteStatusInputsActive))
   )
@@ -98,8 +114,12 @@ export function useWorktreeJumpPaletteStoreState({
   const activeTabTypeByWorktree = useAppStore((state) => state.activeTabTypeByWorktree)
   const activeBrowserTabId = useAppStore((state) => state.activeBrowserTabId)
   const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
-  const browserPagesByWorkspace = useAppStore((state) => state.browserPagesByWorkspace)
-  const unifiedTabsByWorktree = useAppStore((state) => state.unifiedTabsByWorktree)
+  const browserPagesByWorkspace = useAppStore((state) =>
+    resultsReady ? state.browserPagesByWorkspace : NO_BROWSER_PAGES
+  )
+  const unifiedTabsByWorktree = useAppStore((state) =>
+    resultsReady ? state.unifiedTabsByWorktree : NO_UNIFIED_TABS
+  )
   const structuredChatSleptAtByPaneKey = useAppStore(
     (state) => state.structuredChatSleptAtByPaneKey
   )
@@ -114,7 +134,7 @@ export function useWorktreeJumpPaletteStoreState({
     unreadTerminalTabs,
     unreadAgentCompletionPanes
   } = paletteIndexStatus
-  const openFiles = useAppStore((state) => state.openFiles)
+  const openFiles = useAppStore((state) => (resultsReady ? state.openFiles : NO_OPEN_FILES))
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
   const sleepingAgentSessionsByPaneKey = useAppStore(
@@ -153,10 +173,11 @@ export function useWorktreeJumpPaletteStoreState({
   const openNewTerminalTabInActiveWorkspace = useAppStore(
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
-  const settingsSections = useSettingsNavigationMetadata()
+  const settingsSections = useSettingsNavigationMetadata(undefined, resultsReady)
 
   return {
     visible,
+    resultsReady,
     paletteNowMs,
     closeModal,
     openModal,

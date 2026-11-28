@@ -1,9 +1,8 @@
-import { SequencerRecoveryControls } from './sequencer-recovery-controls'
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
-import { ConflictSummaryCard, OperationBanner } from './conflict-status-cards'
+import { ConflictSummaryCard } from './conflict-status-cards'
 import { EmptyState } from './empty-state'
 import { StatusRetryButton } from './status-retry-button'
 import { TooManyChangesBanner } from './too-many-changes-banner'
@@ -17,10 +16,6 @@ export function SourceControlContentStatus({
   conflictOperation,
   sourceControlAiActionsVisible,
   isRecoveryBusy,
-  isAbortingOperation,
-  onAbortOperation,
-  isCompletingMerge,
-  onCompleteMerge,
   onResolveWithAi,
   onReviewConflicts,
   repositoryHuge,
@@ -35,16 +30,13 @@ export function SourceControlContentStatus({
   filterTooLarge,
   hasFilteredUncommittedEntries,
   hasFilteredBranchEntries,
-  filterQuery
+  filterQuery,
+  filterFeedbackInline = true
 }: {
   unresolvedConflictCount: number
   conflictOperation: GitConflictOperation
   sourceControlAiActionsVisible: boolean
   isRecoveryBusy: boolean
-  isAbortingOperation: boolean
-  onAbortOperation: (operation: GitConflictOperation) => void
-  isCompletingMerge: boolean
-  onCompleteMerge: () => void
   onResolveWithAi: () => void
   onReviewConflicts: () => void
   repositoryHuge: { limit: number } | null | undefined
@@ -60,6 +52,8 @@ export function SourceControlContentStatus({
   hasFilteredUncommittedEntries: boolean
   hasFilteredBranchEntries: boolean
   filterQuery: string
+  /** False when the file-list header renders the filter feedback under itself. */
+  filterFeedbackInline?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   // Why: a stopped or still-connecting host can't answer git, so its read error or "clean" result is not the workspace's.
@@ -76,48 +70,16 @@ export function SourceControlContentStatus({
           className="py-6 text-xs"
         />
       )}
-      {unresolvedConflictCount > 0 && (
+      {/* A paused rebase, merge or cherry-pick shows its conflicts in the header's operation bar. */}
+      {unresolvedConflictCount > 0 && conflictOperation === 'unknown' && (
         <div className="px-3 pb-2">
           <ConflictSummaryCard
-            conflictOperation={conflictOperation}
             unresolvedCount={unresolvedConflictCount}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             isRecoveryBusy={isRecoveryBusy}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
             onResolveWithAI={onResolveWithAi}
             onReview={onReviewConflicts}
-          >
-            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
-              <SequencerRecoveryControls
-                worktreeId={worktreeId}
-                operation={conflictOperation}
-                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
-              />
-            )}
-          </ConflictSummaryCard>
-        </div>
-      )}
-      {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
-        <div className="px-3 pb-2">
-          <OperationBanner
-            conflictOperation={conflictOperation}
-            isRecoveryBusy={isRecoveryBusy}
-            isAbortingOperation={isAbortingOperation}
-            onAbortOperation={onAbortOperation}
-            isCompletingMerge={isCompletingMerge}
-            onCompleteMerge={onCompleteMerge}
-            sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-            onResolveWithAI={onResolveWithAi}
-          >
-            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
-              <SequencerRecoveryControls
-                worktreeId={worktreeId}
-                operation={conflictOperation}
-                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
-              />
-            )}
-          </OperationBanner>
+          />
         </div>
       )}
       {repositoryHuge && (
@@ -175,6 +137,36 @@ export function SourceControlContentStatus({
           )}
         />
       ) : null}
+      {filterFeedbackInline ? (
+        <SourceControlFilterFeedback
+          normalizedFilter={normalizedFilter}
+          filterTooLarge={filterTooLarge}
+          hasFilteredUncommittedEntries={hasFilteredUncommittedEntries}
+          hasFilteredBranchEntries={hasFilteredBranchEntries}
+          filterQuery={filterQuery}
+        />
+      ) : null}
+    </>
+  )
+}
+
+/** Filter results feedback; rendered under the file-list header so typing never moves the input. */
+export function SourceControlFilterFeedback({
+  normalizedFilter,
+  filterTooLarge,
+  hasFilteredUncommittedEntries,
+  hasFilteredBranchEntries,
+  filterQuery
+}: {
+  normalizedFilter: string
+  filterTooLarge: boolean
+  hasFilteredUncommittedEntries: boolean
+  hasFilteredBranchEntries: boolean
+  filterQuery: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
       {filterTooLarge && (
         <EmptyState
           heading={t(

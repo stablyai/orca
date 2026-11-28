@@ -19,7 +19,8 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   'bot item set': {
     title: BOT_ITEM_TITLE_HELP,
-    comment: '--comment <text>       Add a comment with this change'
+    comment: '--comment <text>       Add a comment with this change',
+    'expected-version': '--expected-version <n> Only write if the item is still at this version'
   },
   'bot item comment': { text: "--text <text>          The comment's text" },
   'bot item link': { ref: '--ref <ref>            A worker, PR, URL or file to link' },

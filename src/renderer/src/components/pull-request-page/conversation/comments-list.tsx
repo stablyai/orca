@@ -17,10 +17,12 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import type { MentionOption } from '../page-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { ConversationCommentGroup } from './comment-group'
+import { CommentAudienceFilterLoading, CommentCardsLoading } from './conversation-loading'
 
 export function ConversationCommentsList({
   itemType,
   comments,
+  loadingSkeleton = false,
   visibleComments,
   visibleCommentGroups,
   commentFilter,
@@ -42,6 +44,8 @@ export function ConversationCommentsList({
 }: {
   itemType: 'issue' | 'pr'
   comments: PRComment[]
+  /** Cold read: no details yet. Never shows "No comments yet." before a read confirms it. */
+  loadingSkeleton?: boolean
   visibleComments: PRComment[]
   visibleCommentGroups: PRCommentGroup[]
   commentFilter: PRCommentAudienceFilter
@@ -76,7 +80,9 @@ export function ConversationCommentsList({
         )}
       </div>
 
-      {itemType === 'pr' && comments.length > 0 && (
+      {loadingSkeleton && itemType === 'pr' && <CommentAudienceFilterLoading />}
+
+      {!loadingSkeleton && itemType === 'pr' && comments.length > 0 && (
         <div className="grid grid-cols-3 rounded-lg border border-border/50 bg-background p-0.5">
           {getPrCommentAudienceFilters().map((filter) => {
             const isActive = commentFilter === filter.value
@@ -99,7 +105,9 @@ export function ConversationCommentsList({
         </div>
       )}
 
-      {comments.length === 0 ? (
+      {loadingSkeleton ? (
+        <CommentCardsLoading />
+      ) : comments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border/50 px-3 py-6 text-left text-[13px] text-muted-foreground">
           {t('auto.components.PullRequestPage.d2d589556c', 'No comments yet.')}
         </div>

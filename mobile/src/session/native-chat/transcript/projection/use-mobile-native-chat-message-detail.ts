@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useReducer } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer } from 'react'
+import { recomputeOn } from '../../../../hooks/recompute-on'
 import {
   isTextBlock,
   type NativeChatMessage
@@ -21,11 +22,12 @@ export function useMobileNativeChatMessageDetail(
   const client = source?.client,
     sessionId = source?.sessionId
   const cache = useMemo(
-    () => ({
-      live: true,
-      raw: new Set<NativeChatMessage>(),
-      entries: new Map<NativeChatMessage, NativeChatMessage>()
-    }),
+    () =>
+      recomputeOn([client, sessionId], () => ({
+        live: true,
+        raw: new Set<NativeChatMessage>(),
+        entries: new Map<NativeChatMessage, NativeChatMessage>()
+      })),
     [client, sessionId]
   )
   const [revision, refresh] = useReducer((revision: number) => revision + 1, 0)
@@ -48,7 +50,10 @@ export function useMobileNativeChatMessageDetail(
   const raw = (id: string): NativeChatMessage | undefined => byId.get(id)
   return {
     messages: useMemo(
-      () => messages.map((message) => cache.entries.get(message) ?? message),
+      () =>
+        recomputeOn([revision], () =>
+          messages.map((message) => cache.entries.get(message) ?? message)
+        ),
       [cache, messages, revision]
     ),
     detail:
@@ -84,4 +89,31 @@ export function useMobileNativeChatMessageDetail(
             }
           }
   }
+}
+
+export function useMobileNativeChatDetailSource(
+  itemSource: MobileNativeChatVisualSource | null,
+  detail: MobileNativeChatMessageDetail | null
+) {
+  const committedDetail = useMemo(
+    () => recomputeOn([itemSource?.client, itemSource?.sessionId], () => ({ current: detail })),
+    [itemSource?.client, itemSource?.sessionId]
+  )
+  useLayoutEffect(() => {
+    committedDetail.current = detail
+  }, [committedDetail, detail])
+  const load = useCallback(
+    async (id: string) => {
+      if (!committedDetail.current) {
+        throw new Error('Message unavailable')
+      }
+      await committedDetail.current.load(id)
+    },
+    [committedDetail]
+  )
+  return useMemo(
+    () =>
+      itemSource ? { ...itemSource, messageDetail: detail ? { ...detail, load } : null } : null,
+    [itemSource, detail, load]
+  )
 }

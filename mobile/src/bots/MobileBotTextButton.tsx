@@ -1,7 +1,7 @@
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { Pressable, Text } from 'react-native'
 import { pressedStyle } from '../theme/mobile-theme'
-import { sheetStyles } from './mobile-bot-sheet-styles'
+import { sheetStylesSheet } from './mobile-bot-sheet-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 const TEXT_BUTTON_HIT_SLOP = { top: 8, bottom: 8 }
 
@@ -14,7 +14,7 @@ export function MobileBotTextButton(props: {
   /** In the accent, for the one action a line offers (Retry, Undo). */
   accent?: boolean
 }) {
-  useMobileColorScheme()
+  const sheetStyles = useThemedStyles(sheetStylesSheet)
   return (
     <Pressable
       style={({ pressed }) => [

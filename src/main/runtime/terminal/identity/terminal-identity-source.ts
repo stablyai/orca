@@ -156,7 +156,7 @@ export class TerminalIdentitySource {
     this.paneCandidates.leaves.clear()
     let kept = 0
     for (const [key, input] of inputs) {
-      kept += this.leafRecords.has(key) ? 1 : 0
+      kept += this.handleTouches.listening && this.leafRecords.has(key) ? 1 : 0
       const owned = this.ownedLeaves.get(input) ?? { ...input }
       this.ownedLeaves.set(owned, owned)
       next.set(key, owned)

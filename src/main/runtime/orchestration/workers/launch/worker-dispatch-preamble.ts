@@ -110,7 +110,7 @@ ${dispatchIdentityLines(params)}
 
 The coordinator cannot see this ${surface}. Reach it with the \`${cli} orchestration\` commands
 below, and message it only to ask, report a blocker, or finish; it needs no progress updates
-unless the task asks.
+unless the task asks (send = always wakes the recipient; task-update --note = passive, never wakes).
 ${windowsSandboxLine(cli, params.runsOnNativeWindows)}Do only this task, yourself: no subagents or helper workers unless the task asks.
 Terminals you open with \`${cli} terminal create\` or \`split\` close with this worker; add --keep-open to one the user keeps.
 
@@ -132,6 +132,8 @@ ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.wo
   # Add --files-modified or --report-path only with real values. You are
   # done when it confirms; if it fails, follow the recovery it prints.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
+
+  # Optional passive progress for long runs: ${cli} orchestration task-update --from ${params.workerHandle} --note "<status>"
 \`\`\`
 
 ${postDoneInstructions}`

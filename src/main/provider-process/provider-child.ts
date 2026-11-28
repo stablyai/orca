@@ -2,6 +2,7 @@ import { notifyRuntimeListeners } from '../runtime/events/runtime-listener-deliv
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { Readable, Writable } from 'node:stream'
 import type { EventEmitter } from 'node:events'
+import { constants } from 'node:os'
 import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 
 export type ProviderChild = Pick<
@@ -60,3 +61,8 @@ export function notifyProviderChild(child: EventEmitter, event: string, ...args:
 
 /** Late transport errors must not retain a launch's closure scope. */
 export function ignoreProviderTransportError(): void {}
+
+/** A signal name as an exit reports it (a relay's arrives as a plain string). */
+export function isProviderExitSignal(name: string | null): name is NodeJS.Signals {
+  return name !== null && Object.hasOwn(constants.signals, name)
+}

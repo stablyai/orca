@@ -41,19 +41,16 @@ export function drainReplyId(deliveryId: string): string {
 
 export function drainReplyBody(
   row: FilledConnectorReply,
+  conversation: ConnectorReplyBody['conversation'],
   hostName: () => string
-): ConnectorReplyBody | null {
-  const conversation = cloudConversation(row.conversation)
-  if (!conversation) {
-    return null
-  }
+): ConnectorReplyBody {
   const { outcome, prose, presentation, answerDeliveryId, filledAt, turnStartedAt, toolsRan } =
     row.fill
   return {
     replyId: drainReplyId(row.deliveryId),
     conversation,
     answerDeliveryId,
-    turnId: presentation ? (turnStartedAt ?? filledAt) : filledAt,
+    turnId: turnStartedAt ?? filledAt,
     ...(presentation
       ? { text: slackAnswerText(presentation), presentation }
       : {

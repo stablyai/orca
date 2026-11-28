@@ -1,11 +1,7 @@
-import { Text } from 'react-native'
 import { ListRow } from '../components/list/ListGroup'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { KnownAppUpdate } from '../storage/app-update-preferences'
-import { colors } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsSection } from './settings-screen-frame'
 
 export type AppUpdateCheckRowStatus = 'idle' | 'checking' | 'up-to-date' | 'failed'
@@ -69,7 +65,6 @@ function checkRowValue(
 }
 
 export function AppUpdateSettingsRows(props: {
-  installedVersion: string | null
   available: KnownAppUpdate | null
   lastCheckedAt: number | null
   now: number
@@ -79,33 +74,23 @@ export function AppUpdateSettingsRows(props: {
   onCheck?: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const checkValue = checkRowValue(t, props.checkStatus, props.lastCheckedAt, props.now)
-  const { available, installedVersion, onUpdate } = props
-  const versionRow = available ? (
-    <ListRow
-      key="version"
-      title={t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
-        version: available.version
-      })}
-      accessory={
-        <Text style={styles.actionValue}>
-          {t('settings.appUpdateSettingsRows.update', 'Update')}
-        </Text>
-      }
-      onPress={() => onUpdate(available.url)}
-    />
-  ) : installedVersion ? (
-    <ListRow
-      key="version"
-      title={t('settings.appUpdateSettingsRows.installedVersion', 'Version {{version}}', {
-        version: installedVersion
-      })}
-    />
-  ) : null
+  const { available, onUpdate } = props
+  if (!available && !props.onCheck) {
+    return null
+  }
   return (
     <SettingsSection>
-      {versionRow}
+      {available ? (
+        <ListRow
+          key="update"
+          title={t('settings.appUpdateSettingsRows.updateToVersion', 'Update to Orca {{version}}', {
+            version: available.version
+          })}
+          navigates
+          onPress={() => onUpdate(available.url)}
+        />
+      ) : null}
       {props.onCheck ? (
         <ListRow
           key="check"
@@ -125,7 +110,3 @@ export function AppUpdateSettingsRows(props: {
     </SettingsSection>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  actionValue: { fontSize: 15, fontWeight: '600', color: colors.textPrimary }
-}))

@@ -33,7 +33,13 @@ describe('worker_done from a worker on a paired server', () => {
       coordinatorPaneKey: null
     }).id
     link = openRemoteRunLink(home, homeRunId, SERVER)
-    reserveRemotePlacement(home, { link, taskId: TASK, requestKey: KEY, create: { spec: 'work' } })
+    reserveRemotePlacement(home, {
+      link,
+      taskId: TASK,
+      requestKey: KEY,
+      create: { spec: 'work' },
+      creator: { kind: 'system' }
+    })
     peerRunId = server.admitPeerRun({
       peerFingerprint: 'fp_home',
       peerRun: { runId: homeRunId, conversationId: link.conversation_id, label: 'home' }
