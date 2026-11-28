@@ -19,6 +19,7 @@ import { useAutomationsPageStoreState } from './use-automations-page-store-state
 import { useExternalAutomationActions } from './external/use-external-automation-actions'
 import { useAutomationRunsDashboard } from './runs/use-automation-runs-dashboard'
 import { createAutomationsPageNavigation } from './automations-page-navigation'
+import { useAutomationsPageBotFilterRequest } from './use-automations-page-bot-filter-request'
 
 export function useAutomationsPageController() {
   const store = useAutomationsPageStoreState()
@@ -135,6 +136,11 @@ export function useAutomationsPageController() {
     ]
   )
   useAutomationsPageEscape({ store, local, navigation })
+  useAutomationsPageBotFilterRequest({
+    local,
+    navigation,
+    selectHost
+  })
 
   return {
     store,

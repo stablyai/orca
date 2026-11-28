@@ -7,10 +7,13 @@ import {
 import { readAgentOrchestrationProjectionRecords } from '../addressing/orchestration-fleet-agent-status-snapshot'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
+import type { ForegroundShellProbe } from '../mailbox/routing/mailbox-delivery-target'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
   abstract retrySleptMailboxWakes(): void
+  /** Whether a shell, not the pane's agent, is in front; see OrchestrationMailboxDeliveryTarget. */
+  protected abstract mailForegroundShellProbe(ptyId: string): ForegroundShellProbe | null
   protected abstract requestSleptMailboxWake(
     mailbox: string,
     reservedTypes?: ReadonlySet<string>

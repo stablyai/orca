@@ -8,7 +8,7 @@ import { Button } from '../../../ui/button'
 import { AntigravityChatSignInFlowPanel } from '../../../provider-accounts/AntigravityChatSignInFlowPanel'
 import type { AntigravityChatSignInControls } from '../../../provider-accounts/use-antigravity-chat-sign-in'
 
-export type AntigravityAccountAction = 'List' | 'AddCurrent' | 'Select' | 'Remove'
+export type AntigravityAccountAction = 'List' | 'ReadCurrent' | 'AddCurrent' | 'Select' | 'Remove'
 
 /** agy's Google logins, which agy in the terminal and Google-account chats share: the current
  *  login, then saved accounts. With `signIn`, signing in and adding an account run in Orca. */
@@ -31,8 +31,10 @@ export function AntigravityAgyAccountRows({
   const t = useTranslate()
   const signingIn = signIn?.ownFlow === true
   const signInAlert = signIn?.alert ? <ActionError message={signIn.alert} /> : null
+  // Until Orca reads agy's login it can't tell which account holds it, so nothing changed yet.
+  const unread = state?.currentAccount?.unread === true
   const changed = Boolean(
-    state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
+    !unread && state?.selectedAccountId && state.activeAccountId !== state.selectedAccountId
   )
   const changedText = windowsHost
     ? t(
@@ -43,6 +45,14 @@ export function AntigravityAgyAccountRows({
         'accounts.antigravity.changed',
         'The native account changed. Select a saved account again before launching agy.'
       )
+  // A running agy on another saved account wrote its login back; the next launch restores the selection.
+  const launchesUse =
+    state?.restoresSelectionAtLaunch &&
+    state.activeAccountId &&
+    state.selectedAccountId !== state.activeAccountId &&
+    state.accounts.some((account) => account.id === state.selectedAccountId)
+      ? state.selectedAccountId
+      : null
   const terminalRows: React.ReactNode[] = []
   if (error) {
     terminalRows.push(
@@ -117,6 +127,22 @@ export function AntigravityAgyAccountRows({
         }
       />
     )
+  } else if (unread) {
+    terminalRows.push(
+      <AntigravityAccountRow
+        key="current"
+        title={t('accounts.antigravity.signedInUnread', 'agy is signed in')}
+        detail={t(
+          'accounts.antigravity.unreadDetail',
+          'Show the account to see which one. macOS may ask you to allow keychain access.'
+        )}
+        actions={
+          <Button size="xs" variant="outline" disabled={busy} onClick={() => run('ReadCurrent')}>
+            {t('accounts.antigravity.showAccount', 'Show account')}
+          </Button>
+        }
+      />
+    )
   } else if (state?.currentAccount && !state.activeAccountId) {
     const { email } = state.currentAccount
     terminalRows.push(
@@ -148,6 +174,13 @@ export function AntigravityAgyAccountRows({
         key={account.id}
         title={account.email ?? t('accounts.antigravity.saved', 'Saved Google account')}
         active={active}
+        detail={
+          account.id === launchesUse
+            ? t('accounts.antigravity.launchesUse', 'New agy launches use this account')
+            : launchesUse && active
+              ? t('accounts.antigravity.loginNow', "agy's login right now")
+              : undefined
+        }
         selectDisabled={busy}
         onSelect={() => run('Select', account.id)}
         actions={

@@ -119,7 +119,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         this.pairingInitializationFailure = pairingIdentity.failure
       } else {
         this.deviceRegistry = pairingIdentity.deviceRegistry
-        this.deviceRegistry.setOnPairedDevicesChanged(() => this.onPairedDevicesChanged?.())
+        this.deviceRegistry.setOnPairedDevicesChanged(() => this.announcePairedDevicesChanged())
+        // Servers that came into contact before the phone list was readable are checked now.
+        this.queueRelayPhonesChanged()
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         this.hostDescriptor = await loadHostDescriptor(this.userDataPath)

@@ -13,7 +13,7 @@ import {
   type BotItemQuestionShape
 } from '../../../../../shared/bots/bot-item-ask'
 import {
-  botItemAnswerWords,
+  botItemAnswer,
   botItemUnsentAnswers
 } from '../../../../../shared/bots/bot-item-answer-lines'
 import { botItemHeldAnswersComment } from '../../../../../shared/bots/bot-item-held-answers'
@@ -79,13 +79,19 @@ export function BotItemQuestionLines({
   const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
   // Its sends on their way: shown on their lines until the host's read has them.
   const sent = actions?.sent?.get(askId) ?? null
-  const answered = shape.decisions.map((_, index) => {
+  const lines = shape.decisions.map((_, index) => {
     // A line being stepped shows its held answer; with several questions, a comment that named no
     // line shows as itself, not as the line's answer.
     const answer =
       steps?.lines.includes(index) || (several && byOrder?.[index]) ? null : answers[index]
-    return answer ? botItemAnswerWords(shape, index, answer.data) : (sent?.[index] ?? null)
+    if (answer) {
+      const read = botItemAnswer(shape, index, answer.data)
+      return read && { words: read.words, markdown: !read.picked }
+    }
+    const words = sent?.[index]
+    return words ? { words, markdown: false } : null
   })
+  const answered = lines.map((line) => line?.words ?? null)
   const spacing = className ?? (shape.body.trim() ? 'mt-4' : undefined)
   if (waiting && several && steps && actions) {
     return (
@@ -112,6 +118,7 @@ export function BotItemQuestionLines({
                 key={decision.question}
                 question={decision.question}
                 words={words}
+                markdown={lines[index]?.markdown}
               />
             )
           }

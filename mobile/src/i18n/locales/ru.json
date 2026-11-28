@@ -34,7 +34,6 @@
   "agentHistory": {
     "panel": {
       "all": "Все",
-      "emptyScope": "В выбранной области нет предыдущих сессий агентов.",
       "missingResumeId": "У этой сессии нет идентификатора для продолжения.",
       "noSearchResults": "По вашему запросу сессий не найдено.",
       "noSessions": "Нет сессий агентов",
@@ -67,16 +66,12 @@
       "untitledSession": "Сессия без названия"
     },
     "sessionHistoryList": {
-      "currentWorktree": "текущее рабочее дерево",
       "messages_few": "{{count}} сообщения",
       "messages_many": "{{count}} сообщений",
       "messages_one": "{{count}} сообщение",
       "messages_other": "{{count}} сообщения",
       "resumeSession": "Продолжить сессию агента",
-      "continueInCli": "Продолжить в CLI",
-      "hidePreview": "Скрывает последние сообщения.",
-      "showPreview": "Показывает последние сообщения.",
-      "you": "Вы"
+      "continueInCli": "Продолжить в CLI"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Не удалось связаться с сервером",
@@ -144,44 +139,23 @@
     },
     "pairConfirm": {
       "backToHome": "На главный экран",
-      "connectTimedOut": "Не удалось подключиться за {{seconds}} с — посмотрите в журнале ниже, на каком этапе остановилось подключение",
       "connecting": "Подключение…",
-      "description": "Вы открыли ссылку сопряжения, полученную с компьютера. Подтвердите, чтобы добавить его в список серверов.",
       "pairButton": "Выполнить сопряжение",
-      "pairingFailed": "Не удалось выполнить сопряжение: {{error}}",
-      "pairingLog": "Журнал сопряжения",
-      "title": "Выполнить сопряжение с этим компьютером?"
+      "pairingFailed": "Не удалось выполнить сопряжение: {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Разрешите доступ к камере в настройках или вставьте код сопряжения.",
-      "cameraDisabledTitle": "Доступ к камере отключён",
-      "cameraPermissionDescription": "Отсканируйте QR-код в Orca на компьютере или вставьте код сопряжения.",
-      "connectTimedOut": "Не удалось подключиться за {{seconds}} с — посмотрите в журнале ниже, на каком этапе остановилось подключение",
       "connecting": "Подключение…",
       "invalidPairingCode": "Неверный код сопряжения — скопируйте его с компьютера и вставьте ещё раз",
       "invalidQrCode": "Неверный QR-код Orca",
-      "downloadQrCode": "Это код для скачивания. Отсканируйте код сопряжения на шаге 2 на компьютере.",
-      "openDesktopStep": "Откройте Orca на компьютере",
-      "openMobileSettingsStep": "Перейдите в «Настройки → Мобильный доступ»",
       "openSettings": "Открыть настройки",
       "pairingFailed": "Не удалось выполнить сопряжение: {{error}}",
-      "pairingLog": "Журнал сопряжения",
       "pasteCodeMessage": "Скопируйте код, показанный под QR-кодом на компьютере.",
       "pasteCodePlaceholder": "orca://pair?code=... или вставьте код",
       "pasteCodeTitle": "Вставить код сопряжения",
-      "pasteInstead": "Вставить код",
-      "pastePairingCode": "Вставить код сопряжения",
-      "scanCodeStep": "Отсканируйте QR-код",
-      "title": "Сопряжение с компьютером",
-      "tryAgain": "Повторить попытку",
-      "codeNoLongerValid": "Этот код сопряжения истёк, уже использован или был заменён. Покажите новый код на компьютере и отсканируйте его снова.",
       "runtimeAccessLink": "Эта ссылка предназначена для другого приложения Orca. Отсканируйте код в «Настройки → Мобильный доступ» на компьютере или выполните orca pair --mobile на сервере."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Сохранять размер для телефона (по умолчанию)",
-      "leaveAppDescription": "Когда вы используете терминал на телефоне, Orca уменьшает его до размеров экрана. Эта настройка определяет, что произойдёт при закрытии приложения или переходе в другое: терминал сохранит размер для телефона (чтобы интерфейс интерактивных CLI-инструментов не перестраивался) или вернётся к размеру для компьютера. Восстановить размер вручную можно в любой момент кнопкой «Восстановить» на баннере в приложении на компьютере.",
-      "leaveAppHeading": "ПРИ ВЫХОДЕ ИЗ ПРИЛОЖЕНИЯ",
-      "noPairedDesktops": "Пока нет сопряжённых компьютеров. Выполните сопряжение с компьютером, чтобы настроить поведение терминала.",
+      "leaveAppHeading": "При выходе из приложения",
       "restoreAfterMinutes_few": "Через {{count}} минуты",
       "restoreAfterMinutes_many": "Через {{count}} минут",
       "restoreAfterMinutes_one": "Через {{count}} минуту",
@@ -190,21 +164,15 @@
       "restoreAfterSeconds_many": "Через {{count}} с",
       "restoreAfterSeconds_one": "Через {{count}} с",
       "restoreAfterSeconds_other": "Через {{count}} с",
-      "restoreHost": "Восстановление размера: {{name}}",
       "title": "Терминал",
       "previewColumns_one": "{{count}} столбец",
       "previewColumns_other": "{{count}} столбца",
       "previewColumns_few": "{{count}} столбца",
       "previewColumns_many": "{{count}} столбцов",
       "previewLabel": "Предпросмотр терминала",
-      "previewHeading": "ПРЕДПРОСМОТР",
-      "fontHeading": "ШРИФТ",
-      "fontDescription": "Сведите пальцы в терминале, чтобы изменить размер; настройка сохранится здесь. Меняется только на этом устройстве, а не в терминале на компьютере.",
       "font": "Шрифт",
       "size": "Размер",
       "sizePoints": "{{size}} пт",
-      "smaller": "Меньше",
-      "larger": "Больше",
       "lineSpacing": "Межстрочный интервал",
       "lineSpacingTight": "Плотный",
       "lineSpacingNormal": "Обычный",
@@ -257,26 +225,15 @@
     },
     "paneView": {
       "forward": "Вперёд",
-      "keyboardPlaceholder": "Введите текст для страницы…",
       "reload": "Перезагрузить",
-      "sendText": "Отправить текст в браузер",
       "dialogTitleWithOrigin": "{{origin}} сообщает",
       "dialogTitleNoOrigin": "Эта страница сообщает",
-      "dialogAnswer": "Ответ",
       "stop": "Остановить",
       "reconnect": "Подключиться снова"
     },
-    "pointerModifiers": {
-      "clickModifier": "Модификатор {{key}} для щелчка"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Отправка не подтверждена — проверьте страницу перед повторной попыткой",
-      "dialogAnswerFailed": "Не удалось передать ответ странице.",
-      "sent": "Отправлено"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Показать мобильную версию сайта",
-      "webView": "Показать версию сайта для компьютера"
+      "dialogAnswerFailed": "Не удалось передать ответ странице."
     },
     "loadFailure": {
       "retry": "Повторить",
@@ -369,7 +326,6 @@
       "addToMessage": "Добавить к сообщению",
       "attachImage": "Прикрепить изображение",
       "cancelEditing": "Отменить редактирование",
-      "placeholder": "Задайте вопрос; @ — файлы, / — команды",
       "saveEditedMessage": "Сохранить изменённое сообщение",
       "sendMessage": "Отправить сообщение",
       "sendQueue": "В очередь",
@@ -379,10 +335,7 @@
       "sendSteerHint": "Попадёт в то, что агент делает сейчас"
     },
     "contextUsage": {
-      "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
-      "title": "Контекст",
-      "estimated": "Оценка по последнему ответу.",
-      "deferredNote": "Загружается по запросу. Не входит в использованный объём."
+      "title": "Контекст"
     },
     "composerAttachments": {
       "attachedImage": "Прикреплённое изображение",
@@ -394,7 +347,6 @@
       "uploadingImage": "Загрузка изображения"
     },
     "composerPlaceholder": {
-      "prompt": "Задайте вопрос; @ — файлы, / — команды",
       "waitingForTerminal": "Ожидание терминала…"
     },
     "diffCard": {
@@ -410,9 +362,7 @@
     },
     "message": {
       "copyMessage": "Копировать сообщение",
-      "forkFromResponse": "Создать ответвление от этого ответа",
-      "scrollMessageToTop": "Прокрутить к началу сообщения",
-      "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода"
+      "forkFromResponse": "Создать ответвление от этого ответа"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Не удалось записать текст в буфер обмена.",
@@ -444,10 +394,8 @@
     },
     "nativeChatToolLine": {
       "added": "Добавлено",
-      "copyCommand": "Копировать команду",
       "deleted": "Удалено",
       "durationHours": "{{hours}} ч {{minutes}} мин {{seconds}} с",
-      "durationMilliseconds": "{{milliseconds}} мс",
       "durationMinutes": "{{minutes}} мин {{seconds}} с",
       "durationSeconds": "{{seconds}} с",
       "edited": "Изменено",
@@ -610,11 +558,11 @@
       "ultracode": "Ultracode",
       "permissionAppliesNextMessage": "{{saved}} применится к следующему сообщению; сейчас действует {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · следующее сообщение",
-      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}"
+      "permissionAppliesNextMessageTiming": "Применится к следующему сообщению · сейчас действует {{active}}",
+      "modelsLoading": "Загрузка моделей…",
+      "signInForModels": "Войдите, чтобы увидеть доступные вам модели."
     },
     "sessionOptionPickers": {
-      "agentWorking": "Агент работает",
-      "backToModels": "Назад к моделям",
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
@@ -624,17 +572,13 @@
       "workingAnnouncement": "Агент работает. Настройки модели станут доступны после завершения текущего ответа.",
       "applying": "Применяется…",
       "onAttach": "Применится при подключении к чату",
-      "heldPickRefused": "{{picked}} недоступно в этом чате. Оставлено: {{kept}}.",
-      "optionsSection": "Параметры"
+      "heldPickRefused": "{{picked}} недоступно в этом чате. Оставлено: {{kept}}."
     },
     "sessionOptionRows": {
       "defaultMarker": "По умолчанию",
       "notReportedMarker": "Нет данных",
       "moreModels": "Другие модели",
       "fewerModels": "Меньше моделей"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено"
     },
     "stopButton": {
       "stopAgent": "Остановить агента",
@@ -942,13 +886,15 @@
         "finishOnPage": "Завершите на открывшейся странице",
         "needsAuth": "Требуется вход",
         "needsAuthAfterSend": "Требуется вход. Отправьте сообщение, чтобы войти здесь.",
-        "off": "Выключен",
+        "disabled": "Выключен",
         "pending": "Подключение…",
         "tools_few": "{{count}} инструмента",
         "tools_many": "{{count}} инструментов",
         "tools_one": "{{count}} инструмент",
         "tools_other": "{{count}} инструмента",
-        "waitingForSignIn": "Ожидание входа…"
+        "waitingForSignIn": "Ожидание входа…",
+        "orcaRemoved": "Удалён: перезапуск при следующем сообщении",
+        "orcaChanged": "Изменён: перезапуск при следующем сообщении"
       },
       "source": {
         "project": "Проект",
@@ -981,7 +927,9 @@
         "needsAuth_few": "{{count}} требуют входа",
         "needsAuth_many": "{{count}} требуют входа"
       },
-      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь."
+      "pasteHint": "Когда браузер откроет страницу, которая не загрузится, скопируйте её адрес и вставьте здесь.",
+      "manage": "Управлять серверами MCP",
+      "stillFailing": "После переподключения ошибка не исчезла."
     },
     "restartNote": {
       "continued": "Orca попросила этого агента продолжить после перезапуска. Ваш собственный запрос повторно не отправлялся.",
@@ -994,8 +942,8 @@
       "row": {
         "started": "Запущен",
         "reopened": "Открыт заново",
-        "followedUp": "Отправлено уточнение для",
-        "handedOff": "Передано",
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:",
         "task": "Задача от",
         "update": "Обновление от",
         "message": "Сообщение от",
@@ -1006,8 +954,17 @@
         "started": "Запущен",
         "reopened": "Открыт заново",
         "task": "Задача",
-        "followedUp": "Уточнение",
-        "handedOff": "Передано"
+        "followedUp": "Дослано получателю:",
+        "handedOff": "Передано получателю:"
+      },
+      "unnamedRecipient": "агент",
+      "recipientName": "{{name}}",
+      "event": {
+        "followedUp": "Дополнение отправлено",
+        "update": "Обновление",
+        "message": "Сообщение",
+        "handedOff": "Работа передана",
+        "task": "Задача"
       }
     },
     "urlRequest": {
@@ -1443,12 +1400,8 @@
       "monitoring": "Наблюдает за фоновыми задачами",
       "unverifiable": "Давно не было обновлений"
     },
-    "authFailedBanner": {
-      "message": "Ошибка аутентификации — попробуйте подключиться заново. Если ошибка повторяется, повторите сопряжение с компьютера."
-    },
     "authFailedBannerActions": {
-      "repair": "Повторить сопряжение",
-      "webNote": "Подключитесь заново или удалите этот сервер из приложения Orca."
+      "repair": "Повторить сопряжение"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Сброс уже выполнен",
@@ -1487,25 +1440,13 @@
     },
     "customKeyModal": {
       "add": "Добавить",
-      "addShortcut": "Добавить кнопку",
-      "command": "Команда",
       "commandPlaceholder": "Например, pnpm build",
       "editing": "Редактирование",
       "function": "Функциональные клавиши",
       "key": "Клавиша",
-      "label": "Название",
       "labelPlaceholder": "Например, Сборка",
-      "manageShortcuts": "Управление кнопками",
-      "manageShortcutsHint": "Показывайте, скрывайте и меняйте порядок кнопок",
-      "modifiers": "Модификаторы",
-      "moreKeys": "ДОПОЛНИТЕЛЬНЫЕ КЛАВИШИ",
       "navigation": "Навигация",
-      "pickKey": "Выберите клавишу",
-      "pressEnter": "Нажимать Enter",
-      "shortcutCombo": "Сочетание клавиш",
-      "shortcutComboHint": "Создайте сочетания с Ctrl, Alt и Shift",
-      "textMacro": "Текстовый макрос",
-      "textMacroHint": "Отправка заданной текстовой команды"
+      "pressEnter": "Нажимать Enter"
     },
     "dictationSetupSheet": {
       "description": "Скачайте или выберите модель и включите диктовку на сопряжённом компьютере прямо здесь.",
@@ -1548,8 +1489,6 @@
       "allStaged": "Всё в индексе"
     },
     "diffReviewDrawers": {
-      "addNote": "Добавить заметку",
-      "cancelNote": "Отменить ввод заметки",
       "clearSentNotes": "Удалить отправленные заметки",
       "copyNotes": "Скопировать заметки",
       "deleteNote": "Удалить заметку",
@@ -1558,12 +1497,10 @@
       "discardTitle": "Отменить изменения в файле",
       "editNote": "Изменить заметку",
       "fileNote": "Заметка к файлу",
-      "lineNumber": "Строка {{lineNumber}}",
       "loadingSessions": "Загрузка сессий агентов…",
       "newAgentSession": "Новая сессия агента",
       "openInSession": "Открыть в сессии",
       "reviewNote": "Заметка по проверке",
-      "saveLineNote": "Сохранить заметку к строке {{lineNumber}}",
       "sendNotes": "Отправить заметки",
       "sendNotesLabel": "Отправить заметки агенту",
       "sendUnsentNotes": "Отправить неотправленные заметки",
@@ -1590,10 +1527,7 @@
       "discardChanges": "Отменить изменения",
       "rangeLine": "Строка {{line}}",
       "rangeLines": "Строки {{startLine}}–{{line}}",
-      "sendToAgent": "Отправить агенту {{agent}}",
-      "sendToAnAgent": "Отправить агенту",
-      "rangePlaceholder": "Что здесь нужно изменить?",
-      "commentOnGitHub": "Прокомментировать на GitHub"
+      "rangePlaceholder": "Что здесь нужно изменить?"
     },
     "diffReviewFileSummary": {
       "changed": "Изменён",
@@ -1621,7 +1555,6 @@
       "jumpToFile": "{{fileName}}, перейти к другому файлу"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Добавить заметку к строке {{number}}",
       "addedLine": "Добавленная строка",
       "addedLineNumber": "Добавленная строка {{number}}",
       "contextLine": "Строка контекста",
@@ -1645,13 +1578,9 @@
       "openHost": "Открыть {{title}}",
       "pairingInvalid": "Сопряжение недействительно",
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
-      "repairHint": "Нажмите, чтобы повторно выполнить сопряжение с компьютером",
-      "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
-      "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Открыть диагностику сети"
+      "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
+      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -1710,15 +1639,14 @@
       "agent": "Агент",
       "connectTarget": "Подключить целевой сервер",
       "connectTargetFirst": "Сначала подключите целевой сервер",
-      "createWorktree": "Создать рабочее дерево",
       "noProjectsFound": "Проекты не найдены",
       "note": "Заметка",
       "notePlaceholder": "Написать заметку",
       "workspaceName": "Название рабочего пространства",
       "options": "Параметры",
-      "createWorkspace": "Создать рабочее пространство",
       "startFrom": "Начать с",
-      "loadingProjects": "Загрузка проектов…"
+      "loadingProjects": "Загрузка проектов…",
+      "newWorkspace": "Новое рабочее пространство"
     },
     "newWorktreeModal": {
       "remoteRepository": "Удалённый репозиторий"
@@ -1766,14 +1694,10 @@
       "linkUrl": "URL ссылки"
     },
     "richMarkdownToolbar": {
-      "body": "Обычный текст",
       "bold": "Полужирный",
       "bulletList": "Маркированный список",
       "checklist": "Список задач",
       "codeBlock": "Блок кода",
-      "heading1": "H1",
-      "heading2": "H2",
-      "heading3": "H3",
       "image": "Изображение",
       "inlineCode": "Код в строке",
       "italic": "Курсив",
@@ -1846,19 +1770,10 @@
       "failed": "Ошибка"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Создать сочетание клавиш или текстовый макрос",
-      "addShortcut": "Добавить своё сочетание клавиш…",
-      "customShortcuts": "СВОИ СОЧЕТАНИЯ КЛАВИШ",
-      "empty": "Своих сочетаний клавиш пока нет.",
       "removeShortcut": "Удалить {{label}}",
-      "resetDefaults": "Сбросить настройки",
-      "resetDescription": "Показать все встроенные клавиши в исходном порядке",
-      "moreKeys": "ДОПОЛНИТЕЛЬНЫЕ КЛАВИШИ",
-      "moreKeysDescription": "Эти клавиши находятся под ⋯ в строке клавиш терминала. Включайте и выключайте их отображение и удерживайте маркер, чтобы перетащить клавишу в нужное место. Клавиши, уже находящиеся в строке, например Esc или стрелки, не показываются под ⋯.",
-      "directionPad": "КРЕСТОВИНА",
+      "moreKeys": "Дополнительные клавиши",
       "showDirectionPad": "Показывать крестовину",
-      "showDirectionPadDescription": "Закрепить крестовину на боковой панели. Если она выключена, на панели отображаются отдельные клавиши со стрелками.",
-      "showShortcut": "Показать сочетание {{label}}"
+      "showDirectionPadDescription": "Закрепить крестовину на боковой панели. Если она выключена, на панели отображаются отдельные клавиши со стрелками."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Использовать сброс лимитов?",
@@ -1877,13 +1792,10 @@
     "voiceModelList": {
       "deleteModel": "Удалить {{label}}",
       "downloadModel": "Скачать {{label}}",
-      "inUse": "Используется",
       "modelExtracting": "{{size}} · распаковка…",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelSize": "{{size}} МБ",
-      "recommended": "Рекомендуется",
-      "use": "Использовать",
-      "useModel": "Использовать {{label}}"
+      "recommended": "Рекомендуется"
     },
     "workspaceDetailPlaceholder": {
       "description": "Выберите рабочее пространство на боковой панели, чтобы открыть его терминал здесь.",
@@ -1939,17 +1851,19 @@
         "backToBots": "Назад к ботам",
         "loadingBotChats": "Загрузка чатов {{name}}…",
         "noOtherChats": "Других чатов нет",
-        "noMatchingChats": "Подходящих чатов нет"
+        "noMatchingChats": "Подходящих чатов нет",
+        "permissionAgentSettings": "Настройки {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, из настроек {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"
       },
       "turnDiff": {
-        "changedFiles_one": "{{count}} изменённый файл",
-        "changedFiles_other": "{{count}} изменённых файла",
-        "changedFiles_few": "{{count}} изменённых файла",
-        "changedFiles_many": "{{count}} изменённых файлов",
         "partial": "Показана часть изменений",
+        "changed_one": "{{count}} изменённый файл",
+        "changed_other": "{{count}} изменённых файла",
+        "changed_few": "{{count}} изменённых файла",
+        "changed_many": "{{count}} изменённых файлов",
         "showMoreFiles": "Показать ещё {{count}}"
       },
       "connectorAsker": {
@@ -2118,23 +2032,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "ошибка аутентификации",
-      "connected": "подключён",
-      "connecting": "подключение",
       "copyReport": "Скопировать отчёт",
-      "diagnosisHeading": "Возможная причина",
-      "disconnected": "отключён",
-      "handshaking": "согласование соединения",
       "noEvents": "Событий соединения пока нет. Они появятся, когда приложение начнёт подключаться к этому серверу.",
       "noHosts": "Сопряжённых серверов нет.",
-      "privacyHint": "Отправляется отчёт ограниченного размера, из которого удалены конфиденциальные данные. Он содержит имя сервера, адрес подключения, версии, состояние соединения и события. Содержимое терминала и учётные данные никогда не отправляются.",
-      "reconnecting": "повторное подключение",
       "retrySending": "Повторить отправку",
-      "sendDiagnostics": "Отправить диагностику",
       "sending": "Отправка…",
       "sent": "Диагностика отправлена",
-      "stateWithAttempt": "{{state}} · попытка {{attempts}}",
-      "title": "Диагностика сети"
+      "stateWithAttempt": "{{state}} · попытка {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Ресурсы",
@@ -2155,14 +2059,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Проверьте, что уведомления Orca разрешены в системных настройках, а режимы «Фокусирование» и «Не беспокоить» выключены.",
       "checkTailnet": "Убедитесь, что компьютер не спит и отображается как подключённый в вашей сети tailnet.",
-      "desktopTitle": "Приложение на компьютере не запущено",
       "disableVpn": "Отключите этот VPN или включите раздельное туннелирование / «Разрешить LAN».",
-      "firewallTitle": "Брандмауэр блокирует порт {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Адреса серверов вида 100.x.x.x или *.ts.net доступны через Tailscale — оставьте его ВКЛЮЧЁННЫМ.",
       "macosFirewall": "macOS: Системные настройки → Сеть → Брандмауэр — разрешите подключения для Orca.",
       "notificationNetwork": "Переключитесь на мобильную сеть или другую сеть Wi-Fi. Если уведомления начнут приходить, возможно, ваша сеть задерживает их доставку.",
-      "notificationsTitle": "Пуш-уведомления",
       "openDesktop": "Чтобы принимать подключения, Orca должна быть запущена на компьютере.",
       "pairAfterUpdate": "После обновления может потребоваться повторное сопряжение по QR-коду.",
       "reconnectWifi": "Попробуйте заново подключить оба устройства к WiFi.",
@@ -2173,22 +2074,14 @@
       "retryHost": "Вернитесь к списку серверов и нажмите на свой сервер, чтобы повторить попытку.",
       "sameNetwork": "Оба устройства должны быть в одной локальной сети (LAN), если они не подключены через Tailscale.",
       "sameSubnet": "Подключения Ethernet и WiFi должны быть в одной подсети.",
-      "tailscaleTitle": "Сервер недоступен через Tailscale",
-      "timeoutTitle": "Время ожидания подключения истекло",
       "updateTailscale": "Обновите приложение Tailscale — в последних версиях исправлены ошибки повторного подключения.",
       "vpnRouting": "VPN, кроме Tailscale, могут направлять локальный трафик через удалённый сервер.",
-      "vpnTitle": "Конфликт с другим VPN",
       "wifiSignal": "Проверьте уровень сигнала WiFi на телефоне.",
-      "wifiTitle": "Разные сети WiFi",
       "windowsFirewall": "Windows: Брандмауэр Защитника Windows → Разрешение взаимодействия с приложением — разрешите Orca для частных сетей."
     },
     "troubleshootView": {
       "commonIssues": "Частые неполадки",
-      "runAgain": "Запустить снова",
-      "runDiagnostics": "Запустить диагностику",
-      "running": "Выполняется…",
-      "title": "Устранение неполадок",
-      "viewNetworkDiagnostics": "Открыть диагностику сети"
+      "title": "Устранение неполадок"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Подключено",
@@ -2336,26 +2229,18 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "filterPlaceholder": "Фильтр файлов",
-      "noMatchesHint": "Поиск идёт только по открытым папкам.",
-      "clearFilter": "Очистить фильтр",
       "loading": "Загрузка файлов…"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
+      "ignored": "Игнорируется в .gitignore",
       "loadFolderFailed": "Не удалось загрузить папку",
       "loadedOfTotal": "{{loaded}} из {{total}}",
       "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
-      "searchAll": "Искать везде",
-      "searchAllIn": "Искать во всей папке {{folder}}",
-      "searched": "Просмотрено {{loaded}} из {{total}} в {{folder}}.",
-      "searching": "Поиск в {{folder}}… {{loaded}} из {{total}}",
-      "showMore": "Показать ещё {{rows}}",
-      "unavailable": "Недоступно на мобильном устройстве",
-      "ignored": "Игнорируется в .gitignore"
+      "showMore": "Показать ещё {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
@@ -2446,41 +2331,27 @@
     },
     "automationsTab": {
       "connectDesktop": "Подключите {{desktop}}, чтобы просматривать и запускать автоматизации.",
-      "createHint": "Нажмите +, чтобы запланировать агента.",
       "emptyTitle": "Планируйте работу агентов",
-      "lastStatus": "Последний: {{status}}",
       "newAutomation": "Новая автоматизация",
-      "noAutomations": "Автоматизаций пока нет",
-      "pairDesktop": "Выполните сопряжение с компьютером, чтобы просматривать и запускать автоматизации.",
-      "paused": "Приостановлена",
       "scheduled": "По расписанию",
       "showFor": "Показать автоматизации для",
       "toggleFailed": "Не удалось обновить {{name}}",
-      "updateDesktop": "Обновите Orca на {{desktop}}, чтобы использовать автоматизации."
-    },
-    "emptyState": {
-      "connectedDescription": "Здесь появится ваш компьютер. Все данные защищены сквозным шифрованием.",
-      "connectedTitle": "Вы подключены",
-      "description": "Подключитесь к Orca на компьютере, чтобы следить за агентами, открывать любой терминал и управлять работой с телефона.",
-      "openDesktopDescription": "Откройте «Настройки» → «Мобильный доступ» и создайте QR-код для сопряжения.",
-      "openDesktopTitle": "Откройте Orca на компьютере",
-      "scanCodeTitle": "Отсканируйте код",
-      "title": "Подключите компьютер",
-      "pairDesktopButton": "Сопрячь компьютер",
-      "scanCodeBelowDescription": "Нажмите «Сопрячь компьютер» ниже, затем наведите камеру на QR-код на экране."
+      "updateDesktop": "Обновите Orca на {{desktop}}, чтобы использовать автоматизации.",
+      "pairComputer": "Выполните сопряжение с компьютером, чтобы просматривать и запускать автоматизации."
     },
     "listFooter": {
-      "hostPickerTitle": "Открыть задачи на сервере"
+      "openTasksOn": "Открыть задачи на сервере"
     },
     "listHeader": {
-      "desktopsHeading": "Компьютеры"
+      "computersHeading": "Компьютеры"
     },
     "screen": {
       "pairingCheckFailed": "Не удалось проверить сопряжение",
-      "removeHostFailed": "Не удалось удалить сервер",
-      "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
-      "removeHostTitle": "Удалить сервер",
-      "tryAgain": "Попробуйте ещё раз."
+      "tryAgain": "Попробуйте ещё раз.",
+      "removeComputerFailed": "Не удалось удалить сервер",
+      "removeComputerTitle": "Удалить сервер",
+      "removeComputerMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
+      "sameNetworkOnly": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново"
     },
     "stats": {
       "agentTime": "Время агентов",
@@ -2493,34 +2364,29 @@
     },
     "tabs": {
       "automations": "Автоматизации",
-      "chooseDesktop": "{{desktop}}, выбрать другой компьютер",
       "feed": "Лента",
       "usage": "Использование",
       "agents": "Агенты",
-      "bots": "Боты"
+      "bots": "Боты",
+      "chooseComputer": "{{desktop}}, выбрать другой компьютер"
     },
     "usage": {
       "active": "Активна",
-      "addAccounts": "Добавьте учётные записи в разделе «Настройки → Учётные записи» в приложении на компьютере.",
       "connectDesktop": "Подключите {{desktop}}, чтобы видеть использование учётных записей агентов.",
       "emptyTitle": "Данных об использовании пока нет",
-      "openAccountsHint": "Открывает учётные записи этого компьютера",
-      "pairDesktop": "Выполните сопряжение с компьютером, чтобы видеть использование учётных записей агентов.",
       "refresh": "Обновить данные об использовании",
       "showUsageFor": "Показать использование для",
       "updatedAgo": "Обновлено {{time}} назад",
-      "updatedJustNow": "Обновлено только что"
+      "updatedJustNow": "Обновлено только что",
+      "pairComputer": "Выполните сопряжение с компьютером, чтобы видеть использование учётных записей агентов.",
+      "addAccountsOnComputer": "Добавьте учётные записи в разделе «Настройки → Учётные записи» в приложении на компьютере.",
+      "openComputerAccountsHint": "Открывает учётные записи этого компьютера"
     },
     "bottomBar": {
-      "connectFirst": "Подключите компьютер, чтобы начать новую работу.",
       "newWorkspace": "Новое рабочее пространство"
     },
-    "desktops": {
-      "pairDesktop": "Сопрячь компьютер"
-    },
     "sections": {
-      "tasks": "Задачи",
-      "tasksSubtitle": "Просматривайте свои задачи и проверки"
+      "tasks": "Задачи"
     },
     "activeAgents": {
       "heading": "Активные",
@@ -2528,7 +2394,6 @@
     },
     "bots": {
       "noBotsTitle": "Ботов пока нет",
-      "pairDesktop": "Сопрягите компьютер, чтобы увидеть здесь его ботов.",
       "seeAll": "Показать всех ботов",
       "updateOneBody": "Его версия Orca пока не может показывать ботов на вашем телефоне.",
       "updateManyTitle": "Обновите Orca на ваших компьютерах",
@@ -2554,7 +2419,11 @@
         "items_few": "{{count}} элемента",
         "items_many": "{{count}} элементов",
         "items_other": "{{count}} элемента"
-      }
+      },
+      "pairComputer": "Сопрягите компьютер, чтобы увидеть здесь его ботов."
+    },
+    "computers": {
+      "pairComputer": "Сопрячь компьютер"
     }
   },
   "hooks": {
@@ -2577,49 +2446,46 @@
       "address": "Адрес",
       "connectionPreview": "Подключение к {{endpoint}}",
       "goBack": "Назад",
-      "hostNamePlaceholder": "Название сервера",
-      "hostRemoved": "Этот сервер удалён из списка на этом телефоне.",
-      "loadFailed": "Не удалось загрузить данные сервера.",
-      "missingHost": "Не указан сервер.",
       "name": "Название",
-      "saveFailed": "Не удалось сохранить данные сервера.",
-      "saveHost": "Сохранить сервер",
-      "title": "Изменить сервер",
-      "removeHost": "Удалить сервер",
       "updateStepsServiceManager": "Обновите его через менеджер пакетов или менеджер служб.",
       "updateStepsSourceCheckout": "Обновите его из исходного репозитория.",
       "updateStepsServer": "Обновите Orca на сервере и перезапустите её.",
-      "orcaVersion": "Версия Orca"
+      "orcaVersion": "Версия Orca",
+      "editComputer": "Изменить сервер",
+      "removeComputer": "Удалить сервер",
+      "computerRemoved": "Этот сервер удалён из списка на этом телефоне.",
+      "couldNotLoad": "Не удалось загрузить данные сервера.",
+      "couldNotSave": "Не удалось сохранить данные сервера.",
+      "save": "Сохранить"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Подключиться",
       "disconnect": "Отключить",
-      "editHost": "Изменить сервер",
       "networkDiagnostics": "Диагностика сети",
-      "reconnect": "Подключиться снова"
+      "reconnect": "Подключиться снова",
+      "editComputer": "Изменить сервер"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Создание рабочего пространства…"
     },
     "hostScreenHeader": {
       "accounts": "Учётные записи",
-      "backToHosts": "Назад к серверам",
       "floatingWorkspace": "Плавающее рабочее пространство",
       "hideSidebar": "Скрыть боковую панель",
       "reconnect": "Подключиться снова",
       "tasks": "Задачи",
       "automations": "Автоматизации",
       "moreActions": "Дополнительные действия",
-      "sharedLinks": "Общие ссылки"
+      "sharedLinks": "Общие ссылки",
+      "mcpServers": "Серверы MCP"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Удалить «{{name}}» ({{branch}})?",
       "deleteDestroysEnvironment": "Также будет уничтожено окружение «{{environment}}», созданное для него Orca, вместе с незакоммиченными изменениями и запущенными терминалами.",
       "deleteKeepsEnvironment": "Окружение «{{environment}}», созданное для него Orca, продолжит работать: в его рецепте нет шага уничтожения.",
       "pin": "Закрепить",
-      "primaryWorktreeDeleteHint": "Основное рабочее дерево нельзя удалить. Вместо этого уберите проект.",
       "removeHost": "Удалить сервер",
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
@@ -2627,7 +2493,6 @@
       "rename": "Переименовать",
       "markRead": "Отметить прочитанным",
       "markUnread": "Отметить непрочитанным",
-      "moveToStatus": "Переместить в статус",
       "deleteFailed": "Не удалось удалить «{{name}}»",
       "muteNotifications": "Отключить уведомления",
       "unmuteNotifications": "Включить уведомления"
@@ -2692,25 +2557,17 @@
       "exceptDefaultBranch": "Кроме ветки по умолчанию",
       "filters": "Фильтры",
       "groupBy": "Группировать по",
-      "hideAutomationCreated": "Скрыть созданные автоматизацией",
-      "hideCliCreated": "Скрыть созданные через CLI",
       "hideDefaultBranch": "Скрыть ветку по умолчанию",
-      "hideDetachedHead": "Скрыть с отсоединённым HEAD",
-      "hideOtherClientWorkspaces": "Скрыть рабочие пространства других клиентов",
       "hideSleeping": "Скрыть спящие рабочие пространства",
-      "hosts": "Серверы",
       "localLinux": "Локальный ПК с Linux",
       "localMac": "Локальный Mac",
       "localWindows": "Локальный ПК с Windows",
       "projectOrder": "Порядок проектов",
       "projects": "Проекты",
-      "savingToDesktop": "Сохранение на сервере",
       "show": "Показать",
       "showProperties": "Показывать свойства",
       "sortBy": "Сортировать по",
-      "syncedAcrossDevices": "Синхронизация между вашими устройствами",
       "thisComputer": "Этот компьютер",
-      "waitingForDesktop": "Всё ещё ждём ответа сервера",
       "workspaceOptions": "Параметры рабочих пространств",
       "done": "Готово",
       "reset": "Сбросить"
@@ -2756,19 +2613,20 @@
       "accounts": "Учётные записи",
       "agentSessionHistory": "История сессий агентов",
       "changes": "Изменения",
-      "editHost": "Изменить сервер",
       "host": "Сервер",
       "pullRequest": "Пул-реквест",
       "sourceControl": "Управление версиями",
       "tasks": "Задачи",
       "terminal": "Терминал",
       "workspace": "Рабочее пространство",
-      "automations": "Автоматизации"
+      "automations": "Автоматизации",
+      "mcpServers": "Серверы MCP",
+      "editComputer": "Изменить сервер"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Где создать рабочее пространство"
+      "newWorkspaceOn": "Где создать рабочее пространство"
     },
     "loadingDrawer": {
       "downloadProgress": "Скачивание… {{progress}}",
@@ -2787,14 +2645,8 @@
       "silentName": "Беззвучные уведомления Orca"
     },
     "notificationDeliverySection": {
-      "footer": "Типы уведомлений зависят от настроек уведомлений на каждом сопряжённом компьютере. Если не пользоваться приложением 7 дней, уведомления приостанавливаются. Чтобы возобновить их, откройте приложение и подключитесь снова.",
-      "onlyWhenAway": "Только когда вы не за компьютером",
-      "onlyWhenAwayHint": "Если клавиатура и мышь не используются 3 минуты или компьютер заблокирован.",
       "sound": "Звук уведомлений",
-      "suppressWhileFocused": "Не уведомлять при просмотре",
-      "suppressWhileFocusedHint": "Не уведомлять о рабочем пространстве, открытом на этом телефоне.",
-      "onlyWhenAgentNeedsInput": "Только когда агенту нужно моё участие",
-      "onlyWhenAgentNeedsInputHint": "Запросы разрешений и вопросы. Завершённые агенты пропускаются."
+      "onlyWhenAgentNeedsInput": "Только когда агенту нужно моё участие"
     }
   },
   "onboarding": {
@@ -2806,16 +2658,11 @@
       "waitingOnYou": "Ожидает ваших действий."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Включить уведомления агентов",
       "enableNotifications": "Включить уведомления",
       "keepTerminal": "Оставить терминал",
       "notNow": "Не сейчас",
-      "notificationsDescription": "Получайте уведомления на этом телефоне, когда агент завершает работу или ждёт ваших действий, даже если вы не пользуетесь приложением.",
-      "notificationsDisclosure": "Уведомления доставляются через сервис push-уведомлений Orca после 3 минут бездействия на компьютере. Это можно в любой момент изменить в настройках.",
       "notificationsTitle": "Узнавайте, когда агенту нужна ваша помощь",
-      "openInChatUi": "Открывать сессии в интерфейсе чата",
       "openInTerminal": "Открывать сессии в терминале",
-      "sessionViewDescription": "Выберите, где на этом устройстве открывать поддерживаемые сессии агентов: в терминале или интерфейсе чата. Чтобы сменить режим просмотра, нажмите и удерживайте вкладку сессии. Режим по умолчанию можно изменить в любой момент в разделе Настройки → Интерфейс чата.",
       "sessionViewTitle": "Как открывать сессии?",
       "skipNotifications": "Пока не включать уведомления",
       "useChatUi": "Использовать чат"
@@ -2855,15 +2702,7 @@
       "yearsAgo_few": "{{count}} года назад",
       "yearsAgo_many": "{{count}} лет назад",
       "yearsAgo_one": "{{count}} год назад",
-      "yearsAgo_other": "{{count}} года назад",
-      "resolved": "решено",
-      "openOnGitHub": "Открыть комментарий на GitHub",
-      "replyToComment": "Ответить на комментарий",
-      "editComment": "Изменить комментарий",
-      "deleteComment": "Удалить комментарий",
-      "unresolveThread": "Открыть обсуждение снова",
-      "resolveThread": "Закрыть обсуждение",
-      "replyPlaceholder": "Напишите ответ…"
+      "yearsAgo_other": "{{count}} года назад"
     },
     "commentsSection": {
       "comment": "Добавить комментарий",
@@ -2873,18 +2712,8 @@
       "noDescription": "Описание не добавлено.",
       "showMore": "Показать ещё {{count}}",
       "title": "Комментарии",
-      "all": "Все",
-      "humans": "Люди",
-      "bots": "Боты",
-      "noBotComments": "Комментариев от ботов нет.",
-      "noHumanComments": "Комментариев от людей нет.",
-      "commentsLoadFailed": "Не удалось загрузить комментарии. Нажмите «Обновить», чтобы повторить.",
-      "showMoreOf": "Показать ещё {{count}} из {{remaining}}",
-      "addCommentPlaceholder": "Добавьте комментарий…",
       "resolvedThreadSingle": "Закрытое обсуждение от {{author}}",
       "resolvedThreadCount": "Закрытое обсуждение от {{author}} ({{count}})",
-      "resolvedCommentSingle": "Закрытый комментарий от {{author}}",
-      "resolvedCommentCount": "Закрытый комментарий от {{author}} ({{count}})",
       "commentsLoadFailedRetry": "Не удалось загрузить комментарии."
     },
     "linkPrForm": {
@@ -3003,14 +2832,6 @@
       "stateOpen": "Открыт",
       "unavailable": "Проверки недоступны"
     },
-    "prCommentAudienceLabels": {
-      "all": "Все",
-      "bots": "Боты",
-      "humans": "Люди",
-      "noBotComments": "Комментариев ботов нет.",
-      "noComments": "Комментариев пока нет.",
-      "noHumanComments": "Комментариев людей нет."
-    },
     "prSidebarCreateEmptyState": {
       "branchNotLinked": "Ветка {{branch}} не связана с открытым PR.",
       "currentBranchNotLinked": "Текущая ветка не связана с открытым PR.",
@@ -3093,8 +2914,8 @@
       "titleLabel": "Заголовок",
       "descriptionLabel": "Описание",
       "writeWithAi": "Написать с помощью ИИ",
-      "descriptionPlaceholder": "Необязательно",
-      "draft": "Создать как черновик"
+      "draft": "Создать как черновик",
+      "create": "Создать"
     },
     "screens": {
       "hideLog": "Скрыть журнал",
@@ -3104,7 +2925,6 @@
       "failedAfter": "Сбой через {{duration}}",
       "failed": "Сбой",
       "checkActions": "Другие действия: {{name}}",
-      "rerun": "Перезапустить",
       "copyErrorFailed": "Не удалось скопировать ошибку.",
       "durationSeconds": "{{seconds}} с",
       "durationMinutes": "{{minutes}} мин {{seconds}} с",
@@ -3226,23 +3046,15 @@
       "messageModeLabel": "Режим сообщений: напишите, затем отправьте. Переключиться в режим клавиш",
       "moreKeys": "Другие клавиши и действия",
       "showKeyboard": "Показать клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет текущую сессию терминала открытой.",
-      "switchToDesktopMode": "Переключиться в режим компьютера",
-      "switchToPhoneMode": "Переключить в режим телефона",
       "pasteFromClipboard": "Вставить из буфера обмена",
-      "paste": "Вставить",
-      "addCustomShortcut": "Добавить пользовательское сочетание клавиш",
       "control": "Control",
       "alt": "Alt",
       "shift": "Shift"
     },
     "activeContent": {
-      "createTab": "Создать вкладку",
       "creatingTab": "Создание…",
       "fileTitle": "Файл",
       "loadingTerminal": "Загрузка терминала",
-      "noTabs": "В этой сессии нет вкладок",
-      "retryLoadingTerminal": "Повторить загрузку терминала",
       "terminalTakingLonger": "Загрузка терминала занимает больше времени, чем ожидалось"
     },
     "agentChildRow": {
@@ -3359,26 +3171,15 @@
       "workflow": "Фоновый процесс"
     },
     "browserTabActionSheet": {
-      "forward": "Вперёд",
-      "reload": "Перезагрузить",
       "title": "Браузер",
       "hardReload": "Полная перезагрузка"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Закрыть другие вкладки"
     },
-    "bulkTabClose": {
-      "confirm": "Закрыть вкладки",
-      "description": "Выбранные вкладки закроются. Закреплённые вкладки останутся открытыми.",
-      "titleEditors": "Закрыть все вкладки редактора?",
-      "titleLeft": "Закрыть вкладки слева?",
-      "titleOthers": "Закрыть остальные вкладки?",
-      "titleRight": "Закрыть вкладки справа?"
-    },
     "commandDock": {
       "liveInputHint": "Вводимый текст отправляется прямо в активный терминал",
-      "liveInputLabel": "Прямой ввод в терминал",
-      "tapToShowKeyboard": "Нажмите, чтобы показать клавиатуру"
+      "liveInputLabel": "Прямой ввод в терминал"
     },
     "contentRow": {
       "dismissCreationWarning": "Закрыть предупреждение о создании рабочего пространства"
@@ -3590,17 +3391,13 @@
       "requestFailed": "Ошибка запроса: {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Показывает полное название рабочего пространства и его расположение",
       "backToWorktrees": "Вернуться к рабочим деревьям",
       "moreActions": "Другие действия с сессией",
-      "openSourceControl": "Открыть управление версиями",
       "reconnectToDesktop": "Переподключиться к компьютеру",
       "showSidebar": "Показать боковую панель",
       "terminalTitle": "Терминал",
       "terminalLayout": "Расположение терминалов",
-      "fileExplorer": "Проводник файлов",
       "sourceControl": "Управление исходным кодом",
-      "newTab": "Новая вкладка",
       "quickCommands": "Быстрые команды",
       "items": "Элементы",
       "itemsNeedYou": "Элементы, вас ждут: {{count}}",
@@ -3609,25 +3406,18 @@
     "headerMoreActionsSheet": {
       "agentHistory": "История агентов",
       "agentHistoryHint": "Просмотр и возобновление сессий агентов",
-      "checks": "Проверки",
-      "checksHint": "Открыть проверки пул-реквеста"
+      "checks": "Проверки"
     },
     "markdownReader": {
       "changedOnDesktop": "Изменён на компьютере",
       "copyLoaded": "Скопировать загруженное",
-      "copyLoadedSource": "Скопировать загруженный исходный текст Markdown",
-      "copyPath": "Скопировать путь",
-      "copyPathLabel": "Скопировать путь к файлу Markdown",
-      "copySource": "Скопировать исходный текст Markdown",
       "discard": "Отменить изменения",
       "previewTruncated": "Показана часть файла.",
       "readOnly": "Только чтение",
       "loading": "Загрузка документа…"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Доступно: {{count}}",
       "commands": "Команды",
-      "fileTypes": "PDF, текст, код…",
       "files": "Файлы",
       "photos": "Фото",
       "skills": "Навыки",
@@ -3637,7 +3427,7 @@
       "collapse": "Свернуть"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Продолжить в новом CLI"
+      "continueInTerminal": "Продолжить в терминале"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Прокрутить к последним сообщениям"
@@ -3652,11 +3442,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "агент",
-      "emptySubtitle": "Отправьте запрос: {{agent}} может изучить код, объяснить вывод или внести изменения.",
       "emptyTitle": "Начните чат ({{agent}})",
-      "errorSubtitle": "Не удалось прочитать историю. Вернитесь в терминал, чтобы продолжить работу.",
       "errorTitle": "Не удалось загрузить разговор",
-      "notFoundSubtitle": "Отправьте сообщение, чтобы начать разговор, или откройте терминал и посмотрите, что делает {{agent}}.",
       "notFoundTitle": "Пока не удаётся найти этот разговор"
     },
     "nativeChatToggleAction": {
@@ -3707,7 +3494,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Действие",
-      "addQuickCommand": "Добавить быструю команду",
       "advanced": "Дополнительно",
       "agent": "Агент",
       "agentPrompt": "Запрос агенту",
@@ -3726,7 +3512,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} символов",
       "promptSizeKilobytes": "{{used}} КБ / {{max}} КБ",
       "promptTooLong": "Текст слишком длинный для сохранения.",
-      "scope": "Область",
       "terminalCommand": "Команда терминала"
     },
     "quickCommandLaunch": {
@@ -3755,9 +3540,9 @@
       "chooseAgentTitle": "Выбрать агента",
       "deleteConfirmMessage": "Эта быстрая команда будет удалена из сохранённого списка.",
       "editTitle": "Изменить быструю команду",
-      "editorDescription": "Сохраняйте команды терминала или запросы агентам для быстрого доступа.",
       "title": "Быстрые команды",
-      "untitled": "Без названия"
+      "untitled": "Без названия",
+      "add": "Добавить"
     },
     "routeHelpers": {
       "connected": "Подключён",
@@ -3773,20 +3558,15 @@
     "sheets": {
       "browser": "Браузер",
       "chat": "Чат",
-      "copyAllAndLeave": "Скопировать всё и выйти",
-      "copyDraftsFailed": "Не удалось скопировать черновики",
       "copyNotes": "Копировать заметки",
       "copyNotesFailed": "Не удалось скопировать заметки",
       "copyPath": "Копировать путь",
       "discard": "Отменить изменения",
-      "discardAndLeave": "Удалить черновики и выйти",
       "discardChanges": "Отменить изменения",
       "discardMessage": "Заменить черновик на телефоне последней версией файла с компьютера?",
-      "draftsHint": "Перед выходом скопируйте или удалите черновики на телефоне.",
       "file": "Файл",
       "markdown": "Markdown",
       "markdownNote": "Заметка Markdown",
-      "newBrowser": "Новый браузер",
       "newTab": "Новая вкладка",
       "notesCopied": "Заметки скопированы",
       "notesHint": "Выберите сессию агента для текущих заметок.",
@@ -3801,12 +3581,9 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalName": "Название терминала",
-      "unsavedMarkdown": "Несохранённые изменения в Markdown",
-      "urlPrompt": "Введите URL или оставьте поле пустым, чтобы открыть новую вкладку.",
       "allowAutoClose": "Разрешить автоматическое закрытие",
       "agents": "Агенты",
       "renameTerminalFailed": "Не удалось переименовать терминал. {{reason}}",
-      "browserStreamingUnavailable": "Этот сервер не может транслировать вкладки браузера",
       "cli": "CLI",
       "cliOnly": "Только CLI",
       "more": "Ещё",
@@ -3826,7 +3603,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Проверяем возможности Orca на компьютере — повторите попытку чуть позже",
-      "newTab": "Новая вкладка",
       "quickCommandsUpdateRequired": "Для быстрых команд обновите Orca на компьютере"
     },
     "terminalActionSheetActions": {
@@ -3835,20 +3611,12 @@
       "switchToDesktop": "Включить режим компьютера",
       "switchToPhone": "Включить режим телефона"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Нажмите и удерживайте, чтобы прикрепить файл вместо фото",
-      "attachPhoto": "Прикрепить фото",
-      "sendingImage": "Отправка изображения"
-    },
     "terminalLiveInputStatus": {
       "listening": "Прослушивание",
-      "liveInput": "Прямой ввод",
       "preparingMic": "Подготовка микрофона",
       "processing": "Обработка",
       "releaseMicHint": "Отпустите кнопку микрофона, чтобы остановить запись",
-      "startingMic": "Включение микрофона",
-      "uploadingImage": "Загрузка изображения на сервер",
-      "uploadingImageTitle": "Загрузка изображения"
+      "startingMic": "Включение микрофона"
     },
     "terminalRecords": {
       "defaultTitle": "Терминал"
@@ -4085,21 +3853,14 @@
       "mailOwnerUnconfirmed": "Orca не смогла подтвердить, что это сообщение по-прежнему предназначено для этого чата."
     },
     "workerAutoClose": {
-      "running": "Временный агент оркестрации · Закроется через 2 минуты после завершения",
-      "finished": "Временный агент оркестрации завершил работу · Закроется через {{countdown}}",
       "keepOpen": "Оставить открытым"
     },
     "terminalLayoutSheet": {
       "title": "Расположение терминалов",
       "oneTerminal": "Один терминал",
-      "selected": "Выбрано",
       "auto": "Авто",
-      "autoHint": "Разделить с учётом доступного места",
       "sideBySide": "Рядом",
-      "sideBySideHint": "Два столбца, даже при открытой боковой панели",
-      "stacked": "Друг над другом",
-      "stackedHint": "Две строки при любой ориентации",
-      "selectedHint": "Выбрано · {{hint}}"
+      "stacked": "Друг над другом"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Не удалось сохранить расположение",
@@ -4108,23 +3869,19 @@
     "terminalMoreKeys": {
       "sendKey": "Отправить {{label}}",
       "paste": "Вставить",
-      "sending": "Отправка…",
       "photo": "Фото",
       "file": "Файл",
       "desktopWidth": "Ширина компьютера",
       "phoneWidth": "Ширина телефона",
       "keys": "Клавиши",
-      "combos": "Комбинации",
       "yourKeys": "Ваши клавиши",
       "deleteKeyHint": "Удерживайте, чтобы удалить эту клавишу",
-      "addCustomKey": "Добавить свою клавишу",
-      "addKey": "Добавить клавишу"
+      "addCustomKey": "Добавить свою клавишу"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, в фокусе",
       "terminal": "Терминал",
-      "tapToFocusPane": "{{title}}, нажмите для фокусировки",
-      "inputPane": "{{title}} · Ввод"
+      "tapToFocusPane": "{{title}}, нажмите для фокусировки"
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
@@ -4169,10 +3926,7 @@
     "tabBar": {
       "oneTab": "1 вкладка",
       "tabCount": "Вкладок: {{count}}",
-      "anotherNeedsYou": "другая вкладка требует вашего внимания",
       "actionsHint": "Показывает действия для этой вкладки",
-      "next": "Следующая вкладка",
-      "previous": "Предыдущая вкладка",
       "hint": "Показывает все вкладки"
     },
     "contentState": {
@@ -4231,6 +3985,18 @@
     },
     "tabMenu": {
       "closeTab": "Закрыть вкладку"
+    },
+    "terminalChatContinuation": {
+      "busy": "Открывается другой чат или терминал. Подождите и повторите попытку.",
+      "continueInChat": "Продолжить в чате",
+      "failed": "Не удалось продолжить в чате. {{detail}}",
+      "failedAfterClose": "Не удалось продолжить в чате. {{detail}} Разговор находится в истории агентов.",
+      "otherJob": "В этом терминале работает {{process}}. Завершите его, затем продолжите в чате.",
+      "terminalChanged": "Терминал изменился, пока Orca его проверяла. Повторите попытку.",
+      "tryAgain": "Повторите попытку.",
+      "unavailable": "Чаты {{agent}} недоступны на этом компьютере.",
+      "uncheckable": "Orca не удалось проверить, что запущено в этом терминале. Повторите попытку.",
+      "unconfirmed": "Orca не удалось подтвердить, что чат открылся. Проверьте вкладки, прежде чем пробовать снова."
     }
   },
   "settings": {
@@ -4247,7 +4013,6 @@
       "checkUpdates": "Проверить обновления",
       "checkUpdatesStatus": "Проверить обновления, {{status}}",
       "checking": "Проверка…",
-      "installedVersion": "Версия {{version}}",
       "lastCheckedDays_few": "Проверено {{count}} дн. назад",
       "lastCheckedDays_many": "Проверено {{count}} дн. назад",
       "lastCheckedDays_one": "Проверено {{count}} дн. назад",
@@ -4263,19 +4028,17 @@
       "lastCheckedMinutes_other": "Проверено {{count}} мин назад",
       "neverChecked": "Никогда",
       "upToDate": "Обновлений нет",
-      "update": "Обновить",
       "updateToVersion": "Обновить Orca до {{version}}"
     },
     "appearance": {
       "language": {
-        "description": "При выборе «Как в системе» используется язык устройства. Запросы разрешений всегда отображаются на языке устройства.",
-        "heading": "ЯЗЫК",
+        "heading": "Язык",
         "systemWithCurrent": "Как в системе ({{language}})"
       },
       "theme": {
         "dark": "Тёмная",
         "description": "При выборе «Системная» используется светлая или тёмная тема устройства.",
-        "heading": "ТЕМА",
+        "heading": "Тема",
         "light": "Светлая",
         "system": "Системная"
       },
@@ -4283,21 +4046,16 @@
       "usage": {
         "used": "Использовано",
         "remaining": "Осталось",
-        "heading": "ПРОЦЕНТЫ ИСПОЛЬЗОВАНИЯ",
+        "heading": "Проценты использования",
         "description": "Полосы использования на главном экране и в учётных записях показывают, сколько каждого лимита использовано или осталось. Сохраняется на этом телефоне."
       }
     },
     "browserSettingsScreen": {
       "askEachTime": "Спрашивать каждый раз",
-      "askEachTimeDescription": "Каждый раз выбирать браузер Orca, браузер телефона или копирование ссылки.",
       "desktopBrowser": "Браузер Orca на компьютере",
-      "desktopBrowserDescription": "Открывать в браузере сопряжённого компьютера с трансляцией на телефон.",
-      "terminalAndChatLinksDescription": "Выберите, где открывать веб-ссылки при нажатии на них в выводе терминала и в чате.",
-      "linksHeading": "ССЫЛКИ",
       "loadFailed": "Не удалось загрузить настройки браузера. Повторите попытку.",
       "openLinks": "Открывать ссылки",
       "phoneBrowser": "Браузер телефона",
-      "phoneBrowserDescription": "Открывать в Safari, Chrome или другом браузере на этом телефоне.",
       "saveFailed": "Не удалось сохранить настройки браузера. Повторите попытку.",
       "title": "Браузер"
     },
@@ -4305,7 +4063,6 @@
       "about": "О приложении",
       "appearance": "Внешний вид",
       "browser": "Браузер",
-      "chatUi": "Интерфейс чата",
       "notifications": "Уведомления",
       "terminal": "Терминал",
       "troubleshooting": "Устранение неполадок",
@@ -4314,14 +4071,6 @@
     "menuScreen": {
       "privacyPolicy": "Политика конфиденциальности",
       "support": "Поддержка"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Выберите, как на этом устройстве открываются сессии поддерживаемых агентов (Claude, Codex и других агентов с поддержкой чата). В терминале отображается CLI в исходном виде, а в интерфейсе чата — чат, как в приложении для компьютера. Режим отдельной сессии можно изменить через меню, которое открывается долгим нажатием.",
-      "defaultViewHeading": "ВИД ПО УМОЛЧАНИЮ",
-      "off": "Выключено",
-      "on": "Включено",
-      "openInChatUi": "Открывать сессии в интерфейсе чата",
-      "title": "Интерфейс чата"
     },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Не удалось загрузить настройки доставки уведомлений. Откройте этот экран заново, чтобы повторить попытку.",
@@ -4380,32 +4129,20 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Подключитесь к компьютеру, чтобы управлять настройками голоса.",
       "deleteFailed": "Не удалось удалить",
-      "dictationDescription": "Диктуйте текст в любую активную панель на компьютере.",
-      "dictationHeading": "ДИКТОВКА",
-      "dictationMode": "Режим диктовки",
-      "dictationModeDescription": "Переключение: нажмите один раз, чтобы начать, ещё раз — чтобы остановить. Удержание: диктуйте, пока удерживаете кнопку.",
-      "dictationModeWithAutoDescription": "Авто: нажмите, чтобы начать и остановить; на компьютере удержание сочетания клавиш записывает до отпускания. Удержание: диктуйте, пока удерживаете кнопку. Переключение: нажмите один раз, чтобы начать, ещё раз — чтобы остановить.",
       "autoMode": "Авто",
       "downloadFailed": "Не удалось скачать",
-      "enableDictation": "Включить голосовую диктовку",
       "holdMode": "Удержание",
       "loadFailed": "Не удалось загрузить настройки голоса",
       "loadFailedMessage": "Не удалось загрузить настройки голоса.",
       "noneSelected": "Не выбрана",
       "selectModelFailed": "Не удалось выбрать модель",
-      "speechModel": "Речевая модель",
-      "speechModelHeading": "РЕЧЕВАЯ МОДЕЛЬ",
       "title": "Голос",
       "toggleMode": "Переключение",
       "updateFailed": "Не удалось обновить",
       "loading": "Загрузка настроек голоса…"
     },
-    "agents": {
-      "permissionOwnAll": "Собственные настройки агентов"
-    },
     "voiceTranscribeOn": {
-      "heading": "ГДЕ РАСПОЗНАВАТЬ",
-      "description": "То, что слышит этот телефон, остаётся на нём. «Автоматически» использует компьютер, когда телефон не может распознать речь.",
+      "heading": "Где распознавать",
       "automatic": "Автоматически",
       "phone": "Этот телефон",
       "computer": "Компьютер",
@@ -4418,7 +4155,7 @@
       "phoneChecking": "Проверка…"
     },
     "nativeChatText": {
-      "heading": "ТЕКСТ",
+      "heading": "Текст",
       "footer": "Сведите пальцы в чате, чтобы изменить размер; настройка сохранится здесь.",
       "size": "Размер текста",
       "sizeDefault": "По умолчанию",
@@ -4551,12 +4288,7 @@
     },
     "commitFailurePanel": {
       "fix": "Исправить",
-      "fixWithAi": "Исправить ошибку коммита с ИИ",
       "hideDetails": "Скрыть подробности",
-      "hideFailureDetails": "Скрыть подробности ошибки коммита",
-      "showDetails": "Показать подробности",
-      "showFailureDetails": "Показать подробности ошибки коммита",
-      "summary": "Не удалось создать коммит.",
       "title": "Не удалось создать коммит"
     },
     "commitMessageAi": {
@@ -4576,10 +4308,7 @@
       "cancelGeneration": "Отменить создание сообщения коммита",
       "commitMessageDisabled": "Ввод сообщения коммита недоступен. В индексе нет файлов.",
       "commitMessagePlaceholder": "Сообщение коммита",
-      "emptyMessage": "В рабочем дереве нет изменений.",
-      "emptyTitle": "Нет локальных изменений",
       "generateMessage": "Создать сообщение коммита с помощью ИИ",
-      "reconnecting": "Переподключение к компьютеру…",
       "regenerateHint": "Очистите сообщение для повторного создания."
     },
     "createPrAction": {
@@ -4745,7 +4474,6 @@
       "updateDesktop": "Обновите Orca на этом сервере, чтобы использовать управление версиями на мобильном устройстве."
     },
     "modals": {
-      "currentBranch": "текущая",
       "discardButton": "Отменить изменения",
       "discardConfirmMessage": "Отменить изменения в «{{path}}»? Это действие необратимо.",
       "discardTitle": "Отменить изменение",
@@ -4877,6 +4605,9 @@
       "agentCouldNotStart": "Не удалось запустить {{label}}. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentFailedToStart": "Запуск {{label}} завершился ошибкой. Проверьте команду агента в разделе «Настройки» и повторите попытку.",
       "agentReportedError": "{{label}} сообщил об ошибке.",
+      "antigravityInvalidEvents": "Antigravity вернул некорректные события JSON.",
+      "antigravityInvalidResult": "Antigravity вернул некорректный результат.",
+      "antigravityNoFinalResult": "Antigravity не вернул итоговый результат.",
       "chatNameAgentUnsupported": "Выберите поддерживаемого агента для названий чатов в разделе «Настройки -> Чат -> Названия чатов». Поддерживаемые агенты: {{agents}} или «Своя команда».",
       "chatNameCustomCommandEmpty": "Своя команда не задана. Добавьте её в разделе «Настройки -> Чат -> Названия чатов».",
       "cliFailed": "Команда CLI {{label}} завершилась с ошибкой и кодом {{exitCode}}.",
@@ -5056,15 +4787,6 @@
       "behind": "Позади: {{count}}",
       "upToDate": "Актуально",
       "switchBranch": "Сменить ветку {{branch}}",
-      "mergeInProgress": "Выполняется слияние",
-      "rebaseInProgress": "Выполняется перебазирование",
-      "cherryPickInProgress": "Выполняется cherry-pick",
-      "filesNeedDecision_one": "{{count}} файл требует решения, чтобы вы могли завершить.",
-      "filesNeedDecision_other": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_few": "{{count}} файла требуют решения, чтобы вы могли завершить.",
-      "filesNeedDecision_many": "{{count}} файлов требуют решения, чтобы вы могли завершить.",
-      "conflictsResolved": "Все конфликты разрешены. Завершите на панели ниже.",
-      "continueOnComputer": "Все конфликты разрешены. Завершите на компьютере.",
       "commits_one": "{{count}} коммит",
       "commits_other": "{{count}} коммита",
       "commits_few": "{{count}} коммита",
@@ -5090,8 +4812,7 @@
     },
     "pagination": {
       "pageUnreachable": "Страница {{page}} выходит за пределы результатов поиска GitHub.",
-      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub.",
-      "noMoreResults": "На странице {{page}} больше нет результатов."
+      "loadPageFailed": "Не удалось загрузить страницу {{page}} из GitHub."
     },
     "composerSource": {
       "baseFailed": "Не удалось определить базовую ветку.",
@@ -5114,23 +4835,10 @@
     "filterPickers": {
       "allTeams": "Все команды",
       "changeStatus": "Изменить статус",
-      "fieldHidden": "Скрыто на карточках",
-      "fieldShown": "Показано на карточках",
-      "fieldsSubtitle": "Выберите, какие поля проекта показывать на карточках элементов.",
-      "fieldsTitle": "Поля проекта",
-      "gitlabFilter": "Фильтр GitLab",
-      "gitlabView": "Представление GitLab",
-      "jiraFilter": "Фильтр Jira",
-      "jiraSite": "Сайт Jira",
-      "linearFilter": "Фильтр Linear",
       "linearIssue": "Задача Linear",
-      "linearWorkspace": "Рабочее пространство Linear",
       "loadingStates": "Загрузка статусов…",
-      "noFields": "В этом представлении нет дополнительных полей.",
       "noStates": "Нет доступных статусов",
       "switchWorkspaceFailed": "Не удалось сменить рабочее пространство",
-      "teamsSubtitle": "Выберите команды для отображения в разделе «Задачи».",
-      "teamsTitle": "Команды Linear",
       "teams_few": "{{count}} команды",
       "teams_many": "{{count}} команд",
       "teams_one": "{{count}} команда",
@@ -5184,9 +4892,6 @@
     },
     "itemActions": {
       "changeStatus": "Изменить статус",
-      "copyGitHubLink": "Скопировать ссылку на GitHub",
-      "copyLinearLink": "Скопировать ссылку на Linear",
-      "creating": "Создание…",
       "mergeConflicts": "GitHub сообщает о конфликтах слияния.",
       "mergeMergeRequest": "Слить запрос на слияние",
       "mergePullRequest": "Слить пул-реквест",
@@ -5195,34 +4900,14 @@
       "moreActions": "Дополнительные действия"
     },
     "itemDetailContent": {
-      "addSubIssue": "Добавить подзадачу",
       "checks": "Проверки",
       "description": "Описание",
       "discussion": "Обсуждение",
-      "noChecks": "Проверки не найдены.",
-      "noComments": "Комментариев нет.",
-      "noPipelineRuns": "Для этого MR нет запусков конвейера.",
-      "noSubIssues": "Нет подзадач.",
-      "none": "Нет",
-      "pipeline": "Конвейер",
-      "pipelineJobs_few": "{{count}} задания",
-      "pipelineJobs_many": "{{count}} заданий",
-      "pipelineJobs_one": "{{count}} задание",
-      "pipelineJobs_other": "{{count}} задания",
-      "rerunAll": "Повторить все",
-      "subIssueTitle": "Название подзадачи",
       "subIssues": "Подзадачи",
-      "details": "Подробности",
-      "type": "Тип",
-      "status": "Статус",
-      "assignee": "Исполнитель",
       "project": "Проект",
       "priority": "Приоритет",
       "assignees": "Исполнители",
       "loading": "Загрузка подробностей…"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Обновить данные"
     },
     "itemFieldEditors": {
       "addLabels": "Метки для добавления (через запятую)",
@@ -5275,9 +4960,6 @@
     },
     "linearList": {
       "changeStatusFrom": "Изменить статус «{{status}}»"
-    },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Отображаемые поля"
     },
     "listSurface": {
       "connectLinearButton": "Подключить Linear",
@@ -5332,7 +5014,6 @@
       "projectMergeRequests": "MR проекта",
       "projectMergeRequestsDescription": "Запросы на слияние и задачи по репозиториям",
       "projects": "Проекты",
-      "pullRequests": "PR",
       "repository": "Репозиторий",
       "repositorySortDescription": "По репозиториям, внутри — сначала недавно обновлённые",
       "reviewRequestsDescription": "Запросы на проверку, назначенные вам",
@@ -5457,42 +5138,8 @@
       "reviewers": "Рецензенты",
       "viewFile": "Просмотреть"
     },
-    "providerControls": {
-      "myTodos": "Мои дела",
-      "projectMergeRequests": "MR проекта",
-      "reposLabel": "Репозитории: {{repos}}",
-      "filterCount": "Фильтр · {{count}}",
-      "filter": "Фильтр",
-      "filterLabel": "Фильтр и отображение"
-    },
-    "providerItemList": {
-      "intoBranch": "в {{base}}",
-      "nextPage": "Следующая страница",
-      "page": "Страница {{page}}",
-      "pageOfTotal": "Страница {{page}} из {{total}}",
-      "previousPage": "Предыдущая страница",
-      "selectPage": "Выбрать страницу, страница {{page}}",
-      "selectPageOfTotal": "Выбрать страницу, страница {{page}} из {{total}}",
-      "kindAndStatus": "{{kind}}, {{status}}"
-    },
     "providerPickers": {
-      "allRepositories": "Все репозитории",
-      "githubView": "Режим GitHub",
-      "issueSources": "Источники задач GitHub",
-      "issueSourcesDescription": "Выберите для каждого репозитория, где искать и создавать задачи: upstream или origin.",
-      "issues": "Задачи",
-      "noIssueSources": "Другие источники задач недоступны.",
-      "origin": "Исходный репозиторий",
-      "pageHint": "Перейдите на загруженную или доступную страницу результатов.",
-      "pageLoaded": "Загружена",
-      "pageNotLoaded": "Загрузит более ранние результаты",
-      "pageNumber": "Страница {{page}}",
-      "pages": "Страницы GitHub",
-      "pullRequests": "Пул-реквесты",
-      "queryingSource": "Запрос к {{source}}",
-      "repoDescription": "Выберите репозитории для поиска.",
-      "repos": "Репозитории",
-      "upstream": "Вышестоящий репозиторий"
+      "allRepositories": "Все репозитории"
     },
     "providerViewProjection": {
       "all": "Все",
@@ -5501,7 +5148,6 @@
       "allWorkspaces": "Все рабочие пространства",
       "chooseProject": "Выбрать проект",
       "default": "По умолчанию",
-      "defaultSubtitle": "{{subtitle}} · По умолчанию",
       "issues": "Задачи",
       "openState": "Открытые",
       "projects": "Проекты",
@@ -5519,15 +5165,7 @@
     "screenChrome": {
       "newGitHubIssue": "Новая задача GitHub",
       "newLinearIssue": "Новая задача Linear",
-      "refreshGitHub": "Обновить задачи GitHub",
-      "refreshGitLab": "Обновить задачи GitLab",
-      "refreshJira": "Обновить задачи Jira",
-      "refreshLinear": "Обновить Linear",
       "title": "Задачи"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Поиск в проекте…",
-      "providerPlaceholder": "Поиск задач {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Все",
@@ -5554,27 +5192,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Подключить",
-      "connectLinearWorkspace": "Подключить рабочее пространство Linear",
-      "createIssue": "Создать задачу",
       "createWorkspaceIn": "Где создать рабочее пространство",
       "description": "Описание",
-      "descriptionPlaceholder": "Добавьте подробности",
-      "fileIn": "Создать в {{slug}}",
-      "issueSource": "Источник задач",
       "keySecurityHint": "Ваш ключ шифруется с помощью хранилища ключей ОС сервера и хранится локально.",
-      "linearConnectSubtitle": "Вставьте личный API-ключ, чтобы просматривать задачи из этого рабочего пространства.",
       "linearSettingsLink": "Открыть настройки Linear",
       "linearTeam": "Команда Linear",
-      "linearTeamSubtitle": "Создайте задачу в выбранной команде Linear.",
-      "newIssueTitle": "Новая задача в {{providerLabel}}",
       "origin": "Исходный репозиторий",
       "personalApiKey": "Личный API-ключ",
       "repository": "Репозиторий",
-      "repositorySubtitle": "Создайте задачу в выбранном репозитории.",
       "team": "Команда",
       "title": "Заголовок",
-      "titlePlaceholder": "Заголовок задачи",
-      "upstream": "Вышестоящий репозиторий"
+      "upstream": "Вышестоящий репозиторий",
+      "newIssue": "Новая задача",
+      "create": "Создать",
+      "fileInRow": "Где создать",
+      "connectLinear": "Подключить Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Пустой терминал"
@@ -5584,7 +5216,6 @@
       "advanced": "Дополнительно",
       "agent": "Агент",
       "connectFirst": "Сначала подключите репозиторий",
-      "connectRepository": "Подключить репозиторий",
       "defaultBranch": "Ветка по умолчанию",
       "detectingAgents": "Поиск агентов…",
       "remoteRepository": "Удалённый репозиторий",
@@ -5592,9 +5223,9 @@
       "repositoryNotFound": "Репозиторий не найден.",
       "selectRepository": "Выберите репозиторий",
       "startFrom": "Начать с",
-      "title": "Создать рабочее пространство",
-      "workspaceName": "Название рабочего пространства",
-      "optionalLabel": "Необязательно"
+      "createWorkspace": "Создать рабочее пространство",
+      "nameSection": "Название рабочего пространства",
+      "connectRepositoryAction": "Подключить репозиторий"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "«{{name}}» уже существует.",
@@ -5635,7 +5266,6 @@
       "directories_other": "{{count}} каталога",
       "editSparsePreset": "Изменить набор выборочной выгрузки",
       "nameLabel": "Название",
-      "namePlaceholder": "Интерфейс рендерера",
       "newSparsePreset": "Новый набор выборочной выгрузки",
       "runSetupAndCreate": "Выполнить настройку и создать",
       "setupSubtitle": "Перед созданием рабочего пространства для {{name}} выберите, запускать ли скрипт настройки.",
@@ -5647,30 +5277,15 @@
       "createFailed": "Не удалось создать рабочее пространство"
     },
     "filterSheet": {
-      "sortBy": "Сортировать по",
       "issueSource": "Источник задач",
-      "issueSourceRow": "Upstream или origin",
       "view": "Вид",
-      "projectView": "Вид проекта",
-      "projectItems_one": "{{count}} элемент",
-      "projectItems_other": "{{count}} элемента",
-      "projectItems_few": "{{count}} элемента",
-      "projectItems_many": "{{count}} элементов",
-      "chooseView": "Выбрать",
       "showOnRows": "Показывать в строках",
-      "projectFields": "Поля проекта",
       "workspace": "Рабочее пространство",
-      "linearWorkspace": "Рабочее пространство Linear",
       "layout": "Макет",
       "groupBy": "Группировать по",
       "orderBy": "Упорядочить по",
-      "displayProperties": "Свойства отображения",
       "title": "Фильтр и отображение",
-      "done": "Готово",
-      "jqlReplacesPreset": "Ваш поиск JQL заменяет пресет «Показать». Очистите поиск, чтобы снова выбрать пресет."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Поиск JQL"
+      "done": "Готово"
     },
     "itemComments": {
       "noComments": "Комментариев пока нет",
@@ -5718,7 +5333,6 @@
     },
     "webviewEngineErrorState": {
       "code": "код {{code}}",
-      "reload": "Перезагрузить",
       "rendererCrashed": "сбой процесса отрисовки",
       "status": "статус {{statusCode}}",
       "title": "Не удалось загрузить терминал"
@@ -5807,8 +5421,7 @@
       "noFilterMatches": "Нет рабочих пространств, соответствующих фильтрам",
       "reopen": "Откройте заново для обновления",
       "reopenDetail": "Этот сервер возвращает список рабочих пространств в формате, который эта страница пока не поддерживает.",
-      "loading": "Загрузка рабочих пространств…",
-      "retryingAutomatically": "Повторяем автоматически."
+      "loading": "Загрузка рабочих пространств…"
     },
     "workspaceListSections": {
       "all": "Все",
@@ -5826,11 +5439,13 @@
       "right": "Крестовина вправо",
       "down": "Крестовина вниз",
       "hint": "Отправляет клавишу со стрелкой. Удерживайте для повтора."
+    },
+    "terminalKeyRail": {
+      "ctrlC": "Ctrl+C"
     }
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "Дополнительные аргументы агента",
       "allAutomations": "Все автоматизации",
       "schedule": "Расписание",
       "agent": "Агент",
@@ -5843,8 +5458,6 @@
       "cancel": "Отмена",
       "name": "Название",
       "back": "Назад",
-      "continue": "Продолжить",
-      "createAutomation": "Создать автоматизацию",
       "automations": "Автоматизации",
       "runs": "Запуски",
       "refresh": "Обновить",
@@ -5854,7 +5467,6 @@
       "skipped": "Пропущено",
       "started": "Начало",
       "trigger": "Триггер",
-      "run": "Запуск",
       "output": "Вывод",
       "noOutput": "Нет доступного содержимого вывода.",
       "loadingRuns": "Загрузка запусков…",
@@ -5868,45 +5480,18 @@
       "host": "Сервер",
       "pending": "Ожидание",
       "starting": "Запуск",
-      "baseBranchOptional": "Базовая ветка (необязательно)",
-      "workspaceSetupScript": "Скрипт настройки рабочей области",
-      "useProjectSettings": "Использовать настройки проекта",
-      "runSetupScript": "Выполнить скрипт настройки",
-      "skipSetupScript": "Пропустить скрипт настройки",
       "reuseAgentSession": "Повторно использовать сеанс агента",
-      "precheckCommandOptional": "Команда предварительной проверки (необязательно)",
-      "precheckTimeoutSeconds": "Тайм-аут предварительной проверки (секунды)",
-      "missedRunGraceMinutes": "Допуск пропущенного запуска (минуты)",
-      "choose": "Выбрать…",
       "runOnSchedule": "Запускать {{name}} по расписанию",
       "noNextScheduledRun": "Следующий запуск не запланирован",
-      "newWorkspacePerRun": "Новая рабочая область для каждого запуска",
       "instructions": "Инструкции",
       "runNow": "Запустить сейчас",
-      "savedAgent": "{{agent}} (сохранён)",
       "chooseAProjectSetUpOnThisHost": "Выберите проект, настроенный на этом хосте.",
       "newAutomation": "Новая автоматизация",
-      "editorStep": "{{step}} из 3 · {{section}}",
-      "retryProjectLoading": "Повторить загрузку проектов",
-      "loadingProjects": "Загрузка проектов…",
-      "projectAndHostSetup": "Настройка проекта и хоста",
       "savedTarget": "Сохранённая цель",
-      "useAnExistingWorkspace": "Использовать существующую рабочую область",
-      "existingWorkspace": "Существующая рабочая область",
       "savedWorkspace": "Сохранённая рабочая область",
       "loadMoreWorkspaces": "Загрузить ещё рабочие области",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "Список рабочих областей хоста неполон. Обновите или загрузите ещё рабочие области.",
-      "agentDetecting": "Агент · обнаружение…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Установите и включите агента на этом хосте, затем повторите попытку.",
-      "hideAdvancedOptions": "Скрыть дополнительные параметры",
-      "advancedOptions": "Дополнительные параметры",
-      "chooseAnAgent": "Выберите агента",
-      "saveChanges": "Сохранить изменения",
       "loadingAutomations": "Загрузка автоматизаций…",
-      "letYourAgentsWorkOnASchedule": "Пусть агенты работают по расписанию",
-      "createAnAutomationToRunATaskOnThisHost": "Создайте автоматизацию для выполнения задачи на этом хосте.",
-      "nextDate": "Следующий: {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Подключитесь к хосту заново для обновления или изменений. Сохранённая информация доступна ниже.",
       "recentRuns": "Недавние запуски",
       "outcome": "Результат",
       "allOutcomes": "Все результаты",
@@ -5915,14 +5500,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Не удалось проверить исходную панель агента. Подключитесь заново и повторите попытку.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Исходную панель агента больше нельзя открыть. Сохранённый вывод остаётся здесь.",
       "allRuns": "Все запуски",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Запуска больше нет в сохранённой истории хоста. Последняя сохранённая информация остаётся ниже.",
       "scheduledFor": "Запланировано на",
-      "notCreated": "Не создано",
-      "projectHost": "Хост проекта",
-      "notRecorded": "Не записано",
       "capturedTruncated": "Сохранено: {{date}} · Вывод усечён хостом",
       "capturedDate": "Сохранено: {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Исходная панель агента недоступна. Сохранённый вывод остаётся здесь.",
       "openAgent": "Открыть агента",
       "retryHistory": "Повторить загрузку истории",
       "fullOutputUnavailable": "Не удалось загрузить полный вывод.",
@@ -5932,12 +5512,7 @@
       "scheduled": "По расписанию",
       "loadMoreRuns": "Загрузить ещё запуски",
       "customCronOrRRULE": "Свой Cron или RRULE",
-      "cronOrRRULE": "Cron или RRULE",
-      "minuteFromHHMM": "Минуты (из HH:MM)",
-      "timeHHMM24Hour": "Время (HH:MM, 24 часа)",
-      "useATimeSuchAs0900": "Укажите время, например 09:00.",
       "timeZone": "Часовой пояс",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Выполняется на выбранном хосте. Он должен быть доступен в назначенное время.",
       "pairedHost": "Сопряжённый хост",
       "selectedServerUnavailable": "Выбранный сервер (недоступен)",
       "addANameInstructionsAndAnAgent": "Добавьте название, инструкции и агента.",
@@ -5965,8 +5540,6 @@
       "unknownResult": "Неизвестный результат",
       "notReported": "Не сообщено",
       "searchOptions": "Поиск вариантов",
-      "task": "Задача",
-      "review": "Проверка",
       "discardChangesTitle": "Отменить изменения?",
       "discardChangesMessage": "Несохранённые изменения этой автоматизации будут потеряны.",
       "discard": "Отменить изменения",
@@ -5976,7 +5549,6 @@
       "repeats": "Повтор",
       "moreActions": "Другие действия",
       "noRunsYet": "Запусков пока нет",
-      "newOnePerRun": "Новое при каждом запуске",
       "nextRunToday": "Следующий запуск сегодня в {{time}}",
       "nextRunTomorrow": "Следующий запуск завтра в {{time}}",
       "nextRunWeekday": "Следующий запуск: {{day}}, {{time}}",
@@ -6091,7 +5663,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Найдите задачи или введите JQL, например project = ABC",
         "jiraTextMatchesNotice": "Показаны текстовые совпадения. Jira не удалось выполнить этот поиск как JQL."
       },
       "editor": {
@@ -7225,12 +6796,9 @@
       },
       "readFailedTitle": "Не удалось загрузить элементы",
       "wait": {
-        "keep": "Отмена",
-        "titleOne": "Чего ждёт {{title}}?",
-        "titleMany": "Чего ждут элементы ({{count}})?",
         "placeholder": "Ожидает",
-        "confirm": "Отметить ожидание",
-        "offline": "{{host}} не в сети. Введённый текст сохранится; «Отметить ожидание» снова заработает, когда сервер вернётся."
+        "offlineSave": "{{host}} не в сети. Введённый текст сохранится; кнопка «Сохранить» снова заработает, когда компьютер вернётся.",
+        "count": "Элементов: {{count}}"
       }
     },
     "needs": {
@@ -7245,7 +6813,8 @@
       "questions": "Вопросов: {{count}}",
       "pairedAsk": "{{from}} хочет написать {{name}}",
       "connectorFix": "Войти или исправить",
-      "signInApps": "Войдите в приложения: {{count}}"
+      "signInApps": "Войдите в приложения: {{count}}",
+      "listSeparator": ", "
     },
     "waits": {
       "cancel": "Отмена",
@@ -7580,6 +7149,7 @@
       "emptyArgument": "Пусто",
       "valueNew": "Новое значение",
       "valueSaved": "Сохранено",
+      "hostMcpServers": "Ваши MCP-серверы",
       "edit": "Редактировать",
       "save": "Сохранить",
       "args": "Аргументы",
@@ -7593,8 +7163,10 @@
       "editTitle": "Изменить инструмент",
       "reading": "Чтение сведений об инструменте…",
       "url": "URL сервера",
+      "urlPlaceholder": "https://example.com/mcp",
       "headers": "Заголовки",
       "executable": "Исполняемый файл",
+      "commandPlaceholder": "npx",
       "addArg": "Добавить аргумент",
       "env": "Переменные окружения",
       "addHeader": "Добавить заголовок",
@@ -7602,7 +7174,6 @@
       "nameTaken": "Инструмент с именем {{name}} уже есть. Выберите другое имя."
     },
     "handToBot": {
-      "menu": "Передать боту…",
       "title": "Передать {{name}} боту",
       "noAgents": "Агенты не запущены.",
       "oneAgent": "Его агент продолжает работать на бота.",
@@ -7820,6 +7391,9 @@
       "groupMailNeverStarted": "Это письмо так и не запустило ход.",
       "groupRemoteUnreachable": "Не удалось связаться с {{host}}. {{detail}}",
       "groupRemoteUnreachableRetry": "Не удалось связаться с {{host}}. {{detail}} Опубликуйте ещё раз, чтобы повторить попытку.",
+      "composioKeyCantCreateSessions": "Этот ключ Composio не может создавать сессии. Требуется разрешение {{permission}}.",
+      "composioKeyNeedsPermission": "У этого ключа Composio нет нужного разрешения. Требуется {{permission}}.",
+      "composioKeyMissingPermission": "У этого ключа Composio нет разрешения, которое нужно Orca.",
       "googleAccountsChanged": "Его учётные записи Google изменились с тех пор, как вы их открыли. Проверьте их и сохраните снова."
     },
     "automations": {
@@ -7938,6 +7512,7 @@
         "full": "Полный доступ",
         "back": "Назад",
         "continue": "Продолжить",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
         "link": "Ссылка",
         "paste": "Вставить",
         "open": "Открыть",
@@ -8208,7 +7783,6 @@
       "nothingToReport": "Сообщать нечего",
       "mentionPaused": "Приостановлен",
       "mentionOwnChats": "Ваши другие чаты",
-      "mentionPlaceholder": "Спросите что угодно; @ — упомянуть ботов или файлы, / — команды",
       "mentionChatsLoadFailed": "Не удалось загрузить чаты"
     },
     "access": {
@@ -8556,7 +8130,8 @@
         "handoffPick": "Выберите рабочее пространство и нажмите Authorize.",
         "signIn": "Войти в Linear",
         "pickSubtitle": "Выберите рабочее пространство, в котором работает {{name}}"
-      }
+      },
+      "address": "linear.app/{{urlKey}}"
     },
     "github": {
       "setup": {
@@ -8613,7 +8188,11 @@
         "signIn": "Войти в GitHub",
         "pickSubtitle": "Выберите репозитории, в которых он может работать"
       },
-      "allRepositoriesShort": "все репозитории"
+      "allRepositoriesShort": "все репозитории",
+      "ghSignedOut": {
+        "line": "В gh на {{host}} не выполнен вход. Выполните там gh auth login.",
+        "copy": "Скопировать {{text}}"
+      }
     },
     "connect": {
       "account": "Учётная запись",
@@ -8774,6 +8353,7 @@
       }
     },
     "connector": {
+      "titleSeparator": " · ",
       "actions": "Действия {{name}}",
       "removeFrom": "Убрать из {{place}}…"
     },
@@ -8815,13 +8395,13 @@
       "workers_many": "{{count}} исполнителей",
       "noMatches": "Нет агентов по запросу «{{query}}»",
       "emptyTitle": "Нет запущенных агентов",
-      "pairDesktop": "Сопрягите компьютер, чтобы увидеть здесь его агентов.",
       "emptyBody": "Запустите агента в любом рабочем пространстве, и он появится здесь.",
       "unread": "Не прочитано",
-      "noDesktopTitle": "Нет подключённого компьютера",
-      "noDesktopBody": "Агенты появятся здесь, когда подключится компьютер.",
       "hideWorkers": "Скрыть: {{workers}}",
-      "showWorkers": "Показать: {{workers}}"
+      "showWorkers": "Показать: {{workers}}",
+      "pairComputer": "Сопрягите компьютер, чтобы увидеть здесь его агентов.",
+      "noComputerTitle": "Нет подключённого компьютера",
+      "noComputerBody": "Агенты появятся здесь, когда подключится компьютер."
     },
     "actions": {
       "offlineHint": "Его компьютер не в сети.",
@@ -8839,32 +8419,17 @@
       "workspace": "Рабочее пространство",
       "project": "Проект",
       "agent": "Агент",
-      "desktop": "Компьютер"
+      "computer": "Компьютер"
     },
     "options": {
       "groupBy": "Группировать по",
       "showWorkers": "Показывать агентов-исполнителей",
-      "open": "Параметры списка агентов",
       "unreadOnly": "Только непрочитанные",
       "markAllRead": "Отметить все прочитанными",
       "clearFinished": "Убрать завершённые"
     },
     "search": {
-      "toggle": "Поиск агентов",
       "placeholder": "Поиск агентов"
-    },
-    "desktops": {
-      "pickerTitle": "Показать агентов на",
-      "agents_one": "{{count}} агент",
-      "agents_other": "{{count}} агента",
-      "agents_few": "{{count}} агента",
-      "agents_many": "{{count}} агентов",
-      "all": "Все компьютеры",
-      "offline": "Не в сети",
-      "needsYou_one": "{{count}} ждёт вас",
-      "needsYou_other": "{{count}} ждут вас",
-      "needsYou_few": "{{count}} ждут вас",
-      "needsYou_many": "{{count}} ждут вас"
     },
     "sections": {
       "needsYou": "Ждёт вас",
@@ -8885,6 +8450,9 @@
     "activity": {
       "needsWindow": "Не удалось обновить. Откройте Orca на {{desktop}}.",
       "failed": "Не удалось обновить список агентов."
+    },
+    "filterSheet": {
+      "allComputers": "Все компьютеры"
     }
   },
   "chats": {
@@ -8899,6 +8467,97 @@
     }
   },
   "mcpServers": {
-    "agentBlocked": "Заблокировано настройками Claude вашей организации"
+    "category": {
+      "coding": "Разработка",
+      "chat": "Чат",
+      "monitoring": "Мониторинг",
+      "docs": "Документы и проекты",
+      "more": "Другое"
+    },
+    "searchApps": "Поиск приложений",
+    "filterActive": "Фильтр: {{filter}}",
+    "filter": "Фильтр",
+    "allApps": "Все приложения",
+    "added": "Добавлено",
+    "addTitle": "Добавить сервер MCP",
+    "customServer": "Свой сервер",
+    "customServerLine": "URL, команда или вставленная конфигурация",
+    "noMatch": "Нет приложений по запросу «{{query}}».",
+    "apps": "Приложения",
+    "header": "Заголовок",
+    "headerName": "Имя",
+    "headerValue": "Значение",
+    "removeHeader": "Удалить заголовок",
+    "headers": "Заголовки",
+    "headerEmpty": "Пусто",
+    "addHeader": "Добавить заголовок",
+    "addButton": "Добавить",
+    "sourceLabel": "URL сервера или команда запуска",
+    "sourcePlaceholder": "https://… или npx …",
+    "sourceNote": "Вставьте URL сервера, команду запуска или конфигурацию mcpServers.",
+    "details": "Подробности",
+    "trust": "Добавляйте только программы, которым доверяете.",
+    "serverType": "Тип сервера",
+    "urlMode": "Подключиться по URL",
+    "commandMode": "Выполнить команду",
+    "serverName": "Имя сервера",
+    "headersNone": "Нет",
+    "yours": "Ваши",
+    "addServer": "Добавить сервер",
+    "fromPlugins": "Из плагинов",
+    "inYourAgents": "В настройках агентов",
+    "needsSignIn": "Требуется вход",
+    "wontStart": "Не запускается",
+    "signIn": "Войти",
+    "projectsOnly": "Только {{projects}}",
+    "moreFor": "Другие действия: {{name}}",
+    "moveToOrca": "Перенести в Orca",
+    "copyToOrca": "Скопировать в Orca",
+    "signInAgain": "Войти снова",
+    "signOut": "Выйти",
+    "workspaces": "Рабочие пространства",
+    "account": "Учётная запись",
+    "signedIn": "Вход выполнен",
+    "agents": "Агенты",
+    "turnAllOn": "Включить все",
+    "agentsUnread": "Не удалось получить список агентов на этом компьютере.",
+    "agentBlocked": "Заблокировано настройками Claude вашей организации",
+    "advanced": "Дополнительно",
+    "sharedProcess": "Один процесс для всех агентов",
+    "sharedProcessNote": "Расходует меньше памяти. Работает вне папки рабочего пространства.",
+    "removeServer": "Удалить сервер",
+    "url": "URL",
+    "command": "Команда",
+    "arguments": "Аргументы",
+    "title": "Серверы MCP",
+    "reading": "Чтение серверов MCP…",
+    "unavailable": "Серверы MCP недоступны на {{host}}",
+    "signedInTo": "Вход в {{app}} выполнен",
+    "allWorkspaces": "Все рабочие пространства",
+    "includingLater": "Включая добавленные позже",
+    "appliesToNewNote": "Изменения применятся к новым сессиям.",
+    "allAgents": "Все агенты",
+    "agentsOf": "{{on}} из {{total}}",
+    "workspacesAll": "Все",
+    "workspacesAllBut": "Все, кроме {{names}}",
+    "workspacesNone": "Нет",
+    "appliesToNew": "Для новых сессий",
+    "restartSessions": "Перезапустить сессии ({{count}})",
+    "restarted": "Перезапущено сессий: {{count}}",
+    "agentFileTitle": "Включить {{server}} для {{agent}}?",
+    "agentFileMessage": "Orca будет хранить ваши серверы MCP в файле настроек {{agent}} ({{file}}). Ваши собственные записи останутся без изменений.",
+    "agentFilesMessage": "Orca будет хранить ваши серверы MCP в файлах настроек агентов. Ваши собственные записи останутся без изменений.",
+    "allow": "Разрешить",
+    "removeTitle": "Удалить {{name}}?",
+    "removeMessageSavedData": "Сессии, использующие его, могут сразу потерять доступ. При этом могут быть удалены сохранённые для него заголовки, переменные окружения или данные входа. В таком случае, чтобы вернуть доступ, может потребоваться ввести их заново или войти снова.",
+    "remove": "Удалить",
+    "moveTitle": "Перенести {{name}} в Orca?",
+    "moveMessage": "Orca удалит его из настроек {{agents}} и сохранит резервную копию.",
+    "move": "Перенести",
+    "workspacesCount": "Рабочих пространств: {{count}}",
+    "workspacesAllButCount": "Все, кроме {{count}}",
+    "headerMissing": "Заполните заголовок {{header}}, чтобы добавить этот сервер.",
+    "servers": "Серверы",
+    "unreadable": "Сохранённый вход или ключ нельзя открыть. Войдите снова."
   }
 }

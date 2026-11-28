@@ -20,18 +20,21 @@ import {
   releaseAgentSenderHistoryKeys
 } from './runtime-agent-sender-history-triggers'
 import { AgentSenderLineageGraph } from './runtime-agent-sender-lineage'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 
 /** An identity (`dispatch:<id>`, or an earlier handle of that worker) located in a live pane. */
 export type AgentSenderWorker = { identity: string; paneKey: string; dispatchActor?: true }
 type RemoteWorker = AgentSenderWorker & { homePeerFingerprint: string }
 export type AgentSenderWorkers = { workers: AgentSenderWorker[]; remote: RemoteWorker[] }
 
-const remoteRow = z.object({
-  dispatchId: z.string(),
-  homePeerFingerprint: z.string(),
-  processIncarnation: z.string().nullable()
-})
-const assignedRow = z.object({ id: z.string(), handle: z.string().nullable() })
+const remoteRow = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string(),
+    homePeerFingerprint: z.string(),
+    processIncarnation: z.string().nullable()
+  })
+)
+const assignedRow = lazyZodSchema(() => z.object({ id: z.string(), handle: z.string().nullable() }))
 
 // Each reads one live pane through an index; the active and potentially-live predicates are the
 // partial indexes' own, so neither scans every Dispatch or attachment that pane ever had.

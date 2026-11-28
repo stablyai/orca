@@ -3,14 +3,13 @@ import { MobileBotGroupTranscript } from './MobileBotGroupTranscript'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBotGroupReader } from './MobileBotGroupTurns'
 import { useCallback, useMemo, useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Keyboard, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, Ellipsis, ListChecks } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileSessionKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { colors } from '../theme/mobile-theme'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
@@ -30,7 +29,7 @@ import { MobileBotGroupRoomBar } from './MobileBotGroupRoomBar'
 import { MobileBotFaceStack } from './MobileBotFaceStack'
 import { useMobileBotGroupTranscript } from './use-mobile-bot-group-transcript'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
-import { groupStyles as styles } from './mobile-bot-group-styles'
+import { groupStylesSheet } from './mobile-bot-group-styles'
 import { MobileBotGroupMembers } from './MobileBotGroupMembers'
 import { MobileBotGroupPost } from './MobileBotGroupPost'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
@@ -48,6 +47,7 @@ import {
   MobileBotGroupDictationScope,
   useMobileBotGroupDictation
 } from './use-mobile-bot-group-dictation'
+import { useThemedStyles } from '../theme/themed-styles'
 
 /** The group's picture before its name, a chat avatar's 24pt slot. */
 const NAV_FACES = 24
@@ -73,7 +73,8 @@ export function MobileBotGroupRoom({
   /** The computer the group runs on, for "Studio Mac is offline." */
   hostName: string
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(groupStylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
@@ -293,13 +294,16 @@ export function MobileBotGroupRoom({
                   primary={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
                     value0: audience
                   })}
-                  secondary={null}
                   warning={false}
                   accessibleName={t('bots.groups.repliesValue', 'Replies: {{value0}}', {
                     value0: audience
                   })}
                   disabled={!group || !connected}
-                  onPress={() => setMenu('replies')}
+                  onPress={() => {
+                    setMenu('replies')
+                    // The tap kept the field focused, so the sheet closes the keyboard itself.
+                    Keyboard.dismiss()
+                  }}
                 />
               </View>
             }

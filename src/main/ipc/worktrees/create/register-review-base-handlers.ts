@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
@@ -22,10 +23,13 @@ import { resolveGitHubReviewHeadRemote } from '../../../github/pull-requests/sta
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
-export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
+export function registerReviewBaseHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store, runtime } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:resolvePrBase',
     async (
       _event,
@@ -100,7 +104,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:resolveMrBase',
     async (
       _event,

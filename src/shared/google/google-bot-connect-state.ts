@@ -4,6 +4,7 @@ import type { Bot } from '../bot-types'
 import type { GoogleAccountView } from './google-connect-types'
 import { botGoogleAccess, botMayUseGoogleAccount } from './google-bot-accounts'
 import { googleSetupRunActive, type GoogleSetupRun } from './google-setup-run'
+import { CONNECTOR_OFFER_NO_DIRECTIONS } from '../bots/connector-offer-directions'
 
 export type GoogleHostConnect = 'no-app' | 'signed-out' | 'reconnect' | 'connected'
 
@@ -86,7 +87,7 @@ export function googleBotAsk(
     message:
       from === 'start'
         ? "Google's app is already on this computer, so there is no app to make: your owner now sees a Connect card for Google in this chat instead. End your turn; their answer reaches you."
-        : "Your owner now sees a Connect card for Google in this chat; it turns to Connected once they connect it. Don't tell them where to click."
+        : `Your owner now sees a Connect card for Google in this chat; it turns to Connected once they connect it.${CONNECTOR_OFFER_NO_DIRECTIONS}`
   }
 }
 

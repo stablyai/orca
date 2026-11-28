@@ -5,7 +5,7 @@ import {
   LIST_TABLE_HEADER_CLASS,
   LIST_TABLE_STICKY_HEADER_CELL_CLASS
 } from '@/lib/list-interaction/list-table-layout'
-import { AutomationListSortHeader } from './AutomationListSortHeader'
+import { RailPageSortHeader } from '@/components/rail-page/RailPageSortHeader'
 import type { AutomationListSort, AutomationListSortField } from './automation-list-view'
 
 type HeaderColumn = {
@@ -62,7 +62,7 @@ export function AutomationListTableHeader({
             className={index === 0 ? LIST_TABLE_STICKY_HEADER_CELL_CLASS : undefined}
           >
             {column.sortField && onSort ? (
-              <AutomationListSortHeader
+              <RailPageSortHeader
                 field={column.sortField}
                 label={label}
                 sort={sort}

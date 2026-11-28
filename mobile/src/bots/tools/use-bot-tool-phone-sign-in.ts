@@ -10,6 +10,7 @@ import {
 } from '../../../../src/shared/bot-tool-sign-in'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-links/external-link'
+import { useSignInLinkCopy, type SignInLinkCopy } from './use-sign-in-link-copy'
 import { readConnectionStatusProbe } from '../../transport/connection/runtime-status-probe'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -40,7 +41,7 @@ export type BotToolPhoneSignIn = {
   finish: (address: string) => void
   openAgain: () => void
   cancel: () => void
-}
+} & SignInLinkCopy
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 const messageOf = (error: unknown) =>
@@ -305,5 +306,20 @@ export function usePhoneToolSignIn(args: {
     }
   }, [attempt])
 
-  return { attempt, failure, error, starting, start, finish, openAgain, cancel }
+  const linkCopy = useSignInLinkCopy(attempt?.url ?? null)
+  const shownError =
+    error ??
+    (linkCopy.copyFailed ? t('bots.tools.signIn.copyFailed', 'Couldn’t copy the link.') : null)
+
+  return {
+    attempt,
+    failure,
+    error: shownError,
+    starting,
+    start,
+    finish,
+    openAgain,
+    cancel,
+    ...linkCopy
+  }
 }

@@ -28,7 +28,7 @@ import {
   isNativeChatSideChatCommand,
   withNativeChatSideChatCommands
 } from '../../../../../../src/shared/native-chat/input/commands/native-chat-side-chat-command'
-import { translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -62,12 +62,14 @@ export function mobileComposerCatalog({
   agent,
   structured,
   discovery = NO_DISCOVERY,
-  interactionModeSupported = false
+  interactionModeSupported = false,
+  t
 }: {
   agent: string | null
   structured: MobileComposerStructuredCatalog | undefined
   discovery?: NativeChatSkillDiscoverySnapshot
   interactionModeSupported?: boolean
+  t: Translate
 }): MobileComposerCatalog {
   if (!agent) {
     return { profile: null, commands: [], discovery: NO_DISCOVERY, sessionSkills: [] }
@@ -83,7 +85,8 @@ export function mobileComposerCatalog({
           interactionModeSupported,
           structured.mcpPanel
         ),
-        structured
+        structured,
+        t
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {
@@ -97,14 +100,15 @@ export function mobileComposerCatalog({
 /** Desktop's Orca rows: `/fork` and `/usage` run here; `/resume`, `/side` and `/btw` say they are desktop-only. */
 function withMobileOrcaCommands(
   commands: readonly SlashCommandSuggestion[],
-  structured: MobileComposerStructuredCatalog
+  structured: MobileComposerStructuredCatalog,
+  t: Translate
 ): SlashCommandSuggestion[] {
-  const desktopOnly = mobileDesktopOnlyCommandNotice()
+  const desktopOnly = mobileDesktopOnlyCommandNotice(t)
   const rows = withNativeChatOrcaCommands(commands, {
     resume: desktopOnly,
     ...(structured.accountUsage
       ? {
-          usage: translate(
+          usage: t(
             'components.native-chat.usage.description',
             'Show usage for this chat’s Codex account'
           )
@@ -112,7 +116,7 @@ function withMobileOrcaCommands(
       : {}),
     ...(structured.fork
       ? {
-          fork: translate(
+          fork: t(
             'components.native-chat.fork.commandDescription',
             'Fork this chat from its latest response'
           )
@@ -133,8 +137,8 @@ function withMobileOrcaCommands(
   return [...sideRows.filter((row) => !own.includes(row)), ...own]
 }
 
-export function mobileDesktopOnlyCommandNotice(): string {
-  return translate('session.orcaCommands.desktopOnly', 'Available in the desktop app')
+export function mobileDesktopOnlyCommandNotice(t: Translate): string {
+  return t('session.orcaCommands.desktopOnly', 'Available in the desktop app')
 }
 
 /** Orca commands the phone lists but leaves to the desktop app, never sending them as text. */

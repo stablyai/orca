@@ -6,8 +6,18 @@ export type BotToolSignInStatus =
   /** `limited`: the app gave no refresh token, so it works until its token expires. */
   | { state: 'signed-in'; limited: boolean }
   | { state: 'signed-out'; problem?: BotToolSignInProblem }
-  /** The app refused the stored sign-in: "Sign in again". */
-  | { state: 'lost'; problem?: BotToolSignInProblem }
+  /**
+   * The app refused the stored sign-in: "Sign in again". `unreadable`: what's saved for it doesn't
+   * open on this computer (a reset keychain), so it may also be a key to enter again.
+   */
+  | { state: 'lost'; problem?: BotToolSignInProblem; unreadable?: true }
+
+/** What's saved for it doesn't open on this computer: sign in again, or enter its key again. */
+export function botToolSignInUnreadable(
+  signIn: { state: string; unreadable?: unknown } | undefined
+): boolean {
+  return signIn?.state === 'lost' && signIn.unreadable === true
+}
 
 /** Why the last sign-in couldn't start, kept until the next one: "This app isn't supported yet" or "Can't reach". */
 export type BotToolSignInProblem = 'unsupported' | 'unreachable'

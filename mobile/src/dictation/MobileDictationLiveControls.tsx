@@ -7,11 +7,11 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   COMPOSER_CONTROL_SIZE,
-  composerInputStyles
+  composerInputStylesSheet
 } from '../components/composer-input/composer-input-styles'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import {
   MobileDictationGrapes,
   MobileDictationTimer,
@@ -37,14 +37,16 @@ export function MobileDictationCancelButton({
   // After a failure, ✕ throws the kept recording away.
   discards?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const colors = useMobileColors()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   return (
     <Pressable
       ref={targetRef}
       accessibilityRole="button"
       accessibilityLabel={
-        discards ? dictationControlsCopy.discard() : dictationControlsCopy.cancel()
+        discards ? dictationControlsCopy.discard(t) : dictationControlsCopy.cancel(t)
       }
       style={({ pressed }) => [
         composerInputStyles.controlButton,
@@ -76,7 +78,7 @@ export function MobileDictationMicIcon({
   micSize: number
   micStroke: number
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   return processing ? (
     <ActivityIndicator pointerEvents="none" size="small" color={colors.textSecondary} />
   ) : active ? (
@@ -100,9 +102,10 @@ export function MobileDictationFailureNote({
   reason: string
   compact?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
-  useMobileTranslation()
-  const kept = dictationControlsCopy.recordingKept()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
+  const kept = dictationControlsCopy.recordingKept(t)
   return (
     <View style={styles.row} accessible accessibilityLabel={`${reason}. ${kept}.`}>
       <CircleAlert
@@ -137,12 +140,14 @@ export function MobileDictationRetryButton({
   onRetry: () => void
   labelled: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const t = useMobileTranslation()
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={dictationControlsCopy.retry()}
+      accessibilityLabel={dictationControlsCopy.retry(t)}
       style={({ pressed }) => [
         labelled ? styles.retryPill : composerInputStyles.controlButton,
         pressed && composerInputStyles.pressed
@@ -157,7 +162,7 @@ export function MobileDictationRetryButton({
         strokeWidth={2.4}
       />
       {labelled ? (
-        <Text style={styles.retryLabel}>{dictationControlsCopy.retryShort()}</Text>
+        <Text style={styles.retryLabel}>{dictationControlsCopy.retryShort(t)}</Text>
       ) : null}
     </Pressable>
   )
@@ -183,21 +188,22 @@ export function MobileDictationRecordingMeter({
   computerName: string | null
   dotSize: number
 }): React.JSX.Element {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const { now, elapsedSeconds } = useMobileDictationElapsed(meter)
   const kind = engine?.kind ?? null
   // The clock ticks four times a second; the spoken label changes once.
   const label = useMemo(
-    () => dictationMeterLabel(elapsedSeconds, kind, computerName),
-    [elapsedSeconds, kind, computerName]
+    () => dictationMeterLabel(elapsedSeconds, kind, computerName, t),
+    [elapsedSeconds, kind, computerName, t]
   )
   if (engine?.movedAt != null && now - engine.movedAt < MOVED_NOTE_MS) {
     return (
       <View style={styles.row}>
         <EngineIcon kind="computer" color={colors.textPrimary} />
         <Text style={styles.moved} numberOfLines={1}>
-          {dictationControlsCopy.movedTo(computerName)}
+          {dictationControlsCopy.movedTo(computerName, t)}
         </Text>
       </View>
     )
@@ -221,8 +227,9 @@ export function MobileDictationFinishingNote({
   engine: MobileDictationEngineShown | null
   computerName: string | null
 }): React.JSX.Element | null {
-  useMobileColorScheme()
-  useMobileTranslation()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   const onComputer = engine?.kind === 'computer'
   const [slow, setSlow] = useState(false)
   useEffect(() => {
@@ -239,13 +246,13 @@ export function MobileDictationFinishingNote({
     <View style={styles.row}>
       <EngineIcon kind="computer" color={colors.textSecondary} />
       <Text style={styles.finishing} numberOfLines={1}>
-        {dictationControlsCopy.finishingOn(computerName)}
+        {dictationControlsCopy.finishingOn(computerName, t)}
       </Text>
     </View>
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',

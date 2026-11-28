@@ -5,7 +5,7 @@ import {
   summarizeProviderChecks
 } from '../../../../../../src/shared/source-control/checks/provider-check-summary'
 import { prStateToken } from '../../status/pr-state-token'
-import { translate } from '../../../../i18n/mobile-i18n'
+import type { Translate } from '../../../../i18n/mobile-i18n'
 
 // Pure RN-free checks/badge logic follows desktop merge-state and reviewer presenters.
 
@@ -34,7 +34,7 @@ export type PRChecksSummary = {
   label: string
 }
 
-export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
+export function summarizePRChecks(checks: readonly PRCheckDetail[], t: Translate): PRChecksSummary {
   if (checks.length === 0) {
     return {
       total: 0,
@@ -43,7 +43,7 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
       failed: 0,
       cancelled: 0,
       outcome: 'none',
-      label: translate('pullRequest.prChecksPresentation.noChecks', 'No checks')
+      label: t('pullRequest.prChecksPresentation.noChecks', 'No checks')
     }
   }
   // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
@@ -57,21 +57,21 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     const count = failed
     parts.push(
       count === 1
-        ? translate('pullRequest.prChecksPresentation.failing_one', '{{count}} failing', { count })
-        : translate('pullRequest.prChecksPresentation.failing_other', '{{count}} failing', {
+        ? t('pullRequest.prChecksPresentation.failing_one', '{{count}} failing', { count })
+        : t('pullRequest.prChecksPresentation.failing_other', '{{count}} failing', {
             count
           })
     )
   }
   if (cancelled > 0) {
-    parts.push(`${cancelled} ${translate('pullRequest.checkStatus.cancelled', 'Cancelled')}`)
+    parts.push(`${cancelled} ${t('pullRequest.checkStatus.cancelled', 'Cancelled')}`)
   }
   if (pending > 0) {
     const count = pending
     parts.push(
       count === 1
-        ? translate('pullRequest.prChecksPresentation.pending_one', '{{count}} pending', { count })
-        : translate('pullRequest.prChecksPresentation.pending_other', '{{count}} pending', {
+        ? t('pullRequest.prChecksPresentation.pending_one', '{{count}} pending', { count })
+        : t('pullRequest.prChecksPresentation.pending_other', '{{count}} pending', {
             count
           })
     )
@@ -80,16 +80,16 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     const count = passed
     parts.push(
       count === 1
-        ? translate('pullRequest.prChecksPresentation.passed_one', '{{count}} passed', { count })
-        : translate('pullRequest.prChecksPresentation.passed_other', '{{count}} passed', { count })
+        ? t('pullRequest.prChecksPresentation.passed_one', '{{count}} passed', { count })
+        : t('pullRequest.prChecksPresentation.passed_other', '{{count}} passed', { count })
     )
   }
   if (neutral > 0) {
     const count = neutral
     parts.push(
       count === 1
-        ? translate('pullRequest.prChecksPresentation.neutral_one', '{{count}} neutral', { count })
-        : translate('pullRequest.prChecksPresentation.neutral_other', '{{count}} neutral', {
+        ? t('pullRequest.prChecksPresentation.neutral_one', '{{count}} neutral', { count })
+        : t('pullRequest.prChecksPresentation.neutral_other', '{{count}} neutral', {
             count
           })
     )
@@ -106,10 +106,14 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
 }
 
 /** An unreadable checks reply is not an absent one, so the header must not read "No checks". */
-export function prChecksSummaryLabel(summary: PRChecksSummary, checksError: string | null): string {
+export function prChecksSummaryLabel(
+  summary: PRChecksSummary,
+  checksError: string | null,
+  t: Translate
+): string {
   return checksError === null
     ? summary.label
-    : translate('pullRequest.prChecksPresentation.unavailable', 'Checks unavailable')
+    : t('pullRequest.prChecksPresentation.unavailable', 'Checks unavailable')
 }
 
 export function checkOutcomeToken(outcome: CheckPresentationOutcome | 'none'): MobileStatusToken {
@@ -141,16 +145,16 @@ export type PRStateBadge = {
   token: MobileStatusToken
 }
 
-function prStateLabels(): Record<PRState, string> {
+function prStateLabels(t: Translate): Record<PRState, string> {
   return {
-    open: translate('pullRequest.prChecksPresentation.stateOpen', 'Open'),
-    merged: translate('pullRequest.prChecksPresentation.stateMerged', 'Merged'),
-    draft: translate('pullRequest.prChecksPresentation.stateDraft', 'Draft'),
-    closed: translate('pullRequest.prChecksPresentation.stateClosed', 'Closed')
+    open: t('pullRequest.prChecksPresentation.stateOpen', 'Open'),
+    merged: t('pullRequest.prChecksPresentation.stateMerged', 'Merged'),
+    draft: t('pullRequest.prChecksPresentation.stateDraft', 'Draft'),
+    closed: t('pullRequest.prChecksPresentation.stateClosed', 'Closed')
   }
 }
 
 // Use shared prStateToken so sidebar and workspace badge agree on merged/open/closed/draft colors.
-export function prStateBadge(state: PRState): PRStateBadge {
-  return { label: prStateLabels()[state] ?? state, token: prStateToken(state) }
+export function prStateBadge(state: PRState, t: Translate): PRStateBadge {
+  return { label: prStateLabels(t)[state] ?? state, token: prStateToken(state) }
 }

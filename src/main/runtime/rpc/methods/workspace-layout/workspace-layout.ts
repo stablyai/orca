@@ -90,9 +90,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
         (await listEnvironments(getAppEnvironment().getPath('userData'))).map(({ id }) => id)
       )
       return {
-        snapshots: Object.fromEntries(
-          Object.entries(runtime.getRemoteLayoutSnapshots()).filter(([id]) => known.has(id))
-        )
+        snapshots: runtime.getRemoteLayoutSnapshots(known)
       }
     }
   })

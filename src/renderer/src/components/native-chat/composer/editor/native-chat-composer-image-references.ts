@@ -12,6 +12,10 @@ import {
   takeNativeChatPendingAttachment
 } from '../../attachments/chips/native-chat-pending-attachment-cache'
 import {
+  nativeChatPendingAttachmentScope,
+  pendingClipboardImages
+} from '../../attachments/chips/native-chat-pending-attachment-scopes'
+import {
   imageReferenceInsertion,
   imageReferenceToken,
   withoutImageReference
@@ -88,9 +92,12 @@ export function takePendingImageWithReferences(
   input: NativeChatComposerInput | null,
   id: string
 ): ReturnType<typeof takeNativeChatPendingAttachment> {
-  return settlePendingImageReferences(scopeKey, input, () =>
-    takeNativeChatPendingAttachment(scopeKey, id)
-  )
+  const destination = nativeChatPendingAttachmentScope(scopeKey, id)
+  const taken = takeNativeChatPendingAttachment(destination, id)
+  if (taken) {
+    removeImageReferences(destination, destination === scopeKey ? input : null, id)
+  }
+  return taken
 }
 
 /** Removes an image and every chip of it, whether it is on its way or in the draft. */
@@ -100,6 +107,9 @@ export function removeImageWithReferences(
   id: string
 ): void {
   if (takePendingImageWithReferences(scopeKey, input, id)) {
+    if (pendingClipboardImages.has(id)) {
+      pendingClipboardImages.set(id, 'removed')
+    }
     return
   }
   removeImageReferences(scopeKey, input, id)

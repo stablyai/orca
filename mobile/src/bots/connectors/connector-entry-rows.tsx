@@ -6,6 +6,7 @@ import { Blocks } from 'lucide-react-native'
 import { botLinearWorkspaces, botMembersFrom, botSlackApps } from '../../../../src/shared/bot-types'
 import {
   botConnectorEntries,
+  botToolAppSignsIn,
   type BotConnectorEntry
 } from '../../../../src/shared/bots/bot-connector-entries'
 import { botConnectorTitleLine } from '../../../../src/shared/bots/bot-connector-titles'
@@ -15,8 +16,8 @@ import type { ConnectorGitHubState } from '../../../../src/shared/connector-bot-
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { ListRow } from '../../components/list/ListGroup'
 import type { Translate } from '../../i18n/mobile-i18n'
+import type { MobilePalette } from '../../theme/mobile-theme'
 import type { MobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
-import { colors } from '../../theme/mobile-theme'
 import type { PhoneBot } from '../host-bots-operations'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileConnectorLogo } from '../MobileConnectorSourceIcon'
@@ -74,6 +75,7 @@ export type ConnectorRowsInput = {
   /** Settings' save, which Add back uses; null while it can't save. */
   save: ((updates: BotUpdateParams['updates']) => unknown) | null
   t: Translate
+  colors: MobilePalette
 }
 
 /** The reads the shared list is made from. */
@@ -155,7 +157,7 @@ function githubStatus(
 
 /** Every row of the Connectors list, in the shared list's order. */
 export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
-  const { bot, setPage, t } = input
+  const { bot, setPage, t, colors } = input
   const linear = input.linear.status === 'ready' ? input.linear.value : null
   const githubOrgs = githubOrgsOf(bot, input.githubState)
   const separator = t('bots.connector.titleSeparator', ' · ')
@@ -309,9 +311,13 @@ export function connectorRows(input: ConnectorRowsInput): ReactNode[] {
           <ToolRow
             key={entry.key}
             title={title}
-            // As the desktop's: a listed app that signs in in a browser reads as signed in once checked.
+            // As the desktop's: a browser sign-in app reads as signed in once checked, unless its
+            // saved values mean nothing signs in.
             line={
-              entry.app?.signIn === 'browser' && !entry.problem && input.tools?.problems != null
+              entry.app?.signIn === 'browser' &&
+              botToolAppSignsIn(entry) &&
+              !entry.problem &&
+              input.tools?.problems != null
                 ? t('bots.tools.face.signedIn', 'Signed in')
                 : entry.app
                   ? botMcpAppLine(entry.app, t)

@@ -60,11 +60,18 @@ export type WindowsPaneProcessInventory = {
   candidates: WindowsProcessCandidate[]
   /** Full-table anchor catches recycled job-member PIDs orphaned outside the descendant walk. */
   anchorRow: WindowsProcessRow | null
+  /** The root exited; candidates are its orphans, which can prove an agent but never a shell. */
+  rootExited?: true
 }
 
 export async function queryWindowsPaneProcessInventory(
   rootPid: number,
-  options: { fresh?: boolean; anchorPid?: number } = {}
+  options: {
+    fresh?: boolean
+    anchorProcessId?: number
+    /** Opts in to an exited root's orphans; only those born after the pane spawn are its own. */
+    paneSpawnedAtMs?: number
+  } = {}
 ): Promise<WindowsPaneProcessInventory | null> {
   let rows: WindowsProcessRow[]
   try {
@@ -78,12 +85,28 @@ export async function queryWindowsPaneProcessInventory(
   }
   // Snapshot-shared index avoids per-pane whole-table map builds and linear PID lookups.
   const index = getProcessTableIndex(rows)
+  const anchorRow =
+    options.anchorProcessId !== undefined
+      ? (index.byPid.get(options.anchorProcessId) ?? null)
+      : null
+  if (index.byPid.has(rootPid)) {
+    return {
+      candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
+      anchorRow
+    }
+  }
+  const spawnedAt = options.paneSpawnedAtMs
   // Missing roots may indicate stale/filtered snapshots, never observed absence of children.
-  if (!index.byPid.has(rootPid)) {
+  if (options.fresh !== true || spawnedAt === undefined) {
     return null
   }
-  return {
-    candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
-    anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
-  }
+  // Orphans keep the dead root's pid as ppid, which Windows may have reused since an older process held it.
+  const orphans = collectDescendantsFromIndex(
+    index,
+    rootPid,
+    (row) => row.ppid === rootPid && (row.creationTimeMs ?? 0) < spawnedAt
+  )
+  return orphans.length === 0
+    ? null
+    : { candidates: orphans.sort((a, b) => b.depth - a.depth), anchorRow, rootExited: true }
 }

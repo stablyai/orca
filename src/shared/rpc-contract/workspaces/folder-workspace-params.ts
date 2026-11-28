@@ -6,28 +6,31 @@ import { TaskSourceContextSchema } from '../../work-items/task-source-context-sc
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
-import { DiffCommentSchema } from '../../file-review/diff-comment-schema'
+import {
+  DiffCommentDeliverySnapshotSchema,
+  DiffCommentSchema
+} from '../../file-review/diff-comment-schema'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
 import { LaunchSourceParam } from '../agent-launch/launch-source-param'
 
 export const FolderWorkspaceHookCreateShape = {
-  runHooks: z.boolean().optional(),
-  setupDecision: z.enum(['run', 'skip', 'inherit']).optional(),
-  approvedSetupHash: z.string().max(128).optional(),
-  approvedSetupHashes: z.array(z.string().max(128)).max(64).optional(),
-  agentLaunchMode: z.literal('structured').optional(),
+  runHooks: lazyZodSchema(() => z.boolean().optional()),
+  setupDecision: lazyZodSchema(() => z.enum(['run', 'skip', 'inherit']).optional()),
+  approvedSetupHash: lazyZodSchema(() => z.string().max(128).optional()),
+  approvedSetupHashes: lazyZodSchema(() => z.array(z.string().max(128)).max(64).optional()),
+  agentLaunchMode: lazyZodSchema(() => z.literal('structured').optional()),
   startupCommand: OptionalString,
-  startupEnv: z.record(z.string(), z.string()).optional(),
+  startupEnv: lazyZodSchema(() => z.record(z.string(), z.string()).optional()),
   startupLaunchConfig: sleepingAgentLaunchConfigSchema,
-  startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
-  startupAgent: z.string().refine(isTuiAgent).optional(),
+  startupCommandDelivery: lazyZodSchema(() => z.enum(['fast', 'shell-ready']).optional()),
+  startupAgent: lazyZodSchema(() => z.string().refine(isTuiAgent).optional()),
   startupPrompt: OptionalString,
   startupDraft: OptionalString,
-  startupAgentArgs: AgentArgs.optional(),
-  startupSessionOptions: z.record(z.string(), z.string()).optional(),
-  startupLaunchPreferences: LaunchPreferences.optional(),
-  launchSource: LaunchSourceParam.optional()
+  startupAgentArgs: lazyZodSchema(() => AgentArgs.optional()),
+  startupSessionOptions: lazyZodSchema(() => z.record(z.string(), z.string()).optional()),
+  startupLaunchPreferences: lazyZodSchema(() => LaunchPreferences.optional()),
+  launchSource: lazyZodSchema(() => LaunchSourceParam.optional())
 }
 
 export function assertFolderWorkspaceStartup(
@@ -107,7 +110,8 @@ export const FolderWorkspaceUpdate = lazyZodSchema(() =>
         firstAgentMessageRenameError: z.string().nullable().optional(),
         lastActivityAt: OptionalFiniteNumber,
         diffComments: z.array(DiffCommentSchema).optional(),
-        diffCommentsBase: z.array(DiffCommentSchema).optional()
+        diffCommentsBase: z.array(DiffCommentSchema).optional(),
+        deliveredDiffCommentSnapshots: z.array(DiffCommentDeliverySnapshotSchema).optional()
       })
       .superRefine(assertLinkedTaskSourceContextMatch)
   })

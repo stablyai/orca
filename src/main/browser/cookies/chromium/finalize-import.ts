@@ -58,7 +58,7 @@ export async function finalizeChromiumCookieImport(
     cookieClearStore.dispose()
   }
 
-  browserSessionRegistry.clearPendingCookieImport(targetPartition)
+  await browserSessionRegistry.clearPendingCookieImport(targetPartition)
 
   diag(
     `  memory load: ${context.memoryLoaded} OK, ${context.memoryFailed} failed, ${context.partitionSkipped} partition-unreadable`

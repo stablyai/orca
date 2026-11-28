@@ -32,9 +32,9 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ImageLibraryPermissionError } from '../platform/media-picking/media-picker-contract'
 import { useMediaPicker } from '../platform/media-picking/media-picker'
 import { SettingsNote } from '../settings/settings-screen-frame'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { BotAvatarPhotoError, botAvatarPngFromPhoto } from './bot-avatar-photo'
 import type { SheetBot } from './bot-sheet-operations'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
@@ -64,7 +64,8 @@ export function MobileBotIdentityPage(props: {
   onUpload: (png: string) => Promise<boolean>
   showToast: (message: string) => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const picker = useMediaPicker()
   const { bot } = props
@@ -311,6 +312,7 @@ function Tile(props: {
   avatar: MobileBotAvatarSource
   size: number
 }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <Pressable
       accessibilityRole="radio"
@@ -325,7 +327,7 @@ function Tile(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   hero: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg },
   tabs: { marginTop: spacing.lg, marginBottom: spacing.sm },
   grid: { flexDirection: 'row', flexWrap: 'wrap', alignContent: 'flex-start' },

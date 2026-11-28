@@ -17,6 +17,21 @@ import {
   acpSignInRequiredFailure
 } from './acp-prompt-failure'
 
+/** The model command would cancel the turn mail joins; the next prompt applies that pick. */
+export function mailModelCommand(
+  command: ((value: string) => Promise<void>) | undefined,
+  joinsTurn: boolean,
+  turns: { readonly running: boolean }
+): ((value: string) => Promise<void>) | undefined {
+  return command && joinsTurn
+    ? async (value) => {
+        if (!turns.running) {
+          await command(value)
+        }
+      }
+    : command
+}
+
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   requested: AgentSessionExecutionOptions | undefined,

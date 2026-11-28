@@ -779,6 +779,33 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   gap: 6px;
 }
 
+/* Why: sonner fades a folded toast's content only for styled toasts; a custom card is its own surface, so fade its rows. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-toast-card] > * {
+    transition:
+      opacity 400ms,
+      visibility 0s;
+  }
+
+  [data-sonner-toaster]
+    [data-sonner-toast][data-expanded='false'][data-front='false']
+    [data-toast-card]
+    > * {
+    transition:
+      opacity 400ms,
+      visibility 0s 400ms;
+  }
+}
+
+/* Why visibility: hidden rows also leave the tab order, so focus can't land on an invisible control. */
+[data-sonner-toaster]
+  [data-sonner-toast][data-expanded='false'][data-front='false']
+  [data-toast-card]
+  > * {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* Clip folded toast overflow to prevent hover/re-expansion loops; hidden would create a focus-scrollable container. */
 [data-sonner-toaster] [data-sonner-toast][data-expanded='false'][data-front='false'] {
   overflow: clip;
@@ -1120,6 +1147,81 @@ body[data-modal-overlay-open]
   /* Chromium ignores ::-webkit-scrollbar while either standard property is set. */
   scrollbar-width: auto;
   scrollbar-color: auto;
+}
+
+@utility rail-page-row-gutter {
+  padding-inline-start: var(--rail-page-gutter);
+  padding-inline-end: var(--rail-page-row-end, var(--rail-page-gutter));
+}
+
+.rail-page-scroll-region {
+  --rail-page-row-end: max(
+    0px,
+    calc(var(--rail-page-gutter) - var(--rail-page-scrollbar-width, 0px))
+  );
+  --list-table-gutter-end: var(--rail-page-row-end);
+  scrollbar-gutter: stable;
+}
+
+[data-rail-page-container-gutter] {
+  /* The difference is the scrollbar's reserved width in a full-width row. */
+  --rail-page-row-end: max(0px, calc(var(--rail-page-gutter) - 100cqi + 100%));
+}
+
+.rail-page-container {
+  container: rail-page / inline-size;
+}
+
+[data-rail-page-search] {
+  inline-size: calc(var(--spacing) * 51);
+}
+
+[data-rail-page-search-trigger],
+[data-rail-page-search-close] {
+  display: none;
+}
+
+@container rail-page (width < 40rem) {
+  [data-rail-page-search] {
+    inline-size: calc(var(--spacing) * 7);
+  }
+
+  [data-rail-page-search-trigger] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-search-close] {
+    display: inline-flex;
+  }
+
+  [data-rail-page-toolbar]:has(
+      [data-rail-page-search-field]:is(:focus-within, [data-expanded='true'])
+    )
+    [data-rail-page-views] {
+    visibility: hidden;
+  }
+
+  [data-rail-page-search-field] {
+    display: none;
+    position: absolute;
+    inset-inline: var(--rail-page-gutter);
+    top: 50%;
+    z-index: 10;
+    inline-size: auto;
+    gap: calc(var(--spacing) * 1);
+    translate: 0 -50%;
+    border-radius: var(--radius-md);
+    background: var(--background);
+  }
+
+  [data-rail-page-search-field]:focus-within,
+  [data-rail-page-search-field][data-expanded='true'] {
+    display: flex;
+  }
+
+  [data-rail-page-search-hint] {
+    display: none;
+  }
 }
 
 [data-bot-search-field-only] [data-bot-sidebar-list],
@@ -1545,6 +1647,17 @@ html.native-shell .app-layout {
   user-select: none;
 }
 
+/* Rail pages: titlebar and rail form one tray, so the page card's own border is the only seam and its rounded
+   corner meets plain tray. */
+[data-rail-page-active] .titlebar {
+  background: var(--worktree-sidebar);
+  border-bottom-color: transparent;
+}
+
+[data-rail-page-active] [data-app-rail-nav] {
+  border-right-color: transparent;
+}
+
 /* Reserve the same 36px baseline (4px drag strip + 32px tabs) for macOS traffic lights and sidebar chrome. */
 .titlebar-left {
   height: var(--app-header-height);
@@ -1810,6 +1923,16 @@ html.native-shell .app-layout {
   overflow: hidden;
 }
 
+/* A send-notes slot after the path takes the free space, so the path keeps its own width. */
+.editor-header-text:has(+ [data-send-notes-slot]) {
+  flex: 0 1 auto;
+}
+
+/* The send button sits right after the path, so the hidden copy toast must not hold space before it. */
+.editor-header-text:has(+ [data-send-notes-slot]) .editor-header-copy-toast:not(.is-visible) {
+  display: none;
+}
+
 .editor-header-path {
   display: flex;
   align-items: center;
@@ -1892,6 +2015,13 @@ html.native-shell .app-layout {
 .editor-header-copy-toast.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+@starting-style {
+  .editor-header-copy-toast.is-visible {
+    opacity: 0;
+    transform: translateY(2px);
+  }
 }
 
 .content-area {
@@ -2371,34 +2501,6 @@ html.native-shell .app-layout {
 
 .compact-agent-expansion-grid-expanded {
   grid-template-rows: 1fr;
-}
-
-/* A click on a down pane's veil points at its server card: two short shakes, or a brief outline without motion. */
-@keyframes remote-server-outage-nudge {
-  0%,
-  100% {
-    transform: translateX(0);
-  }
-
-  25% {
-    transform: translateX(-4px);
-  }
-
-  75% {
-    transform: translateX(4px);
-  }
-}
-
-.remote-server-outage-nudge {
-  animation: remote-server-outage-nudge 250ms ease-in-out 2;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .remote-server-outage-nudge {
-    animation: none;
-    outline: 2px solid var(--status-warning);
-    outline-offset: 2px;
-  }
 }
 
 /* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */

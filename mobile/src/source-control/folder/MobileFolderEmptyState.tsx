@@ -9,8 +9,8 @@ import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGro
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostQuery } from '../../query/host-query'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -28,6 +28,7 @@ import {
   selectFolderSourceRepos,
   serverFolderSourceCatalogQuery
 } from './folder-source-repos-query'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const NO_INPUT = {}
 
@@ -48,6 +49,7 @@ type Props = {
 
 /** A folder with no attached worktrees: desktop's copy, then one create card per repository. */
 export function MobileFolderEmptyState(props: Props) {
+  const styles = useThemedStyles(stylesSheet)
   const { hostId, folder, desktopCapabilities, folderHostCapabilities, observing, refreshers } =
     props
   const t = useMobileTranslation()
@@ -148,6 +150,7 @@ function FolderRepoCreateCard(props: {
   repo: Repo
   onPress: () => void
 }) {
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const busy = useSyncExternalStore(subscribeFolderRepoCreates, () =>
     isFolderRepoCreateBusy(props.target)
@@ -175,7 +178,7 @@ function FolderRepoCreateCard(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   scroll: { flexGrow: 1 },
   cards: { gap: spacing.sm }
 }))

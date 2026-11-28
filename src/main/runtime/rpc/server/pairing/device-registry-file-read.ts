@@ -13,6 +13,8 @@ export type DeviceRegistryFileRead = {
   unreadable: boolean
   /** Unlisted devices may still exist after a current or previous parse failure. */
   doubtful: boolean
+  /** This read itself dropped rows or could not parse: the list misses devices that exist. */
+  lostRows: boolean
   /** A corrupt file must be set aside before the first rewrite. */
   corruptFilePending: boolean
 }
@@ -35,15 +37,28 @@ export function readDeviceRegistryFile(registryPath: string): DeviceRegistryFile
       devices,
       unreadable: false,
       doubtful: doubtful || droppedRows,
+      lostRows: droppedRows,
       corruptFilePending: droppedRows
     }
   } catch (error) {
     if (isMissingFileError(error)) {
-      return { devices: [], unreadable: false, doubtful, corruptFilePending: false }
+      return {
+        devices: [],
+        unreadable: false,
+        doubtful,
+        lostRows: false,
+        corruptFilePending: false
+      }
     }
     // Permission failure is not emptiness; saving here could erase every paired credential.
     const unreadable = isUnreadableError(error)
     // Corruption cannot prove revocation to a keyed client.
-    return { devices: [], unreadable, doubtful: true, corruptFilePending: !unreadable }
+    return {
+      devices: [],
+      unreadable,
+      doubtful: true,
+      lostRows: true,
+      corruptFilePending: !unreadable
+    }
   }
 }
