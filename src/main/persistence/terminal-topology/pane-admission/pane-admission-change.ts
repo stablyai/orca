@@ -4,6 +4,8 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import { patchStoredSession } from '../../../../shared/workspace-layout/persistence/workspace-layout-record-patch'
+import { WORKSPACE_FIELDS } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-slice'
+import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadPaneCommandLayout, type PaneCommandIds } from './pane-admission-slice-load'
@@ -84,7 +86,59 @@ function withoutHiddenCopies(
   return tabsByWorktree === patched.tabsByWorktree ? patched : { ...patched, tabsByWorktree }
 }
 
-/** A sliced load patches what changed; a whole load in window-owned builds still rewrites the partition. */
+/** Records a slice loads whole by key: its workspaces' maps and its rows' and panes' records. */
+const SLICE_OWNED_FIELDS = [
+  ...WORKSPACE_FIELDS,
+  'terminalLayoutsByTabId',
+  'remoteSessionIdsByTabId',
+  'sleepingAgentSessionsByPaneKey',
+  'terminalPtyIncarnationsByPaneKey',
+  'closedTerminalTabTombstonesByTabId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
+/** Window-owned builds rewrote the partition from the load; a slice rewrites the records it loaded the same way, so legacy duplicates the Loader drops go too, and keeps the rest as stored. */
+function rewriteSlice(
+  stored: WorkspaceSessionState,
+  slice: WorkspaceSessionState,
+  before: WorkspaceSessionState,
+  after: WorkspaceSessionState
+): WorkspaceSessionState {
+  const patched = patchSlicedSession(stored, before, after)
+  let next: Record<string, unknown> | null = null
+  for (const field of SLICE_OWNED_FIELDS) {
+    const saved: Record<string, unknown> | undefined = after[field]
+    const kept: Record<string, unknown> | undefined = patched[field]
+    const keys = new Set([...Object.keys(slice[field] ?? {}), ...Object.keys(saved ?? {})])
+    let map: Record<string, unknown> | null = null
+    for (const key of keys) {
+      const value = saved?.[key]
+      if (stableJson(value) !== stableJson(kept?.[key])) {
+        map ??= { ...kept }
+        if (value === undefined) {
+          delete map[key]
+        } else {
+          map[key] = value
+        }
+      }
+    }
+    if (map) {
+      next ??= { ...patched }
+      if (Object.keys(map).length === 0 && saved === undefined) {
+        delete next[field]
+      } else {
+        next[field] = map
+      }
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patched session with the slice's own records rewritten from its save.
+  return next ? (next as unknown as WorkspaceSessionState) : patched
+}
+
+/**
+ * Each build keeps its own write, narrowed to the slice: window-owned builds rewrite what they loaded,
+ * main-owned builds patch only what the command changed so Loader normalizations stay unwritten
+ * (workspace-layout-record-patch.ts).
+ */
 export function loadPaneChange(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
@@ -93,15 +147,24 @@ export function loadPaneChange(
   loaded: LoadedWorkspaceLayout
   write?: (after: WorkspaceSessionState) => WorkspaceSessionState | null
 } {
-  const { loaded, sliced } = loadPaneCommandLayout(hostId, session, ids)
-  if (!sliced && !ORCA_LAYOUT_OWNER_IS_MAIN) {
+  const { loaded, slice } = loadPaneCommandLayout(hostId, session, ids)
+  if (!slice && !ORCA_LAYOUT_OWNER_IS_MAIN) {
     return { loaded }
   }
-  const patch = sliced ? patchSlicedSession : patchStoredSession
   return {
     loaded,
     write: (after) => {
-      const patched = patch(session, saveWorkspaceLayout(loaded), after)
+      const before = saveWorkspaceLayout(loaded)
+      const patched = !slice
+        ? patchStoredSession(session, before, after)
+        : ORCA_LAYOUT_OWNER_IS_MAIN
+          ? patchSlicedSession(session, before, after)
+          : withoutHiddenCopies(rewriteSlice(session, slice, before, after), before, after, [
+              ...new Set([
+                ...Object.keys(before.tabsByWorktree),
+                ...Object.keys(after.tabsByWorktree)
+              ])
+            ])
       return patched === session ? null : patched
     }
   }

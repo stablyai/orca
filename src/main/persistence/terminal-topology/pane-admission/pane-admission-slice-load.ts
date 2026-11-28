@@ -74,7 +74,7 @@ export function loadPaneCommandSlice(
   session: WorkspaceSessionState,
   ids: PaneCommandIds,
   context: WorkspaceLayoutLoadContext
-): LoadedWorkspaceLayout | null {
+): { loaded: LoadedWorkspaceLayout; slice: WorkspaceSessionState } | null {
   const legacy = session.terminalSurfaceTombstonesByPaneKey
   if (legacy && Object.keys(legacy).length > 0) {
     return null
@@ -122,11 +122,8 @@ export function loadPaneCommandSlice(
   const worktreeIds = new Set(
     [...seen].flatMap((ref) => (ref.startsWith('worktree:') ? [ref.slice('worktree:'.length)] : []))
   )
-  const loaded = loadWorkspaceLayoutWithoutReport(
-    hostId,
-    sliceWorkspaceSession(session, keys, worktreeIds),
-    context
-  )
+  const slice = sliceWorkspaceSession(session, keys, worktreeIds)
+  const loaded = loadWorkspaceLayoutWithoutReport(hostId, slice, context)
   for (const key of keys) {
     const workspace = loaded.layout.workspaces[key]
     if (!workspace) {
@@ -141,20 +138,18 @@ export function loadPaneCommandSlice(
       }
     }
   }
-  return loaded
+  return { loaded, slice }
 }
 
-/** The sliced load when exact, else the whole partition's. */
+/** The sliced load when exact, with the slice it loaded; else the whole partition's. */
 export function loadPaneCommandLayout(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
   ids: PaneCommandIds
-): { loaded: LoadedWorkspaceLayout; sliced: boolean } {
-  const sliced = loadPaneCommandSlice(hostId, session, ids, nameBasedLoadContext())
-  return sliced
-    ? { loaded: sliced, sliced: true }
-    : {
-        loaded: loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext()),
-        sliced: false
-      }
+): { loaded: LoadedWorkspaceLayout; slice?: WorkspaceSessionState } {
+  return (
+    loadPaneCommandSlice(hostId, session, ids, nameBasedLoadContext()) ?? {
+      loaded: loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
+    }
+  )
 }

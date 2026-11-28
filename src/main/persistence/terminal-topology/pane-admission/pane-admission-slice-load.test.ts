@@ -36,10 +36,10 @@ vi.mock('./pane-admission-slice-load', async (importOriginal) => {
       if (!mode.slice) {
         const [hostId, session] = args
         const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
-        return { loaded, sliced: false }
+        return { loaded }
       }
       const load = actual.loadPaneCommandLayout(...args)
-      mode.sliced += load.sliced ? 1 : 0
+      mode.sliced += load.slice ? 1 : 0
       return load
     }
   }
@@ -131,6 +131,9 @@ function fleet(): WorkspaceSessionState {
   addTerminal(session, key(24), 't24', [leaf(24)])
   addTerminal(session, key(25), 't25', [leaf(25)])
   session.tabsByWorktree[key(25)]!.push(session.tabsByWorktree[key(24)]![0]!)
+  // A workspace storing the same row twice; the Loader keeps one.
+  addTerminal(session, key(26), 't26', [leaf(26)])
+  session.tabsByWorktree[key(26)]!.push({ ...session.tabsByWorktree[key(26)]![0]! })
   // The withdrawn pane holds the slice's only incarnation; another workspace's must survive.
   session.terminalPtyIncarnationsByPaneKey = {
     [`t22:${leaf(122)}`]: 'incarnation-22',
@@ -203,6 +206,16 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
       })
   ],
   [
+    'the withdrawn last pane of a row stored twice',
+    (s) => () =>
+      withdrawPaneFromSession(LOCAL_EXECUTION_HOST_ID, s, {
+        type: 'closePane',
+        workspace: key(26),
+        tabId: 't26',
+        leafId: leaf(26)
+      })
+  ],
+  [
     'a withdrawn pane',
     (s) => () =>
       withdrawPaneFromSession(LOCAL_EXECUTION_HOST_ID, s, {
@@ -213,6 +226,36 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
       })
   ]
 ]
+
+/** Each record the sliced write changed, as `result` holds it. */
+function rewritten(
+  stored: WorkspaceSessionState,
+  sliced: WorkspaceSessionState,
+  result: WorkspaceSessionState
+): Record<string, unknown> {
+  const records: Record<string, unknown> = {}
+  const fields = new Set([...Object.keys(stored), ...Object.keys(sliced)])
+  for (const field of fields as Set<keyof WorkspaceSessionState>) {
+    const [was, is] = [stored[field], sliced[field]]
+    const keyed = (value: unknown) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : null
+    const [wasMap, isMap, resultMap] = [keyed(was), keyed(is), keyed(result[field])]
+    if (!wasMap || !isMap) {
+      if (JSON.stringify(was) !== JSON.stringify(is)) {
+        records[field] = result[field]
+      }
+      continue
+    }
+    for (const key of new Set([...Object.keys(wasMap), ...Object.keys(isMap)])) {
+      if (JSON.stringify(wasMap[key]) !== JSON.stringify(isMap[key])) {
+        records[`${field}.${key}`] = resultMap?.[key]
+      }
+    }
+  }
+  return records
+}
 
 function loadedLayout(session: WorkspaceSessionState) {
   return loadWorkspaceLayoutWithoutReport(LOCAL_EXECUTION_HOST_ID, session, nameBasedLoadContext())
@@ -248,8 +291,11 @@ describe.each([
     if (main) {
       expect(sliced.session).toEqual(whole.session)
     } else if (whole.session && sliced.session) {
-      // Window-owned whole loads rewrite the partition; the patch must load the same layout.
+      // Window-owned whole loads rewrite every record; the slice rewrites its own exactly as they did.
       expect(loadedLayout(sliced.session)).toEqual(loadedLayout(whole.session))
+      expect(rewritten(session, sliced.session, whole.session)).toEqual(
+        rewritten(session, sliced.session, sliced.session)
+      )
     }
   })
 })
