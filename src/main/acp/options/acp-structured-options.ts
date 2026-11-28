@@ -54,7 +54,7 @@ export class AcpStructuredOptions {
   private models: SessionModelState | null = null
   private commands: AgentSessionSlashCommand[] | undefined
   private reportedCommands: readonly AvailableCommand[] | undefined
-  private isBuiltin: (command: AvailableCommand) => boolean = () => false
+  private isBuiltin: ReturnType<NonNullable<AcpDialect['builtinCommands']>> = () => false
   // Only new sessions resolve configured defaults; loaded sessions retain their saved choices.
   private resolvesConfig = false
   readonly picked = new Set<string>()
@@ -204,7 +204,7 @@ export class AcpStructuredOptions {
     this.reportedCommands = commands
     this.commands = commands
       .filter((command) => !withheld.includes(command.name))
-      .map((command) => acpSessionSlashCommand(command, this.dialect, this.isBuiltin(command)))
+      .map((row) => acpSessionSlashCommand(row, this.dialect, this.isBuiltin(row, commands)))
   }
 
   readCommands(): AgentSessionSlashCommand[] | undefined {

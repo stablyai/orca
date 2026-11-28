@@ -278,8 +278,10 @@ export type AcpDialect = {
   signInAccount?: AgentSessionAccountKind
   /** A session row's own description when the row is one of the agent's skills; null for a command. */
   skillDescription?(command: AvailableCommand): string | null
-  /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
-  builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
+  /** Which session rows are the agent's own built-ins, given this process's initialize response. */
+  builtinCommands?(
+    initialized: InitializeResponse
+  ): (command: AvailableCommand, reported: readonly AvailableCommand[]) => boolean
   /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
   fastConfigId?: string
   /** This agent's on/off thinking parameter, written only for a CLI model id that names it. */

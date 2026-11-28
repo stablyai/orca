@@ -238,6 +238,9 @@ export const antigravityListedFamilySelection: StructuredAgentListedSelection = 
     : null
 }
 
+// agy lists a user's own `goal` beside its built-in and marks neither, so any namesake withholds it.
+const AGY_GOAL_DESCRIPTION = 'Run until the specified goal is completely finished.'
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
@@ -274,6 +277,10 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   },
   // Avoid using the full command line as the tool name.
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
+  builtinCommands: () => (command, reported) =>
+    command.name === 'goal' &&
+    command.description === AGY_GOAL_DESCRIPTION &&
+    reported.filter(({ name }) => name === command.name).length === 1,
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
   familyEfforts,
