@@ -115,14 +115,14 @@ export class ProviderRelayHost {
     this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
     const managed = this.spawnHolding(relayId, () =>
       spawn(
-      { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
-      {
-        site: 'daemon-provider-relay',
-        allowHost: false,
-        platform: this.platform,
-        inheritedEnv: {},
-        ownerExecutable: spec.ownerExecutable
-      }
+        { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
+        {
+          site: 'daemon-provider-relay',
+          allowHost: false,
+          platform: this.platform,
+          inheritedEnv: {},
+          ownerExecutable: spec.ownerExecutable
+        }
       )
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }

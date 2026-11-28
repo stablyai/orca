@@ -114,9 +114,9 @@ describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
     // Refused peers that never close their side: each is counted, and past the cap closed unanswered.
     const refused = Array.from({ length: 2 * TOOL_RELAY_FRONT_MAX_ANSWERING }, () => agent(port))
     await vi.waitFor(() =>
-      expect(refused.filter((call) => call.socket.readableEnded || call.socket.destroyed).length).toBe(
-        refused.length
-      )
+      expect(
+        refused.filter((call) => call.socket.readableEnded || call.socket.destroyed).length
+      ).toBe(refused.length)
     )
     expect(front.descriptorCount).toBeLessThanOrEqual(
       1 + TOOL_RELAY_FRONT_MAX_HELD + TOOL_RELAY_FRONT_MAX_ANSWERING
