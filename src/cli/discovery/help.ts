@@ -204,6 +204,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'account add' && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, or devin (default claude)'
   }
+  if (command === 'agent models' && flag === 'agent') {
+    return '--agent <id>           Agent ID from orca agent installed'
+  }
   if (command.startsWith('account ') && flag === 'agent') {
     return '--agent <id>           Account provider: claude, codex, opencode, devin, or antigravity'
   }

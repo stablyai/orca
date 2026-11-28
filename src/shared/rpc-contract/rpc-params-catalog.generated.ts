@@ -804,6 +804,7 @@ import {
 } from './plugins/plugins-params'
 import {
   PreflightAgentDetection,
+  PreflightAgentModels,
   PreflightAgentRefresh,
   PreflightCheck,
   PreflightDetectRemoteAgents,
@@ -2114,6 +2115,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.shotReplay': PluginShotReplayParams,
   'plugins.uninstall': PluginUninstallParams,
   'plugins.update': PluginUpdateParams,
+  'preflight.agentModels': PreflightAgentModels,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,

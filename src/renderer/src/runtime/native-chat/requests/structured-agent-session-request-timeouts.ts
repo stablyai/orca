@@ -1,12 +1,12 @@
 import { AGENT_SESSION_RESTART_CONTINUE_TIMEOUT_MS } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-restart-continue-timeout'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
+import { AGENT_MODEL_CATALOG_REQUEST_TIMEOUT_MS } from '../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-request-timeout'
 
 export const STRUCTURED_AGENT_SESSION_METHOD_TIMEOUT_MS: ReadonlyMap<string, number> = new Map([
   ['agentSession.conversationCommand', AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS],
   // The host may start an agent at rest before rewinding it, as it does for a command.
   ['agentSession.rewind', 195_000],
-  // Waiting model catalogs can take Claude’s 60s listing plus 15s account switch and 5s login environment.
-  ['agentSession.modelCatalog', 90_000],
+  ['agentSession.modelCatalog', AGENT_MODEL_CATALOG_REQUEST_TIMEOUT_MS],
   ['agentSession.sleepWorkspace', 120_000],
   // It stops an idle agent and finds the chat's transcripts in a history scan before answering.
   ['agentSession.delete', 120_000],

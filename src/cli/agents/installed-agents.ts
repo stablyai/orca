@@ -23,7 +23,7 @@ export const INSTALLED_AGENT_HANDLERS: Record<string, CommandHandler> = {
           })
         ).result.worktree
       : undefined
-    const response = await readInstalledAgents(client, worktree)
+    const response = await readInstalledAgentsWithFallback(client, worktree)
     const { settings } = response.result
     // Launch refuses agents turned off in Settings → Agents, so they are not offered here.
     const disabled = new Set(settings?.disabledTuiAgents ?? [])
@@ -38,12 +38,19 @@ export const INSTALLED_AGENT_HANDLERS: Record<string, CommandHandler> = {
   }
 }
 
-async function readInstalledAgents(client: RuntimeClient, worktree?: RuntimeWorktreeRecord) {
+export function readInstalledAgents(client: RuntimeClient, worktree?: RuntimeWorktreeRecord) {
+  return client.call<{ agents: TuiAgent[]; settings: AgentLaunchSettings | null }>(
+    'preflight.installedAgents',
+    worktree ? { worktreeId: worktree.id, worktreeHostId: worktree.hostId } : {}
+  )
+}
+
+async function readInstalledAgentsWithFallback(
+  client: RuntimeClient,
+  worktree?: RuntimeWorktreeRecord
+) {
   try {
-    return await client.call<{ agents: TuiAgent[]; settings: AgentLaunchSettings | null }>(
-      'preflight.installedAgents',
-      worktree ? { worktreeId: worktree.id, worktreeHostId: worktree.hostId } : {}
-    )
+    return await readInstalledAgents(client, worktree)
   } catch (error) {
     if (!(error instanceof RuntimeClientError) || error.code !== 'method_not_found') {
       throw error

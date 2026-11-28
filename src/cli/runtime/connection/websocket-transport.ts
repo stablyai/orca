@@ -7,6 +7,8 @@ import type {
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
+  AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+  AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
   PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
@@ -44,8 +46,7 @@ export const CLI_CLIENT_CAPABILITIES = [
   RUNTIME_RPC_STAGED_REPLY_CLIENT_CAPABILITY
 ] as const
 
-// `agent read` prints chats as text the host projects, so it reads every chat agent; only that
-// request says so, leaving how other commands launch and list chats unchanged.
+// Text and catalog reads can represent every structured agent the host projects.
 const AGENT_READ_CLIENT_CAPABILITIES = [
   ...CLI_CLIENT_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -55,6 +56,13 @@ const AGENT_READ_CLIENT_CAPABILITIES = [
 ] as const
 
 function clientCapabilitiesFor(method: string) {
+  if (method === 'agentSession.modelCatalog' || method === 'preflight.agentModels') {
+    return [
+      ...AGENT_READ_CLIENT_CAPABILITIES,
+      AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY,
+      AGENT_SESSION_MODEL_CATALOG_PROGRESS_CAPABILITY
+    ]
+  }
   return method === 'agent.read' ? AGENT_READ_CLIENT_CAPABILITIES : CLI_CLIENT_CAPABILITIES
 }
 

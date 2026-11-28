@@ -4,6 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating
 import { parseRoutableExecutionHostId } from '../../execution-host/execution-host'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { RepoSelector } from '../github/github-repo-target-params'
+import { NATIVE_CHAT_AGENTS } from '../../agent-launch/permissions/agent-chat-permission-support'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { WorkspaceLaunchKind } from '../../agent-launch/contracts/workspace-launch-kind'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
@@ -55,6 +56,19 @@ export const PreflightAgentDetection = lazyZodSchema(() =>
 export const PreflightAgentRefresh = PreflightAgentDetection.safeExtend({
   userInitiated: z.boolean().optional()
 })
+
+export const PreflightAgentModels = lazyZodSchema(() =>
+  z.strictObject({
+    agent: z.enum(NATIVE_CHAT_AGENTS),
+    worktreeId: z
+      .string()
+      .min(1)
+      .refine((id) => id !== FLOATING_TERMINAL_WORKTREE_ID),
+    worktreeHostId: OptionalExecutionHostId.unwrap().refine(
+      (id) => parseRoutableExecutionHostId(id) !== null
+    )
+  })
+)
 
 export const PreflightProjectAgentDetection = lazyZodSchema(() =>
   PreflightAgentDetection.safeExtend({
