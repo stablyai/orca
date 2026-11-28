@@ -91,6 +91,7 @@ test('new tab, split and tab switch stay within the switch-off p95 plus a frame'
     const report = { layoutOwner, platform: process.platform, timing, p95 }
     testInfo.annotations.push({ type: 'layout-latency-p95', description: JSON.stringify(report) })
     console.log(`layout-latency-p95 ${JSON.stringify(report)}`)
+    console.log(`layout-latency-samples ${JSON.stringify(samples)}`)
 
     const baseline = baselines[process.platform]
     test.skip(

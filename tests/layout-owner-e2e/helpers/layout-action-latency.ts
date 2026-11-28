@@ -87,7 +87,7 @@ export async function timeLayoutAction(
           }
           t0 = performance.now()
           button.click()
-          // Without frames, pane mount can wait a throttled tick: stop at the new tab selected.
+          // Without frames, a pane's mount can wait a throttled tick: stop at the new tab selected.
           await until(() =>
             drawn
               ? tabs().length > before && panes() > 0
@@ -103,7 +103,7 @@ export async function timeLayoutAction(
           window.dispatchEvent(
             new CustomEvent(splitEvent, { detail: { tabId, direction: 'vertical' } })
           )
-          await until(() => panes() > before && xterms() > x)
+          await until(() => panes() > before && (!drawn || xterms() > x))
           break
         }
         case 'closePane': {
