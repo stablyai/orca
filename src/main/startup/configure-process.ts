@@ -106,6 +106,9 @@ function getProcessPathDelimiter(): string {
 }
 
 function requestDevParentShutdown(): void {
+  if (devParentShutdownRequested) {
+    return
+  }
   devParentShutdownRequested = true
   quitProcess()
 
@@ -322,8 +325,8 @@ export function installDevParentSignalQuit(isDev: boolean): void {
     requestDevParentShutdown()
   }
 
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
+  process.on('SIGINT', onSignal)
+  process.on('SIGTERM', onSignal)
 }
 
 export function enableMainProcessGpuFeatures(): void {
