@@ -57,6 +57,7 @@
     "expo-status-bar": "^58.0.4",
     "expo-task-manager": "~58.0.13",
     "fflate": "0.8.3",
+    "highlight.js": "11.11.1",
     "i18next": "26.7.2",
     "katex": "0.18.10",
     "lowlight": "^3.3.0",

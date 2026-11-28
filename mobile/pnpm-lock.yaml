@@ -286,6 +286,9 @@ importers:
       fflate:
         specifier: 0.8.3
         version: 0.8.3
+      highlight.js:
+        specifier: 11.11.1
+        version: 11.11.1
       i18next:
         specifier: 26.7.2
         version: 26.7.2(typescript@7.0.2)
