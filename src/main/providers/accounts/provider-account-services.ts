@@ -23,7 +23,10 @@ import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rat
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { releaseIdleChatsOnOtherAccount } from '../../native-chat/agent-session-wire/host/structured-agent-session-account-switch'
 import { AGY_HOST_SELECTION } from '../../antigravity/agy-account-selection'
-import { moveChatsToSelectedAccount } from '../../native-chat/agent-session-wire/host/structured-agent-session-saved-account-switch'
+import {
+  moveChatsToSelectedAccount,
+  noteChatNotMovedToAccount
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-saved-account-switch'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -66,6 +69,13 @@ export function createProviderAccountServices(
       committed
     )
   })
+  AGY_HOST_SELECTION.onChatNotMoved(
+    (chat) =>
+      void noteChatNotMovedToAccount(getStructuredAgentSessionHost(), {
+        ...chat,
+        to: AGY_HOST_SELECTION.email(chat.to) ?? 'the selected account'
+      })
+  )
   // Background quota polls must not boot stopped distros; user-driven resets may prepare them.
   rateLimits.setCodexHomePathResolver((target) =>
     resolveCodexRateLimitHomeUnlessStopped(codexRuntimeHome, target)

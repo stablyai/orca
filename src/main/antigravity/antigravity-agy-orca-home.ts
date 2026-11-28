@@ -103,10 +103,9 @@ function orcaHomeAccount(folderName: string): AcpAccountBinding {
       await writeAntigravityChatSettings(home, auth, env, assertCurrent)
       // Google chats here use agy's login too, so they (and their listings) follow the selected
       // account like terminals.
-      if (isGoogle(auth.method)) {
-        await restoreSelectedAntigravityAccount(env)
-      }
+      const login = isGoogle(auth.method) ? await restoreSelectedAntigravityAccount(env) : undefined
       await copyAgyLoginIntoOrcaHome(home, user, isGoogle(auth.method))
+      return login
     }
   }
 }

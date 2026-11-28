@@ -63,3 +63,45 @@ it('puts the selected login back once the last agy on a previous account exits',
   onNew.exit()
   expect(restore).toHaveBeenCalledTimes(1)
 })
+
+it("doesn't move chats to a selection agy's login couldn't be put on until a later launch reaches it or another is selected", () => {
+  const selection = new AgyAccountSelection()
+  const heard = vi.fn()
+  const notMoved = vi.fn()
+  selection.onChanged(heard)
+  selection.onChatNotMoved(notMoved)
+  selection.note(vault('a'))
+  selection.note(vault('b'))
+  expect(heard).toHaveBeenCalledTimes(1)
+  // A chat prepared for `b` starts on `a`: it says so once, and nothing relaunches it for `b`.
+  const failed = { key: 'a', target: 'b', failure: 'keychain access' }
+  selection.prepared(failed)
+  selection.spawned(agyProcess(), { sessionId: 'chat', key: 'a', prepared: failed })
+  expect(notMoved).toHaveBeenCalledExactlyOnceWith({
+    sessionId: 'chat',
+    to: 'b',
+    reason: 'keychain access'
+  })
+  expect(selection.current()).toBe('b')
+  expect(selection.target()).toBeNull()
+  // A later launch that does reach `b` lets every chat move.
+  selection.prepared({ key: 'b', target: 'b' })
+  expect(selection.target()).toBe('b')
+  expect(heard).toHaveBeenCalledTimes(2)
+
+  selection.prepared(failed)
+  selection.note(vault('a'))
+  expect(selection.target()).toBe('a')
+})
+
+it('puts the selected login back after an agy that started on another account than selected exits', () => {
+  const selection = new AgyAccountSelection()
+  const restore = vi.fn()
+  selection.onOldLoginsGone(restore)
+  selection.note(vault('b'))
+  const chat = agyProcess()
+  selection.started(chat)
+  selection.spawned(chat, { sessionId: 'chat', key: 'a' })
+  chat.exit()
+  expect(restore).toHaveBeenCalledOnce()
+})

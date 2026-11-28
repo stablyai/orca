@@ -5,8 +5,10 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/
 import { isAntigravityFileStorageHostAsync } from './native-file-credentials'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
-import { AGY_HOST_SELECTION } from './agy-account-selection'
+import { AGY_HOST_SELECTION, type AgyPreparedLogin } from './agy-account-selection'
 
+/** The selected account ('' when none) agy's login was found or put on; undefined when this launch
+ *  doesn't select one, null when `quiet` left the login unread. */
 export async function prepareAntigravityAccountForLaunch(args: {
   launchAgent?: string
   command?: string
@@ -19,24 +21,24 @@ export async function prepareAntigravityAccountForLaunch(args: {
   mayPrompt?: boolean
   /** Nobody is waiting on this launch: never read a login only a keychain dialog could name. */
   quiet?: boolean
-}): Promise<void> {
+}): Promise<string | null | undefined> {
   // Windows account selection applies the host default; the shell and agent own each launch.
   if (process.platform === 'win32') {
-    return
+    return undefined
   }
   const agent =
     args.launchAgent ??
     (args.command ? recognizeAgentProcessFromCommandLine(args.command)?.agent : null)
   // Client snapshots never select accounts for a relay or a client-selected distro.
   if (agent !== 'antigravity' || args.connectionId || args.isWsl) {
-    return
+    return undefined
   }
   const path = getAntigravityAccountVaultPath()
   if (!(await credentialFileExists(path))) {
-    return
+    return ''
   }
   if (!(await createEncryptedAntigravityAccountStore(path).read()).selectedAccountId) {
-    return
+    return ''
   }
   const env = args.envIsComplete ? { ...args.env } : { ...process.env, ...args.env }
   for (const key of args.envToDelete ?? []) {
@@ -53,28 +55,45 @@ export async function prepareAntigravityAccountForLaunch(args: {
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
-  await (
-    await getAntigravityAccountService({ runtime: 'host' })
-  ).prepareForLaunch({
+  return (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch({
     mayPrompt: args.mayPrompt ?? true,
     quiet: args.quiet === true
   })
 }
 
+/** Unnamed: a login Orca couldn't name without a keychain dialog. */
+const UNNAMED_LOGIN = '?'
+
 /** A chat or listing puts the selected account back when that's safe and raises no keychain
- *  dialog, else starts on agy's current login as before. */
+ *  dialog, else starts on agy's current login as before; either way it says which account that is. */
 export async function restoreSelectedAntigravityAccount(
   env: Readonly<Record<string, string>>
-): Promise<void> {
+): Promise<AgyPreparedLogin> {
+  const selected = await AGY_HOST_SELECTION.atLaunch()
+  let login: AgyPreparedLogin
   try {
-    await prepareAntigravityAccountForLaunch({
+    const found = await prepareAntigravityAccountForLaunch({
       launchAgent: 'antigravity',
       env: { ...env },
       mayPrompt: false
     })
+    login = { key: found ?? selected, target: found ?? selected }
   } catch (error) {
     console.warn("[antigravity] chat starts on agy's current login:", error)
+    const holder = await getAntigravityAccountService({ runtime: 'host' })
+      .then((service) => service.loginHolderWithoutPrompt())
+      .catch(() => null)
+    login =
+      holder === selected
+        ? { key: selected, target: selected }
+        : {
+            key: holder ?? UNNAMED_LOGIN,
+            target: selected,
+            failure: error instanceof Error ? error.message : String(error)
+          }
   }
+  AGY_HOST_SELECTION.prepared(login)
+  return login
 }
 
 // The last agy Orca started on a previous account may have written its login back as it ran.
@@ -83,7 +102,12 @@ AGY_HOST_SELECTION.onOldLoginsGone(() => {
     launchAgent: 'antigravity',
     mayPrompt: false,
     quiet: true
-  }).catch((error: unknown) =>
-    console.warn("[antigravity] the selected account wasn't put back:", error)
+  }).then(
+    (found) => {
+      if (typeof found === 'string') {
+        AGY_HOST_SELECTION.prepared({ key: found, target: found })
+      }
+    },
+    (error: unknown) => console.warn("[antigravity] the selected account wasn't put back:", error)
   )
 })

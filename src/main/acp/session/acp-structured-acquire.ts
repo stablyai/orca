@@ -22,6 +22,7 @@ import { acpLaneChildWorkDelivery } from '../journal/acp-lane-child-work-deliver
 import { NO_ACP_CHILD_STOPS } from '../turns/acp-structured-child-stop'
 import {
   acpLaunchConnect,
+  currentAcpLaunchAccount,
   prepareAcpStructuredLaunch
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
@@ -109,6 +110,8 @@ export async function acquireAcpStructuredSession(input: {
     await relayed.managed.close().catch(() => undefined)
   }
   const fullAccess = launchPermission.permission === 'full-access'
+  // The last wait before the synchronous spawn.
+  const spawning = await currentAcpLaunchAccount(launch, closedBeforeSpawn)
   const connection = connect(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec),
@@ -150,17 +153,15 @@ export async function acquireAcpStructuredSession(input: {
     options.applied.set('permissionMode', fullAccess ? 'full-access' : 'ask')
   }
   // From here, cancellation closes this connection even before exit is proven.
-  input.track(connection, launch)
+  input.track(connection, spawning)
   stopAtToolWork(launch, connection, (reason) => input.interrupt(sessionId, reason))
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {
-      relayed?.turns.observeSessionUpdate(event.kind === 'known' ? event.notification : event.raw)
+      const update = event.kind === 'known' ? event.notification : event.raw
+      relayed?.turns.observeSessionUpdate(update)
       if (slot.lane) {
         if (slot.reattaching) {
-          slot.history?.keep(
-            'session/update',
-            event.kind === 'known' ? event.notification : event.raw
-          )
+          slot.history?.keep('session/update', update)
         }
         routeAcpSessionEvent({ lane: slot.lane, options }, event, now(), slot.reattaching)
         if (

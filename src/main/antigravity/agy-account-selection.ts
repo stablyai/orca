@@ -8,6 +8,10 @@ type Vault = {
   accounts: readonly { id: string; email: string | null }[]
 }
 type Process = { onExit(listener: () => void): void }
+/** Where a launch's preparation left agy's login: on `key`, prepared for `target`; `failure` says
+ *  why they differ. */
+export type AgyPreparedLogin = { key: string; target: string; failure?: string }
+export type AgyChatNotMoved = { sessionId: string; to: string; reason: string }
 
 /** No saved account selected: agy runs on whatever login it holds. */
 const NONE = ''
@@ -21,6 +25,10 @@ export class AgyAccountSelection {
   private readonly listeners = new Set<SelectionChangedListener>()
   private readonly processes = new Map<Process, string>()
   private readonly oldLoginsGone = new Set<() => void>()
+  private readonly notMoved = new Set<(chat: AgyChatNotMoved) => void>()
+  // The selection the latest preparation failed to put agy's login on, until one reaches it or
+  // another is selected: relaunching a chat for it would only fail again.
+  private stuck: string | null = null
 
   /** How the selection is read before anything noted it. */
   readWith(read: () => Promise<unknown>): void {
@@ -35,6 +43,7 @@ export class AgyAccountSelection {
     const before = this.selected
     this.selected = vault.selectedAccountId
     if (before !== undefined && before !== vault.selectedAccountId) {
+      this.stuck = null
       this.revision += 1
       this.notify()
     }
@@ -52,6 +61,24 @@ export class AgyAccountSelection {
   readonly current = (): string | null =>
     this.selected === undefined ? null : (this.selected ?? NONE)
 
+  /** What a running child should match: the selection, or null while moving to it is known to fail. */
+  readonly target = (): string | null => {
+    const current = this.current()
+    return current !== null && current === this.stuck ? null : current
+  }
+
+  /** A failed preparation stops chats moving to its selection; the next one that reaches the
+   *  selection (a later launch, listing or restore) lets them move again. */
+  prepared(login: AgyPreparedLogin): void {
+    if (login.failure !== undefined) {
+      this.stuck = login.target
+    } else if (this.stuck !== null && login.key === this.stuck) {
+      this.stuck = null
+      this.revision += 1
+      this.notify()
+    }
+  }
+
   /** The saved account's email, when it has one. */
   email(key: string): string | null {
     return this.emails.get(key) ?? null
@@ -65,16 +92,39 @@ export class AgyAccountSelection {
     }
   }
 
-  /** An agy process Orca started now, on the selected account. */
+  /** An agy process Orca started now, on the selected account until `spawned` says otherwise. */
   readonly started = (process: Process): void => {
-    const key = this.current() ?? NONE
-    this.processes.set(process, key)
+    this.processes.set(process, this.current() ?? NONE)
     process.onExit(() => {
+      const key = this.processes.get(process)
       this.processes.delete(process)
-      if (key !== this.current() && !this.otherAccountRunning()) {
+      if (key !== undefined && key !== this.current() && !this.otherAccountRunning()) {
         this.oldLoginsGone.forEach((listener) => listener())
       }
     })
+  }
+
+  /** A chat's agy spawned on `key`; one whose preparation failed says so in that chat. */
+  readonly spawned = (
+    process: Process,
+    chat: { sessionId: string; key: string; prepared?: AgyPreparedLogin }
+  ): void => {
+    if (this.processes.has(process)) {
+      this.processes.set(process, chat.key)
+    }
+    const { prepared } = chat
+    if (prepared?.failure !== undefined) {
+      const notMoved = { sessionId: chat.sessionId, to: prepared.target, reason: prepared.failure }
+      this.notMoved.forEach((listener) => listener(notMoved))
+    }
+  }
+
+  /** Hears each chat that started on another account than the selected one it was prepared for. */
+  onChatNotMoved(listener: (chat: AgyChatNotMoved) => void): () => void {
+    this.notMoved.add(listener)
+    return () => {
+      this.notMoved.delete(listener)
+    }
   }
 
   /** The last agy Orca started on an account other than the selected one exited: one that

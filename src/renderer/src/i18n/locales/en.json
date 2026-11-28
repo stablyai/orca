@@ -21612,6 +21612,7 @@
         "autoReviewApproveHint": "{{agent}} may retry this exact action once. Its review still checks the retry.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
+        "accountNotMoved": "Couldn't move this chat to {{to}}: {{reason}}",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
         "forkedFrom": "Forked from",
         "forkedFromUnknown": "Forked from another chat"
