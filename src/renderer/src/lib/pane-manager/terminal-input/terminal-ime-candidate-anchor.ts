@@ -1,5 +1,5 @@
-import type { IDisposable, Terminal } from '@xterm/xterm'
-import { resolveCursorAgentImeAnchor, type TerminalImeAnchor } from './terminal-ime-anchor'
+import type { IBuffer, IDisposable, Terminal } from '@xterm/xterm'
+import { resolveAppDrawnImeCaret, type TerminalImeAnchor } from './terminal-ime-anchor'
 
 type ImeAnchorCellMetrics = {
   cellWidth: number
@@ -8,10 +8,9 @@ type ImeAnchorCellMetrics = {
   rows: number
 }
 
-// The prompt row only stays valid while the parked cursor and viewport stay put.
-type CursorAgentPromptCache = {
-  row: number
-  cursorY: number
+// An app-drawn caret only stays valid while the buffer, viewport and grid stay put.
+type AppDrawnCaret = TerminalImeAnchor & {
+  bufferType: IBuffer['type']
   baseY: number
   cols: number
   rows: number
@@ -19,7 +18,7 @@ type CursorAgentPromptCache = {
 
 type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
 
-/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, and follow xterm renders while a Cursor Agent composition is active, measuring public .xterm-screen bounds and resolving the prompt row once per composition and skipping unchanged inline styles to avoid layout. Return a cleanup, or null before DOM open. */
+/** OS candidate placement reads the focused textarea at compositionstart; correct xterm’s stale/hidden TUI cursor after its handlers. Keep compositionupdate correction for long CJK sequences, and follow xterm renders for the active composition so a later app-drawn caret is picked up, measuring public .xterm-screen bounds and rechecking the last caret before rescanning and skipping unchanged inline styles to avoid layout. Return a cleanup, or null before DOM open. */
 export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => void) | null {
   if (!terminal.element || !terminal.textarea) {
     return null
@@ -29,9 +28,8 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   const textarea = terminal.textarea
   let metrics: ImeAnchorCellMetrics | null = null
   let deferredApply: number | null = null
-  let cursorAgentSeen = false
   let renderSubscription: IDisposable | null = null
-  let promptCache: CursorAgentPromptCache | null = null
+  let lastCaret: AppDrawnCaret | null = null
 
   const measureCells = (): ImeAnchorCellMetrics | null => {
     if (!screenElement) {
@@ -71,13 +69,13 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     row: number,
     column: number,
     cells: ImeAnchorCellMetrics,
-    isCursorAgent: boolean
+    isRelocated: boolean
   ): void => {
     const top = `${row * cells.cellHeight}px`
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
     writeStyle(textarea, 'left', `${anchorLeft(column, cells)}px`)
-    if (isCursorAgent && compositionView) {
+    if (isRelocated && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
       writeStyle(compositionView, 'left', left)
@@ -86,43 +84,42 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
-  const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
+  const resolveAnchor = (): { anchor: TerminalImeAnchor; isRelocated: boolean } => {
     const buf = terminal.buffer.active
-    // Renders repeat while composing; a bottom-up prompt scan per render is too slow on large grids.
-    const promptRow =
-      promptCache &&
-      promptCache.cursorY === buf.cursorY &&
-      promptCache.baseY === buf.baseY &&
-      promptCache.cols === terminal.cols &&
-      promptCache.rows === terminal.rows
-        ? promptCache.row
+    const cursorVisible = terminal.modes.showCursor
+    const knownCaret =
+      lastCaret &&
+      lastCaret.bufferType === buf.type &&
+      lastCaret.baseY === buf.baseY &&
+      lastCaret.cols === terminal.cols &&
+      lastCaret.rows === terminal.rows
+        ? lastCaret
         : undefined
-    // Cursor Agent leaves the public cursor on a blank row; anchor IME to its rendered prompt instead.
-    const cursorAgentAnchor = resolveCursorAgentImeAnchor({
+    // An app that hides the cursor draws its own caret and parks the real one elsewhere.
+    const caret = resolveAppDrawnImeCaret({
       buffer: buf,
       rows: terminal.rows,
       cols: terminal.cols,
-      cursorX: buf.cursorX,
-      cursorY: buf.cursorY,
-      knownCursorAgent: cursorAgentSeen,
-      promptRow
+      cursorVisible,
+      knownCaret
     })
-    cursorAgentSeen ||= cursorAgentAnchor !== null
-    promptCache = cursorAgentAnchor
+    // A repaint split across writes can briefly paint no caret; within one composition the last one still holds.
+    const anchor = caret ?? (cursorVisible ? null : (knownCaret ?? null))
+    lastCaret = anchor
       ? {
-          row: cursorAgentAnchor.row,
-          cursorY: buf.cursorY,
+          row: anchor.row,
+          column: anchor.column,
+          bufferType: buf.type,
           baseY: buf.baseY,
           cols: terminal.cols,
           rows: terminal.rows
         }
       : null
     return {
-      anchor: cursorAgentAnchor ?? {
-        row: buf.cursorY,
-        column: Math.min(buf.cursorX, terminal.cols - 1)
-      },
-      isCursorAgent: cursorAgentAnchor !== null
+      anchor: anchor
+        ? { row: anchor.row, column: anchor.column }
+        : { row: buf.cursorY, column: Math.min(buf.cursorX, terminal.cols - 1) },
+      isRelocated: anchor !== null
     }
   }
 
@@ -134,7 +131,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const staleMetrics =
       !metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows
     if (event?.type === 'compositionstart') {
-      promptCache = null
+      lastCaret = null
       metrics = measureCells()
     } else if (staleMetrics) {
       metrics = measureCells()
@@ -143,18 +140,19 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     if (!cells) {
       return
     }
-    const { anchor, isCursorAgent } = resolveAnchor()
-    applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
+    const { anchor, isRelocated } = resolveAnchor()
+    applyAnchor(anchor.row, anchor.column, cells, isRelocated)
+    // xterm resets the preedit to the buffer cursor on every render; follow renders for the whole composition,
+    // since the app may hide its cursor and paint a caret after a cursor-anchored start.
+    renderSubscription ??= terminal.onRender(reapplyAfterRender)
     // xterm repositions in setTimeout(0); correct after its timer, coalescing bursts.
-    if (!isCursorAgent) {
+    if (!isRelocated) {
       if (deferredApply !== null) {
         window.clearTimeout(deferredApply)
         deferredApply = null
       }
       return
     }
-    // xterm resets the preedit to the buffer cursor on every render; follow renders only while composing.
-    renderSubscription ??= terminal.onRender(reapplyAfterRender)
     // Re-queue after xterm's latest timer while keeping only one correction pending.
     if (deferredApply !== null) {
       window.clearTimeout(deferredApply)
@@ -175,7 +173,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       window.clearTimeout(deferredApply)
       deferredApply = null
     }
-    promptCache = null
+    lastCaret = null
   }
 
   const reapplyAfterRender = (): void => {

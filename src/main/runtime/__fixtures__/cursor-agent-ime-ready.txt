@@ -1,0 +1,15 @@
+[>1u]11;?[2K[G
+
+  Cursor Agent
+  [2mv2026.09.26-dd393fe[22m
+  [2mTip: Use /mcp to connect Cursor to your tools and data sources.[22m
+
+
+
+ [48;5;233m                                                                                                  [49m
+ [48;5;233m [2m→ [22m[7mP[27m[2mlan, search, build anything[22m                                                                   [49m
+ [48;5;233m                                                                                                  [49m
+
+  [2mAuto[22m
+  [2m~/Projects/personal/orca · feat/example-branch-00[22m
+[?25l[?2004h]0;Cursor Agent[?2031h[?1004h
