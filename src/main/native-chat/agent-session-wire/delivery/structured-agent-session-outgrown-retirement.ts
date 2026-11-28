@@ -37,8 +37,6 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
   const { deps, sessions } = input
   const { launchTools } = deps
   const workHost = { store: deps.store, sessions }
-  // Per chat, the last send that tried the selected account again: one try per message.
-  const retried = new Map<string, string>()
   return async (sessionId, continuingId, next, committed) => {
     // Defer retirement while personal Stop holds handover; its next step decides.
     const session = (await input.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
@@ -72,19 +70,7 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
         const record = deps.store.getRecord(sessionId)
         return record ? ((await deps.launchAccountHome?.(record, 'identity')) ?? null) : null
       },
-      launchAccountKey: async () => {
-        // A person's send in a chat a failed move held back tries once to reach the selection.
-        const key = session?.child?.accountKey
-        if (
-          next?.origin === 'client' &&
-          key !== undefined &&
-          retried.get(sessionId) !== next.clientMessageId
-        ) {
-          retried.set(sessionId, next.clientMessageId)
-          await deps.adapter.retryLaunchAccount?.(sessionId, key).catch(() => undefined)
-        }
-        return deps.adapter.launchAccountKey?.(sessionId) ?? null
-      },
+      launchAccountKey: () => deps.adapter.launchAccountKey?.(sessionId) ?? null,
       launchToolsChanged: async () => {
         const kept = await deps.adapter.keptLaunchOutgrown?.(
           sessionId,

@@ -93,7 +93,13 @@ export async function currentAcpLaunchAccount<
   const prepared = launch.preparedAccount
   const current = launch.spec.launchAccount?.current()
   const { prepare } = launch.spec.account
-  if (!prepared || !prepare || current == null || current === prepared.target) {
+  if (
+    !prepared ||
+    'foreign' in prepared ||
+    !prepare ||
+    current == null ||
+    current === prepared.target
+  ) {
     return launch
   }
   const again = await prepare(launch.env, launch.antigravityChatAuth, closedBeforeSpawn).catch(

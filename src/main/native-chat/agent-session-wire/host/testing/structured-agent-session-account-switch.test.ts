@@ -382,21 +382,16 @@ it("replaces an agent on another saved account at the next send's handover", asy
   expect(chat.child()?.accountKey).toBe('account-b')
 })
 
-it("tries the selected account once per person's send in a chat a failed move held back, and moves it once that works", async () => {
+it('keeps a chat a failed move held back on its account at each send, and moves it at the first send after agy holds the selected one', async () => {
   await rig?.dispose()
   let selected = 'account-a'
-  // A failed move to `account-b` holds chats where they are until a launch reaches it.
+  // In memory only: a launch, listing, restore or the switch itself found agy's login on it.
   let held = false
-  let reaches = false
-  const retryLaunchAccount = vi.fn(async () => {
-    held = !reaches
-  })
   const current = await createQueuedMessageTestRig({
     agent: 'claude',
     restartable: true,
     accountKey: () => selected,
-    launchAccountKey: () => (held ? null : selected),
-    retryLaunchAccount
+    launchAccountKey: () => (held ? null : selected)
   })
   rig = current
   await current.settleAccepted(await current.workingSend(), 'one')
@@ -404,17 +399,14 @@ it("tries the selected account once per person's send in a chat a failed move he
   const starts = current.starts.mock.calls.length
   selected = 'account-b'
   held = true
-  retryLaunchAccount.mockClear()
 
   await current.settleAccepted(await current.workingSend(), 'two')
-  expect(retryLaunchAccount).toHaveBeenCalledOnce()
-  expect(retryLaunchAccount).toHaveBeenCalledWith(SESSION, 'account-a')
+  await current.settleAccepted(await current.workingSend(), 'three')
   expect(current.starts.mock.calls.length).toBe(starts)
   expect(child()?.accountKey).toBe('account-a')
 
-  reaches = true
-  await current.settleAccepted(await current.workingSend(), 'three')
-  expect(retryLaunchAccount).toHaveBeenCalledTimes(2)
+  held = false
+  await current.settleAccepted(await current.workingSend(), 'four')
   expect(current.starts.mock.calls.length).toBe(starts + 1)
   expect(child()?.accountKey).toBe('account-b')
 })

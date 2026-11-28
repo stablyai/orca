@@ -1,4 +1,5 @@
 import type { StructuredAgentSessionAtRestCommands } from '../options/structured-agent-session-at-rest-commands'
+import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionAdapter as Adapter } from './structured-agent-session-adapter'
@@ -50,14 +51,14 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   dispatch: Adapter['dispatch'] = (input) => this.owner(input.sessionId).dispatch(input)
 
-  permissionModeRequiresAcquisition: Adapter['permissionModeRequiresAcquisition'] = (id, mode) =>
-    this.liveOwnerOrNull(id)?.permissionModeRequiresAcquisition?.(id, mode)
+  permissionModeRequiresAcquisition = (
+    sessionId: string,
+    mode: AgentChatPermissionChoice
+  ): boolean | undefined =>
+    this.liveOwnerOrNull(sessionId)?.permissionModeRequiresAcquisition?.(sessionId, mode)
 
   launchAccountKey = (sessionId: string): string | null =>
     this.liveOwnerOrNull(sessionId)?.launchAccountKey?.(sessionId) ?? null
-
-  retryLaunchAccount: Adapter['retryLaunchAccount'] = async (id, key) =>
-    this.liveOwnerOrNull(id)?.retryLaunchAccount?.(id, key)
 
   applyPermissionMode: NonNullable<Adapter['applyPermissionMode']> = async (input) => {
     await this.liveOwnerOrNull(input.sessionId)?.applyPermissionMode?.(input)

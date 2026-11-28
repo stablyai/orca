@@ -51,10 +51,13 @@ export async function startAcpStructuredSession(
       track: (connection, launch) => {
         const { launchAccount: account } = launch.spec
         const prepared = launch.preparedAccount
+        // A launch on another home or store, which no saved account names, records none.
+        const foreign = prepared !== undefined && 'foreign' in prepared
+        const login = prepared && !('foreign' in prepared) ? prepared : undefined
         accountKey =
-          account?.usedBy?.(launch) === false
+          account?.usedBy?.(launch) === false || foreign
             ? undefined
-            : (prepared?.key ?? account?.current() ?? undefined)
+            : (login?.key ?? account?.current() ?? undefined)
         connection.onExit((_exit, requested, lost) => {
           if (!requested) {
             input.events?.observeRootExit?.()
@@ -67,7 +70,7 @@ export async function startAcpStructuredSession(
           account?.spawned?.(connection, {
             sessionId,
             key: accountKey,
-            ...(prepared ? { prepared } : {})
+            ...(login ? { prepared: login } : {})
           })
         }
       },

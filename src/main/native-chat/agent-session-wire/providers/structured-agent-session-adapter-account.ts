@@ -8,9 +8,6 @@ export type StructuredAgentSessionAdapterAccount = {
   /** The account key a start of this session would record now; a running child whose
    *  `accountKey` differs launched on another account. Null when the agent has none. */
   launchAccountKey?(sessionId: string): string | null
-  /** Before a person's send in a chat whose child launched on `childKey`: when a failed move holds
-   *  chats off the selected account, one bounded attempt to reach it. */
-  retryLaunchAccount?(sessionId: string, childKey: string): Promise<void>
 }
 
 /** How a provider stops, changes the permission mode of, and names the account of its children. */

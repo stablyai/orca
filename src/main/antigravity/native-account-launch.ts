@@ -8,6 +8,34 @@ import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './
 import { AntigravityLaunchRestoreError } from './native-account-login-view'
 import { AGY_HOST_SELECTION, type AgyPreparedLogin } from './agy-account-selection'
 
+/** A launch reads agy's login from another home or credential store than the host's own. */
+export class AgyForeignCredentialAuthority extends Error {
+  constructor() {
+    super(
+      'This agy launch uses a different credential authority from the selected Antigravity account.'
+    )
+    this.name = 'AgyForeignCredentialAuthority'
+  }
+}
+
+/** Throws `AgyForeignCredentialAuthority` unless a launch with `env` reads the host's own agy login,
+ *  the one saved accounts swap. */
+async function assertHostCredentialAuthority(
+  env: NodeJS.ProcessEnv,
+  envToDelete: readonly string[] = []
+): Promise<void> {
+  const home =
+    process.platform === 'win32' ? (env.USERPROFILE ?? env.HOME) : (env.HOME ?? env.USERPROFILE)
+  if (
+    envToDelete.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
+    (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
+    (await isAntigravityFileStorageHostAsync(env)) !==
+      (await isAntigravityFileStorageHostAsync(process.env))
+  ) {
+    throw new AgyForeignCredentialAuthority()
+  }
+}
+
 /** The selected account ('' when none) agy's login was found or put on; undefined when this launch
  *  doesn't select one, null when `quiet` left the login unread. */
 export async function prepareAntigravityAccountForLaunch(args: {
@@ -45,17 +73,7 @@ export async function prepareAntigravityAccountForLaunch(args: {
   for (const key of args.envToDelete ?? []) {
     delete env[key]
   }
-  const home = env.HOME ?? env.USERPROFILE
-  if (
-    args.envToDelete?.some((key) => ['HOME', 'USERPROFILE'].includes(key)) ||
-    (home && resolve(home) !== resolve(getAppEnvironment().getPath('home'))) ||
-    (await isAntigravityFileStorageHostAsync(env)) !==
-      (await isAntigravityFileStorageHostAsync(process.env))
-  ) {
-    throw new Error(
-      'This agy launch uses a different credential authority from the selected Antigravity account.'
-    )
-  }
+  await assertHostCredentialAuthority(env, args.envToDelete)
   return (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch({
     mayPrompt: args.mayPrompt ?? true,
     quiet: args.quiet === true
@@ -67,7 +85,7 @@ const UNNAMED_LOGIN = '?'
 
 /** Where a launch left agy's login: on the selected account, else on `holder`, the account fresh
  *  evidence names (null: none), with why it isn't the selected one. */
-export function agyPreparedLogin(
+function agyPreparedLogin(
   selected: string,
   holder: string | null,
   failure: string
@@ -77,17 +95,34 @@ export function agyPreparedLogin(
     : { key: holder ?? UNNAMED_LOGIN, target: selected, failure }
 }
 
-/** Only a failed restore of the host's own login names who holds it; any other failure (a launch
- *  on another home or credential store included) names nobody. */
-export function agyLoginHolderAfter(error: unknown): string | null {
+/** Only a failed restore of the host's own login names who holds it; any other failure names
+ *  nobody. */
+function agyLoginHolderAfter(error: unknown): string | null {
   return error instanceof AntigravityLaunchRestoreError ? error.holder : null
 }
 
+/** Where a launch that failed to reach the selected account left agy's login; one on another home
+ *  or credential store is foreign: no saved account names it, so it never latches the selection. */
+export function agyLoginAfterFailure(
+  selected: string,
+  error: unknown
+): AgyPreparedLogin | { foreign: true } {
+  if (error instanceof AgyForeignCredentialAuthority) {
+    return { foreign: true }
+  }
+  const reason = error instanceof Error ? error.message : String(error)
+  return agyPreparedLogin(selected, agyLoginHolderAfter(error), reason)
+}
+
 /** Windows puts no account back at launch, but reading its login there raises no dialog. */
-async function windowsLaunchLogin(selected: string): Promise<AgyPreparedLogin> {
+async function windowsLaunchLogin(
+  selected: string,
+  env: Readonly<Record<string, string>>
+): Promise<AgyPreparedLogin> {
   if (!selected) {
     return { key: selected, target: selected }
   }
+  await assertHostCredentialAuthority({ ...process.env, ...env })
   const holder = await getAntigravityAccountService({ runtime: 'host' })
     .then((service) => service.readLoginHolder())
     .catch(() => null)
@@ -104,31 +139,29 @@ async function windowsLaunchLogin(selected: string): Promise<AgyPreparedLogin> {
  *  dialog, else starts on agy's current login as before; either way it says which account that is. */
 export async function restoreSelectedAntigravityAccount(
   env: Readonly<Record<string, string>>
-): Promise<AgyPreparedLogin> {
+): Promise<AgyPreparedLogin | { foreign: true }> {
   const selected = await AGY_HOST_SELECTION.atLaunch()
-  let login: AgyPreparedLogin
-  if (process.platform === 'win32') {
-    login = await windowsLaunchLogin(selected)
-  } else {
-    try {
+  let login: AgyPreparedLogin | { foreign: true }
+  try {
+    if (process.platform === 'win32') {
+      login = await windowsLaunchLogin(selected, env)
+    } else {
       const found = await prepareAntigravityAccountForLaunch({
         launchAgent: 'antigravity',
         env: { ...env },
         mayPrompt: false
       })
       login = { key: found ?? selected, target: found ?? selected }
-    } catch (error) {
-      console.warn("[antigravity] chat starts on agy's current login:", error)
-      const reason = error instanceof Error ? error.message : String(error)
-      login = agyPreparedLogin(selected, agyLoginHolderAfter(error), reason)
     }
+  } catch (error) {
+    console.warn("[antigravity] chat starts on agy's current login:", error)
+    login = agyLoginAfterFailure(selected, error)
   }
-  AGY_HOST_SELECTION.prepared(login)
+  if (!('foreign' in login)) {
+    AGY_HOST_SELECTION.prepared(login)
+  }
   return login
 }
-
-// A person's send in a chat a failed move held back tries the selected account once more.
-AGY_HOST_SELECTION.restoreWith(() => restoreSelectedAntigravityAccount({}))
 
 // The last agy Orca started on a previous account may have written its login back as it ran.
 AGY_HOST_SELECTION.onOldLoginsGone(() => {

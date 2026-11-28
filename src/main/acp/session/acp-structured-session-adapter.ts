@@ -210,10 +210,6 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
 
   launchAccountKey = (): string | null => this.deps.spec.launchAccount?.target() ?? null
 
-  retryLaunchAccount = async (_sessionId: string, childKey: string): Promise<void> => {
-    await this.deps.spec.launchAccount?.retry?.(childKey)
-  }
-
   permissionModeRequiresAcquisition: NonNullable<
     SessionAdapter['permissionModeRequiresAcquisition']
   > = (sessionId, mode) => {
