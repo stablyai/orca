@@ -39,6 +39,7 @@ import {
   readMobileNativeChatDraftEditGeneration,
   setMobileNativeChatDraftText
 } from './mobile-native-chat-draft-store'
+import { useNotificationReplyChatDraft } from '../../../../notifications/reply/use-notification-reply-chat-draft'
 import { loadMobileNativeChatDrafts } from './mobile-native-chat-draft-persistence'
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
@@ -102,6 +103,7 @@ export function useMobileNativeChatDrafts(args: {
     onSendError = NO_SEND_ERROR
   } = args
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
+  useNotificationReplyChatDraft(hostId, worktreeId, draftKey)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const [pendingBySession, setPendingBySession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>

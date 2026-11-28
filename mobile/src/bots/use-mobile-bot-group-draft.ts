@@ -7,6 +7,7 @@ import {
   useMobileNativeChatDraft
 } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/drafts/returned-draft-text'
+import { useNotificationReplyChatDraft } from '../notifications/reply/use-notification-reply-chat-draft'
 import { loadMobileNativeChatDrafts } from '../session/native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 
 // A group's rooms keep their drafts as chat tabs (mobileNativeChatScopeKey's shape) of a workspace named
@@ -25,6 +26,7 @@ export function mobileBotGroupDraftKey(hostId: string, groupId: string, roomId: 
  *  room's page. */
 export function useMobileBotGroupDraft(hostId: string, groupId: string, roomId: string) {
   const key = mobileBotGroupDraftKey(hostId, groupId, roomId)
+  useNotificationReplyChatDraft(hostId, mobileBotGroupDraftWorkspaceId(groupId), key)
   useEffect(() => {
     void loadMobileNativeChatDrafts(hostId, mobileBotGroupDraftWorkspaceId(groupId))
   }, [hostId, groupId])

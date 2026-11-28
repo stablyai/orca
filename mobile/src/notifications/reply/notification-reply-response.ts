@@ -5,7 +5,8 @@ import { NOTIFICATION_REPLY_ACTION } from '../../../../src/shared/notifications/
 import { notificationReplyResponseId } from './notification-reply-identity'
 import { readNotificationReplyDraftRecord } from './notification-reply-draft-record'
 import { parsePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
-import { editMobileNativeChatDraft } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-store'
+import { processDeviceStore } from '../../device-store/device-store'
+import { persistNotificationReplyDraft } from './notification-reply-draft-handoff'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
 import { readOrcaPushPayload } from '../payload-identity/push-payload'
 import { readNativeNotificationData } from '../payload-identity/native-notification-data'
@@ -13,15 +14,11 @@ import { loadHosts } from '../../host-catalog/host-store'
 import { sendNotificationReply } from './notification-reply-delivery'
 import { completeNativeReply } from './notification-reply-native'
 import { translate } from '../../i18n/mobile-i18n'
-import { loadMobileNativeChatDrafts } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 import {
   mobileBotGroupDraftKey,
   mobileBotGroupDraftWorkspaceId
 } from '../../bots/use-mobile-bot-group-draft'
-import {
-  botItemCommentDraftKey,
-  returnBotItemCommentDraft
-} from '../../bots/items/bot-item-comment-drafts'
+import { botItemCommentDraftKey } from '../../bots/items/bot-item-comment-drafts'
 
 const PREFIX = 'orca:notificationReply:'
 const recordQueues = new Map<string, Promise<void>>()
@@ -64,26 +61,35 @@ async function restoreDraft(data: unknown): Promise<void> {
     return
   }
   const text = saved.text
-  if (payload.replyTarget?.type === 'bot-item') {
-    returnBotItemCommentDraft(botItemCommentDraftKey(hostId, payload.replyTarget.itemUid), text)
-    await AsyncStorage.setItem(
-      PREFIX + data.replyDraftId,
-      JSON.stringify({ ...saved, restored: true, at: Date.now() })
-    )
-    return
-  }
   const groupId = payload.replyTarget?.type === 'group' ? payload.replyTarget.groupId : null
   const workspace = groupId ? mobileBotGroupDraftWorkspaceId(groupId) : payload.worktreeId
-  const draftKey = groupId
-    ? mobileBotGroupDraftKey(hostId, groupId, groupId)
-    : pane
-      ? `${hostId}\0${workspace}\0${pane.tabId}`
-      : null
+  const draftKey =
+    payload.replyTarget?.type === 'bot-item'
+      ? botItemCommentDraftKey(hostId, payload.replyTarget.itemUid)
+      : groupId
+        ? mobileBotGroupDraftKey(hostId, groupId, groupId)
+        : pane
+          ? `${hostId}\0${workspace}\0${pane.tabId}`
+          : null
   if (!draftKey) {
     return
   }
-  await loadMobileNativeChatDrafts(hostId, workspace)
-  editMobileNativeChatDraft(draftKey, (current) => (current ? `${current}\n${text}` : text))
+  const store = processDeviceStore()
+  if ((await store.open()) !== 'ready') {
+    return
+  }
+  const persisted = await persistNotificationReplyDraft(
+    {
+      read: (table, keys) => store.read(hostId, table, keys),
+      write: (table, ops) => store.write(hostId, table, ops)
+    },
+    draftKey,
+    data.replyDraftId,
+    text
+  )
+  if (!persisted) {
+    return
+  }
   await AsyncStorage.setItem(
     PREFIX + data.replyDraftId,
     JSON.stringify({ ...saved, restored: true, at: Date.now() })

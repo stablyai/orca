@@ -8,7 +8,11 @@ import { buildNativeChatPasteBytes } from '../../../../src/shared/native-chat/in
 import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { itemComment } from '../../bots/items/bot-item-operations'
-import { notificationReplyTerminalClient } from './notification-reply-terminal-input'
+import { decodeHostStatusReply, sendHostStatusRead } from '../../query/host-status-query'
+import {
+  assertNotificationReplyTerminalSupport,
+  notificationReplyTerminalClient
+} from './notification-reply-terminal-input'
 import { groupRead, groupSend } from '../../bots/bot-group-operations'
 import type { AgentSessionHistoryResult } from '../../../../src/shared/agent-session/agent-session-wire'
 import { callAgentSession } from '../../session/native-chat/agent-session/mobile-structured-agent-session-rpc'
@@ -73,6 +77,15 @@ export async function sendNotificationReply(
         )
       )
       return
+    }
+    if (target.type === 'terminal') {
+      const status = decodeHostStatusReply(
+        await sendHostStatusRead(client, {
+          timeoutMs: deadline - Date.now(),
+          budgetSpansConnect: true
+        })
+      )
+      assertNotificationReplyTerminalSupport(status?.status?.capabilities)
     }
     let fence = 1
     if (target.type === 'chat') {
