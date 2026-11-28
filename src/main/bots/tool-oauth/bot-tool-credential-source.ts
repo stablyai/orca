@@ -41,7 +41,9 @@ export type BotToolCredentialAnswer =
   | { kind: 'sign-in-needed' }
   /** Its key isn't set up here, or the app's token server didn't answer: try again later. */
   | { kind: 'unavailable' }
-  /** The bot has no such credential. */
+  /** Its tools file names it and an entry is stored, but it doesn't open on this computer. */
+  | { kind: 'unreadable' }
+  /** The tools file has no such credential. */
   | { kind: 'missing' }
 
 export type BotToolCredentialSource = (
@@ -93,6 +95,10 @@ export function botToolCredentialSource(
       }
     }
     const credential = stored.credential(request.credentialId)
+    if (!credential && toolUrl !== null && stored.unreadable(request.credentialId)) {
+      // A reset keychain or a copied home folder: its row asks to sign in or enter the key again.
+      return { kind: 'unreadable' }
+    }
     if (!credential || credential.url !== toolUrl) {
       return { kind: 'missing' }
     }

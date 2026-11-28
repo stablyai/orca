@@ -13,8 +13,10 @@ import { cn } from '@/lib/class-names'
 import { mcpServerStatusLine } from './native-chat-mcp-server-text'
 import {
   agentSessionMcpRowFailure,
-  agentSessionMcpServerDisplayName
+  agentSessionMcpServerDisplayName,
+  agentSessionMcpShownStatus
 } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import type { AgentSessionMcpFailure } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import { useDeferredPending } from './use-deferred-pending'
 
 export type McpServerAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
@@ -69,7 +71,7 @@ export function NativeChatMcpServerRow({
   /** Any row's action is in flight; the panel runs one at a time. */
   busy: boolean
   /** The panel's last refused action; a null message has no detail. */
-  failure: { server: string; message: string | null } | null
+  failure: AgentSessionMcpFailure | null
   run: (operation: McpServerAction) => void
   dismissSignIn: () => void
   openUrl: (url: string) => void
@@ -126,7 +128,7 @@ export function NativeChatMcpServerRow({
         {t('components.native-chat.mcp.signIn.action', 'Sign in')}
       </PendingLabel>
     </Button>
-  ) : server.canReconnect && server.status === 'failed' ? (
+  ) : server.canReconnect && agentSessionMcpShownStatus(server) === 'failed' ? (
     <Button
       type="button"
       variant="outline"
@@ -143,10 +145,15 @@ export function NativeChatMcpServerRow({
     <li>
       <div className="flex h-8 min-w-0 items-center gap-2 pr-2 pl-3">
         <span aria-hidden="true" className="flex size-3 shrink-0 items-center justify-center">
-          {signIn || server.status === 'pending' ? (
+          {signIn || agentSessionMcpShownStatus(server) === 'pending' ? (
             <LoadingSpinner className="size-3 text-muted-foreground" />
           ) : (
-            <span className={cn('size-1.75 rounded-full', DOT_CLASS[server.status])} />
+            <span
+              className={cn(
+                'size-1.75 rounded-full',
+                DOT_CLASS[agentSessionMcpShownStatus(server)]
+              )}
+            />
           )}
         </span>
         <span className="max-w-1/2 shrink-0 truncate font-medium text-foreground">
@@ -155,14 +162,16 @@ export function NativeChatMcpServerRow({
         <span
           className={cn(
             'min-w-0 flex-1 truncate',
-            server.status === 'failed' && !signIn ? 'text-destructive' : 'text-muted-foreground'
+            agentSessionMcpShownStatus(server) === 'failed' && !signIn
+              ? 'text-destructive'
+              : 'text-muted-foreground'
           )}
           title={statusLine}
         >
           {statusLine}
         </span>
         {actions}
-        {server.canToggle && !signIn ? (
+        {server.canToggle && !signIn && server.orcaChange !== 'removed' ? (
           <Switch
             size="compact"
             checked={enabled}
@@ -188,8 +197,10 @@ export function NativeChatMcpServerRow({
                 'components.native-chat.mcp.signIn.unfinished',
                 'Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.'
               )
-            : (refusal.message ??
-              t('components.native-chat.mcp.actionFailed', 'Couldn’t do that. Try again.'))}
+            : refusal.kind === 'stillFailing'
+              ? t('components.native-chat.mcp.stillFailing', 'Still failing after reconnecting.')
+              : (refusal.message ??
+                t('components.native-chat.mcp.actionFailed', 'Couldn’t do that. Try again.'))}
         </p>
       ) : null}
     </li>

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { Pressable, type HostInstance } from 'react-native'
 import { ArrowDownToLine, Copy, MoreHorizontal, Plus } from 'lucide-react-native'
 import type { BotToolProblem } from '../../../src/shared/bot-tools'
+import { botToolSignInUnreadable } from '../../../src/shared/bot-tool-sign-in'
 import { mcpMoveRemovesFrom } from '../../../src/shared/mcp-servers/mcp-servers'
 import { LIST_LEADING_INSET, ListRow } from '../components/list/ListGroup'
 import { MobileStateButton } from '../components/feedback/MobileStateView'
@@ -122,7 +123,9 @@ function McpServerRow(props: {
       title={mcpServerTitle(server)}
       subtitle={
         needsSignIn
-          ? t('mcpServers.needsSignIn', 'Needs sign-in')
+          ? botToolSignInUnreadable(server.signIn)
+            ? t('mcpServers.signInAgain', 'Sign in again')
+            : t('mcpServers.needsSignIn', 'Needs sign-in')
           : failed
             ? t('mcpServers.wontStart', 'Won’t start')
             : line
