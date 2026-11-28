@@ -172,6 +172,13 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     forkNamed && text === primary ? <ForkMarkedName name={text} /> : text
   const rowTitle = `${shownText(leadingText)}${trailingText ? ` - ${shownText(trailingText)}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
+  // The model is secondary to the name: always in the hover, inline only when the card asks for it.
+  const hoverTitle = model ? `${rowTitle}\n${model}` : rowTitle
+  // The disabled reason replaces the row hover, so keep the model with it when it is not shown inline.
+  const disabledTitle =
+    sendTargetDisabledReason && model && !showModel
+      ? `${sendTargetDisabledReason}\n${model}`
+      : sendTargetDisabledReason
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
@@ -217,7 +224,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const line = (
     <span
       className={cn('min-w-0 flex-1 truncate', modelChip && AGENT_ROW_TITLE_BESIDE_MODEL_CHIP)}
-      title={sendTargetDisabledReason ? undefined : rowTitle}
+      title={sendTargetDisabledReason ? undefined : hoverTitle}
     >
       <span className={leadClassName}>{shownNode(leadingText)}</span>
       {trailingText && (
@@ -243,6 +250,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             dotTitle={sendTargetDisabledReason ? null : undefined}
             tooltipSide="right"
             lineTitle={!sendTargetDisabledReason}
+            lineTitleDetail={model || undefined}
             lineClassName={modelChip ? AGENT_ROW_TITLE_BESIDE_MODEL_CHIP : undefined}
           />
           {modelChip}
@@ -330,7 +338,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason}
+      title={disabledTitle}
     >
       {rowBody}
     </div>

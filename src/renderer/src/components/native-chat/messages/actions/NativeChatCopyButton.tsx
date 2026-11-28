@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { Check, Copy } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { toCodeClipboardText } from '@/lib/clipboard/clipboard-line-endings'
 
@@ -53,18 +54,24 @@ export function NativeChatCopyButton({
     : (copyLabel ?? t('components.native-chat.copyMessage.copy', 'Copy message'))
 
   return (
-    <button
-      type="button"
-      onClick={handleCopy}
-      aria-label={label}
-      title={label}
-      className={cn(
-        'flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        copied && 'text-status-success',
-        className
-      )}
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={label}
+          className={cn(
+            'flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            copied && 'text-status-success',
+            className
+          )}
+        >
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   )
 }
