@@ -205,7 +205,8 @@ export function settleKeptCodexHelperTurns(
     const notify = (method: string, params: Record<string, unknown>) =>
       translator.handle({ type: 'notification', sessionId, threadId, method, params })
     notify('turn/started', { threadId, turn: { id: turnId, status: 'inProgress' } })
-    for (const item of items) {
+    // A background command still running was seeded as such; its end arrives live.
+    for (const item of items.filter((entry) => entry.status !== 'inProgress')) {
       notify('item/completed', { threadId, turnId, item })
     }
     const ended = typeof completedAt === 'number' ? { completedAt } : {}

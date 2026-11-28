@@ -120,8 +120,8 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
           lease.pendingOpens.size === 0 &&
           !this.turns.anyStartPending(threads()) &&
           !this.hasRunningTurn(threads())),
-      // A failed read may pass once the server recovers, which nothing announces: retry in 30 s.
-      lease.readsFailed ? 30_000 : null
+      // A failed read may pass once the server recovers, unannounced: retry, 30 s backing off to 5 min.
+      lease.readsFailed ? Math.min(30_000 * 2 ** lease.readRetries++, 300_000) : null
     )
   }
 

@@ -47,6 +47,8 @@ export class CodexSharedServerLease implements CodexAppServerConnection {
   handedOff = false
   /** A kept run's close couldn't list its loaded threads or read some thread's turn. */
   readsFailed = false
+  /** Timed retries so far while reads fail, for their backoff. */
+  readRetries = 0
   readonly unregister: () => void
   private closing: Promise<boolean> | null = null
   private closeAnnounced = false
