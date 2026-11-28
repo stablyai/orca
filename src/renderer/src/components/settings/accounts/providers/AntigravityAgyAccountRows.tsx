@@ -1,4 +1,6 @@
 import { AlertCircle, Trash2, UserPlus } from 'lucide-react'
+import { Trans } from 'react-i18next'
+import { i18n } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
@@ -241,7 +243,39 @@ export function AntigravityAgyAccountRows({
       )
     )
   }
-  return <>{terminalRows}</>
+  return (
+    <>
+      <AntigravityAccountRow
+        title={t('accounts.antigravity.cliUsageTitle', 'CLI usage')}
+        detail={
+          <>
+            <span>
+              <Trans
+                i18n={i18n}
+                defaults={t(
+                  'accounts.antigravity.cliUsageInstruction',
+                  'Enter <command>{{command}}</command> at the agy prompt in your terminal.',
+                  { command: '/usage' }
+                )}
+                values={{ command: '/usage' }}
+                components={{ command: <code /> }}
+              />
+            </span>
+            <a
+              className="text-foreground underline underline-offset-2"
+              href="https://antigravity.google/docs/cli/commands/usage"
+              target="_blank"
+              onClick={openAppHttpLinkFromAnchor}
+              rel="noopener noreferrer"
+            >
+              {t('accounts.antigravity.cliUsageHelp', 'Usage help')}
+            </a>
+          </>
+        }
+      />
+      {terminalRows}
+    </>
+  )
 }
 
 function ActionError({ message }: { message: string }): React.JSX.Element {
