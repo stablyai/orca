@@ -25,6 +25,7 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 - Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 - Rendered UI E2E checks need an explicit, reproducible viewport and state.
 - Screenshot presentational components without Electron: `pnpm fixtures:shot <id>` ([fixtures](docs/agents-md-refs/component-fixtures.md)).
+- On macOS, fixture Chromium launches require approved escalated execution outside the Codex sandbox, even headless.
 
 # Code Style
 
