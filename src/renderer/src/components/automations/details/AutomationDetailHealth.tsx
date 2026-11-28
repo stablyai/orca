@@ -4,7 +4,11 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import { summarizeAutomationRunUsage } from '../../../../../shared/automations/history/automation-usage-summary'
-import { formatAutomationDateTime, formatAutomationRelativeTime } from '../automation-page-parts'
+import {
+  formatAutomationDateTime,
+  formatAutomationNextRun,
+  formatAutomationRelativeTime
+} from '../automation-page-parts'
 import { getLocalAutomationLastRunSnapshot } from '../listing/automation-list-last-run'
 import type { AutomationLastRunTone } from '../../../../../shared/automation-last-run'
 import { formatAutomationCost, formatAutomationTokens } from '../runs/automation-usage-model'
@@ -114,17 +118,13 @@ export function AutomationDetailHealth({
 
   // An events-only automation has no next run, only the schedule no Orca reaches.
   const scheduled = hasAutomationSchedule(automation)
-  const nextRunRelative =
-    automation.enabled && scheduled
-      ? formatAutomationRelativeTime(automation.nextRunAt, now, t, intlLocale)
-      : null
   const nextRunValue = !automation.enabled
     ? t('auto.components.automations.AutomationsPage.paused', 'Paused')
     : !scheduled
       ? t('automations.botEvents.nextRun', 'Runs on events')
-      : (nextRunRelative ?? formatAutomationDateTime(automation.nextRunAt, t, intlLocale))
+      : formatAutomationNextRun(automation.nextRunAt, now, t, intlLocale)
   const nextRunDetail =
-    automation.enabled && nextRunRelative
+    automation.enabled && scheduled && automation.nextRunAt
       ? formatAutomationDateTime(automation.nextRunAt, t, intlLocale)
       : null
 

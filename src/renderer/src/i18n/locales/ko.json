@@ -19139,6 +19139,7 @@
           "orphanEntryLabel": "할당되지 않은 기존 자동화"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "예약 시간이 지났습니다",
           "never": "없음",
           "now": "방금",
           "runStatusPending": "대기 중",

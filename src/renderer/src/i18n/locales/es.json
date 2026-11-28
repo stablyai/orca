@@ -19414,6 +19414,7 @@
           "orphanEntryLabel": "Automatizaciones antiguas sin asignar"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Hora programada superada",
           "never": "Nunca",
           "now": "ahora mismo",
           "runStatusPending": "En cola",

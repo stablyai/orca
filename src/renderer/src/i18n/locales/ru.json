@@ -20466,6 +20466,7 @@
           "orphanEntryLabel": "Неназначенные устаревшие автоматизации"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Плановое время прошло",
           "never": "Никогда",
           "now": "только что",
           "runStatusPending": "В очереди",

@@ -58,9 +58,15 @@ export function formatAutomationRelativeTime(
 export function formatAutomationNextRun(
   value: number | null | undefined,
   now = Date.now(),
-  t?: Translate,
+  t: Translate = translate,
   intlLocale?: string
 ): string {
+  if (value && value < now) {
+    return t(
+      'auto.components.automations.automationPageParts.scheduledTimePassed',
+      'Scheduled time passed'
+    )
+  }
   return (
     formatAutomationRelativeTime(value, now, t, intlLocale) ??
     formatAutomationDateTime(value, t, intlLocale)

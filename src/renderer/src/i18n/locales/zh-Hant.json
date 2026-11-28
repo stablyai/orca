@@ -19696,6 +19696,7 @@
           "orphanEntryLabel": "未指派的舊版自動化"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "排程時間已過",
           "never": "從未",
           "now": "剛剛",
           "runStatusPending": "已排隊",

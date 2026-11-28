@@ -19914,6 +19914,7 @@
           "orphanEntryLabel": "Atanmamış eski otomasyonlar"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Planlanan saat geçti",
           "never": "Hiçbir zaman",
           "now": "az önce",
           "runStatusPending": "Kuyrukta",

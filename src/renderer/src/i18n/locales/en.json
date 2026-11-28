@@ -19932,6 +19932,7 @@
           "orphanEntryLabel": "Unassigned legacy automations"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Scheduled time passed",
           "never": "Never",
           "now": "now",
           "runStatusPending": "Queued",

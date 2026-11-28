@@ -18962,6 +18962,7 @@
           "orphanEntryLabel": "未割り当ての旧オートメーション"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "予定時刻を過ぎています",
           "never": "なし",
           "now": "たった今",
           "runStatusPending": "キュー待ち",

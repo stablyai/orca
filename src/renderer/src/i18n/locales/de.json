@@ -19914,6 +19914,7 @@
           "orphanEntryLabel": "Nicht zugewiesene ältere Automatisierungen"
         },
         "automationPageParts": {
+          "scheduledTimePassed": "Geplante Zeit überschritten",
           "never": "Nie",
           "now": "gerade eben",
           "runStatusPending": "In der Warteschlange",
