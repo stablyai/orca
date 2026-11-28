@@ -21,7 +21,7 @@ import type { AgentJournalTurnScope } from '../../../shared/agent-session/journa
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalTransactionalDatabase } from './database/journal-host-database'
-import type { JournalSqlDatabase } from './database/journal-sql-database'
+import type { SessionDatabase } from './protected-journal-wire'
 import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
 import type { JournalRowsRead } from './replay/journal-read-row'
 import type { JournalReducerState } from './projection/journal-reducer'
@@ -69,7 +69,7 @@ export type JournalPromptMutationInput = {
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
-  database: JournalSqlDatabase
+  database: SessionDatabase
   now?: () => number
   mintEpoch?: () => string
   recover?: { fence: number }

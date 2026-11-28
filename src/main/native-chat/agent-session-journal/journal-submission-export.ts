@@ -1,3 +1,4 @@
+import type { ProtectedJournalPolicy } from './protected-journal-wire'
 import { createHash, randomUUID } from 'node:crypto'
 import {
   closeSync,
@@ -18,8 +19,7 @@ import type {
 import {
   agentSessionAttachmentStoreRoot,
   AGENT_SESSION_ATTACHMENT_PART_FILE,
-  isAgentSessionAttachmentUploadId,
-  parseAgentSessionAttachmentStorePath
+  isAgentSessionAttachmentUploadId
 } from '../agent-session-attachments/agent-session-attachment-references'
 
 const MAX_EVENT_BYTES = 16 * 1024 * 1024
@@ -27,7 +27,10 @@ const MAX_EVENT_BYTES = 16 * 1024 * 1024
 type Enrollment = { botId: string; writerEpoch: string; workspaceId: string }
 const enrolled = new WeakMap<Database.Database, Enrollment>()
 
-export function openSubmissionExport(db: Database.Database): void {
+export function openSubmissionExport(
+  db: Database.Database,
+  expected?: ProtectedJournalPolicy
+): void {
   if (
     !db
       .prepare(
@@ -35,6 +38,9 @@ export function openSubmissionExport(db: Database.Database): void {
       )
       .get()
   ) {
+    if (expected) {
+      throw new Error('missing protected journal enrollment')
+    }
     return
   }
   const row = db
@@ -44,6 +50,17 @@ export function openSubmissionExport(db: Database.Database): void {
     .get()
   if (!row || row.schema_version !== 1) {
     throw new Error('invalid enrolled journal version')
+  }
+  if (
+    expected &&
+    (expected.botId !== row.bot_id ||
+      expected.writerEpoch !== row.writer_epoch ||
+      expected.workspaceId !== row.workspace_id ||
+      db
+        .prepare('SELECT 1 FROM journal_chat_state WHERE workspace_id<>? LIMIT 1')
+        .get(expected.workspaceId))
+  ) {
+    throw new Error('protected journal enrollment does not match the grant')
   }
   enrolled.set(db, {
     botId: String(row.bot_id),
@@ -67,6 +84,9 @@ CREATE TABLE IF NOT EXISTS journal_submission_export (
   UNIQUE(session_id,epoch,journal_sequence));
 CREATE INDEX IF NOT EXISTS journal_submission_export_family
   ON journal_submission_export(session_id,epoch,family_id,cursor);
+CREATE TABLE IF NOT EXISTS journal_export_upload_origins (
+  upload_id TEXT PRIMARY KEY,session_id TEXT NOT NULL,source_path TEXT NOT NULL,name TEXT NOT NULL,sha256 TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS journal_export_upload_chat ON journal_export_upload_origins(session_id);
 CREATE TABLE IF NOT EXISTS journal_export_blobs (digest TEXT PRIMARY KEY, content BLOB NOT NULL);
 `)
 }
@@ -144,17 +164,35 @@ export function recordSubmissionExport(
     if (block.type === 'text') {
       original.push({ type: 'text', text: block.text })
     } else if (block.type === 'image-ref' && block.path) {
-      const ref = parseAgentSessionAttachmentStorePath(
-        agentSessionAttachmentStoreRoot(stateDirectory),
-        block.path
-      )
-      if (!ref || !uploads.has(ref.uploadId)) {
-        throw new Error('unretained submission image')
+      const found = db
+        .prepare(
+          'SELECT upload_id FROM journal_export_upload_origins WHERE session_id=? AND source_path=?'
+        )
+        .get(target.sessionId, block.path)
+      if (!found) {
+        throw new Error('unbound protected upload')
       }
+      const ref = { uploadId: String(found.upload_id) }
       typedUploads.add(ref.uploadId)
       original.push({ type: 'image-ref', upload: ref.uploadId })
     } else {
       throw new Error('unsupported submission block')
+    }
+  }
+  const acceptedText = input.body.blocks
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+  const fileRefs = db
+    .prepare(
+      'SELECT upload_id FROM journal_export_upload_origins WHERE session_id=? AND instr(?,source_path)>0'
+    )
+    .all(target.sessionId, acceptedText)
+  for (const row of fileRefs) {
+    const upload = String(row.upload_id)
+    if (!typedUploads.has(upload)) {
+      original.push({ type: 'file-ref', upload })
+      typedUploads.add(upload)
     }
   }
   const body = JSON.stringify(original)
@@ -166,10 +204,21 @@ export function recordSubmissionExport(
   if (remaining < 0) {
     throw new Error('oversized submission export')
   }
-  if (uploads.size !== typedUploads.size) {
+  if ([...uploads].some((id) => !typedUploads.has(id))) {
     throw new Error('enrolled submissions require typed attachment references')
   }
   const attachments = retainedAttachments(db, stateDirectory, typedUploads, remaining)
+  for (const retained of attachments) {
+    const origin = JSON.parse(
+      readFileSync(join(stateDirectory, 'protected-upload-receipts', retained.upload), 'utf8')
+    )
+    if (origin.sha256 !== retained.sha256 || origin.sessionId !== target.sessionId) {
+      throw new Error('attachment receipt mismatch')
+    }
+    db.prepare(
+      'INSERT OR IGNORE INTO agent_session_attachment_claims(upload_id,session_id,claimed_at) VALUES(?,?,?)'
+    ).run(retained.upload, target.sessionId, savedAt)
+  }
   const predecessor =
     familyId === undefined
       ? undefined

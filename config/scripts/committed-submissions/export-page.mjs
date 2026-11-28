@@ -15,11 +15,12 @@ import {
   lstatSync,
   openSync,
   readFileSync,
+  renameSync,
   realpathSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { pathToFileURL } from 'node:url'
 
@@ -36,6 +37,20 @@ function syncDirectory(path) {
 }
 
 function assertOwned(path, directory = false, privateKey = false) {
+  for (let parent = dirname(resolve(path)); ; parent = dirname(parent)) {
+    const info = lstatSync(parent)
+    const stickyRoot = info.uid === 0 && (info.mode & 0o1000) !== 0
+    if (
+      !info.isDirectory() ||
+      (info.uid !== 0 && info.uid !== process.getuid()) ||
+      ((info.mode & 0o022) !== 0 && !stickyRoot)
+    ) {
+      throw new Error('unprotected export ancestry')
+    }
+    if (parent === '/') {
+      break
+    }
+  }
   const stat = lstatSync(path)
   if (
     realpathSync(path) !== resolve(path) ||
@@ -163,6 +178,29 @@ export function exportPage({ database, directory, key, after = 0, limit = 32 }) 
   } finally {
     db.close()
   }
+}
+
+/** The publication cursor is advisory; an immutable frame is durable before this checkpoint moves. */
+export function publishPending({ database, directory, key, checkpoint }) {
+  let after = 0
+  if (existsSync(checkpoint)) {
+    assertOwned(checkpoint)
+    after = Number(readFileSync(checkpoint, 'utf8'))
+  }
+  const result = exportPage({ database, directory, key, after, limit: 8 })
+  if (result.through !== after) {
+    const tmp = `${checkpoint}.${randomUUID()}.tmp`
+    const fd = openSync(tmp, 'wx', 0o600)
+    try {
+      writeFileSync(fd, String(result.through))
+      fsyncSync(fd)
+    } finally {
+      closeSync(fd)
+    }
+    renameSync(tmp, checkpoint)
+    syncDirectory(dirname(checkpoint))
+  }
+  return result
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

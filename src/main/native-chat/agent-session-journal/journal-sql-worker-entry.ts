@@ -72,12 +72,15 @@ const gate = { ms: 0 }
 async function open(): Promise<void> {
   try {
     mkdirSync(dirname(workerData.filename), { recursive: true })
-    if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
+    if (
+      !workerData.protectedEnrollment &&
+      workerData.filename === journalDomainDatabasePath(stateDirectory)
+    ) {
       await initializeJournalDomainDatabase(stateDirectory)
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
-    openSubmissionExport(db)
+    openSubmissionExport(db, workerData.protectedEnrollment)
     try {
       destinationMain = legacyDestinationMain(workerData.filename)
     } catch {

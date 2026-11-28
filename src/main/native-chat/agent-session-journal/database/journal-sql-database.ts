@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentSessionTabTableFromStored } from '../../../runtime/agent-session/records/agent-session-tab-table'
 import type { AgentSessionStoreState } from '../../../runtime/agent-session/records/agent-session-store-state'
-import { JournalSqlOwner } from '../journal-sql-owner'
+import { JournalSqlOwner, type JournalSqlOwnerOptions } from '../journal-sql-owner'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
 import { JournalSqlActivity, JournalSqlSendingChats } from '../journal-sql-activity'
@@ -71,10 +71,10 @@ export class JournalSqlDatabase {
 
   static async open(
     stateDirectory: string,
-    options: JournalSqlDatabaseOptions & { writerPath?: string }
+    options: JournalSqlDatabaseOptions & JournalSqlOwnerOptions
   ): Promise<JournalSqlDatabase> {
     const filename = journalDomainDatabasePath(stateDirectory)
-    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
+    const writer = JournalSqlOwner.forDomain(filename, stateDirectory, options)
     try {
       return new JournalSqlDatabase(writer, stateDirectory, await writer.opened(), options)
     } catch (error) {

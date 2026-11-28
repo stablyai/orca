@@ -1,3 +1,4 @@
+import { selectSessionDatabase } from '../../agent-session-journal/protected-journal-client'
 import { prWatchStorage } from '../../../github/pr-watch/pr-watch-storage'
 // Open and settle the crash boundary before any reader, command or child: damaged journals fail;
 // handed-over sends remain permanently unknown. Unhanded personal text becomes a paused card,
@@ -107,7 +108,7 @@ export async function openStructuredAgentSessionConversationJournal(
     kept || (options.acquisition && keptRunningProviderRelayPid(sessionId) !== null)
   const journal = await openAgentSessionJournal({
     identity,
-    database: deps.journalDatabase,
+    database: await selectSessionDatabase(identity, deps.journalDatabase),
     ...(kept ? {} : { recover: { fence } }),
     ...(keptWriter ? { keptWriter: true as const } : {}),
     onRecoveryFailure: ({ step, failure }) => {

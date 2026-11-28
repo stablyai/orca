@@ -26,7 +26,6 @@ import {
 
 const UPLOAD_MAX_CONCURRENT = 8
 const UPLOAD_IDLE_TTL_MS = 5 * 60 * 1000
-const NOT_FOUND = 'Attachment upload was not found'
 const NOT_AN_IMAGE = 'Not an attachment image'
 const PREVIEW_TOO_LARGE = 'file_too_large'
 
@@ -35,6 +34,8 @@ function isTooLarge(error: unknown): boolean {
 }
 
 type InFlightUpload = {
+  digest?: ReturnType<typeof createHash>
+  sessionId?: string
   callerKey: string
   uploadDir: string
   name: string
@@ -44,6 +45,13 @@ type InFlightUpload = {
 }
 
 export type AgentSessionAttachmentStoreOptions = {
+  committed?: (
+    sessionId: string,
+    uploadId: string,
+    name: string,
+    path: string,
+    expectedHash: string
+  ) => Promise<void>
   hasSession: (sessionId: string) => boolean
 }
 
@@ -52,7 +60,7 @@ export class AgentSessionAttachmentStore {
     maxConcurrent: UPLOAD_MAX_CONCURRENT,
     ttlMs: UPLOAD_IDLE_TTL_MS,
     tooManyMessage: 'Too many attachment uploads are in progress',
-    notFoundMessage: NOT_FOUND,
+    notFoundMessage: 'Attachment upload was not found',
     onExpire: (upload) => void removeQuietly(upload.uploadDir)
   })
 
@@ -83,12 +91,15 @@ export class AgentSessionAttachmentStore {
 
   /** Only after the caller has verified the destination on this host. */
   async stageUpload(args: {
+    sessionId?: string
     callerKey: string
     name: string
     byteLength: number
   }): Promise<{ uploadId: string }> {
     const name = sanitizeAgentSessionAttachmentName(args.name)
     const uploadId = this.uploads.create((id) => ({
+      digest: args.sessionId && this.options.committed ? createHash('sha256') : undefined,
+      sessionId: args.sessionId,
       callerKey: args.callerKey,
       uploadDir: join(this.rootDir, id),
       name,
@@ -126,6 +137,7 @@ export class AgentSessionAttachmentStore {
     upload.writing = true
     try {
       await appendFile(join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE), bytes)
+      upload.digest?.update(bytes)
       upload.receivedLength = nextLength
     } finally {
       upload.writing = false
@@ -154,6 +166,15 @@ export class AgentSessionAttachmentStore {
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
       )
+      if (upload.sessionId && upload.digest) {
+        await this.options.committed?.(
+          upload.sessionId,
+          args.uploadId,
+          upload.name,
+          finalPath,
+          upload.digest.digest('hex')
+        )
+      }
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
       await removeQuietly(upload.uploadDir)
@@ -231,7 +252,7 @@ export class AgentSessionAttachmentStore {
     const upload = this.uploads.peek(args.uploadId)
     if (upload) {
       if (upload.callerKey !== args.callerKey) {
-        throw new Error(NOT_FOUND)
+        throw new Error('Attachment upload was not found')
       }
       this.uploads.delete(args.uploadId)
       await removeQuietly(upload.uploadDir)
@@ -287,7 +308,7 @@ export class AgentSessionAttachmentStore {
     const upload = this.uploads.require(uploadId)
     // Do not reveal another caller's upload existence.
     if (upload.callerKey !== callerKey) {
-      throw new Error(NOT_FOUND)
+      throw new Error('Attachment upload was not found')
     }
     return upload
   }

@@ -81,6 +81,14 @@ export type JournalSqlMaintenance =
       durable: boolean
       destination?: LegacyDestinationIdentity
     }
+  | {
+      kind: 'protected-upload-origin'
+      uploadId: string
+      sessionId: string
+      sourcePath: string
+      name: string
+      sha256: string
+    }
   | { kind: 'records-install' }
   | { kind: 'wsl-workspace-rekey'; worktreeIds: readonly (readonly [string, string])[] }
   | JournalForkStageOperation
@@ -182,6 +190,32 @@ export function applyJournalSqlMaintenance(
 
     case 'wsl-workspace-rekey':
       return rekeyWslDriveUncChats(db, operation.worktreeIds)
+    case 'protected-upload-origin': {
+      db.prepare(
+        'INSERT OR IGNORE INTO journal_export_upload_origins(upload_id,session_id,source_path,name,sha256) VALUES(?,?,?,?,?)'
+      ).run(
+        operation.uploadId,
+        operation.sessionId,
+        operation.sourcePath,
+        operation.name,
+        operation.sha256
+      )
+      const match = db
+        .prepare(
+          'SELECT 1 FROM journal_export_upload_origins WHERE upload_id=? AND session_id=? AND source_path=? AND name=? AND sha256=?'
+        )
+        .get(
+          operation.uploadId,
+          operation.sessionId,
+          operation.sourcePath,
+          operation.name,
+          operation.sha256
+        )
+      if (!match) {
+        throw new Error('conflicting protected upload binding')
+      }
+      return null
+    }
     case 'records-install': {
       const records = installAgentSessionStoreRows(db)
       return {

@@ -1,3 +1,4 @@
+import { retainSessionUpload } from '../../../native-chat/agent-session-journal/protected-journal-client'
 // Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
 import { mkdirSync } from 'node:fs'
@@ -40,6 +41,13 @@ export function installAgentSessionAttachments(deps: {
     })
   }
   const attachments = new AgentSessionAttachmentStore(root, {
+    committed: async (id, upload, name, path, expectedHash) => {
+      const record = deps.store.getRecord(id)
+      if (!record) {
+        throw new Error('unknown upload session')
+      }
+      await retainSessionUpload(record.location.workspaceId, id, upload, name, path, expectedHash)
+    },
     hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null
   })
   setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {

@@ -1,3 +1,4 @@
+import type { ProtectedJournalPolicy } from './protected-journal-wire'
 import type { Worker } from 'node:worker_threads'
 import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import {
@@ -17,6 +18,11 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+
+export type JournalSqlOwnerOptions = {
+  writerPath?: string
+  protectedEnrollment?: ProtectedJournalPolicy
+}
 
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
@@ -52,17 +58,27 @@ export class JournalSqlOwner {
     this.fail(error)
   }
 
+  static forDomain(filename: string, stateDirectory: string, options: JournalSqlOwnerOptions) {
+    return new JournalSqlOwner(
+      filename,
+      stateDirectory,
+      options.writerPath,
+      options.protectedEnrollment
+    )
+  }
+
   constructor(
     filename: string,
     stateDirectory: string,
     workerPath = resolveWorkerThreadEntryPath(
       currentWorkerEntryLayout(__dirname),
       'journal-sql-worker-entry.js'
-    )
+    ),
+    protectedEnrollment?: ProtectedJournalPolicy
   ) {
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-writer',
-      workerData: { filename, stateDirectory },
+      workerData: { filename, stateDirectory, protectedEnrollment },
       execArgv: []
     })
     this.worker.on('message', (response: JournalSqlResponse) => this.receive(response))

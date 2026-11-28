@@ -16,7 +16,7 @@ import type {
 import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
 import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
 import { journalWroteBeforeOpen, sameJournalCursor } from './replay/journal-cursor'
-import type { JournalSqlDatabase } from './database/journal-sql-database'
+import type { SessionDatabase } from './protected-journal-wire'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterOperation, JournalWriterTarget } from './journal-writer-command'
@@ -73,7 +73,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   readonly epochReplacements = new JournalEpochReplacements()
 
   private constructor(
-    private readonly database: JournalSqlDatabase,
+    private readonly database: SessionDatabase,
     readonly identity: AgentSessionJournalIdentity,
     private target: JournalWriterTarget,
     private readonly now: () => number,
