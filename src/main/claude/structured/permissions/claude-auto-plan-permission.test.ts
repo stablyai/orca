@@ -212,3 +212,16 @@ it("sends no re-Ask for a kept agent's owed Approve for me once its send is abor
   await setImmediate()
   expect(writes).toEqual(['auto'])
 })
+
+it("keeps a kept agent's owed Ask for the next message when its write is withheld", async () => {
+  const { session, writes } = permissionTestSession('auto')
+  await openPermissionTestSession(session, 'auto')
+  finishPermissionCatchUp(session)
+  session.keptModeOwed = 'default'
+  const send = new AbortController()
+  send.abort()
+
+  await applyKeptClaudeModeOwed(session, undefined, send.signal).catch(() => {})
+  expect(writes).toEqual([])
+  expect(session.keptModeOwed).toBe('default')
+})

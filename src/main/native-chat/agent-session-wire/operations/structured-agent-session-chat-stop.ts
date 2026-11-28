@@ -214,14 +214,14 @@ export function mutateWithChatStop<TValue>(
       reached = true
     }
     // A Stop that ends the captured child cuts its permission writes at its receipt; an interrupt
-    // or a withdrawal keeps the child, which keeps them.
-    if (
+    // or a withdrawal keeps the child, which keeps them, as does a child whose end then failed.
+    const session = context.sessions.get(sessionId)
+    const release =
       (target.reach === 'close' || target.reach === 'starting') &&
       target.child &&
-      context.sessions.get(sessionId)?.child === target.child
-    ) {
-      cutChildPermissionWrites(context.deps.adapter, sessionId, target.child)
-    }
+      session?.child === target.child
+        ? cutChildPermissionWrites(context.deps.adapter, sessionId, session)
+        : undefined
     // Accepted Stop invalidates claims made even after its early abort.
     if (flight && (target.queued || target.reach === 'withdraw' || target.reach === 'starting')) {
       flight.abort()
@@ -263,6 +263,8 @@ export function mutateWithChatStop<TValue>(
         error
       )
       throw error
+    } finally {
+      release?.()
     }
   }
   const result = mutateStructuredAgentSession(

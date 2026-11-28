@@ -313,3 +313,19 @@ it('holds a confirmed startup warning while Plan is active', async () => {
   expect(writes).toEqual(['default'])
   expect(rows).toEqual([settingsWarning])
 })
+
+it('posts no warning from a settings reply or frame that lands after the child is cut', async () => {
+  const settings = Promise.withResolvers<unknown>()
+  const { session, rows, writes, frame } = permissionTestSession('auto')
+  await openPermissionTestSession(session, 'auto', () => settings.promise)
+  finishPermissionCatchUp(session)
+  frame('init', 'default')
+  // An admitted close holds its cut while the child ends.
+  session.permissionDispatchCuts = 1
+
+  settings.resolve(settingsOff)
+  await session.startupSettings
+  frame('status', 'default')
+  expect(rows).toEqual([])
+  expect(writes).toEqual([])
+})

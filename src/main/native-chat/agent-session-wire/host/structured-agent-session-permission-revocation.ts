@@ -1,58 +1,46 @@
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
-import type {
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChildIdentity
-} from './structured-agent-session-host-types'
+import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 
 type Adapter = Pick<StructuredAgentSessionAdapter, 'setPermissionDispatchRevoked'>
+type Release = () => void
 
-/** At an admitted cut of this exact child: its queued permission-mode writes never reach it. */
+/** At an admitted cut of this exact child: its queued permission-mode writes never reach it.
+ *  The release undoes only this cut, and only while the same child is live and not closing (its
+ *  end failed or never began); other cuts of the child still hold. */
 export function cutChildPermissionWrites(
   adapter: Adapter,
   sessionId: string,
-  child: StructuredAgentSessionProviderChildIdentity | null | undefined
-): void {
-  if (child?.generation) {
-    adapter.setPermissionDispatchRevoked?.(sessionId, child.fence, child.generation, true)
-  }
-}
-
-/** Runs an end of the child the host already cut. If it fails before the child begins closing
- *  (or, with `always`, never begins it at all), the child is still live and in use, so its
- *  permission writes are its own again. */
-export async function endCutChild<T>(
-  adapter: Adapter,
-  sessionId: string,
-  session: Pick<StructuredAgentSessionHostSession, 'child'> | undefined,
-  run: () => Promise<T>,
-  always = false
-): Promise<T> {
+  session: Pick<StructuredAgentSessionHostSession, 'child'> | undefined
+): Release {
   const child = session?.child
-  const restore = () => {
-    if (child?.generation && session?.child === child && !child.close) {
-      adapter.setPermissionDispatchRevoked?.(sessionId, child.fence, child.generation, false)
-    }
+  const generation = child?.generation
+  if (!child || !generation) {
+    return () => {}
   }
-  try {
-    const ended = await run()
-    if (always) {
-      restore()
+  adapter.setPermissionDispatchRevoked?.(sessionId, child.fence, generation, true)
+  let held = true
+  return () => {
+    if (held && session.child === child && !child.close) {
+      held = false
+      adapter.setPermissionDispatchRevoked?.(sessionId, child.fence, generation, false)
     }
-    return ended
-  } catch (error) {
-    restore()
-    throw error
   }
 }
 
-/** `endCutChild` run in a session's lane, on the child the lane finds. */
-export function serializeCutEnd(
-  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>,
-  adapter: () => Adapter,
-  sessions: ReadonlyMap<string, Pick<StructuredAgentSessionHostSession, 'child'>>
-) {
-  return <T>(sessionId: string, always: boolean, end: () => Promise<T>): Promise<T> =>
-    serialize(sessionId, () =>
-      endCutChild(adapter(), sessionId, sessions.get(sessionId), end, always)
-    )
+/** Runs an end whose cuts are released when it settles: after a real end the child is gone or
+ *  closing and nothing is released; after a failed one the live child keeps its writes. */
+export async function releasingCuts<T>(
+  first: Release | undefined,
+  run: (own: (release: Release | false | undefined) => void) => Promise<T>
+): Promise<T> {
+  const releases = first ? [first] : []
+  try {
+    return await run((release) => {
+      if (release) {
+        releases.push(release)
+      }
+    })
+  } finally {
+    releases.forEach((release) => release())
+  }
 }

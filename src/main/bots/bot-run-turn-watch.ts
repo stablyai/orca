@@ -9,7 +9,7 @@ import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-s
 import { structuredAgentSessionTurnFailureLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-session-send-turn'
 import { readAgentJournalTurnOutcome } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { pendCutChildPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
+import { pendingStructuredAgentSessionPrompt } from '../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { createKeyedTrailingEdgeCoalescer } from '../runtime/client/events/keyed-trailing-edge-coalescer'
 
@@ -109,7 +109,7 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
       (item) =>
         item.turnScope?.kind === 'turn' &&
         item.turnScope.turnItemId === sent.itemId &&
-        pendCutChildPrompt(work.scope)(item)
+        pendingStructuredAgentSessionPrompt(work.scope)(item)
     )
   if (sent.turn.state === 'running' || (outcome === 'success' && asking)) {
     return null

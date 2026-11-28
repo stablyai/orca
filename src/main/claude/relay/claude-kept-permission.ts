@@ -56,7 +56,7 @@ async function askKeptBypass(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<boolean> {
   // A newer write than any older ladder's: that ladder's late fallback stays unsent.
   const request = claimClaudePermissionModeRequest(session)
   // The same owner check as a ladder's: a cut child or an aborted send sends and records nothing.
@@ -64,14 +64,15 @@ async function askKeptBypass(
   try {
     await session.connection.setPermissionMode('bypassPermissions', { timeoutMs, admits })
     if (!admits()) {
-      return
+      return false
     }
     session.bypassAccepted = true
     session.bypassDisabled = false
     session.bypassRefusal = undefined
+    return true
   } catch (error) {
     if (!admits()) {
-      return
+      return false
     }
     const refusal = claudeBypassRefusalOf(error)
     if (refusal === null) {
@@ -86,13 +87,14 @@ async function askKeptBypass(
 /** A live pick, numbered by the chat's pick sequencer and recorded before its write, so a message
  *  sent before Claude answers writes the same mode behind it; each write goes out at the pick, so
  *  Claude answers picks in order and the last one wins. A pick a newer one replaced records
- *  nothing after its answer; a failed switch leaves Ask owed to the next message. */
+ *  nothing after its answer; a failed switch leaves Ask owed to the next message. False: the
+ *  write was withheld or taken over, so nothing reached Claude. */
 async function applyPick(
   session: ClaudeSession,
   mode: PermissionMode,
   timeoutMs: number | undefined,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<boolean> {
   // Messages, leaving Plan, a refused Full access and the next reattach all read the pick now.
   pickClaudePermissionMode(session, mode)
   const holds = claudePermissionPickHolds(session)
@@ -100,18 +102,18 @@ async function applyPick(
   if (claudeInPlan(session) && !claudeLeavingPlanOnApproval(session)) {
     // Plan stays until the user leaves it; leaving it writes this mode. An approved plan's exit
     // in flight is already leaving Plan, so the pick goes out now behind it.
-    return
+    return true
   }
   try {
     if (mode === 'bypassPermissions') {
-      await askKeptBypass(session, timeoutMs, signal)
-      return
+      return await askKeptBypass(session, timeoutMs, signal)
     }
     const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs, signal })
     // Undefined: a newer request or the child's end took the write over; it records nothing.
     if (applied !== undefined) {
       recordClaudeBuildMode(session, holds, applied)
     }
+    return applied !== undefined
   } catch (error) {
     if (holds() && mode === 'bypassPermissions') {
       // Unknown or refused: the next message asks again (a refusal takes the fallback).
@@ -137,7 +139,10 @@ export function askKeptBypassLeavingPlan(
     session.launchIntent?.permissionMode === 'bypassPermissions' &&
     session.bypassAccepted !== true &&
     session.bypassDisabled !== true
-    ? askKeptBypass(session, timeoutMs, signal).catch(() => {})
+    ? askKeptBypass(session, timeoutMs, signal).then(
+        () => {},
+        () => {}
+      )
     : undefined
 }
 
@@ -207,7 +212,10 @@ export async function applyKeptClaudeModeOwed(
     return
   }
   try {
-    await applyPick(session, owed, timeoutMs, signal)
+    // A withheld write (an aborted send, a cut child) still owes the mode to the next message.
+    if (!(await applyPick(session, owed, timeoutMs, signal))) {
+      return
+    }
   } catch (error) {
     if (owed !== 'bypassPermissions') {
       throw error

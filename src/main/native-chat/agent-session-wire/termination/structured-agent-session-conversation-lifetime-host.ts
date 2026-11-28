@@ -58,17 +58,18 @@ export function cutClosingStructuredAgentSession(
   host: StructuredAgentSessionConversationLifetimeHost,
   sessionId: string,
   admit?: () => boolean
-): void {
+): () => void {
   if (admit && !admit()) {
     throw new Error('The user kept this chat open.')
   }
   const session = host.sessions.get(sessionId)
   const { deps, runtimeState } = host.context()
-  cutChildPermissionWrites(deps.adapter, sessionId, session?.child)
+  const release = cutChildPermissionWrites(deps.adapter, sessionId, session)
   if (session?.journal) {
     closeStructuredAgentSessionHandovers(session.journal)
   }
   if (deps.store.selectWritableRecord(sessionId).kind !== 'unreadable') {
     runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
   }
+  return release
 }

@@ -13,6 +13,7 @@ import {
   claudeInPlan,
   type ClaudeBypassFacts
 } from './claude-full-access-refusal'
+import { claudeChildPermissionCut } from './claude-permission-dispatch-authority'
 
 export type ClaudeNoticeState = Pick<
   ClaudeSession,
@@ -150,6 +151,10 @@ export function claimClaudeFullAccessRefusalNotice(
   session: ClaudeSession,
   fallback?: ClaudeFullAccessFallback
 ): ClaudeFullAccessRefusalNotice | null {
+  // A settings reply or late frame after the child's cut speaks for no live child.
+  if (claudeChildPermissionCut(session)) {
+    return null
+  }
   if (!session.initialization.startup.opened() || !session.fullAccessRefusalNotices) {
     if (fallback === 'unconfirmed' && session.fullAccessRefusalNotices) {
       session.fullAccessRefusalNoticeId = PENDING_FULL_ACCESS_UNCONFIRMED

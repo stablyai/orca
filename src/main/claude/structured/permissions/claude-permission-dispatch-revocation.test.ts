@@ -113,3 +113,20 @@ it('cuts only the exact child: a later acquisition under the same chat keeps its
   await setImmediate()
   expect(next.writes).toEqual(['auto'])
 })
+
+it('holds overlapping cuts until each releases', async () => {
+  const { session, writes } = await inPlan('auto')
+  const cut = revokeClaudePermissionDispatch(new Map([['chat', session]]))
+  // A close and a sleep both cut the child; the sleep's end fails and releases only its own.
+  cut('chat', 1, 'process', true)
+  cut('chat', 1, 'process', true)
+  cut('chat', 1, 'process', false)
+  approvePlan(session)
+  await setImmediate()
+  expect(writes).toEqual([])
+
+  cut('chat', 1, 'process', false)
+  approvePlan(session)
+  await setImmediate()
+  expect(writes).toEqual(['auto'])
+})

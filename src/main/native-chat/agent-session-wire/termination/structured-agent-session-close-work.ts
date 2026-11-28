@@ -15,12 +15,14 @@ export type StructuredAgentSessionCloseWork = {
   state: 'idle' | 'busy' | 'unknown'
 }
 
-/** Caller holds host serialization; the resource decision and cut finish before the journal lane releases. */
+/** Caller holds host serialization; the resource decision and cut finish before the journal lane releases.
+ *  Resolves to the cut's release, for an end that then fails. */
 export async function admitClosingStructuredAgentSession(
   host: StructuredAgentSessionConversationLifetimeHost,
   sessionId: string,
   admit: (work: StructuredAgentSessionCloseWork) => boolean
-): Promise<void> {
+): Promise<() => void> {
+  let release = () => {}
   const session = host.sessions.get(sessionId)
   const child = session?.child
   const { runtimeState, deps } = host.context()
@@ -30,12 +32,13 @@ export async function admitClosingStructuredAgentSession(
     runtimeState.acquireAborts.has(sessionId) ||
     host.childWorkOpen(sessionId) ||
     (!!child && (child.phase === 'starting' || !!child.close))
-  const finish = (state: StructuredAgentSessionCloseWork['state']) =>
-    cutClosingStructuredAgentSession(
+  const finish = (state: StructuredAgentSessionCloseWork['state']) => {
+    release = cutClosingStructuredAgentSession(
       host,
       sessionId,
       () => admit({ sessionId: current() ? sessionId : null, state }) && current()
     )
+  }
   if (!session) {
     const record = deps.store.getConversation(sessionId)
     finish(
@@ -46,7 +49,7 @@ export async function admitClosingStructuredAgentSession(
         ? 'idle'
         : 'unknown'
     )
-    return
+    return release
   }
   const journal = session.journal
   const capture = () =>
@@ -115,4 +118,5 @@ export async function admitClosingStructuredAgentSession(
   } else {
     finish('unknown')
   }
+  return release
 }
