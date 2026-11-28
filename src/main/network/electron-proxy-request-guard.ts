@@ -9,7 +9,9 @@ export function installElectronProxyRequestGuard(proxySession: Session): void {
     if (typeof readiness === 'boolean') {
       answer(readiness)
     } else {
-      void readiness.then(answer)
+      // A rejected readiness must fail closed like a synchronous false: unanswered callbacks
+      // would hang every intercepted request, and the rejection must not escape unhandled (#43913).
+      void readiness.then(answer, () => answer(false))
     }
   })
 }
