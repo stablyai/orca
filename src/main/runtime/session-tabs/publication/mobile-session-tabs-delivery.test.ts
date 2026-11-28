@@ -12,11 +12,12 @@ const WORKTREE = 'repo::/wt'
 function setup() {
   const snapshots = new MobileSessionSnapshotsByWorktree()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delivery reads only the worktree key.
-  snapshots.set(WORKTREE, {
+  const initial = {
     worktree: WORKTREE,
     snapshotVersion: 1,
     tabs: []
-  } as unknown as RuntimeMobileSessionTabsSnapshot)
+  } as unknown as RuntimeMobileSessionTabsSnapshot
+  snapshots.set(WORKTREE, initial)
   const delivered: number[] = []
   const subscription: MobileSessionTabSubscription = {
     listener: () => {},
@@ -40,15 +41,19 @@ function setup() {
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the frame's worktree is all delivery reads.
   const frame = { worktree: WORKTREE } as RuntimeMobileSessionTabsResult
-  return { snapshots, delivered, deliver, frame }
+  return { snapshots, delivered, deliver, frame, initial }
 }
 
 describe('mobile session tabs delivery', () => {
   // A status change no listener reads schedules no replacement, so it must not retire the queued frame.
   it('keeps a queued frame across an unpublished version bump', async () => {
-    const { snapshots, delivered, deliver, frame } = setup()
+    const { snapshots, delivered, deliver, frame, initial } = setup()
     const sent = deliver(frame, 7)
     snapshots.oweUnpublishedVersion(WORKTREE)
+    // Another client's read pays the bump before the queued frame is delivered.
+    snapshots.payOwedVersion(WORKTREE, () =>
+      snapshots.set(WORKTREE, { ...initial, snapshotVersion: 2 })
+    )
     await sent
     expect(delivered).toEqual([7])
   })
