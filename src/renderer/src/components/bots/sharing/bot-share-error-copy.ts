@@ -5,6 +5,8 @@ import {
   BOT_SHARE_ERRORS,
   type BotShareErrorCode
 } from '../../../../../shared/bots/bot-share-errors'
+import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { botErrorMessage } from '../bot-presentation'
 
 function copyFor(code: BotShareErrorCode): string {
@@ -66,7 +68,22 @@ export function botShareErrorCode(cause: unknown): BotShareErrorCode | null {
   return CODES.find((code) => message.includes(code)) ?? null
 }
 
+/** The bot's host has no Orca Cloud (a headless server), so it can't publish the link. */
+function hostRefusalCopy(cause: unknown): string | null {
+  if (!(cause instanceof RuntimeRpcCallError) || cause.code !== SHARING_UNAVAILABLE_ON_HOST_CODE) {
+    return null
+  }
+  return translate(
+    'bots.share.error.hostUnavailable',
+    "This bot runs on a headless Orca server, which can't publish share links yet. Run the bot on a desktop Orca app to share it."
+  )
+}
+
 export function botShareErrorMessage(cause: unknown): string {
+  const refusal = hostRefusalCopy(cause)
+  if (refusal) {
+    return refusal
+  }
   const code = botShareErrorCode(cause)
   return code ? copyFor(code) : botErrorMessage(cause)
 }

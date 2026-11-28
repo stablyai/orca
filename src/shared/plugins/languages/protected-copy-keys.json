@@ -909,6 +909,7 @@
     "bots.share.error.avatarRefused",
     "bots.share.error.blocked",
     "bots.share.error.expired",
+    "bots.share.error.hostUnavailable",
     "bots.share.error.moved",
     "bots.share.error.noteSecret",
     "bots.share.error.prepareAgain",

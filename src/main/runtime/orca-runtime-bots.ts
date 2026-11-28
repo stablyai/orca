@@ -40,6 +40,7 @@ import type { BotChangeScope } from '../../shared/bots/bot-change-scope'
 import type { BotChatTreeIndex } from '../bots/bot-chat-tree-index'
 import { BotChatTreeWorkerCache } from '../bots/bot-chat-tree-worker-cache'
 import { pairedBotRosterCache } from '../bots/paired-bot-rosters'
+import { SharingUnavailableOnHostError } from '../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import type { DispatchRowChange } from './orchestration/db/worker-status-notice'
 import type { AdmittedMessage } from '../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { isStructuredAttentionMuted } from './agent-session/lifecycle/structured-agent-session-mobile-attention'
@@ -139,7 +140,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */
   botShares(): BotShareService {
     if (!this.botShareClient) {
-      throw new Error('Sharing a bot needs the Orca desktop app.')
+      // A headless host has no cloud client, so it refuses the way it refuses any cloud sharing.
+      throw new SharingUnavailableOnHostError()
     }
     this.botShareService ??= new BotShareService({
       ...this.botShareClient,
