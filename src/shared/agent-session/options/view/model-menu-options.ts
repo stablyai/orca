@@ -1,6 +1,7 @@
 import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
 import type { AgentSessionModelOption } from '../model-catalog/agent-session-model-option'
 import type { AgentSessionOptionCatalog } from '../catalog-providers/agent-session-option-catalog-types'
+import { piModelDisplayLabel } from '../catalog-providers/agent-session-option-catalog-pi'
 import {
   applyStructuredAgentSessionModelCatalog,
   commitStructuredAgentSessionOptionValues,
@@ -88,16 +89,17 @@ export function modelMenuOptions(
       : (state.catalog?.models ?? []).map((model) => {
           const live = liveById.get(model.id)
           const effort = model.options.find((option) => option.id === 'effort')?.kind
-          return (
-            live ?? {
-              id: model.id,
-              label: model.label,
-              description: model.description,
-              isDefault: model.isDefault === true,
-              efforts: effort?.type === 'select' ? effort.choices : [],
-              ...(effort?.type === 'select' ? { defaultEffort: effort.defaultValue } : {})
-            }
-          )
+          const row = live ?? {
+            id: model.id,
+            label: model.label,
+            description: model.description,
+            isDefault: model.isDefault === true,
+            efforts: effort?.type === 'select' ? effort.choices : [],
+            ...(effort?.type === 'select' ? { defaultEffort: effort.defaultValue } : {})
+          }
+          return input.agent === 'pi'
+            ? { ...row, label: piModelDisplayLabel(row.id, row.label) }
+            : row
         })
   const savedModel = input.saved?.model
   const descriptors = structuredAgentSessionShownSnapshot(state).map((descriptor) =>

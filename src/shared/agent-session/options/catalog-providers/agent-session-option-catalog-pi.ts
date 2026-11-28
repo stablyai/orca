@@ -8,6 +8,12 @@ export function isPiModelOptionId(value: string): boolean {
   return slash > 0 && slash < value.length - 1
 }
 
+export function piModelDisplayLabel(id: string, label: string): string {
+  return label !== id && isPiModelOptionId(id)
+    ? `${label} (${id.slice(0, id.indexOf('/'))})`
+    : label
+}
+
 // Why: terminal launches need Pi's CLI flags; Pi chats keep applying picks over RPC.
 export const PI_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
