@@ -1380,7 +1380,7 @@
 1 src/main/startup/serve-launch/serve-user-data-path-guard.ts
 4 src/main/startup/shell-environment/windows-shell-path-hydration.ts
 1 src/main/startup/uninstall/agent-hooks-uninstall-preflight.ts
-2 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
+1 src/main/startup/uninstall/wsl-holder-uninstall-preflight.ts
 3 src/main/startup/windows-install-permissions/windows-install-dir-acl-probe.ts
 13 src/main/startup/windows-install-permissions/windows-install-dir-acl-recovery.ts
 4 src/main/startup/windows-install-permissions/windows-install-dir-package-acl-grant.ts
@@ -1468,7 +1468,8 @@
 3 src/main/wsl/discovery/wsl-availability.ts
 2 src/main/wsl/discovery/wsl-console-running-distros.ts
 2 src/main/wsl/discovery/wsl-distro-boot-id.ts
-4 src/main/wsl/discovery/wsl-distro-holder.ts
+2 src/main/wsl/discovery/wsl-distro-holder-command.ts # moved from wsl-distro-holder.ts with spawnDetachedHolder (cached wsl.exe path, interop cwd stat)
+2 src/main/wsl/discovery/wsl-distro-holder.ts
 4 src/main/wsl/discovery/wsl-installation.ts
 1 src/main/wsl/discovery/wsl-registered-distro-fallback.ts
 2 src/main/wsl/execution/wsl-exe-process.ts
@@ -1491,15 +1492,16 @@
 8 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
-4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
+1 src/main/wsl/host-lifecycle/wsl-host-account-migration.ts # per user Connect of an unpinned host after a mismatch: one root wsl.exe transport; its only sync step is the cached wsl.exe existsSync
+3 src/main/wsl/host-lifecycle/wsl-host-connector.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
 1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
-1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
+1 src/main/wsl/orcad/wsl-orcad-account-facts.ts # per connect of a pinned host: one default-user wsl.exe transport; its only sync step is the cached wsl.exe existsSync
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts
-7 src/main/wsl/orcad/wsl-orcad-deploy.ts
+6 src/main/wsl/orcad/wsl-orcad-deploy.ts
 1 src/main/wsl/orcad/wsl-orcad-failed-install-removal.ts
 2 src/main/wsl/orcad/wsl-orcad-host-transport.ts
 5 src/main/wsl/orcad/wsl-orcad-instance-adoption.ts
