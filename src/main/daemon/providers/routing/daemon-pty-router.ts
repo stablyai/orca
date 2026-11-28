@@ -79,7 +79,7 @@ export class DaemonPtyRouter implements IPtyProvider {
       // Another generation's exit for a reused ID must not unroute its live owner.
       (id, adapter) => {
         this.ownerResolver.forgetRoute(id, adapter)
-        this.legacyIdleRetirement.schedule(adapter)
+        this.legacyIdleRetirement.noteActivity(adapter)
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
