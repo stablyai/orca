@@ -18,7 +18,7 @@ type AgentCliUpdateDefinition = {
   parseVersion?: typeof parseCliVersion
   /** Its launcher runs a newer copy from elsewhere, so an unchanged file doesn't mean an unchanged version. */
   updatesOutsideLauncher?: true
-  latest: (installed: string) => AgentCliReleaseSource
+  latest: (installed: string, realPath: string) => AgentCliReleaseSource
   plan: (installed: string, realPath: string) => AgentCliUpdatePlan
 }
 
@@ -30,6 +30,8 @@ const selfUpdate = (...args: string[]): (() => AgentCliUpdatePlan) => {
 
 // `codex update` arrived in 0.126.0; older builds are updated by hand.
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
+// Earlier Pi releases' update command could only update extension packages.
+const PI_SELF_UPDATE_SINCE = '0.70.3'
 // Earlier releases read `qwen update` as a prompt and run it.
 const QWEN_UPDATE_COMMAND_SINCE = '0.20.0'
 // Below 2.0.0 is the archived Python CLI, which Kimi Code replaces rather than updates.
@@ -68,6 +70,30 @@ function manualCodexUpdateCommand(realPath: string): string {
   )
 }
 
+function piPackage(realPath: string): string {
+  return /(?:^|[/\\])node_modules[/\\]@mariozechner[/\\]pi-coding-agent[/\\]/i.test(realPath)
+    ? '@mariozechner/pi-coding-agent'
+    : '@earendil-works/pi-coding-agent'
+}
+
+function piUpdatePlan(installed: string, realPath: string): AgentCliUpdatePlan {
+  const brew = packageManagerPlan(homebrewUpgradeCommand('pi-coding-agent', realPath))
+  if (brew) {
+    return brew
+  }
+  if (compareAppVersions(installed, PI_SELF_UPDATE_SINCE) < 0) {
+    const manager = realPath.replaceAll('\\', '/').includes('/install/global/node_modules/')
+      ? 'bun'
+      : 'npm'
+    return {
+      runnable: false,
+      command: `${manager} install -g --ignore-scripts ${piPackage(realPath)}@latest`
+    }
+  }
+  // Pi chooses the updater for its managed launcher or global package manager.
+  return { runnable: true, args: ['update', '--self'] }
+}
+
 // Other self-updates follow how the CLI was installed (native, npm, bun, Homebrew), and a
 // package manager behind the release is caught by the version read after it.
 const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDefinition> = {
@@ -90,6 +116,12 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     plan: selfUpdate('upgrade')
   },
   opencode2: { latest: () => npm('@opencode/cli'), plan: selfUpdate('upgrade') },
+  // The managed launcher reads install/current-version; the update doesn't replace it.
+  pi: {
+    updatesOutsideLauncher: true,
+    latest: (_installed, realPath) => npm(piPackage(realPath)),
+    plan: piUpdatePlan
+  },
   omp: { latest: () => npm('@oh-my-pi/pi-coding-agent'), plan: selfUpdate('update') },
   // An npm install's loader runs the newest copy in Copilot's package cache.
   copilot: {

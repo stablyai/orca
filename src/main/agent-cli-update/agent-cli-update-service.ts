@@ -94,8 +94,12 @@ function planCommand(cli: OwnAgentCli, plan: AgentCliUpdatePlan): string {
   return plan.runnable ? [cli.command, ...plan.args].join(' ') : plan.command
 }
 
-function latestRelease(agent: AgentCliUpdateAgent, installed: string): Promise<string | null> {
-  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed))
+function latestRelease(
+  agent: AgentCliUpdateAgent,
+  cli: OwnAgentCli,
+  installed: string
+): Promise<string | null> {
+  return latestAgentCliRelease(agentCliUpdateDefinition(agent).latest(installed, cli.realPath))
 }
 
 async function behindRelease(
@@ -104,8 +108,7 @@ async function behindRelease(
   recheck: boolean
 ): Promise<{ version: string; latest: string } | null> {
   const version = await installedVersion(agent, cli, recheck)
-  // Which release line is latest can depend on the installed major.
-  const latest = version ? await latestRelease(agent, version) : null
+  const latest = version ? await latestRelease(agent, cli, version) : null
   return version && latest && compareAppVersions(version, latest) < 0 ? { version, latest } : null
 }
 
@@ -239,7 +242,7 @@ async function updateAgentCli(
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')
-  const latest = after ? await latestRelease(agent, after) : null
+  const latest = after ? await latestRelease(agent, updated, after) : null
   // The version decides when readable: a failed run that leaves the CLI at the latest release is done
   // (e.g. a wrapper around a desktop app's CLI), and a clean exit still behind it (e.g. Homebrew) is not.
   const current =

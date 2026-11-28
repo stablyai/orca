@@ -3,6 +3,7 @@
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
+import { resolveWindowsCmdShim } from '@orca/process-host/windows-cmd-shim-resolution'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { AgentCliUpdateAgent } from '../../shared/agent-launch/installation/agent-cli-update'
 import { hasExplicitTuiLaunchCommand } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
@@ -58,7 +59,12 @@ export async function findOwnAgentCli(
   if (!isAbsolute(program) || WINDOWS_DRIVE_MOUNT.test(program)) {
     return null
   }
-  const realPath = await realpath(program).catch(() => null)
+  // A Windows npm shim isn't a symlink; Pi's release channel lives in its script path.
+  const script =
+    agent === 'pi' && process.platform === 'win32' && /\.cmd$/i.test(program)
+      ? resolveWindowsCmdShim(program, env)?.prefixArgs[0]
+      : undefined
+  const realPath = await realpath(script ?? program).catch(() => null)
   // Orca's own copies live in its data folder and update without asking.
   if (
     !realPath ||

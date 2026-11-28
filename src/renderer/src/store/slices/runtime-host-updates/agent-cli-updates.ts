@@ -21,8 +21,7 @@ const RUN_TIMEOUT_MS = 12 * 60_000
 const CHECK_INTERVAL_MS = 10 * 60_000
 // Opening the update list checks sooner; a CLI updated in a terminal sends no finish event.
 const OPEN_CHECK_INTERVAL_MS = 10_000
-// The host runs three --version probes (5s cap each, some read twice) at a time; 17 agents plus
-// release lookups can approach a minute.
+// The host runs three --version probes (5s cap each, some read twice) at a time, plus release lookups.
 const CHECK_TIMEOUT_MS = 2 * 60_000
 
 export type AgentCliUpdateRun =
