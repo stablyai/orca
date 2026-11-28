@@ -3,6 +3,7 @@ import { Maximize2 } from 'lucide-react'
 import type mermaidNamespace from 'mermaid'
 import { readableMermaidFlowchartSvg } from '../../../../../shared/document-preview/mermaid-flowchart-contrast'
 import { getMermaidConfig } from './mermaid-config'
+import { sourceUsesElkLayout } from './mermaid-elk-layout'
 import { sanitizeMermaidSvg } from './mermaid-sanitize'
 import { readMermaidThemeColors } from './mermaid-theme-colors'
 import { translate } from '@/i18n/i18n'
@@ -10,13 +11,29 @@ import { useTranslate } from '@/i18n/use-translate'
 
 type MermaidApi = typeof mermaidNamespace
 
+function hasRegisterLayoutLoaders(
+  mermaid: MermaidApi
+): mermaid is MermaidApi & { registerLayoutLoaders: (loaders: unknown[]) => void } {
+  return 'registerLayoutLoaders' in mermaid && typeof mermaid.registerLayoutLoaders === 'function'
+}
+
 // Load Mermaid on demand to keep its large bundle out of the eager sidebar markdown path; reuse one module promise.
 let mermaidModulePromise: Promise<MermaidApi> | null = null
-function loadMermaid(): Promise<MermaidApi> {
+let elkLayoutsRegistered = false
+async function loadMermaid(content: string): Promise<MermaidApi> {
   if (!mermaidModulePromise) {
     mermaidModulePromise = import('mermaid').then((mod) => mod.default)
   }
-  return mermaidModulePromise
+  const mermaid = await mermaidModulePromise
+  if (!elkLayoutsRegistered && sourceUsesElkLayout(content)) {
+    if (!hasRegisterLayoutLoaders(mermaid)) {
+      throw new Error('mermaid.registerLayoutLoaders is unavailable')
+    }
+    const { default: elkLayouts } = await import('@mermaid-js/layout-elk')
+    mermaid.registerLayoutLoaders(elkLayouts)
+    elkLayoutsRegistered = true
+  }
+  return mermaid
 }
 
 /** A diagram with the page background it was themed against. */
@@ -84,7 +101,7 @@ export default function MermaidBlock({
 
     const render = async (): Promise<void> => {
       try {
-        const mermaid = await loadMermaid()
+        const mermaid = await loadMermaid(content)
         if (cancelled) {
           return
         }
