@@ -514,7 +514,7 @@ describe('the transitional recheck timer', () => {
 
     decide.mockImplementation(async () => {
       state.admissionClosed = false
-      return { state: 'busy' }
+      return { state: 'busy', liveSessions: 1 }
     })
     const refused = new Error('Terminal daemon is decommissioning')
     await expect(retirement.settleHeldRetirements(refused, 1, preRpc)).resolves.toBe(true)
