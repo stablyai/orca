@@ -22,8 +22,11 @@ import {
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 import { scheduleLocalCapacityRetry } from './filesystem-watcher-local-capacity'
 import { installLocalWatcher } from './filesystem-watcher-local-install'
+import { undeliveredBatchPayload } from './filesystem-watcher-local-events'
 import { isCurrentWatcherSender } from './filesystem-watcher-sender-lifetime'
 import type { WatchWorktreeResult } from '../../../../shared/file-watch/watch-worktree-result'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
+import { publishLocalWatchPause, sendLocalWatchPauseTo } from './filesystem-watcher-pause-state'
 
 const cancelledInstallWaiters = watcherLifecycleState.cancelledLocalInstallWaiters
 
@@ -59,6 +62,13 @@ export async function subscribeLocalWatcher(
   const finishInstall = beginWatcherInstall(worktreePath)
   try {
     await subscribeWhileRemovalAllowed(worktreePath, sender, generation, senderSignal)
+    // Every subscribe outcome settles here; publish even for a retired sender, whose install may have carried other windows.
+    const { key, path } = getLocalWatcherRoot(worktreePath)
+    if (isCurrentWatcherSender(sender, senderSignal)) {
+      sendLocalWatchPauseTo(key, path, sender)
+    } else {
+      publishLocalWatchPause(key, path)
+    }
   } finally {
     finishInstall()
   }
@@ -217,7 +227,12 @@ async function subscribeWhileRemovalAllowed(
   }
 }
 
-export function unsubscribeLocalWatcher(worktreePath: string, senderId: number): void {
+/** With `handOver`, returns the events this sender had queued but not yet received, so a caller moving coverage to another watch keeps them. */
+export function unsubscribeLocalWatcher(
+  worktreePath: string,
+  senderId: number,
+  handOver = false
+): FsChangedPayload | undefined {
   const { key: rootKey } = getLocalWatcherRoot(worktreePath)
   forgetCancelledInstallWaiter(cancelledInstallWaiters, rootKey, senderId)
   const suspended = watcherLifecycleState.suspendedLocalWatcherListeners.get(rootKey)
@@ -244,10 +259,11 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
 
   const root = watcherLifecycleState.watchedRoots.get(rootKey)
   if (!root) {
-    return
+    return undefined
   }
 
-  root.listeners.delete(senderId)
+  const undelivered =
+    root.listeners.delete(senderId) && handOver ? undeliveredBatchPayload(root) : undefined
 
   // Grace teardown lets rapid workspace switches reuse native watchers.
   if (root.listeners.size === 0) {
@@ -258,7 +274,7 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
     }
     // Duplicate unwatch calls must not overwrite and leak existing grace timers.
     if (watcherLifecycleState.pendingTeardowns.has(rootKey)) {
-      return
+      return undelivered
     }
 
     const teardownTimer = setTimeout(() => {
@@ -274,4 +290,5 @@ export function unsubscribeLocalWatcher(worktreePath: string, senderId: number):
 
     watcherLifecycleState.pendingTeardowns.set(rootKey, teardownTimer)
   }
+  return undelivered
 }

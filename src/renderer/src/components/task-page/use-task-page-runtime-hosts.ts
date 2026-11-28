@@ -1,7 +1,8 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '@/runtime/hosts/display/execution-host-label'
 import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
-import { normalizeGitHubTaskPreset } from '../../../../shared/work-items/task-github-search'
+import { resolveGitHubLandingPreset } from '../../../../shared/work-items/task-github-search'
+import { useAppStore } from '@/store'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { useState, useRef, useEffect, useMemo } from 'react'
 import {
@@ -32,7 +33,11 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     visibleTaskProviders
   } = model
   // Seed preset/query synchronously to avoid a throwaway initial empty-query request.
-  const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
+  const savedGithubPreset = useAppStore((s) => s.taskResumeState?.githubItemsPreset)
+  const defaultTaskViewPreset = resolveGitHubLandingPreset(
+    savedGithubPreset,
+    settings?.defaultTaskViewPreset
+  )
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
   const [taskSource, setTaskSource] = useState<TaskProvider>(

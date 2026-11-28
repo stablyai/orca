@@ -120,15 +120,29 @@ export function planOrcadUpdate(input: {
   }
   // Only an uncounted census the server answered can pass on a later force; a counted one never can.
   const forceable = liveSessions === null && isAnsweredOrcadTerminalCensus(input.census)
+  // A census that never reached a daemon names the check that blocked it, not a silent daemon (#51014).
+  if (liveSessions === null && input.census.unansweredBecause && input.force !== true) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_terminal_census_unavailable',
+      reason:
+        `${input.census.unansweredBecause} So this update cannot tell whether work is running ` +
+        'on the host, and it waits. Retry once that clears.'
+    }
+  }
   if (input.force && crossing.state === 'unverifiable') {
     return {
       action: 'defer',
       code: 'orcad_update_daemon_protocol_unverifiable',
       ...(forceable ? { forceable: true } : {}),
-      reason:
-        'The terminal daemon did not report its protocol, so this update cannot show that ' +
-        `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
-        'when the daemon answers or has stopped.'
+      // Under full force an unwoken incumbent still names its check, not a silent daemon (#51014).
+      reason: input.census.unansweredBecause
+        ? `${input.census.unansweredBecause} So this update cannot show that orcad ` +
+          `${input.candidateVersion} will reach any terminals it is forced past. Retry once ` +
+          'that clears.'
+        : 'The terminal daemon did not report its protocol, so this update cannot show that ' +
+          `orcad ${input.candidateVersion} will reach the terminals it is forced past. Retry ` +
+          'when the daemon answers or has stopped.'
     }
   }
   if (liveSessions === null) {

@@ -546,4 +546,131 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
       'Worker exited without reporting'
     ])
   })
+
+  function startTurn(): void {
+    observeChatWorkerWorking(WORKER_SESSION, {
+      getDb: () => db,
+      isWaitingForMail: () => false,
+      notify: () => {}
+    })
+  }
+
+  function workerReport(
+    to: string,
+    opts: { threadId?: string; type?: 'status' | 'escalation' | 'question' } = {}
+  ) {
+    return db.insertMessage({
+      from: WORKER_ADDRESS,
+      to,
+      subject: 'Status',
+      body: 'Still on it.',
+      type: opts.type ?? 'status',
+      ...(opts.threadId ? { threadId: opts.threadId } : {}),
+      runId
+    })
+  }
+
+  function otherRun(coordinator: {
+    handle?: string
+    session?: typeof COORDINATOR_SESSION
+  }): string {
+    return db.createRun({
+      objective: 'another run',
+      coordinatorHandle: coordinator.handle ?? null,
+      coordinatorPaneKey: null,
+      coordinatorOrcaSessionId: coordinator.session ?? null
+    }).id
+  }
+
+  it("counts a reply to another Run's mailbox only when that Run's current coordinator is this worker's", () => {
+    const reporter = createReporter()
+    const sameCoordinatorRun = otherRun({ session: COORDINATOR_SESSION })
+    const strangerRun = otherRun({ handle: 'term_stranger' })
+
+    const question = sendCoordinatorMail('question')
+    startTurn()
+    workerReport(`run:${sameCoordinatorRun}`, { threadId: question.id })
+    completeTurn(reporter, 'turn-other-run')
+    expect(stopEscalations()).toEqual([])
+
+    const next = sendCoordinatorMail('next')
+    startTurn()
+    workerReport(`run:${strangerRun}`, { threadId: next.id })
+    completeTurn(reporter, 'turn-stranger-run')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('does not count a reply to a Run handed off from this coordinator to another', () => {
+    const reporter = createReporter()
+    const handedOff = otherRun({
+      session: createOrcaSessionId(() => '44444444-4444-4444-8444-444444444444')
+    })
+    db.db
+      .prepare('INSERT INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)')
+      .run(handedOff, COORDINATOR_ADDRESS)
+
+    const question = sendCoordinatorMail('question')
+    startTurn()
+    workerReport(`run:${handedOff}`, { threadId: question.id })
+    completeTurn(reporter, 'turn-handed-off-run')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it("does not count a reply to a Run coordinated by a live worker of this worker's Run", () => {
+    const reporter = createReporter()
+    db.db.prepare("UPDATE runs SET coordinator_handle = 'term_lead' WHERE id = ?").run(runId)
+    db.createDispatchContext({
+      taskId: db.createTask({ spec: 'lead work', runId }).id,
+      assigneeHandle: 'term_lead',
+      creator: { kind: 'session', orcaSessionId: COORDINATOR_SESSION },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    const leadRun = otherRun({ handle: 'term_lead' })
+
+    const question = sendCoordinatorMail('question')
+    startTurn()
+    workerReport(`run:${leadRun}`, { threadId: question.id })
+    completeTurn(reporter, 'turn-lead-run')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('counts a report that ends the exchange earlier in the turn, before coordinator mail the turn took later', () => {
+    const reporter = createReporter()
+    sendCoordinatorMail('first')
+    startTurn()
+    workerReport(`run:${runId}`, { type: 'escalation' })
+    sendCoordinatorMail('keep waiting')
+    completeTurn(reporter, 'turn-mail-after-report')
+    expect(stopEscalations()).toEqual([])
+  })
+
+  it('still escalates when the coordinator answered the worker question in the turn and the worker stopped', () => {
+    const reporter = createReporter()
+    sendCoordinatorMail('first')
+    startTurn()
+    const question = workerReport(`run:${runId}`, { type: 'question' })
+    const answer = db.insertMessage({
+      from: COORDINATOR_ADDRESS,
+      to: `dispatch:${dispatchId}`,
+      subject: 'Re: question',
+      body: 'Yes, go ahead.',
+      type: 'status',
+      threadId: question.id,
+      replyTo: question.id,
+      runId
+    })
+    db.markAsRead([answer.id], { kind: 'session', sessionId: WORKER_SESSION })
+    completeTurn(reporter, 'turn-answer-not-acted-on')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('still escalates when a plain status came before new coordinator work the turn left unanswered', () => {
+    const reporter = createReporter()
+    sendCoordinatorMail('first')
+    startTurn()
+    workerReport(`run:${runId}`)
+    sendCoordinatorMail('new work')
+    completeTurn(reporter, 'turn-status-then-new-work')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
 })

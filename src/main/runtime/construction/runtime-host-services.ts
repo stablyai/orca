@@ -25,8 +25,6 @@ import type * as CompatibilityAuthority from '../orchestration/terminal-authorit
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
-import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
-import { sweepStoppedWorkerTerminals } from '../orchestration/terminal-authority/release/stopped-worker-terminal-release'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
 import { createLazyMobileSpeechOwners } from '../speech/lazy-mobile-speech-owners'
@@ -230,10 +228,15 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
     isTerminalProvenAbsent: (candidate) => this.isLeafPtyProvenAbsent(candidate.ptyId),
     hasRequestedReleases: () =>
       (this.getExistingOrchestrationDb()?.listWorkerTerminalReleaseBacklog(1).length ?? 0) > 0,
-    reconcileRequestedReleases: () =>
-      reconcileRequestedWorkerTerminalReleases(this).then(() =>
-        sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
-      ),
+    reconcileRequestedReleases: async () => {
+      const [{ reconcileRequestedWorkerTerminalReleases }, { sweepStoppedWorkerTerminals }] =
+        await Promise.all([
+          import('../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'),
+          import('../orchestration/terminal-authority/release/stopped-worker-terminal-release')
+        ])
+      await reconcileRequestedWorkerTerminalReleases(this)
+      await sweepStoppedWorkerTerminals(this, () => this.legacyWorkerRecovery.isStopped())
+    },
     reconcile: (options) => this.reconcileLegacyWorkerTerminals(options),
     updateRetry: (plan, deferredDispatchIds, options) =>
       this.updateLegacyWorkerTerminalRecoveryRetry(plan, deferredDispatchIds, options)

@@ -1154,7 +1154,9 @@
         "pending": "接続中…",
         "tools_other": "{{count}} 個のツール",
         "waitingForSignIn": "サインイン待ち…",
-        "tools_one": "{{count}} 個のツール"
+        "tools_one": "{{count}} 個のツール",
+        "orcaRemoved": "削除済み: 次のメッセージで再起動します",
+        "orcaChanged": "変更済み: 次のメッセージで再起動します"
       },
       "source": {
         "project": "プロジェクト",
@@ -1186,7 +1188,8 @@
         "failed": "失敗: {{count}}"
       },
       "pasteHint": "ブラウザーが読み込めないページに移動したら、そのアドレスをコピーしてここに貼り付けてください。",
-      "manage": "MCP サーバーを管理"
+      "manage": "MCP サーバーを管理",
+      "stillFailing": "再接続後も失敗しています。"
     }
   },
   "common": {
@@ -1709,7 +1712,9 @@
         "permissionAcceptEditsDescription": "ファイルの編集とファイル操作コマンドを承認し、それ以外は確認します",
         "permissionAutoDescription": "承認リクエストを代わりに審査します",
         "permissionFullAccessCodexDescription": "確認しません。任意のファイルを編集し、ネットワークを使用できます",
-        "permissionFullAccessDescription": "編集やコマンドの前に確認しません"
+        "permissionFullAccessDescription": "編集やコマンドの前に確認しません",
+        "permissionAgentSettings": "{{agent}} の設定",
+        "permissionFromAgentSettings": "{{mode}}（{{agent}} の設定より）"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"
@@ -3125,7 +3130,7 @@
       "collapse": "折りたたむ"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "新しい CLI で再開"
+      "continueInTerminal": "ターミナルで続行"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "最新の内容にスクロール"
@@ -3679,6 +3684,18 @@
       "terminalTitle": "ターミナルのテキスト",
       "pointsAndColumns": "{{points}} · {{count}} 列",
       "moreTerminal": "その他のターミナル設定"
+    },
+    "terminalChatContinuation": {
+      "busy": "別のチャットまたはターミナルを開いています。しばらく待ってから再試行してください。",
+      "continueInChat": "チャットで続行",
+      "failed": "チャットで続行できませんでした。{{detail}}",
+      "failedAfterClose": "チャットで続行できませんでした。{{detail}} 会話は Agent の履歴にあります。",
+      "otherJob": "このターミナルで {{process}} が実行中です。終了してからチャットで続行してください。",
+      "terminalChanged": "Orca が確認している間にこのターミナルが変わりました。再試行してください。",
+      "tryAgain": "再試行してください。",
+      "unavailable": "このコンピューターでは {{agent}} のチャットを利用できません。",
+      "uncheckable": "このターミナルで何が実行中か Orca が確認できませんでした。再試行してください。",
+      "unconfirmed": "チャットが開いたことを Orca が確認できませんでした。再試行する前にタブを確認してください。"
     }
   },
   "settings": {
@@ -3836,9 +3853,6 @@
       "title": "音声",
       "toggleMode": "トグル",
       "updateFailed": "更新できませんでした"
-    },
-    "agents": {
-      "permissionOwnAll": "Agent 独自の設定"
     },
     "voiceTranscribeOn": {
       "heading": "文字起こしの場所",
@@ -4264,6 +4278,9 @@
       "agentCouldNotStart": "{{label}} を起動できませんでした。設定で Agent のコマンドを確認し、もう一度お試しください。",
       "agentFailedToStart": "{{label}} の起動に失敗しました。設定で Agent のコマンドを確認し、もう一度お試しください。",
       "agentReportedError": "{{label}} がエラーを報告しました。",
+      "antigravityInvalidEvents": "Antigravity が無効な JSON イベントを返しました。",
+      "antigravityInvalidResult": "Antigravity が無効な結果を返しました。",
+      "antigravityNoFinalResult": "Antigravity が最終結果を返しませんでした。",
       "chatNameAgentUnsupported": "この操作に対応するチャット名生成用の Agent を設定 -> チャット -> チャット名で選択してください。対応 Agent: {{agents}}、またはカスタムコマンド。",
       "chatNameCustomCommandEmpty": "カスタムコマンドが空です。設定 -> チャット -> チャット名で追加してください。",
       "cliFailed": "{{label}} の CLI コマンドがコード {{exitCode}} で失敗しました。",
@@ -7238,6 +7255,7 @@
     "workspacesCount": "{{count}} 件のワークスペース",
     "workspacesAllButCount": "{{count}} 件以外すべて",
     "headerMissing": "このサーバーを追加するには、{{header}} を入力してください。",
-    "servers": "サーバー"
+    "servers": "サーバー",
+    "unreadable": "保存されたサインインまたはキーを開けません。もう一度サインインしてください。"
   }
 }
