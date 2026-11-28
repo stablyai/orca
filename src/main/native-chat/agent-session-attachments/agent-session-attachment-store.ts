@@ -3,7 +3,7 @@
 import { readAttachmentTextChunk } from './agent-session-attachment-text-read'
 import type { AttachmentTextRequest } from '../../../shared/attachment-text/attachment-text-source'
 import { createHash, randomUUID } from 'node:crypto'
-import { access, appendFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { access, appendFile, mkdir, rm, rmdir, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import {
   sanitizeAgentSessionAttachmentName,
@@ -309,10 +309,9 @@ async function writeContent(uploadDir: string, path: string, bytes: Buffer): Pro
     await renameFileWithWindowsRetryAsync(partPath, path)
   } catch (error) {
     // Leave no part-only folder for a later write of the same bytes to reuse while the sweep removes it.
-    const entries = await readdir(uploadDir).catch(() => [])
-    if (entries.every((entry) => entry === AGENT_SESSION_ATTACHMENT_PART_FILE)) {
-      await removeQuietly(uploadDir)
-    }
+    // Only this write's part file goes; a folder still holding anything, or unreadable, stays.
+    await rm(partPath, { force: true }).catch(() => {})
+    await rmdir(uploadDir).catch(() => {})
     throw error
   }
 }
