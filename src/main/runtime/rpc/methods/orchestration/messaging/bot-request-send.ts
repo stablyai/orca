@@ -23,7 +23,6 @@ import {
 } from '../../../../../bots/bot-request-policy'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
@@ -46,20 +45,12 @@ import { answersRequest, askedInConversation, botRequestSender } from './bot-req
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { statusNoteInstead } from './bot-status-note'
 
 type SendParamsInput = Pick<
   z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
+  'subject' | 'body' | 'type' | 'priority' | 'threadId' | 'item'
 >
-
-/** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
-export function mayReachBot(
-  runtime: OrcaRuntimeService,
-  to: string,
-  sender: OrchestrationCallerIdentity
-): boolean {
-  return botAddressReach(runtime, runtime.getOrchestrationDb(), to, sender).kind !== 'none'
-}
 
 /** Mail that reaches a bot, by any address, is held to who the sending turn is for; null for other mail. */
 export async function sendToBot(
@@ -95,6 +86,10 @@ export async function sendToBot(
   const acting = await readActingSender(runtime, db, callerSessionId, mail, receiving)
   if (!acting) {
     return null
+  }
+  const note = await statusNoteInstead(context, mail, acting, receiving.bot)
+  if (note) {
+    return note
   }
   const held: (() => void)[] = []
   const receipt = await sendBotRequest({

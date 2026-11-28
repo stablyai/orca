@@ -116,6 +116,15 @@ export function botAddressReach(
   return mayNameSession(to) ? { kind: 'session' } : { kind: 'none' }
 }
 
+/** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
+export function mayReachBot(
+  runtime: OrcaRuntimeService,
+  to: string,
+  sender: OrchestrationCallerIdentity
+): boolean {
+  return botAddressReach(runtime, runtime.getOrchestrationDb(), to, sender).kind !== 'none'
+}
+
 /** The bot an address reaches, or null when it reaches no bot. */
 export async function receivingBot(
   runtime: OrcaRuntimeService,
