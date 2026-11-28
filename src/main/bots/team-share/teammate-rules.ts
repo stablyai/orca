@@ -47,6 +47,9 @@ import type { Bot } from '../../../shared/bot-types'
 import type { RpcCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { botShareUsable } from '../../../shared/bots/bot-team-shares'
+import { botHomeOfActsFor, type BotHomeOf } from '../../../shared/bots/bot-home-of'
+import type { BotRequestAsker } from '../../../shared/bots/bot-acts-for'
 
 // ── 1. Methods ──────────────────────────────────────────────────────────────────────────────────
 
@@ -209,6 +212,34 @@ export function callerTabPerson(scope: RpcCallerScope | undefined): TabPerson {
   return scope?.kind === 'bot-share' ? teammateTabListKey(scope) : 'owner'
 }
 
+/** Whom a new chat's tab is for, named by its creator before the chat exists: a person, or no one
+ *  (no tab row in any list) when the creator cannot say whose it is. Never read back from the chat. */
+export type NewChatTabPerson = TabPerson | 'no-one'
+
+/** A bot chat's person, from whom it acts for: the teammate it acts for alone, else the owner. */
+export function actsForTabPerson(
+  bot: Pick<Bot, 'id' | 'shares'>,
+  actsFor: readonly BotRequestAsker[]
+): TabPerson {
+  return botHomeTabPerson(bot.id, botHomeOfActsFor(bot, actsFor))
+}
+
+/** The person whose Home of an agent a chat falls under. */
+export function botHomeTabPerson(botId: string, of: BotHomeOf): TabPerson {
+  return of === 'owner' ? 'owner' : teammateTabListKey({ botId, accountId: of.accountId })
+}
+
+/** A create whose creator names no person: the host's own in a workspace with one list, no one's in
+ *  an agent's Home, where every list is someone's. */
+export function unnamedCreatorTabPerson(
+  worktreeId: string,
+  bots: readonly Pick<Bot, 'folderWorkspaceId'>[]
+): NewChatTabPerson {
+  return bots.some((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
+    ? 'no-one'
+    : HOST_STATE_PERSON
+}
+
 /** The list a person's write lands in: their own in their agent's Home, the host's (the owner's,
  *  or a worker workspace's one shared list) everywhere else. */
 export function homeTabListOf(
@@ -235,17 +266,24 @@ export function writesHostTabList(methodName: string): boolean {
 /** A tab list read names: `'owner'` or a teammate by account. Absent, the caller's own (`tabOwnerOf`). */
 export type TabListPerson = 'owner' | { accountId: string }
 
-/** The list a read of `person`'s tabs names in a workspace: a teammate's own in the agent's Home, the
- *  host's for the owner and everywhere else (one shared list). */
+/** The list a read of `person`'s tabs names in a workspace: the host's for the owner, a teammate's own
+ *  in the Home of an agent shared with them, unless they declined. Null for anyone else: a teammate
+ *  has no list outside that Home, and the caller is refused rather than shown another list under
+ *  their name. */
 export function viewedTabListOf(
   worktreeId: string,
   person: TabListPerson,
-  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[]
-): 'host' | TeammateTabListKey {
+  bots: readonly Pick<Bot, 'id' | 'folderWorkspaceId' | 'shares'>[]
+): 'host' | TeammateTabListKey | null {
+  if (person === 'owner') {
+    return 'host'
+  }
   const home = bots.find((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
-  return home && person !== 'owner'
-    ? teammateTabListKey({ botId: home.id, accountId: person.accountId })
-    : 'host'
+  const shared = home?.shares?.some(
+    (share) =>
+      share.kind === 'account' && share.accountId === person.accountId && botShareUsable(share)
+  )
+  return home && shared ? teammateTabListKey({ botId: home.id, accountId: person.accountId }) : null
 }
 
 // ── 6. Read marks ───────────────────────────────────────────────────────────────────────────────

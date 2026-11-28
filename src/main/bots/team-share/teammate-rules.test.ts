@@ -159,14 +159,16 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
         file: file.replaceAll('\\', '/'),
         text: readFileSync(join(src, file), 'utf8')
       }))
-    // The Home tab write API: each takes the person (`person`, `personOf` or `people`) as a required field.
+    // The Home tab write API: each takes the person (`person` or `people`) as a required field.
     const writes =
-      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate|createMobileSessionTerminal|createSessionBrowserTab|openPersonFile)\(/g
+      /\b(publishStructuredAgentSessionTab|activateMobileSessionTab|closeMobileSessionTab|refuseUnattributedMobileSessionTabClose|closeChatTabs|commitStructuredAgentSessionCreate|createStructuredAgentSessionForWorktree|createStructuredWorkerSession(ForWorktree)?|createMobileSessionTerminal|createSessionBrowserTab|openPersonFile)\(/g
     // Sources: the caller's scope at a handler, a chat's stamp, the host's own state, the list a close
     // names (`sessionTabCloseTarget`, which reads one of those); or the field of a function that took
-    // one of those (its own callers are in this census too).
+    // one of those (its own callers are in this census too). A create names its person from its
+    // creator before the chat exists (whom a bot chat acts for, a worker's coordinator), never the new
+    // chat's own stamp, and no one when the creator cannot say.
     const source =
-      /^(callerTabPerson\(\w+\.callerScope\)|closeTarget\.person|callerTabPerson\(callerScope\)|\(?\w*\)? => callerTabPerson\(ctx\.callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|(\(\w+\) => )?args\.runtime\.chatTabPerson\(|HOST_STATE_PERSON|args\.personOf\(|input\.person|options\.person|opts\.person|caller\.person)/
+      /^(callerTabPerson\(\w+\.callerScope\)|closeTarget\.person|callerTabPerson\(callerScope\)|(\w+\.)?runtime\.chatTab(Person|People)\(|HOST_STATE_PERSON|'no-one'|input\.actsFor \? actsForTabPerson\(|args\.coordinatorPerson \?\? unnamedCreatorTabPerson\(|(prepared\.)?tab\.person|args\.person|input\.person|options\.person|opts\.person|caller\.person)/
     const calls = files.flatMap(({ file, text }) =>
       [...text.matchAll(writes)].flatMap((match) => {
         const at = match.index + match[0].length
@@ -182,8 +184,7 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
           end += 1
         }
         const call = text.slice(at, end)
-        const named =
-          /\b(?:person|personOf|people): \[?([^,\n}\]]+)/.exec(call)?.[1]?.trim() ?? '(none)'
+        const named = /\b(?:person|people):\s+\[?([^,\n}\]]+)/.exec(call)?.[1]?.trim() ?? '(none)'
         return [{ at: `${file} ${match[1]}`, named }]
       })
     )

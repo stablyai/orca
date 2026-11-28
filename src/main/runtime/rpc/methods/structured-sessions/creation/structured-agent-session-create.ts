@@ -1,5 +1,6 @@
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
-import type { TabPerson } from '../../../../../bots/team-share/teammate-rules'
+import type { NewChatTabPerson } from '../../../../../bots/team-share/teammate-rules'
+import { withCreateTabPerson } from './structured-agent-session-create-tab-person'
 import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { seededPermissionMode } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -178,11 +179,11 @@ export async function commitStructuredAgentSessionCreate(args: {
   placedByWindow?: boolean
   /** Where the creating client opens the chat, in this host's ids. */
   tabPlacement?: ChatTabPlacement
-  /** Whom the chat's tab is for: a client's create the caller's (`callerTabPerson`), a system
-   *  create the new chat's stamp (`chatTabPerson`). */
-  personOf: (sessionId: string) => TabPerson
+  /** Whom the chat's tab is for, named by the creator: a client's create the caller's
+   *  (`callerTabPerson`), a system create whom it starts the chat for. No one: no tab anywhere. */
+  person: NewChatTabPerson
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  const { prepared } = args
+  const prepared = withCreateTabPerson(args.runtime, args.prepared, args.person)
   const tab = prepared.tab
   const tabPlace = {
     ...(args.capture ? { capture: args.capture } : {}),
@@ -211,7 +212,7 @@ export async function commitStructuredAgentSessionCreate(args: {
                 return Promise.resolve()
               }
               return args.runtime.publishStructuredAgentSessionTab({
-                person: args.personOf(sessionId),
+                person: tab.person,
                 workspaceId: tab.workspaceId,
                 sessionId,
                 agent: tab.agent,
@@ -247,7 +248,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   }
   try {
     await args.runtime.publishStructuredAgentSessionTab({
-      person: args.personOf(result.value.sessionId),
+      person: prepared.tab.person,
       workspaceId: prepared.tab.workspaceId,
       sessionId: result.value.sessionId,
       agent: prepared.tab.agent,
@@ -288,8 +289,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true
-  /** False publishes no tab; use `createBackgroundStructuredAgentSession`, which also keeps a restart from restoring one. */
-  publishTab?: false
+  /** Whom the chat's tab is for, decided by the creator (`commitStructuredAgentSessionCreate`). */
+  person: NewChatTabPerson
   firstMessage?: StructuredAgentSessionFirstMessage
   signal?: AbortSignal
   beforeFirstMessage?: () => void | Promise<void>
@@ -313,9 +314,8 @@ export async function createStructuredAgentSessionForWorktree(args: {
   return commitStructuredAgentSessionCreate({
     runtime: args.runtime,
     caller: args.caller,
-    prepared: args.publishTab === false ? { ...prepared, tab: null } : prepared,
+    prepared,
     activate: args.activate,
-    // A bot's, a worker's or an automation's chat: its tab is for whom it was created.
-    personOf: (sessionId) => args.runtime.chatTabPerson(sessionId)
+    person: args.person
   })
 }

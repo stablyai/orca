@@ -2,9 +2,9 @@ import { createStructuredAgentSessionForWorktree } from './structured-sessions/c
 
 /** Background work: a chat with no tab, which opening it later (`agentSession.reveal`) adds. */
 export async function createBackgroundStructuredAgentSession(
-  args: Omit<Parameters<typeof createStructuredAgentSessionForWorktree>[0], 'publishTab'>
+  args: Omit<Parameters<typeof createStructuredAgentSessionForWorktree>[0], 'person'>
 ): ReturnType<typeof createStructuredAgentSessionForWorktree> {
-  const created = await createStructuredAgentSessionForWorktree({ ...args, publishTab: false })
+  const created = await createStructuredAgentSessionForWorktree({ ...args, person: 'no-one' })
   // Founding records every new chat as having a tab; this one has none for a restart to restore, yet
   // stays open, so orchestration mail still reaches it.
   if (created.ok) {

@@ -67,6 +67,8 @@ export type AgentSessionReserveRequest = {
   models?: AgentSessionAdmissionModels
   /** Reserved tab ids are checked before spawn and claimed only when the tab publishes. */
   surfaceTabId?: string
+  /** False: founded with no host tab row, held in the background as background work is. */
+  hostTab?: false
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
   /** Only an adopting create is named before its first message. */

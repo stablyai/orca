@@ -7,9 +7,11 @@ import {
 } from '../../../../shared/workspace/identity/person-workspace-key'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
+  callerTabPerson,
+  homeTabListOf,
   isTeammateTabList,
   tabListTeammate,
-  tabOwnerOf
+  type TabPerson
 } from '../../../bots/team-share/teammate-rules'
 import type { RpcCallerScope } from '../../rpc/callers/rpc-caller-scope'
 
@@ -31,14 +33,19 @@ export function resolveTabListTarget(
   workspaceId: string,
   scope: RpcCallerScope | undefined
 ): TabListTarget {
-  const owner = tabOwnerOf(workspaceId, scope?.kind === 'bot-share' ? scope : null, agents)
+  return { home: workspaceId, list: personTabListOf(agents, workspaceId, callerTabPerson(scope)) }
+}
+
+/** The workspace a write for `person` lands in: their own in their agent's Home, else `workspaceId`. */
+export function personTabListOf(
+  agents: readonly Pick<Bot, 'id' | 'folderWorkspaceId'>[],
+  workspaceId: string,
+  person: TabPerson
+): string {
+  const list = homeTabListOf(person, workspaceId, agents)
   const home = parseWorkspaceKey(workspaceId)
-  if (!isTeammateTabList(owner) || home?.type !== 'folder') {
-    return { home: workspaceId, list: workspaceId }
+  if (!isTeammateTabList(list) || home?.type !== 'folder') {
+    return workspaceId
   }
-  const list = personWorkspaceKey({
-    folderWorkspaceId: home.folderWorkspaceId,
-    ...tabListTeammate(owner)
-  })
-  return { home: workspaceId, list }
+  return personWorkspaceKey({ folderWorkspaceId: home.folderWorkspaceId, ...tabListTeammate(list) })
 }

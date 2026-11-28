@@ -38,10 +38,12 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
     const host = requireStructuredCleanupHost(ctx)
     // The caller's close: a teammate's in their own Home closes their tab only.
     if (
-      !ctx.runtime.closeChatTabs({
-        people: [callerTabPerson(ctx.callerScope)],
-        sessionId: params.sessionId
-      }).hostList
+      !(
+        await ctx.runtime.closeChatTabs({
+          people: [callerTabPerson(ctx.callerScope)],
+          sessionId: params.sessionId
+        })
+      ).hostList
     ) {
       if (!keepRunning) {
         await host.close(params.sessionId, 'user-close')

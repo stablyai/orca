@@ -45,7 +45,7 @@ export function botHomeRootOf(host: Pick<BotHomeHost, 'deps'>): (sessionId: stri
 }
 
 /** A new Home Chat: the owner's is named Home; a teammate's is stored unnamed, and every read titles
- *  it from their share row (agent-session-record-home-names.ts). The Home it replaced keeps no tab,
+ *  it from their share row (agent-session-record-home-names.ts). The owner's Home it replaced keeps no tab,
  *  even when its stop won but its tab bookkeeping lost a race, so no restore reopens it; and it gives
  *  up any name Orca gave it (older builds saved "<name>’s Home"), so it is named from its content. */
 export async function nameNewHome(
@@ -58,7 +58,8 @@ export async function nameNewHome(
   if (of === 'owner') {
     await host.setUserConversationName(sessionId, BOT_HOME_NAME, 'rename')
   }
-  if (replaced && host.isSessionTabVisible(replaced)) {
+  // A teammate's Home has no host tab of its own: one there is the owner's, opened by him.
+  if (of === 'owner' && replaced && host.isSessionTabVisible(replaced)) {
     await host.setSessionTabVisibility(replaced, false)
   }
   if (replaced && of !== 'owner') {

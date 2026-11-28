@@ -20,15 +20,17 @@ import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-la
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import type { BotShareDevices } from './bot-share-access'
-import type { TabListPerson } from './teammate-rules'
+import { teammateTabListKey, type TabListPerson } from './teammate-rules'
 import { createSessionTabsTabDeltaDecoder } from '../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import { botShareAsker } from './bot-share-chats'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { makeTestBot } from '../bot.test-fixture'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { createChatAs } from './teammate-chat-create.test-support'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
+import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../shared/workspace-session/teammate-homes-session-partition'
 
 export { B, C }
 
@@ -106,12 +108,20 @@ function shareDevices(): BotShareDevices {
   }
 }
 
+type ChatRecordFields = NonNullable<Parameters<typeof authorityProfile>[1]>['recordFields']
+
 /** `home`: which folder is the agent's Home; the rig's own workspace by default, else a second one
- *  (so the rig's workspace is one of the agent's workers' workspaces). */
-export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityRig } = {}) {
+ *  (so the rig's workspace is one of the agent's workers' workspaces). `chats`: seeded chats beyond
+ *  B, C and O, each with its own record fields (a fork, a name). */
+export async function rig(
+  options: { home?: 'rig' | 'other'; opened?: AuthorityRig; chats?: ChatRecordFields } = {}
+) {
+  const chats = options.chats ?? {}
   const opened =
     options.opened ??
-    (await openAuthorityRuntime(await authorityProfile([], { records: [B, C, O] })))
+    (await openAuthorityRuntime(
+      await authorityProfile([], { records: [B, C, O, ...Object.keys(chats)], recordFields: chats })
+    ))
   const homeFolder =
     options.home === 'other'
       ? opened.profile.createFolderWorkspace({
@@ -128,7 +138,7 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
         ...SHARED
       })
     )
-    for (const sessionId of [B, C]) {
+    for (const sessionId of [B, C, ...Object.keys(chats)]) {
       opened.runtime
         .getOrchestrationDb()
         .recordBotConversationActsFor(sessionId, { actsFor: [botShareAsker(SHARED, SCOPE)] })
@@ -232,30 +242,50 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
     )
     return replies
   }
-  const create = async (deviceId: string, where = worktree) => {
-    // The agent's runtime home is made under the app's data folder: the test's own.
-    stubUserData()
-    const sessionId = randomUUID()
-    await call(deviceId, 'agentSession.create', {
-      envelope: {
-        sessionId,
-        clientOperationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-        expectedRuntimeFence: null,
-        // As the client signs it.
-        payloadFingerprint: structuredAgentSessionCreateFingerprint({
-          sessionId,
-          worktree: where,
-          agent: 'codex'
-        })
-      },
-      worktree: where,
-      agent: 'codex'
-    })
-    return sessionId
-  }
+  const create = (deviceId: string, where = worktree, tabPlacement?: { afterTabId: string }) =>
+    createChatAs(call, deviceId, where, tabPlacement)
+  /** A teammate's own workspace in the Home, as the host holds it. */
+  const listOf = (teammate: { botId: string; accountId: string } = TEAMMATE) =>
+    personWorkspaceKey({ folderWorkspaceId: homeFolder, ...teammate })
   return {
     ...opened,
     home,
+    listOf,
+    /** The chats in a teammate's own workspace, live, and its active tab. */
+    mine: (teammate?: { botId: string; accountId: string }) => {
+      const snapshot = opened.runtime['mobileSessionTabsByWorktree'].get(listOf(teammate))
+      const chatOf = (id: string) => snapshot?.tabs.find((tab) => tab.id === id)
+      return {
+        chats: (snapshot?.tabs ?? []).flatMap((tab) =>
+          tab.type === 'agent-session' ? [tab.sessionId] : []
+        ),
+        /** The chats in the order the list shows them, group by group. */
+        order: (snapshot?.tabGroups ?? []).flatMap((group) =>
+          group.tabOrder.flatMap((id) => {
+            const tab = chatOf(id)
+            return tab?.type === 'agent-session' ? [tab.sessionId] : []
+          })
+        ),
+        activeTabId: snapshot?.activeTabId ?? null,
+        snapshotVersion: snapshot?.snapshotVersion ?? 0
+      }
+    },
+    /** The chats a teammate's own workspace saves, in the teammates' partition. */
+    mineSaved: (teammate?: { botId: string; accountId: string }) =>
+      (
+        opened.profile.getWorkspaceSession(TEAMMATE_HOMES_SESSION_PARTITION).unifiedTabs?.[
+          listOf(teammate)
+        ] ?? []
+      ).flatMap((tab) => (tab.contentType === 'agent-session' ? [tab.entityId] : [])),
+    /** A teammate's close of their chat's tab, at the runtime's close entry (`session.tabs.close`
+     *  past its read of the caller's list). */
+    closeMine: (sessionId: string, options: { expectedTerminalHandle?: string } = {}) =>
+      opened.runtime.closeMobileSessionTab(worktree, `agent-session:${sessionId}`, {
+        person: teammateTabListKey(TEAMMATE),
+        reason: 'user',
+        clientNavigationId: 'mate-desk',
+        ...options
+      }),
     send,
     call,
     list,

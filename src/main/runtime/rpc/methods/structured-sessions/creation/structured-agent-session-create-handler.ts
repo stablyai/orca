@@ -147,7 +147,7 @@ async function resolveAndCommitStructuredAgentSessionCreate(
         caller: callerFor(ctx),
         prepared,
         activate: true,
-        personOf: () => callerTabPerson(ctx.callerScope),
+        person: callerTabPerson(ctx.callerScope),
         placedByWindow: ctx.caller?.kind === 'desktop',
         ...(capture ? { capture } : {}),
         ...('tabPlacement' in params && params.tabPlacement

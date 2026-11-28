@@ -1,4 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { NewChatTabPerson } from '../../../../../../../bots/team-share/teammate-rules'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -99,6 +100,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
+  person: NewChatTabPerson
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const created = await createStructuredWorkerSession({
@@ -106,6 +108,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
+    person: args.person,
     ...(options ? { options } : {})
   })
   args.effects.push({

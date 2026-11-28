@@ -1,7 +1,7 @@
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredChatDisplayName } from '../../../../shared/agent-session/view/structured-chat-row-name'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import { agentSessionRecordShownName } from '../../agent-session/records/agent-session-record-shown-name'
+import { agentSessionRecordShownNameIn } from '../../agent-session/records/agent-session-record-shown-name'
 
 export type SavedTabs = () => readonly Tab[] | undefined
 
@@ -14,10 +14,7 @@ export function structuredConversationTabNamer(
   return (sessionId) => {
     const store = getStructuredAgentSessionHost()?.deps?.store
     const record = store?.getConversation(sessionId)
-    const conversationName =
-      store && record?.location.workspaceId === workspaceId
-        ? agentSessionRecordShownName(store, record)
-        : null
+    const conversationName = agentSessionRecordShownNameIn(store, record, workspaceId)
     return (
       structuredChatDisplayName(savedChatTab(sessionId)?.customLabel, conversationName, '') || null
     )

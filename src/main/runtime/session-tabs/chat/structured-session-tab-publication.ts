@@ -132,7 +132,12 @@ export type StructuredSessionRawPublicationInput = Pick<
   | 'tabId'
   | 'placement'
   | 'placedByWindow'
-> & { eligible?: () => boolean; savedOrder?: MainSessionTabRows }
+> & {
+  eligible?: () => boolean
+  savedOrder?: MainSessionTabRows
+  /** A list whose chat rows keep their own ids (a teammate's), never the host's tab table's. */
+  rowId?: string
+}
 
 export function projectStructuredSessionTab(
   runtime: Pick<
@@ -144,7 +149,10 @@ export function projectStructuredSessionTab(
 ): void {
   const existing = runtime.mobileSessionTabsByWorktree.get(input.workspaceId)
   const id =
-    input.tabId && isReopenedChatTabId(input.tabId) ? input.tabId : mobileChatTabId(input.sessionId)
+    input.rowId ??
+    (input.tabId && isReopenedChatTabId(input.tabId)
+      ? input.tabId
+      : mobileChatTabId(input.sessionId))
   if (existing?.tabs.some((tab) => tab.id === id)) {
     // Background republish does not write/emit; healing missing client mirrors needs activate or explicit republish.
     if (!input.activate) {

@@ -44,6 +44,7 @@ import {
   structuredWorkerProcessIncarnation,
   type StructuredWorkerIdentity
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import type { NewChatTabPerson } from '../../../../../bots/team-share/teammate-rules'
 import { createStructuredAgentSessionForWorktree } from '../../structured-sessions/creation/structured-agent-session-create'
 
 // The worker's handle, keyed by its root session: a reused worker outlives the Dispatch that created it.
@@ -132,6 +133,7 @@ export async function createStructuredWorkerSession(args: {
   dispatchId: string
   /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
   options?: Readonly<Record<string, string>>
+  person: NewChatTabPerson
 }): Promise<{
   identity: StructuredWorkerIdentity
   host: StructuredAgentSessionHost
@@ -170,6 +172,7 @@ export async function createStructuredWorkerSession(args: {
       },
       worktree: `id:${args.worktreeId}`,
       agent: args.agent,
+      person: args.person,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
       ...(structuredWorkerModelReplacesSavedSelection(args.agent, args.options?.model)

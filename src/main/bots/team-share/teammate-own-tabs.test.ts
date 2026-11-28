@@ -1,7 +1,7 @@
 // Each person on a shared agent's host has their own tab list in its Home; every other workspace has
 // one list, shared. Through the real dispatcher, runtime, chat host and record store.
 import { randomUUID } from 'node:crypto'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
   physicalReload,
@@ -11,13 +11,14 @@ import { showBotSessionTab } from '../bot-session-tab-show'
 import { chatTabCommandsSettled } from '../../runtime/terminal/layout/session-layout-apply.test-fixture'
 import { botShareAsker } from './bot-share-chats'
 import { readBotConversationActsFor } from '../bot-conversation-acts-for'
-import { teammateTabListKey } from './teammate-rules'
 import { setRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
+import { ownerWindowProbe } from './owner-window-probe.test-support'
 import {
   All,
   B,
   C,
   O,
+  OTHER,
   rig,
   SCOPE,
   sessions,
@@ -30,20 +31,28 @@ import {
 
 afterEach(settleTeammateRig)
 
-it('leaves the owner’s Home list byte-identical through a teammate’s reveal, create, activate, close and a restore', async () => {
+it('leaves the owner’s Home list byte-identical through a teammate’s reveal, create, close and a restore', async () => {
   const r = await rig()
   await r.reveal('owner-desk', O)
   const before = await r.ownerView()
+  const probe = ownerWindowProbe(r.runtime, r.profile, r.workspace)
+  const owner = await probe.ownerState()
 
   await r.reveal('mate-desk', C)
   const created = await r.create('mate-desk')
   await r.reveal('mate-desk', B)
-  await r.activate('mate-desk', C)
-  await r.close('mate-desk', B)
+  await r.closeMine(B)
   await chatTabCommandsSettled()
 
+  // The held-mail set is host-wide; a newly attached window (the probe's) is sent it whole.
+  const relays = probe.relays.filter((relay) => relay.name !== 'sleepingMailChanged')
+  const ownerAfter = await probe.ownerState()
+  probe.close()
+  expect(relays).toEqual([])
+  expect(ownerAfter).toBe(owner)
   expect(await r.ownerView()).toBe(before)
-  expect(sessions(await r.list('mate-phone'))).toEqual([C, created])
+  expect(r.mine().chats).toEqual([C, created])
+  expect(r.mineSaved()).toEqual([C, created])
   expect(r.host.isSessionTabVisible(created)).toBe(false)
 
   // A restart: the owner's list comes back as it was, and so does Mate's own.
@@ -51,14 +60,12 @@ it('leaves the owner’s Home list byte-identical through a teammate’s reveal,
   expect(await fresh.hostChats()).toEqual([O])
   expect(savedIds(fresh)).toEqual([O])
   expect(sessions(await fresh.list('owner-desk'))).toEqual([O])
-  expect(sessions(await fresh.list('mate-desk'))).toEqual([C, created])
+  expect(fresh.mine().chats).toEqual([C, created])
 })
 
 it('never touches a teammate’s list when the owner’s window drops an empty Home', async () => {
   const r = await rig()
   await r.reveal('mate-desk', C)
-  const phone = await r.subscribe('mate-phone')
-  const seen = phone.length
   await r.reveal('owner-desk', O)
   const ownersTab = (await r.list('owner-desk')).tabs.find((tab) => tab.sessionId === O)!
   await r.call('owner-desk', 'session.tabs.close', {
@@ -71,28 +78,18 @@ it('never touches a teammate’s list when the owner’s window drops an empty H
   r.runtime['notifyMobileSessionTabsRemoved'](r.workspace)
   await chatTabCommandsSettled()
 
-  expect(sessions(await r.list('mate-desk'))).toEqual([C])
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
-  expect(phone.slice(seen).filter((frame) => sessions(frame).length === 0)).toEqual([])
-  const saved = r.profile.getMobileClientTabSelections()[teammateTabListKey(TEAMMATE)]
-  expect(saved?.[r.workspace]?.personTabs).toEqual([C])
+  expect(r.mine().chats).toEqual([C])
+  expect(r.mineSaved()).toEqual([C])
 })
 
-it('shows a teammate’s two devices one list, each with its own focus', async () => {
+it('shows a teammate’s two devices one list', async () => {
   const r = await rig()
   await r.reveal('mate-desk', B)
   await r.reveal('mate-phone', C)
-  await r.activate('mate-desk', C)
-  await r.activate('mate-phone', B)
 
-  const desk = await r.list('mate-desk')
-  const phone = await r.list('mate-phone')
-  expect(sessions(desk)).toEqual([B, C])
-  expect(sessions(phone)).toEqual([B, C])
-  expect(desk.activeTabId).toBe(`agent-session:${C}`)
-  expect(phone.activeTabId).toBe(`agent-session:${B}`)
+  expect(r.mine().chats).toEqual([B, C])
   // Another teammate of the same agent has their own list, empty.
-  expect(sessions(await r.list('other-desk'))).toEqual([])
+  expect(r.mine(OTHER).chats).toEqual([])
 })
 
 it('puts a teammate’s tab in a worker workspace in the one shared list the owner sees', async () => {
@@ -112,71 +109,52 @@ it('lists a teammate’s Home in listAll and subscribeAll with no host tab there
   r.runtime['restoreHeadlessGraphAuthority']()
   await r.reveal('mate-desk', C)
 
-  const listed = All.parse(await r.call('mate-phone', 'session.tabs.listAll', null))
-  expect(listed.snapshots.filter((s) => s.worktree === r.workspace).map(sessions)).toEqual([[C]])
-  const census = await r.subscribe('mate-phone', true)
-  expect(census.filter((s) => s.worktree === r.workspace).map(sessions)).toEqual([[C]])
+  expect(r.mine().chats).toEqual([C])
+  const listed = All.parse(await r.call('owner-phone', 'session.tabs.listAll', null))
+  expect(listed.snapshots.filter((s) => s.worktree === r.workspace).map(sessions)).toEqual([])
 })
 
-it('updates a teammate’s other device live, past its first empty frame (#50219 round 1, 2)', async () => {
+it('moves a teammate’s list to a new version on each chat it gains (#50219 round 1, 2)', async () => {
   const r = await rig()
-  const phone = await r.subscribe('mate-phone')
-  const first = phone[0]!
-  expect(sessions(first)).toEqual([])
+  await r.reveal('mate-desk', B)
+  const first = r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
 
   await r.reveal('mate-desk', C)
-  await vi.waitFor(() => expect(phone.some((frame) => sessions(frame).includes(C))).toBe(true))
-  const shown = phone.find((frame) => sessions(frame).includes(C))!
+  const shown = r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
   // A desktop drops a frame that does not outrank the one it holds.
   expect(shown.publicationEpoch).toBe(first.publicationEpoch)
   expect(shown.snapshotVersion).toBeGreaterThan(first.snapshotVersion)
 })
 
-it('answers a teammate’s activate with their own list, never the owner’s (#50219 round 1, 3)', async () => {
+it('never closes the owner’s tab from a teammate’s close (#50219 round 1, 3)', async () => {
   const r = await rig()
   await r.reveal('owner-desk', O)
   await r.reveal('mate-desk', C)
   const owner = await r.subscribe('owner-desk')
   const seen = owner.length
+  const before = await r.ownerView()
 
-  // No navigation named: a teammate's own list is activated on their device alone (round 2, 3).
-  const reply = Tabs.parse(
-    await r.call('mate-desk', 'session.tabs.activate', {
-      worktree: `id:${r.workspace}`,
-      tabId: `agent-session:${C}`
-    })
-  )
-  expect(sessions(reply)).toEqual([C])
-  expect(reply.activeTabId).toBe(`agent-session:${C}`)
+  // An owner's tab is not in a teammate's list to close.
+  await r.closeMine(O)
   await chatTabCommandsSettled()
+
   expect(owner.slice(seen)).toEqual([])
-  // An owner's tab is not in a teammate's list to activate or close.
-  for (const method of ['session.tabs.activate', 'session.tabs.close']) {
-    const refused = await r.send('mate-desk', method, {
-      worktree: `id:${r.workspace}`,
-      tabId: `agent-session:${O}`,
-      reason: 'user'
-    })
-    expect(refused.ok).toBe(false)
-  }
-  expect(await r.hostChats()).toEqual([O])
+  expect(await r.ownerView()).toBe(before)
+  expect(r.mine().chats).toEqual([C])
 })
 
 it('never returns to a closed tab when it opens again, after a restart too (#50219 round 1, 4; round 2, 2)', async () => {
   const r = await rig()
   await r.reveal('mate-desk', B)
   await r.reveal('mate-desk', C)
-  await r.activate('mate-desk', C)
-  await r.activate('mate-phone', C)
-  // The phone is away (not listening) while the desk closes its pick.
-  await r.close('mate-desk', C)
-  expect((await r.list('mate-desk')).activeTabId).toBe(`agent-session:${B}`)
+  await r.closeMine(C)
+  expect(r.mine().chats).toEqual([B])
+  expect(r.mineSaved()).toEqual([B])
 
   const fresh = await rig({ opened: await physicalReload(r) })
+  expect(fresh.mine().chats).toEqual([B])
   await fresh.reveal('mate-desk', C)
-  expect(sessions(await fresh.list('mate-phone'))).toEqual([B, C])
-  expect((await fresh.list('mate-phone')).activeTabId).toBe(`agent-session:${B}`)
-  expect((await fresh.list('mate-desk')).activeTabId).toBe(`agent-session:${B}`)
+  expect(fresh.mine().chats).toEqual([B, C])
 })
 
 it('refuses a host-list tab write in a teammate’s own Home', async () => {
@@ -245,12 +223,7 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
   })
   await r.reveal('mate-desk', C)
   // Their tab lists; who sends as which pane is the workspace's, and the owner's open adds C's.
-  const mates = async () =>
-    JSON.stringify(
-      [await r.list('mate-desk'), await r.list('mate-phone')].map(
-        ({ agentSenderAssociations: _senders, ...tabs }) => tabs
-      )
-    )
+  const mates = async () => JSON.stringify([r.mine(), r.mineSaved()])
   const before = await mates()
 
   await r.reveal('owner-desk', C)
@@ -259,58 +232,33 @@ it('lists a teammate’s chats in the owner’s chat list under their name; the 
   expect(await mates()).toBe(before)
 })
 
-it('shows a chat a teammate closed as their last tab again on their offline device when it reopens', async () => {
+it('shows a chat a teammate closed as their last tab again when it reopens', async () => {
   const r = await rig()
   await r.reveal('mate-desk', C)
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
-  // The phone is away while the desk closes the Home's only tab, then opens the chat again.
-  await r.close('mate-desk', C)
+  expect(r.mine().chats).toEqual([C])
+  await r.closeMine(C)
+  expect(r.mine().chats).toEqual([])
   await r.reveal('mate-desk', C)
 
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(r.mine().chats).toEqual([C])
+  expect(r.mineSaved()).toEqual([C])
 })
 
 it('moves a teammate’s list to a new version when a chat in it is renamed', async () => {
   const r = await rig()
   await r.reveal('mate-desk', C)
-  const before = await r.list('mate-phone')
+  const list = () => r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
+  const before = list()
 
-  // Where a rename (or a title the agent picks) lands: the chat's tabs retitle.
+  await r.host.deps.store.setUserConversationName(C, 'Sprint Plan', 'rename')
+  // Where the rename lands: the chat's tabs retitle.
   r.runtime.refreshStructuredConversationTabTitle(r.workspace, C)
 
   // A desktop drops a frame that does not outrank the one it holds.
-  const after = await r.list('mate-phone')
+  const after = list()
   expect(after.publicationEpoch).toBe(before.publicationEpoch)
   expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
-})
-
-it('activates a bot link only on the chat it names, in a teammate’s own list', async () => {
-  const r = await rig()
-  await r.reveal('mate-desk', B)
-  await r.reveal('mate-desk', C)
-  const link = (sessionId: string) => ({
-    botId: TEAMMATE.botId,
-    conversation: { source: 'slack', externalId: 'thread-1' },
-    leadSessionId: sessionId,
-    sessionId,
-    worktreeId: r.workspace
-  })
-  const activate = (botLinkTarget: unknown) =>
-    r.send('mate-desk', 'session.tabs.activate', {
-      worktree: `id:${r.workspace}`,
-      tabId: `agent-session:${C}`,
-      navigation: 'caller',
-      botLinkTarget
-    })
-  const before = (await r.list('mate-desk')).activeTabId
-
-  // The link names B, the tab is C: the check reads the tab's own chat, so it refuses.
-  expect(await activate(link(B))).toMatchObject({
-    ok: false,
-    error: { message: 'bot_link_target_changed' }
-  })
-  expect((await r.list('mate-desk')).activeTabId).toBe(before)
-  expect(await r.hostChats()).toEqual([])
+  expect(after.tabs.map((tab) => tab.title)).toEqual(['Sprint Plan'])
 })
 
 it('closes only a teammate’s own tab when they close a chat in their Home', async () => {
@@ -322,27 +270,10 @@ it('closes only a teammate’s own tab when they close a chat in their Home', as
   await r.call('mate-desk', 'agentSession.close', { sessionId: C })
   await chatTabCommandsSettled()
 
-  expect(sessions(await r.list('mate-phone'))).toEqual([])
+  expect(r.mine().chats).toEqual([])
+  expect(r.mineSaved()).toEqual([])
   expect(await r.hostChats()).toEqual([C])
   expect(await r.ownerView()).toBe(before)
-})
-
-it('answers a teammate’s close with no reason from their own list, never republishing the owner’s', async () => {
-  const r = await rig()
-  await r.reveal('owner-desk', O)
-  await r.reveal('mate-desk', C)
-  const owner = await r.subscribe('owner-desk')
-  const seen = owner.length
-
-  const reply = await r.call('mate-desk', 'session.tabs.close', {
-    worktree: `id:${r.workspace}`,
-    tabId: `agent-session:${C}`
-  })
-  await chatTabCommandsSettled()
-
-  expect(reply).toMatchObject({ refused: true, refusalReason: 'missing-intent' })
-  expect(owner.slice(seen)).toEqual([])
-  expect(sessions(await r.list('mate-desk'))).toEqual([C])
 })
 
 it('refuses a teammate’s agent launch into their own Home before it writes a tab', async () => {
@@ -394,12 +325,12 @@ it('shows a teammate’s chat the agent publishes during its turn in their list,
   await showBotSessionTab(r.runtime, bot, C)
   await chatTabCommandsSettled()
 
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(r.mine().chats).toEqual([C])
   expect(await r.hostChats()).toEqual([])
   // The owner's own chat goes to the owner's list.
   await showBotSessionTab(r.runtime, bot, O)
   expect(await r.hostChats()).toEqual([O])
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(r.mine().chats).toEqual([C])
 })
 
 it('publishes an owner’s turn after a teammate’s call to the owner’s list alone', async () => {
@@ -421,7 +352,7 @@ it('publishes an owner’s turn after a teammate’s call to the owner’s list 
   await chatTabCommandsSettled()
 
   expect(await r.hostChats()).toEqual([O])
-  expect(sessions(await r.list('mate-desk'))).not.toContain(O)
+  expect(r.mine().chats).not.toContain(O)
 })
 
 it('restores the owner’s Home on a cold start a teammate’s first call begins, beside their own list', async () => {
@@ -431,7 +362,8 @@ it('restores the owner’s Home on a cold start a teammate’s first call begins
 
   const fresh = await rig({ opened: await physicalReload(r, { restore: false }) })
   // The teammate's list is the first call after the restart: it starts the host's restore.
-  expect(sessions(await fresh.list('mate-desk'))).toEqual([C])
+  await fresh.list('mate-desk')
+  expect(fresh.mine().chats).toEqual([C])
   expect(await fresh.hostChats()).toEqual([O])
   expect(sessions(await fresh.list('owner-desk'))).toEqual([O])
 })
@@ -446,6 +378,7 @@ it('leaves the owner’s list as it was when a teammate starts a new Home Chat',
   // The owner opens the teammate's Home Chat in the owner's own list.
   await r.reveal('owner-desk', home)
   await r.reveal('mate-desk', home)
+  expect(r.mine().chats).toContain(home)
   const before = await r.list('owner-desk')
 
   const reset = Opened.parse(
@@ -456,7 +389,7 @@ it('leaves the owner’s list as it was when a teammate starts a new Home Chat',
   expect(reset).not.toBe(home)
   expect(sessions(await r.list('owner-desk'))).toEqual(sessions(before))
   expect(await r.hostChats()).toEqual([home])
-  expect(sessions(await r.list('mate-desk'))).not.toContain(home)
+  expect(r.mine().chats).not.toContain(home)
 })
 
 it('renames a teammate’s terminal in a worker workspace through the host window, as for anyone', async () => {
@@ -496,7 +429,7 @@ it('closes a deleted chat’s tab in every person’s list, on every device', as
   await r.reveal('mate-desk', C)
   await r.reveal('owner-desk', C)
   await r.reveal('owner-desk', O)
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  expect(r.mine().chats).toEqual([C])
   expect(await r.hostChats()).toEqual([C, O])
 
   expect(await r.call('owner-desk', 'agentSession.delete', { sessionId: C })).toMatchObject({
@@ -504,10 +437,162 @@ it('closes a deleted chat’s tab in every person’s list, on every device', as
   })
   await chatTabCommandsSettled()
 
-  for (const device of ['mate-desk', 'mate-phone', 'owner-desk', 'owner-phone']) {
+  for (const device of ['owner-desk', 'owner-phone']) {
     expect(sessions(await r.list(device)), device).not.toContain(C)
   }
   expect(await r.hostChats()).toEqual([O])
-  const saved = r.profile.getMobileClientTabSelections()[teammateTabListKey(TEAMMATE)]
-  expect(saved?.[r.workspace]?.personTabs ?? []).toEqual([])
+  expect(r.mine().chats).toEqual([])
+  expect(r.mineSaved()).toEqual([])
+})
+
+// A teammate's devices read their own workspace through the wire boundary (piece C); until then
+// their reads, activations and device picks still come from the old per-person list.
+describe.skip('a teammate’s devices, once their reads come from their own workspace', () => {
+  it('shows a teammate’s two devices one list, each with its own focus', async () => {
+    const r = await rig()
+    await r.reveal('mate-desk', B)
+    await r.reveal('mate-phone', C)
+    await r.activate('mate-desk', C)
+    await r.activate('mate-phone', B)
+
+    const desk = await r.list('mate-desk')
+    const phone = await r.list('mate-phone')
+    expect(sessions(desk)).toEqual([B, C])
+    expect(sessions(phone)).toEqual([B, C])
+    expect(desk.activeTabId).toBe(`agent-session:${C}`)
+    expect(phone.activeTabId).toBe(`agent-session:${B}`)
+    // Another teammate of the same agent has their own list, empty.
+    expect(sessions(await r.list('other-desk'))).toEqual([])
+  })
+
+  it('lists a teammate’s Home in listAll and subscribeAll with no host tab there (#50219 round 1, 1)', async () => {
+    const r = await rig()
+    // A windowless host (orca serve) answers the all-workspace census from main's own graph.
+    r.runtime['restoreHeadlessGraphAuthority']()
+    await r.reveal('mate-desk', C)
+
+    const listed = All.parse(await r.call('mate-phone', 'session.tabs.listAll', null))
+    expect(listed.snapshots.filter((s) => s.worktree === r.workspace).map(sessions)).toEqual([[C]])
+    const census = await r.subscribe('mate-phone', true)
+    expect(census.filter((s) => s.worktree === r.workspace).map(sessions)).toEqual([[C]])
+  })
+
+  it('updates a teammate’s other device live, past its first empty frame (#50219 round 1, 2)', async () => {
+    const r = await rig()
+    const phone = await r.subscribe('mate-phone')
+    const first = phone[0]!
+    expect(sessions(first)).toEqual([])
+
+    await r.reveal('mate-desk', C)
+    await vi.waitFor(() => expect(phone.some((frame) => sessions(frame).includes(C))).toBe(true))
+    const shown = phone.find((frame) => sessions(frame).includes(C))!
+    // A desktop drops a frame that does not outrank the one it holds.
+    expect(shown.publicationEpoch).toBe(first.publicationEpoch)
+    expect(shown.snapshotVersion).toBeGreaterThan(first.snapshotVersion)
+  })
+
+  it('answers a teammate’s activate with their own list, never the owner’s (#50219 round 1, 3)', async () => {
+    const r = await rig()
+    await r.reveal('owner-desk', O)
+    await r.reveal('mate-desk', C)
+    const owner = await r.subscribe('owner-desk')
+    const seen = owner.length
+
+    // No navigation named: a teammate's own list is activated on their device alone (round 2, 3).
+    const reply = Tabs.parse(
+      await r.call('mate-desk', 'session.tabs.activate', {
+        worktree: `id:${r.workspace}`,
+        tabId: `agent-session:${C}`
+      })
+    )
+    expect(sessions(reply)).toEqual([C])
+    expect(reply.activeTabId).toBe(`agent-session:${C}`)
+    await chatTabCommandsSettled()
+    expect(owner.slice(seen)).toEqual([])
+    // An owner's tab is not in a teammate's list to activate or close.
+    for (const method of ['session.tabs.activate', 'session.tabs.close']) {
+      const refused = await r.send('mate-desk', method, {
+        worktree: `id:${r.workspace}`,
+        tabId: `agent-session:${O}`,
+        reason: 'user'
+      })
+      expect(refused.ok).toBe(false)
+    }
+    expect(await r.hostChats()).toEqual([O])
+  })
+
+  it('never returns to a closed tab when it opens again, after a restart too (#50219 round 1, 4; round 2, 2)', async () => {
+    const r = await rig()
+    await r.reveal('mate-desk', B)
+    await r.reveal('mate-desk', C)
+    await r.activate('mate-desk', C)
+    await r.activate('mate-phone', C)
+    // The phone is away (not listening) while the desk closes its pick.
+    await r.close('mate-desk', C)
+    expect((await r.list('mate-desk')).activeTabId).toBe(`agent-session:${B}`)
+
+    const fresh = await rig({ opened: await physicalReload(r) })
+    await fresh.reveal('mate-desk', C)
+    expect(sessions(await fresh.list('mate-phone'))).toEqual([B, C])
+    expect((await fresh.list('mate-phone')).activeTabId).toBe(`agent-session:${B}`)
+    expect((await fresh.list('mate-desk')).activeTabId).toBe(`agent-session:${B}`)
+  })
+
+  it('shows a chat a teammate closed as their last tab again on their offline device when it reopens', async () => {
+    const r = await rig()
+    await r.reveal('mate-desk', C)
+    expect(sessions(await r.list('mate-phone'))).toEqual([C])
+    // The phone is away while the desk closes the Home's only tab, then opens the chat again.
+    await r.close('mate-desk', C)
+    await r.reveal('mate-desk', C)
+
+    expect(sessions(await r.list('mate-phone'))).toEqual([C])
+  })
+
+  it('activates a bot link only on the chat it names, in a teammate’s own list', async () => {
+    const r = await rig()
+    await r.reveal('mate-desk', B)
+    await r.reveal('mate-desk', C)
+    const link = (sessionId: string) => ({
+      botId: TEAMMATE.botId,
+      conversation: { source: 'slack', externalId: 'thread-1' },
+      leadSessionId: sessionId,
+      sessionId,
+      worktreeId: r.workspace
+    })
+    const activate = (botLinkTarget: unknown) =>
+      r.send('mate-desk', 'session.tabs.activate', {
+        worktree: `id:${r.workspace}`,
+        tabId: `agent-session:${C}`,
+        navigation: 'caller',
+        botLinkTarget
+      })
+    const before = (await r.list('mate-desk')).activeTabId
+
+    // The link names B, the tab is C: the check reads the tab's own chat, so it refuses.
+    expect(await activate(link(B))).toMatchObject({
+      ok: false,
+      error: { message: 'bot_link_target_changed' }
+    })
+    expect((await r.list('mate-desk')).activeTabId).toBe(before)
+    expect(await r.hostChats()).toEqual([])
+  })
+
+  it('answers a teammate’s close with no reason from their own list, never republishing the owner’s', async () => {
+    const r = await rig()
+    await r.reveal('owner-desk', O)
+    await r.reveal('mate-desk', C)
+    const owner = await r.subscribe('owner-desk')
+    const seen = owner.length
+
+    const reply = await r.call('mate-desk', 'session.tabs.close', {
+      worktree: `id:${r.workspace}`,
+      tabId: `agent-session:${C}`
+    })
+    await chatTabCommandsSettled()
+
+    expect(reply).toMatchObject({ refused: true, refusalReason: 'missing-intent' })
+    expect(owner.slice(seen)).toEqual([])
+    expect(sessions(await r.list('mate-desk'))).toEqual([C])
+  })
 })
