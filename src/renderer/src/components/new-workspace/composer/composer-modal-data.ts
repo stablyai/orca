@@ -31,6 +31,8 @@ export type ComposerModalData = {
   taskSourceContext?: TaskSourceContext | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
+  /** The base is only the checkout start point, never a branch picked to name the workspace. */
+  initialBaseBranchIsStartPoint?: boolean
   initialParentWorktreeId?: string
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean

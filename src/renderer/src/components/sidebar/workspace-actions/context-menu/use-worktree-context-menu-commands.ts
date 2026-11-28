@@ -191,7 +191,13 @@ export function useWorktreeContextMenuCommands(args: {
       return
     }
     args.setMenuOpenState(false)
+    // Detached, bare and unborn parents (all-zero head) keep the project default base.
+    const { branch, head } = args.worktree
+    const parentBranch = /[^0]/.test(head) ? branch.replace(/^refs\/heads\//, '') : ''
     args.openModal('new-workspace-composer', {
+      ...(parentBranch
+        ? { initialBaseBranch: `refs/heads/${parentBranch}`, initialBaseBranchIsStartPoint: true }
+        : {}),
       initialRepoId: repo.id,
       initialWorkspaceTarget: getRepoWorkspaceCreationTargetHint(repo, state.projectHostSetups),
       initialParentWorktreeId: args.worktree.id,

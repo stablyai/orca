@@ -42,6 +42,7 @@ export type UseComposerStateOptions = {
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
+  initialBaseBranchIsStartPoint?: boolean
   initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated?: () => void

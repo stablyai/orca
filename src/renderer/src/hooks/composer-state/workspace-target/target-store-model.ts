@@ -35,6 +35,7 @@ export type ComposerTargetStoreModel = {
   initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined
+  initialBaseBranchIsStartPoint?: boolean
   initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated: (() => void) | undefined
