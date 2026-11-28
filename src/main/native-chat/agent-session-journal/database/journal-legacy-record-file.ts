@@ -52,7 +52,7 @@ export function createJournalLegacyRecordStage(db: Database.Database): void {
 /** Reads only the opened file's initial extent and rechecks the handle and name before fallback. */
 async function readStableRecordFile(
   file: RecordFile,
-  consume: (bytes: Buffer) => void,
+  consume: (bytes: Buffer) => boolean,
   checkCancellation: () => void
 ): Promise<void> {
   checkCancellation()
@@ -78,7 +78,9 @@ async function readStableRecordFile(
         throw changedRecordFile()
       }
       offset += BigInt(bytesRead)
-      consume(buffer.subarray(0, bytesRead))
+      if (!consume(buffer.subarray(0, bytesRead))) {
+        break
+      }
     }
     const after = await handle.stat({ bigint: true })
     if (recordFileIdentity(after) !== file.identity) {
@@ -201,9 +203,9 @@ async function stageRecordFile(
       (assembler.depth === 1 && (assembler.key === 'schemaVersion' || assembler.key === 'hostId'))
   )
   const decoder = new StringDecoder('utf8')
-  const parse = (consume: () => void): void => {
+  const parse = (consume: () => void): boolean => {
     if (malformed) {
-      return
+      return false
     }
     try {
       consume()
@@ -212,7 +214,7 @@ async function stageRecordFile(
         throw error
       }
       malformed = true
-      return
+      return false
     }
     if (pending.length > 0) {
       runJournalTransaction(db, () => {
@@ -227,6 +229,7 @@ async function stageRecordFile(
       })
       pending.length = 0
     }
+    return true
   }
   await readStableRecordFile(
     file,

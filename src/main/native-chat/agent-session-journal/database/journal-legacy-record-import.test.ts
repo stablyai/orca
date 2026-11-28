@@ -9,6 +9,7 @@ import {
   truncateSync,
   writeFileSync
 } from 'node:fs'
+import * as filePromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -262,6 +263,33 @@ it.each([false, true])(
     }
   }
 )
+
+it('stops reading a definitively malformed primary and still validates the backup', async () => {
+  const open = filePromises.open
+  const primaryReadCounts: (() => number)[] = []
+  const primaryPaths = new Set<string>()
+  vi.spyOn(filePromises, 'open').mockImplementation(async (...args) => {
+    const handle = await open(...args)
+    if (typeof args[0] === 'string' && primaryPaths.has(args[0])) {
+      const read = vi.spyOn(handle, 'read')
+      primaryReadCounts.push(() => read.mock.calls.length)
+    }
+    return handle
+  })
+  for (const size of [128 * 1024, 1280 * 1024]) {
+    const { root, primary, backup } = profile()
+    primaryPaths.add(primary)
+    writeFileSync(primary, `{invalid:${'x'.repeat(size)}`)
+    saveRecords(backup, { 'saved-chat': stored('saved-chat') }, { unknown: 'x'.repeat(size) })
+    const db = new Database(await initializeJournalDomainDatabase(root))
+    try {
+      expect(loadAgentSessionStoreRows(db).records.has('saved-chat')).toBe(true)
+    } finally {
+      db.close()
+    }
+  }
+  expect(primaryReadCounts.map((count) => count())).toEqual([1, 1])
+})
 
 it('refuses indeterminate inputs before publishing, and leaves the same profile eligible for retry', async () => {
   const { root, primary, backup } = profile()
