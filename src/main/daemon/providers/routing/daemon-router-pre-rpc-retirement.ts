@@ -28,7 +28,8 @@ export class DaemonRouterPreRpcRetirement {
   /** Asked again while checking: the running inventory may predate the exit that asked. */
   private readonly checkAgain = new Set<DaemonPtyAdapter>()
   private readonly waitingForQuiet = new Set<DaemonPtyAdapter>()
-  private readonly fences = new Set<Promise<void>>()
+  /** Each decision's fence, by the generation deciding. */
+  private readonly fences = new Map<Promise<void>, DaemonPtyAdapter>()
   // Weak: a generation can also leave through the endpoint-loss path, which never tells this class.
   private readonly recheckDelays = new WeakMap<DaemonPtyAdapter, number>()
   private readonly rechecks = new WeakMap<DaemonPtyAdapter, number>()
@@ -49,10 +50,13 @@ export class DaemonRouterPreRpcRetirement {
     }
   ) {}
 
-  /** Call before routing any spawn that may reach an older generation; call the result when it settles. */
-  async admitReattach(): Promise<() => void> {
-    while (this.fences.size > 0) {
-      await Promise.all(this.fences)
+  /**
+   * Call before routing any spawn that may reach an older generation; call the result when it settles.
+   * A spawn already routed to one generation waits only for that generation's decision.
+   */
+  async admitReattach(route?: DaemonPtyAdapter): Promise<() => void> {
+    for (let pending = this.fencesFor(route); pending.length > 0; pending = this.fencesFor(route)) {
+      await Promise.all(pending)
     }
     // Counted in the same turn the loop saw no fence, so no decision can start between.
     this.reattachesInFlight++
@@ -71,6 +75,16 @@ export class DaemonRouterPreRpcRetirement {
         }
       }
     }
+  }
+
+  private fencesFor(route: DaemonPtyAdapter | undefined): Promise<void>[] {
+    const pending: Promise<void>[] = []
+    for (const [fence, adapter] of this.fences) {
+      if (route === undefined || adapter === route) {
+        pending.push(fence)
+      }
+    }
+    return pending
   }
 
   /** An exit or discovery: check soon and restart the recheck backoff. */
@@ -248,7 +262,7 @@ export class DaemonRouterPreRpcRetirement {
     // From this turn until the generation answers, reattaches wait instead of probing it.
     let releaseFence!: () => void
     const fence = new Promise<void>((resolve) => (releaseFence = resolve))
-    this.fences.add(fence)
+    this.fences.set(fence, adapter)
     const fenceTimer = setTimeout(() => {
       this.fences.delete(fence)
       releaseFence()

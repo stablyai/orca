@@ -141,6 +141,11 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
     return this.activeSessionIds.size > 0 || this.exitsClassifying > 0
   }
 
+  /** Nothing watched, and its connection closed after delivering every event it had buffered. */
+  hasDeliveredOwedEvents(): boolean {
+    return !this.hasWatchedSessions() && !this.client.isConnected()
+  }
+
   protected daemonProcessExited(pid: number | undefined): boolean {
     return preservedDaemonProcessExited(pid)
   }

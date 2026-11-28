@@ -91,7 +91,7 @@ export class DaemonRouterSpawn {
       this.state.legacy.length > 0 &&
       route !== this.state.current() &&
       (!opts.isNewSession || route !== undefined)
-    const releaseReattach = mayReachLegacy ? await this.legacyIdle.admitReattach() : null
+    const releaseReattach = mayReachLegacy ? await this.legacyIdle.admitReattach(route) : null
     if (retirement.admissionClosed) {
       releaseReattach?.()
       throw new Error('Terminal daemon is decommissioning')

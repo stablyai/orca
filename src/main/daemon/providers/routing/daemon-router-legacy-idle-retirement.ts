@@ -61,8 +61,8 @@ export class DaemonRouterLegacyIdleRetirement {
     })
   }
 
-  admitReattach(): Promise<() => void> {
-    return this.preRpc.admitReattach()
+  admitReattach(route?: DaemonPtyAdapter): Promise<() => void> {
+    return this.preRpc.admitReattach(route)
   }
 
   /** An exit or discovery on the generation. */
@@ -120,6 +120,24 @@ export class DaemonRouterLegacyIdleRetirement {
     if (reached && isAdmissionRefusal(error) && this.modes.get(reached) === 'pre-rpc') {
       await this.preRpc.askAgain(reached)
       return !this.options.legacy().includes(reached) || !reached.isIdleRetirementAdmissionClosed()
+    }
+    // Attach-only picks its owner internally: re-ask each fenced generation it may have reached.
+    if (target === 'any' && isAdmissionRefusal(error)) {
+      const fenced = this.options
+        .legacy()
+        .filter(
+          (adapter) =>
+            this.modes.get(adapter) === 'pre-rpc' && adapter.isIdleRetirementAdmissionClosed()
+        )
+      await Promise.all(fenced.map((adapter) => this.preRpc.askAgain(adapter)))
+      if (
+        fenced.some(
+          (adapter) =>
+            !this.options.legacy().includes(adapter) || !adapter.isIdleRetirementAdmissionClosed()
+        )
+      ) {
+        return true
+      }
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     // Only the generation the spawn reached can have refused it before its close arrives.

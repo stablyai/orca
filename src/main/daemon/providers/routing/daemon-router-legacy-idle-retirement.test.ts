@@ -329,7 +329,8 @@ describe('the transitional recheck timer', () => {
       sessions: [],
       liveRelays: 1
     }
-    const state = { watched: false, admissionClosed: false, retired: false }
+    const state = { watched: false, admissionClosed: false, retired: false, connected: false }
+    const connectionLost: (() => void)[] = []
     const base = {
       hasRetiredForIdle: () => false,
       wasAskedToRetireWhenIdle: () => false,
@@ -350,13 +351,24 @@ describe('the transitional recheck timer', () => {
       hasRetiredForIdle: () => state.retired,
       getActiveSessionIds: () => [],
       hasWatchedSessions: () => state.watched,
+      hasDeliveredOwedEvents: () => !state.watched && !state.connected,
+      onConnectionLost: (listener: () => void) => {
+        connectionLost.push(listener)
+        return () => {}
+      },
       isIdleRetirementAdmissionClosed: () => state.admissionClosed,
       requestIdleRetirement: vi.fn(async () => {
         state.retired = true
         return { state: 'retiring' }
       })
     })
-    return { current, held, preRpc, inventory, state }
+    const loseConnection = (): void => {
+      state.connected = false
+      for (const listener of connectionLost.splice(0)) {
+        listener()
+      }
+    }
+    return { current, held, preRpc, inventory, state, loseConnection }
   }
 
   afterEach(() => {
@@ -592,6 +604,8 @@ describe('the transitional recheck timer', () => {
         return () => {}
       },
       hasWatchedSessions: () => watched.value,
+      hasDeliveredOwedEvents: () => !watched.value,
+      onConnectionLost: () => () => {},
       hasRetiredForIdle: () => true,
       disconnectOnly
     })
@@ -642,6 +656,78 @@ describe('the transitional recheck timer', () => {
     await vi.advanceTimersByTimeAsync(0)
     await expect(settled).resolves.toBe(true)
     expect(decide).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a retired generation subscribed until its connection closes and drains its stream', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory, state, loseConnection } = stubs()
+    // Inventory already dropped its last terminal; that terminal's exit is still on the stream.
+    Object.assign(state, { admissionClosed: true, connected: true })
+    inventory.liveRelays = 0
+    const { legacy, released, retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(state.retired).toBe(true)
+    expect(legacy).toEqual([])
+    expect(released).toEqual([])
+    loseConnection()
+    expect(released).toEqual([preRpc])
+  })
+
+  it('asks a fenced generation again when an attach-only restore it may own is refused', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, state } = stubs()
+    const { retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    state.admissionClosed = true
+    const decide = vi.mocked(preRpc.requestIdleRetirement)
+    decide.mockImplementation(async () => {
+      state.admissionClosed = false
+      return { state: 'busy', liveSessions: 1 }
+    })
+    const refused = new Error('Terminal daemon is decommissioning')
+    await expect(retirement.settleHeldRetirements(refused, 1, 'any')).resolves.toBe(true)
+    expect(decide).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds a reattach routed to one older generation only for that generation’s decision', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, inventory } = stubs()
+    const other = stubs().preRpc
+    inventory.liveRelays = 0
+    let answer!: () => void
+    vi.mocked(preRpc.requestIdleRetirement).mockImplementation(
+      () => new Promise((resolve) => (answer = () => resolve({ state: 'busy', liveSessions: 0 })))
+    )
+    const legacy = [preRpc, other]
+    const retirement = new DaemonRouterLegacyIdleRetirement({
+      current: () => current,
+      legacy: () => legacy,
+      drop: () => {},
+      unroute: () => true,
+      release: () => {}
+    })
+    retirement.noteActivity(preRpc)
+    await vi.advanceTimersByTimeAsync(300)
+    expect(vi.mocked(preRpc.requestIdleRetirement)).toHaveBeenCalledTimes(1)
+
+    let routedToOther = false
+    void retirement.admitReattach(other).then((release) => {
+      routedToOther = true
+      release()
+    })
+    let unrouted = false
+    void retirement.admitReattach().then((release) => {
+      unrouted = true
+      release()
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(routedToOther).toBe(true)
+    expect(unrouted).toBe(false)
+    answer()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(unrouted).toBe(true)
   })
 
   it('stops rechecking a fenced generation after the cap, and asks it again when it refuses a spawn', async () => {

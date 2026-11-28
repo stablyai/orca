@@ -13,12 +13,15 @@ export type RetiredExitDeliveryOptions = {
   maxMs: number | undefined
 }
 
+type Lingering = { timer: ReturnType<typeof setTimeout>; stopListening: () => void }
+
 /**
- * A retired older generation owns nothing, so it gets no new work at once; but exits it still owes
- * this app's terminals (a WSL pane's comes late) arrive before it is unsubscribed.
+ * A retired older generation owns nothing, so it gets no new work at once. It stays subscribed
+ * until its connection has closed (which delivers every event still buffered on its stream) and no
+ * watched terminal's exit is pending (a WSL pane's comes late), or until the bound passes.
  */
 export class DaemonRouterRetiredExitDelivery {
-  private readonly lingering = new Map<DaemonPtyAdapter, ReturnType<typeof setTimeout>>()
+  private readonly lingering = new Map<DaemonPtyAdapter, Lingering>()
 
   constructor(private readonly options: RetiredExitDeliveryOptions) {}
 
@@ -36,9 +39,9 @@ export class DaemonRouterRetiredExitDelivery {
     queueMicrotask(() => this.settle(adapter))
   }
 
-  /** The generation retired, or one of its owed exits arrived. */
+  /** The generation retired, its connection closed, or one of its owed exits arrived. */
   settle(adapter: DaemonPtyAdapter): void {
-    if (!adapter.hasWatchedSessions()) {
+    if (adapter.hasDeliveredOwedEvents()) {
       this.finish(adapter)
       return
     }
@@ -50,8 +53,9 @@ export class DaemonRouterRetiredExitDelivery {
 
   /** `carried`: a restart hands these to the next router, which releases them. */
   dispose(carried: boolean): void {
-    for (const [adapter, timer] of this.lingering) {
+    for (const [adapter, { timer, stopListening }] of this.lingering) {
       clearTimeout(timer)
+      stopListening()
       if (!carried) {
         this.options.release(adapter)
       }
@@ -62,16 +66,19 @@ export class DaemonRouterRetiredExitDelivery {
   private wait(adapter: DaemonPtyAdapter): void {
     const timer = setTimeout(() => this.finish(adapter), this.options.maxMs ?? EXIT_DELIVERY_MAX_MS)
     timer.unref?.()
-    this.lingering.set(adapter, timer)
+    // Fires after the client drains what its stream had buffered.
+    const stopListening = adapter.onConnectionLost(() => this.settle(adapter))
+    this.lingering.set(adapter, { timer, stopListening })
   }
 
   private finish(adapter: DaemonPtyAdapter): void {
-    const timer = this.lingering.get(adapter)
-    if (timer === undefined) {
+    const entry = this.lingering.get(adapter)
+    if (entry === undefined) {
       this.options.drop(adapter)
       return
     }
-    clearTimeout(timer)
+    clearTimeout(entry.timer)
+    entry.stopListening()
     this.lingering.delete(adapter)
     this.options.release(adapter)
   }
