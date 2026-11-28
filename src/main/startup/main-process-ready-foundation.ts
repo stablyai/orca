@@ -119,7 +119,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   if (state.isServeMode) {
     // Profile loading can decrypt and hang; fence unreachable keychains first.
     await withholdUnreachableKeychainForServe({
-      usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
+      usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain'),
+      // Source runs use ad-hoc-signed Electron, whose Keychain ACL breaks on every Electron upgrade;
+      // a packaged binary would ignore the probe script and boot a second Orca.
+      accessProbe: app.isPackaged
+        ? undefined
+        : { electronPath: process.execPath, appName: app.getName() }
     })
   }
   // Managed WSL launchers live outside the bundle; reconcile launcher/bridge compatibility after app updates.
