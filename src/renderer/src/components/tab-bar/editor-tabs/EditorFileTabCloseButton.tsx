@@ -15,7 +15,7 @@ export function EditorFileTabCloseButton({
     <button
       className={`flex items-center justify-center w-4 h-4 rounded-sm ${
         fileIsDirty
-          ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
+          ? 'hidden group-hover:flex group-focus-within:flex text-muted-foreground hover:text-foreground hover:bg-muted'
           : showsSelectionChrome
             ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
             : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
