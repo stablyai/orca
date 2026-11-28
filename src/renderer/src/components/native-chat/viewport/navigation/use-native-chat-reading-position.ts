@@ -11,6 +11,11 @@ import {
 // Why: a chat view released while hidden comes back where its reader left off, not at the end.
 // A newer read generation can supersede the first page while the chat's read owner reactivates.
 const MAX_RESTORE_ATTEMPTS = 5
+/**
+ * Older pages (200 rows each) a return reads to reach its bookmark; one deeper opens at the end, so a switch never
+ * replays a long chat's history.
+ */
+export const NATIVE_CHAT_RESTORE_MAX_PAGES = 3
 
 export type NativeChatReadingPosition = { messageId: string; offset: number }
 

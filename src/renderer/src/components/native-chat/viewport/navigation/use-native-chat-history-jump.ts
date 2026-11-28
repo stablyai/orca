@@ -10,7 +10,8 @@ export const NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES = 1000
 /** A rail pick, or the subagent a view shows, whose spawn may sit in older history. */
 export type NativeChatHistoryJumpTarget =
   | { kind: 'rail'; id: string }
-  | { kind: 'item'; id: string; offset?: number }
+  /** `maxPages` bounds the older pages read for it; past that it is `missing`. */
+  | { kind: 'item'; id: string; offset?: number; maxPages?: number }
   | { kind: 'subagent'; agentId: string }
 
 /** What the committed transcript can do for a target now; `failed` means a page could not load, so a retry may reach it. */
@@ -92,6 +93,10 @@ export function useNativeChatHistoryJump({
       target: NativeChatHistoryJumpTarget,
       signal: AbortSignal
     ): Promise<HistoryJumpResult> => {
+      const maxPages =
+        target.kind === 'item' && target.maxPages !== undefined
+          ? target.maxPages
+          : NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES
       for (let pages = 0; ; pages += 1) {
         if (signal.aborted) {
           return 'aborted'
@@ -100,7 +105,7 @@ export function useNativeChatHistoryJump({
         if (next === 'landed') {
           return 'landed'
         }
-        if (next === 'stop' || pages >= NATIVE_CHAT_HISTORY_JUMP_MAX_PAGES) {
+        if (next === 'stop' || pages >= maxPages) {
           return 'missing'
         }
         const result = await committedRef.current.loadEarlier()

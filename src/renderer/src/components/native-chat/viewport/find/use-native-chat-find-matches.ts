@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNativeChatViewRef } from '../../pane/ownership/native-chat-view-memory'
+import { keptMatchIndex, keptMatchOf, type KeptMatch } from './native-chat-find-kept-match'
 import {
   createDomTextSearchHighlights,
   findDomTextSearchRanges,
@@ -59,7 +61,6 @@ function visibleTextScope(reuse: Range[]): DomTextSearchScope {
 }
 
 type MatchAnchor = { node: Node; offset: number }
-
 function anchorOf(range: Range | undefined): MatchAnchor | null {
   return range ? { node: range.startContainer, offset: range.startOffset } : null
 }
@@ -140,15 +141,20 @@ export function useNativeChatFindMatches({
   const searchedQueryRef = useRef<string | null>(restoredQuery)
   // Text nodes holding a match: React rewrites a growing node whole, which collapses its ranges.
   const matchNodesRef = useRef<ReadonlySet<Node>>(new Set())
+  // Kept with the chat tab, so a chat switched back to resumes Next/Previous from the match it left on.
+  const keptRef = useNativeChatViewRef<KeptMatch | null>('find-active', null)
 
   const activate = useCallback(
     (matches: readonly Range[], index: number) => {
       activeIndexRef.current = index
       anchorRef.current = anchorOf(matches[index])
+      if (index >= 0 && searchedQueryRef.current) {
+        keptRef.current = keptMatchOf(matches, index, searchedQueryRef.current)
+      }
       chatFindHighlights.setActive(instance, matches[index])
       setActiveIndex(index)
     },
-    [instance]
+    [instance, keptRef]
   )
 
   const search = useCallback(() => {
@@ -173,6 +179,13 @@ export function useNativeChatFindMatches({
       activate(matches, survivingMatchIndex(matches, anchor))
       return
     }
+    const kept = keptRef.current
+    const keptIndex =
+      !newQuery && !anchor && kept?.query === query ? keptMatchIndex(matches, kept) : -1
+    if (keptIndex !== -1) {
+      activate(matches, keptIndex)
+      return
+    }
     // A new query, or the active match's row scrolled out of the window: start from what is on screen.
     const bar = barRef.current?.getBoundingClientRect() ?? null
     const first = firstVisibleMatch(matches, scroller, bar)
@@ -180,7 +193,7 @@ export function useNativeChatFindMatches({
     if (newQuery && first.index !== -1 && !first.inView) {
       revealMatch(matches[first.index])
     }
-  }, [activate, barRef, instance, query, revealMatch, rootRef])
+  }, [activate, barRef, instance, keptRef, query, revealMatch, rootRef])
 
   useEffect(() => {
     const root = rootRef.current

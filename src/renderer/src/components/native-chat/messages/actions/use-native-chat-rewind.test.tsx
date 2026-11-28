@@ -92,3 +92,58 @@ it('a chat released mid-rewind keeps refusing sends until the rewound conversati
   const later = renderHook(() => useNativeChatRewind(cold), { wrapper: inTab })
   expect(later.result.current.admitsSend()).toBe(true)
 })
+
+it("a rewind reply landing after the tab moved to another conversation never blocks that conversation's sends", async () => {
+  const sent = Promise.withResolvers<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>()
+  const showing = (conversation: string) =>
+    function InConversation({ children }: { children: ReactNode }) {
+      return (
+        <NativeChatViewTabContext value={{ ...TAB, conversation }}>
+          {children}
+        </NativeChatViewTabContext>
+      )
+    }
+  const state = {
+    ...EMPTY_STRUCTURED_AGENT_SESSION,
+    epoch: 'e1',
+    fence: 1,
+    status: 'ready' as const,
+    items: [
+      {
+        itemId: 'user-1',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'message' as const, role: 'user' as const, blocks: [] }
+      }
+    ]
+  }
+  const input = {
+    sessionId: 'session-a',
+    capturePresentation: () => () => true,
+    state,
+    support: { supported: true as const },
+    blocked: false,
+    send: () => sent.promise
+  }
+  const first = renderHook(() => useNativeChatRewind(input), { wrapper: showing('claude:a') })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rewind only awaits the confirm's answer.
+  const confirm = (() => Promise.resolve(true)) as unknown as ConfirmationDialogContextValue
+  await act(async () => {
+    void first.result.current.request('user-1', confirm)
+    for (let tick = 0; tick < 5; tick++) {
+      await Promise.resolve()
+    }
+  })
+  first.unmount()
+  const other = renderHook(() => useNativeChatRewind({ ...input, sessionId: 'session-b' }), {
+    wrapper: showing('claude:b')
+  })
+  await act(async () => {
+    sent.resolve({ kind: 'done', value: { itemId: 'user-1', epoch: 'e2', sequence: 5 } })
+    for (let tick = 0; tick < 5; tick++) {
+      await Promise.resolve()
+    }
+  })
+  expect(other.result.current.admitsSend()).toBe(true)
+})
