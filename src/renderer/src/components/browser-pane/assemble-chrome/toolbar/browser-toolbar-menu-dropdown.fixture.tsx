@@ -18,14 +18,23 @@ const PROFILES: BrowserSessionProfile[] = [
     scope: 'default',
     partition: 'persist:orca-browser',
     label: 'Default',
-    source: null
+    source: {
+      browserFamily: 'chrome',
+      profileName: 'Personal',
+      importedAt: 1735689600000,
+      chromeProfile: { id: '4f7b4052-00aa-48ac-b17f-87b1372f6524', directory: 'Default' }
+    }
   },
   {
     id: 'fixture-work',
     scope: 'isolated',
     partition: 'persist:orca-browser-fixture-work',
     label: 'Work',
-    source: null
+    source: {
+      browserFamily: 'firefox',
+      profileName: 'default-release',
+      importedAt: 1735776000000
+    }
   }
 ]
 
@@ -165,6 +174,8 @@ function Toolbar({
               browserPageId: 'fixture-page',
               allProfiles: PROFILES,
               effectiveProfileId: 'default',
+              pageRoute,
+              canRefreshFromChrome: true,
               onSwitchProfile: noop,
               onNewProfile: noop
             }}

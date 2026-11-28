@@ -158,6 +158,7 @@ export function BrowserSessionCookiesSection({
 
       <div className="space-y-2">
         <BrowserProfileRow
+          hostId={selectedHostId}
           profile={
             defaultProfile ?? {
               id: 'default',
@@ -175,6 +176,7 @@ export function BrowserSessionCookiesSection({
         />
         {nonDefaultProfiles.map((profile) => (
           <BrowserProfileRow
+            hostId={selectedHostId}
             key={profile.id}
             profile={profile}
             detectedBrowsers={detectedBrowsers}

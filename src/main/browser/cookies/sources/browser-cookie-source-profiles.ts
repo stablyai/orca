@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { access, readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { BrowserSessionProfileSource } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
@@ -14,7 +15,25 @@ export type DetectedBrowser = {
   keychainService?: string
   keychainAccount?: string
   profiles: BrowserProfile[]
+  profilesFromLocalState?: boolean
   selectedProfile: string
+}
+
+export function importedBrowserProfileSource(
+  browser: DetectedBrowser
+): BrowserSessionProfileSource {
+  const directory = browser.selectedProfile
+  return {
+    browserFamily: browser.family,
+    profileName:
+      browser.profiles.find((profile) => profile.directory === directory)?.name ?? directory,
+    ...(browser.family === 'chrome' &&
+      browser.profilesFromLocalState &&
+      browser.profiles.some((profile) => profile.directory === directory) && {
+        chromeProfile: { directory, id: randomUUID() }
+      }),
+    importedAt: Date.now()
+  }
 }
 
 export type ChromiumBrowserDef = {
@@ -118,8 +137,9 @@ export function browserRootPath(def: ChromiumBrowserDef): string | null {
   return join(configHome, def.linuxRoot)
 }
 
-export function isSafeBrowserProfileDirectory(directory: string): boolean {
+export function isSafeBrowserProfileDirectory(directory: unknown): directory is string {
   return (
+    typeof directory === 'string' &&
     directory.length > 0 &&
     directory !== '.' &&
     !directory.includes('\0') &&
@@ -129,18 +149,26 @@ export function isSafeBrowserProfileDirectory(directory: string): boolean {
   )
 }
 
+export async function browserCookieFileExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
 // Local State maps profile directories to display names.
-export function discoverProfiles(browserRoot: string): BrowserProfile[] {
+export async function discoverListedChromiumProfiles(
+  browserRoot: string
+): Promise<BrowserProfile[]> {
   try {
     const localStatePath = join(browserRoot, 'Local State')
-    if (!existsSync(localStatePath)) {
-      return [{ name: 'Default', directory: 'Default' }]
-    }
-    const raw = readFileSync(localStatePath, 'utf-8')
+    const raw = await readFile(localStatePath, 'utf-8')
     const localState = JSON.parse(raw)
     const infoCache = localState?.profile?.info_cache
-    if (!infoCache || typeof infoCache !== 'object') {
-      return [{ name: 'Default', directory: 'Default' }]
+    if (!infoCache || typeof infoCache !== 'object' || Array.isArray(infoCache)) {
+      return []
     }
     const profiles: BrowserProfile[] = []
     for (const [dir, info] of Object.entries(infoCache)) {
@@ -151,9 +179,9 @@ export function discoverProfiles(browserRoot: string): BrowserProfile[] {
       const profileName = (info as { name?: string })?.name ?? dir
       profiles.push({ name: profileName, directory: dir })
     }
-    return profiles.length > 0 ? profiles : [{ name: 'Default', directory: 'Default' }]
+    return profiles
   } catch {
-    return [{ name: 'Default', directory: 'Default' }]
+    return []
   }
 }
 
@@ -170,16 +198,13 @@ export function firefoxProfilesRoot(): string | null {
   return join(home, '.mozilla', 'firefox')
 }
 
-export function discoverFirefoxProfiles(): BrowserProfile[] {
+async function discoverFirefoxProfiles(): Promise<BrowserProfile[]> {
   const profilesRoot = firefoxProfilesRoot()
   if (!profilesRoot) {
     return []
   }
   try {
-    if (!existsSync(profilesRoot)) {
-      return []
-    }
-    const entries = readdirSync(profilesRoot, { withFileTypes: true })
+    const entries = (await readdir(profilesRoot, { withFileTypes: true }))
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
     // Firefox usually uses default-release as the primary profile.
@@ -207,15 +232,15 @@ export function discoverFirefoxProfiles(): BrowserProfile[] {
   }
 }
 
-export function detectFirefox(): DetectedBrowser | null {
+export async function detectFirefox(): Promise<DetectedBrowser | null> {
   const profilesRoot = firefoxProfilesRoot()
   if (!profilesRoot) {
     return null
   }
-  const profiles = discoverFirefoxProfiles()
+  const profiles = await discoverFirefoxProfiles()
   for (const profile of profiles) {
     const cookiesPath = join(profilesRoot, profile.directory, 'cookies.sqlite')
-    if (existsSync(cookiesPath)) {
+    if (await browserCookieFileExists(cookiesPath)) {
       return {
         family: 'firefox',
         label: 'Firefox',

@@ -150,6 +150,8 @@ export type BrowserSessionProfileSource = {
     | 'vivaldi'
     | 'manual'
   profileName?: string
+  /** The id binds refresh to this successful import on the destination host. */
+  chromeProfile?: { directory: string; id: string }
   importedAt: number
 }
 
@@ -187,6 +189,10 @@ export type BrowserCookieImportSummary = {
     keyringFailure?: { cause: LinuxCookieKeyFailure; browser: string }
   }
 }
+
+export type BrowserCookieImportSelection =
+  | { browserFamily: string; browserProfile?: string }
+  | { refreshSourceId: string }
 
 /** `sshTargetId` fills that SSH host's page jar instead of the profile's own. */
 export type BrowserProfileCookieImportArgs = { profileId: string; sshTargetId?: string }

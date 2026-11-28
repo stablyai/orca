@@ -9,6 +9,7 @@ import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
+import { importCookiesIntoBrowserProfile } from '../../browser/cookies/imports/browser-profile-cookie-import'
 import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
 import {
   browserCookieImportSource,
@@ -20,6 +21,7 @@ import {
 } from '../../browser/cookies/route-partition/browser-ssh-route-cookie-import'
 import type {
   BrowserCookieImportResult,
+  BrowserCookieImportSelection,
   BrowserSessionProfile,
   BrowserSessionProfileScope
 } from '../../../shared/browser/workspaces/browser-workspace-types'
@@ -146,12 +148,8 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
       if ('reason' in source) {
         return source
       }
-      const result = await source.importInto(profile.partition)
+      const result = await importCookiesIntoBrowserProfile(profile, () => source)
       if (result.ok) {
-        browserSessionRegistry.updateProfileSource(args.profileId, {
-          ...source.badge,
-          importedAt: Date.now()
-        })
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result
@@ -214,17 +212,23 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
   registerClientHostCookieImportHandlers(ipc)
   registerCookieClearHandlers(ipc)
 
-  ipc.handle('browser:session:detectBrowsers', (event): DetectedBrowserPickerEntry[] => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return []
+  ipc.handle(
+    'browser:session:detectBrowsers',
+    async (event): Promise<DetectedBrowserPickerEntry[]> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return []
+      }
+      return detectedBrowserPickerEntries()
     }
-    return detectedBrowserPickerEntries()
-  })
+  )
 
   // List browsers on the machine whose cookie store import will read.
   ipc.handle(
     'browser:session:detectBrowsersForClientHost',
-    (event, args: { environmentId: string }): DetectedBrowserPickerEntry[] | null => {
+    async (
+      event,
+      args: { environmentId: string }
+    ): Promise<DetectedBrowserPickerEntry[] | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return []
       }
@@ -239,18 +243,19 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
     'browser:session:importFromBrowser',
     async (
       event,
-      args: {
-        profileId: string
-        browserFamily: string
-        browserProfile?: string
-        sshTargetId?: unknown
-      }
+      args: { profileId: string; sshTargetId?: unknown } & BrowserCookieImportSelection
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
       }
-      const sshTargetId = sshRouteTargetId(args)
-      if (sshTargetId) {
+      if (args.sshTargetId !== undefined) {
+        if ('refreshSourceId' in args) {
+          return browserCookieImportFailure('savedChromeProfileUnavailable')
+        }
+        const sshTargetId = sshRouteTargetId(args)
+        if (!sshTargetId) {
+          return browserCookieImportFailure('sshHostDisconnected')
+        }
         return importCookiesIntoSshRoutePartition({
           sshTargetId,
           browserProfileId: args.profileId,
@@ -263,16 +268,10 @@ export function registerBrowserSessionProfileHandlers(ipc: IpcHandleRegistrar = 
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
-      const source = browserCookieImportSource(args)
-      if ('reason' in source) {
-        return source
-      }
-      const result = await source.importInto(profile.partition)
+      const result = await importCookiesIntoBrowserProfile(profile, (previous) =>
+        browserCookieImportSource(args, previous)
+      )
       if (result.ok) {
-        browserSessionRegistry.updateProfileSource(args.profileId, {
-          ...source.badge,
-          importedAt: Date.now()
-        })
         return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
       }
       return result
@@ -300,8 +299,8 @@ type DetectedBrowserPickerEntry = {
 }
 
 // Return picker metadata only; keep cookie paths and keychain identifiers in main.
-function detectedBrowserPickerEntries(): DetectedBrowserPickerEntry[] {
-  return detectInstalledBrowsers().map((browser) => ({
+async function detectedBrowserPickerEntries(): Promise<DetectedBrowserPickerEntry[]> {
+  return (await detectInstalledBrowsers()).map((browser) => ({
     family: browser.family,
     label: browser.label,
     profiles: browser.profiles,

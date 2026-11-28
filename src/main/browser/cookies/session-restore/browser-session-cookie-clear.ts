@@ -1,7 +1,10 @@
-import type { Session } from 'electron'
+import { session, type Session } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
 import { cdpCookieScopeKey } from '../browser-cookie-clear-store'
-import { withCookieMutationLock } from '../mutation/cookie-mutation-lock'
+import {
+  withCookieImportSourceLock,
+  withCookieMutationLock
+} from '../mutation/cookie-mutation-lock'
 import { groupByScope, noteScopeChange } from './browser-session-cookie-scopes'
 import { scheduleSave, writeTrackedSnapshot } from './browser-session-cookie-restore'
 import {
@@ -20,6 +23,20 @@ export async function clearBrowserCookieJar(target: Session): Promise<void> {
   if (!persisted) {
     throw new Error('browser_cookie_clear_not_persisted')
   }
+}
+
+export async function clearBrowserCookieJarWithSource(
+  partition: string,
+  clearSource: () => boolean | Promise<boolean>
+): Promise<boolean> {
+  const target = session.fromPartition(partition)
+  return withCookieImportSourceLock(target, async () => {
+    if (!(await clearSource())) {
+      return false
+    }
+    await clearBrowserCookieJar(target)
+    return true
+  })
 }
 
 /** For a clear already made in the live jar: see `clearCookiesDurably`. */

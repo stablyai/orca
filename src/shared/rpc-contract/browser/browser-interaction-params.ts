@@ -129,26 +129,12 @@ export const TabProfileClone = lazyZodSchema(() =>
   })
 )
 
-export const ProfileDelete = lazyZodSchema(() =>
-  z.object({ profileId: requiredString('Missing required --profile') })
-)
-
-export const ProfileClearGoogleCookies = lazyZodSchema(() =>
-  ProfileDelete.extend({
-    executorRuntimeId: z.string().min(1)
-  })
-)
-
-export const ProfileClearCookies = ProfileClearGoogleCookies
-
-export const ProfileImportFromBrowser = lazyZodSchema(() =>
-  z.object({
-    profileId: requiredString('Missing required --profile'),
-    browserFamily: requiredString('Missing required --browser-family'),
-    browserProfile: OptionalString,
-    supportsPartitionSkippedCookies: z.literal(true).optional()
-  })
-)
+export {
+  ProfileClearGoogleCookies as ProfileClearCookies,
+  ProfileClearGoogleCookies,
+  ProfileDelete,
+  ProfileImportFromBrowser
+} from './browser-identity-params'
 
 export const Drag = lazyZodSchema(() =>
   ExpectUrlBrowserTarget.extend({

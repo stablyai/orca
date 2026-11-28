@@ -241,7 +241,7 @@
 5 src/renderer/src/runtime/web-session-tabs-sync/subscriptions/use-runtime-session-mirror-environment-key.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking/tracking-decisions.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/use-web-session-tabs-sync.ts
-9 src/renderer/src/store/index.ts
+8 src/renderer/src/store/index.ts
 2 src/renderer/src/store/project-groups/project-group-mutations.ts
 1 src/renderer/src/store/repos/all-host-repo-catalog-actions.ts
 3 src/renderer/src/store/repos/create-repo-slice.ts
@@ -250,11 +250,10 @@
 1 src/renderer/src/store/repos/repo-reorder-host-split.ts
 1 src/renderer/src/store/repos/repo-update.ts
 1 src/renderer/src/store/repos/runtime-repo-catalog-actions.ts
-1 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/hosts/browser-host-actions.ts
 6 src/renderer/src/store/slices/browser/hosts/browser-host-state.ts
-9 src/renderer/src/store/slices/browser/profiles/browser-cookie-import-actions.ts
-11 src/renderer/src/store/slices/browser/profiles/browser-profile-import-actions.ts
+1 src/renderer/src/store/slices/browser/profiles/browser-cookie-import-actions.ts
+7 src/renderer/src/store/slices/browser/profiles/browser-profile-import-actions.ts
 7 src/renderer/src/store/slices/browser/profiles/browser-profile-list-actions.ts
 4 src/renderer/src/store/slices/browser/tabs/browser-tab-actions.ts
 1 src/renderer/src/store/slices/browser/tabs/paired-browser-tab-creator.ts

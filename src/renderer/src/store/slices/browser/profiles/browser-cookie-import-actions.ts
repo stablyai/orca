@@ -23,19 +23,25 @@ export function createBrowserCookieImportActions(
   get: BrowserSliceGet
 ): Pick<BrowserSlice, 'importCookiesFromBrowser' | 'clearBrowserProfileCookies'> {
   return {
-    importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?, pageRoute?) => {
+    importCookiesFromBrowser: async (profileId, source, browserProfile?, pageRoute?) => {
+      const selection =
+        typeof source === 'string'
+          ? { browserFamily: source, browserProfile }
+          : { refreshSourceId: source.refreshSourceId }
       if (pageRoute?.kind === 'ssh') {
         return importSshPageCookies(get, pageRoute, () =>
           window.api.browser.sessionImportFromBrowser({
             profileId,
-            browserFamily,
-            browserProfile,
+            ...selection,
             sshTargetId: pageRoute.sshTargetId
           })
         )
       }
       const initialState = get()
-      const hostId = pageCookieImportHostId(pageRoute) ?? getBrowserSettingsHostId(initialState)
+      const hostId =
+        typeof source === 'string'
+          ? (pageCookieImportHostId(pageRoute) ?? getBrowserSettingsHostId(initialState))
+          : source.hostId
       const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
       const parsedHostId = parseExecutionHostId(hostId)
       const runtimeEnvironmentId =
@@ -61,8 +67,7 @@ export function createBrowserCookieImportActions(
               profileId,
               pageRoute
             ),
-            browserFamily,
-            browserProfile
+            ...selection
           })
           ranOnClient = clientHostResult != null
           const pairingRevision = captureRuntimeEnvironmentRequestRevision(runtimeEnvironmentId)
@@ -71,7 +76,7 @@ export function createBrowserCookieImportActions(
             (await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
               { kind: 'environment', environmentId: runtimeEnvironmentId },
               'browser.profileImportFromBrowser',
-              { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
+              { profileId, ...selection, supportsPartitionSkippedCookies: true },
               { timeoutMs: 30_000, expectedEnvironmentPairingRevision: pairingRevision }
             ))
           if (result.ok) {
@@ -133,8 +138,7 @@ export function createBrowserCookieImportActions(
         const result: BrowserCookieImportResult = await window.api.browser.sessionImportFromBrowser(
           {
             profileId,
-            browserFamily,
-            browserProfile,
+            ...selection,
             ...(parsedHostId?.kind === 'ssh' ? { sshTargetId: parsedHostId.targetId } : {})
           }
         )

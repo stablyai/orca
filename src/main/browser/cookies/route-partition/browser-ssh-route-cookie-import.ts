@@ -64,16 +64,16 @@ async function importIntoSshRoutePartition(
       currentPartition: resolvePartition,
       routeChanged: () => browserCookieImportFailure('sshHostDisconnected')
     },
-    resolveSource
+    resolveSource,
+    (_partition, source) =>
+      recordClientRouteCookieImportSource({
+        route: sshCookieImportRoute(target.sshTargetId),
+        profileId: target.browserProfileId,
+        source
+      })
   )
   if (!imported.ok) {
     return imported
   }
-  // Badge the host's jar on this desktop; the profile's own jar and badge are unchanged.
-  await recordClientRouteCookieImportSource({
-    route: sshCookieImportRoute(target.sshTargetId),
-    profileId: target.browserProfileId,
-    source: { ...imported.source.badge, importedAt: Date.now() }
-  })
   return { ...imported.result, profileId: target.browserProfileId }
 }

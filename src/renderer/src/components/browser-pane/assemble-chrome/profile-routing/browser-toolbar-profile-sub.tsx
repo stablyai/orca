@@ -1,4 +1,4 @@
-import { Check, Plus, UserRound } from 'lucide-react'
+import { Check, Plus, RefreshCw, UserRound } from 'lucide-react'
 import {
   DropdownMenuItem,
   DropdownMenuPortal,
@@ -7,6 +7,10 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
+import { useAppStore } from '@/store'
+import type { BrowserPageCookieImportRoute } from '@/store/slices/browser/browser-slice-contract'
+import { pageCookieImportHostId } from '@/store/slices/browser/profiles/browser-page-cookie-import-route'
+import { refreshChromeProfileCookies } from '@/lib/browser/cookies/refresh-chrome-profile-cookies'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
@@ -16,6 +20,9 @@ export type BrowserToolbarProfileSubProps = {
   browserPageId: string
   allProfiles: BrowserSessionProfile[]
   effectiveProfileId: string
+  /** The page's own route: pending imports and refresh target its jar, not another host's same-id profile. */
+  pageRoute: BrowserPageCookieImportRoute
+  canRefreshFromChrome: boolean
   onSwitchProfile: (profileId: string | null) => void
   onNewProfile: () => void
   /** Set while a switch is in flight; the host refuses a second one meanwhile. */
@@ -27,12 +34,19 @@ export function BrowserToolbarProfileSub({
   browserPageId,
   allProfiles,
   effectiveProfileId,
+  pageRoute,
+  canRefreshFromChrome,
   onSwitchProfile,
   onNewProfile,
   switching = false
 }: BrowserToolbarProfileSubProps): React.JSX.Element {
   const t = useTranslate()
+  const hostId = pageCookieImportHostId(pageRoute)!
   const currentProfile = allProfiles.find((profile) => profile.id === effectiveProfileId)
+  const isImporting = useAppStore((s) => {
+    const pending = s.browserSessionImportStateByHostId?.[hostId]
+    return pending?.profileId === effectiveProfileId && pending.status === 'importing'
+  })
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={switching}>
@@ -71,6 +85,15 @@ export function BrowserToolbarProfileSub({
             <Plus className="size-3.5" />
             {t('auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef', 'New Profile…')}
           </DropdownMenuItem>
+          {canRefreshFromChrome && currentProfile?.source?.chromeProfile && (
+            <DropdownMenuItem
+              disabled={isImporting}
+              onSelect={() => void refreshChromeProfileCookies(currentProfile, hostId)}
+            >
+              <RefreshCw className="size-3.5" />
+              {t('browser.cookieImport.refreshChrome', 'Refresh from Chrome')}
+            </DropdownMenuItem>
+          )}
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
     </DropdownMenuSub>

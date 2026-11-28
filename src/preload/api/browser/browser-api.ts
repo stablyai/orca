@@ -58,6 +58,7 @@ import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserCookieImportResult,
+  BrowserCookieImportSelection,
   BrowserClientHostCookieImportArgs,
   BrowserProfileCookieImportArgs,
   BrowserLoadError,
@@ -228,16 +229,16 @@ export type BrowserApi = {
     environmentId: string
   }) => Promise<DetectedBrowserInfo[] | null>
   sessionImportFromBrowser: (
-    args: BrowserProfileCookieImportArgs & { browserFamily: string; browserProfile?: string }
+    args: BrowserProfileCookieImportArgs & BrowserCookieImportSelection
   ) => Promise<BrowserCookieImportResult>
   /** Null when the environment's pages are not client-hosted on this desktop. */
   sessionImportFromBrowserForClientHost: (
-    args: BrowserClientHostCookieImportArgs & { browserFamily: string; browserProfile?: string }
+    args: BrowserClientHostCookieImportArgs & BrowserCookieImportSelection
   ) => Promise<BrowserCookieImportResult | null>
   /** Import sources of a paired server's or SSH host's jars on this desktop, keyed by browser profile ID. */
   sessionClientRouteImportSources: (
     args: { environmentId: string } | { sshTargetId: string }
-  ) => Promise<Record<string, BrowserSessionProfileSource>>
+  ) => Promise<Record<string, BrowserSessionProfileSource> | null>
   /** Site permissions are local to this computer and browser profile. */
   sitePermissionsList: (args: { profileId: string }) => Promise<BrowserSitePermissionEntry[]>
   /** Null forgets the answer so the site is asked again. */

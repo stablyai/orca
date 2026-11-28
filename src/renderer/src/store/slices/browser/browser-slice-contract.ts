@@ -265,6 +265,9 @@ export type BrowserSlice = {
     summary: BrowserCookieImportSummary | null
     error: string | null
   } | null
+  browserSessionImportStateByHostId?: Partial<
+    Record<ExecutionHostId, BrowserSlice['browserSessionImportState']>
+  >
   /** Loads one host's profiles; defaults to the host Browser settings is showing. */
   fetchBrowserSessionProfiles: (hostId?: ExecutionHostId) => Promise<void | {
     hostId: ExecutionHostId
@@ -306,7 +309,7 @@ export type BrowserSlice = {
   fetchDetectedBrowsers: () => Promise<void>
   importCookiesFromBrowser: (
     profileId: string,
-    browserFamily: string,
+    source: string | { refreshSourceId: string; hostId: ExecutionHostId },
     browserProfile?: string,
     pageRoute?: BrowserPageCookieImportRoute | null
   ) => Promise<BrowserCookieImportExecutionResult>

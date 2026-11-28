@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { lazyZodSchema } from '../../schema/lazy-zod-schema'
-import { requiredString } from '../rpc-param-primitives'
+import { OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const ProfileCreate = lazyZodSchema(() =>
   z
@@ -29,4 +29,40 @@ export const BrowserIdentitySet = lazyZodSchema(() =>
     // Opt-in overwrite of corrupt or newer-version data; the host backs the old bytes up first.
     reset: z.boolean().optional()
   })
+)
+
+export const ProfileDelete = lazyZodSchema(() =>
+  z.object({ profileId: requiredString('Missing required --profile') })
+)
+
+export const ProfileClearGoogleCookies = lazyZodSchema(() =>
+  ProfileDelete.extend({ executorRuntimeId: z.string().min(1) })
+)
+
+export const ProfileImportFromBrowser = lazyZodSchema(() =>
+  ProfileDelete.extend({
+    supportsPartitionSkippedCookies: z.literal(true).optional(),
+    refreshSourceId: z.uuid().optional(),
+    browserFamily: OptionalString,
+    browserProfile: OptionalString
+  })
+    .superRefine(({ refreshSourceId, browserFamily, browserProfile }, ctx) => {
+      if (refreshSourceId && (browserFamily !== undefined || browserProfile !== undefined)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Choose a browser or refresh a saved Chrome profile'
+        })
+      } else if (!refreshSourceId && !browserFamily) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['browserFamily'],
+          message: 'Missing required --browser-family'
+        })
+      }
+    })
+    .transform(({ refreshSourceId, browserFamily, browserProfile, ...target }) =>
+      refreshSourceId
+        ? { ...target, refreshSourceId }
+        : { ...target, browserFamily: browserFamily!, browserProfile }
+    )
 )

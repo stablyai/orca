@@ -13,11 +13,22 @@ export async function clearClientRouteProfileCookies(
     return null
   }
   const partition = boundRoutePartition(routeIdentity, profileId)
-  // Badge first, like the local clear, so quitting mid-clear can't leave "Imported from" behind.
-  await forgetClientRouteCookieImportSource({ route: environmentId, profileId })
-  // No page or import has bound this profile's jar: it holds nothing.
-  if (partition !== null) {
-    await clearRoutePartitionCookies(partition)
+  const route = { ...routeIdentity, environmentId }
+  if (partition === null) {
+    await forgetClientRouteCookieImportSource({ route, profileId })
+    return true
   }
-  return true
+  return clearRoutePartitionCookies(partition, async () => {
+    const current = getPairedRuntimeBrowserClientRouteIdentity(environmentId)
+    if (
+      !current ||
+      current.storageScope !== route.storageScope ||
+      current.authorityConnectionIdentity !== route.authorityConnectionIdentity ||
+      boundRoutePartition(current, profileId) !== partition
+    ) {
+      return false
+    }
+    await forgetClientRouteCookieImportSource({ route, profileId })
+    return true
+  })
 }

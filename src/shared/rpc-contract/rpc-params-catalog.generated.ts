@@ -282,7 +282,13 @@ import {
   GrabSetMode,
   GrabViewportBridge
 } from './browser/browser-grab-params'
-import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
+import {
+  BrowserIdentitySet,
+  ProfileClearGoogleCookies,
+  ProfileCreate,
+  ProfileDelete,
+  ProfileImportFromBrowser
+} from './browser/browser-identity-params'
 import {
   Check,
   Drag,
@@ -299,9 +305,6 @@ import {
   KeyboardInsert,
   Keypress,
   LimitParam,
-  ProfileClearCookies,
-  ProfileDelete,
-  ProfileImportFromBrowser,
   Scroll,
   Select,
   SelectorPath,
@@ -1507,9 +1510,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
-  'browser.profileClearCookies': ProfileClearCookies,
+  'browser.profileClearCookies': ProfileClearGoogleCookies,
   'browser.profileClearDefaultCookies': null,
-  'browser.profileClearGoogleCookies': ProfileClearCookies,
+  'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,
   'browser.profileDetectBrowsers': null,

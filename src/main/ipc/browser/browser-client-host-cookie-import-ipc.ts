@@ -1,13 +1,18 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
-import type { BrowserCookieImportResult } from '../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  BrowserCookieImportResult,
+  BrowserCookieImportSelection
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   importCookieFileIntoClientRoutePartition,
   importCookiesIntoClientRoutePartition
 } from '../../browser/cookies/client-route/browser-client-route-cookie-import'
+import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import {
   clientRouteCookieImportSources,
+  openClientRouteCookieImportSources,
   sshCookieImportRoute
 } from '../../browser/cookies/client-route/client-route-cookie-import-source-store'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
@@ -49,18 +54,18 @@ export function registerClientHostCookieImportHandlers(ipc: IpcHandleRegistrar =
     'browser:session:importFromBrowserForClientHost',
     async (
       event,
-      args: ClientHostCookieImportTargetArgs & {
-        browserFamily: string
-        browserProfile?: string
-      }
+      args: ClientHostCookieImportTargetArgs & BrowserCookieImportSelection
     ): Promise<BrowserCookieImportResult | null> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return browserCookieImportFailure('notAuthorized')
       }
+      const selection =
+        'refreshSourceId' in args
+          ? { refreshSourceId: args.refreshSourceId }
+          : { browserFamily: args.browserFamily, browserProfile: args.browserProfile }
       return importCookiesIntoClientRoutePartition({
         ...clientHostCookieImportTarget(args),
-        browserFamily: args.browserFamily,
-        browserProfile: args.browserProfile
+        ...selection
       })
     }
   )
@@ -85,15 +90,31 @@ export function registerClientHostCookieImportHandlers(ipc: IpcHandleRegistrar =
   // Overlay desktop imports unavailable to the server's profile records, or to an SSH host's.
   ipc.handle(
     'browser:session:clientRouteImportSources',
-    (event, args: { environmentId?: unknown; sshTargetId?: unknown }) => {
+    async (event, args: { environmentId?: unknown; sshTargetId?: unknown }) => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return {}
       }
-      if (typeof args?.environmentId === 'string') {
-        return clientRouteCookieImportSources(args.environmentId)
+      const { environmentId, sshTargetId } = args ?? {}
+      if (typeof environmentId !== 'string') {
+        return typeof sshTargetId === 'string'
+          ? clientRouteCookieImportSources(sshCookieImportRoute(sshTargetId))
+          : {}
       }
-      return typeof args?.sshTargetId === 'string'
-        ? clientRouteCookieImportSources(sshCookieImportRoute(args.sshTargetId))
+      const route = getPairedRuntimeBrowserClientRouteIdentity(environmentId)
+      if (!route) {
+        return null
+      }
+      const { sources } = await openClientRouteCookieImportSources({
+        ...route,
+        environmentId
+      })
+      const current = getPairedRuntimeBrowserClientRouteIdentity(environmentId)
+      if (!current) {
+        return null
+      }
+      return current.storageScope === route.storageScope &&
+        current.authorityConnectionIdentity === route.authorityConnectionIdentity
+        ? sources
         : {}
     }
   )

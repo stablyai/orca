@@ -211,8 +211,7 @@ export function BrowserToolbarMenu({
     : browserSessionProfiles
 
   const handleSwitchProfile = (profileId: string | null): void => {
-    const targetId = profileId ?? 'default'
-    if (targetId === effectiveProfileId) {
+    if ((profileId ?? 'default') === effectiveProfileId) {
       return
     }
     setPendingSwitchProfileId(profileId)
@@ -384,6 +383,8 @@ export function BrowserToolbarMenu({
                 allProfiles,
                 switching: switchingProfile,
                 effectiveProfileId,
+                pageRoute,
+                canRefreshFromChrome: showsCookieImport && pageRoute.kind === 'local',
                 onSwitchProfile: handleSwitchProfile,
                 onNewProfile: () => setNewProfileDialogOpen(true)
               }
