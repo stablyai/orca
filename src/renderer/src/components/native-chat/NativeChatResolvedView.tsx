@@ -19,7 +19,10 @@ import { useNativeChatCanSend } from './host-access/use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './prompts/NativeChatInteractiveCard'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
 import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat/native-chat-agent-support'
-import { useNativeChatTerminalPromptCard } from './prompts/use-native-chat-interactive-prompt-card'
+import {
+  useNativeChatTerminalPromptCard,
+  useScreenChoiceGuardedSend
+} from './prompts/use-native-chat-interactive-prompt-card'
 import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './host-access/NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './session/terminal/send/use-native-chat-interactive-send'
@@ -63,6 +66,7 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  readTerminalScreen,
   readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
@@ -175,10 +179,16 @@ export function NativeChatResolvedView({
     transcriptPath: transcriptPath ?? null,
     messages: sessionAfterCommandBoundaries.messages,
     transcriptSettled: session.readPhase === 'ready',
-    canSend
+    canSend,
+    ...(readTerminalScreen ? { readTerminalScreen } : {})
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
+  const promptCardSend = useScreenChoiceGuardedSend(
+    interactiveSend,
+    mountedPromptCard,
+    readTerminalScreen
+  )
   const composerReady = shownPromptCard === null && targetPtyId !== null && canSend
   const pendingMessages = useMemo(
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
@@ -321,7 +331,7 @@ export function NativeChatResolvedView({
             <NativeChatInteractiveCard
               key={actionKey}
               card={mountedPromptCard}
-              send={interactiveSend}
+              send={promptCardSend}
               requiresTerminal={nativeChatAskRequiresTerminal(agent)}
               onAnswerInTerminal={onSwitchToTerminal}
               onDismiss={promptCardPresentation.dismiss}

@@ -30,6 +30,7 @@ export function TerminalPaneNativeChatPortal({
     managedPanes,
     paneTitles,
     readNativeChatTerminalDraft,
+    readNativeChatTerminalScreen,
     resolveAgentForLeaf,
     switchNativeChatToTerminal,
     tabId
@@ -83,6 +84,7 @@ export function TerminalPaneNativeChatPortal({
           resolvedAgent={chatPaneResolvedAgent}
           ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
           onSwitchToTerminal={switchNativeChatToTerminal}
+          readTerminalScreen={readNativeChatTerminalScreen}
           readTerminalDraft={readNativeChatTerminalDraft}
           contextMenuActions={contextMenuActions}
         />
