@@ -21,7 +21,9 @@ import {
 import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
+import { attachHeaderDragWindowListeners } from './header-drag-pointer-match'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
+import { useHeaderDragBodyCursor } from './header-drag-body-cursor'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 // Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
@@ -218,63 +220,42 @@ export function useRepoHeaderDrag({
     if (!sessionArmed) {
       return
     }
-    const onPointerMove = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (!session || e.pointerId !== session.pointerId) {
-        return
-      }
-      if (hasPointerBeenReleased(e)) {
-        endDrag(false)
-        return
-      }
-      session.latestPointerY = e.clientY
-      if (!session.promoted) {
-        const dx = e.clientX - session.startX
-        const dy = e.clientY - session.startY
-        if (
-          dx * dx + dy * dy <
-          PROJECT_HEADER_DRAG_THRESHOLD_PX * PROJECT_HEADER_DRAG_THRESHOLD_PX
-        ) {
+    const detachListeners = attachHeaderDragWindowListeners({
+      getSession: () => dragSessionRef.current,
+      onMove: (session, e) => {
+        if (hasPointerBeenReleased(e)) {
+          endDrag(false)
           return
         }
-        session.promoted = true
-        // Virtualization may detach headers; global listeners keep dragging alive without capture.
-        if (session.handleEl.isConnected) {
-          try {
-            session.handleEl.setPointerCapture(session.pointerId)
-          } catch {}
+        session.latestPointerY = e.clientY
+        if (!session.promoted) {
+          const dx = e.clientX - session.startX
+          const dy = e.clientY - session.startY
+          if (
+            dx * dx + dy * dy <
+            PROJECT_HEADER_DRAG_THRESHOLD_PX * PROJECT_HEADER_DRAG_THRESHOLD_PX
+          ) {
+            return
+          }
+          session.promoted = true
+          // Virtualization may detach headers; global listeners keep dragging alive without capture.
+          if (session.handleEl.isConnected) {
+            try {
+              session.handleEl.setPointerCapture(session.pointerId)
+            } catch {}
+          }
+          refreshHeaderRects()
+          setState({ draggingRepoId: session.repo.id, dropIndex: null, dropIndicatorY: null })
         }
         refreshHeaderRects()
-        setState({ draggingRepoId: session.repo.id, dropIndex: null, dropIndicatorY: null })
-      }
-      refreshHeaderRects()
-      applyDrop(session.repo.id, computeDrop(e.clientY))
-      ensureAutoscroll()
-    }
-    const onPointerEnd = (e: PointerEvent): void => {
-      const session = dragSessionRef.current
-      if (session && e.pointerId === session.pointerId) {
-        endDrag(e.type === 'pointerup')
-      }
-    }
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        endDrag(false)
-      }
-    }
-    const onBlur = (): void => endDrag(false)
-
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', onPointerEnd)
-    window.addEventListener('pointercancel', onPointerEnd)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('blur', onBlur)
+        applyDrop(session.repo.id, computeDrop(e.clientY))
+        ensureAutoscroll()
+      },
+      onEnd: (commit) => endDrag(commit),
+      onCancel: () => endDrag(false)
+    })
     return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', onPointerEnd)
-      window.removeEventListener('pointercancel', onPointerEnd)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('blur', onBlur)
+      detachListeners()
       cancelAutoscroll()
       if (clickSwallowTimeoutRef.current !== null) {
         clearTimeout(clickSwallowTimeoutRef.current)
@@ -291,19 +272,7 @@ export function useRepoHeaderDrag({
     sessionArmed
   ])
 
-  useEffect(() => {
-    if (state.draggingRepoId === null) {
-      return
-    }
-    const body = document.body
-    const { cursor: prevCursor, userSelect: prevUserSelect } = body.style
-    body.style.cursor = 'grabbing'
-    body.style.userSelect = 'none'
-    return () => {
-      body.style.cursor = prevCursor
-      body.style.userSelect = prevUserSelect
-    }
-  }, [state.draggingRepoId])
+  useHeaderDragBodyCursor(state.draggingRepoId !== null)
 
   const onHandlePointerDown = useCallback((event: React.PointerEvent<HTMLElement>, repo: Repo) => {
     const session = createProjectHeaderDragSession({

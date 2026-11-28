@@ -46,6 +46,8 @@ export type ProjectGroupHeaderDragSession = {
   rootProjectHeaderKeys?: readonly string[]
   rootProjectHeaderHostId?: string
   pointerId: number
+  pointerType: string
+  aliasedPointerId: number | null
   headerRects: ProjectGroupHeaderDragRect[]
   handleEl: HTMLElement
   startX: number
