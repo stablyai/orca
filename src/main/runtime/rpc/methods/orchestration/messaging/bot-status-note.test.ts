@@ -99,7 +99,9 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     await expect(
       mail.send(RANGER_THREAD, { to: 'bot:Docs', type: 'status', body: 'b' })
     ).rejects.toThrow(
-      new RegExp(`${second} \\(Two\\), ${first} \\(One\\).*Send it again once, with --item <n>`)
+      new RegExp(
+        `${second} \\(Two\\), ${first} \\(One\\).*orchestration reply --id <msg>.*send it again once, with --item <n>`
+      )
     )
     expect(messageCount()).toEqual({ n: 0 })
     expect(mail.runtime.notifyMessageArrived).not.toHaveBeenCalled()
