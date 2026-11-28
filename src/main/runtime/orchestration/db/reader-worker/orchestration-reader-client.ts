@@ -43,7 +43,7 @@ const IN_PLACE: {
   connectorWorkerCandidates: (connection, args) =>
     readConnectorWorkerCandidates(connection, args.sessionIds, args.now),
   botGroupTurnSource: () => {
-    throw new Error('Group turn detail reads require a durable orchestration database.')
+    throw new Error('Group turn detail reads need an injected in-memory reader.')
   }
 }
 
@@ -65,7 +65,8 @@ export class OrchestrationReaderClient {
 
   constructor(
     factory: WorkerThreadFactory = spawnOrchestrationReader,
-    private readonly timeoutMs = READ_TIMEOUT_MS
+    private readonly timeoutMs = READ_TIMEOUT_MS,
+    private readonly inPlace: Partial<typeof IN_PLACE> = {}
   ) {
     this.queue = new WorkerThreadRequestQueue({
       factory,
@@ -100,7 +101,7 @@ export class OrchestrationReaderClient {
       this.files.set(connection, path)
     }
     if (!path) {
-      return IN_PLACE[read](connection, args)
+      return (this.inPlace[read] ?? IN_PLACE[read])(connection, args)
     }
     const response = await this.queue.dispatch(
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `read` and `args` share K, which the union cannot correlate.
