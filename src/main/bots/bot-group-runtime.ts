@@ -118,6 +118,24 @@ export function assertBotGroupQueuedMessageAllowed(
   }
 }
 
+export function assertNotBotGroupHomeFolderWorkspace(
+  runtime: Partial<Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'>>,
+  folderWorkspaceId: string
+): void {
+  const orchestration = runtime.getExistingOrchestrationDb?.()
+  if (!orchestration) {
+    return
+  }
+  const isHome = new BotGroupStore(orchestration.db)
+    .list()
+    .some((group) => group.folderWorkspaceId === folderWorkspaceId)
+  if (isHome) {
+    throw new Error(
+      'Cannot delete a bot group home folder workspace directly. Delete the bot group instead.'
+    )
+  }
+}
+
 export function startBotGroupsSoon(runtime: OrcaRuntimeService, isCurrent: () => boolean): void {
   setTimeout(() => {
     // A database closed before this ran (shutdown, tests) has nothing left to start.
