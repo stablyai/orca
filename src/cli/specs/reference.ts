@@ -12,13 +12,14 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
     path: ['reference', 'add'],
     summary: 'Attach reviews or issues to a workspace',
     usage:
-      'orca reference add <url-or-jira-key>... --worktree <selector> [--reference-site <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'reference-site'],
+      'orca reference add <url-or-jira-key>... --worktree <selector> [--reference-site <id>] [--reference-provider github|gitea] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'reference-site', 'reference-provider'],
     positionalArgs: ['url'],
     variadicPositional: true,
     repeatableFlags: ['url'],
     notes: [
       'Bare keys resolve Jira issues on the selected execution-host Jira site; use --reference-site to choose one explicitly. Other providers require full URLs.',
+      'Use --reference-provider github or gitea for an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL. URLs whose host or path already names a provider keep it.',
       'Existing links are unchanged; all inputs are validated and Jira keys resolved before writing. Full URLs do not require Jira lookup.'
     ],
     examples: [
@@ -30,13 +31,15 @@ export const REFERENCE_COMMAND_SPECS: CommandSpec[] = [
     path: ['reference', 'remove'],
     aliases: [['reference', 'rm']],
     summary: 'Detach reviews or issues from a workspace',
-    usage: 'orca reference remove [<url>...] [--key <key>...] --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'key'],
+    usage:
+      'orca reference remove [<url>...] [--key <key>...] --worktree <selector> [--reference-provider github|gitea] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'url', 'key', 'reference-provider'],
     positionalArgs: ['url'],
     variadicPositional: true,
     repeatableFlags: ['url', 'key'],
     notes: [
       'Use full URLs, or opaque --key values from reference list for older links without URLs.',
+      'Use --reference-provider github or gitea to remove an /issues/ URL on a self-hosted host whose forge Orca cannot infer from the URL. URLs whose host or path already names a provider keep it.',
       'Removing an absent link succeeds without changing the workspace.'
     ]
   },
