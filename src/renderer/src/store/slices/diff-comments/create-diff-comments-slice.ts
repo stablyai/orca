@@ -5,6 +5,7 @@ import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import {
   createDeliveredDiffCommentMatcher,
+  filterRevisionsStillListed,
   type DiffCommentDeliverySnapshot
 } from '../../../../../shared/file-review/diff-comment-mutation'
 import {
@@ -187,10 +188,9 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     // Why: some launch paths report one success twice; only unchanged notes not already being removed need the host.
-    const isShownUnchanged = createDeliveredDiffCommentMatcher(shown)
-    const pending = comments.filter(
-      (snapshot) =>
-        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) && isShownUnchanged(snapshot)
+    const pending = filterRevisionsStillListed(
+      comments.filter((snapshot) => !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot))),
+      shown
     )
     if (pending.length === 0) {
       return true

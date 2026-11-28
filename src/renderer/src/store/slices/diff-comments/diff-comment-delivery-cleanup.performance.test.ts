@@ -131,3 +131,20 @@ it('asks the host once when one success is reported twice', async () => {
   expect(shown(store)).toEqual([])
   expect(host.notes).toEqual([])
 })
+
+// PR #51560: a one-note report (inline note menus) must not index every shown note before queueing cleanup.
+it.each([300, 3000])(
+  'admits one reported note among %i shown with constant reads',
+  async (count) => {
+    const { snapshots: stored, idReads } = countedSnapshots(
+      Array.from({ length: count }, (_, i) => note(`n${i}`))
+    )
+    const store = createStore(stored)
+    const delivered = [note('n0')]
+    // Admission is synchronous; host work runs on the queue after this returns.
+    const clearing = store.getState().clearDeliveredDiffComments(OWNER, delivered)
+    expect(idReads()).toBeLessThanOrEqual(4)
+    expect(await clearing).toBe(true)
+    expect(shown(store)).toHaveLength(count - 1)
+  }
+)

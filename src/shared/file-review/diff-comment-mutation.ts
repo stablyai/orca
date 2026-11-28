@@ -27,6 +27,21 @@ export function matchesDeliveredDiffComment(
   )
 }
 
+function indexRevisionsById(
+  revisions: readonly DiffCommentDeliverySnapshot[]
+): Map<string, DiffCommentDeliverySnapshot[]> {
+  const byId = new Map<string, DiffCommentDeliverySnapshot[]>()
+  for (const revision of revisions) {
+    const bucket = byId.get(revision.id)
+    if (bucket) {
+      bucket.push(revision)
+    } else {
+      byId.set(revision.id, [revision])
+    }
+  }
+  return byId
+}
+
 /** Same answer as `revisions.some(r => matchesDeliveredDiffComment(note, r))`, by id lookup so whole-list scans stay linear. */
 export function createDeliveredDiffCommentMatcher(
   revisions: readonly DiffCommentDeliverySnapshot[]
@@ -34,21 +49,36 @@ export function createDeliveredDiffCommentMatcher(
   // Built on the first query: callers often pass it to an empty or short-circuiting scan.
   let byId: Map<string, DiffCommentDeliverySnapshot[]> | undefined
   return (note) => {
-    if (!byId) {
-      byId = new Map()
-      for (const revision of revisions) {
-        const bucket = byId.get(revision.id)
-        if (bucket) {
-          bucket.push(revision)
-        } else {
-          byId.set(revision.id, [revision])
-        }
-      }
-    }
+    byId ??= indexRevisionsById(revisions)
     return (
       byId.get(note.id)?.some((revision) => matchesDeliveredDiffComment(note, revision)) ?? false
     )
   }
+}
+
+/** Same answer as `revisions.filter(r => notes.some(n => matchesDeliveredDiffComment(n, r)))`, in one pass over notes. */
+export function filterRevisionsStillListed<T extends DiffCommentDeliverySnapshot>(
+  revisions: readonly T[],
+  notes: readonly DiffCommentDeliverySnapshot[]
+): T[] {
+  if (revisions.length === 0) {
+    return []
+  }
+  // Why: index the reported side and stop once all are found, so a one-note report doesn't index the whole list.
+  const byId = indexRevisionsById(revisions)
+  const listed = new Set<DiffCommentDeliverySnapshot>()
+  const wanted = new Set(revisions).size
+  for (const note of notes) {
+    for (const revision of byId.get(note.id) ?? []) {
+      if (!listed.has(revision) && matchesDeliveredDiffComment(note, revision)) {
+        listed.add(revision)
+      }
+    }
+    if (listed.size === wanted) {
+      break
+    }
+  }
+  return revisions.filter((revision) => listed.has(revision))
 }
 
 // Why: a writer's list can predate another device's edits, so apply only what it changed since its base.
