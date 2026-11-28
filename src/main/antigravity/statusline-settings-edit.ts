@@ -8,6 +8,8 @@ export type StatusLineInspection =
   | { kind: 'empty' }
   /** `disabled`: agy has the line turned off; the command is still the slot's owner. */
   | { kind: 'command'; command: string; disabled: boolean }
+  /** A statusLine object with settings of the user's but no command: an empty slot to fill. */
+  | { kind: 'bare'; hasType: boolean }
   | { kind: 'unsupported'; detail: string }
   | { kind: 'invalid' }
 
@@ -30,6 +32,16 @@ export function inspectStatusLine(text: string): StatusLineInspection {
   }
   const named = (name: string): Node[] =>
     (value.children ?? []).filter((member) => memberName(member) === name)
+  const typeNodes = named('type')
+  if (
+    named('command').length === 0 &&
+    typeNodes.length <= 1 &&
+    (typeNodes.length === 0 || typeNodes[0].children?.[1]?.value === 'command')
+  ) {
+    return named('enabled').some((member) => member.children?.[1]?.value === false)
+      ? unsupported("agy's status line is turned off")
+      : { kind: 'bare', hasType: typeNodes.length === 1 }
+  }
   const commandNode = named('command')[0]?.children?.[1]
   const typeValue = named('type')[0]?.children?.[1]?.value
   if (
@@ -131,13 +143,41 @@ export function removeStatusLineMember(text: string): string | null {
   return index === -1 ? text : spliceMember(text, parsed.root, parsed.members, index)
 }
 
+/** Adds `type` (if asked) and `command` to the end of the existing statusLine object. */
+export function addStatusLineKeys(
+  text: string,
+  addType: boolean,
+  commandLiteral: string
+): string | null {
+  const statusLine = rootMembers(text)?.members.find(
+    (member) => memberName(member) === 'statusLine'
+  )?.children?.[1]
+  if (statusLine?.type !== 'object') {
+    return null
+  }
+  const members = statusLine.children ?? []
+  const last = members.at(-1)
+  const [key, value] = last?.children ?? []
+  const lead = last ? (/\s*$/.exec(text.slice(0, last.offset))?.[0] ?? '') : ''
+  const colon = key && value ? text.slice(memberEnd(key), value.offset) : ': '
+  const typePart = addType ? `"type"${colon}"command",${lead || ' '}` : ''
+  const added = `${typePart}"command"${colon}${commandLiteral}`
+  if (!last) {
+    return `${text.slice(0, statusLine.offset + 1)}${added}${text.slice(memberEnd(statusLine) - 1)}`
+  }
+  return `${text.slice(0, memberEnd(last))},${lead}${added}${text.slice(memberEnd(last))}`
+}
+
 /**
  * Takes back what an install put into a statusLine that did not exist before: its `type` and
  * `command`. Keys the user added since stay, and the statusLine goes only once it is empty.
  */
-export function removeInsertedStatusLineKeys(text: string): string | null {
+export function removeInsertedStatusLineKeys(
+  text: string,
+  keys: readonly string[] = ['command', 'type']
+): string | null {
   let next = text
-  for (const key of ['command', 'type']) {
+  for (const key of keys) {
     const statusLine = rootMembers(next)?.members.find(
       (member) => memberName(member) === 'statusLine'
     )?.children?.[1]

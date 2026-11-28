@@ -17,6 +17,7 @@ import {
   type Paths
 } from './statusline-install-files'
 import {
+  addStatusLineKeys,
   hasJsonComments,
   insertStatusLineMember,
   inspectStatusLine,
@@ -28,6 +29,7 @@ import {
 
 export type { AntigravityStatusLineOptions } from './statusline-install-files'
 
+const RECORD_UNREADABLE = "Could not read Orca's restore record; left unchanged"
 const RECORD_MISSING = "Orca's restore record is missing; left unchanged"
 const CONFLICT = 'Antigravity settings.json kept changing; left unchanged'
 const INVALID = 'Could not parse Antigravity settings.json'
@@ -71,6 +73,20 @@ function planInstall(text: string | null, slot: StatusLineInspection, paths: Pat
       ? { error: INVALID }
       : { next, record: { ...base, originalCommand: null, postInstallSha256: sha256(next) } }
   }
+  if (slot.kind === 'bare') {
+    const next = addStatusLineKeys(text, !slot.hasType, JSON.stringify(paths.installedCommand))
+    return next === null
+      ? { error: INVALID }
+      : {
+          next,
+          record: {
+            ...base,
+            originalCommand: null,
+            insertedKeys: slot.hasType ? ['command'] : ['command', 'type'],
+            postInstallSha256: sha256(next)
+          }
+        }
+  }
   const edit = replaceStatusLineCommand(text, JSON.stringify(paths.installedCommand))
   return edit === null
     ? { error: INVALID }
@@ -92,7 +108,10 @@ export async function getAntigravityStatusLineStatus(
   const resolved = await resolveSettingsTarget(paths.settings)
   const text =
     'target' in resolved ? await readTextOrNull(resolved.target).catch(() => undefined) : undefined
-  const record = await readRecord(paths.record)
+  const record = await readRecord(paths.record).catch(() => 'unreadable' as const)
+  if (record === 'unreadable') {
+    return status(paths, 'error', RECORD_UNREADABLE)
+  }
   const slot = typeof text === 'string' ? inspectStatusLine(text) : null
   if (text === undefined || slot?.kind === 'invalid') {
     // A record with unreadable settings may hold a command Orca still has to undo.
@@ -192,7 +211,7 @@ function planRemoval(text: string, record: InstallRecord): RemovalPlan {
   }
   const next =
     record.originalCommandLiteral === undefined
-      ? removeInsertedStatusLineKeys(text)
+      ? removeInsertedStatusLineKeys(text, record.insertedKeys)
       : (replaceStatusLineCommand(text, record.originalCommandLiteral)?.text ?? null)
   return next === null ? { error: INVALID } : { next }
 }
@@ -201,9 +220,18 @@ export async function removeAntigravityStatusLine(
   options: AntigravityStatusLineOptions = {}
 ): Promise<AntigravityStatusLineStatus> {
   const paths = resolvePaths(options)
-  const record = await readRecord(paths.record)
+  const record = await readRecord(paths.record).catch(() => 'unreadable' as const)
+  // A record that cannot be read, or belongs to another install, is never used or deleted.
+  if (record === 'unreadable') {
+    return status(paths, 'error', RECORD_UNREADABLE)
+  }
+  if (record && record.installedCommand !== paths.installedCommand) {
+    return status(paths, 'error', RECORD_MISSING)
+  }
   // Turning the feature off ends its consent first: whatever happens to settings, the wrapper
-  // a running agy may still call keeps the user's command and the row but never posts.
+  // a running agy may still call keeps the user's command and the row but never posts. Without a
+  // usable record the wrapper stays as it is; any post it makes goes to 127.0.0.1 and Orca drops
+  // it, because ingest only accepts readings while the setting is on.
   if (record && (await fileExists(paths.script))) {
     await writeScript(
       paths.script,

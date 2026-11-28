@@ -29,6 +29,8 @@ export type InstallRecord = {
   /** The command's JSON literal as the file spelled it; absent when no statusLine key existed. */
   originalCommandLiteral?: string
   installedCommand: string
+  /** Keys an install added to an existing statusLine object that lacked a command. */
+  insertedKeys?: string[]
   /** The whole settings file before install (null: Orca created it) and a hash of what Orca wrote. */
   preInstallText: string | null
   postInstallSha256: string
@@ -136,9 +138,14 @@ export async function restoreFileText(
   }
 }
 
+/** Null when there is no record or it is damaged; a file that exists but cannot be read throws. */
 export async function readRecord(path: string): Promise<InstallRecord | null> {
+  const text = await readTextOrNull(path)
+  if (text === null) {
+    return null
+  }
   try {
-    const raw: unknown = JSON.parse(await readFile(path, 'utf8'))
+    const raw: unknown = JSON.parse(text)
     if (
       typeof raw === 'object' &&
       raw !== null &&
@@ -156,13 +163,18 @@ export async function readRecord(path: string): Promise<InstallRecord | null> {
         ...('originalCommandLiteral' in raw && typeof raw.originalCommandLiteral === 'string'
           ? { originalCommandLiteral: raw.originalCommandLiteral }
           : {}),
+        ...('insertedKeys' in raw &&
+        Array.isArray(raw.insertedKeys) &&
+        raw.insertedKeys.every((key) => typeof key === 'string')
+          ? { insertedKeys: raw.insertedKeys }
+          : {}),
         installedCommand: raw.installedCommand,
         preInstallText: raw.preInstallText,
         postInstallSha256: raw.postInstallSha256
       }
     }
   } catch {
-    // A missing or damaged record means no restore point.
+    // A damaged record means no restore point.
   }
   return null
 }

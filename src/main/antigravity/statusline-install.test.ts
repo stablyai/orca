@@ -279,6 +279,81 @@ describe.skipIf(process.platform === 'win32')('Antigravity status-line installer
     }
   })
 
+  it.skipIf(process.getuid?.() === 0)(
+    'never deletes a restore record it cannot read, and uses it again once readable',
+    async () => {
+      seed(WITH_COMMAND)
+      await installAntigravityStatusLine(options())
+      const ambiguous = read().replace(
+        '"type": "command",',
+        '"type": "command","command": "other",'
+      )
+      writeFileSync(settingsPath, ambiguous)
+      chmodSync(recordPath, 0o000)
+      try {
+        expect((await getAntigravityStatusLineStatus(options())).state).toBe('error')
+        expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+        expect((await installAntigravityStatusLine(options())).state).toBe('error')
+        expect(existsSync(recordPath)).toBe(true)
+      } finally {
+        chmodSync(recordPath, 0o600)
+      }
+      writeFileSync(settingsPath, ambiguous.replace('"command": "other",', ''))
+      expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+      expect(read()).toBe(WITH_COMMAND)
+    }
+  )
+
+  it('applies nothing from a restore record that belongs to another install', async () => {
+    seed(WITH_COMMAND)
+    await installAntigravityStatusLine(options())
+    const installed = read()
+    const script = readFileSync(scriptPath, 'utf8')
+    const record = JSON.parse(readFileSync(recordPath, 'utf8'))
+    writeFileSync(
+      recordPath,
+      JSON.stringify({
+        ...record,
+        installedCommand: '/elsewhere/wrapper.sh',
+        originalCommand: 'echo other'
+      })
+    )
+    expect((await removeAntigravityStatusLine(options())).state).toBe('error')
+    expect(read()).toBe(installed)
+    expect(readFileSync(scriptPath, 'utf8')).toBe(script)
+    expect(existsSync(recordPath)).toBe(true)
+  })
+
+  it("treats a statusLine of the user's own settings without a command as an empty slot", async () => {
+    seed(WITHOUT_STATUS_LINE)
+    await installAntigravityStatusLine(options())
+    writeFileSync(
+      settingsPath,
+      read().replace(/"command": "[^"]*"/, (m) => `${m}, "padding": 2`)
+    )
+    await removeAntigravityStatusLine(options())
+    const kept = read()
+    expect(JSON.parse(kept)).toEqual({ theme: 'dark', tools: [1, 2], statusLine: { padding: 2 } })
+
+    expect((await installAntigravityStatusLine(options())).state).toBe('installed')
+    expect(JSON.parse(read()).statusLine).toEqual({
+      padding: 2,
+      type: 'command',
+      command: scriptPath
+    })
+    expect((await removeAntigravityStatusLine(options())).state).toBe('not_installed')
+    expect(read()).toBe(kept)
+  })
+
+  it('fills a bare statusLine that already has a type and keeps it on remove', async () => {
+    const original = '{"statusLine":{"type":"command","padding":1}}'
+    seed(original)
+    await installAntigravityStatusLine(options())
+    writeFileSync(settingsPath, read().replace('"padding":1', '"padding":3'))
+    await removeAntigravityStatusLine(options())
+    expect(JSON.parse(read()).statusLine).toEqual({ type: 'command', padding: 3 })
+  })
+
   it('names a turned-off status line in the error', async () => {
     seed('{"statusLine":{"command":"echo hi","enabled":false}}')
     expect((await installAntigravityStatusLine(options())).detail).toContain('turned off')
