@@ -59,7 +59,13 @@ export function WorktreeCardDetailsHover({
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const internalHoverControl = useWorktreeCardDetailsHoverControl()
   const detailsHoverControl = hoverControl ?? internalHoverControl
-  const { hoverOpen, contextMenuOpen, handleHoverOpenChange } = detailsHoverControl
+  const {
+    hoverOpen,
+    contextMenuOpen,
+    handleHoverOpenChange,
+    referencePeekOpen,
+    handleReferencePeekOpenChange
+  } = detailsHoverControl
   const [workspaceTitleEditing, setWorkspaceTitleEditing] = React.useState(false)
   const pendingWorkspaceTitleCloseRef = React.useRef(false)
   const handleWorkspaceTitleEditingChange = React.useCallback(
@@ -84,17 +90,12 @@ export function WorktreeCardDetailsHover({
     },
     [handleHoverOpenChange, workspaceTitleEditing]
   )
-  // Counted: one card can hold several reference peeks.
-  const [openReferencePeeks, setOpenReferencePeeks] = React.useState(0)
-  const handleReferencePeekOpenChange = React.useCallback((open: boolean): void => {
-    setOpenReferencePeeks((count) => Math.max(0, count + (open ? 1 : -1)))
-  }, [])
   // Same rest-to-peek intent as agent activity rows so passing pointers don't flash the card.
   const hoverIntent = useActivityThreadHoverCardIntent({
     open: hoverOpen || workspaceTitleEditing,
     onOpenChange: handleEffectiveHoverOpenChange,
     openDelay,
-    enabled: openReferencePeeks === 0
+    enabled: !referencePeekOpen
   })
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
   const attachments = getWorkspaceAttachments(workspace ?? {})
