@@ -14,6 +14,8 @@ import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { websocketPayloadToUint8 } from '../transport/encryption/websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from '../transport/relay/mobile-relay-connect-url'
 import { WsInboundMessageQueue } from '../../../src/shared/network/websocket/ws-inbound-message-queue'
+import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
+import { DECISIVE_PROBE_TIMEOUT_MS } from '../transport/rpc/rpc-session-liveness-watchdog'
 
 import { RelayOuterError } from '../transport/encryption/mobile-relay-e2ee-link'
 
@@ -22,7 +24,6 @@ const RELAY_ERROR_CLOSE_GRACE_MS = 250
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
 }
 
 export type PairingCandidateClient = {
@@ -85,12 +86,7 @@ export function connectMobileRelayForPairing(args: {
       if (!isRpcResponse(value)) {
         return
       }
-      const request = pending.get(value.id)
-      if (request) {
-        clearTimeout(request.timer)
-        pending.delete(value.id)
-        request.resolve(value)
-      }
+      pending.get(value.id)?.resolve(value)
     },
     onBinary: () => {},
     onError: fail
@@ -185,7 +181,6 @@ export function connectMobileRelayForPairing(args: {
     channel.dispose()
     rejectAuthenticated(error)
     for (const request of pending.values()) {
-      clearTimeout(request.timer)
       request.reject(error)
     }
     pending.clear()
@@ -198,21 +193,50 @@ export function connectMobileRelayForPairing(args: {
       if (closed || !authenticated) {
         throw new Error('relay pairing client closed')
       }
-      const id = `relay-pair-${++requestCounter}`
-      return new Promise<RpcResponse>((resolve, reject) => {
-        const timer = setTimeout(() => {
+      const ids: string[] = []
+      let retry: ReturnType<typeof setTimeout> | undefined
+      let timeout: ReturnType<typeof setTimeout> | undefined
+      try {
+        return await new Promise<RpcResponse>((resolve, reject) => {
+          const send = () => {
+            const id = `relay-pair-${++requestCounter}`
+            ids.push(id)
+            pending.set(id, { resolve, reject })
+            if (
+              !channel.sendText(
+                JSON.stringify({ id, deviceToken: args.deviceToken, method, params })
+              )
+            ) {
+              reject(new Error('relay E2EE channel not ready'))
+            }
+          }
+          timeout = setTimeout(
+            () => reject(new Error(`relay pairing RPC timed out: ${method}`)),
+            requestTimeoutMs
+          )
+          if (
+            method === hostStatusProbe.operation.method &&
+            requestTimeoutMs > DECISIVE_PROBE_TIMEOUT_MS
+          ) {
+            // A slow first reply can still win. Retry only the read, on the already authorized invite socket.
+            retry = setTimeout(() => {
+              log(
+                'warn',
+                'Relay: first status read unanswered',
+                'Retrying on the authenticated socket'
+              )
+              send()
+            }, DECISIVE_PROBE_TIMEOUT_MS)
+          }
+          send()
+        })
+      } finally {
+        clearTimeout(timeout)
+        clearTimeout(retry)
+        for (const id of ids) {
           pending.delete(id)
-          reject(new Error(`relay pairing RPC timed out: ${method}`))
-        }, requestTimeoutMs)
-        pending.set(id, { resolve, reject, timer })
-        if (
-          !channel.sendText(JSON.stringify({ id, deviceToken: args.deviceToken, method, params }))
-        ) {
-          clearTimeout(timer)
-          pending.delete(id)
-          reject(new Error('relay E2EE channel not ready'))
         }
-      })
+      }
     },
     close: () => {
       intentionallyClosed = true
