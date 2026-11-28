@@ -30115,7 +30115,7 @@
       "emptyTemplates": "模板",
       "expand": "展开 Bots",
       "collapse": "折叠 Bots",
-      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 项需要你，{{unread}} 个未读，{{working}} 个工作中",
+      "summary": "{{action}}，{{total}} 个 bot，{{attention}} 个需要你，{{unread}} 个未读，{{working}} 个工作中",
       "new": "新建 bot 或群组",
       "expandAll": "展开所有 bots",
       "collapseAll": "折叠所有 bots"

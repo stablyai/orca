@@ -29583,7 +29583,7 @@
       "newThreadTab": "新規スレッド",
       "items": {
         "orNames": "{{names}}、または {{last}}",
-        "emptyBotsNeedsYou": "{{names}} からの対応が必要な項目はありません",
+        "emptyBotsNeedsYou": "{{names}} からの項目で、対応が必要なものはありません",
         "emptyBots": "{{names}} の項目はありません",
         "emptyTitle": "このグループの項目はまだありません",
         "filterNamed": "項目を絞り込み、{{filter}} で絞り込み済み",
