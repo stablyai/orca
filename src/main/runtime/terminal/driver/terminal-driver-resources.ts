@@ -47,6 +47,7 @@ import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
   abstract currentLocalStructuredSessionPresentation(
@@ -139,7 +140,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
 
   // Mobile ownership locks desktop input/resize in both renderer and main; clientId selects the active phone viewport (docs/mobile-presence-lock.md).
   protected readonly terminalDrivers = new RuntimeTerminalDriverController({
-    notifyChanged: (ptyId, next) => this.notifier?.terminalDriverChanged(ptyId, next),
+    notifyChanged: (ptyId, next) => this.notifyWindowOfTerminalDriver(ptyId, next),
     canClaimMobileFloor: (ptyId, clientId) => {
       const softLeaver = this.pendingSoftLeavers.get(ptyId)
       return this.mobileSubscribers.get(ptyId)?.has(clientId) || softLeaver?.clientId === clientId
@@ -259,7 +260,9 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     isMobileDriven: (ptyId) => this.getDriver(ptyId).kind === 'mobile',
     getTerminalSize: (ptyId) => this.getTerminalSize(ptyId) ?? null,
     resolveHostTarget: (ptyId) => this.resolveDesktopRestoreTarget(ptyId),
-    hostShowsTerminals: () => this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID,
+    hostShowsTerminal: (ptyId) =>
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      windowShowsPty(this.ptysById.get(ptyId)),
     applyLayout: async (ptyId, target) => {
       this.freshSubscribeGuard.add(ptyId)
       try {

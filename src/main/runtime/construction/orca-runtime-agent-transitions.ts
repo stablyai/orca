@@ -19,11 +19,7 @@ import type { ExternalConversationSeam } from '../../external-conversations/exte
 import { installExternalConversations } from '../../external-conversations/external-conversations-install'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import {
-  folderWorkspaceKey,
-  parseWorkspaceKey
-} from '../../../shared/workspace/identity/workspace-scope'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   OrcaRuntimeWithTerminalWorkerRestartResume,
   unrefTimer
@@ -46,6 +42,8 @@ import {
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { WorktreeRowsChanges } from '../client/events/worktree-rows-change-events'
+import { inHostListPane } from '../terminal/output/terminal-tab-list-classification'
+import { readTerminalAgentWorkspaceLabels } from '../push/notifications/terminal-agent-workspace-labels'
 import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
@@ -56,6 +54,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
   readonly agentTransitions = new AgentTransitionDetector({
     resolveTabWorktreeId: (tabId) => this.tabs.get(tabId)?.worktreeId,
     subscribeToPtyExit: (ptyId, listener) => this.subscribeToPtyExit(ptyId, listener),
+    inHostList: (paneKey) => inHostListPane(paneKey, (identity) => this.getStatusTabList(identity)),
     now: Date.now
   })
   private readonly terminalAgentPhonePush = new TerminalAgentPhonePush({
@@ -209,7 +208,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     super(...args)
     this.servedOrcaProfileId = args[2]?.servedOrcaProfileId ?? null
     this.automation.botChat = (bot, id) => botChatTakingMail(this, bot, id)
-    this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
+    this.agentTransitions.subscribeHostLists((change) =>
+      this.terminalAgentPhonePush.observe(change)
+    )
     followAgentPhasesForBots(this.agentTransitions, this.botChangeNotices, {
       hasBots: () => this.bots.list().length > 0,
       botOfWorkspace: (worktreeId) => this.botOfWorkspace(worktreeId),
@@ -311,29 +312,12 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithTer
     worktreeId: string,
     paneKey: string
   ): TerminalAgentWorkspaceLabels {
-    const store = this.store
     const tabId = parsePaneKey(paneKey)?.tabId
     const fallback =
       (tabId ? this.tabs.get(tabId)?.title?.trim() : undefined) ||
       this.agentTransitions.latestRow(paneKey)?.agentType ||
       'workspace'
-    const scope = parseWorkspaceKey(worktreeId)
-    if (scope?.type === 'folder') {
-      const folder = store?.getFolderWorkspaces?.().find((f) => f.id === scope.folderWorkspaceId)
-      const group = folder
-        ? store?.getProjectGroups?.().find((item) => item.id === folder.projectGroupId)
-        : undefined
-      return { repoLabel: group?.name, worktreeLabel: folder?.name || fallback }
-    }
-    const id = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    // Catalog changes empty the listing cache; persisted metadata remains available.
-    const listed = this.resolvedWorktrees.peek()?.worktrees.find((item) => item.id === id)
-    const meta = listed ? undefined : store?.getWorktreeMeta(id)
-    const repoId = listed?.repoId ?? (meta ? getRepoIdFromWorktreeId(id) : undefined)
-    const repo = repoId ? store?.getRepo(repoId) : undefined
-    return {
-      repoLabel: repo?.displayName,
-      worktreeLabel: listed?.displayName || listed?.branch || meta?.displayName || fallback
-    }
+    const listed = this.resolvedWorktrees.peek()?.worktrees
+    return readTerminalAgentWorkspaceLabels(this.store, listed, worktreeId, fallback)
   }
 }

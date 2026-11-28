@@ -2,6 +2,7 @@ import type { ApplyLayoutResult, PtyLayoutTarget } from '../layout/terminal-layo
 import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from './terminal-orchestration-authority'
 import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRuntimeWithGetOrchestrationDispatchAuthority {
   protected abstract enqueueLayout(
@@ -130,6 +131,7 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
     return this.terminalFitOverrides.get(ptyId) ?? null
   }
 
+  /** The window's hydration reads: only terminals it shows. */
   getAllTerminalFitOverrides(): Map<
     string,
     { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
@@ -139,10 +141,13 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
       { mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }
     >()
     for (const [ptyId, override] of this.terminalFitOverrides) {
+      if (!windowShowsPty(this.ptysById.get(ptyId))) {
+        continue
+      }
       result.set(ptyId, { mode: override.mode, cols: override.cols, rows: override.rows })
     }
     for (const ptyId of this.remoteDesktopFloor.ownerPtyIds()) {
-      if (result.has(ptyId)) {
+      if (result.has(ptyId) || !windowShowsPty(this.ptysById.get(ptyId))) {
         continue
       }
       const size = this.getTerminalSize(ptyId)
@@ -154,7 +159,11 @@ export abstract class OrcaRuntimeWithHasRecentTerminalOutputPath extends OrcaRun
   }
 
   getAllTerminalDrivers(): Map<string, RuntimeTerminalDriverState> {
-    return this.terminalDrivers.getAll()
+    return new Map(
+      [...this.terminalDrivers.getAll()].filter(([ptyId]) =>
+        windowShowsPty(this.ptysById.get(ptyId))
+      )
+    )
   }
 
   getBrowserRemoteViewerPages(): string[] {

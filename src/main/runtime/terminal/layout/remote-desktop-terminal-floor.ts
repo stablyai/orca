@@ -10,8 +10,9 @@ export type RemoteDesktopTerminalFloorDependencies = {
   isMobileDriven: (ptyId: string) => boolean
   getTerminalSize: (ptyId: string) => Viewport | null
   resolveHostTarget: (ptyId: string) => Viewport
-  /** False on a headless host (orca serve, orcad), which has no pane to give a PTY's grid back to. */
-  hostShowsTerminals: () => boolean
+  /** False on a headless host (orca serve, orcad), or for a PTY no host pane shows (a teammate's own
+   *  in a shared agent's Home), which has no pane to give its grid back to. */
+  hostShowsTerminal: (ptyId: string) => boolean
   applyLayout: (ptyId: string, target: LayoutTarget) => Promise<{ ok: boolean }>
 }
 
@@ -244,7 +245,7 @@ export class RemoteDesktopTerminalFloor {
     if (removedOwnerClientId === null) {
       return Promise.resolve(true)
     }
-    if (!this.owners.has(ptyId) && !this.dependencies.hostShowsTerminals()) {
+    if (!this.owners.has(ptyId) && !this.dependencies.hostShowsTerminal(ptyId)) {
       // Headless hosts have no host pane to reclaim; restoring spawn size would cause duplicate TUI redraws (#15997).
       if (removedOwnerViewport) {
         // Remember the departing viewer grid, not a temporary phone-fit grid, for the later restore.

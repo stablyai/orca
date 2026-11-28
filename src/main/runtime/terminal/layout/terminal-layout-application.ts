@@ -4,6 +4,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './runtime-layout-apply'
 import { PaneGridRecorder } from './pane-grid-recording'
+import { windowShowsPty } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
@@ -17,7 +18,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     }
     this.paneGrids ??= new PaneGridRecorder({
       sessions: () =>
-        (this.store?.getWorkspaceSessionHostIds?.() ?? []).flatMap((hostId) => {
+        (this.store?.getAllWorkspaceSessionPartitionIds?.() ?? []).flatMap((hostId) => {
           const session = this.store?.getWorkspaceSession?.(hostId)
           return session ? [session] : []
         }),
@@ -114,20 +115,26 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
     const overrideChanged = (prevFitOverride != null) !== (target.kind === 'phone')
     if (target.kind === 'remote-desktop' || modeChanged || overrideChanged) {
       // Arm cascade suppression before desktop-fit notifications can provoke collateral renderer resizes.
+      // Only the window hears of, and remeasures on, a fit of a terminal it shows.
+      const windowShows = windowShowsPty(this.ptysById.get(ptyId))
       if (target.kind === 'desktop') {
         this.lastRendererSizes.delete(ptyId)
-        this.suppressResizesForMs(500)
+        if (windowShows) {
+          this.suppressResizesForMs(500)
+        }
       }
-      this.notifier?.terminalFitOverrideChanged(
-        ptyId,
-        target.kind === 'phone'
-          ? 'mobile-fit'
-          : target.kind === 'remote-desktop'
-            ? 'remote-desktop-fit'
-            : 'desktop-fit',
-        target.cols,
-        target.rows
-      )
+      if (windowShows) {
+        this.notifier?.terminalFitOverrideChanged(
+          ptyId,
+          target.kind === 'phone'
+            ? 'mobile-fit'
+            : target.kind === 'remote-desktop'
+              ? 'remote-desktop-fit'
+              : 'desktop-fit',
+          target.cols,
+          target.rows
+        )
+      }
       this.notifyFitOverrideListeners(
         ptyId,
         target.kind === 'phone'
@@ -154,7 +161,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void {
-    if (mode === this.getDefaultMobileDisplayMode()) {
+    if (mode === this.getDefaultMobileDisplayMode(ptyId)) {
       this.mobileDisplayModes.delete(ptyId)
     } else {
       this.mobileDisplayModes.set(ptyId, mode)
@@ -162,22 +169,25 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   getMobileDisplayMode(ptyId: string): 'auto' | 'desktop' {
-    return this.mobileDisplayModes.get(ptyId) ?? this.getDefaultMobileDisplayMode()
+    return this.mobileDisplayModes.get(ptyId) ?? this.getDefaultMobileDisplayMode(ptyId)
   }
 
   // Why: a headless runtime (orca serve, orcad) serves several clients at once, so a phone that
   // only views a terminal must not shrink it for all of them. Phone input or an explicit
   // phone-mode request still claims the size. servesHeadlessGraph is fixed for the process, so
-  // a desktop host keeps fitting phones on open and no PTY's mode flips mid-session.
-  protected getDefaultMobileDisplayMode(): 'auto' | 'desktop' {
-    return this.servesHeadlessGraph ? 'desktop' : 'auto'
+  // a desktop host keeps fitting phones on open and no PTY's mode flips mid-session. A PTY the window
+  // does not show (a teammate's own) is served as a headless host serves it; its holder never changes.
+  protected getDefaultMobileDisplayMode(ptyId: string): 'auto' | 'desktop' {
+    return this.servesHeadlessGraph || !windowShowsPty(this.ptysById.get(ptyId))
+      ? 'desktop'
+      : 'auto'
   }
 
   // A phone opening a terminal no phone is on (or holding at phone size) starts passive again.
   // Phones still present or in their leave grace keep the earlier claim, as before.
   protected resetMobileDisplayModeForFreshViewer(ptyId: string): void {
     if (
-      this.getDefaultMobileDisplayMode() === 'desktop' &&
+      this.getDefaultMobileDisplayMode(ptyId) === 'desktop' &&
       !this.mobileSubscribers.get(ptyId)?.size &&
       !this.pendingSoftLeavers.has(ptyId) &&
       !this.terminalFitOverrides.has(ptyId)

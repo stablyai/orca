@@ -47,6 +47,7 @@ import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-termi
 import type { RecentPtyOutputBuffer } from '../terminal/output/recent-pty-output-buffer'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
+import { clientEventTabList } from '../terminal/output/terminal-tab-list-classification'
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
 export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
@@ -78,7 +79,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly clientEvents = new RuntimeClientEventBus({
     makeTitleGateKey: (rawTitle, normalizedTitle) =>
       this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle),
-    onConsumerAvailabilityChanged: () => this.refreshTerminalSideEffectConsumerAvailability()
+    onConsumerAvailabilityChanged: () => this.refreshTerminalSideEffectConsumerAvailability(),
+    tabListOf: (event) => clientEventTabList(event, (ptyId) => this.ptysById.get(ptyId))
   })
 
   protected readonly nativeChatDraftResolutions = new RuntimeNativeChatDraftResolutions({

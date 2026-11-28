@@ -19,7 +19,8 @@ import {
 } from '../catalog/runtime-worktree-selection'
 
 import type { RemoveManagedWorktreeOptions } from '../catalog/runtime-worktree-selection'
-import { hostSleepKey } from '../../terminal/stop/worktree-terminal-sleep-key'
+import { hostSleepKey, listSleepWorkspaceId } from '../../terminal/stop/worktree-terminal-sleep-key'
+import type { PtyList } from '../../terminal/records/runtime-terminal-state-records'
 import {
   resolveWorktreeHostRouting,
   type LaunchHostRepo
@@ -105,7 +106,8 @@ export function observeTerminals(runtime: ObservingRuntime, selector: string) {
 export function explicitKey(
   repos: readonly LaunchHostRepo[],
   selector: string,
-  hostId?: string | null
+  hostId?: string | null,
+  list?: PtyList
 ): string | null {
   const worktreeId = getExplicitWorktreeIdSelector(selector)
   const repoId = worktreeId ? splitWorktreeId(worktreeId)?.repoId : undefined
@@ -114,7 +116,7 @@ export function explicitKey(
   }
   const named = parseExecutionHostId(hostId ?? undefined)?.id
   if (named) {
-    return workspaceLifecycleKey(named, worktreeId)
+    return workspaceLifecycleKey(named, listSleepWorkspaceId(worktreeId, list))
   }
   const routing = resolveWorktreeHostRouting(repos, { repoId })
   if (routing.kind === 'ambiguous') {
@@ -122,19 +124,21 @@ export function explicitKey(
   }
   return workspaceLifecycleKey(
     routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID,
-    worktreeId
+    listSleepWorkspaceId(worktreeId, list)
   )
 }
 
 async function lookedUpKey(
   runtime: LifecycleRuntime,
   selector: string,
-  hostId?: string
+  hostId?: string,
+  list?: PtyList
 ): Promise<string> {
   const worktree = await runtime.showManagedWorktree(selector)
+  const listWorkspaceId = listSleepWorkspaceId(worktree.id, list)
   const named = parseExecutionHostId(hostId ?? worktree.hostId ?? undefined)?.id
   if (named) {
-    return workspaceLifecycleKey(named, worktree.id)
+    return workspaceLifecycleKey(named, listWorkspaceId)
   }
   const routing = resolveWorktreeHostRouting(runtime.listRepos(), worktree)
   if (routing.kind === 'ambiguous') {
@@ -142,23 +146,25 @@ async function lookedUpKey(
   }
   return workspaceLifecycleKey(
     routing.kind === 'resolved' ? routing.hostId : LOCAL_EXECUTION_HOST_ID,
-    worktree.id
+    listWorkspaceId
   )
 }
 
+/** `list`: whose terminals the command takes; a teammate's own list queues apart from the host's. */
 export function queueTerminalWorkspaceCommand<T>(
   runtime: LifecycleRuntime,
   selector: string,
-  command: LifecycleCommand<T>
+  command: LifecycleCommand<T>,
+  list: PtyList = 'host'
 ): Promise<T> {
   const queue = runtime.workspaceLifecycle
   if (!queue) {
     return command.run()
   }
-  const key = explicitKey(runtime.listRepos(), selector)
+  const key = explicitKey(runtime.listRepos(), selector, undefined, list)
   return key
     ? queue.submit(key, command)
-    : queue.submitResolving(() => lookedUpKey(runtime, selector), command)
+    : queue.submitResolving(() => lookedUpKey(runtime, selector, undefined, list), command)
 }
 
 /** Resolve the workspace id before queueing so name-based deletes wait for its sleep; unresolved workspaces run unqueued. */

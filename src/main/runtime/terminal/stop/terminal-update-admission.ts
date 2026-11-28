@@ -1,3 +1,4 @@
+import type { PtyList } from '../records/runtime-terminal-state-records'
 /** Close per-runtime spawn admission between update census and server stop; time-bound it so vanished desktops cannot lock users out. */
 export const TERMINAL_UPDATE_ADMISSION_CLOSED_MESSAGE =
   'This server is restarting for an update. Try again in a moment.'
@@ -11,6 +12,8 @@ export class TerminalUpdateAdmissionClosedError extends Error {
 
 export type WorktreeTerminalSpawnLeaseOptions = {
   refuseSleptWorktree?: boolean
+  /** Whose list the spawn opens in: it wakes, or is refused by, that list's sleep alone. */
+  list?: PtyList
   reattachSessionId?: string
   requireAttachOnly?: () => void
 }

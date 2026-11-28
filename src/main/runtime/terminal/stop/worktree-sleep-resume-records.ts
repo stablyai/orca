@@ -218,6 +218,49 @@ export function clearClosedWorktreeResumeRecords(
     : null
 }
 
+/** The session without any of a workspace's terminal tabs or their resume records, in one edit: a
+ *  list no window shows, whose slept tabs no tab close removes. Null when it holds none. */
+export function clearWorkspaceTerminals(
+  session: WorkspaceSessionState,
+  worktreeId: string
+): WorkspaceSessionState | Error | null {
+  const tabIds = new Set((session.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+  for (const tab of session.unifiedTabs?.[worktreeId] ?? []) {
+    if (tab.contentType === 'terminal') {
+      tabIds.add(tab.id)
+    }
+  }
+  const kept = (ids: readonly string[] = []) => ids.filter((id) => !tabIds.has(id))
+  const { [worktreeId]: _tabs, ...tabsByWorktree } = session.tabsByWorktree
+  const emptied: WorkspaceSessionState = {
+    ...session,
+    tabsByWorktree,
+    terminalLayoutsByTabId: Object.fromEntries(
+      Object.entries(session.terminalLayoutsByTabId ?? {}).filter(([tabId]) => !tabIds.has(tabId))
+    ),
+    ...(session.unifiedTabs?.[worktreeId] && {
+      unifiedTabs: {
+        ...session.unifiedTabs,
+        [worktreeId]: session.unifiedTabs[worktreeId].filter((tab) => !tabIds.has(tab.id))
+      }
+    }),
+    ...(session.tabGroups?.[worktreeId] && {
+      tabGroups: {
+        ...session.tabGroups,
+        [worktreeId]: session.tabGroups[worktreeId].map((group) => ({
+          ...group,
+          tabOrder: kept(group.tabOrder),
+          activeTabId:
+            group.activeTabId && tabIds.has(group.activeTabId) ? null : group.activeTabId,
+          ...(group.recentTabIds && { recentTabIds: kept(group.recentTabIds) })
+        }))
+      }
+    })
+  }
+  const cleared = clearClosedWorktreeResumeRecords(emptied, worktreeId, [...tabIds])
+  return cleared ?? (tabIds.size > 0 ? emptied : null)
+}
+
 /** The session without a workspace-sleep record whose tab it no longer lists, or null when the record is still placed. */
 export function dropStrandedSleepRecord(
   session: WorkspaceSessionState,
