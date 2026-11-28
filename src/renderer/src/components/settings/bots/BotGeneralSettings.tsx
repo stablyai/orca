@@ -90,8 +90,8 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
           <div className="font-medium leading-[18px]">{t('settings.bots.agent', 'Agent')}</div>
           <p className="text-xs leading-4 text-muted-foreground">
             {t(
-              'settings.bots.agentModelDescription',
-              'Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.'
+              'settings.bots.agentModelAllInstancesDescription',
+              'Used across this bot’s Home Chat, rooms, threads, and automations. Changing the agent switches all of its conversations on their next reply.'
             )}
           </p>
         </div>

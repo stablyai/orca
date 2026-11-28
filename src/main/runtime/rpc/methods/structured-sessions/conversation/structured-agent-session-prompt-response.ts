@@ -1,3 +1,5 @@
+import { botOfHomeWorkspace } from '../../../../../../shared/bots/bot-homes'
+import { selectBotProviderFromComposer } from '../../../../../bots/bot-composer-provider-switch'
 import { defineMethod } from '../../../core'
 import { clientReadsOptionsWithoutModel } from '../structured-agent-session-policy'
 import { isAgentRpcCaller } from '../../../callers/rpc-caller-identity'
@@ -58,6 +60,13 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
       }
       requireStructuredAgentAudience(ctx, params.agent)
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)
+      const record = host.deps.store.getConversation(params.sessionId)
+      const bot = record
+        ? botOfHomeWorkspace(ctx.runtime.bots.list(), record.location.workspaceId)
+        : null
+      if (bot) {
+        return selectBotProviderFromComposer(ctx.runtime, host, bot, params)
+      }
       return host.selectProvider(params)
     }
   })

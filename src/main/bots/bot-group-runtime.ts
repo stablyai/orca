@@ -10,7 +10,9 @@ import type {
   StructuredMailOwner
 } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { isBotGroupMemberSession } from '../../shared/bots/bot-group'
+import type { OrcaRuntimeWithBots } from '../runtime/orca-runtime-bots'
+import { botGroupRoomMembers, isBotGroupMemberSession } from '../../shared/bots/bot-group'
+import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { BotGroupStore } from './bot-group-store'
 import { migrateBotGroupHomes } from './bot-group-home-migration'
@@ -47,7 +49,7 @@ import { botGroupRoomChat } from './bot-group-automation-run'
 import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
 import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
 
-const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
+const runtimes = new WeakMap<OrcaRuntimeWithBots, BotGroupRuntime>()
 /** `homeChat`, also finding the group rooms a bot is a member of, where its automations may run. */
 export function withGroupRoomChats(
   runtime: OrcaRuntimeService,
@@ -116,6 +118,27 @@ export function assertBotGroupQueuedMessageAllowed(
   }
 }
 
+export function isBotGroupPreConsentOperation(
+  runtime: OrcaRuntimeWithBots,
+  sessionId: string,
+  operationId: string
+): boolean {
+  return (
+    isBotGroupMemberSession(sessionId) &&
+    (runtimes.get(runtime)?.isPreConsentOperation(operationId) ?? false)
+  )
+}
+
+export async function captureBotGroupPreConsentOperations(
+  runtime: OrcaRuntimeService,
+  botId: string
+): Promise<void> {
+  if (typeof runtime.getOrchestrationDb !== 'function') {
+    return
+  }
+  await runtimeBotGroups(runtime).capturePreConsentOperationsForBot(botId)
+}
+
 export function startBotGroupsSoon(runtime: OrcaRuntimeService, isCurrent: () => boolean): void {
   setTimeout(() => {
     // A database closed before this ran (shutdown, tests) has nothing left to start.
@@ -145,6 +168,8 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  /** Room operations reserved before broadening consent, so later admission cannot gain authority. */
+  private readonly preConsentOperations = new Set<string>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<
     string,
@@ -203,4 +228,27 @@ export class BotGroupRuntime {
   saveAnswer = (operationId: string, text: string) => saveGroupPeerAnswer(this, operationId, text)
   recordWorker = (operation: Promise<string | null>, dispatchId: string) =>
     recordGroupWorker(this, operation, dispatchId)
+
+  isPreConsentOperation = (operationId: string): boolean =>
+    this.preConsentOperations.has(operationId)
+
+  capturePreConsentOperationsForBot = async (botId: string): Promise<void> => {
+    const groupIds = this.store
+      .list()
+      .filter((group) =>
+        botGroupRoomMembers(group)
+          .flat()
+          .some((member) => member.botId === botId)
+      )
+      .map((group) => group.id)
+    for (const groupId of groupIds) {
+      await runKeyedSerializedOperation(this.queues, groupId, async () => {
+        for (const { turn } of this.store.pending()) {
+          if (turn.botId === botId) {
+            this.preConsentOperations.add(turn.operationId)
+          }
+        }
+      })
+    }
+  }
 }

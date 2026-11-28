@@ -1778,7 +1778,6 @@
       "fileChangedOnDisk": "{{file}} diskte değişti.",
       "pictureCurrent": "Mevcut görsel",
       "agent": "Ajan",
-      "agentModelDescription": "Bot konuşmaları ve otomasyonlar için kullanılır. Yeni bir model yeni konuşmalara uygulanır; Ana sohbet mevcut modelini korur.",
       "permissions": "İzinler",
       "permissionsDescription": "Yeni oturumların başlangıç izni. Bunun ötesindeki her şey oturumda sorulur.",
       "active": "Etkin",

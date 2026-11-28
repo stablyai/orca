@@ -31,6 +31,7 @@ import { BotsDbWorkerClient } from '../bots/db-worker/bots-db-worker-client'
 import { profileAccountUserId } from '../orca-profiles/profile-account-user-id'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { OrcaRuntimeWithLinearCommands } from './integrations/linear/linear-commands'
+import { isBotGroupPreConsentOperation } from '../bots/bot-group-runtime'
 import { botStructuredSessionWiring, type WiredBot } from '../bots/bot-structured-session-wiring'
 import { botChatJournal } from '../bots/bot-chat-reads'
 import type { RuntimeStore } from './construction/runtime-store-contract'
@@ -265,6 +266,8 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
       assertQueuedMessageAllowed: (sessionId: string, messageId: string) =>
         this.assertStructuredQueuedMessageAllowed(sessionId, messageId),
+      isPreConsentOperation: (sessionId: string, messageId: string) =>
+        isBotGroupPreConsentOperation(this, sessionId, messageId),
       onMessageAdmitted: (message: AdmittedMessage) => this.onChatMessageAdmitted(message)
     }
   }

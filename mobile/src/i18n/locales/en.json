@@ -7046,16 +7046,16 @@
       "kept": "Kept: soul, memory, automations, connectors",
       "notKept": "Not kept: the current conversation",
       "action": "Switch to {{agent}}",
-      "continueDescription": "Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.",
-      "homeContinues": "Home Chat continues on {{agent}} with its recent history",
       "newChats": "New Slack threads, automation runs and chats you open later start on {{agent}}",
-      "existingSlackChats": "Slack threads with an existing Orca chat keep that chat’s agent",
       "allowAction": "Allow access and switch",
       "installRequired": "Install this agent on the bot’s computer first.",
       "currentHomePermission": "Home Chat currently uses {{mode}}.",
       "currentDefaultPermission": "New chats currently use {{mode}}.",
       "saveExplicitAsk": "This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings.",
-      "threads": "Slack threads already running stay on {{agent}} until they finish"
+      "threads": "Slack threads already running stay on {{agent}} until they finish",
+      "allInstancesDescription": "Home Chat, existing rooms and threads, and new chats use {{agent}} on their next reply.",
+      "allInstancesContinue": "Home Chat, existing rooms and other chats continue on {{agent}} with their recent history",
+      "activeRepliesFinish": "Active replies finish on their current agent before switching"
     },
     "tools": {
       "add": "Add a tool",

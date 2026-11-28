@@ -460,3 +460,54 @@ it('sends new work after a switch while keeping a held card under its earlier pe
   )
   expect(chat.dispatch).toHaveBeenCalledTimes(1)
 })
+
+it('keeps pre-consent room reservations on their old authority and refuses late ones after switch', async () => {
+  const preConsentIds = new Set<string>()
+  const chat = await createQueuedMessageTestRig({
+    hostDeps: {
+      ...piHost,
+      isPreConsentOperation: (_sessionId, clientMessageId) => preConsentIds.has(clientMessageId)
+    }
+  })
+  rig = chat
+  expect(await chat.host.selectProvider(piSelection)).toEqual({ status: 'selected' })
+
+  chat.dispatch.mockResolvedValueOnce({
+    state: 'accepted',
+    providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-old-1', ordinal: 1 }
+  })
+  const early = chat.send('Reserved before consent')
+  preConsentIds.add(early.id)
+  await early.result
+  await eventually(async () => {
+    expect((await chat.submission(early.id))?.dispatchState).toBe('accepted')
+  })
+  expect(chat.store.getRecord(SESSION)?.provider).toBe('codex')
+  expect(chat.store.getRecord(SESSION)?.selectedProvider?.agent).toBe('pi')
+
+  chat.dispatch.mockResolvedValueOnce({
+    state: 'accepted',
+    providerIdentity: { provider: 'legacy', agent: 'pi', sessionId: THREAD, recordId: 'new-1' }
+  })
+  const after = chat.send('Sent after consent', undefined, {
+    fence: chat.store.getRecord(SESSION)!.lease.runtimeFence
+  })
+  await after.result
+  await eventually(async () => {
+    expect((await chat.submission(after.id))?.dispatchState).toBe('accepted')
+    expect(chat.store.getRecord(SESSION)?.provider).toBe('pi')
+    expect(chat.store.getRecord(SESSION)?.providerSwitch).toBeUndefined()
+  })
+
+  const late = chat.send('Late pre-consent reservation', undefined, {
+    fence: chat.store.getRecord(SESSION)!.lease.runtimeFence
+  })
+  preConsentIds.add(late.id)
+  await late.result
+  await eventually(async () => {
+    expect((await chat.submission(late.id))?.rejection).toMatchObject({
+      kind: 'providerSwitchQueuedPermission'
+    })
+  })
+  expect(chat.dispatch).toHaveBeenCalledTimes(2)
+})

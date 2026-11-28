@@ -88,7 +88,8 @@ export async function prepareStructuredChatProviderSwitch(
   }
   if (
     selection?.botDefault &&
-    deps.botHomeDefault?.(selection.botDefault, sessionId) !== selection.agent
+    deps.botHomeDefault?.(selection.botDefault, sessionId, record.location.workspaceId) !==
+      selection.agent
   ) {
     await deps.store.updateRecord(sessionId, {
       kind: 'select-provider',
@@ -99,6 +100,7 @@ export async function prepareStructuredChatProviderSwitch(
     selection = undefined
   }
   const activeBoundary = record.providerSwitchQueueBoundary
+  const preConsent = deps.isPreConsentOperation?.(sessionId, next.clientMessageId) === true
   const queued =
     next.queuedMessageId && (activeBoundary || selection?.consent)
       ? await session.journal.queuedMessages.get(next.queuedMessageId)
@@ -109,8 +111,13 @@ export async function prepareStructuredChatProviderSwitch(
   const allowsSwitch = body?.kind === 'message' && !body.command
   if (
     activeBoundary &&
-    next.queuedMessageId &&
-    queuedBeforeConsent(queued?.queuedAt, activeBoundary, session.journal.physicalCursor().epoch) &&
+    (preConsent ||
+      (next.queuedMessageId &&
+        queuedBeforeConsent(
+          queued?.queuedAt,
+          activeBoundary,
+          session.journal.physicalCursor().epoch
+        ))) &&
     !(allowsSwitch && selection && agentChatPermissionModes(selection.agent))
   ) {
     return refuseProviderSwitchSend(session, record, next, 'providerSwitchQueuedPermission')
@@ -158,7 +165,7 @@ export async function prepareStructuredChatProviderSwitch(
         selection.agent
       )
     }
-    if ((next.submittedSequence ?? 0) <= consent.queueThrough.sequence) {
+    if (preConsent || (next.submittedSequence ?? 0) <= consent.queueThrough.sequence) {
       return 'none'
     }
     if (

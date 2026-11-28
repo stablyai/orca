@@ -126,8 +126,8 @@ export function MobileBotAgentPage(props: {
         message={[
           props.inPlaceSwitch
             ? t(
-                'bots.agentSwitch.continueDescription',
-                'Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.',
+                'bots.agentSwitch.allInstancesDescription',
+                'Home Chat, existing rooms and threads, and new chats use {{agent}} on their next reply.',
                 { agent }
               )
             : t(
@@ -140,8 +140,8 @@ export function MobileBotAgentPage(props: {
           ...(props.inPlaceSwitch
             ? [
                 t(
-                  'bots.agentSwitch.homeContinues',
-                  'Home Chat continues on {{agent}} with its recent history',
+                  'bots.agentSwitch.allInstancesContinue',
+                  'Home Chat, existing rooms and other chats continue on {{agent}} with their recent history',
                   { agent }
                 )
               ]
@@ -153,8 +153,8 @@ export function MobileBotAgentPage(props: {
           ),
           props.inPlaceSwitch
             ? t(
-                'bots.agentSwitch.existingSlackChats',
-                'Slack threads with an existing Orca chat keep that chat’s agent'
+                'bots.agentSwitch.activeRepliesFinish',
+                'Active replies finish on their current agent before switching'
               )
             : t(
                 'bots.agentSwitch.threads',

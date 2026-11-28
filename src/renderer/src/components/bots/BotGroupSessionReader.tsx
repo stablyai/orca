@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo } from 'react'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useStructuredAgentSession } from '../native-chat/session/structured/use-structured-agent-session'
+import { useStructuredAgentSessionActiveProvider } from '../native-chat/session/status/structured-agent-session-status-hooks'
 import {
   botGroupOperationAdmitted,
   createBotGroupJournalIndexer,
@@ -8,6 +9,7 @@ import {
   type BotGroupTurn
 } from '../../../../shared/bots/bot-group'
 export type BotGroupSession = ReturnType<typeof useStructuredAgentSession> & {
+  agent: string
   groupTurnItems: ReturnType<typeof indexBotGroupJournal>
 }
 export const BotGroupSessionReader = memo(function BotGroupSessionReader({
@@ -22,9 +24,10 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
   visible: boolean
   report: (sessionId: string, session: BotGroupSession | null) => void
 }): null {
+  const activeAgent = useStructuredAgentSessionActiveProvider(turn.sessionId, target, turn.agent)
   const controller = useStructuredAgentSession({
     sessionId: turn.sessionId,
-    agent: turn.agent,
+    agent: activeAgent,
     target,
     isVisible: visible,
     queueFollowUps: true
@@ -66,7 +69,10 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
     controller.journalItems,
     controller.submissions
   ])
-  const session = useMemo(() => ({ ...controller, groupTurnItems }), [controller, groupTurnItems])
+  const session = useMemo(
+    () => ({ ...controller, agent: activeAgent, groupTurnItems }),
+    [controller, activeAgent, groupTurnItems]
+  )
   useEffect(() => {
     report(turn.sessionId, session)
   }, [turn.sessionId, report, session])

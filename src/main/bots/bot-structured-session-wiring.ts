@@ -266,9 +266,15 @@ export function botStructuredSessionWiring(deps: {
     quietTurnEnd: (sessionId, outcome, usageLimited) =>
       deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
     isBotHome: (workspaceId) => lookup.byHome(workspaceId) !== null,
-    botHomeDefault: (botId, sessionId) => {
+    botHomeDefault: (botId, sessionId, workspaceId) => {
       const bot = botById(botId)
-      return bot?.chatSessionId === sessionId ? bot.agent : undefined
+      if (!bot) {
+        return undefined
+      }
+      if (bot.chatSessionId === sessionId) {
+        return bot.agent
+      }
+      return workspaceId && lookup.byHome(workspaceId)?.id === bot.id ? bot.agent : undefined
     }
   }
 }

@@ -1089,7 +1089,6 @@
       "fileChangedOnDisk": "{{file}} 已在磁盘上更改",
       "pictureCurrent": "当前头像",
       "agent": "智能体",
-      "agentModelDescription": "用于 bot 的对话和自动化。新模型适用于新对话；主聊天会保留当前使用的模型",
       "permissions": "权限",
       "permissionsDescription": "新会话的初始权限。超出此权限的操作会在会话中请求批准",
       "active": "已启用",

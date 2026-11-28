@@ -1534,7 +1534,6 @@
       "fileChangedOnDisk": "{{file}} changed on disk.",
       "pictureCurrent": "Current picture",
       "agent": "Agent",
-      "agentModelDescription": "Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.",
       "permissions": "Permissions",
       "permissionsDescription": "The starting permission for new sessions. Anything beyond it asks in the session.",
       "active": "Active",
@@ -1817,7 +1816,8 @@
       "soulStats": "{{lines}} lines · {{words}} words",
       "soulDoubleClickHint": "Double-click to edit",
       "soulEmpty": "No instructions yet. Double-click or select Edit to write.",
-      "teamDisabled": "Bots are turned off by your team."
+      "teamDisabled": "Bots are turned off by your team.",
+      "agentModelAllInstancesDescription": "Used across this bot’s Home Chat, rooms, threads, and automations. Changing the agent switches all of its conversations on their next reply."
     },
     "windowMaterial": {
       "description": "What shows behind translucent terminals. Requires restart.",
@@ -28162,13 +28162,14 @@
       "notKept": "Not kept: the current conversation",
       "threads": "Slack threads with an existing Orca chat keep that chat's agent",
       "action": "Switch to {{agent}}",
-      "continueDescription": "Home Chat and new chats use {{agent}}. Your other chats keep their agent. Change any of them from its own picker.",
-      "homeContinues": "Home Chat continues on {{agent}} with its recent history",
       "newChats": "New Slack threads, automation runs and chats you open later start on {{agent}}",
       "allowAction": "Allow access and switch",
       "currentHomePermission": "Home Chat currently uses {{mode}}.",
       "currentDefaultPermission": "New chats currently use {{mode}}.",
-      "saveExplicitAsk": "This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings."
+      "saveExplicitAsk": "This bot will use Ask for approval instead of Same as chats. Giving chats more or less access later won’t change this bot’s setting. Switching back won’t restore Same as chats. You can turn it back on in Bot Settings.",
+      "allInstancesDescription": "Home Chat, existing rooms and threads, and new chats use {{agent}} on their next reply.",
+      "allInstancesContinue": "Home Chat, existing rooms and other chats continue on {{agent}} with their recent history",
+      "activeRepliesFinish": "Active replies finish on their current agent before switching"
     },
     "avatar": {
       "intake": {

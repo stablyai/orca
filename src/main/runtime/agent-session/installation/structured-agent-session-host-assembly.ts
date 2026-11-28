@@ -112,6 +112,7 @@ export async function installOnJournal(
     canSwitchProvider: (sessionId, agent) =>
       !deps.readOnlySession?.(sessionId) || lookAroundSupported(agent),
     ...(deps.botHomeDefault ? { botHomeDefault: deps.botHomeDefault } : {}),
+    ...(deps.isPreConsentOperation ? { isPreConsentOperation: deps.isPreConsentOperation } : {}),
     ...(deps.launchTools ? { launchTools: deps.launchTools } : {}),
     ...(deps.assertNoTerminalWriter ? { assertNoTerminalWriter: deps.assertNoTerminalWriter } : {}),
     ...(catalogOwner.modelCatalog ? { modelCatalog: catalogOwner.modelCatalog } : {})

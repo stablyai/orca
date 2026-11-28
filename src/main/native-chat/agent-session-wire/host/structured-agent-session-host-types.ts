@@ -257,7 +257,9 @@ export type StructuredAgentSessionHostDeps = {
     permission: AgentChatPermissionChoice
   ) => Promise<AgentSessionAccountHome>
   canSwitchProvider?: (sessionId: string, agent: string) => boolean
-  botHomeDefault?: (botId: string, sessionId: string) => string | undefined
+  botHomeDefault?: (botId: string, sessionId: string, workspaceId?: string) => string | undefined
+  /** True for a room operation reserved before broadening consent, admitted to native chat afterward. */
+  isPreConsentOperation?: (sessionId: string, clientMessageId: string) => boolean
   /** The MCP servers a chat's agent launched with from Orca (a bot's own, the host list's), against
    *  what its next launch would get; a chat that got none never refreshes for tools. */
   launchTools?: {
