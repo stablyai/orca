@@ -1,4 +1,3 @@
-import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-target'
@@ -124,14 +123,19 @@ async function markSeen(bot: BotRef, sessionIds: string[], current?: () => boole
   if (sessionIds.length > 0) {
     if (current) {
       if (current()) {
-        await callRuntimeRpc(
-          botTarget(bot),
+        await callBotRpc(
+          bot,
           'bots.chats.seen',
           { sessionIds },
           {
             beforeSend: () => {
               if (!current()) {
-                throw new Error('Chat origin changed.')
+                throw new Error(
+                  translate(
+                    'bots.automationPanel.refreshBeforeOpen',
+                    'This computer changed. Refresh this automation before opening it.'
+                  )
+                )
               }
             }
           }

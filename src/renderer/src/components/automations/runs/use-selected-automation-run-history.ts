@@ -153,26 +153,35 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
     inputRef.current = input
   })
   const reloadToken = input.reloadToken
+  const selectedOwner = selected
+    ? capturedAutomationOwner(input.context.capturedOwners, selected.key).owner
+    : null
   const navigation =
     input.navigation?.runId &&
-    input.navigation.automationId === request?.selected.automation.id &&
+    input.navigation.automationId === selected?.automation.id &&
     (!input.navigation.owner ||
       (navigationRevision &&
-        request?.captured.owner &&
-        automationNavigationMatchesOwner(input.navigation, request.captured.owner)))
+        selectedOwner &&
+        automationNavigationMatchesOwner(input.navigation, selectedOwner)))
       ? input.navigation
       : null
   const settled = useRef<{ request: typeof request; reloadToken: number } | null>(null)
   const navigationBlocked = Boolean(
     navigationRevision &&
     input.navigation?.owner &&
-    input.navigation.automationId === request?.selected.automation.id &&
-    (!request.captured.owner ||
-      !automationNavigationMatchesOwner(input.navigation, request.captured.owner))
+    input.navigation.automationId === selected?.automation.id &&
+    (!selectedOwner || !automationNavigationMatchesOwner(input.navigation, selectedOwner))
   )
 
   useEffect(() => {
     if (navigationBlocked) {
+      return
+    }
+    if (
+      navigation?.owner &&
+      (!request?.captured.owner ||
+        !automationNavigationMatchesOwner(navigation, request.captured.owner))
+    ) {
       return
     }
     const { onSettled } = inputRef.current
