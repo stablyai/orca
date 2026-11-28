@@ -4,6 +4,33 @@ import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['host', 'add'],
+    summary: 'Save an SSH target on the selected Orca runtime',
+    usage:
+      'orca host add --name <label> --hostname <address> --user <username> [--port <port>] [--identity-file <path>] [--jump-host <host>] [--proxy-command <command>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'name',
+      'hostname',
+      'user',
+      'port',
+      'identity-file',
+      'jump-host',
+      'proxy-command'
+    ],
+    notes: [
+      'Saves a manual SSH target, as Settings does. The default port is 22. Each invocation creates a new target.',
+      'Only registers the target: it does not connect, accept host keys, or store passwords or key passphrases. Connect from Settings to complete any prompts.',
+      'With --environment or --pairing-code, saves on that Orca runtime. SSH keys, paths, jump hosts and proxy commands are interpreted on that runtime, not on the calling machine.',
+      'A runtime without SSH target management is refused; there is no fallback to local registration. Headless runtimes without an SSH stack report that management is unavailable.',
+      'Returns the saved id and --host ssh:<id> selector. host list and host rm operate on the local Orca runtime; run them on the selected machine when registering remotely.'
+    ],
+    examples: [
+      'orca host add --name build-box --hostname 192.0.2.10 --user ubuntu --json',
+      'orca host add --name build-box --hostname build.example.com --user dev --port 2222 --identity-file /home/dev/.ssh/id_ed25519 --environment office --json'
+    ]
+  },
+  {
     path: ['host', 'name'],
     summary: 'Show or set the name this Orca runtime reports to connected clients',
     usage: 'orca host name [--name <name>] [--json]',
