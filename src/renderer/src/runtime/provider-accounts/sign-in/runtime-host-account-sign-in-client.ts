@@ -146,15 +146,18 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
         continue
       }
     }
-    // A link wait never outlives the deadline: once it passes, a lost answer ends here as no link.
-    const untilDeadline =
-      status.phase === 'starting' ? Math.max(0, promptDeadline - Date.now()) : undefined
+    // A link wait never outlives the deadline: each try gets only the time left, and once it passes a lost
+    // answer ends here as no link. A cancelled attempt waits normally for the host to settle it.
+    const bounded = status.phase === 'starting' && !attempt.cancelRequested
+    const untilDeadline = bounded ? Math.max(0, promptDeadline - Date.now()) : undefined
     const wait = () =>
       call(
         attempt,
         'accounts.hostSignInWait',
         { flowId: status.flowId, afterRevision: status.revision },
-        Math.min(WAIT_TIMEOUT_MS, untilDeadline ?? WAIT_TIMEOUT_MS)
+        bounded
+          ? Math.max(1, Math.min(WAIT_TIMEOUT_MS, promptDeadline - Date.now()))
+          : WAIT_TIMEOUT_MS
       )
     advance(
       attempt,
