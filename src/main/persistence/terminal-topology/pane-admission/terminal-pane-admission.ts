@@ -31,6 +31,7 @@ import {
 } from '../pane-moves/pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { loadPaneChange } from './pane-admission-change'
 import {
   editorViewsOfModel,
   type PartitionEditorViews
@@ -66,12 +67,17 @@ export function admitPaneToSession(
   admission: TerminalPaneAdmission
 ): PaneLayoutChange<TerminalPaneAdmissionOutcome> {
   const leafId = admission.type === 'createTerminalTab' ? admission.leafId : admission.newLeafId
-  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
+  const { loaded, write } = loadPaneChange(hostId, session, {
+    workspace: admission.workspace,
+    tabId: admission.tabId,
+    leafIds: admission.type === 'createTerminalTab' ? [leafId] : [admission.leafId, leafId],
+    groupId: admission.type === 'createTerminalTab' ? admission.groupId : undefined
+  })
   const workspace = loaded.layout.workspaces[admission.workspace]
   if (workspace && locatePane(workspace, paneKeyOf(admission.tabId, leafId))) {
     return { value: 'exists', session: null }
   }
-  const change = applyToSession(loaded, admission, false, {}, touchedRecordsWrite(session, loaded))
+  const change = applyToSession(loaded, admission, false, {}, write)
   return { ...change, value: change.value.ok ? 'admitted' : change.value.code }
 }
 
@@ -80,17 +86,13 @@ export function withdrawPaneFromSession(
   session: WorkspaceSessionState,
   pane: CommandOf<'closePane'>
 ): PaneLayoutChange<LayoutRefusalCode | null> {
-  const loaded = loadWorkspaceLayoutWithoutReport(hostId, session, nameBasedLoadContext())
-  const change = applyToSession(loaded, pane, false, {}, touchedRecordsWrite(session, loaded))
+  const { loaded, write } = loadPaneChange(hostId, session, {
+    workspace: pane.workspace,
+    tabId: pane.tabId,
+    leafIds: [pane.leafId]
+  })
+  const change = applyToSession(loaded, pane, false, {}, write)
   return { ...change, value: change.value.ok ? null : change.value.code }
-}
-
-/** Main-owned layouts patch changed records; window-owned builds rewrite the partition. */
-function touchedRecordsWrite(
-  session: WorkspaceSessionState,
-  loaded: LoadedWorkspaceLayout
-): ((after: WorkspaceSessionState) => WorkspaceSessionState | null) | undefined {
-  return ORCA_LAYOUT_OWNER_IS_MAIN ? (after) => touchedRecords(session, loaded, after) : undefined
 }
 
 function touchedRecords(

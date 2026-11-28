@@ -39,7 +39,11 @@ export function useSourceControlConflictAbort({
   const confirmAction = useConfirmationDialog()
 
   const handleAbortOperation = useCallback(
-    async (requestedOperation: AbortConflictOperation): Promise<void> => {
+    async (
+      requestedOperation: AbortConflictOperation,
+      // The operation bar confirms in place, so it skips the dialog.
+      { confirmed = false }: { confirmed?: boolean } = {}
+    ): Promise<void> => {
       if (
         !activeWorktreeId ||
         !worktreePath ||
@@ -68,15 +72,17 @@ export function useSourceControlConflictAbort({
             'auto.components.right.sidebar.SourceControl.abortMergeConfirmDescription',
             'This cancels the merge in progress and can discard conflict resolutions made during this merge.'
           )
-      const confirmed = await confirmAction({
-        title,
-        description,
-        confirmLabel: isRebase
-          ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
-          : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
-        confirmVariant: 'destructive'
-      })
-      if (!confirmed || operationStore.getState().isAbortingOperation) {
+      const approved =
+        confirmed ||
+        (await confirmAction({
+          title,
+          description,
+          confirmLabel: isRebase
+            ? translate('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
+            : translate('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge'),
+          confirmVariant: 'destructive'
+        }))
+      if (!approved || operationStore.getState().isAbortingOperation) {
         return
       }
 
@@ -153,32 +159,24 @@ export function useSourceControlConflictAbort({
     ]
   )
 
-  const handleAbortMerge = useCallback(async (): Promise<void> => {
-    await handleAbortOperation('merge')
-  }, [handleAbortOperation])
-
-  const handleAbortRebase = useCallback(async (): Promise<void> => {
-    await handleAbortOperation('rebase')
-  }, [handleAbortOperation])
-
-  const handleAbortOperationForConflict = useCallback(
-    (operation: GitConflictOperation): void => {
-      if (operation === 'merge') {
-        void handleAbortMerge()
-        return
-      }
-      if (operation === 'rebase') {
-        void handleAbortRebase()
-      }
+  const handleAbortMerge = useCallback(
+    async (options?: { confirmed?: boolean }): Promise<void> => {
+      await handleAbortOperation('merge', options)
     },
-    [handleAbortMerge, handleAbortRebase]
+    [handleAbortOperation]
+  )
+
+  const handleAbortRebase = useCallback(
+    async (options?: { confirmed?: boolean }): Promise<void> => {
+      await handleAbortOperation('rebase', options)
+    },
+    [handleAbortOperation]
   )
 
   return {
     confirmAction,
     handleAbortMerge,
     handleAbortOperation,
-    handleAbortOperationForConflict,
     handleAbortRebase
   }
 }

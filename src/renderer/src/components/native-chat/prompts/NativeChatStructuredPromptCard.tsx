@@ -1,4 +1,8 @@
-import { useState, type RefObject } from 'react'
+import type { RefObject } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import { agentSessionPromptQuestions } from '../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { structuredQuestionCard } from '../../../../../shared/native-chat/input/questions/structured-agent-question-card'
 import { chatApprovalFromJournal } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
@@ -25,11 +29,18 @@ export function NativeChatStructuredPromptCard({
   shouldFocus: boolean
   answerInputRef: RefObject<HTMLTextAreaElement | null>
 }): React.JSX.Element | null {
-  const [collapsed, setCollapsed] = useState(false)
+  const promptKey = prompt ? `${prompt.itemId}:${prompt.revision}` : undefined
+  // Kept with the chat tab: a released chat returns with the question folded if the reader folded it.
+  const [collapsed, setCollapsed] = useNativeChatViewState(
+    promptKey === undefined ? undefined : `prompt-collapsed:${promptKey}`,
+    false,
+    KEPT_PROMPT_VIEWS
+  )
   if (prompt?.body.kind === 'approval') {
     return (
       <NativeChatApprovalCard
         approval={chatApprovalFromJournal(prompt.body)}
+        memoryKey={promptKey}
         onChoose={(optionId) => void promptResponse.respond(prompt, { kind: 'option', optionId })}
         isSubmitting={promptResponse.holds(prompt)}
         onCancel={onCancel}
@@ -50,6 +61,7 @@ export function NativeChatStructuredPromptCard({
         >
           <NativeChatStructuredQuestionCard
             questions={questions}
+            memoryKey={promptKey}
             onAnswer={(response) => void promptResponse.respond(prompt, response)}
             isSubmitting={promptResponse.holds(prompt)}
             onCancel={onCancel}

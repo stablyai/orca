@@ -42,6 +42,7 @@ import { NativeChatExpandable } from './messages/disclosure/NativeChatExpandable
 import { NativeChatEventOpenButton } from './messages/events/NativeChatEventOpenButton'
 import { NativeChatOfferActions, useNativeChatOffer } from './NativeChatOfferActions'
 import { useNativeChatDisclosure } from './messages/disclosure/native-chat-disclosure-store'
+import { useNativeChatViewGuard } from './pane/ownership/native-chat-view-memory'
 
 // Every new-bot card in a chat shares this prefix, so opening one closes the rest.
 const BOT_CREATE_CARD_DISCLOSURE = 'bot-create-card:'
@@ -161,7 +162,8 @@ function OfferCard({
   useTranslation()
   const answering = useNativeChatOffer(proposer.id, messageId)
   const { proposal } = offer
-  const [creating, setCreating] = useState(false)
+  // Kept with the chat tab: a card released mid-create returns still creating.
+  const [creating, setCreating] = useNativeChatViewGuard(`bot-create:${messageId}`, false)
   const [editing, setEditing] = useState(false)
   const { open, setOpen } = useNativeChatDisclosure(
     messageId ? `${BOT_CREATE_CARD_DISCLOSURE}${messageId}` : undefined,

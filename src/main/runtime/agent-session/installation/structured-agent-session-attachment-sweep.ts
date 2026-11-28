@@ -5,7 +5,7 @@ import type { JournalWriterEffect } from '../../../native-chat/agent-session-jou
 /** Filesystem awaits release the writer; each claim decision returns to its sole transaction owner. */
 export function structuredAgentSessionAttachmentSweepFacts(
   database: JournalSqlDatabase,
-  retainedUploadIds?: () => Promise<ReadonlySet<string>>
+  retainedUploadIds?: () => Promise<ReadonlySet<string> | null>
 ): AgentSessionAttachmentSweepFacts {
   const writable = () => !database.readOnly && !database.isClosed
   const sweep = async (operation: Extract<JournalWriterEffect, { kind: 'sweep' }>['operation']) =>

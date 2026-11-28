@@ -73,7 +73,8 @@ export function monitorFederatedSetup(
         setupState,
         effects
       })
-      if (!evidence.changed) {
+      // Why: home reads setup_state through worker-show; a relayed success mail only wakes its coordinator.
+      if (!evidence.changed || setupState === 'succeeded') {
         return
       }
       args.db.enqueueFederationRelay({
@@ -82,10 +83,10 @@ export function monitorFederatedSetup(
         kind: 'status',
         payload: JSON.stringify({
           from: `dispatch:${args.dispatchId}`,
-          subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+          subject: `Setup failed for worker ${args.dispatchId}`,
           body: '',
           type: 'status',
-          priority: setupState === 'failed' ? 'high' : 'normal',
+          priority: 'high',
           threadId: null,
           payload: JSON.stringify({
             dispatchId: args.dispatchId,

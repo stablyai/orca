@@ -2,7 +2,7 @@ import { createSessionInitialOutput } from './session-initial-output'
 import { isValidPtySize } from '../protocol/daemon-pty-size'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline, createSessionShellReady } from './session-output-pipeline'
-import { SessionProducerPause } from './session-producer-pause'
+import { SessionProducerPause, type StreamStallHandler } from './session-producer-pause'
 import { SessionFocusReport } from './session-focus-report'
 import type { SessionShellReadyBarrier } from './session-shell-ready-barrier'
 import type { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
@@ -133,6 +133,7 @@ export class Session extends SessionProcessInspection {
     if (this.isAlive && !this._disposed && !this.startupIngress.answerLiveQueryReply(data)) {
       this.focusReport.observeInput(data, this.recoveryBarrier.focusReportingArming)
       this.shellReady.observeTypedInput(data)
+      this.producerPause.noteInput(data)
       this.writeInput(data)
     }
   }
@@ -165,11 +166,10 @@ export class Session extends SessionProcessInspection {
   }
 
   /** Apply PTY backpressure with separate lost-resume and stream-stall protection. */
-  pauseProducer(source?: 'stream', onStreamStall?: () => void): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    this.producerPause.pause(source, this.hasAttachedClients && !this.isTerminating, onStreamStall)
+  pauseProducer(source?: 'stream', onStall?: StreamStallHandler) {
+    const exited = this._state === 'exited' || this._disposed
+    const canPause = this.termination.streamPauseAnswer(this.hasAttachedClients)
+    return exited ? 'exited' : this.producerPause.pause(source, canPause, onStall)
   }
 
   resumeProducer(source?: 'stream'): void {
@@ -195,21 +195,24 @@ export class Session extends SessionProcessInspection {
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    return this.output.attachClient(client)
+    const firstViewer = !this.output.hasAttachedClients
+    const token = this.output.attachClient(client)
+    this.producerPause.noteViewerAttached(firstViewer)
+    return token
   }
 
   detachClient(token: symbol): void {
     this.output.detachClient(token)
     // With no viewer left to resume the producer, release its pause eagerly.
     if (!this.output.hasAttachedClients) {
-      this.producerPause.release({ resume: true })
+      this.producerPause.release({ resume: true, reason: 'released' })
       this.reportFocusLost()
     }
   }
 
   detachAllClients(): void {
     this.output.clearClients()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, reason: 'released' })
   }
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
@@ -319,7 +322,7 @@ export class Session extends SessionProcessInspection {
     }
     this._disposed = true
     this.output.markDisposed()
-    this.producerPause.release({ resume: true })
+    this.producerPause.release({ resume: true, reason: 'exited' })
     this.termination.cancelForceKillFallback()
     this.shellReady.dispose()
     this.termination.disposeSubprocessHandle()
@@ -350,7 +353,7 @@ export class Session extends SessionProcessInspection {
     this._state = 'exited'
     this.termination.clearTerminating()
     // The child is reaped; clear pause timers without resuming its handle.
-    this.producerPause.release({ resume: false })
+    this.producerPause.release({ resume: false, reason: 'exited' })
 
     this.termination.cancelForceKillFallback()
     this.shellReady.clearReadyTimer()

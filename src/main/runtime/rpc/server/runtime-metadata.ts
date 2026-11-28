@@ -5,10 +5,13 @@ import {
   type RuntimeMetadata
 } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { writeSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
+import { clearRuntimeRestartMarker } from './runtime-restart-marker-file'
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   writeSecureJsonFile(metadataPath, metadata)
+  // Published metadata means the runtime serves again, so any restart is over.
+  void clearRuntimeRestartMarker(userDataPath)
 }
 
 export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {

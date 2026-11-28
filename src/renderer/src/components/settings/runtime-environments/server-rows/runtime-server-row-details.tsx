@@ -3,7 +3,7 @@ import { Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { classifyRemotePairingHostname } from '../../../../../../shared/remote-runtime/pairing/remote-pairing-address'
 import { joinSentences } from '../../../../../../shared/text/sentence-joining'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {

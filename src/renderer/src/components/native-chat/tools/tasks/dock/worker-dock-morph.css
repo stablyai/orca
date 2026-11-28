@@ -1,0 +1,96 @@
+/* The chip and its open list are one shape: width and height grow together, then rows rise in. */
+[data-worker-dock-morph] {
+  --worker-dock-morph-ms: 280ms;
+  --worker-dock-morph-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  interpolate-size: allow-keywords;
+  width: fit-content;
+  /* translate: a card dropped over the dock in a very short pane (the card budget) slides back. */
+  transition:
+    width var(--worker-dock-morph-ms) var(--worker-dock-morph-ease),
+    translate var(--worker-dock-morph-ms) var(--worker-dock-morph-ease);
+}
+
+[data-worker-dock-morph='open'] {
+  width: 100%;
+}
+
+/* Rows never widen the chip: its folded width is the chip row's alone. */
+[data-worker-dock-clip] {
+  contain: inline-size;
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--worker-dock-morph-ms) var(--worker-dock-morph-ease);
+}
+
+[data-worker-dock-morph='open'] > [data-worker-dock-clip] {
+  grid-template-rows: 1fr;
+}
+
+[data-worker-dock-clip] > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Each row's delay is inline (WorkerDockGroupedRows). */
+[data-worker-dock-entering] [data-worker-dock-rise] {
+  animation:
+    worker-dock-row-fade calc(var(--worker-dock-morph-ms) * 0.7) ease-out backwards,
+    worker-dock-row-rise var(--worker-dock-morph-ms) var(--worker-dock-morph-ease) backwards;
+}
+
+/* The header's actions arrive once the shape has widened: held to one line, unseen, while it
+   widens, so a long Stop label does not wrap and unwrap mid-morph; then free to wrap, they fade in. */
+[data-worker-dock-entering] [data-worker-dock-actions] {
+  animation:
+    worker-dock-row-fade calc(var(--worker-dock-morph-ms) * 0.4) ease-out
+      var(--worker-dock-morph-ms) backwards,
+    worker-dock-one-line var(--worker-dock-morph-ms) step-end;
+}
+
+[data-worker-dock-entering] [data-worker-dock-actions] button {
+  animation: worker-dock-one-line var(--worker-dock-morph-ms) step-end;
+}
+
+/* Exit is faster than entry. */
+[data-worker-dock-morph='closed'] [data-worker-dock-morph-row] {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity calc(var(--worker-dock-morph-ms) * 0.3) ease-out,
+    transform calc(var(--worker-dock-morph-ms) * 0.3) ease-out;
+}
+
+@keyframes worker-dock-row-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes worker-dock-one-line {
+  from,
+  to {
+    overflow: hidden;
+    text-wrap-mode: nowrap;
+  }
+}
+
+@keyframes worker-dock-row-rise {
+  from {
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-worker-dock-morph],
+  [data-worker-dock-clip] {
+    transition: none;
+  }
+
+  [data-worker-dock-morph] [data-worker-dock-actions],
+  [data-worker-dock-morph] [data-worker-dock-actions] button,
+  [data-worker-dock-morph] [data-worker-dock-morph-row] {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

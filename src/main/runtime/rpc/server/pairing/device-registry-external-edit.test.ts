@@ -129,6 +129,6 @@ describe('device registry saves over an externally edited file', () => {
 
     expect(returned).toEqual([])
     expect(fileIds()).not.toContain(desktop.deviceId)
-    expect(registry.listDelegatedMobileDevices(desktop.deviceId)).toEqual([])
+    expect(registry.listDevices().filter((d) => d.parentDeviceId === desktop.deviceId)).toEqual([])
   })
 })

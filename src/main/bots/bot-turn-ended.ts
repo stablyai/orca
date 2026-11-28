@@ -1,12 +1,7 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import {
-  settleBotRequestFailure,
-  settleBotRequestTurn
-} from '../runtime/rpc/methods/orchestration/messaging/bot-request-outcome'
 import { botGroupRoomOfSession, markBotGroupRoomUnread } from './bot-group-runtime'
 import type { BotGroupRoomOfSession } from '../runtime/agent-session/lifecycle/structured-agent-session-mobile-attention'
-import { noteBotGroupMemberReply } from './bot-group-latest'
-import { type BotRecentChatsSection, readBotRecentChats } from './bot-recent-chats'
+import type { BotRecentChatsSection } from './bot-recent-chats'
 import {
   type BotActiveWorkSection,
   botIdleItemsNote,
@@ -14,7 +9,6 @@ import {
   joinedTurnSections,
   type TurnSectionsMemo
 } from './bot-active-work'
-import { readBotActiveWork } from './bot-active-work-read'
 import { lookAroundIdleItemFacts } from './bot-look-around-prompt'
 import { isRegisteredLookOpening } from './bot-look-around-runtime'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
@@ -22,15 +16,12 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { Bot } from '../../shared/bot-types'
 import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
-import { readBotChats } from '../runtime/rpc/methods/bots-chats'
-import { sendBotItemMail } from '../runtime/rpc/methods/bots-items-mail'
 import type { BotItemMail } from './bot-items-schema'
 import {
   botNeedsYouInChatNote,
   createBotOwnerChatCheck,
   createBotUnansweredQuestionNote
 } from './bot-unanswered-question-note'
-import { requireStructuredHost } from './bot-chat-session'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
@@ -44,12 +35,14 @@ export function botTurnEnded(
   ended?: TurnEndedVerdict
 ): void {
   markBotGroupRoomUnread(runtime, sessionId)
-  void noteBotGroupMemberReply(runtime, sessionId, turnId).catch((error: unknown) =>
-    console.warn('[bot-groups] could not note a reply for the sidebar', error)
-  )
-  void settleBotRequestTurn(runtime, sessionId, turnId, ended).catch((error: unknown) =>
-    console.warn('[bots] could not settle a bot request turn', error)
-  )
+  void import('./bot-group-latest')
+    .then(({ noteBotGroupMemberReply }) => noteBotGroupMemberReply(runtime, sessionId, turnId))
+    .catch((error: unknown) =>
+      console.warn('[bot-groups] could not note a reply for the sidebar', error)
+    )
+  void import('../runtime/rpc/methods/orchestration/messaging/bot-request-outcome')
+    .then(({ settleBotRequestTurn }) => settleBotRequestTurn(runtime, sessionId, turnId, ended))
+    .catch((error: unknown) => console.warn('[bots] could not settle a bot request turn', error))
 }
 
 /** Bot session work the runtime base needs but only the whole runtime can do. */
@@ -76,7 +69,9 @@ function activeWorkSlot(
   botId: string
 ): Promise<BotActiveWorkSection | undefined> {
   return withTimeout<BotActiveWorkSection | undefined>(
-    readBotActiveWork(runtime, botId),
+    import('./bot-active-work-read').then(({ readBotActiveWork }) =>
+      readBotActiveWork(runtime, botId)
+    ),
     BOT_WORK_NOTE_TIMEOUT_MS,
     undefined
   )
@@ -100,9 +95,10 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
       return false
     }
   }
-  const unansweredQuestionNote = createBotUnansweredQuestionNote(isOwnerChat, async (sessionId) =>
-    (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
-  )
+  const unansweredQuestionNote = createBotUnansweredQuestionNote(isOwnerChat, async (sessionId) => {
+    const { requireStructuredHost } = await import('./bot-chat-session')
+    return (await (await requireStructuredHost(runtime)).journalReads(sessionId)).endedTurnCount()
+  })
   const sections: TurnSectionsMemo = new Map()
   const idleSaid = new Map<string, Map<number, string>>()
   const needsYouSaid = new Map<string, string>()
@@ -111,9 +107,11 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
-      void settleBotRequestFailure(runtime, failure).catch((error: unknown) =>
-        console.warn('[bots] could not settle a failed bot request', error)
-      ),
+      void import('../runtime/rpc/methods/orchestration/messaging/bot-request-outcome')
+        .then(({ settleBotRequestFailure }) => settleBotRequestFailure(runtime, failure))
+        .catch((error: unknown) =>
+          console.warn('[bots] could not settle a failed bot request', error)
+        ),
     groupRoomOf: (sessionId) => botGroupRoomOfSession(runtime, sessionId),
     // A stalled read never holds a message back: past the bound, this turn goes without it.
     // With the bot's live work, which rides the same resend-on-change key; a slow live-work read
@@ -125,7 +123,9 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         await Promise.all([
           // A slow read drops the recent chats (null).
           withTimeout(
-            readBotRecentChats(runtime, botId, sessionId),
+            import('./bot-recent-chats').then(({ readBotRecentChats }) =>
+              readBotRecentChats(runtime, botId, sessionId)
+            ),
             BOT_WORK_NOTE_TIMEOUT_MS,
             null
           ),
@@ -187,7 +187,13 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
           }
         : null
     },
-    chatsOf: (bot, sessionId) => readBotChats(runtime, bot, sessionId, true),
-    sendItemMail: (mail) => sendBotItemMail(runtime, mail)
+    chatsOf: async (bot, sessionId) => {
+      const { readBotChats } = await import('../runtime/rpc/methods/bots-chats')
+      return readBotChats(runtime, bot, sessionId, true)
+    },
+    sendItemMail: async (mail) => {
+      const { sendBotItemMail } = await import('../runtime/rpc/methods/bots-items-mail')
+      return sendBotItemMail(runtime, mail)
+    }
   }
 }

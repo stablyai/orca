@@ -1,7 +1,7 @@
 // --once and --by: a bot automation that runs a single time, on its first event or at a deadline.
 import type { AutomationOnce } from '../../shared/automation-once'
 import { getOptionalStringFlag } from '../arguments/flags'
-import { hasImpossibleLeadingDate } from '../arguments/calendar-date'
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 /** The wait --once and --by ask for; undefined when neither is given. */

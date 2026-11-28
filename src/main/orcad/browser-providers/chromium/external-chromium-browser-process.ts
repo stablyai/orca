@@ -21,7 +21,6 @@ import {
 } from './external-chromium-tab-projection'
 import { ExternalChromiumTabRegistry } from './external-chromium-tab-registry'
 import { withExternalChromiumPageCdp } from './external-chromium-page-cdp'
-import { deleteCookieByName } from '../../../browser/cookies/browser-cookie-delete-by-name'
 import { runExternalChromiumPageInput, type PageInputSession } from './external-chromium-page-input'
 import { agentBrowserSnapshotArgs } from '../../../browser/agent-browser/protocol/agent-browser-snapshot-arguments'
 import { Snapshot } from '../../../../shared/rpc-contract/browser/browser-observation-params'
@@ -241,12 +240,19 @@ export class ExternalChromiumBrowserProcess {
     }
     if (method === 'browserCookieDelete') {
       // agent-browser's `cookies clear` ignores filters and wipes the whole jar, as on the desktop.
-      return withExternalChromiumPageCdp(session, this.session, page.agentPageId, (send, tab) =>
-        deleteCookieByName(send, String(params.name ?? ''), {
-          domain: typeof params.domain === 'string' ? params.domain : undefined,
-          url: typeof params.url === 'string' ? params.url : undefined,
-          pageUrl: tab.url
-        })
+      return withExternalChromiumPageCdp(
+        session,
+        this.session,
+        page.agentPageId,
+        async (send, tab) => {
+          const { deleteCookieByName } =
+            await import('../../../browser/cookies/browser-cookie-delete-by-name')
+          return deleteCookieByName(send, String(params.name ?? ''), {
+            domain: typeof params.domain === 'string' ? params.domain : undefined,
+            url: typeof params.url === 'string' ? params.url : undefined,
+            pageUrl: tab.url
+          })
+        }
       )
     }
     if (method === 'browserBack' || method === 'browserForward' || method === 'browserReload') {

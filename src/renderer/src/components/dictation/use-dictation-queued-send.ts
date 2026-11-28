@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useInsertionEffect, useRef, useState, type RefObject } from 'react'
 import { isDictationUnderway, type DictationSession } from './dictation-session-machine'
 import { dispatchDictationControl } from './dictation-control-events'
 import { pressDictationTerminalEnter } from './dictation-insertion-target'
@@ -21,11 +21,13 @@ export function useSendAfterDictation<Intent>(
 ): (intent?: Intent) => void {
   const pendingRef = useRef<{ intent?: Intent } | null>(null)
   const [landedTick, setLandedTick] = useState(0)
-  useEffect(() => {
+  // Why insertion: a chat hidden by Activity still commits this render but runs no other effects until shown; use-dictation-queued-send.test.tsx guards this across React upgrades.
+  useInsertionEffect(() => {
     const pending = pendingRef.current
     pendingRef.current = null
     if (pending) {
-      sendMessage(pending.intent)
+      // The send updates state, which an insertion effect may not.
+      queueMicrotask(() => sendMessage(pending.intent))
     }
   }, [landedTick, sendMessage])
   return (intent) => {

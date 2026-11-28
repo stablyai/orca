@@ -1154,7 +1154,9 @@
         "pending": "正在連線…",
         "tools_other": "{{count}} 個工具",
         "waitingForSignIn": "正在等待登入…",
-        "tools_one": "{{count}} 個工具"
+        "tools_one": "{{count}} 個工具",
+        "orcaRemoved": "已移除：下一則訊息時重新啟動",
+        "orcaChanged": "已變更：下一則訊息時重新啟動"
       },
       "source": {
         "project": "專案",
@@ -1186,7 +1188,8 @@
         "failed": "失敗：{{count}}"
       },
       "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。",
-      "manage": "管理 MCP 伺服器"
+      "manage": "管理 MCP 伺服器",
+      "stillFailing": "重新連線後仍然失敗。"
     }
   },
   "common": {
@@ -1710,7 +1713,9 @@
         "permissionAcceptEditsDescription": "核准檔案編輯和檔案命令；其餘操作會詢問",
         "permissionAutoDescription": "代你審查核准要求",
         "permissionFullAccessCodexDescription": "從不詢問；可以編輯任何檔案並使用網路",
-        "permissionFullAccessDescription": "編輯或執行命令前從不詢問"
+        "permissionFullAccessDescription": "編輯或執行命令前從不詢問",
+        "permissionAgentSettings": "{{agent}} 設定",
+        "permissionFromAgentSettings": "{{mode}}，來自 {{agent}} 設定"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
@@ -3125,7 +3130,7 @@
       "collapse": "收合"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "在新的 CLI 中恢復"
+      "continueInTerminal": "在終端機中繼續"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "捲動至最新內容"
@@ -3679,6 +3684,18 @@
       "terminalTitle": "終端機文字",
       "pointsAndColumns": "{{points}} · {{count}} 欄",
       "moreTerminal": "更多終端機設定"
+    },
+    "terminalChatContinuation": {
+      "busy": "另一個聊天或終端機正在開啟。請稍候再試。",
+      "continueInChat": "在聊天中繼續",
+      "failed": "無法在聊天中繼續。{{detail}}",
+      "failedAfterClose": "無法在聊天中繼續。{{detail}} 對話在代理程式歷史紀錄中。",
+      "otherJob": "此終端機中正在執行 {{process}}。請先結束它，然後在聊天中繼續。",
+      "terminalChanged": "Orca 檢查時此終端機已變更。請再試一次。",
+      "tryAgain": "請再試一次。",
+      "unavailable": "此電腦上無法使用 {{agent}} 聊天。",
+      "uncheckable": "Orca 無法檢查此終端機中正在執行的內容。請再試一次。",
+      "unconfirmed": "Orca 無法確認聊天已開啟。再試一次前請檢查你的分頁。"
     }
   },
   "settings": {
@@ -3836,9 +3853,6 @@
       "title": "語音",
       "toggleMode": "切換",
       "updateFailed": "無法更新"
-    },
-    "agents": {
-      "permissionOwnAll": "各代理程式自身的設定"
     },
     "voiceTranscribeOn": {
       "heading": "轉寫位置",
@@ -4264,6 +4278,9 @@
       "agentCouldNotStart": "無法啟動 {{label}}。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentFailedToStart": "{{label}} 啟動失敗。請在「設定」中檢查代理程式的命令，然後再試一次。",
       "agentReportedError": "{{label}} 回報錯誤。",
+      "antigravityInvalidEvents": "Antigravity 傳回無效的 JSON 事件。",
+      "antigravityInvalidResult": "Antigravity 傳回無效的結果。",
+      "antigravityNoFinalResult": "Antigravity 未傳回最終結果。",
       "chatNameAgentUnsupported": "請在「設定 -> 聊天 -> 聊天名稱」中，為此操作選擇支援的聊天命名代理程式。支援的代理程式：{{agents}}，或選擇「自訂命令」。",
       "chatNameCustomCommandEmpty": "自訂命令為空白。請在「設定 -> 聊天 -> 聊天名稱」中新增。",
       "cliFailed": "{{label}} CLI 命令執行失敗，結束代碼為 {{exitCode}}。",
@@ -7234,6 +7251,7 @@
     "workspacesCount": "{{count}} 個工作區",
     "workspacesAllButCount": "全部（排除 {{count}} 個）",
     "headerMissing": "請填寫 {{header}} 才能新增此伺服器。",
-    "servers": "伺服器"
+    "servers": "伺服器",
+    "unreadable": "無法開啟已儲存的登入或金鑰。請重新登入。"
   }
 }

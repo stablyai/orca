@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, type HostInstance } from 'react-native'
 import { LogOut, MoreHorizontal, RefreshCw } from 'lucide-react-native'
 import type { BotToolDetails } from '../../../src/shared/bot-tools'
+import { botToolSignInUnreadable } from '../../../src/shared/bot-tool-sign-in'
 import { ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
@@ -54,8 +55,10 @@ export function MobileMcpServerPage(props: {
   const locked = !props.online
   const agents = props.agents ?? []
   const off = agents.filter((agent) => server.agentsOff.includes(agent))
+  const unreadable = botToolSignInUnreadable(signIn)
+  // An entry that doesn't open has no sign-in to sign out of; the footer signs in over it.
   const menu =
-    signIn && signIn.state !== 'signed-out'
+    signIn && signIn.state !== 'signed-out' && !unreadable
       ? [
           {
             id: 'again',
@@ -115,7 +118,13 @@ export function MobileMcpServerPage(props: {
           <ListRow
             key="account"
             title={t('mcpServers.account', 'Account')}
-            subtitle={needsSignIn ? t('mcpServers.needsSignIn', 'Needs sign-in') : undefined}
+            subtitle={
+              unreadable
+                ? t('mcpServers.unreadable', 'Saved sign-in or key can’t be opened. Sign in again.')
+                : needsSignIn
+                  ? t('mcpServers.needsSignIn', 'Needs sign-in')
+                  : undefined
+            }
             subtitleIcon={needsSignIn ? <McpStatusDot tone="amber" /> : undefined}
             value={needsSignIn ? undefined : t('mcpServers.signedIn', 'Signed in')}
           />

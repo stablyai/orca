@@ -6,12 +6,13 @@ import type {
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeWorkspaceFileTargets } from '../../workspaces/workspace-file-session-targets'
+import { isStructuredAgentSessionAddressPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorkspaceFileTargets {
   onMobileSessionTabsChanged(
     listener: MobileSessionTabSubscription['listener'],
     clientNavigationId?: string,
     clientKind?: 'mobile' | 'runtime',
-    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree'>
+    options?: Pick<MobileSessionTabSubscription, 'observation' | 'acceptsWorktree' | 'scope'>
   ): () => void {
     // Drain coalesced notifications before subscribing: the initial snapshot already includes them.
     this.mobileSessionTabsNotifyCoalescer.flushAll()
@@ -20,7 +21,8 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
       clientNavigationId,
       clientKind,
       observation: options?.observation,
-      acceptsWorktree: options?.acceptsWorktree
+      acceptsWorktree: options?.acceptsWorktree,
+      scope: options?.scope
     }
     this.mobileSessionTabListeners.add(subscription)
     return () => {
@@ -97,6 +99,22 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
       }
     }
     return selected
+  }
+
+  /** Whether a pane's hook status reaches any listener: chat-scoped listeners read chat panes only. */
+  protected hasPaneStatusListeners(paneKey: string): boolean {
+    return isStructuredAgentSessionAddressPaneKey(paneKey)
+      ? this.mobileSessionTabListeners.size > 0
+      : this.hasTerminalStatusListeners()
+  }
+
+  protected hasTerminalStatusListeners(): boolean {
+    for (const { scope } of this.mobileSessionTabListeners) {
+      if (scope !== 'agent-sessions') {
+        return true
+      }
+    }
+    return false
   }
 
   protected hasAgentSenderListeners(): boolean {

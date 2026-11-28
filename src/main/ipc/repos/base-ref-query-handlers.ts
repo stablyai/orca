@@ -23,8 +23,11 @@ import { getProjectRuntimeReadGitOptions } from '../../workspaces/execution-host
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { broadcastWhenWslDistroRunning } from '../preflight/preflight-wsl-refusal-retry'
 
-export function registerBaseRefQueryHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerBaseRefQueryHandlers(
+  store: Store,
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
+): void {
+  ipc.handle(
     'repos:getBaseRefDefault',
     async (
       _event,
@@ -55,7 +58,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'repos:searchBaseRefs',
     async (
       _event,
@@ -65,7 +68,7 @@ export function registerBaseRefQueryHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'repos:searchBaseRefDetails',
     async (
       _event,

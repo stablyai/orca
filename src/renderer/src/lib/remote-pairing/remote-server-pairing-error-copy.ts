@@ -21,6 +21,11 @@ const COPY: Record<RemoteServerPairingFailureCode, (name: string | null) => stri
       'runtime.remoteServerPairingErrors.managedDeployment',
       REMOTE_SERVER_PAIRING_FAILURE_COPY.managedDeployment
     ),
+  wslHostDeployment: () =>
+    translate(
+      'runtime.remoteServerPairingErrors.wslHostDeployment',
+      REMOTE_SERVER_PAIRING_FAILURE_COPY.wslHostDeployment
+    ),
   sshAccessChangePending: () =>
     translate(
       'runtime.remoteServerPairingErrors.sshAccessChangePending',

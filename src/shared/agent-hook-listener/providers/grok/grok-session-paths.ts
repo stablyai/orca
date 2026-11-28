@@ -1,11 +1,12 @@
 import { lstatSync } from 'node:fs'
-import { lstat, opendir } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { blake3 } from '@noble/hashes/blake3'
 import { bytesToHex } from '@noble/hashes/utils'
 import { resolveAbsoluteDirOverride } from '../../../file-access/absolute-dir-override'
 import { GrokSessionPathLookupQueue } from './grok-session-path-lookup-queue'
+import { openDirectory } from '../../../open-directory'
 
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
 // Grok switches encoded cwd names above 255 bytes to slug+hash groups.
@@ -148,7 +149,7 @@ type GrokSessionDirectory = AsyncIterable<GrokSessionDirectoryEntry> & {
 type GrokSessionDirectoryOpener = (sessionsDir: string) => Promise<GrokSessionDirectory>
 
 const defaultSessionDirectoryOpener: GrokSessionDirectoryOpener = (sessionsDir) =>
-  opendir(sessionsDir)
+  openDirectory(sessionsDir)
 let sessionDirectoryOpener = defaultSessionDirectoryOpener
 const sessionPathLookupQueue = new GrokSessionPathLookupQueue(scanGrokChatHistoryBySessionId)
 

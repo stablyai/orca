@@ -176,7 +176,15 @@ export function TaskPageLinearFilters({
                   'auto.components.TaskPage.linearHasWorktreeSearchPlaceholder',
                   'Filter issues linked to an Orca workspace...'
                 )
-              : t('auto.components.TaskPage.eec0c5c079', 'Search Linear issues...')
+              : t('auto.components.TaskPage.eec0c5c079', 'Search...')
+          }
+          aria-label={
+            linearMode === 'in-orca'
+              ? undefined
+              : t(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
+                  'Search Linear issues'
+                )
           }
           density="compact"
           surface="background"
