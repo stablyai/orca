@@ -24,21 +24,16 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
 } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
 import {
-  claudeMessageIdentity,
   claudeRecord,
   claudeText,
-  claudeThinkingIdentity,
-  claudeToolIdentity,
-  claudeToolResults,
-  claudeToolUses,
   readClaudeMessageEnvelope
 } from '../structured/journal/claude-structured-item-translation'
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
 import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
+import { claudeTranscriptSourceIdentities } from './claude-transcript-source-identities'
 import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 import {
   createTranscriptCompactionRecovery,
@@ -157,27 +152,9 @@ export function createClaudeTranscriptImportPlan(input: {
           }
           return
         }
-        if (envelope?.role === 'assistant') {
-          const source =
-            envelope.messageId && typeof row.apiBlockIndex === 'number'
-              ? {
-                  provider: 'claude' as const,
-                  sessionId: envelope.sessionId,
-                  uuid: claudeSourceBlockId(envelope.messageId, row.apiBlockIndex)
-                }
-              : null
-          const thinking = envelope.content.some((part) => claudeRecord(part)?.type === 'thinking')
-          const frameIdentity = thinking
-            ? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
-            : claudeMessageIdentity(envelope)
-          matchSource(source ? [source, frameIdentity] : [frameIdentity])
-        }
         if (envelope) {
-          for (const tool of claudeToolUses(envelope)) {
-            matchSource([claudeToolIdentity(envelope.sessionId, tool.id)])
-          }
-          for (const result of claudeToolResults(envelope)) {
-            matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
+          for (const identities of claudeTranscriptSourceIdentities(row, envelope)) {
+            matchSource(identities)
           }
         }
         const { decoded, ignored, internalTurnStart, hasWork } = claudeTranscriptPrompt(
