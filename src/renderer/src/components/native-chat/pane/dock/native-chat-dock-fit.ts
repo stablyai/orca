@@ -96,12 +96,17 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
     const lines = Number(scroller.dataset.nativeChatDockFloorLines)
     const style = getComputedStyle(scroller)
     const padding = Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
-    const floor = Math.min(
-      scroller.scrollHeight,
-      lines * Number.parseFloat(style.lineHeight) + (padding || 0)
-    )
-    if (Number.isFinite(floor) && scroller.clientHeight + SLACK < floor) {
+    const floor = lines * Number.parseFloat(style.lineHeight) + (padding || 0)
+    if (scroller.clientHeight + SLACK < Math.min(scroller.scrollHeight, floor)) {
       return false
+    }
+    // A nested text scroller can meet its floor while the card scrollport is still too short.
+    const clip = scroller.closest<HTMLElement>(CLIP_SELECTOR)
+    if (clip) {
+      const visibleHeight = clip.clientHeight + SLACK
+      if (visibleHeight < floor && visibleHeight < clip.scrollHeight) {
+        return false
+      }
     }
   }
   // A list scroller keeps its first item whole (or all of a shorter list).

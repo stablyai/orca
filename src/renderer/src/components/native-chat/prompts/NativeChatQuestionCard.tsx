@@ -271,7 +271,10 @@ export function NativeChatQuestionCard({
       aria-label={nativeChatQuestionCardLabel(t, q, index, total)}
       tabIndex={-1}
       // The card opens focused but must not look picked or ringed; options draw their own focus.
-      className={cn('flex min-h-0 shrink flex-col bg-chat-pane outline-none', look?.frameClassName)}
+      className={cn(
+        'flex min-h-0 shrink flex-col bg-chat-pane outline-none [[data-native-chat-dock-fit~=dock]_[data-native-chat-dock]_&]:shrink-0',
+        look?.frameClassName
+      )}
       aria-busy={isSubmitting}
       onKeyDown={(event) => {
         if (!confirmNativeChatQuestionOnCardEnter(event, currentAnswered, () => confirm(true))) {
