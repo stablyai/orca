@@ -23,6 +23,9 @@ export const EXECUTION_HOST_METHODS = [
   'ui.setJiraQuickFilters',
   'ui.getJiraSavedFilters',
   'ui.mutateJiraSavedFilters',
+  // Saved agy accounts belong to the host whose chats run agy.
+  'accounts.antigravityList',
+  'accounts.antigravitySelect',
   'agent.launch',
   'agent.launchReplay',
   // Agent ids, chat records and transcripts live on the host that runs the agent.

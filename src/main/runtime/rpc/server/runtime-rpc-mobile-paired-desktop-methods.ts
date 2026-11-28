@@ -51,6 +51,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
+  // OpenCode and Devin profiles, listed in the same accounts.list snapshot.
+  'accounts.selectData',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'github.project.addIssueCommentBySlug',

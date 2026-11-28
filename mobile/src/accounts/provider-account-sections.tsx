@@ -17,7 +17,7 @@ import {
   AntigravityAccountSection,
   antigravityBusyId,
   requestAntigravitySelect,
-  useAntigravityAccounts
+  useProviderAccountSwitch
 } from './antigravity-account-section'
 import { selectDataAccount } from './provider-account-operations'
 import { useThemedStyles } from '../theme/themed-styles'
@@ -49,11 +49,7 @@ export function ProviderAccountSections({
 }) {
   const t = useMobileTranslation()
   const styles = useThemedStyles(stylesSheet)
-  const [antigravityAccounts, setAntigravityAccounts] = useAntigravityAccounts(
-    client,
-    live,
-    reloadKey
-  )
+  const accountSwitch = useProviderAccountSwitch(client, live, reloadKey)
   if (!snapshot) {
     return null
   }
@@ -81,31 +77,26 @@ export function ProviderAccountSections({
     })
   const selectAntigravity = (accountId: string) =>
     void runSwitch(antigravityBusyId(accountId), async (rpc) => {
-      setAntigravityAccounts(await requestAntigravitySelect(rpc, accountId))
+      accountSwitch.replaceAntigravity(await requestAntigravitySelect(rpc, accountId))
     })
 
-  const usage = getOtherUsageProviders(snapshot)
-  const antigravityHasSection = (antigravityAccounts?.accounts.length ?? 0) > 0
-  // Saved agy accounts carry their own usage in the Antigravity section.
-  const others = usage.filter(
-    (limits) => !(antigravityHasSection && limits.provider === 'antigravity')
-  )
+  const others = getOtherUsageProviders(snapshot)
   return (
     <>
-      {(['opencode', 'devin'] as const).map((provider) => (
-        <ManagedDataAccountSection
-          key={provider}
-          provider={provider}
-          snapshot={snapshot}
-          busyAccountId={busyAccountId}
-          switchBlocked={switchBlocked}
-          onSelect={selectManagedData}
-        />
-      ))}
+      {accountSwitch.supported
+        ? (['opencode', 'devin'] as const).map((provider) => (
+            <ManagedDataAccountSection
+              key={provider}
+              provider={provider}
+              snapshot={snapshot}
+              busyAccountId={busyAccountId}
+              switchBlocked={switchBlocked}
+              onSelect={selectManagedData}
+            />
+          ))
+        : null}
       <AntigravityAccountSection
-        state={antigravityAccounts}
-        activeUsage={usage.find((limits) => limits.provider === 'antigravity') ?? null}
-        now={now}
+        state={accountSwitch.antigravity}
         busyAccountId={busyAccountId}
         switchBlocked={switchBlocked}
         onSelect={selectAntigravity}

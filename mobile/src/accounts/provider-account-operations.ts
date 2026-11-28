@@ -1,19 +1,22 @@
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
-import { ProviderRateLimitsSchema } from './accounts-snapshot'
 
 const AntigravityAccountStateSchema = z.looseObject({
   accounts: z.array(
     z.looseObject({
       id: z.string().min(1),
-      email: z.string().nullable(),
-      // A usage reading this phone can't read leaves the account row without bars.
-      usage: ProviderRateLimitsSchema.nullable().optional().catch(null)
+      email: z.string().nullable()
     })
   ),
   activeAccountId: z.string().nullable(),
-  selectedAccountId: z.string().nullable()
+  // Older hosts omit `unread` and `restoresSelectionAtLaunch`.
+  currentAccount: z
+    .looseObject({ unread: z.literal(true).optional() })
+    .nullable()
+    .optional(),
+  selectedAccountId: z.string().nullable(),
+  restoresSelectionAtLaunch: z.literal(true).optional()
 })
 
 export type AntigravityAccountState = z.infer<typeof AntigravityAccountStateSchema>
