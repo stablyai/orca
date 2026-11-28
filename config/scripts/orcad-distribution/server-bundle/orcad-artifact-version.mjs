@@ -7,8 +7,11 @@ import {
 } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
 
-/** The runtime enters through `.runtime-node`'s executableSha256 string, never its bytes (design D2). */
-export function computeOrcadFullVersion(artifactDir, { target, agentBrowserFilename }) {
+/** The runtime enters through `.runtime-node`'s executableSha256 string, never its bytes (design D2).
+ * The optional agent-browser binary stays out of this id. A desktop that ships it and one that does
+ * not must not look like two Linux SSH builds of the same server (#45450). Callers may still pass
+ * `agentBrowserFilename`; it no longer changes the hash. */
+export function computeOrcadFullVersion(artifactDir, { target }) {
   const hash = createHash('sha256')
   for (const filename of orcadArtifactFilenames(
     target,
@@ -22,9 +25,6 @@ export function computeOrcadFullVersion(artifactDir, { target, agentBrowserFilen
       )
     }
     hash.update(readFileSync(artifactPath))
-  }
-  if (agentBrowserFilename && existsSync(join(artifactDir, agentBrowserFilename))) {
-    hash.update(readFileSync(join(artifactDir, agentBrowserFilename)))
   }
   return `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
 }
