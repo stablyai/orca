@@ -9,14 +9,18 @@ import type {
   AgentHookInstallStatus,
   AgentHookTarget
 } from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { isAgentHookTarget } from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
-import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
+import {
+  isAgentHookTarget,
+  readAgentHookConsent
+} from '../../../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
+import { formatAgentProductName } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
 
 /** One row per detected agent Orca has hooks for: installed or not, with Install or Remove. */
 export function AgentHookConsentRows(): React.JSX.Element | null {
   const t = useTranslate()
   const detected = useAppStore((state) => state.detectedAgentIds)
+  const settings = useAppStore((state) => state.settings)
   const ensureNativeDetectedAgents = useAppStore((state) => state.ensureNativeDetectedAgents)
   const [statuses, setStatuses] = useState<AgentHookInstallStatus[]>([])
   const [busy, setBusy] = useState<AgentHookTarget | null>(null)
@@ -45,7 +49,7 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
     if (failure !== null) {
       toast.error(
         t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', {
-          agent: formatAgentTypeLabel(agent)
+          agent: formatAgentProductName(agent)
         }),
         { description: failure || undefined }
       )
@@ -57,18 +61,23 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
       {agents.map((agent) => {
         const status = statuses.find((entry) => entry.agent === agent)
         // Disk is the truth: a failed removal still shows Installed with Remove.
-        const installed = status?.managedHooksPresent === true
+        const present = status?.managedHooksPresent === true
+        // Some agents (Codex) write their hooks only when they next start.
+        const pending = !present && readAgentHookConsent(settings, agent) === 'granted'
+        const installed = present || pending
         return (
           <div key={agent} className="flex min-h-9 items-center gap-2.5 py-1.5 text-[13px]">
             <AgentTypeIcon agentType={agent} size={14} />
-            <span className="w-32 shrink-0 truncate">{formatAgentTypeLabel(agent)}</span>
+            <span className="w-32 shrink-0 truncate">{formatAgentProductName(agent)}</span>
             <span
               className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
               title={status?.configPath || undefined}
             >
-              {installed
+              {present
                 ? t('agentHookConsent.settings.installed', 'Installed')
-                : t('agentHookConsent.settings.notInstalled', 'Not installed')}
+                : pending
+                  ? t('agentHookConsent.settings.pending', 'Added when it next starts')
+                  : t('agentHookConsent.settings.notInstalled', 'Not installed')}
             </span>
             <Button
               type="button"

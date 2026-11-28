@@ -21,7 +21,7 @@ import { openAgentSettingsAction } from '@/components/settings/navigation/open-a
 import { cn } from '@/lib/class-names'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { formatAgentProductName } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { AgentHookConsentSlide, agentHookConsentSlides } from './AgentHookConsentSlides'
 import {
   closeAgentHookConsentOffer,
@@ -54,7 +54,7 @@ export function AgentHookConsentCard(): React.JSX.Element | null {
 }
 
 function agentNames(agents: readonly AgentHookTarget[]): string {
-  return agents.map((agent) => formatAgentTypeLabel(agent)).join(', ')
+  return agents.map((agent) => formatAgentProductName(agent)).join(', ')
 }
 
 function WhatHooksDo({
@@ -66,7 +66,7 @@ function WhatHooksDo({
   configPath: string
   t: Translate
 }): React.JSX.Element {
-  const name = formatAgentTypeLabel(agent)
+  const name = formatAgentProductName(agent)
   const lines = [
     t(
       'agentHookConsent.safe.onlyOrca',
@@ -93,7 +93,7 @@ function WhatHooksDo({
           <CircleHelp />
         </Button>
       </HoverCardTrigger>
-      <HoverCardContent side="top" align="end">
+      <HoverCardContent side="left" align="start">
         <div className="w-64 text-xs leading-relaxed">
           <ul className="space-y-1">
             {lines.map((line) => (
@@ -121,7 +121,7 @@ function AgentHookConsentOfferCard({
   offer: AgentHookConsentCardOffer
 }): React.JSX.Element {
   const t = useTranslate()
-  const name = formatAgentTypeLabel(offer.agent)
+  const name = formatAgentProductName(offer.agent)
   const slides = agentHookConsentSlides(offer.agent)
   const [slide, setSlide] = useState(0)
   const [paused, setPaused] = useState(false)

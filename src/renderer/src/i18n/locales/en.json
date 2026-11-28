@@ -31570,7 +31570,8 @@
     "settings": {
       "installed": "Installed",
       "notInstalled": "Not installed",
-      "remove": "Remove"
+      "remove": "Remove",
+      "pending": "Added when it next starts"
     },
     "declineFailed": "Couldn’t save your choice"
   }
