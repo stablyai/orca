@@ -102,6 +102,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   },
   // Hermes' ACP sends an unregistered `/word` to the model as text, so a picked skill would not load.
   hermes: null,
+  kimchi: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
   // Kiro loads `.kiro/skills` only (never `.agents/skills`) and reports skills once a session starts.

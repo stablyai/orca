@@ -148,6 +148,7 @@ export function normalizeProviderEvent(input: {
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'pi':
+    case 'kimchi':
     case 'omp':
     case 'prime-agent':
       payload = normalizePiCompatibleEvent(

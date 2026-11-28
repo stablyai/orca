@@ -98,6 +98,7 @@ export type ProviderRateLimits = {
     | 'codex'
     | 'opencode-go'
     | 'kimi'
+    | 'kimchi'
     | 'minimax'
     | 'grok'
     | 'cursor'
@@ -181,6 +182,7 @@ export type RateLimitState = {
   codex: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
+  kimchi: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null

@@ -38,6 +38,7 @@ import { getClaudeHookPluginDir } from '../../../claude/hooks/claude-hook-plugin
 import { applyManagedDataAccountEnvironment } from '../../../managed-data-accounts/launch-environment'
 import { applyOpenCodeStatusPluginEnv, captureOpenCodeSourceConfig } from './opencode-config'
 import { applyRemoteViewerClipboardEnv } from './remote-viewer-clipboard-env'
+import { installKimchiManagedExtensionEnv } from './kimchi-agent'
 
 /** Mutate host-local PTY environment only for local execution; SSH cannot use these loopback endpoints or filesystem paths. */
 export function buildPtyHostEnv(
@@ -76,7 +77,10 @@ export function buildPtyHostEnv(
   const shouldInstallPrimeAgentExtensions =
     opts.agentStatusHooksEnabled && isTuiAgentEnabled('prime-agent', opts.disabledTuiAgents)
   // Pi/OMP source shadows are agent-scoped to avoid cross-agent extension state.
-  const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
+  const preexistingPiAgentDir = resolvePiAgentSourceDir(
+    baseEnv,
+    piAgentKind === 'kimchi' ? 'kimchi' : 'pi'
+  )
   const preexistingOmpAgentDir =
     piAgentKind === 'omp'
       ? resolvePiAgentSourceDir(baseEnv, 'omp')
@@ -85,7 +89,6 @@ export function buildPtyHostEnv(
     piAgentKind === 'prime-agent'
       ? resolvePiAgentSourceDir(baseEnv, 'prime-agent')
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
-
   const openCodeAgent = applyOpenCodeStatusPluginEnv(
     id,
     baseEnv,
@@ -132,7 +135,9 @@ export function buildPtyHostEnv(
       // Windows loopback is outside WSL's NAT namespace; use the guest relay endpoint.
       const distro = opts.wslDistro ?? null
       const wslLaunchKind =
-        explicitPiAgentKind === 'pi' || explicitPiAgentKind === 'omp'
+        explicitPiAgentKind === 'pi' ||
+        explicitPiAgentKind === 'omp' ||
+        explicitPiAgentKind === 'kimchi'
           ? explicitPiAgentKind
           : undefined
       wslHookRelayManager.ensureForDistro(distro, opts.selectedCodexHomePath, wslLaunchKind)
@@ -171,6 +176,7 @@ export function buildPtyHostEnv(
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
     clearPiAgentShadowEnv(baseEnv, 'prime-agent')
+    clearPiAgentShadowEnv(baseEnv, 'kimchi')
     // Bare shells must not create agent homes; use existing Pi/OMP directories or userData for OMP status (#10196).
     if (shouldInstallPiExtensions && piAgentKind === 'pi') {
       const piEnv = piTitlebarExtensionService.buildPtyEnv(id, preexistingPiAgentDir, 'pi', {
@@ -210,6 +216,8 @@ export function buildPtyHostEnv(
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
+    // prettier-ignore
+    installKimchiManagedExtensionEnv(id, baseEnv, opts, piAgentKind, explicitPiAgentKind, preexistingPiAgentDir)
   } else {
     // Nested PTYs must not inherit another agent's source/overlay state.
     restoreOrStripOverlayEnv(baseEnv, {
@@ -228,6 +236,7 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.ORCA_KIMCHI_SOURCE_AGENT_DIR
   }
 
   if (opts.isWsl && opts.agentStatusHooksEnabled) {

@@ -75,6 +75,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       codex: this.state.codex,
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
+      kimchi: this.state.kimchi,
       minimax: this.state.minimax,
       grok: this.state.grok,
       cursor: this.state.cursor,

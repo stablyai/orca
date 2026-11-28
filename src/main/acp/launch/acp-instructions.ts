@@ -164,6 +164,11 @@ export const deliverAppendSystemPromptInstructions = givenEachStart(async ({ fil
   args: [`--append-system-prompt=${await file()}`]
 }))
 
+export const deliverKimchiInstructions = givenEachStart(async ({ text }) => ({
+  sessionMeta: { 'kimchi.dev': { appendSystemPrompt: text } },
+  sessionMetaOnReopen: true
+}))
+
 // Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
 export const deliverKiroInstructions = keptWithSession(async ({ text }) => ({
   sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }

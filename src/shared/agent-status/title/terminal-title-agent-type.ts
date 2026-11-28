@@ -208,6 +208,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TerminalAgent>> = {
   Hermes: 'hermes',
   'DeepSeek Build': 'dsb',
   Pi: 'pi',
+  Kimchi: 'kimchi',
   OMP: 'omp'
 }
 

@@ -45,6 +45,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   codex: 'codex',
   opencodeGo: 'opencode-go',
   kimi: 'kimi',
+  kimchi: 'kimchi',
   minimax: 'minimax',
   grok: 'grok',
   cursor: 'cursor',

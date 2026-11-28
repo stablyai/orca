@@ -26,7 +26,8 @@ import {
   openCodeTuiPluginDirName,
   writeOpenCodeTuiPlugin
 } from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+import { KimchiPrefillExtension } from './kimchi-prefill-extension'
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'kimchi'>
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const OPENCODE2_OVERLAY_SUBDIR = 'opencode2-overlays'
@@ -55,7 +56,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  kimchi: join('.config', 'kimchi', 'harness')
 }
 function safeDirName(input: string): string {
   // Hash pane keys into portable directory names because embedded tab ids can contain unsafe characters.
@@ -83,8 +85,10 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
-    'prime-agent': null
+    'prime-agent': null,
+    kimchi: null
   }
+  private kimchiPrefillExtension = new KimchiPrefillExtension()
   private homeDir: string
   private opencodeRoot: string
   private opencode2Root: string
@@ -123,6 +127,12 @@ export class PluginOverlayManager {
         sources.primeAgentExtensionSource
       )
     }
+    if (typeof sources.kimchiExtensionSource === 'string') {
+      this.piExtensionSources.kimchi = withOrcaManagedPiExtensionMarker(
+        sources.kimchiExtensionSource
+      )
+    }
+    this.kimchiPrefillExtension.setSource(sources.kimchiPrefillExtensionSource)
   }
   hasOpenCodeSource(agent: 'opencode' | 'opencode2' = 'opencode'): boolean {
     return Boolean(agent === 'opencode2' ? this.opencode2PluginSource : this.opencodePluginSource)
@@ -232,7 +242,7 @@ export class PluginOverlayManager {
   private getDefaultPiAgentDir(kind: PiAgentKind, configDirName?: string): string {
     const root =
       kind === 'omp' ? configDirName || PI_AGENT_HOME_DIR_NAME.omp : PI_AGENT_HOME_DIR_NAME[kind]
-    return join(this.homeDir, root, PI_AGENT_SUBDIR)
+    return kind === 'kimchi' ? join(this.homeDir, root) : join(this.homeDir, root, PI_AGENT_SUBDIR)
   }
 
   private canOverwritePiExtension(path: string): boolean {
@@ -283,6 +293,7 @@ export class PluginOverlayManager {
         return null
       }
       writeFileSync(extensionPath, extensionSource)
+      this.kimchiPrefillExtension.write(extensionsDir, kind)
       return {
         sourceAgentDir,
         statusExtensionPath: extensionPath

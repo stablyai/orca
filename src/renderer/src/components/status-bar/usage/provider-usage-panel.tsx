@@ -74,6 +74,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'kimi') {
     return <AgentIcon agent="kimi" size={13} />
   }
+  if (provider === 'kimchi') {
+    return <AgentIcon agent="kimchi" size={13} />
+  }
   if (provider === 'minimax') {
     return <MiniMaxIcon size={13} />
   }

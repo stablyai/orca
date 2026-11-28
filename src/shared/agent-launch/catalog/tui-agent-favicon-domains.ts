@@ -24,6 +24,7 @@ export const TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
   'command-code': 'commandcode.ai',
   continue: 'continue.dev',
   cursor: 'cursor.com',
+  kimchi: 'kimchi.dev',
   kimi: 'moonshot.cn',
   'mistral-vibe': 'mistral.ai',
   'qwen-code': 'qwenlm.github.io',

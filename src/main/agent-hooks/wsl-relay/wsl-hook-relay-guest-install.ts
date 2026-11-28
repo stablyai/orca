@@ -31,16 +31,17 @@ type GuestInstallState = {
   opencode2OverlayDir?: string
   piAgentDir?: string
   ompStatusExtension?: string
+  kimchiAgentDir?: string
   lastInstallAt?: number
   lastOpenCodeSettings?: string
   // Failed attempts throttle retries without claiming the guest accepted those settings.
   lastAttemptOpenCodeSettings?: string
   lastInstallMux?: SshChannelMultiplexer
-  launchKinds?: Set<'pi' | 'omp'>
+  launchKinds?: Set<'pi' | 'omp' | 'kimchi'>
   installation?: Promise<void>
 }
 
-function* requestedKinds(state: GuestInstallState): Generator<'pi' | 'omp' | undefined> {
+function* requestedKinds(state: GuestInstallState): Generator<'pi' | 'omp' | 'kimchi' | undefined> {
   if (!state.launchKinds?.size) {
     yield undefined
   }
@@ -129,6 +130,8 @@ async function installGuestHooksAndPlugins(
         state.piAgentDir = overlay.kind === 'dir' ? overlay.piDir : undefined
       } else if (kind === 'omp') {
         state.ompStatusExtension = overlay.kind === 'dir' ? overlay.ompDir : undefined
+      } else if (kind === 'kimchi') {
+        state.kimchiAgentDir = overlay.kind === 'dir' ? overlay.kimchiDir : undefined
       }
     }
   }

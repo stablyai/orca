@@ -61,6 +61,7 @@ export type StatusBarItem =
   | 'codex'
   | 'opencode-go'
   | 'kimi'
+  | 'kimchi'
   | 'minimax'
   | 'grok'
   | 'cursor'

@@ -29,7 +29,7 @@ type PiManagedExtensionEnv = {
   statusExtensionPath?: string
 }
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'kimchi'>
 
 // Retain old per-kind roots for upgrade cleanup.
 const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
@@ -41,10 +41,14 @@ const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
 const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
-  'prime-agent': '.prime'
+  'prime-agent': '.prime',
+  kimchi: '.config/kimchi/harness'
 }
 
 export function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
+  if (kind === 'kimchi') {
+    return join(homedir(), AGENT_HOME_DIR_NAME[kind])
+  }
   const root = kind === 'omp' ? configDirName || AGENT_HOME_DIR_NAME.omp : AGENT_HOME_DIR_NAME[kind]
   return join(homedir(), root, PI_AGENT_SUBDIR)
 }
@@ -170,7 +174,7 @@ export class PiTitlebarExtensionService {
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}
     const sourceAgentDir = existingAgentDir || getDefaultPiAgentDir(kind, options?.configDirName)
-    if (kind !== 'prime-agent') {
+    if (kind !== 'prime-agent' && kind !== 'kimchi') {
       try {
         this.safeRemoveOverlay(this.getPtyOverlayDir(ptyId, kind), kind)
         this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
@@ -205,6 +209,8 @@ export class PiTitlebarExtensionService {
       }
     } else if (kind === 'prime-agent') {
       env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = installed.sourceAgentDir
+    } else if (kind === 'kimchi') {
+      env.ORCA_KIMCHI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     } else {
       env.ORCA_PI_SOURCE_AGENT_DIR = installed.sourceAgentDir
     }

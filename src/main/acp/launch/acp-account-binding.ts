@@ -5,6 +5,7 @@ import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { resolveStructuredEnvAccountHomePath } from '../../runtime/agent-session/environment/structured-agent-account-home'
 
 import type { AcpPreparedAccount } from './acp-launch-contract'
@@ -31,23 +32,43 @@ export type AcpAccountBinding = {
 
 export function directoryAccountBinding(
   variable: string,
-  defaultHome: (homePath: string, launchEnv: NodeJS.ProcessEnv) => string
+  defaultHome: (homePath: string, launchEnv: NodeJS.ProcessEnv) => string,
+  options?: { allowOverride?: boolean }
 ): AcpAccountBinding {
+  const effectiveChildHome = (launchEnv: NodeJS.ProcessEnv, fallback: string): string =>
+    (process.platform === 'win32' ? launchEnv.USERPROFILE : launchEnv.HOME) || fallback
+  const resolvedHome = (launchEnv: NodeJS.ProcessEnv): string =>
+    resolveStructuredEnvAccountHomePath({
+      launchEnv:
+        options?.allowOverride === false ? { ...launchEnv, [variable]: undefined } : launchEnv,
+      variable,
+      defaultPath: (homePath) =>
+        defaultHome(
+          options?.allowOverride === false ? effectiveChildHome(launchEnv, homePath) : homePath,
+          launchEnv
+        ),
+      ...(options?.allowOverride === false ? { processEnv: {} } : {})
+    })
   return {
     pin: { accountHomeVariable: variable },
     resolve: async ({ launchEnv }) => ({
       variable,
-      path: resolveStructuredEnvAccountHomePath({
-        launchEnv,
-        variable,
-        defaultPath: (homePath) => defaultHome(homePath, launchEnv)
-      })
+      path: resolvedHome(launchEnv)
     }),
     environment: (home, env) => {
       if (!isLegacyAgentSessionAccountHome(home) || home.variable !== variable) {
         throw new Error(`sessions of this agent pin ${variable}`)
       }
-      return { ...env, [variable]: home.path }
+      if (options?.allowOverride !== false) {
+        return { ...env, [variable]: home.path }
+      }
+      const path = resolvedHome(env)
+      if (
+        normalizeRuntimePathForComparison(home.path) !== normalizeRuntimePathForComparison(path)
+      ) {
+        throw new Error(`sessions of this agent pin ${path}`)
+      }
+      return { ...env, [variable]: path }
     }
   }
 }

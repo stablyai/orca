@@ -20,6 +20,7 @@ export const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
   Hermes: 'hermes',
   'DeepSeek Build': 'dsb',
   Pi: 'pi',
+  Kimchi: 'kimchi',
   OMP: 'omp'
 }
 

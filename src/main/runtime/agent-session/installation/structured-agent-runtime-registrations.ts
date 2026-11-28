@@ -179,6 +179,7 @@ function createAcpAdapter(
       savedSession,
       ...deps.acpLaunchCommand,
       dataDirectory: deps.stateDirectory,
+      ...(deps.preTrustWorkspace ? { preTrustWorkspace: deps.preTrustWorkspace } : {}),
       logger: deps.logger
     })
     return new AcpStructuredSessionAdapter({

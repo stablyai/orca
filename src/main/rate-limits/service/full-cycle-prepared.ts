@@ -24,6 +24,7 @@ export type FetchAllCyclePrepared = {
   zcodeConfigChanged: boolean
   zcodeGeneration: number
   claudeFetchGated: boolean
+  kimchiFetchGated: boolean
   results: [
     PromiseSettledResult<ProviderRateLimits>,
     PromiseSettledResult<ProviderRateLimits>,
@@ -33,5 +34,6 @@ export type FetchAllCyclePrepared = {
   ]
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
+  kimchiResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
 }

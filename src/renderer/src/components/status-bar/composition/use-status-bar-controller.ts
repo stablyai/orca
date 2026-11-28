@@ -105,7 +105,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, opencodeGo, kimi, minimax, grok, cursor, zcode } = rateLimits
+  const { claude, codex, opencodeGo, kimi, kimchi, minimax, grok, cursor, zcode } = rateLimits
   const muse = rateLimits.muse
 
   // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
@@ -121,6 +121,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
+  const visibleKimchi = getVisibleUsageProvider('kimchi', kimchi, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
@@ -138,6 +139,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
+  // Kimchi's saved API key can provide usage independently of CLI detection.
+  const showKimchi = visibleKimchi !== null && statusBarItems.includes('kimchi')
   // MiniMax supports cookie/API-key usage without an installed CLI.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -170,6 +173,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showCodex ||
     showOpencodeGo ||
     showKimi ||
+    showKimchi ||
     showMiniMax ||
     showGrok ||
     showCursor ||
@@ -185,6 +189,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     codex?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
+    kimchi?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
@@ -202,6 +207,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showCodex ? visibleCodex : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
+    showKimchi ? visibleKimchi : null,
     showMiniMax ? visibleMiniMax : null,
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,

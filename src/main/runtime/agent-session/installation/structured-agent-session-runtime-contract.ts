@@ -69,6 +69,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveAgentLaunchEnv?: (agent: string) => Record<string, string>
   /** The settings a per-agent Command override is read from, for the same agents. */
   resolveAgentCommandSettings?: () => StructuredAgentCommandSettings
+  /** Orca's current global/repository decision for this session's workspace. */
+  preTrustWorkspace?: (location: AgentSessionRecord['location']) => boolean
   /** See `StructuredAgentLaunchSources.resolveInstructions`. */
   resolveSessionInstructions?: (
     record: AgentSessionRecord,

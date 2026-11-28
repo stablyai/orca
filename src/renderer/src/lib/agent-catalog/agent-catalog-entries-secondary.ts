@@ -97,6 +97,12 @@ export function secondaryAgentCatalogEntries(): AgentCatalogEntry[] {
       homepageUrl: 'https://docs.factory.ai/cli/getting-started/quickstart'
     },
     {
+      id: 'kimchi',
+      label: translate('auto.lib.agent.catalog.3d96e5db16', 'Kimchi'),
+      cmd: 'kimchi',
+      homepageUrl: 'https://kimchi.dev'
+    },
+    {
       id: 'kimi',
       label: translate('auto.lib.agent.catalog.28810273af', 'Kimi'),
       cmd: 'kimi',

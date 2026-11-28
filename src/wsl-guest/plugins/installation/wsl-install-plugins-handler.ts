@@ -18,6 +18,7 @@ export type InstallPluginsResult = {
     pi: boolean
     omp: boolean
     primeAgent: boolean
+    kimchi: boolean
   }
   overlayDirs: {
     claudeAgentView?: string
@@ -26,6 +27,7 @@ export type InstallPluginsResult = {
     opencode2?: string
     pi?: string
     omp?: string
+    kimchi?: string
   }
 }
 
@@ -50,6 +52,8 @@ export function createInstallPluginsHandler(
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
     const primeAgent = params.primeAgentExtensionSource
+    const kimchi = params.kimchiExtensionSource
+    const kimchiPrefill = params.kimchiPrefillExtensionSource
     // Why: bound per-source bytes so a buggy/hostile host can't OOM the guest relay.
     assertPluginSourceUnderByteCap('opencodeStartupPromptSource', startupPrompt)
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
@@ -57,6 +61,8 @@ export function createInstallPluginsHandler(
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
+    assertPluginSourceUnderByteCap('kimchiExtensionSource', kimchi)
+    assertPluginSourceUnderByteCap('kimchiPrefillExtensionSource', kimchiPrefill)
     pluginOverlay.setSources({
       ...(typeof claudeAgentView === 'string' ? { claudeAgentViewSource: claudeAgentView } : {}),
       opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
@@ -64,13 +70,18 @@ export function createInstallPluginsHandler(
       opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
       ompExtensionSource: typeof omp === 'string' ? omp : undefined,
-      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined,
+      kimchiExtensionSource: typeof kimchi === 'string' ? kimchi : undefined,
+      kimchiPrefillExtensionSource: typeof kimchiPrefill === 'string' ? kimchiPrefill : undefined
     })
     let opencodeDir: string | undefined
     const launchKind =
-      params.launchKind === 'pi' || params.launchKind === 'omp' ? params.launchKind : undefined
+      params.launchKind === 'pi' || params.launchKind === 'omp' || params.launchKind === 'kimchi'
+        ? params.launchKind
+        : undefined
     let piDir: string | undefined
     let ompDir: string | undefined
+    let kimchiDir: string | undefined
     if (pluginOverlay.hasOpenCodeSource()) {
       // An omitted source leaves the manager's cache untouched, so it counts as unchanged.
       const incoming = typeof opencode === 'string' ? opencode : null
@@ -126,16 +137,18 @@ export function createInstallPluginsHandler(
     }
     // Materialize only the explicitly requested agent. Bare shells must not create
     // ~/.pi/agent or ~/.omp/agent (#10196).
-    if (launchKind === 'pi' || launchKind === 'omp') {
-      const source = launchKind === 'pi' ? pi : omp
+    if (launchKind) {
+      const source = launchKind === 'pi' ? pi : launchKind === 'omp' ? omp : kimchi
       if (typeof source === 'string') {
         const result = pluginOverlay.materializePi(`wsl-${launchKind}`, undefined, launchKind, {
           materializeDefaultHome: true
         })
         if (launchKind === 'pi') {
           piDir = result?.sourceAgentDir
-        } else {
+        } else if (launchKind === 'omp') {
           ompDir = result?.statusExtensionPath
+        } else {
+          kimchiDir = result?.sourceAgentDir
         }
       }
     }
@@ -169,14 +182,16 @@ export function createInstallPluginsHandler(
         opencode2: pluginOverlay.hasOpenCode2Source(),
         pi: pluginOverlay.hasPiSource('pi'),
         omp: pluginOverlay.hasPiSource('omp'),
-        primeAgent: pluginOverlay.hasPiSource('prime-agent')
+        primeAgent: pluginOverlay.hasPiSource('prime-agent'),
+        kimchi: pluginOverlay.hasPiSource('kimchi')
       },
       overlayDirs: {
         ...(claude ? { claudeAgentView: claude.pluginDir, claudeConfig: claude.configDir } : {}),
         ...(opencodeDir ? { opencode: opencodeDir } : {}),
         ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
         ...(piDir ? { pi: piDir } : {}),
-        ...(ompDir ? { omp: ompDir } : {})
+        ...(ompDir ? { omp: ompDir } : {}),
+        ...(kimchiDir ? { kimchi: kimchiDir } : {})
       }
     }
   }

@@ -58,6 +58,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'cursor':
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
+    case 'kimchi':
     case 'omp':
     case 'prime-agent':
       return eventName === 'before_agent_start'
@@ -128,6 +129,7 @@ export function isTurnEndEvent(source: AgentHookSource, eventName: unknown): boo
     case 'opencode2':
     case 'mimo-code':
     case 'pi':
+    case 'kimchi':
     case 'omp':
     case 'prime-agent':
       // Why: their done events are status snapshots or milestones that can repeat within one turn.
@@ -236,6 +238,7 @@ export function extractToolFields(
     case 'cursor':
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
+    case 'kimchi':
     case 'omp':
     case 'prime-agent':
       return extractPiToolFields(eventName, hookPayload, source)

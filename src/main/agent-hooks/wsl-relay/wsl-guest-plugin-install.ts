@@ -19,6 +19,7 @@ export type GuestOverlayResult =
       dir2?: string
       piDir?: string
       ompDir?: string
+      kimchiDir?: string
       claudeDir?: string
       claudeConfig?: string
     }
@@ -29,7 +30,7 @@ export async function requestGuestOpenCodeOverlayDir(
   mux: SshChannelMultiplexer,
   deps: GuestPluginInstallDeps,
   distro: string,
-  launchKind?: 'pi' | 'omp'
+  launchKind?: 'pi' | 'omp' | 'kimchi'
 ): Promise<GuestOverlayResult> {
   try {
     const res = await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
@@ -42,10 +43,13 @@ export async function requestGuestOpenCodeOverlayDir(
     const dir2 = overlayDirs.opencode2
     const piDir = overlayDirs.pi
     const ompDir = overlayDirs.omp
+    const kimchiDir = overlayDirs.kimchi
     const opencodeDir = typeof dir === 'string' && dir.length > 0 ? dir : undefined
     const opencode2Dir = typeof dir2 === 'string' && dir2.length > 0 ? dir2 : undefined
     const guestPiDir = typeof piDir === 'string' && piDir.length > 0 ? piDir : undefined
     const guestOmpDir = typeof ompDir === 'string' && ompDir.length > 0 ? ompDir : undefined
+    const guestKimchiDir =
+      typeof kimchiDir === 'string' && kimchiDir.length > 0 ? kimchiDir : undefined
     const claudeDir =
       typeof overlayDirs.claudeAgentView === 'string' && overlayDirs.claudeAgentView.startsWith('/')
         ? overlayDirs.claudeAgentView
@@ -54,14 +58,15 @@ export async function requestGuestOpenCodeOverlayDir(
       typeof overlayDirs.claudeConfig === 'string' && overlayDirs.claudeConfig.startsWith('/')
         ? overlayDirs.claudeConfig
         : undefined
-    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir || claudeDir
+    return opencodeDir || opencode2Dir || guestPiDir || guestOmpDir || guestKimchiDir || claudeDir
       ? {
           kind: 'dir',
           ...(claudeDir && claudeConfig ? { claudeDir, claudeConfig } : {}),
           ...(opencodeDir ? { dir: opencodeDir } : {}),
           ...(opencode2Dir ? { dir2: opencode2Dir } : {}),
           ...(guestPiDir ? { piDir: guestPiDir } : {}),
-          ...(guestOmpDir ? { ompDir: guestOmpDir } : {})
+          ...(guestOmpDir ? { ompDir: guestOmpDir } : {}),
+          ...(guestKimchiDir ? { kimchiDir: guestKimchiDir } : {})
         }
       : { kind: 'none' }
   } catch (err) {

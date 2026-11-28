@@ -204,6 +204,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
       statusBarItems: StatusBarItems.optional(),
       _portsStatusBarDefaultAdded: z.boolean().optional(),
       _kimiStatusBarDefaultAdded: z.boolean().optional(),
+      _kimchiStatusBarDefaultAdded: z.boolean().optional(),
       _minimaxStatusBarDefaultAdded: z.boolean().optional(),
       // Retired with Antigravity usage; older clients still send it.
       _antigravityStatusBarDefaultAdded: z.boolean().optional(),
@@ -224,6 +225,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
               codex: z.string().optional(),
               'opencode-go': z.string().optional(),
               kimi: z.string().optional(),
+              kimchi: z.string().optional(),
               minimax: z.string().optional(),
               grok: z.string().optional(),
               cursor: z.string().optional(),

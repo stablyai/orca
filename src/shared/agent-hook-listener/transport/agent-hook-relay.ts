@@ -26,6 +26,7 @@ const AGENT_HOOK_SOURCES = [
   'mimo-code',
   'cursor',
   'pi',
+  'kimchi',
   'omp',
   'prime-agent',
   'droid',

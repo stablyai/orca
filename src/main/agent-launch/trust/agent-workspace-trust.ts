@@ -1,6 +1,8 @@
 import { homedir } from 'node:os'
+import { realpath } from 'node:fs/promises'
 import {
   AGENT_TRUST_WRITE_DEADLINE_MS,
+  awaitValueWithinDeadline,
   SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
 } from './agent-trust-write-deadline'
 import type { AgentTrustPreset } from './agent-trust-presets'
@@ -45,8 +47,27 @@ function localHomePaths(workspacePath: string, context: AgentTrustLaunchContext)
     : [homedir(), context.env?.HOME, context.env?.USERPROFILE]
 }
 
-/** Antigravity in a WSL guest reads `~/.gemini` in the distro, keyed by its Linux cwd. */
-async function applyAntigravityWslTrust(
+/** Kimchi canonicalizes trust keys in the guest, so resolve WSL symlinks there as well. */
+async function canonicalizeWslGuestWorkspacePath(
+  workspacePath: string,
+  guestPath: string
+): Promise<string> {
+  const canonicalHostPath = await awaitValueWithinDeadline(
+    realpath(workspacePath).catch(() => null),
+    SHORT_AGENT_TRUST_WRITE_DEADLINE_MS,
+    null
+  )
+  if (!canonicalHostPath) {
+    return guestPath
+  }
+  const canonicalGuestPath =
+    parseWslUncPath(canonicalHostPath)?.linuxPath ?? toLinuxPath(canonicalHostPath)
+  return canonicalGuestPath.startsWith('/') ? canonicalGuestPath : guestPath
+}
+
+/** WSL agents read their distro home, keyed by the Linux cwd. */
+async function applyWslWorkspaceTrust(
+  preset: 'antigravity' | 'kimchi',
   workspacePath: string,
   context: AgentTrustLaunchContext
 ): Promise<void> {
@@ -56,14 +77,15 @@ async function applyAntigravityWslTrust(
   const guestPath = uncWorkspace?.linuxPath ?? toLinuxPath(workspacePath)
   // The cached home is a UNC path into the guest; an uncached home means no trust write.
   const guestHome = distro ? getCachedWslHome(distro) : undefined
-  if (!guestHome || !guestPath.startsWith('/')) {
+  if (!distro || !guestHome || !guestPath.startsWith('/')) {
     return
   }
+  const canonicalGuestPath = await canonicalizeWslGuestWorkspacePath(workspacePath, guestPath)
   // Keep the host path as the ownership key so worktree removal finds the entry.
-  await applyWorkspaceTrustOnThisHost('antigravity', workspacePath, () => ({
+  await applyWorkspaceTrustOnThisHost(preset, workspacePath, () => ({
     homes: [guestHome],
     agentHome: guestHome,
-    guestWorkspacePath: guestPath,
+    guestWorkspacePath: canonicalGuestPath,
     claudeConfig: () => null,
     codexConfigFiles: () => [],
     deadlineMs: SHORT_AGENT_TRUST_WRITE_DEADLINE_MS
@@ -82,8 +104,8 @@ export async function applyAgentWorkspaceTrust(
   }
   // The other writers target local homes, which WSL agents do not read.
   if (preset !== 'claude' && isWslLaunch(workspacePath, context)) {
-    if (preset === 'antigravity') {
-      await applyAntigravityWslTrust(workspacePath, context)
+    if (preset === 'antigravity' || preset === 'kimchi') {
+      await applyWslWorkspaceTrust(preset, workspacePath, context)
     }
     return {}
   }

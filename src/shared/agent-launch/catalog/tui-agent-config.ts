@@ -243,6 +243,13 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     windowsShiftEnterEncoding: 'csi-u',
     ctrlEnterEncoding: 'csi-u'
   },
+  kimchi: {
+    detectCmd: 'kimchi',
+    promptInjectionMode: 'stdin-after-start',
+    draftPromptEnvVar: 'ORCA_KIMCHI_PREFILL',
+    preflightTrust: 'kimchi',
+    windowsShiftEnterEncoding: 'csi-u'
+  },
   kimi: {
     preflightTrust: 'kimi',
     // The kimi launcher runs as kimi-code; recognize the alias for reuse and dispatch --inject.
@@ -340,13 +347,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = Object.fromEnt
   ])
 ) as Record<TuiAgent, TuiAgentConfig>
 
-export function isTuiAgent(value: unknown): value is TuiAgent {
-  return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
-}
+export const isTuiAgent = (value: unknown): value is TuiAgent =>
+  typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
 
-export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
-  return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
-}
+// prettier-ignore
+export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] { return [config.detectCmd, ...(config.detectCmdAliases ?? [])] }
 
 export function getTuiAgentLaunchCommand(
   config: TuiAgentConfig,

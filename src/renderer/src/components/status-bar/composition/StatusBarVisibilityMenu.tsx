@@ -86,6 +86,16 @@ export function StatusBarVisibilityMenu({
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem
+          checked={statusBarItems.includes('kimchi')}
+          onCheckedChange={() => {
+            recordFeatureInteraction('usage-tracking')
+            toggleStatusBarItem('kimchi')
+          }}
+        >
+          <AgentIcon agent="kimchi" size={14} />
+          {t('auto.components.status.bar.StatusBar.kimchiUsageMenu', 'Kimchi Usage')}
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
           checked={statusBarItems.includes('minimax')}
           onCheckedChange={() => {
             recordFeatureInteraction('usage-tracking')

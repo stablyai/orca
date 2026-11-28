@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { readFile, realpath } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
+import { withFileTransactionLock } from '../../filesystem/file-transaction-lock'
 import { grantCodexProjectTrustOffMain } from '../../codex/trust/project-trust/codex-project-trust-worker-client'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
 import { canonicalizeAgentTrustPath as canonicalize } from './agent-trust-path-canonicalization'
@@ -104,6 +107,36 @@ export function markAntigravityWorkspaceTrusted(
   }
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
   recordOrcaCreatedAntigravityTrust(configPath, workspacePath, absPath)
+}
+
+/** Kimchi stores canonical-path trust decisions in its fixed harness directory. */
+export async function markKimchiWorkspaceTrusted(
+  workspacePath: string,
+  home: string,
+  guestWorkspacePath?: string
+): Promise<void> {
+  const root = guestWorkspacePath ?? (await realpath(workspacePath).catch(() => workspacePath))
+  const trustPath = join(home, '.config', 'kimchi', 'harness', 'trust.json')
+  await withFileTransactionLock(trustPath, async () => {
+    let trust: Record<string, unknown> = {}
+    try {
+      const parsed: unknown = JSON.parse(await readFile(trustPath, 'utf-8'))
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return
+      }
+      trust = Object.fromEntries(Object.entries(parsed))
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        // Preserve corrupt user trust data; Kimchi can repair it after manual approval.
+        return
+      }
+    }
+    if (trust[root] === true) {
+      return
+    }
+    trust[root] = true
+    await writeHooksJsonAsync(trustPath, trust)
+  })
 }
 
 /** Kimi Code 2.3.1 keeps one exact-folder record per cwd (workspaceTrust/trustRecord.ts). */

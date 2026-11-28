@@ -14,7 +14,8 @@ export type WslRelayDistroState = {
   opencode2OverlayDir?: string
   piAgentDir?: string
   ompStatusExtension?: string
-  launchKinds: Set<'pi' | 'omp'>
+  kimchiAgentDir?: string
+  launchKinds: Set<'pi' | 'omp' | 'kimchi'>
   startup?: Promise<void>
   installation?: Promise<void>
   failures: number
@@ -38,4 +39,5 @@ export type WslRelayRestartSetup = Pick<
   | 'opencode2OverlayDir'
   | 'piAgentDir'
   | 'ompStatusExtension'
-> & { launchKinds: readonly ('pi' | 'omp')[] }
+  | 'kimchiAgentDir'
+> & { launchKinds: readonly ('pi' | 'omp' | 'kimchi')[] }

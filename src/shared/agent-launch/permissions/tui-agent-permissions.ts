@@ -9,6 +9,7 @@ export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   codex: '--approve-for-me',
   // Why: Cursor's server classifier runs safe tool calls and asks for the rest; its ACP server has no such mode.
   cursor: '--auto-review',
+  kimchi: '--auto',
   // Why: agy --mode auto approves safe actions and asks on risky ones; ACP chats keep their own modes.
   antigravity: '--mode auto'
 }
@@ -31,6 +32,7 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   'command-code': '--yolo',
   continue: '--allow "*"',
   cursor: '--yolo',
+  kimchi: '--yolo',
   // Why: Kimi Code's --yolo is Ask When Needed; --auto is its Never Ask mode.
   kimi: '--auto',
   muse: '--yolo',

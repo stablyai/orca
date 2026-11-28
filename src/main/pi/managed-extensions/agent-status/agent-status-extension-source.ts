@@ -176,6 +176,12 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     ...getPiAgentStatusRuntimeDetectionSourceLines(kind),
     '',
     'function post(hookEventName: string, extra: Record<string, unknown> = {}, final = false): void {',
+    ...(kind === 'kimchi'
+      ? [
+          '  // Kimchi marks nested agent sessions; they must not drive the parent pane lifecycle.',
+          "  if (process.env.KIMCHI_SUBAGENT === '1') return"
+        ]
+      : []),
     '  const ompRuntime = isOmpRuntime()',
     // Pin identity at event time because payload construction waits until delivery.
     '  const metadata = getPostSessionMetadata(ompRuntime)',

@@ -55,7 +55,13 @@ export type AcpLaunchSpec = {
   /** The terminal agent's Command setting may name a different program than this chat server. */
   ignoreAgentCommandSetting?: true
   /** `model` is the chat's saved model, passed only to specs that launch with it. */
-  args(input: { fullAccess: boolean; pluginDirs: readonly string[]; model?: string }): string[]
+  args(input: {
+    fullAccess: boolean
+    pluginDirs: readonly string[]
+    model?: string
+    /** Orca's policy trusts this chat's workspace for this launch; absent keeps agent defaults. */
+    preTrustWorkspace?: boolean
+  }): string[]
   /** The ACP model option cannot name every selection the CLI resolves, so the launch line carries it. */
   launchesWithModel?: true
   /** Applied after the account and user environment. */

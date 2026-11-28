@@ -100,7 +100,7 @@ function transpileExtensionSource(source: string): string {
 }
 
 export function createAgentStatusExtensionHarness(args: {
-  kind: 'pi' | 'omp' | 'prime-agent'
+  kind: 'pi' | 'omp' | 'prime-agent' | 'kimchi'
   killImpl?: (pid: number, signal: number) => void
   env?: Record<string, string | undefined>
   pid?: number

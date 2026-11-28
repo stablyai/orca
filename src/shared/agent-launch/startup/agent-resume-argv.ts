@@ -45,6 +45,10 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
         : null
+    case 'kimchi':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['kimchi', '--session', providerSession.transcriptPath]
+        : null
     case 'prime-agent':
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['prime-agent', '--resume', providerSession.transcriptPath]

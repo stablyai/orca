@@ -24,6 +24,7 @@ import type { GlobalSettings } from '../../../shared/settings/global-settings-ty
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
@@ -75,8 +76,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   /** See `AcpInstructionsLaunch`. */
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
-  takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   sessionMetaOptional?: true
+  takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   aroundSessionOpen?: AcpInstructionsLaunch['aroundSessionOpen']
   release?: AcpInstructionsLaunch['release']
   /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
@@ -110,6 +111,8 @@ export type AcpStructuredLaunchPartDeps = {
   inheritedEnv?: NodeJS.ProcessEnv
   probeVersion?: AgentCliVersionReader
   dataDirectory: string
+  /** Orca's trust policy for this exact launch; absence keeps the agent fail-closed. */
+  preTrustWorkspace?: (location: AgentSessionRecord['location']) => boolean
 } & Pick<AcpLaunchVisualsDeps, 'logger'>
 
 export type AcpLaunchSettings = StructuredAgentCommandSettings &
@@ -178,9 +181,8 @@ async function readAcpLaunchInvocation(
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
   Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
   return {
-    ...invocation,
+    ...resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings }),
     env,
     envToDelete,
     spec,
@@ -195,9 +197,8 @@ export function acpStructuredLaunchPart(
   return withAcpToolFreeFolder(deps, async (basis, identity) => {
     const { record } = basis
     const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
-    const accountHome = movedHome ?? record.accountHome
     const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
+      await resolveAcpLaunchInvocation(agentSpec, movedHome ?? record.accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -282,8 +283,9 @@ export function acpStructuredLaunchPart(
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
     const model = spec.launchesWithModel && !head ? record.options?.model : undefined
+    const preTrustWorkspace = deps.preTrustWorkspace?.(record.location) === true
     const args = [
-      ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model }),
+      ...spec.args({ fullAccess, pluginDirs: skill?.pluginDirs ?? [], model, preTrustWorkspace }),
       ...(skill?.args ?? []),
       ...(instructions?.args ?? [])
     ]

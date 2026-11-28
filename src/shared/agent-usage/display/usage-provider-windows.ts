@@ -25,6 +25,7 @@ const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   codex: 'Codex',
   'opencode-go': 'OpenCode Go',
   kimi: 'Kimi',
+  kimchi: 'Kimchi',
   minimax: 'MiniMax',
   grok: 'Grok',
   zcode: 'ZCode',
