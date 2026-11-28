@@ -18,8 +18,11 @@ export type OwnerAccountsState = {
 
 type Stream = { state: OwnerAccountsState | null; listeners: Set<() => void>; close: () => void }
 
-// One accounts stream per host, shared by every reader while any is mounted; no cache after that.
+// One accounts stream per host, shared by every reader while any is mounted. The last snapshot a
+// host vouched for survives the unsubscribe teardown, so a switch back shows it instead of an
+// empty bar while the fresh stream answers.
 const streams = new Map<string, Stream>()
+const lastVouchedByEnvironmentId = new Map<string, ProviderAccountsSnapshot>()
 
 function publish(stream: Stream, state: OwnerAccountsState): void {
   stream.state = state
@@ -31,9 +34,24 @@ function snapshotState(snapshot: ProviderAccountsSnapshot): OwnerAccountsState {
   return { snapshot, failure: snapshot.rateLimits ? null : 'usage-not-published' }
 }
 
+/** Only a live stream's publication vouches for a snapshot; a read or frame that outlived its stream may be older. */
+function publishVouched(
+  environmentId: string,
+  stream: Stream,
+  snapshot: ProviderAccountsSnapshot
+): void {
+  lastVouchedByEnvironmentId.set(environmentId, snapshot)
+  publish(stream, snapshotState(snapshot))
+}
+
 function connect(environmentId: string, stream: Stream): void {
   let closed = false
   const timers: ReturnType<typeof setTimeout>[] = []
+  const remembered = lastVouchedByEnvironmentId.get(environmentId)
+  // Why: a reconnect keeps the state it has, an unanswered "cannot reach" included.
+  if (remembered && stream.state === null) {
+    stream.state = snapshotState(remembered)
+  }
   // Each open makes the host refresh stale usage.
   const reopen = (): void => {
     if (!closed) {
@@ -54,7 +72,7 @@ function connect(environmentId: string, stream: Stream): void {
     {
       onSnapshot: (snapshot) => {
         if (!closed) {
-          publish(stream, snapshotState(snapshot))
+          publishVouched(environmentId, stream, snapshot)
         }
       },
       // Why: timeout, closed stream and RPC failure all mean the owner's usage is unverifiable.
@@ -110,6 +128,6 @@ export function applyOwnerAccountsSnapshot(
 ): void {
   const stream = streams.get(environmentId)
   if (stream && stream === startedOn) {
-    publish(stream, snapshotState(snapshot))
+    publishVouched(environmentId, stream, snapshot)
   }
 }
