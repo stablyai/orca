@@ -7,7 +7,7 @@ import type { SshTarget } from '../../../../../../shared/remote-runtime/ssh/ssh-
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import type { RuntimeServerRowState } from './runtime-server-row-state'
 
 export type RuntimeServerProblemLine = { text: string; destructive: boolean }

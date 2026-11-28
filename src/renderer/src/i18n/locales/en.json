@@ -2252,7 +2252,8 @@
         "add": "Add a server for this repo",
         "files": "From this repo’s files",
         "open": "Open {{file}}"
-      }
+      },
+      "unreadable": "Saved sign-in or key can’t be opened on this computer"
     }
   },
   "menu": {
@@ -2531,6 +2532,9 @@
           "localBaseRefShallowHistory": "Your workspace was created from {{value0}} and is unaffected. Orca could not also update your local {{value1}} branch because this clone only has recent history, so Git cannot confirm local {{value1}} is just behind. To fix this for every new workspace, run once:",
           "localBaseRefRefreshTurnOff": "Disable Check",
           "localBaseRefRefreshTurnOffHelp": "What Disable Check does",
+          "localBaseRefRefreshDisable": "Disable",
+          "localBaseRefRefreshDisableTooltip": "Stop checking {{value0}}",
+          "localBaseRefClose": "Close",
           "localBaseRefRefreshTurnOffTooltip": "Turns off the Orca setting {{value0}}. Orca will stop updating local {{value1}} when you create a workspace, and this warning will stop appearing. New workspaces are unaffected. Turn it back on anytime in Settings › Git.",
           "localBaseRefUnshallow": "Unshallow",
           "localBaseRefUnshallowFailed": "Could not open a terminal for this workspace",
@@ -2571,9 +2575,7 @@
           "localBaseRefNotUpdated": "{{value0}} not updated",
           "localBaseRefNotUpdatedDirty": "Uncommitted changes in {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Local-only commits on {{value0}}.",
-          "localBaseRefNotUpdatedError": "Git error.",
-          "localBaseRefHideDetails": "Hide details",
-          "localBaseRefShowDetails": "Details"
+          "localBaseRefNotUpdatedError": "Git error."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -20561,7 +20563,12 @@
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
           "signInAgainAction": "Sign in again",
           "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
-          "openAccountSettings": "Open account settings"
+          "openAccountSettings": "Open account settings",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links.",
+          "deleteNamedFailed": "Could not delete “{{name}}”.",
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted."
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -20576,7 +20583,7 @@
         },
         "ArtifactCollection": {
           "loadMore": "Load more",
-          "noMatches": "No matches"
+          "noMatchingArtifacts": "No matching artifacts"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Anyone with this link can view it",
@@ -20638,14 +20645,34 @@
           "size": "Size",
           "updated": "Updated",
           "expires": "Expires",
-          "actions": "Actions"
+          "actions": "Actions",
+          "selectAll": "Select all"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Loading artifacts"
         },
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Clear filters",
+          "any": "Any time",
+          "today": "Today",
+          "pastWeek": "Past 7 days",
+          "pastMonth": "Past 30 days",
+          "anyExpiry": "Any",
+          "withinWeek": "Within 7 days",
+          "expired": "Expired"
+        },
+        "ArtifactListRow": {
+          "select": "Select {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Delete",
+          "clear": "Clear",
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        }
       },
       "BrowserCookieImportMachineNotice": {
         "remoteLabel": "Browsers on {{value0}}",
@@ -22785,7 +22812,9 @@
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
           "notStarted": "Not started",
-          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+          "orcaRemoved": "Removed: restarts on next message",
+          "orcaChanged": "Changed: restarts on next message"
         },
         "signIn": {
           "action": "Sign in",
@@ -22800,7 +22829,8 @@
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "Manage MCP servers"
+        "manage": "Manage MCP servers",
+        "stillFailing": "Still failing after reconnecting."
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -26097,8 +26127,7 @@
         "failing": "failing",
         "running": "running",
         "cancelled": "cancelled",
-        "passing": "passing",
-        "more": "+{{count}} more"
+        "passing": "passing"
       }
     },
     "attachments": {
@@ -28160,6 +28189,9 @@
       "unreachable": "Couldn't reach {{hosts}}. The bot may be there; open the link again once it's back.",
       "pick": "More than one computer has a bot for this link: {{hosts}}. Open it from the sidebar.",
       "updateNeeded": "Update Orca on {{hosts}} to open this bot here."
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "Bot's Home didn't load."
     },
     "activity": {
       "title": "Activity",

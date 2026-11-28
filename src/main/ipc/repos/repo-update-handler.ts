@@ -33,8 +33,12 @@ import {
   isWslMoveSourceHost
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
-export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
-  ipcMain.handle(
+export function registerRepoUpdateHandler(
+  mainWindow: BrowserWindow,
+  store: Store,
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
+): void {
+  ipc.handle(
     'repos:update',
     async (
       _event,
@@ -119,11 +123,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       }
       if ('agentAccounts' in updates) {
         const raw = updates.agentAccounts
-        const normalized = raw == null ? null : normalizeRepoAgentAccounts(raw)
-        if (raw != null && !normalized) {
+        updates.agentAccounts = raw == null ? null : normalizeRepoAgentAccounts(raw)
+        if (raw != null && !updates.agentAccounts) {
           delete updates.agentAccounts
-        } else {
-          updates.agentAccounts = normalized
         }
       }
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.

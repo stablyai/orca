@@ -1742,7 +1742,8 @@
         "add": "為此存放庫新增伺服器",
         "files": "來自此存放庫的檔案",
         "open": "開啟 {{file}}"
-      }
+      },
+      "unreadable": "無法在這台電腦上開啟已儲存的登入或金鑰"
     },
     "navigation": {
       "accounts": {
@@ -2167,13 +2168,14 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} 有未提交的變更。",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} 有僅存在於本機的提交。",
           "localBaseRefNotUpdatedError": "Git 錯誤。",
-          "localBaseRefHideDetails": "隱藏詳細資料",
-          "localBaseRefShowDetails": "詳細資料",
           "localBaseRefShallowHistoryTitle": "本機 {{value0}} 未更新：淺層複製",
           "localBaseRefShallowHistoryNamed": "「{{value0}}」已從 {{value1}} 建立，不受影響。Orca 無法同時更新本機 {{value2}} 分支，因為此複製僅包含近期的歷史記錄，Git 無法確認本機 {{value2}} 是否只是落後。若要避免之後建立工作區時再發生此問題，請執行一次：",
           "localBaseRefShallowHistory": "工作區已從 {{value0}} 建立，不受影響。Orca 無法同時更新本機 {{value1}} 分支，因為此複製僅包含近期的歷史記錄，Git 無法確認本機 {{value1}} 是否只是落後。若要避免之後建立工作區時再發生此問題，請執行一次：",
           "localBaseRefRefreshTurnOff": "停用檢查",
           "localBaseRefRefreshTurnOffHelp": "「停用檢查」的作用",
+          "localBaseRefRefreshDisable": "停用",
+          "localBaseRefRefreshDisableTooltip": "停止檢查 {{value0}}",
+          "localBaseRefClose": "關閉",
           "localBaseRefRefreshTurnOffTooltip": "關閉 Orca 的 {{value0}} 設定。建立工作區時，Orca 將不再更新本機 {{value1}}，也不會再顯示此警告。新工作區不受影響。可隨時在「設定」›「Git」重新開啟。",
           "localBaseRefUnshallow": "取得完整歷史記錄",
           "localBaseRefUnshallowFailed": "無法為此工作區開啟終端機",
@@ -19948,8 +19950,7 @@
           "more": "更多成品操作"
         },
         "ArtifactCollection": {
-          "loadMore": "載入更多",
-          "noMatches": "沒有符合項"
+          "loadMore": "載入更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何取得此連結的人都能檢視",
@@ -22384,7 +22385,9 @@
           "needsAuth": "需要登入",
           "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
           "pending": "正在連線…",
-          "tools_other": "{{count}} 個工具"
+          "tools_other": "{{count}} 個工具",
+          "orcaRemoved": "已移除：下一則訊息時重新啟動",
+          "orcaChanged": "已變更：下一則訊息時重新啟動"
         },
         "signIn": {
           "external": "請在開啟的頁面完成",
@@ -22424,7 +22427,8 @@
           "user": "使用者",
           "plugin": "外掛",
           "session": "工作階段"
-        }
+        },
+        "stillFailing": "重新連線後仍然失敗。"
       }
     },
     "tab": {
@@ -25278,8 +25282,7 @@
         "failing": "失敗",
         "running": "待處理",
         "cancelled": "已取消",
-        "passing": "通過",
-        "more": "另有 {{count}} 個"
+        "passing": "通過"
       }
     },
     "attachments": {

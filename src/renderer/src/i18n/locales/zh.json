@@ -1516,7 +1516,8 @@
         "add": "为此仓库添加服务器",
         "files": "来自此仓库的文件",
         "open": "打开 {{file}}"
-      }
+      },
+      "unreadable": "无法在这台电脑上打开已保存的登录或密钥"
     },
     "navigation": {
       "accounts": {
@@ -1798,13 +1799,14 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} 有未提交的更改",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} 有仅存在于本地的提交",
           "localBaseRefNotUpdatedError": "Git 错误",
-          "localBaseRefHideDetails": "隐藏详情",
-          "localBaseRefShowDetails": "详情",
           "localBaseRefShallowHistoryTitle": "本地 {{value0}} 未更新：浅克隆",
           "localBaseRefShallowHistoryNamed": "“{{value0}}”由 {{value1}} 创建，不受影响。Orca 无法同时更新你的本地 {{value2}} 分支：此克隆只包含较近的历史，Git 无法确认本地 {{value2}} 只是落后。要为之后每个新工作区解决此问题，请运行一次：",
           "localBaseRefShallowHistory": "你的工作区由 {{value0}} 创建，不受影响。Orca 无法同时更新你的本地 {{value1}} 分支：此克隆只包含较近的历史，Git 无法确认本地 {{value1}} 只是落后。要为之后每个新工作区解决此问题，请运行一次：",
           "localBaseRefRefreshTurnOff": "禁用检查",
           "localBaseRefRefreshTurnOffHelp": "了解“禁用检查”的作用",
+          "localBaseRefRefreshDisable": "禁用",
+          "localBaseRefRefreshDisableTooltip": "停止检查 {{value0}}",
+          "localBaseRefClose": "关闭",
           "localBaseRefRefreshTurnOffTooltip": "关闭 Orca 设置 {{value0}}。创建工作区时 Orca 将不再更新本地 {{value1}}，此警告也不会再出现。新工作区不受影响。可随时在设置 › Git 中重新开启",
           "localBaseRefUnshallow": "取消浅克隆",
           "localBaseRefUnshallowFailed": "无法为此工作区打开终端",
@@ -19621,8 +19623,7 @@
           "more": "更多产物操作"
         },
         "ArtifactCollection": {
-          "loadMore": "加载更多",
-          "noMatches": "没有匹配的产物"
+          "loadMore": "加载更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何持有此链接的人都可以查看",
@@ -21685,7 +21686,9 @@
           "failedReason": "失败：{{error}}",
           "disabled": "已禁用",
           "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录",
-          "notStarted": "尚未启动"
+          "notStarted": "尚未启动",
+          "orcaRemoved": "已移除：下一条消息时重新启动",
+          "orcaChanged": "已更改：下一条消息时重新启动"
         },
         "signIn": {
           "action": "登录",
@@ -21700,7 +21703,8 @@
           "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击“完成”",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "管理 MCP 服务器"
+        "manage": "管理 MCP 服务器",
+        "stillFailing": "重新连接后仍然失败。"
       },
       "ciResultLine": {
         "failingLead": "CI 失败于",
@@ -25720,8 +25724,7 @@
         "failing": "失败",
         "running": "待处理",
         "cancelled": "已取消",
-        "passing": "通过",
-        "more": "另有 {{count}} 项"
+        "passing": "通过"
       },
       "addEmoji": "添加表情符号",
       "addEmojiTooltip": "添加表情符号（或输入 :）",

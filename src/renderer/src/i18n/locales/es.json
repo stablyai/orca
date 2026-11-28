@@ -1273,7 +1273,8 @@
         "add": "Agregar un servidor para este repositorio",
         "files": "De los archivos de este repositorio",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir en este equipo"
     }
   },
   "menu": {
@@ -1552,8 +1553,6 @@
           "localBaseRefNotUpdatedDirty": "Cambios sin confirmar en {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Commits solo locales en {{value0}}.",
           "localBaseRefNotUpdatedError": "Error de Git.",
-          "localBaseRefHideDetails": "Ocultar detalles",
-          "localBaseRefShowDetails": "Detalles",
           "0216895fb5": "No se pudo eliminar la rama",
           "5366d13eec": "Espacio de trabajo eliminado, rama conservada",
           "2e17f825d4": "Worktree eliminado, rama conservada",
@@ -1589,6 +1588,9 @@
           "localBaseRefShallowHistory": "Tu espacio de trabajo se creó a partir de {{value0}} y no se ve afectado. Orca no pudo actualizar además tu rama local {{value1}} porque este clon solo tiene el historial reciente, así que Git no puede confirmar que {{value1}} local solo esté atrasada. Para solucionarlo en todos los espacios de trabajo nuevos, ejecuta una vez:",
           "localBaseRefRefreshTurnOff": "Desactivar comprobación",
           "localBaseRefRefreshTurnOffHelp": "Qué hace Desactivar comprobación",
+          "localBaseRefRefreshDisable": "Desactivar",
+          "localBaseRefRefreshDisableTooltip": "Dejar de comprobar {{value0}}",
+          "localBaseRefClose": "Cerrar",
           "localBaseRefRefreshTurnOffTooltip": "Desactiva el ajuste de Orca {{value0}}. Orca dejará de actualizar {{value1}} local al crear un espacio de trabajo y esta advertencia dejará de aparecer. Los espacios de trabajo nuevos no se ven afectados. Vuelve a activarlo cuando quieras en Ajustes › Git.",
           "localBaseRefUnshallow": "Obtener historial completo",
           "localBaseRefUnshallowFailed": "No se pudo abrir una terminal para este espacio de trabajo",
@@ -19837,8 +19839,7 @@
           "more": "Más acciones del artefacto"
         },
         "ArtifactCollection": {
-          "loadMore": "Cargar más",
-          "noMatches": "Sin resultados"
+          "loadMore": "Cargar más"
         },
         "updatedAt": "Actualizado {{when}}",
         "updatedRecently": "recientemente",
@@ -22269,7 +22270,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} herramientas",
           "tools_one": "{{count}} herramienta",
-          "tools_other": "{{count}} herramientas"
+          "tools_other": "{{count}} herramientas",
+          "orcaRemoved": "Eliminado: se reinicia con el próximo mensaje",
+          "orcaChanged": "Cambiado: se reinicia con el próximo mensaje"
         },
         "signIn": {
           "external": "Completa el proceso en la página que se abrió",
@@ -22311,7 +22314,8 @@
           "user": "Usuario",
           "plugin": "Plugin",
           "session": "Sesión"
-        }
+        },
+        "stillFailing": "Sigue fallando tras reconectar."
       }
     },
     "tab": {
@@ -26158,8 +26162,7 @@
         "failing": "fallando",
         "running": "en curso",
         "cancelled": "cancelado",
-        "passing": "superado",
-        "more": "+{{count}} más"
+        "passing": "superado"
       }
     },
     "attachments": {

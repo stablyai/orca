@@ -2252,7 +2252,8 @@
         "add": "Bu repo için sunucu ekle",
         "files": "Bu reponun dosyalarından",
         "open": "{{file}} dosyasını aç"
-      }
+      },
+      "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor"
     }
   },
   "menu": {
@@ -2530,13 +2531,14 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} içinde commit edilmemiş değişiklikler var.",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} üzerinde yalnızca yerel commit'ler var.",
           "localBaseRefNotUpdatedError": "Git hatası.",
-          "localBaseRefHideDetails": "Ayrıntıları gizle",
-          "localBaseRefShowDetails": "Ayrıntılar",
           "localBaseRefShallowHistoryTitle": "Yerel {{value0}} güncellenemedi: sığ klon",
           "localBaseRefShallowHistoryNamed": "\"{{value0}}\", {{value1}} temel alınarak oluşturuldu ve bu durumdan etkilenmedi. Orca'da yerel {{value2}} branch'iniz de güncellenemedi çünkü bu klon yalnızca yakın geçmişi içeriyor ve Git, yerel {{value2}} branch'inin yalnızca geride kaldığını doğrulayamıyor. Bu sorunu tüm yeni çalışma alanları için gidermek üzere şu komutu bir kez çalıştırın:",
           "localBaseRefShallowHistory": "Çalışma alanınız {{value0}} temel alınarak oluşturuldu ve bu durumdan etkilenmedi. Orca'da yerel {{value1}} branch'iniz de güncellenemedi çünkü bu klon yalnızca yakın geçmişi içeriyor ve Git, yerel {{value1}} branch'inin yalnızca geride kaldığını doğrulayamıyor. Bu sorunu tüm yeni çalışma alanları için gidermek üzere şu komutu bir kez çalıştırın:",
           "localBaseRefRefreshTurnOff": "Kontrolü devre dışı bırak",
           "localBaseRefRefreshTurnOffHelp": "Kontrolü devre dışı bırak seçeneğinin işlevi",
+          "localBaseRefRefreshDisable": "Devre dışı bırak",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} kontrolünü durdur",
+          "localBaseRefClose": "Kapat",
           "localBaseRefRefreshTurnOffTooltip": "Orca'daki {{value0}} ayarını kapatır. Çalışma alanı oluşturduğunuzda Orca artık yerel {{value1}} branch'ini güncellemez ve bu uyarı görünmez. Yeni çalışma alanları bundan etkilenmez. Ayarlar › Git bölümünden istediğiniz zaman tekrar açabilirsiniz.",
           "localBaseRefUnshallow": "Tüm geçmişi indir",
           "localBaseRefUnshallowFailed": "Bu çalışma alanı için terminal açılamadı",
@@ -20522,8 +20524,7 @@
           "more": "Daha fazla artifact işlemi"
         },
         "ArtifactCollection": {
-          "loadMore": "Daha fazla yükle",
-          "noMatches": "Eşleşme yok"
+          "loadMore": "Daha fazla yükle"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Bu bağlantıya sahip olan herkes görüntüleyebilir",
@@ -23077,7 +23078,9 @@
           "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
           "pending": "Bağlanıyor…",
           "tools_one": "{{count}} araç",
-          "tools_other": "{{count}} araç"
+          "tools_other": "{{count}} araç",
+          "orcaRemoved": "Kaldırıldı: sonraki mesajda yeniden başlar",
+          "orcaChanged": "Değiştirildi: sonraki mesajda yeniden başlar"
         },
         "signIn": {
           "external": "Açılan sayfada tamamlayın",
@@ -23119,7 +23122,8 @@
           "user": "Kullanıcı",
           "plugin": "Eklenti",
           "session": "Oturum"
-        }
+        },
+        "stillFailing": "Yeniden bağlandıktan sonra hâlâ başarısız."
       },
       "loadEarlierFailed": "Önceki mesajlar yüklenemedi.",
       "loadEarlierRetry": "Yeniden dene",
@@ -26038,8 +26042,7 @@
         "failing": "başarısız",
         "running": "beklemede",
         "cancelled": "iptal edildi",
-        "passing": "başarılı",
-        "more": "+{{count}} tane daha"
+        "passing": "başarılı"
       },
       "addEmoji": "Emoji ekle",
       "addEmojiTooltip": "Emoji ekle (veya : yaz)",

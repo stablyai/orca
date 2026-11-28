@@ -1924,7 +1924,8 @@
         "add": "Server für dieses Repo hinzufügen",
         "files": "Aus den Dateien dieses Repos",
         "open": "{{file}} öffnen"
-      }
+      },
+      "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
     }
   },
   "menu": {
@@ -2202,13 +2203,14 @@
           "localBaseRefNotUpdatedDirty": "Nicht committete Änderungen in {{value0}}.",
           "localBaseRefNotUpdatedNotFastForward": "Nur lokale Commits auf {{value0}}.",
           "localBaseRefNotUpdatedError": "Git-Fehler.",
-          "localBaseRefHideDetails": "Details ausblenden",
-          "localBaseRefShowDetails": "Details",
           "localBaseRefShallowHistoryTitle": "Lokaler Branch {{value0}} nicht aktualisiert: flacher Klon",
           "localBaseRefShallowHistoryNamed": "„{{value0}}“ wurde aus {{value1}} erstellt und ist nicht betroffen. Orca konnte den lokalen Branch {{value2}} nicht zusätzlich aktualisieren, da dieser Klon nur den jüngsten Verlauf enthält. Git kann daher nicht bestätigen, dass der lokale Branch {{value2}} lediglich zurückliegt. Um dies für alle neuen Arbeitsbereiche zu beheben, einmalig Folgendes ausführen:",
           "localBaseRefShallowHistory": "Der Arbeitsbereich wurde aus {{value0}} erstellt und ist nicht betroffen. Orca konnte den lokalen Branch {{value1}} nicht zusätzlich aktualisieren, da dieser Klon nur den jüngsten Verlauf enthält. Git kann daher nicht bestätigen, dass der lokale Branch {{value1}} lediglich zurückliegt. Um dies für alle neuen Arbeitsbereiche zu beheben, einmalig Folgendes ausführen:",
           "localBaseRefRefreshTurnOff": "Prüfung deaktivieren",
           "localBaseRefRefreshTurnOffHelp": "Was „Prüfung deaktivieren“ bewirkt",
+          "localBaseRefRefreshDisable": "Deaktivieren",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} nicht mehr prüfen",
+          "localBaseRefClose": "Schließen",
           "localBaseRefRefreshTurnOffTooltip": "Deaktiviert die Orca-Einstellung {{value0}}. Orca aktualisiert den lokalen Branch {{value1}} beim Erstellen eines Arbeitsbereichs nicht mehr, und diese Warnung wird nicht mehr angezeigt. Neue Arbeitsbereiche sind davon nicht betroffen. Die Einstellung lässt sich jederzeit unter Einstellungen › Git wieder aktivieren.",
           "localBaseRefUnshallow": "Vollständigen Verlauf laden",
           "localBaseRefUnshallowFailed": "Für diesen Arbeitsbereich konnte kein Terminal geöffnet werden",
@@ -20179,8 +20181,7 @@
           "more": "Weitere Artefakt-Aktionen"
         },
         "ArtifactCollection": {
-          "loadMore": "Mehr laden",
-          "noMatches": "Keine Treffer"
+          "loadMore": "Mehr laden"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Alle mit diesem Link können das Artefakt ansehen",
@@ -22686,7 +22687,9 @@
           "needsAuthAfterSend": "Anmeldung nötig. Zum Anmelden hier eine Nachricht senden.",
           "pending": "Verbindung wird hergestellt…",
           "tools_one": "{{count}} Werkzeug",
-          "tools_other": "{{count}} Werkzeuge"
+          "tools_other": "{{count}} Werkzeuge",
+          "orcaRemoved": "Entfernt: Neustart bei der nächsten Nachricht",
+          "orcaChanged": "Geändert: Neustart bei der nächsten Nachricht"
         },
         "signIn": {
           "external": "Auf der geöffneten Seite abschließen",
@@ -22727,7 +22730,8 @@
           "user": "Benutzer",
           "plugin": "Plugin",
           "session": "Sitzung"
-        }
+        },
+        "stillFailing": "Nach dem erneuten Verbinden weiterhin fehlerhaft."
       }
     },
     "tab": {
@@ -25625,8 +25629,7 @@
         "failing": "fehlschlagend",
         "running": "ausstehend",
         "cancelled": "abgebrochen",
-        "passing": "erfolgreich",
-        "more": "+{{count}} weitere"
+        "passing": "erfolgreich"
       }
     },
     "attachments": {

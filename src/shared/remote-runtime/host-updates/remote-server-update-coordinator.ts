@@ -4,23 +4,22 @@ import {
   isPerfPrereleaseAppVersion,
   isPrereleaseAppVersion,
   isValidAppVersion
-} from '../../../../../shared/app-lifecycle/identity/app-version'
+} from '../../app-lifecycle/identity/app-version'
 import {
   REMOTE_SERVER_UPDATE_CAPABILITY,
   type RemoteServerUpdateInstallResult,
   type RemoteServerUpdaterSnapshot,
   type RemoteServerUpdateSupport
-} from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
+} from '../host-catalog/remote-server-update'
 
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment
-} from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
+} from '../host-catalog/runtime-environments'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
+import type { UpdateCheckOptions } from '../../updater/update-status-types'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
-import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
 export type RemoteServerUpdatePhase =
@@ -72,7 +71,12 @@ export type RemoteServerUpdateTransport = {
   install: (environmentId: string) => Promise<RemoteServerUpdateInstallResult>
   wait: (milliseconds: number) => Promise<void>
   now?: () => number
+  /** Words a failure for this client's UI; defaults to the raw error message. */
+  describeError?: (error: unknown) => string
 }
+
+const describeError = (transport: RemoteServerUpdateTransport, error: unknown): string =>
+  transport.describeError?.(error) ?? (error instanceof Error ? error.message : String(error))
 
 export type RemoteServerUpdateTiming = {
   operationTimeoutMs: number
@@ -192,7 +196,7 @@ export async function inspectRemoteServerUpdate(
         ...statusFields,
         phase: 'failed',
         targetVersion: null,
-        error: remoteServerUpdateErrorMessage(error)
+        error: describeError(transport, error)
       }
     }
   }
@@ -308,7 +312,7 @@ export async function runRemoteServerUpdate(
       ...next,
       phase: 'failed',
       progress: null,
-      error: remoteServerUpdateErrorMessage(error)
+      error: describeError(transport, error)
     }
     onProgress(next)
     return next

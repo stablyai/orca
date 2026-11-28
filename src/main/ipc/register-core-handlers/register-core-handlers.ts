@@ -43,7 +43,7 @@ import { registerLazyCodexAccountHandlers } from '../accounts/lazy-codex-account
 import { registerAgentHookHandlers } from '../agent-hooks/agent-hooks'
 import { getPtyIdForPaneKey } from '../pty/pane/key-state'
 import { registerLazyClaudeAccountHandlers } from '../accounts/lazy-claude-accounts-handlers'
-import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/updater-ipc-handlers'
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'

@@ -1249,7 +1249,8 @@
         "add": "このリポジトリにサーバーを追加",
         "files": "このリポジトリのファイルから",
         "open": "{{file}} を開く"
-      }
+      },
+      "unreadable": "保存されたサインインまたはキーをこのコンピューターで開けません"
     }
   },
   "menu": {
@@ -1526,8 +1527,6 @@
           "localBaseRefNotUpdatedDirty": "{{value0}} に未コミットの変更があります。",
           "localBaseRefNotUpdatedNotFastForward": "{{value0}} にローカルのみのコミットがあります。",
           "localBaseRefNotUpdatedError": "Git エラー。",
-          "localBaseRefHideDetails": "詳細を隠す",
-          "localBaseRefShowDetails": "詳細",
           "0216895fb5": "ブランチの削除に失敗しました",
           "5366d13eec": "ワークスペースを削除しました、ブランチは保持されました",
           "2e17f825d4": "ワークツリーを削除しました、ブランチは保持されました",
@@ -1563,6 +1562,9 @@
           "localBaseRefShallowHistory": "ワークスペースは {{value0}} から作成されており、影響はありません。このクローンには最近の履歴しかないため、Git はローカルの {{value1}} が単に遅れているだけかを確認できず、Orca はローカルの {{value1}} ブランチを更新できませんでした。すべての新しいワークスペースでこれを解決するには、次を一度実行してください:",
           "localBaseRefRefreshTurnOff": "チェックを無効化",
           "localBaseRefRefreshTurnOffHelp": "「チェックを無効化」の動作",
+          "localBaseRefRefreshDisable": "無効化",
+          "localBaseRefRefreshDisableTooltip": "{{value0}} のチェックを停止",
+          "localBaseRefClose": "閉じる",
           "localBaseRefRefreshTurnOffTooltip": "Orca の設定 {{value0}} をオフにします。ワークスペースの作成時に Orca はローカルの {{value1}} を更新しなくなり、この警告も表示されなくなります。新しいワークスペースには影響しません。設定 › Git からいつでも再度オンにできます。",
           "localBaseRefUnshallow": "完全な履歴を取得",
           "localBaseRefUnshallowFailed": "このワークスペースのターミナルを開けませんでした",
@@ -19336,8 +19338,7 @@
           "more": "その他のアーティファクト操作"
         },
         "ArtifactCollection": {
-          "loadMore": "さらにロードする",
-          "noMatches": "一致なし"
+          "loadMore": "さらにロードする"
         },
         "ArtifactDetailHeader": {
           "publicLink": "このリンクを知っている人は誰でも閲覧できます",
@@ -21769,7 +21770,9 @@
           "needsAuth": "サインインが必要",
           "needsAuthAfterSend": "サインインが必要です。メッセージを送信すると、ここでサインインできます。",
           "pending": "接続中…",
-          "tools_other": "{{count}} 個のツール"
+          "tools_other": "{{count}} 個のツール",
+          "orcaRemoved": "削除済み: 次のメッセージで再起動します",
+          "orcaChanged": "変更済み: 次のメッセージで再起動します"
         },
         "signIn": {
           "external": "開いたページで完了してください",
@@ -21809,7 +21812,8 @@
           "user": "ユーザー",
           "plugin": "プラグイン",
           "session": "セッション"
-        }
+        },
+        "stillFailing": "再接続後も失敗しています。"
       }
     },
     "tab": {
@@ -25312,8 +25316,7 @@
         "failing": "失敗",
         "running": "保留中",
         "cancelled": "キャンセル済み",
-        "passing": "合格",
-        "more": "ほか {{count}} 件"
+        "passing": "合格"
       }
     },
     "attachments": {

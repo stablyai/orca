@@ -49,7 +49,6 @@ import { mainProcessState as state } from '../main-process-state'
 import { logStartupMilestone } from '../diagnostics/startup-diagnostics'
 import { setupHeadlessServeAutoUpdater } from '../../updater/lifecycle/main-window-updater'
 import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
-import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
@@ -221,7 +220,7 @@ async function launchServeMode(
     onBeforeUpdateQuit: () =>
       preserveStateBeforeUpdateRestart({ codexRuntimeHome: state.core.codexRuntimeHome, store }),
     onBeforeUpdateQuitFailure: 'abort',
-    updateInstallMode: resolveUpdateInstallMode(true)
+    isServeMode: true
   })
 }
 

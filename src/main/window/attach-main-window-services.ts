@@ -21,7 +21,7 @@ import type {
   PrepareClaudeAuth,
   PrepareCodexSessionResume
 } from '../ipc/pty/host-env/types'
-import { registerDaemonManagementHandlers } from '../ipc/pty/ipc/pty-management'
+import { registerLazyDaemonManagementHandlers } from '../ipc/pty/ipc/lazy-pty-management-ipc'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import {
@@ -30,17 +30,12 @@ import {
 } from '../browser/site-settings/permissions/browser-media-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { hasWorkingUpdateAgents } from '../updater/lifecycle/update-agent-activity'
-import { reloadWithRendererCheckpoint } from './renderer-relays/native-unload-coordinator'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 import type {
   PreQuitCleanupFailureMode,
   UpdateInstallMode
 } from '../updater/lifecycle/updater-state'
-import { scheduleHistoryGc } from '../pty/history/terminal-history-gc'
-import { openCodeHookService, openCode2HookService } from '../opencode/status-hooks/hook-service'
 import { listLiveDaemonPtyIds } from '../daemon/providers/lifecycle/daemon-provider-state'
-import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
-import { getKnownWorktreeIdsForHistoryGc } from '../pty/history/history-gc-worktree-ids'
 import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
@@ -48,8 +43,6 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/worktrees/listing/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/installation/structured-agent-session-host-refusal'
-import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
 import { installPluginDesktopFrameServices } from '../plugins/panels/desktop-actions/plugin-frame-desktop-services'
@@ -80,6 +73,7 @@ export async function attachMainWindowServices(
     onBeforeUpdateQuit?: () => void | Promise<void>
     onBeforeUpdateQuitFailure?: PreQuitCleanupFailureMode
     updateInstallMode?: UpdateInstallMode
+    isServeMode?: boolean
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
 ): Promise<void> {
@@ -115,30 +109,41 @@ export async function attachMainWindowServices(
     }
   )
   // Register after PTY handlers so macOS reactivation reinstalls management IPC (docs/daemon-staleness-ux.md §Phase 1).
-  registerDaemonManagementHandlers()
+  registerLazyDaemonManagementHandlers()
   // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
-  scheduleHistoryGc(async () => {
-    // An unknown daemon inventory keeps every session folder but still runs the rest of the GC.
-    const liveSessionIds = await listLiveDaemonPtyIds().catch(() => null)
-    return {
-      ...getKnownWorktreeIdsForHistoryGc(store),
-      liveSessionIds: liveSessionIds && new Set(liveSessionIds)
-    }
+  void Promise.all([
+    import('../pty/history/terminal-history-gc'),
+    import('../pty/history/history-gc-worktree-ids')
+  ]).then(([{ scheduleHistoryGc }, { getKnownWorktreeIdsForHistoryGc }]) => {
+    scheduleHistoryGc(async () => {
+      // An unknown daemon inventory keeps every session folder but still runs the rest of the GC.
+      const liveSessionIds = await listLiveDaemonPtyIds().catch(() => null)
+      return {
+        ...getKnownWorktreeIdsForHistoryGc(store),
+        liveSessionIds: liveSessionIds && new Set(liveSessionIds)
+      }
+    })
   })
-  openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
-  openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
+  void import('../opencode/status-hooks/hook-service').then(
+    ({ openCodeHookService, openCode2HookService }) => {
+      openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
+      openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
+    }
+  )
   const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
+  const hydrateLocalPty = (): Promise<void> =>
+    import('../memory/hydrate-local-pty-registry').then(({ hydrateLocalPtyRegistryAtBoot }) =>
+      hydrateLocalPtyRegistryAtBoot(store)
+    )
   if (localPtyProviderStartupReady) {
-    void localPtyProviderStartupReady
-      .then(() => hydrateLocalPtyRegistryAtBoot(store))
-      .catch((error) => {
-        console.warn(
-          '[memory] Deferred pty-registry hydration skipped:',
-          error instanceof Error ? error.message : String(error)
-        )
-      })
+    void localPtyProviderStartupReady.then(hydrateLocalPty).catch((error) => {
+      console.warn(
+        '[memory] Deferred pty-registry hydration skipped:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
   } else {
-    void hydrateLocalPtyRegistryAtBoot(store)
+    void hydrateLocalPty()
   }
   const sshReady = registerSshHandlers(
     store,
@@ -154,6 +159,11 @@ export async function attachMainWindowServices(
     await sshReady
   }
   registerDroppedPathPreparation(mainWindow, async () => {
+    const [{ ensureStructuredAgentSessionHostUnlessRefused }, { getAgentSessionAttachmentStore }] =
+      await Promise.all([
+        import('../runtime/agent-session/installation/structured-agent-session-host-refusal'),
+        import('../native-chat/agent-session-attachments/agent-session-attachment-store-registry')
+      ])
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       runtime.ensureStructuredAgentSessionHost()
     )
@@ -272,7 +282,7 @@ function registerAppReloadHandler(
   activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
-  ipcMain.handle('app:reload', (event) => {
+  ipcMain.handle('app:reload', async (event) => {
     if (
       mainWindow.isDestroyed() ||
       mainWebContents.isDestroyed() ||
@@ -280,6 +290,8 @@ function registerAppReloadHandler(
     ) {
       return
     }
+    const { reloadWithRendererCheckpoint } =
+      await import('./renderer-relays/native-unload-coordinator')
     return reloadWithRendererCheckpoint(mainWebContents, false, onBeforeRendererReload)
   })
   mainWindow.on('closed', () => {

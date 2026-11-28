@@ -20,7 +20,7 @@ import { refuseRealtimeSchedulingUnderZeroRtTime } from './linux-runtime/linux-r
 import { recordProcessGoneCrash } from './main-window/main-window-lifecycle-flags'
 import { isGpuFallbackCrashCandidate } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import { mainProcessState as state } from './main-process-state'
-import { isNativeUpdateInstallUnderWay } from '../updater/updater-service'
+import { isNativeUpdateInstallUnderWay } from '../updater/updater-service-slot'
 import { initializeMainProcessObservers, startUsageBackend } from './main-process-observers'
 import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 import {
