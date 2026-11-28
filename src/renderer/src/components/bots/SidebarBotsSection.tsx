@@ -283,7 +283,6 @@ export function SidebarBotsSection({
               <>
                 <BotSidebarVirtualRows
                   entries={entries}
-                  listRef={listRef}
                   draggingId={drag.state.draggingGroupId}
                   revealId={pendingRenameKey ?? reveal.request?.target.entryKey}
                   renderEntry={(entry, index) => {

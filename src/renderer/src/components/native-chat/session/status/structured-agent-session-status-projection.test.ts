@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeStructuredChatTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { projectStatus } from './structured-agent-session-status-projection'
 import type { StructuredTab } from './structured-agent-session-tabs'
@@ -18,7 +18,7 @@ if (!isStructuredTab(chatTab)) {
   throw new Error('fixture is not a chat tab')
 }
 const tab: StructuredTab = chatTab
-const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+const paneKey = chatPaneKey(tab.entityId)
 const openedAt = Date.UTC(2026, 0, 15, 12, 0, 0)
 
 function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {

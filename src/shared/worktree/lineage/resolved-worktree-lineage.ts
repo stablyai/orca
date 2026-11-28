@@ -80,22 +80,42 @@ export function getConnectedWorktreeLineageIds(
   seedIds: readonly string[],
   lineageById: Readonly<Record<string, WorktreeLineage>>
 ): Set<string> {
-  const childrenByParentId = new Map<string, string[]>()
-  for (const [childId, lineage] of Object.entries(lineageById)) {
-    const children = childrenByParentId.get(lineage.parentWorktreeId) ?? []
-    children.push(childId)
-    childrenByParentId.set(lineage.parentWorktreeId, children)
-  }
   const connected = new Set(seedIds)
+  if (connected.size === 0) {
+    return connected
+  }
+  let childrenByParentId: Map<string, string[]> | undefined
+  for (const childId in lineageById) {
+    if (!Object.hasOwn(lineageById, childId)) {
+      continue
+    }
+    const parentId = lineageById[childId].parentWorktreeId
+    childrenByParentId ??= new Map()
+    const children = childrenByParentId.get(parentId)
+    if (children) {
+      children.push(childId)
+    } else {
+      childrenByParentId.set(parentId, [childId])
+    }
+  }
+  if (!childrenByParentId) {
+    return connected
+  }
   const pending = [...connected]
-  for (const id of pending) {
-    for (const adjacent of [
-      lineageById[id]?.parentWorktreeId,
-      ...(childrenByParentId.get(id) ?? [])
-    ]) {
-      if (adjacent && !connected.has(adjacent)) {
-        connected.add(adjacent)
-        pending.push(adjacent)
+  for (let index = 0; index < pending.length; index += 1) {
+    const id = pending[index]
+    const parentId = Object.hasOwn(lineageById, id) ? lineageById[id].parentWorktreeId : undefined
+    if (parentId && !connected.has(parentId)) {
+      connected.add(parentId)
+      pending.push(parentId)
+    }
+    const children = childrenByParentId.get(id)
+    if (children) {
+      for (const childId of children) {
+        if (childId && !connected.has(childId)) {
+          connected.add(childId)
+          pending.push(childId)
+        }
       }
     }
   }
@@ -107,42 +127,91 @@ export function projectResolvedWorktreeLineage<T extends Worktree>(
   lineageById: Readonly<Record<string, WorktreeLineage>>,
   knownPeers: readonly Worktree[] = []
 ): WorktreeWithResolvedLineage<T>[] {
-  const allWorktrees: readonly Worktree[] = [...worktrees, ...knownPeers]
-  const indicesById = new Map<string, number[]>()
-  allWorktrees.forEach((worktree, index) => {
-    const indices = indicesById.get(worktree.id) ?? []
-    indices.push(index)
-    indicesById.set(worktree.id, indices)
-  })
+  if (worktrees.length === 0) {
+    return []
+  }
+  const allWorktrees: readonly Worktree[] =
+    knownPeers.length === 0 ? worktrees : [...worktrees, ...knownPeers]
+  let hasAnyLineage = false
+  for (const row of allWorktrees) {
+    if (Object.hasOwn(lineageById, row.id)) {
+      hasAnyLineage = true
+      break
+    }
+  }
+  if (!hasAnyLineage) {
+    return worktrees.map((worktree) => ({
+      ...worktree,
+      parentWorktreeId: null,
+      childWorktreeIds: [],
+      lineage: null
+    }))
+  }
+  const indicesById = new Map<string, number | number[]>()
+  for (let index = 0; index < allWorktrees.length; index += 1) {
+    const id = allWorktrees[index].id
+    const existing = indicesById.get(id)
+    if (existing === undefined) {
+      indicesById.set(id, index)
+    } else if (typeof existing === 'number') {
+      indicesById.set(id, [existing, index])
+    } else {
+      existing.push(index)
+    }
+  }
   const validLineageByChildIndex = new Map<number, WorktreeLineage>()
   const parentIndexByChildIndex = new Map<number, number>()
   const childIdsByParentIndex = new Map<number, string[]>()
 
-  allWorktrees.forEach((child, childIndex) => {
-    const lineage = lineageById[child.id]
-    if (!lineage) {
-      return
+  for (let childIndex = 0; childIndex < allWorktrees.length; childIndex += 1) {
+    const child = allWorktrees[childIndex]
+    if (!Object.hasOwn(lineageById, child.id)) {
+      continue
     }
-    const parentIndices = (indicesById.get(lineage.parentWorktreeId) ?? []).filter((index) =>
-      isValidResolvedWorktreeLineageEdge(child, allWorktrees[index], lineage)
-    )
-    // A locator can exist on several hosts. An ambiguous parent must not be selected by row order.
-    if (parentIndices.length !== 1) {
-      return
+    const lineage = lineageById[child.id]
+    const candidates = indicesById.get(lineage.parentWorktreeId)
+    if (candidates === undefined) {
+      continue
+    }
+    let soleParentIndex = -1
+    if (typeof candidates === 'number') {
+      if (isValidResolvedWorktreeLineageEdge(child, allWorktrees[candidates], lineage)) {
+        soleParentIndex = candidates
+      }
+    } else {
+      // A locator can exist on several hosts. An ambiguous parent must not be selected by row order.
+      let matchCount = 0
+      for (const candidateIndex of candidates) {
+        if (isValidResolvedWorktreeLineageEdge(child, allWorktrees[candidateIndex], lineage)) {
+          soleParentIndex = candidateIndex
+          matchCount += 1
+          if (matchCount > 1) {
+            soleParentIndex = -1
+            break
+          }
+        }
+      }
+    }
+    if (soleParentIndex === -1) {
+      continue
     }
     validLineageByChildIndex.set(childIndex, lineage)
-    parentIndexByChildIndex.set(childIndex, parentIndices[0])
-  })
-
-  for (const index of getCyclicLineageChildKeys(parentIndexByChildIndex)) {
-    validLineageByChildIndex.delete(index)
-    parentIndexByChildIndex.delete(index)
+    parentIndexByChildIndex.set(childIndex, soleParentIndex)
   }
 
-  for (const [childIndex, parentIndex] of parentIndexByChildIndex) {
-    const children = childIdsByParentIndex.get(parentIndex) ?? []
-    children.push(allWorktrees[childIndex].id)
-    childIdsByParentIndex.set(parentIndex, children)
+  if (parentIndexByChildIndex.size > 0) {
+    for (const index of getCyclicLineageChildKeys(parentIndexByChildIndex)) {
+      validLineageByChildIndex.delete(index)
+      parentIndexByChildIndex.delete(index)
+    }
+    for (const [childIndex, parentIndex] of parentIndexByChildIndex) {
+      const children = childIdsByParentIndex.get(parentIndex)
+      if (children) {
+        children.push(allWorktrees[childIndex].id)
+      } else {
+        childIdsByParentIndex.set(parentIndex, [allWorktrees[childIndex].id])
+      }
+    }
   }
 
   return worktrees.map((worktree, index) => {

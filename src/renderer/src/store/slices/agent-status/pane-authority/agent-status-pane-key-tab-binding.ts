@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { chatPaneAddressTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusEntry,
   ParsedAgentStatusPayload
@@ -70,6 +71,10 @@ export function openNonTerminalTabIds(
   for (const tab of state.unifiedTabsByWorktree[worktreeId] ?? []) {
     if (tab.contentType !== 'terminal') {
       tabIds.add(tab.id)
+      // A chat's pane keys name its conversation address, not its tab.
+      if (tab.contentType === 'agent-session') {
+        tabIds.add(chatPaneAddressTabId(tab.entityId))
+      }
     }
   }
   return tabIds

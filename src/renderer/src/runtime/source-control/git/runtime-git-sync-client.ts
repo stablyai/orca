@@ -3,6 +3,7 @@ import type {
   GitForkSyncResult
 } from '../../../../../shared/git/remotes/git-fork-sync'
 import type {
+  GitAbortOperationRequest,
   GitUpstreamStatus,
   RebaseFromBaseResult
 } from '../../../../../shared/git/status/git-status-types'
@@ -14,36 +15,51 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
-export async function abortRuntimeGitMerge(context: RuntimeGitContext): Promise<void> {
+function expectedRunIdentityParams(request: GitAbortOperationRequest) {
+  return request.expectedRunIdentity ? { expectedRunIdentity: request.expectedRunIdentity } : {}
+}
+
+export async function abortRuntimeGitMerge(
+  context: RuntimeGitContext,
+  request: GitAbortOperationRequest = {}
+): Promise<void> {
   const target = context.target
+  const expected = expectedRunIdentityParams(request)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.abortMerge({
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...expected
     })
     return
   }
+  // Older servers drop the unknown field and abort as before.
   await callRuntimeRpc(
     target,
     'git.abortMerge',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...expected },
     { timeoutMs: 30_000 }
   )
 }
 
-export async function abortRuntimeGitRebase(context: RuntimeGitContext): Promise<void> {
+export async function abortRuntimeGitRebase(
+  context: RuntimeGitContext,
+  request: GitAbortOperationRequest = {}
+): Promise<void> {
   const target = context.target
+  const expected = expectedRunIdentityParams(request)
   if (target.kind === 'local' || !context.worktreeId) {
     await window.api.git.abortRebase({
       worktreePath: resolveLocalWorktreePath(context),
-      connectionId: context.connectionId
+      connectionId: context.connectionId,
+      ...expected
     })
     return
   }
   await callRuntimeRpc(
     target,
     'git.abortRebase',
-    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), ...expected },
     { timeoutMs: 30_000 }
   )
 }

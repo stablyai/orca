@@ -1,7 +1,8 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import { useCallback, useMemo, useState, type RefObject } from 'react'
+import { useCallback, useMemo, type RefObject } from 'react'
+import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
@@ -76,7 +77,8 @@ export function useNativeChatComposerSubmit(args: {
   const { agent, orcaCommands, setCaret, setDraft, structuredTransport, submitEmpty, textareaRef } =
     args
   const threadGoal = structuredTransport?.threadGoal
-  const [entered, setEntered] = useState(false)
+  // Goal entry is part of the draft: it survives the chat view being released.
+  const [entered, setEntered] = useNativeChatViewState(`goal-entry:${draftScopeKey}`, false)
   const active = entered && structuredTransport !== undefined
 
   const interceptPick = useCallback(
@@ -125,7 +127,17 @@ export function useNativeChatComposerSubmit(args: {
           setEntered(true)
         }
       },
-    [agent, caret, draft, setCaret, setDraft, structuredTransport, textareaRef, threadGoal]
+    [
+      agent,
+      caret,
+      draft,
+      setCaret,
+      setDraft,
+      setEntered,
+      structuredTransport,
+      textareaRef,
+      threadGoal
+    ]
   )
 
   // Native goals keep the ordinary sender's paste admission and clearing; host goals clear only an unchanged draft.
@@ -156,9 +168,9 @@ export function useNativeChatComposerSubmit(args: {
         return
       }
       if (!threadGoal) {
-        const isCurrent = structuredTransport.capturePresentation()
         void sendStructured(`/goal ${objective}`, [], intent).then((accepted) => {
-          if (accepted && isCurrent() && readNativeChatComposerDraft(draftScopeKey).text === '') {
+          // Goal entry belongs to the draft, not the view: clear it even if the view was released meanwhile.
+          if (accepted && readNativeChatComposerDraft(draftScopeKey).text === '') {
             setEntered(false)
           }
         })
@@ -173,10 +185,10 @@ export function useNativeChatComposerSubmit(args: {
         if (!clearNativeChatComposerDraftIfUnchanged(draftScopeKey, submitted)) {
           return
         }
+        setEntered(false)
         if (isCurrent()) {
           structuredTransport.onError(null)
           setCaret(0)
-          setEntered(false)
         }
       })
     },
@@ -186,6 +198,7 @@ export function useNativeChatComposerSubmit(args: {
       imageAttachments.length,
       sendStructured,
       setCaret,
+      setEntered,
       structuredTransport,
       threadGoal
     ]
@@ -243,13 +256,14 @@ export function useNativeChatComposerSubmit(args: {
       sendStructured,
       setCaret,
       setDraft,
+      setEntered,
       setGoal,
       structuredTransport,
       threadGoal
     ]
   )
 
-  const exit = useCallback(() => setEntered(false), [])
+  const exit = useCallback(() => setEntered(false), [setEntered])
   const goalMode = useMemo(() => ({ active, exit, interceptPick }), [active, exit, interceptPick])
   const commandText = structuredTransport
     ? resolveNativeChatPastedText(draftScopeKey, draft)

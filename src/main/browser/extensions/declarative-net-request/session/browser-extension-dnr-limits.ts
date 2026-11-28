@@ -58,6 +58,8 @@ export function isSafeDnrRule(rule: Pick<DnrRule, 'action'>): boolean {
 
 export type DnrRuleScope = 'dynamic' | 'session'
 
+export class DnrApiError extends Error {}
+
 /** The first limit enabled static rulesets break (updateEnabledRulesets), else null. */
 export function dnrStaticRuleLimitError(
   rulesets: readonly { ruleCount: number; regexRuleCount: number }[],

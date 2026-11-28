@@ -1,9 +1,9 @@
 import { join } from 'node:path'
 import { PluginImageCache } from '../../plugins/media/plugin-image-cache'
-import { installPluginImageProtocolHandler } from '../../plugins/media/plugin-image-protocol'
+import { PLUGIN_IMAGE_SCHEME } from '../../../shared/plugins/images/plugin-image-url'
 import { getPluginDesktopFrameServices } from '../../plugins/panels/desktop-actions/plugin-frame-desktop-services'
 import { pluginHostVersion } from '../../../shared/plugins/installation/plugin-host-version'
-import { app, BrowserWindow, net } from 'electron'
+import { app, BrowserWindow, net, protocol } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../../plugins/plugin-service'
 import { PluginKillListService } from '../../plugins/catalog/plugin-kill-list-service'
@@ -195,11 +195,19 @@ export async function initializeMainProcessPlugins(core: DesktopCore, store: Sto
         .catch((error) => console.warn('[plugins] auto-update failed:', error))
     }
   }
-  installPluginImageProtocolHandler({
-    cache: pluginImageCache,
-    findValidPlugin: (pluginKey) => core.pluginService?.findValidPlugin(pluginKey) ?? null,
-    findApprovedPlugin: (pluginKey) =>
-      core.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
+  let pluginImageHandler: ((request: Request) => Promise<Response>) | null = null
+  protocol.handle(PLUGIN_IMAGE_SCHEME, async (request) => {
+    if (!pluginImageHandler) {
+      const { createPluginImageRequestHandler } =
+        await import('../../plugins/media/plugin-image-protocol')
+      pluginImageHandler = createPluginImageRequestHandler({
+        cache: pluginImageCache,
+        findValidPlugin: (pluginKey) => core.pluginService?.findValidPlugin(pluginKey) ?? null,
+        findApprovedPlugin: (pluginKey) =>
+          core.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
+      })
+    }
+    return pluginImageHandler(request)
   })
   const requestBundledPluginBootstrap = createLazyBundledPluginBootstrapRequester(
     core,

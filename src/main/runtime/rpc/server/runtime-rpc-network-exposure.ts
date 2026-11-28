@@ -9,6 +9,11 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     return this.pinnedBindHost ?? WS_BIND_HOST_ALL_INTERFACES
   }
 
+  // The host the listener answers on right now, before any widening; null until it starts.
+  getBoundWebSocketHost(): string | null {
+    return this.wsBoundHost
+  }
+
   // LAN opt-in rebinds loopback and disconnects local clients; reuse their already-issued port so all endpoints can reconnect (STA-2370).
   async ensureNetworkExposure(): Promise<void> {
     // A pinned bind is the operator's exposure choice: never widen it; offers advertise only what it answers.

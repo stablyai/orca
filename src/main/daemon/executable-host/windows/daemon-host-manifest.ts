@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -196,6 +196,10 @@ export function executeManifest(ops: CopyOp[], stagingRoot: string): void {
     const dest = destPath(stagingRoot, op.destRel)
     mkdirSync(dirname(dest), { recursive: true })
     const { filter } = op
+    if (filter && op.kind === 'dir' && process.platform === 'win32') {
+      copyFilteredTreeSync(op.sourcePath, dest, filter)
+      continue
+    }
     // Dereference links so the mirror survives removal of the install directory.
     cpSync(op.sourcePath, dest, {
       recursive: op.kind === 'dir',
@@ -203,5 +207,25 @@ export function executeManifest(ops: CopyOp[], stagingRoot: string): void {
       force: true,
       ...(filter ? { filter: (src: string) => filter(src) } : {})
     })
+  }
+}
+
+// cpSync with a filter walks folders with opendirSync, which can crash on Windows when an open
+// fails (#50997). Same filter, dereferenced links and overwrite; #51222 replaces this walk.
+function copyFilteredTreeSync(
+  source: string,
+  destination: string,
+  filter: (sourcePath: string) => boolean
+): void {
+  if (!filter(source)) {
+    return
+  }
+  if (!statSync(source).isDirectory()) {
+    copyFileSync(source, destination)
+    return
+  }
+  mkdirSync(destination, { recursive: true })
+  for (const name of readdirSync(source)) {
+    copyFilteredTreeSync(join(source, name), join(destination, name), filter)
   }
 }

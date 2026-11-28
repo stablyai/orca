@@ -62,7 +62,8 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
     !isGithubProjectSearch &&
     !(connState === 'connected' && model.error) &&
     model.items.length > 0
-  return Object.assign(model, {
+  return {
+    ...model,
     colors,
     composerInputStyles,
     groupFieldStyles,
@@ -74,7 +75,7 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
     isGithubProjectSearch,
     loading,
     showsKeptRows
-  })
+  }
 }
 
 export type ConnectionPresentationModel = ReturnType<typeof useMobileTasksConnectionPresentation>

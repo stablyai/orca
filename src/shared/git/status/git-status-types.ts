@@ -103,6 +103,9 @@ export type GitStatusResult = {
   entries: GitStatusEntry[]
   conflictOperation: GitConflictOperation
   rebaseIndexObservation?: string
+  // Which paused run this is (see readOperationRunIdentity). Current hosts set it whenever an
+  // operation is paused: a string, or null when it can't be read reliably. Absent from older hosts.
+  operationRunIdentity?: string | null
   head?: string
   branch?: string
   // Reuse porcelain v2 upstream/ahead/behind metadata to avoid two extra refresh subprocesses.
@@ -138,3 +141,9 @@ export type GitUpstreamStatus = {
 }
 
 export type GitBranchChangeStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied'
+
+/** An abort refuses unless the paused run is still the one the user armed Abort against. */
+export type GitAbortOperationRequest = { expectedRunIdentity?: string }
+
+/** Prefix of the error an abort throws when the paused run changed after it was confirmed. */
+export const OPERATION_RUN_CHANGED_ERROR = 'ORCA_OPERATION_RUN_CHANGED'

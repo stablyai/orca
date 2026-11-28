@@ -255,7 +255,8 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       })),
     [githubProjectViews, pendingGitHubProjectViewSelection, t]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     colorScheme,
     createTargetOptions,
     selectedCreateTarget,
@@ -279,7 +280,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     githubProjectFieldsLabel,
     githubProjectSortOptions,
     githubProjectViewOptions
-  })
+  }
 }
 
 export type PickerProjectionModel = ReturnType<typeof useMobileTasksPickerProjection>

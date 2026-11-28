@@ -211,6 +211,7 @@ export class RuntimeAccountController {
       movesRunningSessions?: true
       runningSessions?: ClaudeAccountSwitchRunningSessions
       answersAsk?: true
+      answersAskId?: string
     } = {}
   ): Promise<ClaudeAccountSelectResult> {
     const { claudeAccounts } = this.requireServices()
@@ -229,7 +230,8 @@ export class RuntimeAccountController {
       before: { state: before, accountId: getSelectedClaudeAccountIdInState(before, target) },
       after: { state: after, accountId: getSelectedClaudeAccountIdInState(after, target) },
       ...(options.runningSessions ? { runningSessions: options.runningSessions } : {}),
-      ...(options.answersAsk ? { answersAskFor: accountId } : {})
+      ...(options.answersAsk ? { answersAskFor: accountId } : {}),
+      ...(options.answersAsk && options.answersAskId ? { answersAskId: options.answersAskId } : {})
     })
     return runningSessions ? { ...after, runningSessions } : after
   }
