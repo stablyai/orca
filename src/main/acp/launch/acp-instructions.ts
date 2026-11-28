@@ -232,6 +232,13 @@ export const deliverCodeBuddyInstructions = givenEachStart(async ({ text, cwd })
   return {}
 })
 
+// DSH rebuilds its system prompt from the folder's AGENTS.md and AGENTS.local.md on every start,
+// reopens included (checked live on 0.2.2-rc.5, `--profile acp`), so each launch rewrites the file.
+export const deliverDshInstructions = givenEachStart(async ({ text, cwd }) => {
+  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)
+  return {}
+})
+
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
 export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, env }) => {

@@ -134,7 +134,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   codebuddy: {
     skillPrefix: '/',
     skillSourceOwner: 'codebuddy'
-  }
+  },
+  // Orca knows no skill folders of DSH's; its ACP sessions report what they load as commands.
+  dsh: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots unless the profile sets
