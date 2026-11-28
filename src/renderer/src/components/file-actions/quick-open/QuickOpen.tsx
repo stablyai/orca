@@ -16,7 +16,7 @@ import {
 } from '@/components/file-actions/file-path-cursor-tooltip'
 import {
   parseQuickOpenQueryTarget,
-  isQuickOpenAbsolutePath
+  isQuickOpenDirectPath
 } from '../../../../../shared/quick-open/quick-open-query-target'
 import { openQuickOpenFile } from './quick-open-file-navigation'
 import { rankQuickOpenFilesWithHistory } from './quick-open-history-ranking'
@@ -67,14 +67,14 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const parsedTarget = useMemo(() => parseQuickOpenQueryTarget(deferredQuery), [deferredQuery])
-  const absoluteQuery = isQuickOpenAbsolutePath(parsedTarget.pathQuery)
+  const directPathQuery = isQuickOpenDirectPath(parsedTarget.pathQuery)
   const [openError, setOpenError] = useState<string | null>(null)
   const { opening, invalidate, begin } = useQuickOpenInteraction(activeWorktreeId)
   const [selectedPath, setSelectedPath] = useState('')
   const worktreePath = activeWorktree?.path ?? null
   const history = useQuickOpenHistory(activeWorktreeId, worktreePath)
   const { files, loading, loadError, truncated, recentError } = useRuntimeFileListForWorktree({
-    enabled: visible && !absoluteQuery,
+    enabled: visible && !directPathQuery,
     worktreeId: activeWorktreeId,
     query: parsedTarget.pathQuery,
     recentPaths: history
@@ -98,11 +98,11 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
     [files, deferredQuery, parsedTarget]
   )
   const filtered = useMemo(() => {
-    if (absoluteQuery) {
+    if (directPathQuery) {
       return [{ path: parsedTarget.pathQuery, score: 0 }]
     }
     return rankQuickOpenFilesWithHistory(effectiveTarget.pathQuery, files, history)
-  }, [absoluteQuery, parsedTarget.pathQuery, effectiveTarget.pathQuery, files, history])
+  }, [directPathQuery, parsedTarget.pathQuery, effectiveTarget.pathQuery, files, history])
 
   const handleSelect = useCallback(
     async (selectedPath: string) => {
@@ -200,11 +200,11 @@ function QuickOpenContent({ visible }: { visible: boolean }): React.JSX.Element 
             {openError}
           </div>
         ) : null}
-        {loading && !absoluteQuery ? (
+        {loading && !directPathQuery ? (
           <div className="py-6 text-center text-sm text-muted-foreground">
             {t('auto.components.QuickOpen.722a21e1a8', 'Loading files...')}
           </div>
-        ) : loadError && !absoluteQuery ? (
+        ) : loadError && !directPathQuery ? (
           (() => {
             const guidance = parseQuickOpenInstallRgGuidance(loadError)
             return guidance ? (

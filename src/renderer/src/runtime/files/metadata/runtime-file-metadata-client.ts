@@ -34,7 +34,7 @@ export async function statRuntimePath(
   access?: LocalFileAccess,
   /** A user act; may start a stopped WSL distro. Local stats only. */
   options: { wakeWslDistro?: boolean } = {}
-): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
+): Promise<{ size: number; isDirectory: boolean; mtime: number; resolvedPath?: string }> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)

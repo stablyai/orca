@@ -31,3 +31,15 @@ export function isQuickOpenAbsolutePath(query: string): boolean {
     (query.startsWith('/') || isWindowsAbsolutePathLike(query))
   )
 }
+
+export function isQuickOpenHomePath(query: string): boolean {
+  return (
+    !isQuickOpenQueryTooLarge(query) &&
+    !query.includes('\0') &&
+    (query.startsWith('~/') || query.startsWith('~\\'))
+  )
+}
+
+export function isQuickOpenDirectPath(query: string): boolean {
+  return isQuickOpenAbsolutePath(query) || isQuickOpenHomePath(query)
+}

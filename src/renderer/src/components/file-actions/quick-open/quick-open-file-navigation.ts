@@ -10,9 +10,13 @@ import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { RuntimeTerminalPathResolution } from '../../../../../shared/terminal/runtime-terminal-file-path'
-import { resolveWslRepoWorktreeBasePath } from '../../../../../shared/file-access/wsl-paths'
 import {
-  isQuickOpenAbsolutePath,
+  parseWslUncPath,
+  resolveWslRepoWorktreeBasePath
+} from '../../../../../shared/file-access/wsl-paths'
+import {
+  isQuickOpenDirectPath,
+  isQuickOpenHomePath,
   type QuickOpenQueryTarget
 } from '../../../../../shared/quick-open/quick-open-query-target'
 import { hostAbsentRefusal } from '../../terminal-pane/host-files/host-file-refusal'
@@ -49,8 +53,17 @@ export async function openQuickOpenFile(
     window.api.platform?.get().platform === 'win32'
       ? resolveWslRepoWorktreeBasePath(root, path)
       : path
-  const isAbsolute = isQuickOpenAbsolutePath(selectedPath)
-  let filePath = isAbsolute ? resolvePastedPath(selectedPath) : joinPath(root, selectedPath)
+  const isHome = isQuickOpenHomePath(selectedPath)
+  const isDirect = isQuickOpenDirectPath(selectedPath)
+  if (isHome && target.kind !== 'environment' && (route.connectionId || parseWslUncPath(root))) {
+    throw new Error(
+      translate(
+        'auto.components.QuickOpen.homeRelativeHostUnsupported',
+        'Home-relative paths cannot be expanded for this workspace host. Enter the full path instead.'
+      )
+    )
+  }
+  let filePath = isDirect ? resolvePastedPath(selectedPath) : joinPath(root, selectedPath)
   let relativePath = getRelativePathInsideRoot(filePath, root) ?? filePath
   const context = { ...route, worktreeId, worktreePath: root }
   const literalQuery = rawQuery?.trim().replace(/\\/g, '/')
@@ -64,7 +77,7 @@ export async function openQuickOpenFile(
         rankQuickOpenFiles(literalQuery, prepareQuickOpenFiles([normalizedSelection]), 1).length >
           0))
   )
-  if (isAbsolute && rawQuery && rawQuery.trim() !== selectedPath && target.kind !== 'environment') {
+  if (isDirect && rawQuery && rawQuery.trim() !== selectedPath && target.kind !== 'environment') {
     try {
       const literalPath = resolvePastedPath(rawQuery.trim())
       const literalStats = await statUserOpenedPath(context, literalPath)
@@ -72,7 +85,7 @@ export async function openQuickOpenFile(
       if (literalStats.isDirectory) {
         throw new Error(chooseFileNotDirectoryMessage())
       }
-      filePath = literalPath
+      filePath = literalStats.resolvedPath ?? literalPath
       relativePath = literalStats.escapesWorktree
         ? filePath
         : (getRelativePathInsideRoot(filePath, root) ?? filePath)
@@ -85,7 +98,7 @@ export async function openQuickOpenFile(
   }
   let terminalArtifactGrantId: string | undefined
   let grantReadOnly = false
-  if (target.kind === 'environment' && isAbsolute) {
+  if (target.kind === 'environment' && isDirect) {
     let literal: RuntimeTerminalPathResolution | undefined
     if (rawQuery && rawQuery.trim() !== selectedPath) {
       literal = await callRuntimeRpc<RuntimeTerminalPathResolution>(
@@ -139,7 +152,12 @@ export async function openQuickOpenFile(
   } else {
     const stats = await statUserOpenedPath(context, filePath)
     assertCurrent()
-    if (stats.escapesWorktree) {
+    if (stats.resolvedPath) {
+      filePath = stats.resolvedPath
+      relativePath = stats.escapesWorktree
+        ? filePath
+        : (getRelativePathInsideRoot(filePath, root) ?? filePath)
+    } else if (stats.escapesWorktree) {
       relativePath = filePath
     }
     if (stats.isDirectory) {
