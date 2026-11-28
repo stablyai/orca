@@ -418,7 +418,7 @@
 3 src/main/daemon/launch/daemon-launch-paths.ts
 1 src/main/daemon/launch/daemon-launched-child-spawn.ts
 8 src/main/daemon/launch/daemon-launched-child.ts
-20 src/main/daemon/launch/daemon-out-of-process-launcher.ts
+19 src/main/daemon/launch/daemon-out-of-process-launcher.ts
 5 src/main/daemon/launch/daemon-protocol-cleanup.ts
 13 src/main/daemon/launch/daemon-replacement-preflight.ts
 6 src/main/daemon/launch/daemon-spawner.ts
@@ -434,7 +434,7 @@
 1 src/main/daemon/providers/adapter/daemon-pty-runtime-state.ts
 1 src/main/daemon/providers/adapter/daemon-pty-session-control.ts
 5 src/main/daemon/providers/adapter/daemon-pty-session-spawn.ts
-17 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
+16 src/main/daemon/providers/lifecycle/daemon-provider-init.ts
 7 src/main/daemon/providers/lifecycle/daemon-provider-restart.ts
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts

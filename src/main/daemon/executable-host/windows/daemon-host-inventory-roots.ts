@@ -141,3 +141,11 @@ export async function inventoryRootsAsync(
   )
   return [...plan.roots, ...plan.optional.filter((_, index) => present[index])]
 }
+
+/** Matches copy destRels that fall under a fingerprint root, so a fresh copy can fingerprint what it wrote. */
+export function inventoryCodeMatcher(
+  roots: readonly CodeFileSource[]
+): (destRel: string) => boolean {
+  const rels = roots.map((root) => root.destRel)
+  return (destRel) => rels.some((rel) => destRel === rel || destRel.startsWith(`${rel}/`))
+}

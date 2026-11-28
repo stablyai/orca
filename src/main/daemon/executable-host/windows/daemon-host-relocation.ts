@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readdir } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { renameWithWindowsRetry } from '../../../filesystem/windows-rename-retry'
@@ -21,16 +21,18 @@ import {
   daemonHostBuildInventoryMatches,
   daemonHostBuildInventoryMatchesAsync,
   daemonHostBuildRuntimeMatches,
+  inventoryFromFiles,
   readDaemonHostBuildMarker,
   writeDaemonHostBuildMarker,
+  type DaemonHostBuildInventory,
   type DaemonHostBuildMarker
 } from './daemon-host-build-inventory'
 import {
-  daemonHostStagingName,
-  reclaimAbandonedDaemonHostStaging,
-  reclaimUnownedDaemonHostDir
-} from './daemon-host-reclaim'
-import type { PinnedDaemonVersionsEvidence } from './daemon-host-pinned-versions'
+  inventoryCodeMatcher,
+  inventoryRootsAsync,
+  type CodeFileSource
+} from './daemon-host-inventory-roots'
+import { daemonHostStagingName } from './daemon-host-reclaim'
 
 // Copy the Electron runtime outside NSIS's install-directory kill zone; failures fall back to the install runtime.
 
@@ -55,7 +57,7 @@ function resolveEntrySourcePath(resourcesPath: string, observedEntryPath?: strin
 }
 
 /** orcad is packaged plain Node; require an Electron asar root before attempting relocation. */
-function isPackagedElectronWin32(): boolean {
+export function isPackagedElectronWin32(): boolean {
   const environment = getAppEnvironment()
   return (
     process.platform === 'win32' &&
@@ -235,26 +237,45 @@ export function materializeRelocatedDaemonHost(): Promise<RelocatedDaemonHost | 
   return inFlightMaterialization
 }
 
+// Any published build means the source fingerprint is needed to pick or reject it.
+async function hasBuildCandidates(): Promise<boolean> {
+  const versionRoot = join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
+  const names = await readdir(versionRoot).catch(() => [])
+  return names.some((name) => name.startsWith('build-'))
+}
+
 async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
   }
-  const inventory = await collectDaemonHostBuildInventoryAsync(sources)
+  const roots = await inventoryRootsAsync(sources)
+  // With no build to compare against, skip hashing sources up front; the copy fingerprints its own bytes.
+  if (roots && !(await hasBuildCandidates())) {
+    return publishRelocatedHost(sources, roots, null)
+  }
+  const inventory = roots ? await collectDaemonHostBuildInventoryAsync(sources, roots) : null
   const existing = await findRelocatedDaemonHostAsync(
     sources,
     currentBuildFingerprint(sources, inventory?.fingerprint ?? null)
   )
-  if (existing) {
+  if (existing || !roots || !inventory) {
     return existing
   }
+  return publishRelocatedHost(sources, roots, inventory)
+}
+
+async function publishRelocatedHost(
+  sources: DaemonHostSources,
+  roots: CodeFileSource[],
+  inventory: DaemonHostBuildInventory | null
+): Promise<RelocatedDaemonHost | null> {
   // Reject incomplete sources before copying a runtime the mirror check would refuse anyway.
-  if (!inventory || missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
+  if (missingProcessTreeFiles(sources.windowsProcessTreeDir)) {
     return null
   }
   const version = getAppEnvironment().getVersion()
-  const root = getDaemonHostRootDir()
-  const versionRoot = join(root, version)
+  const versionRoot = join(getDaemonHostRootDir(), version)
   const nonce = randomBytes(6).toString('hex')
   // Keep the unique name short for conpty; the marker carries the fingerprint.
   const dest = join(versionRoot, `build-${nonce}`)
@@ -263,14 +284,22 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
     return null
   }
   const staging = join(versionRoot, daemonHostStagingName(process.pid, nonce))
+  let published: DaemonHostBuildInventory
   try {
     await mkdir(versionRoot, { recursive: true })
-    await executeManifest(
-      buildDaemonHostManifest(sources),
-      staging,
-      new Map(inventory.files.map((file) => [file.path, file.sha256]))
-    )
-    await writeDaemonHostBuildMarker(staging, version, inventory)
+    const hashes = await executeManifest(buildDaemonHostManifest(sources), staging, {
+      isCode: inventoryCodeMatcher(roots),
+      ...(inventory
+        ? { expected: new Map(inventory.files.map((file) => [file.path, file.sha256])) }
+        : {})
+    })
+    published =
+      inventory ??
+      inventoryFromFiles(
+        sources,
+        [...hashes].map(([path, sha256]) => ({ path, sha256 }))
+      )
+    await writeDaemonHostBuildMarker(staging, version, published)
     // Publish a new immutable build (a live daemon may use an older one); retry Defender's brief holds.
     await renameWithWindowsRetry(staging, dest)
   } catch {
@@ -279,42 +308,6 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
     })
     return null
   }
-  return findRelocatedDaemonHostAsync(sources, inventory.fingerprint)
-}
-
-export async function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): Promise<void> {
-  if (!isPackagedElectronWin32()) {
-    return
-  }
-  await pruneDaemonHostStaging()
-  if (evidence.status === 'unverifiable') {
-    console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
-    return
-  }
-  const version = getAppEnvironment().getVersion()
-  const root = getDaemonHostRootDir()
-  let entries
-  try {
-    entries = readdirSync(root, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    // A published current-version build can belong to a daemon that has not written its pid yet.
-    if (!entry.isDirectory() || entry.name === version) {
-      continue
-    }
-    // Only a complete runtime-directory listing permits treating unrecorded versions as unowned.
-    const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
-    await reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
-  }
-}
-
-/** Reclaim only copies whose writer positively exited, independently of daemon pid publication. */
-export async function pruneDaemonHostStaging(): Promise<void> {
-  if (isPackagedElectronWin32()) {
-    await reclaimAbandonedDaemonHostStaging(
-      join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
-    )
-  }
+  currentBuildFingerprint(sources, published.fingerprint)
+  return findRelocatedDaemonHostAsync(sources, published.fingerprint)
 }

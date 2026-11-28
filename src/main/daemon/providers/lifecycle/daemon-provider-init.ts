@@ -7,7 +7,7 @@ import {
 } from '../../../startup/diagnostics/startup-diagnostics'
 import { checkDaemonHealth } from '../../health/daemon-health'
 import { collectPinnedDaemonVersions } from '../../executable-host/windows/daemon-host-pinned-versions'
-import { pruneOldDaemonHosts } from '../../executable-host/windows/daemon-host-relocation'
+import { pruneOldDaemonHosts } from '../../executable-host/windows/daemon-host-prune'
 import {
   cleanupFailedDaemonAdoption,
   releaseDaemonAdoptionLease,

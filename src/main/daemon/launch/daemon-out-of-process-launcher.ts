@@ -16,10 +16,8 @@ import {
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
-import {
-  materializeRelocatedDaemonHost,
-  pruneDaemonHostStaging
-} from '../executable-host/windows/daemon-host-relocation'
+import { materializeRelocatedDaemonHost } from '../executable-host/windows/daemon-host-relocation'
+import { pruneDaemonHostStaging } from '../executable-host/windows/daemon-host-prune'
 import {
   appImageDaemonIdentityPath,
   resolveAppImageDaemonLaunch

@@ -42,9 +42,9 @@ import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
   getDaemonHostRootDir,
   getRelocatedDaemonHost,
-  materializeRelocatedDaemonHost,
-  pruneOldDaemonHosts
+  materializeRelocatedDaemonHost
 } from '../daemon-host-relocation'
+import { pruneOldDaemonHosts } from '../daemon-host-prune'
 
 let tempDir: string
 let installDir: string
@@ -114,6 +114,16 @@ afterEach(() => {
 })
 
 describe('materializeRelocatedDaemonHost', () => {
+  it('reuses a cold copy fingerprinted from its own bytes instead of copying again', async () => {
+    const cold = await materializeRelocatedDaemonHost()
+    const warm = await materializeRelocatedDaemonHost()
+    expect(cold).not.toBeNull()
+    expect(warm).toEqual(cold)
+    expect(
+      readdirSync(dirname(dirname(cold!.execPath))).filter((n) => n.startsWith('build-'))
+    ).toHaveLength(1)
+  })
+
   it('rematerializes a host whose copied addon went missing', async () => {
     await materializeRelocatedDaemonHost()
     const dest = relocatedHostRoot()
@@ -167,12 +177,18 @@ describe('executeManifest', () => {
     const staging = join(tempDir, 'staging')
     const fingerprinted = createHash('sha256').update('entry').digest('hex')
 
-    await executeManifest([op], staging, new Map([['entry.js', fingerprinted]]))
+    await executeManifest([op], staging, {
+      isCode: (rel) => rel === 'entry.js',
+      expected: new Map([['entry.js', fingerprinted]])
+    })
     expect(readFileSync(join(staging, 'entry.js'), 'utf8')).toBe('entry')
 
     writeFileSync(entry, 'changed after fingerprinting')
     await expect(
-      executeManifest([op], join(tempDir, 'staging-2'), new Map([['entry.js', fingerprinted]]))
+      executeManifest([op], join(tempDir, 'staging-2'), {
+        isCode: (rel) => rel === 'entry.js',
+        expected: new Map([['entry.js', fingerprinted]])
+      })
     ).rejects.toThrow('code changed while copying')
   })
 })

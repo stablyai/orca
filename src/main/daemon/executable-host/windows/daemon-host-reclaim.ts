@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { removeDaemonHostTree } from './daemon-host-tree-walk'
 import { join } from 'node:path'
 import type { ProcessLivenessVerdict } from '../../endpoint/identity/daemon-incarnation-evidence-types'
@@ -39,7 +39,7 @@ export async function reclaimUnownedDaemonHostDir(
 export async function reclaimAbandonedDaemonHostStaging(versionRoot: string): Promise<void> {
   let entries
   try {
-    entries = readdirSync(versionRoot, { withFileTypes: true })
+    entries = await readdir(versionRoot, { withFileTypes: true })
   } catch {
     return
   }

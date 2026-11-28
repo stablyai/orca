@@ -188,24 +188,37 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
-// Verify the bytes written; rereading a just-written file waits on Defender's scan of it.
-async function copyVerifiedFile(sourcePath: string, dest: string, sha256: string): Promise<void> {
+// Hash the bytes written; rereading a just-written file waits on Defender's scan of it.
+async function copyHashedFile(
+  sourcePath: string,
+  dest: string,
+  expected: string | undefined
+): Promise<string> {
   const bytes = await readFile(sourcePath)
-  if (createHash('sha256').update(bytes).digest('hex') !== sha256) {
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  if (expected !== undefined && sha256 !== expected) {
     throw new Error('daemon-host relocation: code changed while copying')
   }
   await writeFile(dest, bytes)
+  return sha256
+}
+
+export type ManifestCodeHashing = {
+  /** Posix destRels whose copied bytes are hashed and returned. */
+  isCode: (destRel: string) => boolean
+  /** When given, every code file must match; a fresh copy omits it and records what it copied. */
+  expected?: ReadonlyMap<string, string>
 }
 
 /**
  * Copy through libuv so the ~1.8k-file, ~275 MiB runtime doesn't hold Electron main; only per-file hashing runs there.
- * Files named in expectedHashes (posix destRel -> sha256) must match those hashes.
+ * Returns the sha256 of every code file, taken from the bytes written.
  */
 export async function executeManifest(
   ops: CopyOp[],
   stagingRoot: string,
-  expectedHashes: ReadonlyMap<string, string> = new Map()
-): Promise<void> {
+  code: ManifestCodeHashing = { isCode: () => false }
+): Promise<Map<string, string>> {
   const exists = await mapWithConcurrencyUntilFailure(ops, DAEMON_HOST_FS_CONCURRENCY, (op) =>
     access(op.sourcePath).then(
       () => true,
@@ -218,10 +231,9 @@ export async function executeManifest(
     throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
   }
   const { files, dirs } = await listDaemonHostTree(present, DAEMON_HOST_FS_CONCURRENCY)
-  const listedRels = new Set(files.map((file) => file.destRel))
-  const unlisted = [...expectedHashes.keys()].find((destRel) => !listedRels.has(destRel))
-  if (unlisted) {
-    throw new Error(`daemon-host relocation: ${unlisted} is outside the copy manifest`)
+  const codeFiles = files.filter((file) => code.isCode(file.destRel))
+  if (code.expected && code.expected.size !== codeFiles.length) {
+    throw new Error('daemon-host relocation: copied code does not match its fingerprint')
   }
   // Keep accepted empty directories, matching the recursive copy this replaced.
   const destDirs = new Set([
@@ -231,12 +243,19 @@ export async function executeManifest(
   for (const dir of destDirs) {
     await mkdir(dir, { recursive: true })
   }
+  const hashes = new Map<string, string>()
   // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
-  await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, (file) => {
+  await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, async (file) => {
     const dest = destPath(stagingRoot, file.destRel)
-    const sha256 = expectedHashes.get(file.destRel)
-    return sha256
-      ? copyVerifiedFile(file.sourcePath, dest, sha256)
-      : copyFile(file.sourcePath, dest)
+    if (!code.isCode(file.destRel)) {
+      await copyFile(file.sourcePath, dest)
+      return
+    }
+    const expected = code.expected?.get(file.destRel)
+    if (code.expected && expected === undefined) {
+      throw new Error(`daemon-host relocation: ${file.destRel} is outside the fingerprint`)
+    }
+    hashes.set(file.destRel, await copyHashedFile(file.sourcePath, dest, expected))
   })
+  return hashes
 }

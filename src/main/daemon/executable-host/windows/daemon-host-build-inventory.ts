@@ -56,7 +56,7 @@ function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
     .flatMap((name) => listCodeFiles(join(sourcePath, name), `${destRel}/${name}`))
 }
 
-function inventoryFromFiles(
+export function inventoryFromFiles(
   sources: DaemonHostSources,
   files: DaemonHostBuildFile[]
 ): DaemonHostBuildInventory {
@@ -90,10 +90,11 @@ export function collectDaemonHostBuildInventory(
 
 /** Same inventory as collectDaemonHostBuildInventory, read and hashed off the event loop. */
 export async function collectDaemonHostBuildInventoryAsync(
-  sources: DaemonHostSources
+  sources: DaemonHostSources,
+  knownRoots?: CodeFileSource[] | null
 ): Promise<DaemonHostBuildInventory | null> {
   try {
-    const roots = await inventoryRootsAsync(sources)
+    const roots = knownRoots === undefined ? await inventoryRootsAsync(sources) : knownRoots
     if (!roots) {
       return null
     }
