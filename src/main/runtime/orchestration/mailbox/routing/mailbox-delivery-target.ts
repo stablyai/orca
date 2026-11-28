@@ -159,8 +159,11 @@ export class OrchestrationMailboxDeliveryTarget {
         }
         // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
         setTimeout(() => {
+          // A delivery that joined after the read began may postdate it either way: the agent may
+          // have exited meanwhile, which leaves the PTY's incarnation unchanged.
           const stale =
             shellInFront ||
+            deferral.joinedInFlight ||
             (probeShell !== null &&
               this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
           for (const [deferredMailbox, reserved] of deferral.mailboxes) {

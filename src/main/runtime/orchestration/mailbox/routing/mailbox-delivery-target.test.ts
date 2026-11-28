@@ -53,12 +53,16 @@ describe('deferForTerminalProbe', () => {
     expect(await probe(async () => false, [['term_a']])).toEqual([['term_a', false]])
   })
 
-  it('probes again, once, for a delivery that arrived while a shell was being read', async () => {
-    expect(await probe(async () => true, [['term_a'], ['run:r1']])).toEqual([
-      ['term_a', true],
-      ['run:r1', true]
-    ])
-  })
+  it.each([true, false])(
+    'probes again, once, for a delivery that arrived during the read (shell in front: %s)',
+    async (shellInFront) => {
+      const reads = [shellInFront, true]
+      expect(await probe(async () => reads.shift() ?? true, [['term_a'], ['run:r1']])).toEqual([
+        ['term_a', true],
+        ['run:r1', true]
+      ])
+    }
+  )
 
   it('hands a deferred delivery its reserved types back, unrestricted once an unreserved one joins', async () => {
     vi.useFakeTimers()
