@@ -139,8 +139,16 @@ export function ArtifactListRow({
             so none is nested in another; a click anywhere on the row still opens it. */}
         <div
           data-current={isSelected ? 'true' : undefined}
-          onFocus={() => setFocusWithin(true)}
+          // React bubbles focus out of the portaled row menus too; only the row's own DOM counts.
+          onFocus={(event) => {
+            if (event.currentTarget.contains(event.target)) {
+              setFocusWithin(true)
+            }
+          }}
           onBlur={(event) => {
+            if (!event.currentTarget.contains(event.target)) {
+              return
+            }
             const next = event.relatedTarget
             if (!(next instanceof Node) || !event.currentTarget.contains(next)) {
               setFocusWithin(false)
@@ -185,8 +193,9 @@ export function ArtifactListRow({
               <span
                 className={cn(
                   'absolute inset-0 flex items-center justify-center',
+                  // Hidden, it takes no pointer or touch hits, so a tap there opens the row instead.
                   !selecting &&
-                    'opacity-0 group-hover/list-table-row:opacity-100 group-focus-within/list-table-row:opacity-100'
+                    'pointer-events-none opacity-0 group-hover/list-table-row:pointer-events-auto group-hover/list-table-row:opacity-100 group-focus-within/list-table-row:pointer-events-auto group-focus-within/list-table-row:opacity-100'
                 )}
               >
                 <Checkbox

@@ -1,11 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import {
   DEFAULT_ARTIFACT_LIST_SORT,
   EMPTY_ARTIFACT_LIST_FILTER,
   filterArtifactList,
   nextArtifactListSort,
-  sortArtifactList
+  sortArtifactList,
+  withoutDeletingArtifacts
 } from './artifact-list-view'
 
 const NOW = Date.parse('2026-06-15T12:00:00.000Z')
@@ -95,19 +96,40 @@ describe('filterArtifactList expires', () => {
 })
 
 describe('filterArtifactList updated today', () => {
-  // Built from local fields: Today starts at local midnight, so a UTC fixture would shift by timezone.
-  const now = new Date(2026, 5, 15, 12, 0, 0).getTime()
-  const midnight = new Date(2026, 5, 15, 0, 0, 0).getTime()
-  const at = (ms: number): string => new Date(ms).toISOString()
-  const rows = [
-    item('yesterday', at(midnight - 1), at(now + DAY)),
-    item('midnight', at(midnight), at(now + DAY)),
-    item('now', at(now), at(now + DAY)),
-    item('bad', 'not-a-date', at(now + DAY))
-  ]
+  // Why a non-UTC zone: Today starts at local midnight, and under UTC a setUTCHours regression would pass.
+  const originalTz = process.env.TZ
+  beforeAll(() => {
+    process.env.TZ = 'America/Los_Angeles'
+  })
+  afterAll(() => {
+    if (originalTz === undefined) {
+      delete process.env.TZ
+    } else {
+      process.env.TZ = originalTz
+    }
+  })
 
   it('keeps rows from local midnight on and drops earlier or unparseable updates', () => {
+    // Built after the zone is set, from local fields: noon and midnight on June 15 in Los Angeles.
+    const now = new Date(2026, 5, 15, 12, 0, 0).getTime()
+    const midnight = new Date(2026, 5, 15, 0, 0, 0).getTime()
+    expect(new Date(midnight).getTimezoneOffset()).not.toBe(0)
+    const at = (ms: number): string => new Date(ms).toISOString()
+    const rows = [
+      item('yesterday', at(midnight - 1), at(now + DAY)),
+      item('midnight', at(midnight), at(now + DAY)),
+      item('now', at(now), at(now + DAY)),
+      item('bad', 'not-a-date', at(now + DAY))
+    ]
     const filter = { ...EMPTY_ARTIFACT_LIST_FILTER, updated: 'today' as const }
     expect(slugs(filterArtifactList(rows, filter, now))).toEqual(['midnight', 'now'])
+  })
+})
+
+describe('withoutDeletingArtifacts', () => {
+  it('leaves only checked rows not already deleting, so Delete acts on C alone while A and B run', () => {
+    const rows = [item('A', 'x', 'x'), item('B', 'x', 'x'), item('C', 'x', 'x')]
+    expect(slugs(withoutDeletingArtifacts(rows, new Set(['A', 'B'])))).toEqual(['C'])
+    expect(withoutDeletingArtifacts(rows, new Set(['A', 'B', 'C']))).toEqual([])
   })
 })

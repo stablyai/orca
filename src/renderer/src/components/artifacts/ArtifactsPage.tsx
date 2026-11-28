@@ -15,6 +15,7 @@ import {
 } from './ArtifactsPageStates'
 import { useArtifactPagination } from './useArtifactPagination'
 import { useArtifactDeletion } from './use-artifact-deletion'
+import { liveRegionNonce } from './artifact-live-region'
 
 export default function ArtifactsPage(): React.JSX.Element {
   const t = useTranslate()
@@ -49,7 +50,7 @@ export default function ArtifactsPage(): React.JSX.Element {
     removeArtifact,
     setError
   } = useArtifactPagination(authStatus, refreshAuth)
-  const { deletingSlugs, deleteArtifacts } = useArtifactDeletion({
+  const { deletingSlugs, deleteArtifacts, deletedAnnouncement } = useArtifactDeletion({
     accountIdentity,
     refreshAuth,
     removeArtifact,
@@ -174,6 +175,15 @@ export default function ArtifactsPage(): React.JSX.Element {
         />
       )}
 
+      {/* Page-level, not in the list: deleting the last artifact unmounts the list before this reads. */}
+      <span className="sr-only" aria-live="polite">
+        {deletedAnnouncement.count > 0
+          ? t('auto.components.artifacts.ArtifactsPage.deleted', '{{count}} artifacts deleted', {
+              count: deletedAnnouncement.count,
+              defaultValue_one: '{{count}} artifact deleted'
+            }) + liveRegionNonce(deletedAnnouncement.seq)
+          : ''}
+      </span>
       <ArtifactDetailDrawer
         item={selectedArtifact}
         deleting={selectedArtifact ? deletingSlugs.has(selectedArtifact.artifact.slug) : false}

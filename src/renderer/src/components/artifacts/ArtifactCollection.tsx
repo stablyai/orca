@@ -12,9 +12,11 @@ import {
   filterArtifactList,
   nextArtifactListSort,
   sortArtifactList,
+  withoutDeletingArtifacts,
   type ArtifactListFilter,
   type ArtifactListSort
 } from './artifact-list-view'
+import { liveRegionNonce } from './artifact-live-region'
 import { ArtifactListFilterMenu, ArtifactListFilterPills } from './ArtifactListFilterMenu'
 import { ArtifactListRows } from './ArtifactListRows'
 import { ArtifactListSelectionBar } from './ArtifactListSelectionBar'
@@ -100,14 +102,12 @@ export function ArtifactCollection({
 
   const { clear: clearSelection } = selection
   const selecting = selection.checkedSlugs.size > 0
-  // Why: a bulk delete prunes one checked row at a time; holding the announced count until the batch
-  // settles reads it once (the final count, or nothing once all are gone), not once per removed row.
-  const liveSelectedCount = selecting ? checkedItems.length : 0
-  const [announcedSelectedCount, setAnnouncedSelectedCount] = useState(liveSelectedCount)
-  const deletingChecked = checkedItems.some(({ artifact }) => deletingSlugs.has(artifact.slug))
-  if (!deletingChecked && announcedSelectedCount !== liveSelectedCount) {
-    setAnnouncedSelectedCount(liveSelectedCount)
-  }
+  // Per-row: Delete acts on checked rows not already deleting, so a second batch can run beside the first.
+  const deletableItems = useMemo(
+    () => withoutDeletingArtifacts(checkedItems, deletingSlugs),
+    [checkedItems, deletingSlugs]
+  )
+  const { announcement } = selection
   useEffect(() => {
     clearSelectionRef.current = selecting
       ? () => {
@@ -135,10 +135,8 @@ export function ArtifactCollection({
             {selecting ? (
               <ArtifactListSelectionBar
                 count={checkedItems.length}
-                deleteDisabled={checkedItems.every(({ artifact }) =>
-                  deletingSlugs.has(artifact.slug)
-                )}
-                onDelete={() => void deleteArtifacts(checkedItems).then(restoreFocusToFilter)}
+                deleteDisabled={deletableItems.length === 0}
+                onDelete={() => void deleteArtifacts(deletableItems).then(restoreFocusToFilter)}
                 onClear={() => {
                   selection.clear()
                   restoreFocusToFilter()
@@ -160,11 +158,11 @@ export function ArtifactCollection({
       />
       {/* Mounted before any row is checked so the first count is announced, not just inserted. */}
       <span className="sr-only" aria-live="polite">
-        {announcedSelectedCount > 0
+        {announcement.count > 0
           ? t('auto.components.artifacts.ArtifactListSelectionBar.selected', '{{count}} selected', {
-              count: announcedSelectedCount,
+              count: announcement.count,
               defaultValue_one: '{{count}} selected'
-            })
+            }) + liveRegionNonce(announcement.seq)
           : ''}
       </span>
       {notice}

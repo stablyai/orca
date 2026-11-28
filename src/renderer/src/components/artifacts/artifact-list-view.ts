@@ -51,6 +51,16 @@ export function nextArtifactListSort(
     : DEFAULT_ARTIFACT_LIST_SORT
 }
 
+/** The rows a delete would act on: in-flight rows are skipped, so pressing Delete again never repeats them. */
+export function withoutDeletingArtifacts(
+  items: readonly ArtifactListItem[],
+  deletingSlugs: ReadonlySet<string>
+): readonly ArtifactListItem[] {
+  return deletingSlugs.size === 0
+    ? items
+    : items.filter(({ artifact }) => !deletingSlugs.has(artifact.slug))
+}
+
 export type ArtifactTypeOption = { type: string; label: string; count: number }
 
 /** Types present in the loaded list, in first-seen order, so the menu never offers an empty type. */

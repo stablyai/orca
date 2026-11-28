@@ -20570,7 +20570,9 @@
           "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links.",
           "deleteNamedFailed": "Could not delete “{{name}}”.",
           "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
-          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted."
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted.",
+          "deleted_one": "{{count}} artifact deleted",
+          "deleted_other": "{{count}} artifacts deleted"
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",

@@ -16,6 +16,9 @@ const NO_SLUGS: ReadonlySet<string> = new Set()
 
 type DeletingState = { identity: string; slugs: ReadonlySet<string> }
 
+/** One settled batch's deleted count, for its live region; `seq` re-announces an equal count. */
+export type ArtifactDeletionAnnouncement = { count: number; seq: number }
+
 function withoutSlug(current: DeletingState | null, identity: string, slug: string) {
   if (current?.identity !== identity || !current.slugs.has(slug)) {
     return current
@@ -66,6 +69,9 @@ export function useArtifactDeletion({
 }): {
   deletingSlugs: ReadonlySet<string>
   deleteArtifacts: (items: readonly ArtifactListItem[]) => Promise<void>
+  /** Set once per settled batch from the batch's own outcome, so selection changes made
+   * mid-batch neither silence it nor change the count it reads. */
+  deletedAnnouncement: ArtifactDeletionAnnouncement
 } {
   const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
@@ -74,6 +80,10 @@ export function useArtifactDeletion({
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const confirm = useConfirmationDialog()
   const [deleting, setDeleting] = useState<DeletingState | null>(null)
+  const [deletedAnnouncement, setDeletedAnnouncement] = useState<ArtifactDeletionAnnouncement>({
+    count: 0,
+    seq: 0
+  })
   const deletingSlugs = deleting?.identity === accountIdentity ? deleting.slugs : NO_SLUGS
 
   const deleteArtifacts = async (requested: readonly ArtifactListItem[]): Promise<void> => {
@@ -139,6 +149,7 @@ export function useArtifactDeletion({
       return { identity: requestedIdentity, slugs }
     })
     let failed: { item: ArtifactListItem; untried: number } | null = null
+    let deletedCount = 0
     for (const [index, item] of items.entries()) {
       const slug = item.artifact.slug
       if (failed || !requestedAccountIsCurrent()) {
@@ -148,10 +159,14 @@ export function useArtifactDeletion({
       const outcome = await deleteOneArtifact(slug, requestedAccountIsCurrent, refreshAuth)
       if (outcome === 'deleted') {
         removeArtifact(requestedIdentity, slug)
+        deletedCount += 1
       } else if (outcome === 'failed') {
         failed = { item, untried: items.length - index - 1 }
       }
       setDeleting((current) => withoutSlug(current, requestedIdentity, slug))
+    }
+    if (deletedCount > 0 && requestedAccountIsCurrent()) {
+      setDeletedAnnouncement((current) => ({ count: deletedCount, seq: current.seq + 1 }))
     }
     if (failed && requestedAccountIsCurrent()) {
       // The failed row and any rows after it stay listed and checked, so the batch can be retried.
@@ -180,5 +195,5 @@ export function useArtifactDeletion({
     }
   }
 
-  return { deletingSlugs, deleteArtifacts }
+  return { deletingSlugs, deleteArtifacts, deletedAnnouncement }
 }
