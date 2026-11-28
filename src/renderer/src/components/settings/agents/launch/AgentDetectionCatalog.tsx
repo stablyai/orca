@@ -22,7 +22,8 @@ export function AgentDetectionCatalog({
   activeServerEnvironmentId,
   activeServerName,
   onRefresh,
-  getRowProps
+  getRowProps,
+  onSetAvailableEnabled
 }: {
   detectedAgents: AgentCatalogEntry[]
   undetectedAgents: AgentCatalogEntry[]
@@ -33,19 +34,38 @@ export function AgentDetectionCatalog({
   activeServerName: string | null
   onRefresh: () => void
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
+  onSetAvailableEnabled?: (agents: TuiAgent[], enabled: boolean) => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
   const installedBody = useRef<HTMLDivElement>(null)
   const availableBody = useRef<HTMLDivElement>(null)
   const [hosts] = useState(() => new Map<TuiAgent, RowHost>())
   const [expandedByAgent, setExpandedByAgent] = useState<Partial<Record<TuiAgent, boolean>>>({})
+  const [savingAvailability, setSavingAvailability] = useState(false)
   const sections = [
     { agents: detectedAgents, installed: true },
     { agents: undetectedAgents, installed: false }
   ]
   const rows = sections.flatMap(({ agents, installed }) =>
-    agents.map((agent) => ({ agent, row: getRowProps(agent, installed) }))
+    agents.map((agent) => ({ agent, installed, row: getRowProps(agent, installed) }))
   )
+  const availableRows = rows.filter((row) => !row.installed)
+  const setAvailableEnabled = async (enabled: boolean): Promise<void> => {
+    if (!onSetAvailableEnabled || savingAvailability) {
+      return
+    }
+    setSavingAvailability(true)
+    try {
+      await onSetAvailableEnabled(
+        availableRows.map(({ agent }) => agent.id),
+        enabled
+      )
+    } catch {
+      // The settings owner reports save errors.
+    } finally {
+      setSavingAvailability(false)
+    }
+  }
   const arriving = rows.filter(({ agent }) => !Object.hasOwn(expandedByAgent, agent.id))
   if (arriving.length > 0) {
     setExpandedByAgent({
@@ -98,6 +118,7 @@ export function AgentDetectionCatalog({
           <SettingsGroup
             key={installed ? 'installed' : 'available'}
             bodyRef={installed ? installedBody : availableBody}
+            wrapAction={!installed}
             className="has-[[data-settings-group-body]:empty]:hidden"
             title={
               installed ? (
@@ -150,6 +171,29 @@ export function AgentDetectionCatalog({
                     ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
                     : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
                 </Button>
+              ) : onSetAvailableEnabled ? (
+                <div className="flex flex-wrap gap-1">
+                  {[true, false].map((enabled) => (
+                    <Button
+                      key={String(enabled)}
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      disabled={
+                        savingAvailability ||
+                        detectionPending ||
+                        detectionFailed ||
+                        isRefreshing ||
+                        availableRows.every(({ row }) => row.isEnabled === enabled)
+                      }
+                      onClick={() => void setAvailableEnabled(enabled)}
+                    >
+                      {enabled
+                        ? t('settings.agents.enableAllAvailable', 'Enable all')
+                        : t('settings.agents.disableAllAvailable', 'Disable all')}
+                    </Button>
+                  ))}
+                </div>
               ) : undefined
             }
           />

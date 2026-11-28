@@ -393,6 +393,11 @@ export function AgentLaunchSettingsCatalog({
           refreshSettings?.()
         }}
         getRowProps={rowProps}
+        onSetAvailableEnabled={
+          settings.bulkAvailability
+            ? (agents, enabled) => mutate({ type: 'bulk-availability', agents, enabled })
+            : undefined
+        }
       />
     </>
   )

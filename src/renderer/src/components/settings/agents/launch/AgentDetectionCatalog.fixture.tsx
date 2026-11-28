@@ -8,6 +8,7 @@ import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { scrollSubsectionIntoView } from '../../navigation/settings-navigation-foundations'
 import { getSettingsTitleTargetId } from '../../section-layout/settings-target-highlight'
 import { revealInstalledAgentChoice } from '../surfaces/installed-agent-choice-reveal'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   const catalog = getAgentCatalog()
@@ -17,10 +18,23 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   const [command, setCommand] = useState<string>()
   const [deferSave, setDeferSave] = useState(false)
   const [cliMissing, setCliMissing] = useState(false)
-  const [firstEnabled, setFirstEnabled] = useState(true)
+  const [disabledAgents, setDisabledAgents] = useState(() => new Set<TuiAgent>())
+  const setEnabled = (agents: TuiAgent[], enabled: boolean): void =>
+    setDisabledAgents((previous) => {
+      const next = new Set(previous)
+      for (const agent of agents) {
+        if (enabled) {
+          next.delete(agent)
+        } else {
+          next.add(agent)
+        }
+      }
+      return next
+    })
   const complete = useRef<(() => void) | null>(null)
   const shown = short ? catalog.slice(0, 2) : catalog
   const moving = shown[0]
+  const firstEnabled = !disabledAgents.has(moving.id)
   const rowProps = (agent: AgentCatalogEntry, detected: boolean) => ({
     agentId: agent.id,
     label: agent.label,
@@ -29,7 +43,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     defaultArgs: '',
     defaultEnv: {},
     isDetected: agent === moving ? false : detected,
-    isEnabled: agent === moving ? firstEnabled : true,
+    isEnabled: !disabledAgents.has(agent.id),
     defaultMark: null,
     isSavedDefault: false,
     cmdOverride: agent === moving ? command : undefined,
@@ -54,7 +68,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
           }
         : undefined,
     onSetDefault: () => {},
-    onSetEnabled: () => {},
+    onSetEnabled: (enabled: boolean) => setEnabled([agent.id], enabled),
     onSaveOverride: async (value: string) => {
       if (deferSave) {
         await new Promise<void>((resolve) => {
@@ -94,7 +108,11 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
           <Button variant="outline" size="xs" onClick={() => setCliMissing(!cliMissing)}>
             CLI missing: {String(cliMissing)}
           </Button>
-          <Button variant="outline" size="xs" onClick={() => setFirstEnabled(!firstEnabled)}>
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => setEnabled([moving.id], !firstEnabled)}
+          >
             First agent enabled: {String(firstEnabled)}
           </Button>
           <Button variant="outline" size="xs" onClick={() => setDeferSave(!deferSave)}>
@@ -139,6 +157,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
               activeServerName={null}
               onRefresh={() => {}}
               getRowProps={rowProps}
+              onSetAvailableEnabled={async (agents, enabled) => setEnabled(agents, enabled)}
             />
             <SettingsGroup title="Codex history">
               <SettingsSwitchRow
