@@ -227,30 +227,6 @@ export function botGroupTurnItems(
   return indexBotGroupJournal(snapshot)(operationId, workerDispatchIds)
 }
 
-export function botGroupCompletedText(items: readonly AgentJournalRenderItem[]): string | null {
-  return botGroupCompletedReply(items)?.text ?? null
-}
-
-/** A turn's finished reply (`text` cut for room history, `full` whole) and when it finished; null
- *  until it completes with text. */
-export function botGroupCompletedReply(
-  items: readonly AgentJournalRenderItem[]
-): { text: string; full: string; completedAt: number | undefined } | null {
-  const turn = items.find((item) => item.body.kind === 'turn')
-  if (turn?.body.kind !== 'turn' || turn.body.state !== 'completed') {
-    return null
-  }
-  const completedAt = turn.body.completedAt
-  const full = items
-    .flatMap((item) =>
-      item.body.kind === 'message' && item.body.role === 'assistant'
-        ? item.body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : []))
-        : []
-    )
-    .join('\n')
-  return full ? { text: full.slice(-16_000), full, completedAt } : null
-}
-
 /** What a member has not seen: posts and replies since it was last asked (all, if new), newest kept
  *  under the cap. Local replies are keyed by operation; remote answers ride on their post. */
 export function botGroupContext(

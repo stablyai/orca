@@ -1,11 +1,11 @@
 // Settles finished member turn replies onto their group messages so later posts quote them without
 // reopening member chats on every send.
 import {
-  botGroupCompletedText,
   botGroupTurnReplyText,
   type BotGroupMessage,
   type BotGroupTurn
 } from '../../shared/bots/bot-group'
+import { botGroupCompletedText } from '../../shared/bots/bot-group-completed-reply'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { botChatReads } from './bot-chat-reads'
 import type { BotGroupRuntime } from './bot-group-runtime'
