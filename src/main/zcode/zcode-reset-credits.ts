@@ -203,9 +203,6 @@ export async function fetchZcodeResetCredits(options: {
   const weekCards = data.data.available_week_resets
     .map((card) => ({ ...card, expire_at: resetTimestamp(card.expire_at) }))
     .sort((a, b) => a.expire_at - b.expire_at)
-  if (cards.length === 0 && weekCards.length === 0) {
-    return null
-  }
   return {
     availableCount: cards.length,
     nextExpiresAt: cards[0]?.expire_at ?? null,

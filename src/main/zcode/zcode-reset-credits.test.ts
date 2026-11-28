@@ -91,6 +91,27 @@ describe('zcode reset credits', async () => {
     expect(await fetchZcodeResetCredits({ credentialStorePath: path })).toBeNull()
   })
 
+  it('distinguishes an exhausted inventory from an unavailable endpoint', async () => {
+    const path = store(accountTokens())
+    install(() =>
+      json({
+        code: 200,
+        data: {
+          available_five_hour_resets: [],
+          available_week_resets: [],
+          latest_five_hour_reset_history: null,
+          latest_week_reset_history: null,
+          has_unread_history: false
+        }
+      })
+    )
+    await expect(fetchZcodeResetCredits({ credentialStorePath: path })).resolves.toEqual({
+      availableCount: 0,
+      nextExpiresAt: null,
+      credits: []
+    })
+  })
+
   it('keeps the account identity stable across JWT refreshes', async () => {
     const first = await readZcodeResetCredentialFacts(store(accountTokens()))
     const refreshed = await readZcodeResetCredentialFacts(
