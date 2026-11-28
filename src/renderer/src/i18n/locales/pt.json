@@ -25009,6 +25009,7 @@
           "deleted": "Excluído",
           "kept": "Mantidos · {{count}}",
           "showMore": "Mostrar mais {{count}}",
+          "showFewer": "Mostrar menos",
           "waiting": "Inativo há {{elapsed}} de {{after}} dias",
           "title": "Atividade",
           "notListed_one": "Mais {{count}} espaço de trabalho mantido não está listado.",

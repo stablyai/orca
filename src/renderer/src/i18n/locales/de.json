@@ -23547,6 +23547,7 @@
           "deleted": "Gelöscht",
           "kept": "Behalten · {{count}}",
           "showMore": "{{count}} weitere anzeigen",
+          "showFewer": "Weniger anzeigen",
           "waiting": "Inaktiv: {{elapsed}} von {{after}} Tagen",
           "title": "Aktivität",
           "notListed_one": "1 weiterer behaltener Arbeitsbereich wird nicht aufgeführt.",

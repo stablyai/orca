@@ -23219,6 +23219,7 @@
           "deleted": "삭제됨",
           "kept": "유지됨 · {{count}}개",
           "showMore": "{{count}}개 더 보기",
+          "showFewer": "간략히 표시",
           "waiting": "{{after}}일 중 {{elapsed}}일 비활성",
           "title": "활동",
           "notListed_one": "유지된 워크스페이스 1개가 더 있지만 표시하지 않았습니다.",

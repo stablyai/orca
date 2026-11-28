@@ -23550,6 +23550,7 @@
           "deleted": "Supprimé",
           "kept": "Conservés · {{count}}",
           "showMore": "Afficher {{count}} de plus",
+          "showFewer": "Afficher moins",
           "waiting": "Inactivité : {{elapsed}} / {{after}} j",
           "title": "Activité",
           "notListed_one": "{{count}} autre espace de travail conservé n'est pas listé.",

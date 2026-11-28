@@ -23972,6 +23972,7 @@
           "deleted": "Silindi",
           "kept": "Korunan: {{count}}",
           "showMore": "{{count}} tane daha göster",
+          "showFewer": "Daha az göster",
           "waiting": "Etkin olmayan süre: {{elapsed}} gün · Eşik: {{after}} gün",
           "title": "Etkinlik",
           "notListed_one": "Korunan 1 çalışma alanı daha listede gösterilmiyor.",
