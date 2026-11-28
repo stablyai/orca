@@ -93,5 +93,10 @@
     "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
     "test": "Agent-slept window pane wake keeps a moved slept pane its handle and its exit wait pending",
     "row": "B1"
+  },
+  {
+    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
+    "unhandled": "Runtime graph publisher belongs to a superseded renderer generation",
+    "row": "B1"
   }
 ]
