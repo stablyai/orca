@@ -81,7 +81,7 @@ function toBucket(
   return window ? [{ ...window, name }] : []
 }
 
-/** The reading holds only quota windows; the payload's email never leaves this function. */
+/** Quota windows plus, when agy reports one, the login's email as `usageMetadata.account`. */
 export type AntigravityStatusLineReading = ProviderRateLimits
 
 /** Null means the payload has no quota object; one with no usable pool reads as empty buckets. */
@@ -106,6 +106,12 @@ export function readAntigravityStatusLineQuota(
     ...toBucket(thirdPartyWeekly, ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly, WEEKLY_MINUTES)
   ]
   // A quota object with no usable pool is an explicit "nothing to show", not a missing report.
+  const email =
+    typeof payload === 'object' && payload !== null && 'email' in payload
+      ? typeof payload.email === 'string'
+        ? payload.email.trim()
+        : ''
+      : ''
   return {
     provider: 'antigravity',
     session: toWindow(gemini5h, FIVE_HOUR_MINUTES),
@@ -114,7 +120,7 @@ export function readAntigravityStatusLineQuota(
     updatedAt: receivedAt,
     error: null,
     status: 'ok',
-    usageMetadata: { source: 'live-session' }
+    usageMetadata: { source: 'live-session', ...(email ? { account: { email } } : {}) }
   }
 }
 

@@ -6,8 +6,13 @@ type AntigravityLiveUsageHost = {
   publish: (next: ProviderRateLimits | null) => void
 }
 
-function windowsKey(limits: ProviderRateLimits): string {
-  return JSON.stringify([limits.session, limits.weekly, limits.buckets ?? []])
+function readingKey(limits: ProviderRateLimits): string {
+  return JSON.stringify([
+    limits.session,
+    limits.weekly,
+    limits.buckets ?? [],
+    limits.usageMetadata?.account
+  ])
 }
 
 // agy reports quota only while it runs in an Orca terminal; nothing here ever fetches, polls or
@@ -31,7 +36,7 @@ export class AntigravityLiveUsage {
     }
     const previous = this.host.current()
     // Unchanged windows keep the time Orca first received them.
-    if (previous && windowsKey(previous) === windowsKey(reading)) {
+    if (previous && readingKey(previous) === readingKey(reading)) {
       return
     }
     this.host.publish(reading)

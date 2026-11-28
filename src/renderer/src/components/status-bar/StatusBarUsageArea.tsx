@@ -218,6 +218,10 @@ export function StatusBarUsageArea({
                         provider={p}
                         asSubmenu
                         triggerContent={rowNode}
+                        // An Antigravity reading names the login it came from, as the account cards do.
+                        {...(p.usageMetadata?.account
+                          ? { variant: 'account', accountLabel: p.usageMetadata.account.email }
+                          : {})}
                         ariaLabel={t(
                           'auto.components.status.bar.UsageRosterPanel.openDetails',
                           'Open usage details'

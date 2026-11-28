@@ -7,12 +7,12 @@ import {
 
 const NOW = Date.parse('2026-11-28T10:00:00Z')
 
-function payload(quota: unknown): object {
+function payload(quota: unknown, email: string | null = 'user@example.com'): object {
   return {
     cwd: '/tmp/work',
     model: { id: 'm', display_name: 'Gemini 4 Neon (High)', effort: 'high' },
     cycle_mode: 'auto',
-    email: 'user@example.com',
+    ...(email ? { email } : {}),
     quota
   }
 }
@@ -42,7 +42,16 @@ describe('readAntigravityStatusLineQuota', () => {
       ['Claude · GPT 5h', 90],
       ['Claude · GPT weekly', 50]
     ])
-    expect(JSON.stringify(reading)).not.toContain('example.com')
+    // The login's email rides along in memory, as the label for which account the numbers are for.
+    expect(reading?.usageMetadata?.account).toEqual({ email: 'user@example.com' })
+  })
+
+  it('carries no account when agy reports no email', () => {
+    const rest = payload(
+      { 'gemini-5h': { remaining_fraction: 0.5, reset_time: '2026-11-28T12:00:00Z' } },
+      null
+    )
+    expect(readAntigravityStatusLineQuota(rest, NOW)?.usageMetadata?.account).toBeUndefined()
   })
 
   it('reads an epoch or lapsed reset as unused, but keeps the fraction for a bad reset time', () => {

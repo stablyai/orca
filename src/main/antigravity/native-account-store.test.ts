@@ -43,6 +43,30 @@ afterEach(() => {
   _resetSecretStoreForTests()
 })
 
+describe('selectAccount notification', () => {
+  it('tells the caller agy was switched even when the vault write then fails', async () => {
+    const h = harness(credential('a'))
+    await h.service.addCurrentAccount()
+    h.setNative(credential('b'))
+    const { accounts } = await h.service.addCurrentAccount()
+    h.setNative(credential('a'))
+    const b = accounts.find((row) => row.subject === 'b')!.id
+    vi.mocked(h.store.write).mockRejectedValueOnce(new Error('vault full'))
+    const switched = vi.fn()
+    await expect(h.service.selectAccount(b, switched)).rejects.toThrow('vault full')
+    expect(h.getNative()).toBe(credential('b'))
+    expect(switched).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays quiet when agy already held the selected account', async () => {
+    const h = harness(credential('a'))
+    const { accounts } = await h.service.addCurrentAccount()
+    const switched = vi.fn()
+    await h.service.selectAccount(accounts[0].id, switched)
+    expect(switched).not.toHaveBeenCalled()
+  })
+})
+
 describe('protected Antigravity account snapshots', () => {
   it.skipIf(process.platform === 'win32').each([
     [

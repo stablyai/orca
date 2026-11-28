@@ -30,7 +30,7 @@ export type AntigravityCredentialBackend = {
 export type AntigravityLaunchRestore = {
   /** True while Orca's own agy sign-in may have put a login it hasn't saved yet in the slot. */
   signInHoldsLogin: () => boolean
-  /** Called once a launch put the selected account back as agy's login. */
+  /** Called once a launch wrote the selected account into agy's login, even if checking it failed. */
   onLoginSwitched?: () => void
 }
 
@@ -120,7 +120,8 @@ export class AntigravityAccountService {
     })
   }
 
-  /** `switched` runs once agy holds another login than before and the switch is saved. */
+  /** `switched` runs as soon as agy's login was written, before it is checked or saved, and also
+   *  when a later step fails: after a write attempt agy's login is no longer known. */
   selectAccount(id: string, switched?: () => void): Promise<AntigravityAccountState> {
     return this.serialize(async () => {
       const { vault, current } = await this.reconcile(id)
@@ -128,7 +129,7 @@ export class AntigravityAccountService {
       if (!selected) {
         throw new Error('Antigravity account was not found.')
       }
-      const { readback, switching } = await this.switchNative(selected, current)
+      const { readback } = await this.switchNative(selected, current, switched)
       const latest = await this.store.read()
       if (
         !latest.accounts.some((account) => account.id === id && this.matches(account, readback))
@@ -138,9 +139,6 @@ export class AntigravityAccountService {
       latest.selectedAccountId = id
       this.updateSnapshot(latest, readback)
       await this.store.write(latest)
-      if (switching) {
-        switched?.()
-      }
       return this.state({ vault: latest, current: readback })
     })
   }
@@ -199,8 +197,7 @@ export class AntigravityAccountService {
       if (this.launchRestore.signInHoldsLogin()) {
         throw new Error('Antigravity sign-in is in progress. Finish it, then launch agy again.')
       }
-      await this.switchNative(selected, current)
-      this.launchRestore.onLoginSwitched?.()
+      await this.switchNative(selected, current, this.launchRestore.onLoginSwitched)
       // No vault write: both logins are already saved, and another Orca process selecting meanwhile wins.
       if ((await this.store.read()).selectedAccountId !== selected.id) {
         throw new Error('Antigravity snapshots changed during selection; refresh before retrying.')
@@ -218,11 +215,17 @@ export class AntigravityAccountService {
 
   private async switchNative(
     selected: StoredAntigravityAccount,
-    current: AntigravityNativeCredential | null
+    current: AntigravityNativeCredential | null,
+    onWritten?: () => void
   ) {
     const switching = !current || !this.matches(selected, current)
     if (switching) {
-      await this.backend.write(selected.credentials, current?.contents ?? null)
+      try {
+        await this.backend.write(selected.credentials, current?.contents ?? null)
+      } finally {
+        // A failed write may still have changed the slot, so the old login is not known either.
+        onWritten?.()
+      }
     }
     const { current: readback, fingerprint } = await this.logins.read()
     this.logins.note(fingerprint, readback)
