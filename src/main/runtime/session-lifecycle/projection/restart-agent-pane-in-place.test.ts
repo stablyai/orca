@@ -13,6 +13,8 @@ import {
   storeFolderWorkspace
 } from '../../construction/test-context/runtime-store-partial-fixture'
 import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
+import { registerBoundPty } from '../../terminal/layout/bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 const WORKSPACE = 'folder:ws'
 const TAB = 'tab-1'
@@ -42,9 +44,8 @@ const providerSession: AgentProviderSessionMetadata = {
   transcriptPath: '/home/user/.claude/projects/ws/conversation.jsonl'
 }
 
-function runtimeWithSavedLayout(savedPtyId: string, savedTabs: TerminalTab[]) {
-  folder = mkdtempSync(join(tmpdir(), 'orca-restart-in-place-'))
-  const session: WorkspaceSessionState = {
+function savedLayout(savedPtyId: string, savedTabs: TerminalTab[]): WorkspaceSessionState {
+  return {
     ...getDefaultWorkspaceSession(),
     tabsByWorktree: { [WORKSPACE]: savedTabs },
     terminalLayoutsByTabId: {
@@ -69,6 +70,12 @@ function runtimeWithSavedLayout(savedPtyId: string, savedTabs: TerminalTab[]) {
       }
     }
   }
+}
+
+/** The agent's terminal starts bound to its pane, then the saved layout changes under it. */
+function runtimeWithSavedLayout(savedPtyId: string, savedTabs: TerminalTab[]) {
+  folder = mkdtempSync(join(tmpdir(), 'orca-restart-in-place-'))
+  let session = savedLayout(RUNNING, [{ ...savedTab, ptyId: RUNNING }])
   const workspace = storeFolderWorkspace({
     id: 'ws',
     projectGroupId: 'group',
@@ -78,7 +85,10 @@ function runtimeWithSavedLayout(savedPtyId: string, savedTabs: TerminalTab[]) {
     partialRuntimeStore({
       getFolderWorkspaces: () => [workspace],
       getFolderWorkspace: () => workspace,
-      getWorkspaceSession: () => session
+      getWorkspaceSession: () => session,
+      setWorkspaceSession: (next: WorkspaceSessionState) => {
+        session = next
+      }
     })
   )
   const runtime = new OrcaRuntimeService(store)
@@ -92,7 +102,8 @@ function runtimeWithSavedLayout(savedPtyId: string, savedTabs: TerminalTab[]) {
     },
     getForegroundProcess: async () => 'claude'
   })
-  runtime.registerPty(RUNNING, WORKSPACE, null, { tabId: TAB, leafId: LEAF })
+  registerBoundPty(runtime, RUNNING, WORKSPACE, null, { tabId: TAB, leafId: LEAF })
+  session = savedLayout(savedPtyId, savedTabs)
   return { runtime, stopped }
 }
 
@@ -100,6 +111,9 @@ const savedLayoutsThatRefuse = [
   ['gives its pane to another terminal', BEFORE, [savedTab]],
   ['no longer has its tab', RUNNING, []]
 ] satisfies [string, string, TerminalTab[]][]
+
+// With main owning layout, the saved layout is main's: a terminal it gives no pane holds none.
+const refusal = ORCA_LAYOUT_OWNER_IS_MAIN ? 'not_local' : 'saved_layout_differs'
 
 it.each(savedLayoutsThatRefuse)(
   'keeps the agent terminal running when the saved layout %s',
@@ -112,13 +126,14 @@ it.each(savedLayoutsThatRefuse)(
     })
 
     expect({ result, stopped }).toEqual({
-      result: { ok: false, reason: 'saved_layout_differs' },
+      result: { ok: false, reason: refusal },
       stopped: []
     })
   }
 )
 
-it.each(savedLayoutsThatRefuse)(
+// Main's layout gives the terminal no pane, so a switch has no Claude pane to count.
+it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN).each(savedLayoutsThatRefuse)(
   'reports the Claude terminal as not moved by a switch when the saved layout %s',
   async (_case, savedPtyId, savedTabs) => {
     const { runtime } = runtimeWithSavedLayout(savedPtyId, savedTabs)
