@@ -1,3 +1,4 @@
+import { capJournalToolOutput } from '../../../native-chat/agent-session-journal/journal-tool-output-cap'
 import { projectCodexHistoryItem } from './codex-history-projection'
 import { isDeepStrictEqual } from 'node:util'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
@@ -96,7 +97,9 @@ export function createCodexHistoryImportPlan(input: {
         journal.presentationRemoved(key) ||
         (saved &&
           ((body.kind === 'message' && body.role === 'user') ||
-            isDeepStrictEqual(saved.body, body)))
+            isDeepStrictEqual(saved.body, body) ||
+            // A saved output cut at 64 KiB matches the whole one it was cut from.
+            isDeepStrictEqual(saved.body, capJournalToolOutput({ ...saved, body }, saved).body)))
       ) {
         return false
       }

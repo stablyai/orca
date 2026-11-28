@@ -121,6 +121,19 @@ describe('existing-profile default cohorts', () => {
     store.updateSettings({ deleteChatHistoryWithWorkspace: true })
     expect(store.getSettings().deleteOrcaChatsWithWorkspace).toBe(true)
     expect(store.getSettings().deleteAgentTranscriptsWithWorkspace).toBe(true)
+    await closeTestStores()
+
+    // An older build that turned the combined switch off in between decides both parts.
+    writeDataFile(
+      legacyProfile({
+        deleteOrcaChatsWithWorkspace: true,
+        deleteAgentTranscriptsWithWorkspace: true,
+        deleteChatHistoryWithWorkspace: false
+      })
+    )
+    const downgraded = createStore().getSettings()
+    expect(downgraded.deleteOrcaChatsWithWorkspace).toBe(false)
+    expect(downgraded.deleteAgentTranscriptsWithWorkspace).toBe(false)
   })
 
   it('marks new chat messages only for existing profiles without a choice', async () => {

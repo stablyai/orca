@@ -49,11 +49,14 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
    *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
    *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
    *  it meanwhile. */
-  forgetIdleChat = (
+  forgetIdleChat = async (
     forget: AgentSessionIdleForget,
     stillWanted: () => Promise<boolean>
-  ): Promise<boolean> =>
-    this.journalDatabase.forgetChat(
+  ): Promise<boolean> => {
+    // Nobody waits on a cleanup: an old chat is copied in first like idle conversion, outside the
+    // chat's lane (which holds the activity it waits out), and fails rather than fill the disk.
+    await this.journalDatabase.conversions.ensure(forget.sessionId, false)
+    return this.journalDatabase.forgetChat(
       forget.sessionId,
       async () =>
         (await stillWanted()) &&
@@ -61,10 +64,9 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
           kind: 'forget-idle',
           ...forget,
           legacyTabIds: this.transactions.legacySessionTabIds
-        }),
-      // Nobody waits on a cleanup: copying an old chat in first must never fill the disk.
-      false
+        })
     )
+  }
 
   /** Deletes every session of a chat for good with their tabs and its tombstone, in one commit, or
    *  none: each must be at rest. The caller holds every session's conversation lane; each journal

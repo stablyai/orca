@@ -155,11 +155,25 @@ export class LoadedCohortMigrationOperations {
   seedDeleteOrcaChatsWithWorkspace(state: PersistedState, savedProfile: unknown): PersistedState {
     const saved =
       isRecord(savedProfile) && isRecord(savedProfile.settings) ? savedProfile.settings : undefined
+    const combined = saved?.deleteChatHistoryWithWorkspace === true
     if (typeof saved?.deleteOrcaChatsWithWorkspace === 'boolean') {
-      return state
+      const both =
+        saved.deleteOrcaChatsWithWorkspace && saved.deleteAgentTranscriptsWithWorkspace === true
+      // A combined switch that no longer says "both on" was changed by an older build since.
+      if (combined === both) {
+        return state
+      }
+      this.runtime.loadNeedsSave = true
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          deleteOrcaChatsWithWorkspace: combined,
+          deleteAgentTranscriptsWithWorkspace: combined
+        }
+      }
     }
     const fresh = !isRecord(savedProfile) || isTelemetryOnlyProfile(savedProfile)
-    const combined = saved?.deleteChatHistoryWithWorkspace === true
     this.runtime.loadNeedsSave = true
     return {
       ...state,
