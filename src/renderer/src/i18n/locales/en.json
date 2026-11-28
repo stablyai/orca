@@ -23955,6 +23955,9 @@
         },
         "localOnlyNotice": "Talk instead of typing in any pane. These settings apply to this computer only; {{host}} keeps its own."
       },
+      "advanced": {
+        "localOnlyNotice": "Low-level compatibility settings for troubleshooting. These settings are saved on this computer, not on {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Available environment variables"
       },

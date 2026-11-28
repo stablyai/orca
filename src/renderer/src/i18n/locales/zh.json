@@ -22895,6 +22895,9 @@
         },
         "localOnlyNotice": "在任意面板中用说话代替打字。这些设置仅对此电脑生效，{{host}} 会保留自己的设置"
       },
+      "advanced": {
+        "localOnlyNotice": "排查问题用的底层兼容性设置。这些设置保存在此电脑上，而不是 {{host}}"
+      },
       "repositoryHooks": {
         "availableEnvVars": "可用的环境变量"
       },

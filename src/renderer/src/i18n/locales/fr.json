@@ -23927,6 +23927,9 @@
           "never": "Jamais"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Paramètres de compatibilité bas niveau pour le dépannage. Ces paramètres sont enregistrés sur cet ordinateur, pas sur {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Variables d'environnement disponibles"
       },

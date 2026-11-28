@@ -23615,6 +23615,9 @@
           "never": "永不"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "用於故障排除的低階相容性設定。這些設定儲存在這台電腦上，而非 {{host}}。"
+      },
       "repositoryHooks": {
         "availableEnvVars": "可用的環境變數"
       },

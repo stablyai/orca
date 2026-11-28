@@ -23150,6 +23150,9 @@
           "never": "안 함"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "문제 해결을 위한 낮은 수준의 호환성 설정입니다. 이 설정은 {{host}}이(가) 아닌 이 컴퓨터에 저장됩니다."
+      },
       "repositoryHooks": {
         "availableEnvVars": "사용 가능한 환경 변수"
       },
