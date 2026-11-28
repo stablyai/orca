@@ -3,6 +3,7 @@ import { triggerEdgeBump } from '../../platform/haptics/haptics'
 import { returnToHostSessionList } from '../../navigation/session-list-back'
 import type { HostStackHostRoute } from '../../navigation/host-stack-navigation'
 import { useBackClaim } from '../../navigation/use-back-claim'
+import { dropDocumentEditDraft } from '../../drafts/document-edit-draft-rows'
 
 export function filePreviewSessionListLeave(
   router: { dismissTo: (href: HostStackHostRoute) => void },
@@ -88,4 +89,29 @@ export function useMobileFilePreviewBack(options: {
   useBackClaim(requestBack)
 
   return { confirmingDiscard, requestBack, requestLeaveToSessionList, stay, discard }
+}
+
+/** Back for a preview document, including dropping its edit draft when the reader discards. */
+export function useMobileFilePreviewBackWithDraft(options: {
+  hasUnsavedDraft: boolean
+  router: { back: () => void; dismissTo: (href: HostStackHostRoute) => void }
+  hostId: string | undefined
+  editDraftKey: string | null
+}): { back: MobileFilePreviewBack; dropEditDraft: () => void } {
+  const { hasUnsavedDraft, router, hostId, editDraftKey } = options
+  // Unmount retires pending saves; a refused back keeps the document and its save alive.
+  const leave = useCallback(() => router.back(), [router])
+  const dropEditDraft = (): void => {
+    if (editDraftKey) {
+      dropDocumentEditDraft(editDraftKey)
+    }
+  }
+  const back = useMobileFilePreviewBack({
+    hasUnsavedDraft,
+    leave,
+    router,
+    hostId,
+    onDiscard: dropEditDraft
+  })
+  return { back, dropEditDraft }
 }

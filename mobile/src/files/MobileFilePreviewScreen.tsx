@@ -39,12 +39,11 @@ import { useMobileFilePreviewSave } from './preview/use-mobile-file-preview-save
 import { MobileFilePreviewConflictBar } from './preview/MobileFilePreviewConflictBar'
 import { filePreviewStylesSheet } from './preview/mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './markdown/mobile-markdown-file-link'
-import { useMobileFilePreviewBack } from './preview/use-mobile-file-preview-back'
+import { useMobileFilePreviewBackWithDraft } from './preview/use-mobile-file-preview-back'
 import {
   filePreviewEditDraftKey,
   MobileFilePreviewEditDraft
 } from './preview/MobileFilePreviewEditDraft'
-import { dropDocumentEditDraft } from '../drafts/document-edit-draft-rows'
 import { useThemedStyles } from '../theme/themed-styles'
 
 type Props = {
@@ -292,16 +291,12 @@ function MobileFilePreviewDocument({ route }: Props) {
     savedContent
   })
 
-  // Unmount retires pending saves; a refused back keeps the document and its save alive.
-  const leave = useCallback(() => router.back(), [router])
   const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
-  const dropEditDraft = () => editDraftKey && dropDocumentEditDraft(editDraftKey)
-  const back = useMobileFilePreviewBack({
+  const { back, dropEditDraft } = useMobileFilePreviewBackWithDraft({
     hasUnsavedDraft,
-    leave,
     router,
     hostId: previewParams?.hostId,
-    onDiscard: dropEditDraft
+    editDraftKey
   })
   // Reload, once confirmed, drops the draft for what disk holds now.
   const reloadFromDisk = () => {
