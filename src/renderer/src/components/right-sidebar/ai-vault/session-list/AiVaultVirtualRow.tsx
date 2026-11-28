@@ -10,6 +10,7 @@ import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/res
 import { cn } from '@/lib/class-names'
 import { VaultGroupHeader } from '../panel/AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
+import { AiVaultGroupMoreRow } from './AiVaultGroupMoreRow'
 import type { AiVaultSessionGroup } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import type { AiVaultOriginalPaneTarget } from '../session-actions/ai-vault-original-pane'
 import {
@@ -41,6 +42,7 @@ import { useTranslate } from '@/i18n/use-translate'
 export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
   | { type: 'session'; groupKey: string; session: AiVaultSession }
+  | { type: 'group-more'; groupKey: string; hiddenCount: number; expanded: boolean }
 
 type AiVaultVirtualRowProps = {
   row: AiVaultListRow | undefined
@@ -60,6 +62,7 @@ type AiVaultVirtualRowProps = {
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
   onToggleGroup: (key: string) => void
+  onToggleGroupExpanded: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
@@ -110,6 +113,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
   getSessionResumeActions,
   getSessionResumeInChat,
   onToggleGroup,
+  onToggleGroupExpanded,
   onToggleSessionDetails,
   onJumpToOriginalPane,
   onJumpToWorktree,
@@ -134,6 +138,22 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
   const t = useTranslate()
   if (!row) {
     return null
+  }
+  if (row.type === 'group-more') {
+    return (
+      <div
+        ref={measureElement}
+        data-index={index}
+        className="absolute left-0 top-0 w-full"
+        style={{ transform: `translateY(${start}px)` }}
+      >
+        <AiVaultGroupMoreRow
+          hiddenCount={row.hiddenCount}
+          expanded={row.expanded}
+          onToggle={() => onToggleGroupExpanded(row.groupKey)}
+        />
+      </div>
+    )
   }
 
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
