@@ -15,12 +15,20 @@ import { AgentCliInstallationError } from '../../../native-chat/agent-launch/age
 import type { PiBackgroundWorkLaunch } from '../background-work/rpc-background-work-bridge'
 import { PI_BACKGROUND_WORK_DIR_ENV } from '../background-work/rpc-background-work-bridge-source'
 import { PI_BOT_TOOLS_ENV } from '../../../bots/bot-tools-pi'
+import {
+  PI_RPC_FAMILY_PI,
+  piRpcFamilyFor,
+  type PiRpcFamily,
+  type PiRpcFamilyAgent
+} from '../pi-rpc-family'
 
 export type PiRpcLaunchOptions = {
   command: string
   prefixArgs?: readonly string[]
   cwd: string
   fullAccess: boolean
+  /** Protocol and flag differences between Pi-family agents; defaults to Pi. */
+  family?: PiRpcFamily
   extraArgs?: readonly string[]
   env?: Record<string, string>
   envToDelete?: readonly string[]
@@ -77,7 +85,6 @@ export function piRpcSessionlessEnvironment(env: Readonly<Record<string, string>
   }
 }
 
-const PI_READ_TOOLS = ['read', 'grep', 'find', 'ls'] as const
 // A limited run is refused any other tool selection, which could widen it.
 const PI_TOOL_SELECTION_FLAGS = [
   '--tools',
@@ -94,29 +101,36 @@ const PI_TOOL_SELECTION_FLAGS = [
 export type PiToolLimit = 'read' | 'none'
 
 // A run limited to some tools also turns MCP off, which --no-mcp does from Pi 1.0.4.
-const PI_LIMITED_TOOLS_MINIMUM_VERSION = '1.0.4'
 
 /** A look reads only; a reply-only run has no tools. Null runs every tool Pi has. */
 export function piToolLimit(
   readOnly: ReadOnlySessionMode | null,
-  launchVersion: AgentCliVersionCheck
+  launchVersion: AgentCliVersionCheck,
+  agent: PiRpcFamilyAgent = 'pi'
 ): PiToolLimit | null {
   const tools = toolFreeSession(readOnly) ? 'none' : readOnly ? 'read' : null
+  const family = piRpcFamilyFor(agent)
   if (
     tools &&
     launchVersion.status === 'ready' &&
-    compareAppVersions(launchVersion.version, PI_LIMITED_TOOLS_MINIMUM_VERSION) < 0
+    compareAppVersions(launchVersion.version, family.limitedToolsMinimumVersion) < 0
   ) {
-    throw AgentCliInstallationError.tooOld('pi', {
+    throw AgentCliInstallationError.tooOld(agent, {
       version: launchVersion.version,
-      minimumVersion: PI_LIMITED_TOOLS_MINIMUM_VERSION
+      minimumVersion: family.limitedToolsMinimumVersion
     })
+  }
+  if (tools && family.limitedLaunchRequiresVerifiedVersion && launchVersion.status !== 'ready') {
+    throw new Error(
+      `${agent} limited sessions require a verified version >= ${family.limitedToolsMinimumVersion}, but the version probe returned ${launchVersion.status}`
+    )
   }
   return tools
 }
 
 /** Pi stores its own sessions; an explicit session file is shared with terminal resumes. */
 export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLaunch {
+  const family = options.family ?? PI_RPC_FAMILY_PI
   if (!options.fullAccess) {
     throw new Error('Pi structured chat supports full access only')
   }
@@ -184,10 +198,27 @@ export function buildPiRpcLaunch(options: PiRpcLaunchOptions): ProviderProcessLa
       ...(options.instructionsFile ? ['--append-system-prompt', options.instructionsFile] : []),
       ...(options.skillDirs ?? []).flatMap((dir) => ['--skill', dir]),
       // Plain names replace the whole selection, a resumed session's included, and leave MCP tools undeclared.
-      ...(options.tools === 'read' ? ['--tools', PI_READ_TOOLS.join(','), '--no-mcp'] : []),
-      ...(options.tools === 'none' ? ['--no-tools', '--no-mcp'] : []),
+      ...(options.tools === 'read'
+        ? [
+            '--tools',
+            (options.family ?? PI_RPC_FAMILY_PI).readTools.join(','),
+            // Without `--no-mcp` the big hammer is the only way MCP tools stay out.
+            ...((options.family ?? PI_RPC_FAMILY_PI).supportsNoMcpFlag
+              ? ['--no-mcp']
+              : ['--no-tools'])
+          ]
+        : []),
+      ...(options.tools === 'none'
+        ? [
+            '--no-tools',
+            ...((options.family ?? PI_RPC_FAMILY_PI).supportsNoMcpFlag ? ['--no-mcp'] : [])
+          ]
+        : []),
       ...(options.backgroundWork ? ['--extension', options.backgroundWork.extension] : []),
-      ...(options.botTools ? ['--extension', options.botTools.extension] : []),
+      // OMP rejects `--no-tools` combined with `--extension`, and a limited session must not gain host tools.
+      ...(options.botTools && !(options.tools && !family.supportsNoMcpFlag)
+        ? ['--extension', options.botTools.extension]
+        : []),
       ...(options.sessionFile ? ['--session', options.sessionFile] : []),
       ...(options.forkFile ? ['--fork', options.forkFile] : [])
     ],

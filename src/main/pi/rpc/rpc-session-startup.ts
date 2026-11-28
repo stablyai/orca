@@ -14,7 +14,8 @@ import {
   unpickedSessionConfiguredChoice,
   withLiveCatalogListing
 } from '../../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import { piRpcProviderLink, type PiRpcResolvedLaunch } from './launch/rpc-launch-resolution'
+import { piRpcProviderLink } from './launch/rpc-provider-link'
+import type { PiRpcResolvedLaunch } from './launch/rpc-launch-resolution'
 import { piModelOptionId } from './options/rpc-model-options'
 import { readPiRpcCommands, readPiRpcSessionOptions } from './options/rpc-options'
 import { piRpcStateSchema, type PiRpcState } from './rpc-protocol'
@@ -73,7 +74,8 @@ export class PiRpcSessionStartup {
         sink: this.input.events,
         signal,
         assertCurrent: () => this.assertLive(signal),
-        logger: this.deps.logger
+        logger: this.deps.logger,
+        agent: this.deps.family?.agent
       }),
       signal
     )
@@ -154,7 +156,10 @@ export class PiRpcSessionStartup {
 
   private async readCommands(): Promise<void> {
     try {
-      const result = await readPiRpcCommands(this.connection)
+      const result = await readPiRpcCommands(
+        this.connection,
+        this.deps.family?.commandsRequest ?? 'get_commands'
+      )
       if (this.failedCause() || this.connection.closed) {
         return
       }

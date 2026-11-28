@@ -7,7 +7,10 @@ import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../shared/execution-host/execution-host'
 import type { StructuredAgentDefinition } from '../../../native-chat/agent-session-wire/providers/structured-agent-definition'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
+import {
+  agentDrivesSession,
+  migrationAdjustedHandleChain
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import type { StructuredAgentCommandSettings } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   createNativeChatVisualsDelivery,
@@ -168,6 +171,18 @@ function admittedRecord(
   }
   const agents = { definition: (agent: string) => (agent === definition.agent ? definition : null) }
   if (!agentDrivesSession(agents, record)) {
+    // A transport migration (OMP's ACP-to-RPC cutover) leaves same-agent handles nothing can resume;
+    // dropping those relics opens the session fresh instead of hard-erroring every migrated chat.
+    const migrated = {
+      ...record,
+      providerHandleChain: migrationAdjustedHandleChain(definition, record.providerHandleChain)
+    }
+    if (
+      migrated.providerHandleChain.length !== record.providerHandleChain.length &&
+      agentDrivesSession(agents, migrated)
+    ) {
+      return migrated
+    }
     const pin = definition.accountHomeVariable ?? definition.accountLocatorKind
     throw new Error(
       `session ${sessionId}'s account home or handles are not ${definition.agent}'s: its sessions pin ${pin} and hold ${definition.handleTransport} handles`

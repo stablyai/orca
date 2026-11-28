@@ -8,19 +8,27 @@ import {
   structuredAgentLaunchSources
 } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
+import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/providers/structured-agent-definition'
+import { PI_RPC_FAMILY_PI, type PiRpcFamily } from './rpc/pi-rpc-family'
 import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
 import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 
-function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredAgentRuntimeAdapter {
+export function createPiRpcAdapter(
+  context: StructuredAgentAdapterContext,
+  family: PiRpcFamily = PI_RPC_FAMILY_PI,
+  definition: DirectoryAccountAgentDefinition = PI_RPC_AGENT
+): StructuredAgentRuntimeAdapter {
   const { deps } = context
   return new PiRpcSessionAdapter({
+    family,
     resolveLaunch:
-      deps.resolvePiLaunch ??
+      (family.agent === 'pi' ? deps.resolvePiLaunch : undefined) ??
       composeStructuredLaunch(
-        PI_RPC_AGENT,
+        definition,
         structuredAgentLaunchSources(context),
         piRpcLaunchPart({
+          family,
           logger: deps.logger,
           dataDirectory: deps.stateDirectory,
           managedExtensionsEnabled: deps.piManagedExtensionsEnabled
@@ -58,5 +66,5 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
 
 export const PI_RPC_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Object.assign(
   PI_RPC_RUNTIME_METADATA,
-  { createAdapter: createPiRpcAdapter }
+  { createAdapter: (context) => createPiRpcAdapter(context) }
 )

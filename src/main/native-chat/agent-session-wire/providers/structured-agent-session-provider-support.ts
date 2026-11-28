@@ -46,6 +46,35 @@ export function agentDrivesSession(
   )
 }
 
+/** A transport migration (OMP's ACP-to-RPC cutover) strands same-agent handles nothing can resume; drop only those relics. */
+export function migrationAdjustedHandleChain<
+  L extends { handle: { transport: string; agent: string } }
+>(definition: { agent: string; handleTransport: string }, chain: readonly L[]): L[] {
+  return chain.filter(
+    (link) =>
+      link.handle.transport === definition.handleTransport || link.handle.agent !== definition.agent
+  )
+}
+
+/** agentDrivesSession after dropping migration relics; the launch path re-filters so stored chains stay intact. */
+export function agentDrivesSessionMigrating(
+  agents: Pick<StructuredAgentRegistry, 'definition'>,
+  session: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'providerHandleChain'>
+): boolean {
+  if (agentDrivesSession(agents, session)) {
+    return true
+  }
+  const definition = agents.definition(session.provider)
+  if (!definition) {
+    return false
+  }
+  const adjusted = migrationAdjustedHandleChain(definition, session.providerHandleChain)
+  return (
+    adjusted.length !== session.providerHandleChain.length &&
+    agentDrivesSession(agents, { ...session, providerHandleChain: adjusted })
+  )
+}
+
 /** Share launch support checks with restart/retry offers; stored history needs no adapter. */
 export function hostCanStartRecord(
   deps: {
@@ -56,7 +85,7 @@ export function hostCanStartRecord(
 ): boolean {
   return (
     adapterSupportsCreateIfDeclared(deps.adapter, record.location, record.provider) &&
-    agentDrivesSession(deps.agents, record)
+    agentDrivesSessionMigrating(deps.agents, record)
   )
 }
 

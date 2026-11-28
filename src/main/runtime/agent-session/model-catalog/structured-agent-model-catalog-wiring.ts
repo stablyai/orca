@@ -19,7 +19,7 @@ import type {
   StructuredAgentRuntimeRegistration
 } from '../installation/structured-agent-runtime-registration-types'
 import type { StructuredAgentRegistry } from '../../../native-chat/agent-session-wire/providers/structured-agent-registry'
-import { agentDrivesSession } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
+import { agentDrivesSessionMigrating } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-provider-support'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import {
   STRUCTURED_AGENT_RUNTIME_METADATA,
@@ -92,7 +92,7 @@ export async function modelCatalogHostDeps(input: {
       store: agentModelCatalogStore,
       getConversation: (id) => input.store.getConversation(id) ?? undefined,
       getRecord: (id) => input.store.getRecord(id) ?? undefined,
-      drivesRecord: (record) => agentDrivesSession(input.agents, record),
+      drivesRecord: (record) => agentDrivesSessionMigrating(input.agents, record),
       resolveAccountHome: deps.resolveAgentAccountHome,
       ...structuredAgentModelCatalogAccountReads(input.host),
       recordWorkspacePath: async (record) =>

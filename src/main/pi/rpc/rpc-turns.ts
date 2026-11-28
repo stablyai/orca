@@ -6,36 +6,14 @@ import type {
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { JsonlRpcRecord } from '../../jsonl-rpc/peer'
-import type { JsonlRpcRequestOptions } from '../../jsonl-rpc/peer-oversized-record'
-import type { JsonlRpcTimelineLane } from '../../jsonl-rpc/timeline-lane'
 import { PiRpcCompaction } from './rpc-compaction'
 import { PiRpcContextUsage } from './rpc-context-usage'
 import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './prompts/rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { type PiRpcState, piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
-
-export type PiRpcTurnDeps = {
-  lane: JsonlRpcTimelineLane
-  generation: string
-  send: (frame: JsonlRpcRecord) => Promise<void>
-  request: (
-    command: string,
-    params?: Record<string, unknown>,
-    options?: JsonlRpcRequestOptions
-  ) => Promise<unknown>
-  settled: (id: string, outcome: AgentSessionDispatchOutcome) => void
-  /** Pi took this send, before it opens a turn for it; while one runs, it steers it into that turn.
-   *  `opener`: the send that starts a run from idle, which joined no turn. */
-  accepting?: (id: string, opener: boolean) => void
-  idle: () => void
-  /** Called after the timeline accepts the turn end. */
-  turnEnded?: () => void
-  failed: (error: Error) => void
-  diagnostic?: (error: unknown) => void
-  prepareStateObservation?: () => (state: PiRpcState) => void
-}
+import { piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
+import type { PiRpcTurnDeps } from './rpc-turn-deps'
 
 /** Prompt replies can be idless and arrive after dialogs; they have no elapsed-time deadline. */
 export class PiRpcTurns {
@@ -176,7 +154,8 @@ export class PiRpcTurns {
       case 'agent_end':
         // This can precede automatic retry or detached compaction.
         break
-      case 'agent_settled':
+      case 'agent_settled': // OMP renamed it to session_settled; payload identical.
+      case 'session_settled':
         this.commandCompleted()
         return
       case 'compaction_start':

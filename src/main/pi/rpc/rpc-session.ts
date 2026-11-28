@@ -76,7 +76,7 @@ export class PiRpcSession {
     this.lane = new JsonlRpcTimelineLane({
       sink,
       sessionId: input.identity.sessionId,
-      agent: 'pi',
+      agent: deps.family?.agent ?? 'pi',
       generation,
       namespace: input.identity.sessionId,
       ...this.reading.control('lane'),

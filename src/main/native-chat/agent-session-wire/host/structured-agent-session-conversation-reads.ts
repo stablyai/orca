@@ -58,7 +58,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       if (
         record &&
         (record.provider !== params.agent ||
-          !providerSupport.agentDrivesSession(context().deps.agents, record))
+          !providerSupport.agentDrivesSessionMigrating(context().deps.agents, record))
       ) {
         return null
       }

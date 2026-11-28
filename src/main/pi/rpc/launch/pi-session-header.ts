@@ -27,11 +27,23 @@ export async function readPiSessionHeader(
     const buffer = Buffer.alloc(64 * 1024)
     const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, 0)
     const data = buffer.subarray(0, bytesRead).toString('utf8')
-    const lf = data.indexOf('\n')
-    if (lf === -1) {
-      throw new Error('Pi session header is incomplete or oversized')
+    // OMP writes a `title` line ahead of the header; Pi starts with the header itself.
+    for (const line of data.split('\n')) {
+      if (!line.trim()) {
+        throw new Error('Pi session header is incomplete or oversized')
+      }
+      const frame: unknown = JSON.parse(line)
+      if (
+        typeof frame === 'object' &&
+        frame !== null &&
+        'type' in frame &&
+        frame.type === 'title'
+      ) {
+        continue
+      }
+      return headerSchema.parse(frame)
     }
-    return headerSchema.parse(JSON.parse(data.slice(0, lf)))
+    throw new Error('Pi session header is incomplete or oversized')
   } finally {
     await descriptor.close()
   }

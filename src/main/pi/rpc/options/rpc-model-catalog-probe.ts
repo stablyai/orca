@@ -29,6 +29,7 @@ import { runAgentModelCatalogSession } from '../../../native-chat/agent-model-ca
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
 import { buildPiRpcLaunch, piRpcSessionlessEnvironment } from '../launch/rpc-launch'
+import type { PiRpcFamily } from '../pi-rpc-family'
 import { checkPiRpcVersion, resolvePiRpcInvocation } from '../launch/rpc-launch-resolution'
 import { piModelOptionId, readPiRpcModelOptions, type PiRpcRequester } from './rpc-model-options'
 import { piRpcModelSchema } from './rpc-model-schema'
@@ -43,6 +44,7 @@ const discoveryStateSchema = lazyZodSchema(() =>
 )
 
 export type PiModelCatalogProbeDeps = {
+  family?: PiRpcFamily
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveEnvironment: () => Promise<NodeJS.ProcessEnv>
   /** Refresh once on a missing Pi binary; absent disables retry. */
@@ -107,7 +109,8 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
       resolveCommand: deps.resolveCommand,
       refreshEnvironmentAfterMiss:
         lookup === 'recover' ? deps.refreshEnvironmentAfterMiss : undefined,
-      resolveWorkingDirectory: () => cwd
+      resolveWorkingDirectory: () => cwd,
+      family: deps.family
     })
     assertStructuredAgentResolutionCurrent(operation)
     return {
@@ -135,7 +138,8 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
         assertStructuredAgentResolutionCurrent(operation)
         const release = await checkPiRpcVersion(
           { command, prefixArgs, cwd, env, operation },
-          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
+          deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null })),
+          deps.family?.minimumVersions
         )
         assertStructuredAgentResolutionCurrent(operation)
         if (release.status === 'tooOld') {
@@ -146,7 +150,8 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
           prefixArgs,
           cwd,
           ...piRpcSessionlessEnvironment(env),
-          fullAccess: true
+          fullAccess: true,
+          ...(deps.family ? { family: deps.family } : {})
         })
         const success = await runAgentModelCatalogSession(
           () =>

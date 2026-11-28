@@ -41,7 +41,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
   supportsCreate: NonNullable<StructuredAgentSessionAdapter['supportsCreate']> = (
     location,
     agent
-  ) => agent === 'pi' && this.supportsLocation(location)
+  ) => agent === (this.deps.family?.agent ?? 'pi') && this.supportsLocation(location)
 
   async acquire(input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> {
     const id = input.identity.sessionId

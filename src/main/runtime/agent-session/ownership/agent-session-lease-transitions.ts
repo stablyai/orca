@@ -14,6 +14,7 @@ import {
   type AgentSessionProviderHandleLink
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleBelongsTo } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { migrationRebasedChain } from './agent-session-provider-handle-transition'
 import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
 import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type {
@@ -159,7 +160,7 @@ export function proveAgentSessionOwner(args: {
     throw new Error('agent_session_provider_handle_stale_fence')
   }
   const providerHandleChain = link
-    ? appendAgentSessionProviderHandleLink(record.providerHandleChain, link)
+    ? appendAgentSessionProviderHandleLink(migrationRebasedChain(record, link), link)
     : record.providerHandleChain
   const head = providerHandleChain.at(-1)
   if (link && !head) {

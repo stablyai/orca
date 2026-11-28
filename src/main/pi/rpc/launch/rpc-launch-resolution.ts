@@ -7,7 +7,6 @@ import {
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { hasReachedAppVersion } from '../../../../shared/app-lifecycle/identity/app-version'
@@ -50,8 +49,10 @@ import {
   piBotToolsConfig
 } from '../../../bots/bot-tools-pi'
 import { writePiExtensionFile } from './pi-extension-file'
+import { PI_RPC_FAMILY_PI, type PiRpcFamily, type PiRpcFamilyAgent } from '../pi-rpc-family'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
+  family?: PiRpcFamily
   previous: AgentSessionProviderHandleLink | null
   replacement?: 'unsaved' | 'restore-failed'
   /** Conversation files, newest first; empty for a new conversation. */
@@ -60,6 +61,7 @@ export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   shrinksImages?: true
 }
 export type PiRpcLaunchPartDeps = {
+  family?: PiRpcFamily
   resolveCommand?: typeof resolveCliCommand
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
@@ -71,18 +73,17 @@ export type PiRpcLaunchPartDeps = {
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
-export const PI_RPC_MINIMUM_VERSIONS = ['0.84.0'] as const
-// Before 1.5.1 Pi shrinks prompt images but sends steered and follow-up ones as given.
-const PI_SHRINKS_EVERY_IMAGE_VERSION = '1.5.1'
+export const PI_RPC_MINIMUM_VERSIONS = PI_RPC_FAMILY_PI.minimumVersions
 
 export function resolvePiRpcCommand(
   env: Readonly<Record<string, string>>,
   commandSettings: StructuredAgentCommandSettings = {},
-  resolve?: typeof resolveCliCommand
+  resolve?: typeof resolveCliCommand,
+  agent: PiRpcFamilyAgent = 'pi'
 ): StructuredAgentCommand {
   const homePath = env.HOME ?? env.USERPROFILE
   return resolveStructuredAgentCommand(
-    'pi',
+    agent,
     commandSettings,
     { pathEnv: env.PATH ?? env.Path ?? null, ...(homePath ? { homePath } : {}) },
     resolve ? { resolve } : {}
@@ -97,7 +98,8 @@ export function checkPiRpcVersion(
     cwd: string
     env: Record<string, string>
   },
-  read?: AgentCliVersionReader
+  read?: AgentCliVersionReader,
+  minimumVersions: readonly string[] = PI_RPC_FAMILY_PI.minimumVersions
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
     {
@@ -107,7 +109,7 @@ export function checkPiRpcVersion(
       env: launch.env,
       operation: launch.operation
     },
-    PI_RPC_MINIMUM_VERSIONS,
+    minimumVersions,
     read
   )
 }
@@ -122,7 +124,9 @@ export function resolvePiRpcInvocation(deps: {
   refreshEnvironmentAfterMiss?: (askedAt: number) => Promise<void>
   /** Base for relative PATH entries; defaults to Orca's working directory. */
   resolveWorkingDirectory?: () => Promise<string> | string
+  family?: PiRpcFamily
 }): Promise<StructuredAgentCommand & { env: Record<string, string> }> {
+  const agent = deps.family?.agent ?? 'pi'
   return resolveAgainAfterRefreshOnMissingProgram(
     async () => {
       const env: Record<string, string> = {}
@@ -133,7 +137,7 @@ export function resolvePiRpcInvocation(deps: {
       }
       assertStructuredAgentResolutionCurrent(deps.operation)
       env.PI_CODING_AGENT_DIR = deps.accountDir
-      return { env, ...resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand) }
+      return { env, ...resolvePiRpcCommand(env, deps.commandSettings, deps.resolveCommand, agent) }
     },
     deps.refreshEnvironmentAfterMiss,
     { env: ({ env }) => env, cwd: deps.resolveWorkingDirectory },
@@ -144,6 +148,8 @@ export function resolvePiRpcInvocation(deps: {
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
+  const family = deps.family ?? PI_RPC_FAMILY_PI
+  const { agent } = family
   return async (basis, identity) => {
     const { record } = basis
     if (process.platform === 'win32' && !isWindowsProcessStartTimeAvailable()) {
@@ -157,7 +163,8 @@ export function piRpcLaunchPart(
       commandSettings: basis.commandSettings(),
       resolveCommand: deps.resolveCommand,
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
-      resolveWorkingDirectory: () => cwd
+      resolveWorkingDirectory: () => cwd,
+      family
     })
     const previous = agentSessionProviderHandleChainHead(record.providerHandleChain)
     let sessionFile: string | undefined
@@ -166,7 +173,7 @@ export function piRpcLaunchPart(
     if (previous) {
       if (
         previous.handle.transport !== 'jsonl-rpc' ||
-        previous.handle.agent !== 'pi' ||
+        previous.handle.agent !== agent ||
         !isAbsolute(previous.handle.nativeId)
       ) {
         throw new Error('Pi resume handle is not a host session file')
@@ -194,50 +201,60 @@ export function piRpcLaunchPart(
     // Recheck each launch because the PATH binary may have changed.
     const launchVersion = await checkPiRpcVersion(
       { command, prefixArgs, cwd, env },
-      deps.probeVersion
+      deps.probeVersion,
+      family.minimumVersions
     )
     if (launchVersion.status === 'tooOld') {
-      throw AgentCliInstallationError.tooOld('pi', launchVersion)
+      throw AgentCliInstallationError.tooOld(agent, launchVersion)
     }
-    const visuals = await basis.visuals()
+    const visuals = family.supportsSkillDirFlag ? await basis.visuals() : null
     const linked = await basis.linkedSkills()
     // Only a folder with skills; Pi loads every SKILL.md under it, links included.
-    const linkedRoot = linked.projects.length > 0 ? linked.root : null
+    const linkedRoot =
+      family.supportsSkillDirFlag && linked.projects.length > 0 ? linked.root : null
     const skillDirs = [visuals?.skill, linkedRoot].flatMap((root) =>
       root ? [root.skillsRoot] : []
     )
+    if (!family.supportsSkillDirFlag && linked.projects.length > 0) {
+      deps.logger?.warn(`${agent} cannot load linked project skills without a skill flag`, {
+        scope: 'pi-rpc-launch'
+      })
+    }
     const instructions = await basis.instructions(
       linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
     )
     const instructionsFile = instructions
       ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
       : undefined
-    const tools = piToolLimit(basis.readOnly, launchVersion)
+    const tools = piToolLimit(basis.readOnly, launchVersion, agent)
     // Pi registers each server beside its own; a host-list server named like one of them stays out.
-    const botTools = await deliverHostMcpServersBesideConfig(basis, 'pi', { env, cwd })
+    const botTools = await deliverHostMcpServersBesideConfig(basis, agent, { env, cwd })
     const botServers = piBotToolsConfig(botTools)
     // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
     if (deps.managedExtensionsEnabled?.()) {
-      piTitlebarExtensionService.installManagedExtensions(accountHome.path, 'pi')
+      piTitlebarExtensionService.installManagedExtensions(accountHome.path, agent)
     }
-    const backgroundWork = await (
-      deps.ensureBackgroundWorkBridge ??
-      (() =>
-        ensurePiBackgroundWorkBridge((error) =>
-          deps.logger?.warn('Pi chat starts without its background-work bridge', {
-            scope: 'pi-background-work',
-            error
-          })
-        ))
-    )()
+    const backgroundWork = family.supportsBackgroundWorkBridge
+      ? await (
+          deps.ensureBackgroundWorkBridge ??
+          (() =>
+            ensurePiBackgroundWorkBridge((error) =>
+              deps.logger?.warn('Pi chat starts without its background-work bridge', {
+                scope: 'pi-background-work',
+                error
+              })
+            ))
+        )()
+      : null
     return {
       launch: {
         command,
         prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
+        family,
         previous,
         ...(sessionFile || forkFile
-          ? { lineage: piConversationFiles(record.providerHandleChain) }
+          ? { lineage: piConversationFiles(record.providerHandleChain, agent) }
           : {}),
         ...(sessionFile ? { sessionFile } : {}),
         ...(forkFile ? { forkFile } : {}),
@@ -259,7 +276,8 @@ export function piRpcLaunchPart(
             }
           : {}),
         ...(launchVersion.status === 'ready' &&
-        hasReachedAppVersion(launchVersion.version, PI_SHRINKS_EVERY_IMAGE_VERSION)
+        family.shrinksEveryImageVersion !== null &&
+        hasReachedAppVersion(launchVersion.version, family.shrinksEveryImageVersion)
           ? { shrinksImages: true as const }
           : {})
       },
@@ -269,10 +287,10 @@ export function piRpcLaunchPart(
 }
 
 /** Follow resumes and directory forks to the original session; forks preserve entry IDs. */
-function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
+function piConversationFiles(chain: AgentSessionProviderHandleChain, agent: string): string[] {
   const files: string[] = []
   for (const link of chain.toReversed()) {
-    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== 'pi') {
+    if (link.handle.transport !== 'jsonl-rpc' || link.handle.agent !== agent) {
       break
     }
     files.push(link.handle.nativeId)
@@ -281,38 +299,4 @@ function piConversationFiles(chain: AgentSessionProviderHandleChain): string[] {
     }
   }
   return files
-}
-
-export function piRpcProviderLink(
-  launch: PiRpcResolvedLaunch,
-  file: string,
-  fence: number,
-  linkId: string,
-  at: number
-): AgentSessionProviderHandleLink {
-  if (!isAbsolute(file)) {
-    throw new Error('Pi did not return an absolute session file')
-  }
-  const previous = launch.previous
-  if (launch.sessionFile && file !== launch.sessionFile) {
-    throw new Error('Pi resumed a different session file')
-  }
-  if (launch.forkFile && file === launch.forkFile) {
-    throw new Error('Pi did not fork the session for its new directory')
-  }
-  const key = previous ? agentSessionProviderHandleKey(previous.handle) : undefined
-  return {
-    linkId,
-    handle: { transport: 'jsonl-rpc', agent: 'pi', nativeId: file },
-    origin: launch.forkFile ? 'forked' : launch.sessionFile ? 'resumed' : 'created',
-    mintedAtFence: fence,
-    observedAt: at,
-    ...(launch.forkFile && key ? { forkedFromKey: key } : {}),
-    ...(launch.replacement === 'unsaved' && key
-      ? { supersedesKey: key, ...(previous?.replaces ? { replaces: previous.replaces } : {}) }
-      : {}),
-    ...(launch.replacement === 'restore-failed' && key
-      ? { replaces: { key, reason: 'restore-failed', replacedAt: at } }
-      : {})
-  }
 }

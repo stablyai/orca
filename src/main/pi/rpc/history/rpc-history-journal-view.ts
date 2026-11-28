@@ -53,7 +53,8 @@ export type PiHistoryJournalView = {
 
 export async function readPiHistoryJournalView(
   journal: StructuredAgentSessionHistoryJournal,
-  lineage: ReadonlySet<string>
+  lineage: ReadonlySet<string>,
+  agent = 'pi'
 ): Promise<PiHistoryJournalView & HistoryCatchUpJournalView> {
   return captureHistoryCatchUpView(journal, async () => {
     const [cursor, hasRows, accepted] = await Promise.all([
@@ -75,7 +76,7 @@ export async function readPiHistoryJournalView(
         const identity = parseAgentJournalItemKey(itemId)
         if (
           identity?.provider === 'legacy' &&
-          identity.agent === 'pi' &&
+          identity.agent === agent &&
           lineage.has(identity.sessionId)
         ) {
           accounted.add(identity.recordId)
