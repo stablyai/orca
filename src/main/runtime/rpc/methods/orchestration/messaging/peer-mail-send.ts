@@ -134,7 +134,11 @@ export async function sendPeerMail(args: {
     }
     // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
     throw !delivering || peerMailStoredNothing(error)
-      ? withUnattachedUploads(error, server, { copied: attachments?.length ?? 0 })
+      ? withUnattachedUploads(error, server, {
+          copied: attachments?.length ?? 0,
+          // Only the server's refusal can follow its eager claim for the item's chat.
+          forItem: delivering && params.item !== undefined
+        })
       : error
   }
   return recordReceiptBeforeNudge(

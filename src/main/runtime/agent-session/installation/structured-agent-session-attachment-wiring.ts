@@ -51,16 +51,17 @@ export function installAgentSessionAttachments(deps: {
     attachments,
     async (sessionId, body) => {
       writable('claimed')
+      const now = Date.now()
       const [claimed] = await deps.journalDatabase.effects([
-        { kind: 'claim', claim: { sessionId, body, required: true, now: Date.now() } }
+        { kind: 'claim', claim: { sessionId, body, required: true, now } }
       ])
       return claimed && typeof claimed === 'object' && 'inserted' in claimed
-        ? claimed.inserted
+        ? { uploadIds: claimed.inserted, claimedAt: now }
         : undefined
     },
-    async (sessionId, uploadIds) => {
+    async (sessionId, { uploadIds, claimedAt }) => {
       writable('released')
-      await deps.journalDatabase.effects([{ kind: 'release', sessionId, uploadIds }])
+      await deps.journalDatabase.effects([{ kind: 'release', sessionId, uploadIds, claimedAt }])
     }
   )
   const retainedUploadIds = deps.retainedUploadIds

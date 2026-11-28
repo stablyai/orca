@@ -18,5 +18,7 @@ export const ORCHESTRATION_FEDERATION_ERROR_CODES = [
   // A refused bot mail whose file claims couldn't be given back, so a chat still holds its files.
   'peer_mail_files_kept',
   // A send --on that stored no mail after its files reached the server; data counts them.
-  'peer_mail_not_sent'
+  'peer_mail_not_sent',
+  // Bot mail with files that was stored, then a later step failed: it was delivered.
+  'peer_mail_stored'
 ] as const

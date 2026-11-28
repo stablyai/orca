@@ -276,18 +276,20 @@ describe('files sent with mail to a bot on a paired server', () => {
       bStore,
       async (sessionId, body) => {
         claimedFor.push(sessionId)
-        const claim = { sessionId, body, required: true, now: Date.now() }
+        const now = Date.now()
+        const claim = { sessionId, body, required: true, now }
         const claimed = applyJournalWriterEffect(journal.db, bState, { kind: 'claim', claim })
         duringClaim?.()
         return claimed && typeof claimed === 'object' && 'inserted' in claimed
-          ? claimed.inserted
+          ? { uploadIds: claimed.inserted, claimedAt: now }
           : undefined
       },
-      async (sessionId, uploadIds) => {
+      async (sessionId, { uploadIds, claimedAt }) => {
         if (releaseFails) {
           throw new Error('journal is read-only')
         }
-        applyJournalWriterEffect(journal.db, bState, { kind: 'release', sessionId, uploadIds })
+        const release = { kind: 'release' as const, sessionId, uploadIds, claimedAt }
+        applyJournalWriterEffect(journal.db, bState, release)
       }
     )
     file = join(dir, 'notes.txt')
@@ -573,5 +575,47 @@ describe('files sent with mail to a bot on a paired server', () => {
     })
     expect(claimsOn(committed[0]!)).toEqual([B_OTHER])
     expect(b.db.getInbox(10)).toEqual([])
+  })
+  it('keeps the claims of mail it stored when a later step there fails, and says it was delivered', async () => {
+    vi.mocked(b.runtime.notifyMessageArrived).mockImplementation(() => {
+      throw new Error('wake failed')
+    })
+
+    await expect(send({ to: 'bot:Docs', files: [file] })).rejects.toMatchObject({
+      code: 'peer_mail_stored',
+      message: 'The message was delivered with its files, then this failed: wake failed',
+      data: { effectsApplied: true }
+    })
+    expect(b.db.getUnreadMessages(CHAT_ON_B)).toHaveLength(1)
+    expect(claimsOn(committed[0]!)).toEqual([B_SESSION])
+  })
+
+  it('gives back only the claim its own send took, not one taken anew since', async () => {
+    const path = await bStore.storeFile('shared.txt', Buffer.from('x'))
+    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: `@${path}` }] }
+    const claim = (now: number) =>
+      applyJournalWriterEffect(journal.db, bState, {
+        kind: 'claim',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a user message naming one upload is all the claim reads.
+        claim: { sessionId: B_SESSION, body: body as never, required: true, now }
+      }) as { inserted: string[] }
+    const { inserted } = claim(1000)
+    // The chat dropped that claim, then took it again for other mail.
+    applyJournalWriterEffect(journal.db, bState, {
+      kind: 'release',
+      sessionId: B_SESSION,
+      uploadIds: inserted,
+      claimedAt: 1000
+    })
+    claim(2000)
+
+    applyJournalWriterEffect(journal.db, bState, {
+      kind: 'release',
+      sessionId: B_SESSION,
+      uploadIds: inserted,
+      claimedAt: 1000
+    })
+
+    expect(claimsOn(path)).toEqual([B_SESSION])
   })
 })

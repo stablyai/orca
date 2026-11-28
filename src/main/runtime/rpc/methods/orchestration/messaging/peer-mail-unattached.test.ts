@@ -50,4 +50,12 @@ describe('files a failed send left on the server', () => {
       message: expect.stringMatching(/^That chat closed\. The message wasn't sent\./)
     })
   })
+  it('says files for an item may still be kept with its chat after the server refused the mail', () => {
+    const refusal = new OrchestrationError('invalid_argument', 'No such item. Nothing was sent.')
+    expect(withUnattachedUploads(refusal, server, { copied: 1, forItem: true })).toMatchObject({
+      message:
+        "No such item. The message wasn't sent. A file already copied to devB for it may still be kept there with the item's chat; if not, Orca on devB clears it as an unused upload later.",
+      data: { cause: 'invalid_argument', filesMaybeKept: true, unattachedUploads: 1 }
+    })
+  })
 })

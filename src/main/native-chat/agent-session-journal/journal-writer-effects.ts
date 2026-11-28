@@ -57,8 +57,9 @@ export type JournalWriterEffect =
       row?: JournalReceiptRowBinding
     }
   | { kind: 'claim'; claim: Omit<AgentSessionAttachmentClaim, 'stateDirectory'> }
-  /** Drops the claims one chat took for these uploads: a send that claimed them, then was refused. */
-  | { kind: 'release'; sessionId: string; uploadIds: readonly string[] }
+  /** Drops the claims one chat took for these uploads at `claimedAt`: a send that claimed them, then
+   *  was refused. A claim taken anew at another moment stays. */
+  | { kind: 'release'; sessionId: string; uploadIds: readonly string[]; claimedAt: number }
   | { kind: 'queue-delete'; sessionId: string; messageIds: readonly string[] }
   | {
       kind: 'sweep'
@@ -118,10 +119,10 @@ export function applyJournalWriterEffect(
       return claimAgentSessionAttachmentsInTransaction(db, { ...effect.claim, stateDirectory })
     case 'release': {
       const release = db.prepare(
-        'DELETE FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?'
+        'DELETE FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=? AND claimed_at=?'
       )
       for (const uploadId of effect.uploadIds) {
-        release.run(uploadId, effect.sessionId)
+        release.run(uploadId, effect.sessionId, effect.claimedAt)
       }
       return null
     }

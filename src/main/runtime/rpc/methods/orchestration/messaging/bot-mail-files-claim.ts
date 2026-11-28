@@ -4,19 +4,31 @@
 // claims it took, so its files are swept as unused.
 import type { Bot } from '../../../../../../shared/bot-types'
 import { isOrcaSessionId } from '../../../../../../shared/agent-session/identity/orca-session-address'
-import { getAgentSessionAttachmentReleaser } from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import {
+  getAgentSessionAttachmentReleaser,
+  type AgentSessionAttachmentClaimed
+} from '../../../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { botChatTakingMail, botChatTakingMailNow } from '../../bots-chats'
 
-/** Claims the mail's uploads for one session; resolves to the uploads it newly claimed, when known. */
-export type MailFilesClaim = (sessionId: string) => Promise<readonly string[] | undefined>
+/** Claims the mail's uploads for one session; resolves to the claims it newly took, when known. */
+export type MailFilesClaim = (
+  sessionId: string
+) => Promise<AgentSessionAttachmentClaimed | undefined>
 
-/** Files claimed for the chat a mail is about to be stored in. */
-export type ClaimedMailFiles = {
+/** What storing the mail tells its claimed files. */
+export type AdmitFiles = {
   /** Run in the same turn the mail is stored: refuses it when the chat moved on meanwhile. */
   current: () => void
+  /** The mail is stored: from here its files' claims are its own and stay, whatever fails next. */
+  stored: () => void
+}
+
+/** Files claimed for the chat a mail is about to be stored in. */
+export type ClaimedMailFiles = AdmitFiles & {
+  isStored: () => boolean
   /** Gives back the claims this send took; false when they may still be held. */
   release: () => Promise<boolean>
 }
@@ -47,8 +59,13 @@ export async function claimMailFilesFor(
       { effectsApplied: false }
     )
   }
-  const inserted = await claim(live)
+  const claimed = await claim(live)
+  let stored = false
   return {
+    stored: () => {
+      stored = true
+    },
+    isStored: () => stored,
     current: () => {
       if ((botChatTakingMailNow(runtime, bot, root)?.sessionId ?? fallback) !== live) {
         throw new OrchestrationError(
@@ -60,14 +77,14 @@ export async function claimMailFilesFor(
     },
     release: async () => {
       const releaser = getAgentSessionAttachmentReleaser()
-      if (!inserted || !releaser) {
-        return inserted?.length === 0
+      if (!claimed || claimed.uploadIds.length === 0) {
+        return claimed !== undefined
       }
-      if (inserted.length === 0) {
-        return true
+      if (!releaser) {
+        return false
       }
       try {
-        await releaser(live, inserted)
+        await releaser(live, claimed)
         return true
       } catch (error) {
         console.warn('[bots] mail files: releasing the claims of a refused send failed', error)
@@ -77,33 +94,52 @@ export async function claimMailFilesFor(
   }
 }
 
-/** Stores the mail with `admit`, given the files' current-check; a refusal or a duplicate gives back
- *  the claims this send took. A refusal that couldn't give them back is `peer_mail_files_kept`. */
+/** Stores the mail with `admit`, given the files' checks. A refusal or a duplicate gives back the
+ *  claims this send took; one that couldn't give them back is `peer_mail_files_kept`. A failure
+ *  after the mail is stored keeps them, since the stored mail reads them: `peer_mail_stored`. */
 export async function admitWithClaimedFiles(
   claimed: ClaimedMailFiles | undefined,
-  admit: (current?: () => void) => { sent: boolean; receipt: unknown }
+  admit: (files?: AdmitFiles) => { sent: boolean; receipt: unknown }
 ): Promise<unknown> {
   if (!claimed) {
     return admit().receipt
   }
   let admitted: { sent: boolean; receipt: unknown }
   try {
-    admitted = admit(claimed.current)
+    admitted = admit(claimed)
   } catch (error) {
+    // Codes of their own, so the sender hears them across the pairing: others reach it bare.
+    if (claimed.isStored()) {
+      throw relabeled(
+        error,
+        'peer_mail_stored',
+        { effectsApplied: true },
+        (reason) => `The message was delivered with its files, then this failed: ${reason}`
+      )
+    }
     if (await claimed.release()) {
       throw error
     }
-    // Its own code, so the sender hears it across the pairing: other refusal codes reach it bare.
-    const known = error instanceof OrchestrationError
-    const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
-    throw new OrchestrationError(
-      'peer_mail_files_kept',
-      error instanceof Error ? error.message : String(error),
-      { ...data, ...(known ? { cause: error.code } : {}), effectsApplied: false, filesKept: true }
-    )
+    throw relabeled(error, 'peer_mail_files_kept', { effectsApplied: false, filesKept: true })
   }
-  if (!admitted.sent) {
-    await claimed.release()
+  // No paired mail is a duplicate today (its request carries no turn to match): kept for local use.
+  if (!admitted.sent && !(await claimed.release())) {
+    console.warn('[bots] mail files: a duplicate request keeps the files its send claimed')
   }
   return admitted.receipt
+}
+
+function relabeled(
+  error: unknown,
+  code: string,
+  extra: object,
+  say: (reason: string) => string = (reason) => reason
+): OrchestrationError {
+  const known = error instanceof OrchestrationError
+  const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
+  return new OrchestrationError(code, say(error instanceof Error ? error.message : String(error)), {
+    ...data,
+    ...(known ? { cause: error.code } : {}),
+    ...extra
+  })
 }

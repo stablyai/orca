@@ -3,7 +3,15 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { admitWithClaimedFiles, type ClaimedMailFiles } from './bot-mail-files-claim'
 
 function claimed(released = true): ClaimedMailFiles & { release: ReturnType<typeof vi.fn> } {
-  return { current: vi.fn(), release: vi.fn(async () => released) }
+  let stored = false
+  return {
+    current: vi.fn(),
+    stored: () => {
+      stored = true
+    },
+    isStored: () => stored,
+    release: vi.fn(async () => released)
+  }
 }
 
 describe('storing mail whose files were claimed', () => {
@@ -29,8 +37,8 @@ describe('storing mail whose files were claimed', () => {
       effectsApplied: false
     })
     await expect(
-      admitWithClaimedFiles(files, (current) => {
-        expect(current).toBe(files.current)
+      admitWithClaimedFiles(files, (passed) => {
+        expect(passed).toBe(files)
         throw refusal
       })
     ).rejects.toBe(refusal)
@@ -49,6 +57,32 @@ describe('storing mail whose files were claimed', () => {
       code: 'peer_mail_files_kept',
       message: 'Docs is paused. Nothing was sent.',
       data: { cause: 'bot_paused', effectsApplied: false, filesKept: true }
+    })
+  })
+  it('keeps the claims of mail already stored when a later step fails', async () => {
+    const files = claimed()
+    await expect(
+      admitWithClaimedFiles(files, (passed) => {
+        passed?.stored()
+        throw new Error('wake failed')
+      })
+    ).rejects.toMatchObject({
+      code: 'peer_mail_stored',
+      message: 'The message was delivered with its files, then this failed: wake failed',
+      data: { effectsApplied: true }
+    })
+    expect(files.release).not.toHaveBeenCalled()
+  })
+
+  it('says files are kept for a plain error whose claims could not be given back', async () => {
+    await expect(
+      admitWithClaimedFiles(claimed(false), () => {
+        throw new Error('database is locked')
+      })
+    ).rejects.toMatchObject({
+      code: 'peer_mail_files_kept',
+      message: 'database is locked',
+      data: { effectsApplied: false, filesKept: true }
     })
   })
 })

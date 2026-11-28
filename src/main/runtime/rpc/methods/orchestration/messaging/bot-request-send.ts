@@ -37,7 +37,7 @@ import {
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendBotRequestArgs, SendParamsInput } from './bot-request-send-args'
-import { admitWithClaimedFiles, claimMailFilesFor } from './bot-mail-files-claim'
+import { admitWithClaimedFiles, claimMailFilesFor, type AdmitFiles } from './bot-mail-files-claim'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
@@ -218,14 +218,9 @@ async function admitBotRequestMail(
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request queues in, named to the sender. */
-  /** `filesCurrent`: its files' chat still runs the session they were claimed for. */
-  const admit = (
-    address: string,
-    reserved = false,
-    held?: HeldChat | null,
-    filesCurrent?: () => void
-  ) => {
-    filesCurrent?.()
+  /** `files`: the claimed files' checks, before it is stored and once it is. */
+  const admit = (address: string, reserved = false, held?: HeldChat | null, files?: AdmitFiles) => {
+    files?.current()
     const recipient =
       address.startsWith('run:') && receiving.via === 'address'
         ? { ok: true as const, to: address, runId: address.slice('run:'.length) }
@@ -263,6 +258,7 @@ async function admitBotRequestMail(
       return blockedReceipt(admission)
     }
     const { message } = admission
+    files?.stored()
     runtimeBotGroups(runtime).noteMailed(groupScope?.operationId, target.id)
     card.write({ messageId: message.id })
     const sent = recordReceiptForPostCommitNudge(
@@ -280,7 +276,7 @@ async function admitBotRequestMail(
   /** Claims the mail's files for `chatId` last, just before it is stored there by `store`. */
   const withFiles = async (
     chatId: string | null,
-    store: (current?: () => void) => { sent: boolean; receipt: unknown },
+    store: (files?: AdmitFiles) => { sent: boolean; receipt: unknown },
     home = false
   ) =>
     admitWithClaimedFiles(
@@ -301,8 +297,8 @@ async function admitBotRequestMail(
   }
   if (groupScope) {
     const address = sessionAddress(groupScope.target.sessionId)
-    return withFiles(groupScope.target.sessionId, (current) =>
-      admit(address, false, undefined, current)
+    return withFiles(groupScope.target.sessionId, (files) =>
+      admit(address, false, undefined, files)
     )
   }
   // Whoever the sending turn acts for, the request lands where it was addressed; its record says who asked.
@@ -313,14 +309,14 @@ async function admitBotRequestMail(
   if (receiving.via === 'address') {
     const home = receiving.chat !== null && receiving.chat === target.chatSessionId
     const held = await failureHeldChat(runtime, receiving.chat, home)
-    return withFiles(receiving.chat, (current) => admit(args.to, false, held, current))
+    return withFiles(receiving.chat, (files) => admit(args.to, false, held, files))
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
   return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
     const held = await failureHeldChat(runtime, sessionId, true)
     return withFiles(
       sessionId,
-      (current) => admit(sessionAddress(sessionId), false, held, current),
+      (files) => admit(sessionAddress(sessionId), false, held, files),
       true
     )
   })

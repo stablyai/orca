@@ -35,13 +35,15 @@ export type UnattachedUploads = {
   copied: number
   /** One more whose commit may have stored it: its answer never came back. */
   maybeOneMore?: boolean
+  /** Mail about an item, refused there: its Orca may have claimed them for the item's chat first. */
+  forItem?: boolean
 }
 
 /** `error`, from a send that stored no mail, saying what files it left on `server`. */
 export function withUnattachedUploads(
   error: unknown,
   server: { name: string },
-  { copied, maybeOneMore = false }: UnattachedUploads
+  { copied, maybeOneMore = false, forItem = false }: UnattachedUploads
 ): unknown {
   if (copied === 0 && !maybeOneMore) {
     return error
@@ -64,11 +66,11 @@ export function withUnattachedUploads(
   // One code the CLI hears across this Orca's own RPC, with the refusal's own code as its cause.
   return new OrchestrationError(
     'peer_mail_not_sent',
-    `${reason} The message wasn't sent. ${note(server.name, copied, maybeOneMore, kept)}${again}`,
+    `${reason} The message wasn't sent. ${note(server.name, copied, maybeOneMore, kept, forItem)}${again}`,
     {
       ...rest,
       ...(known && error.code !== 'peer_mail_files_kept' ? { cause: error.code } : {}),
-      ...(kept ? { filesKept: true } : {}),
+      ...(kept ? { filesKept: true } : forItem ? { filesMaybeKept: true } : {}),
       // Copied files are an effect; one that only may have been leaves it unknown.
       ...(copied > 0 ? { effectsApplied: true } : {}),
       unattachedUploads: copied,
@@ -77,13 +79,22 @@ export function withUnattachedUploads(
   )
 }
 
-function note(server: string, copied: number, maybeOneMore: boolean, kept: boolean): string {
+function note(
+  server: string,
+  copied: number,
+  maybeOneMore: boolean,
+  kept: boolean,
+  forItem: boolean
+): string {
   const files = copied === 1 ? 'A file' : `${copied} files`
   if (copied === 0) {
     return `A file may have been copied to ${server} for it; if so, it is attached to nothing there, and Orca on ${server} clears unused uploads later.`
   }
   const more = maybeOneMore ? ', and maybe one more,' : ''
   const plural = copied > 1 || maybeOneMore
+  if (forItem && !kept) {
+    return `${files} already copied to ${server} for it${more} may still be kept there with the item's chat; if not, Orca on ${server} clears ${plural ? 'them as unused uploads' : 'it as an unused upload'} later.`
+  }
   return kept
     ? `${files} already copied to ${server} for it${more} ${plural ? 'are' : 'is'} still held there by a chat; Orca on ${server} removes ${plural ? 'them' : 'it'} with that chat.`
     : `${files} already copied to ${server} for it${more} ${plural ? 'are' : 'is'} attached to nothing there; Orca on ${server} clears unused uploads later.`
