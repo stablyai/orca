@@ -3,7 +3,6 @@ import {
   type UnhandledProviderFrameJournalItem
 } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
   type CodexJournalTranslationAdmission,
   type CodexJournalTranslatorDeps,
@@ -30,6 +29,7 @@ import {
 } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 import { CodexTurnFailures } from './codex-turn-failures'
+import { codexTerminalTurnId, writeCodexFrameRow } from './codex-frame-row-write'
 import { CodexStartupWarnings } from './codex-startup-warnings'
 import { boundedTurnBucket } from './codex-generic-frame-bucket'
 
@@ -152,10 +152,7 @@ export class CodexJournalGenericFrames {
       }
     }
     this.fallbackSequence += 1
-    const terminalTurnId =
-      translated.body.failure && translated.body.failure.kind !== 'providerRetrying'
-        ? frameTurnId
-        : null
+    const terminalTurnId = codexTerminalTurnId(translated.body, frameTurnId)
     const identity = {
       provider: 'orca' as const,
       clientMessageId: terminalTurnId
@@ -164,25 +161,13 @@ export class CodexJournalGenericFrames {
     }
     const attribution = this.deps.attributionFor(threadId, frameTurnId)
     attribution.turnScope = translated.turnScope ?? attribution.turnScope
-    const { sink } = this.deps
-    const admission =
-      terminalTurnId && sink.tryReviseResolvedItem
-        ? // A failure a person's Stop of this turn caused is the Stop's, so it shows no error row.
-          sink.tryReviseResolvedItem(
-            estimateStructuredAgentSessionItemBytes(identity, translated.body),
-            {
-              kind: 'stop-decided',
-              failure: true,
-              turnId: terminalTurnId,
-              endedAt: Date.now(),
-              ran: { kind: 'literal', identity, body: translated.body },
-              stopped: null
-            },
-            attribution
-          )
-        : sink.tryAppendItem
-          ? sink.tryAppendItem(identity, translated.body, attribution)
-          : (sink.appendItem(identity, translated.body, attribution), CODEX_JOURNAL_ADMITTED)
+    const admission = writeCodexFrameRow(
+      this.deps.sink,
+      identity,
+      translated.body,
+      attribution,
+      terminalTurnId
+    )
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
