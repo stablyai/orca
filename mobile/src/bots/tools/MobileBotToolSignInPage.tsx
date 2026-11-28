@@ -2,21 +2,28 @@
 // load at the end isn't a surprise; the address it lands on is pasted back here.
 import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowUpRight } from 'lucide-react-native'
+import { ArrowUpRight, Check, Copy } from 'lucide-react-native'
 import { ListRow } from '../../components/list/ListGroup'
 import { TextField } from '../../components/composer-input/TextField'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../../settings/settings-screen-frame'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { BotToolPhoneSignIn } from './use-bot-tool-phone-sign-in'
 
-export function StepNumber({ n }: { n: number }) {
+/** A step's number, or a tick once it's done. */
+export function StepNumber({ n, done = false }: { n: number; done?: boolean }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
-    <View style={styles.number}>
-      <Text style={styles.numberText}>{n}</Text>
+    <View style={[styles.number, done && styles.numberDone]}>
+      {done ? (
+        <Check size={14} color={colors.bgBase} strokeWidth={3} />
+      ) : (
+        <Text style={styles.numberText}>{n}</Text>
+      )}
     </View>
   )
 }
@@ -30,7 +37,8 @@ export function MobileBotToolSignInPage(props: {
   onClose: () => void
 }) {
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const { signIn } = props
   const [address, setAddress] = useState('')
   const attempt = signIn.attempt
@@ -40,12 +48,16 @@ export function MobileBotToolSignInPage(props: {
       signIn.finish(pasted)
     }
   }
+  // This phone's shell can't open a link this long; the same attempt finishes from the browser.
+  const copying = signIn.failure !== 'needs-update' && !!attempt?.url && !signIn.opensHere
   const steps = [
     {
       title: t('bots.tools.signIn.action', 'Sign in'),
-      detail: t('bots.tools.signIn.step1Detail', 'Sign in to {{app}} and allow access.', {
-        app: props.app
-      })
+      detail: copying
+        ? t('bots.tools.signIn.step1Copy', 'Copy the link below and open it in your browser.')
+        : t('bots.tools.signIn.step1Detail', 'Sign in to {{app}} and allow access.', {
+            app: props.app
+          })
     },
     {
       title: t('bots.tools.signIn.step2', 'Copy the address'),
@@ -81,7 +93,10 @@ export function MobileBotToolSignInPage(props: {
             title={step.title}
             subtitle={step.detail}
             subtitleLines={3}
-            leading={<StepNumber n={index + 1} />}
+            // Pasting the address shows the first two done, as the page's browser steps are.
+            leading={
+              <StepNumber n={index + 1} done={index < 2 && attempt !== null && pasted !== ''} />
+            }
           />
         ))}
       </SettingsSection>
@@ -91,6 +106,19 @@ export function MobileBotToolSignInPage(props: {
             host: props.hostName
           })}
         </SettingsNote>
+      ) : copying ? (
+        <SettingsSection
+          footer={t('bots.tools.signIn.pasteInBrowser', 'Paste it into your browser to sign in.')}
+        >
+          <ListRow
+            leading={<Copy size={18} color={colors.accentBlue} />}
+            accent
+            title={t('bots.tools.signIn.copyLink', 'Copy link')}
+            value={signIn.copied ? t('common.copied', 'Copied') : undefined}
+            accessibilityRole="button"
+            onPress={signIn.copyLink}
+          />
+        </SettingsSection>
       ) : attempt?.url || !attempt ? (
         <SettingsSection>
           <ListRow
@@ -129,7 +157,7 @@ export function MobileBotToolSignInPage(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   number: {
     width: 24,
     height: 24,
@@ -138,6 +166,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  numberDone: { backgroundColor: colors.textPrimary },
   numberText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
   paste: { marginTop: spacing.lg }
 }))

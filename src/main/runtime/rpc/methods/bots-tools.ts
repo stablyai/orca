@@ -15,6 +15,7 @@ import { botHomeFolder } from '../../../bots/bot-home'
 import { forgetBotToolCredentials } from '../../../bots/bot-tool-credentials'
 import { revokeBotToolSignIns } from '../../../bots/tool-oauth/bot-tool-oauth-revoke'
 import { botOwnTool, readBotToolServers } from '../../../bots/bot-tools-file'
+import { isMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import {
   addSortedBotTool,
   BOT_TOOL_SIGN_IN_NEEDS_UPDATE,
@@ -65,6 +66,7 @@ export async function botToolsHome(runtime: OrcaRuntimeService, bot: Bot): Promi
     botId: bot.id,
     folder: botHomeFolder(bot),
     signInFolder: botToolSignInFolder(bot.id),
+    hostMcpServers: bot.hostMcpServers === true,
     otherBotFolders: runtime.bots
       .list()
       .filter((other) => other.id !== bot.id && other.agent === agent)
@@ -154,7 +156,10 @@ export const BOT_TOOLS_METHODS = [
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
-      return await listBotTools(await botToolsHome(context.runtime, bot))
+      const tools = await listBotTools(await botToolsHome(context.runtime, bot))
+      return isMcpServersFeatureEnabled()
+        ? { ...tools, hostMcpServers: bot.hostMcpServers === true }
+        : tools
     }
   }),
   defineMethod({

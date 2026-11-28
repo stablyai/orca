@@ -16,7 +16,8 @@ export function buildPluginWorkerSpawnSpec(
     mainEntry: plugin.manifest.main,
     // Dev roots survive manifest changes; include revision to prevent stale worker reuse.
     manifestRevision: JSON.stringify(plugin.manifest),
-    reviewedContentHash: plugin.contentHash ?? plugin.consentContentHash ?? null,
+    // Why not a dev folder's consent hash: that names only its manifest and recipes, not its code.
+    reviewedContentHash: plugin.contentHash,
     ...(plugin.isDev ? { devRevision: plugin.devRevision ?? null, allowProposed: true } : {}),
     ...(pluginNeedsResidentWorker(plugin.manifest) ? { keepWarm: true as const } : {}),
     grantedCapabilities

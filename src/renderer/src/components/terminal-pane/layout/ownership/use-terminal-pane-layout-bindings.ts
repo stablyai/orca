@@ -52,8 +52,11 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       }
 
       if (ptyId) {
+        // Why: a new split is selected before its shell binds, so persistence kept a bound sibling.
+        const isManagerActiveLeaf = managerRef.current?.getActivePane()?.leafId === leafId
         setTabLayout(tabId, {
           ...layoutWithoutPtyBindings,
+          ...(isManagerActiveLeaf ? { activeLeafId: leafId } : {}),
           ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
         })
         notifyQueuedRestartPaneBound(tabId, ptyId)
@@ -78,7 +81,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       }
       setTabLayout(tabId, nextLayout)
     },
-    [setTabLayout, tabId, paneTransportsRef]
+    [setTabLayout, tabId, paneTransportsRef, managerRef]
   )
   const writePanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {

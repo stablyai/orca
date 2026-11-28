@@ -1,5 +1,6 @@
 import { TerminalCommandPaint, type CommandPaintMarks } from '../input/terminal-command-paint'
 import { CommandFinishArbiter, commandMarkAgent } from './command-finish-arbiter'
+import { notifyWorktreeActivity } from '../../../ipc/worktrees/git/worktree-activity-signal'
 import type { LaunchedAgentForeground } from '../wait/launched-agent-foreground'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
@@ -50,6 +51,8 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
       }
       if (lanes.authority) {
         this.applyShellCommandFinished(ptyId, lanes.authority.exitCode)
+        // The command may have run git worktree add/remove; the repo's metadata backstop re-checks (throttled).
+        notifyWorktreeActivity(this.ptysById.get(ptyId)?.worktreeId)
       }
     },
     dismiss: (ptyId, lanes) => {

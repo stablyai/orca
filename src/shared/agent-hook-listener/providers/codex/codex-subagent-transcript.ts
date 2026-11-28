@@ -27,7 +27,9 @@ import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 import { codexSubagentPathLabel } from './codex-agent-path'
 import {
   keepCodexSubagentHidden,
-  takeInterruptedCodexSubagent
+  rememberInterruptedCodexSubagent,
+  takeInterruptedCodexSubagent,
+  type InterruptedCodexSubagent
 } from './codex-interrupted-subagents'
 import {
   finishCodexSubagent,
@@ -59,7 +61,7 @@ export type CodexSubagentTranscriptState = {
   turnEnds: Map<string, 'completed' | 'failed'>
   subagents: Map<string, TrackedTranscriptSubagent>
   /** Children retired by an interrupt, kept so a later message can show them working again. */
-  interruptedSubagents: Map<string, TrackedTranscriptSubagent>
+  interruptedSubagents: Map<string, InterruptedCodexSubagent>
   /** Incremental reviewer cursors for child rollouts, which must not replace the parent cursor. */
   reviewerCursorsByPath: Map<string, JsonlCursor>
   /** Reviewer ownership discovered from child rollouts, keyed by their bounded cursor paths. */
@@ -214,7 +216,7 @@ export function applyCodexParentTranscript(
       finishCodexSubagent(roster, activity.id)
       state.subagents.delete(activity.id)
       if (tracked) {
-        state.interruptedSubagents.set(activity.id, tracked)
+        rememberInterruptedCodexSubagent(state, activity.id, tracked)
       }
       continue
     }
@@ -288,7 +290,7 @@ export function applyCodexChildTranscripts(
     }
     state.subagents.delete(id)
     if (tracked.interrupted) {
-      state.interruptedSubagents.set(id, tracked)
+      rememberInterruptedCodexSubagent(state, id, tracked)
     }
   }
   return changed

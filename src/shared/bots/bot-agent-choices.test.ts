@@ -3,7 +3,13 @@ import {
   buildNewTabAgentMenuRows,
   type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
-import { botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
+import {
+  botAgentChoices,
+  botNewChatAgents,
+  newBotAgent,
+  readyBotDefaultAgent,
+  type BotAgentMenuModel
+} from './bot-agent-choices'
 
 const settled = (
   rows: NewTabAgentMenuRow[],
@@ -53,5 +59,41 @@ describe('botNewChatAgents', () => {
     expect(botNewChatAgents({ agent: 'claude' }, settled([], null))).toEqual([
       { agent: 'claude', unavailable: 'check-failed' }
     ])
+  })
+})
+
+describe('botAgentChoices', () => {
+  it('never offers an agent the host lacks as the first choice when installed agents are required', () => {
+    // A WSL distro without Linux agents: only chats that would install one first.
+    const setupOnly = settled(
+      [
+        { kind: 'chat', agent: 'grok', setup: true },
+        { kind: 'chat', agent: 'claude', setup: true }
+      ],
+      []
+    )
+    expect(botAgentChoices(setupOnly, undefined, true)).toEqual([])
+    const mixed = settled([
+      { kind: 'chat', agent: 'claude', setup: true },
+      { kind: 'cli', agent: 'codex', chat: true }
+    ])
+    expect(botAgentChoices(mixed, undefined, true)).toEqual(['codex'])
+  })
+})
+
+describe('readyBotDefaultAgent', () => {
+  it('keeps a ready default, not one whose chat installs it first', () => {
+    const model = settled([
+      { kind: 'chat', agent: 'claude' },
+      { kind: 'chat', agent: 'codex', setup: true }
+    ])
+    const choices = botAgentChoices(model)
+    expect(newBotAgent(choices, readyBotDefaultAgent(model, 'codex'))).toBe('claude')
+    expect(newBotAgent(choices, readyBotDefaultAgent(model, 'claude'))).toBe('claude')
+    const ready = settled([
+      { kind: 'chat', agent: 'claude' },
+      { kind: 'cli', agent: 'codex', chat: true }
+    ])
+    expect(newBotAgent(botAgentChoices(ready), readyBotDefaultAgent(ready, 'codex'))).toBe('codex')
   })
 })

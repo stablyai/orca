@@ -151,7 +151,7 @@ export class WatcherProcessSupervisor {
     }
     this.slot.canaryDir = launched.canaryDir
     this.slot.child = this.ownedChildren.track(launched.child)
-    this.deliveryHealth.childStarted()
+    this.deliveryHealth.childStarted(this.options.onDeliveryStallChange)
     return launched.child
   }
 

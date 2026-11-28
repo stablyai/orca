@@ -115,7 +115,8 @@ export function projectStructuredItemToNativeChat(
         ...(projected.drawnMarkdown !== undefined
           ? { drawnMarkdown: projected.drawnMarkdown }
           : {}),
-        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {})
+        ...(item.shortened && item.body.kind === 'message' ? { shortened: true } : {}),
+        journalRevision: item.revision
       }
     : null
   projectedItems.set(item, message)
@@ -272,6 +273,11 @@ const structuredAgentSessionPaneLeaf = memoizeStringResult((sessionId: string): 
  *  minted slot's chat by its session's legacy id. */
 export function structuredAgentSessionAddressTabId(tabId: string, sessionId: string): string {
   return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
+}
+
+/** Chat status rows are addressed under the legacy tab id (see structuredAgentSessionPaneKey). */
+export function isStructuredAgentSessionAddressPaneKey(paneKey: string): boolean {
+  return paneKey.startsWith(structuredAgentSessionTabId(''))
 }
 
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {

@@ -58,7 +58,7 @@ export type ClaudeOpenTurnDeps = {
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
   usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
-  /** Block late output from reopening ended or failed turns until an accepted send arrives. */
+  /** Block late output from reopening ended or failed turns until a send or a new provider cycle. */
   private reopenSuppressed = false
   /** Track root work since cycle init; background output may open a turn before that init. */
   private cycleWorkObserved = false
@@ -145,9 +145,8 @@ export class ClaudeOpenTurn {
 
   observeProviderCycleStart(): void {
     this.steerHandoffEnd = null
-    this.cycleWorkObserved = false
     this.cycleTurn = null
-    this.inputChoiceWorkObserved = false
+    this.cycleWorkObserved = this.inputChoiceWorkObserved = this.reopenSuppressed = false
   }
 
   observeProviderCycleWork(): void {
@@ -174,6 +173,16 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
     // Every open clears, since a relaunch can leave the host holding the last process's guess.
     this.deps.sink.setPromptSuggestion?.(null)
+  }
+
+  /** The turn a kept agent was running when the last app quit: its row exists, so only its end is
+   *  published, the replay continues it instead of opening another, and a follow-up steers it. */
+  adoptKept(turn: ClaudeCurrentTurn): void {
+    if (!this.current) {
+      this.current = turn
+      this.cycleTurn = turn
+      this.cycleWorkObserved = this.inputChoiceWorkObserved = true
+    }
   }
 
   /** The host already wrote the command row; only publish its eventual end. */
@@ -274,7 +283,7 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed = true
   }
 
-  /** Keep failure suppression latched until a new accepted send. */
+  /** Keep failure suppression latched until a send or a new provider cycle. */
   suppressReopenOnFailure(failed: boolean): void {
     this.reopenSuppressed ||= failed
   }

@@ -1,4 +1,7 @@
+import { Suspense } from 'react'
 import { Bot, ChevronDown } from 'lucide-react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { useAppStore } from '../../../store/index'
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
@@ -15,10 +18,13 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useNewTabAgentMenuRows } from '../../agent/launch-menu/use-new-tab-agent-menu-rows'
-import {
-  QuickLaunchAgentMenuItems,
-  useTabAgentMenuLaunch
-} from '../../agent/launch-menu/AgentMenuItems'
+import { useTabAgentMenuLaunch } from '../../agent/launch-menu/use-tab-agent-menu-launch'
+
+const QuickLaunchAgentMenuItems = lazy(() =>
+  import('../../agent/launch-menu/AgentMenuItems').then((module) => ({
+    default: module.QuickLaunchAgentMenuItems
+  }))
+)
 import {
   rowId,
   rowLabel,
@@ -52,6 +58,7 @@ export function LandingDefaultAgentItem({
   onPickerClosed: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const pickerMounted = useLatchedOpen(pickerOpen)
   // Host statuses decide whether the default opens as chat; the live route reads them from their owner.
   const defaultAgent = useAppStoreWithHostStatuses((state) =>
     readNewAgentTabDefault(state, worktreeId)
@@ -103,23 +110,27 @@ export function LandingDefaultAgentItem({
             <ChevronDown className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="start"
-          sideOffset={6}
-          className="w-64"
-          // Why: the portaled menu still bubbles through React to the row, whose click launches the default.
-          onClick={(event) => event.stopPropagation()}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault()
-            onPickerClosed()
-          }}
-        >
-          <QuickLaunchAgentMenuItems
-            worktreeId={worktreeId}
-            groupId={groupId}
-            onFocusTerminal={focusTerminalTabSurface}
-          />
-        </DropdownMenuContent>
+        {pickerMounted ? (
+          <DropdownMenuContent
+            align="start"
+            sideOffset={6}
+            className="w-64"
+            // Why: the portaled menu still bubbles through React to the row, whose click launches the default.
+            onClick={(event) => event.stopPropagation()}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              onPickerClosed()
+            }}
+          >
+            <Suspense fallback={null}>
+              <QuickLaunchAgentMenuItems
+                worktreeId={worktreeId}
+                groupId={groupId}
+                onFocusTerminal={focusTerminalTabSurface}
+              />
+            </Suspense>
+          </DropdownMenuContent>
+        ) : null}
       </DropdownMenu>
       <span className="flex-1" />
       <LandingItemShortcut label={shortcut} />

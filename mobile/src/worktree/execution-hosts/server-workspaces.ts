@@ -72,10 +72,23 @@ export class ServerRowSnapshots {
   constructor(readonly deltas: boolean) {}
 
   async read(client: RpcClient, hosts: readonly MobileRelayHost[]): Promise<(Worktree[] | null)[]> {
-    let byHost = this.byClient.get(client)
+    this.retain(client, hosts)
+    if (hosts.length === 0) {
+      return []
+    }
+    const byHost = this.hostsOf(client)
+    return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
+  }
+
+  /** Drops snapshots for servers no longer listed by this client. */
+  retain(client: RpcClient, hosts: readonly MobileRelayHost[]): void {
+    const byHost = this.byClient.get(client)
     if (!byHost) {
-      byHost = new Map()
-      this.byClient.set(client, byHost)
+      return
+    }
+    if (hosts.length === 0) {
+      this.byClient.delete(client)
+      return
     }
     const listed = new Set<ExecutionHostId>(hosts.map((host) => host.hostId))
     for (const hostId of byHost.keys()) {
@@ -83,7 +96,18 @@ export class ServerRowSnapshots {
         byHost.delete(hostId)
       }
     }
-    return Promise.all(hosts.map((host) => this.readHost(client, byHost, host.hostId)))
+    if (byHost.size === 0) {
+      this.byClient.delete(client)
+    }
+  }
+
+  private hostsOf(client: RpcClient): Map<ExecutionHostId, WorktreeCatalogSnapshotClient> {
+    let byHost = this.byClient.get(client)
+    if (!byHost) {
+      byHost = new Map()
+      this.byClient.set(client, byHost)
+    }
+    return byHost
   }
 
   private async readHost(

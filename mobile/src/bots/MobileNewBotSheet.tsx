@@ -10,12 +10,13 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { triggerError } from '../platform/haptics/haptics'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
 import { spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { RpcRefusedError } from '../transport/rpc/rpc-refused-error'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../src/shared/bot-avatar'
 import {
   BOT_PURPOSE_MAX_LENGTH,
+  refusedForOlderHostPurposeLimit,
   proposalCreateParams,
   type BotProposal
 } from '../../../src/shared/bots/bot-proposal'
@@ -31,8 +32,8 @@ import { botCreate } from './bot-sheet-operations'
 import type { ListedBot, PhoneBot } from './host-bots-operations'
 import { mobileBotAvatarSource } from './host-bot-row-facts'
 import type { NewBotComputer } from './new-bot-computers'
+import { groupFieldStylesSheet } from '../components/composer-input/composer-input-styles'
 import {
-  groupFieldStyles,
   newBotComputerNote,
   NewBotAgentRow,
   NewBotAgentSheet,
@@ -90,13 +91,14 @@ export function MobileNewBotSheet(props: NewBotSheetProps) {
 }
 
 function NewBotForm(props: NewBotSheetProps) {
-  useMobileColorScheme()
+  const groupFieldStyles = useThemedStyles(groupFieldStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { seed } = props
   const [name, setName] = useState(seed?.proposal.name ?? '')
   const [purpose, setPurpose] = useState('')
   const [computerId, setComputerId] = useState(props.computerId)
-  const [picked, setPicked] = useState<BotAgent>(seed?.agent ?? 'claude')
+  const [picked, setPicked] = useState<BotAgent | undefined>(seed?.agent)
   const [avatar, setAvatar] = useState(() =>
     seed?.proposal.mascot && isBotMascotId(seed.proposal.mascot)
       ? mascotAvatar(seed.proposal.mascot)
@@ -127,11 +129,14 @@ function NewBotForm(props: NewBotSheetProps) {
   }
   const computer = listed ?? (computerId === lastChosen?.id ? lastChosen : undefined)
   const client = listed && listed.refusal === undefined ? props.clientFor(listed.id) : null
-  const choices = useNewBotAgentChoices(client)
+  const answer = useNewBotAgentChoices(client)
+  const choices = answer?.agents ?? null
   const importRead = useBotImportSources(seed ? null : client)
   const nudge = importRead.status === 'ready' ? botImportNudge(importRead.sources) : null
-  // The kept agent moves to the computer's first when it lacks it; until it answers, the kept one shows.
-  const agent = choices?.length && !choices.includes(picked) ? choices[0] : picked
+  // The kept agent moves to the computer's default (else its first) when it lacks it, as does none
+  // kept; until it answers, the kept one shows.
+  const kept = picked && (!choices?.length || choices.includes(picked)) ? picked : undefined
+  const agent = kept ?? answer?.defaultAgent ?? choices?.[0] ?? 'claude'
   const otherAccount = useOtherOrcaAccount(
     computer?.hostId.startsWith('runtime:') ? client : null,
     computer ? props.pairedClientFor(computer.id) : null
@@ -183,7 +188,16 @@ function NewBotForm(props: NewBotSheetProps) {
     } catch (error) {
       triggerError()
       setError(
-        error instanceof Error ? error.message : t('bots.new.failed', 'Couldn’t create the bot')
+        error instanceof RpcRefusedError &&
+          refusedForOlderHostPurposeLimit(error.code, error.message, made.purpose)
+          ? t(
+              'bots.new.purposeTooLongForHost',
+              "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
+              { host: computer.label }
+            )
+          : error instanceof Error
+            ? error.message
+            : t('bots.new.failed', 'Couldn’t create the bot')
       )
     } finally {
       setCreating(false)
@@ -420,6 +434,6 @@ function NewBotForm(props: NewBotSheetProps) {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   picture: { alignItems: 'center', paddingTop: spacing.sm, paddingBottom: spacing.lg }
 }))

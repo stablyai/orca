@@ -40,11 +40,13 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
     handler: (params, context): Promise<BotToolSignInAttemptView> =>
       onHost(context, async () => {
         const owner = signInOwner(context)
-        const key = await mcpServerSignInKey(params.id)
-        if (!key) {
-          throw noSignIn()
-        }
-        return inHostWords(() => startBotToolSignInAttempt(owner, key, params.mode))
+        return inHostWords(async () => {
+          const key = await mcpServerSignInKey(params.id, undefined, { signal: context.signal })
+          if (!key) {
+            throw noSignIn()
+          }
+          return startBotToolSignInAttempt(owner, key, params.mode)
+        })
       })
   }),
   defineMethod({

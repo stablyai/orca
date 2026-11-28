@@ -29,15 +29,17 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'
 import type { DirectoryCache, DirectoryState, FileExplorerRow } from './file-tree'
 import { spacing } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { fileDirectoryQuery, type DirectoryRead } from './mobile-file-explorer-operations'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { fileExplorerStylesSheet } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
 import { useMobileFileExplorerDecorations } from './use-mobile-file-explorer-decorations'
+import { useMobileNativeChatFileSearch } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
 import { useRefreshHint } from '../../query/refresh-hint'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-route-capability'
+import { MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY } from '../../../../src/shared/file-search/mobile-file-content-search'
 import { navigateToMobileFilePreview } from '../preview/mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -48,10 +50,16 @@ import {
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
+import { recomputeOn } from '../../hooks/recompute-on'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 const ROOT = { relativePath: '' }
+// The most the host's search returns, best first.
+const SEARCH_RESULT_LIMIT = 32
+// As long as the host keeps its own file list, so files an agent just made turn up.
+const SEARCH_MAX_AGE_MS = 30_000
 const NO_FOLDERS: ReadonlySet<string> = new Set()
 
 type FolderRead = Pick<UseQueryResult<DirectoryRead>, 'data' | 'error' | 'isFetching'>
@@ -111,7 +119,7 @@ function useListingsVersion(queryClient: QueryClient, prefix: QueryKey): number 
 }
 
 // A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
-function folderState(read: FolderRead, connState: ConnectionState): DirectoryState {
+function folderState(read: FolderRead, connState: ConnectionState, t: Translate): DirectoryState {
   switch (hostScreenState(read, connState)) {
     case 'data':
       return read.data?.kind === 'directory' ? directoryState(read.data) : { entries: [] }
@@ -121,8 +129,7 @@ function folderState(read: FolderRead, connState: ConnectionState): DirectorySta
       return {
         entries: [],
         error:
-          read.error?.message ||
-          translate('files.fileExplorerPanel.loadFailed', 'Unable to load files')
+          read.error?.message || t('files.fileExplorerPanel.loadFailed', 'Unable to load files')
       }
     case 'empty-connecting':
     case 'empty-offline':
@@ -130,8 +137,8 @@ function folderState(read: FolderRead, connState: ConnectionState): DirectorySta
         entries: [],
         error:
           connState === 'connected'
-            ? translate('common.connectingToHost', 'Connecting to host…')
-            : translate('common.waitingForHost', 'Waiting for host…')
+            ? t('common.connectingToHost', 'Connecting to host…')
+            : t('common.waitingForHost', 'Waiting for host…')
       }
   }
 }
@@ -145,7 +152,7 @@ export function MobileFileExplorerPanel(props: {
   headerless?: boolean
   onRequestClose?: () => void
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(fileExplorerStylesSheet)
   const t = useMobileTranslation()
   const { hostId, worktreeId, name, embedded, headerless, onRequestClose } = props
   const router = useWorkspaceRouteHandoff()
@@ -171,7 +178,7 @@ export function MobileFileExplorerPanel(props: {
   const [filterBarHeight, setFilterBarHeight] = useState(0)
   const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
-  const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
 
   const host = { hostId, client }
   const rootQuery = useHostQuery(fileDirectoryQuery, host, target, ROOT)
@@ -192,7 +199,7 @@ export function MobileFileExplorerPanel(props: {
     [hostId, queryClient, target]
   )
 
-  const { folderPaging, searching, showMore, searchAll } = useMobileFileExplorerPaging({
+  const { folderPaging, showMore } = useMobileFileExplorerPaging({
     scope,
     hostId,
     client,
@@ -203,38 +210,53 @@ export function MobileFileExplorerPanel(props: {
     [hostId, target]
   )
   const listingsVersion = useListingsVersion(queryClient, listingsKey)
-  const refreshing = useRefreshHint(searching)
 
-  const directoryCache = useMemo((): DirectoryCache => {
-    if (rootRead?.kind === 'legacy') {
-      return rootRead.cache
-    }
-    // Closed folders and earlier visits stay in the cache, so the filter searches every folder opened before.
-    const cached = queryClient.getQueriesData<DirectoryRead>({ queryKey: listingsKey })
-    // fromEntries keeps a folder named __proto__ an own key; assignment would set the prototype.
-    return Object.fromEntries([
-      ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
-        const relativePath = folderPathOf(key)
-        return relativePath !== undefined && data?.kind === 'directory'
-          ? [[relativePath, directoryState(data)]]
-          : []
+  const directoryCache = useMemo(
+    () =>
+      recomputeOn([listingsVersion], (): DirectoryCache => {
+        if (rootRead?.kind === 'legacy') {
+          return rootRead.cache
+        }
+        // Closed folders and earlier visits stay in the cache, so reopening one shows its rows at once.
+        const cached = queryClient.getQueriesData<DirectoryRead>({ queryKey: listingsKey })
+        // fromEntries keeps a folder named __proto__ an own key; assignment would set the prototype.
+        return Object.fromEntries([
+          ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
+            const relativePath = folderPathOf(key)
+            return relativePath !== undefined && data?.kind === 'directory'
+              ? [[relativePath, directoryState(data)]]
+              : []
+          }),
+          ...folders.map(({ relativePath }, index): [string, DirectoryState] => [
+            relativePath,
+            folderState(folderReads[index], connState, t)
+          ])
+        ])
       }),
-      ...folders.map(({ relativePath }, index): [string, DirectoryState] => [
-        relativePath,
-        folderState(folderReads[index], connState)
-      ])
-    ])
     // listingsVersion marks cache writes that getQueriesData reads but nothing here observes.
-  }, [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead])
+    [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead, t]
+  )
 
-  const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
+  const search = useMobileNativeChatFileSearch({
+    // An older host's root read already holds its whole file list, which the listed matches search.
+    client: rootRead?.kind === 'legacy' ? null : client,
+    worktreeId,
+    limit: SEARCH_RESULT_LIMIT,
+    maxAgeMs: SEARCH_MAX_AGE_MS
+  })
+  const searchesContents = useRouteCapability(MOBILE_FILE_CONTENT_SEARCH_RUNTIME_CAPABILITY)
+  const { filter, setFilter, filtering, rows, searchPending, contentPending, onToggleDirectory } =
     useMobileFileExplorerRows({
       scope,
       directoryCache,
       expanded,
       setExpanded,
-      loadDirectory: refreshDirectory
+      loadDirectory: refreshDirectory,
+      search,
+      contentSearch: searchesContents ? { client, worktreeId } : null,
+      connected: connState === 'connected'
     })
+  const refreshing = useRefreshHint(searchPending || contentPending)
   const decorate = useMobileFileExplorerDecorations({
     host,
     target,
@@ -256,7 +278,7 @@ export function MobileFileExplorerPanel(props: {
   )
 
   const previewFile = useCallback(
-    (relativePath: string, displayName: string) => {
+    (relativePath: string, displayName: string, at?: { line: number; column: number }) => {
       navigateToMobileFilePreview(
         router,
         {
@@ -264,7 +286,8 @@ export function MobileFileExplorerPanel(props: {
           worktreeId,
           relativePath,
           name: displayName,
-          worktreeName: name
+          worktreeName: name,
+          ...(at ? { line: String(at.line), column: String(at.column) } : {})
         },
         { embedded, onRequestClose }
       )
@@ -277,7 +300,7 @@ export function MobileFileExplorerPanel(props: {
       <MobileFileExplorerRow
         item={item}
         maximumIndentation={Math.max(0, panelWidth / 3 - spacing.lg)}
-        expanded={shownExpanded}
+        expanded={expanded}
         decorate={decorate}
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
@@ -285,7 +308,6 @@ export function MobileFileExplorerPanel(props: {
         onOpenActions={openRowActions}
         folderPaging={folderPaging}
         onShowMore={showMore}
-        onSearchAll={searchAll}
       />
     )
   }
@@ -348,16 +370,10 @@ export function MobileFileExplorerPanel(props: {
       />
     ) : rootScreen !== 'data' ? (
       <MobileStateView loading title={t('files.fileExplorerPanel.loading', 'Loading files…')} />
+    ) : rows.length === 0 && filtering && (searchPending || contentPending) ? (
+      <MobileStateView loading title={t('files.fileExplorerPanel.searching', 'Searching…')} />
     ) : rows.length === 0 && filtering ? (
-      <MobileNoMatchState
-        message={t(
-          'files.fileExplorerPanel.noMatchesHint',
-          'Only folders you have opened are searched.'
-        )}
-        onClear={() => setFilter('')}
-        clearLabel={t('files.fileExplorerPanel.clearFilter', 'Clear filter')}
-        bottomInset={filterBarHeight}
-      />
+      <MobileNoMatchState onClear={() => setFilter('')} bottomInset={filterBarHeight} />
     ) : rows.length === 0 ? (
       <MobileStateView
         icon={FolderOpen}
@@ -397,7 +413,7 @@ export function MobileFileExplorerPanel(props: {
         <BottomSearchBar
           value={filter}
           onChangeText={setFilter}
-          placeholder={t('files.fileExplorerPanel.filterPlaceholder', 'Filter files')}
+          placeholder={t('files.fileExplorerPanel.searchPlaceholder', 'Search files')}
           bottomInset={insets.bottom}
           onCoveredHeightChange={setFilterBarHeight}
         />

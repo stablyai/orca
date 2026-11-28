@@ -10,6 +10,7 @@ import {
   type MacOSProviderProcessOwner
 } from './macos-native-provider-process-reaping'
 import { RuntimeClientError } from '../runtime-client-error'
+import { COMPUTER_SIDECAR_DEV_BUILD_ENV } from '../sidecar-transport/computer-sidecar-dev-build-env'
 
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
 
@@ -143,11 +144,12 @@ function spawnProvider(
   socketPath: string,
   socketTokenPath: string
 ): ChildProcess {
-  const provider = spawn(
-    helperExecutablePath,
-    ['--agent', socketPath, '--token-file', socketTokenPath],
-    { detached: true, stdio: 'ignore' }
-  )
+  const args = ['--agent', socketPath, '--token-file', socketTokenPath]
+  // Why: a dev helper is not nested in Orca.app, so TCC must judge the helper, not the dev spawner.
+  if (process.env[COMPUTER_SIDECAR_DEV_BUILD_ENV] === '1') {
+    args.push('--self-responsible')
+  }
+  const provider = spawn(helperExecutablePath, args, { detached: true, stdio: 'ignore' })
   provider.unref()
   return provider
 }

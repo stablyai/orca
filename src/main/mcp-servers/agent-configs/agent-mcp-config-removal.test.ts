@@ -129,22 +129,27 @@ describe('agent MCP config discovery and move', () => {
       )
     profile('same', '')
     profile('edited', ', "headers": { "Authorization": "Bearer mine" }')
+    // Orca never launches Gemini CLI with its list, so Gemini keeps its copy.
+    const gemini = `{ "mcpServers": { "github": { "httpUrl": "${GITHUB}" } } }`
+    write('.gemini/settings.json', gemini)
     const host: AgentMcpImportHost = {
       context: context(),
       userDataPath: join(home, 'orca-data'),
-      workspaceFor: (path) =>
+      workspaceFor: async () => (path) =>
         ({
           '/work/orca': { key: 'repo-1', name: 'orca' },
           '/work/docs': { key: 'repo-2', name: 'docs' }
         })[path] ?? null,
-      isOrcaProject: (path) => path.startsWith('/orca-data/')
+      isOrcaProject: (path) => path.startsWith('/orca-data/'),
+      listReaches: async () => (agent) => agent !== 'gemini'
     }
     const rows = await listAgentMcpServers(host)
     const row = (name: string) => rows.find((found) => found.name === name)!
     expect([row('db').projectNames, row('db').movable]).toEqual([['docs'], true])
     expect([row('lost').projectNames, row('lost').movable]).toEqual([['elsewhere'], false])
     expect(row('github')).toMatchObject({
-      agents: ['claude', 'codex'],
+      agents: ['claude', 'codex', 'gemini'],
+      removesFrom: ['claude', 'codex'],
       projectNames: [],
       movable: true
     })
@@ -155,18 +160,17 @@ describe('agent MCP config discovery and move', () => {
     await moveAgentMcpServer(host, row('db').key, add)
     await moveAgentMcpServer(host, row('grk').key, add)
     expect(added).toEqual([
-      [
-        { name: 'github', url: GITHUB },
-        { workspaces: null, agentsOff: [] }
-      ],
+      [{ name: 'github', url: GITHUB }, { workspaces: null, agentsOff: [] }, false],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
         // Off in orca and in Droid, on in docs: only docs gets it, and Droid stays off.
-        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: ['droid'] }
+        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: ['droid'] },
+        false
       ],
       [
         { name: 'grk', command: 'grk', args: ['a'] },
-        { workspaces: null, agentsOff: ['grok'] }
+        { workspaces: null, agentsOff: ['grok'] },
+        false
       ]
     ])
     // The last server out of a TOML file takes its emptied table with it.
@@ -186,8 +190,46 @@ describe('agent MCP config discovery and move', () => {
       `# keep me\nmodel = "o3"\n\n# about linear\n[mcp_servers.linear]\nurl = "https://mcp.linear.app/mcp"\n`
     )
     expect(read('.codex/config.toml.bak')).toBe(CODEX_TOML)
+    expect(read('.gemini/settings.json')).toBe(gemini)
     expect(read('orca-data/claude-profiles/same/home/.claude.json')).not.toContain('github')
     expect(read('orca-data/claude-profiles/edited/home/.claude.json')).toContain('github')
+  })
+
+  it('keeps an agent’s copy when Orca stops reaching that agent while Move adds the server', async () => {
+    const reached = new Set(['cursor'])
+    const host: AgentMcpImportHost = {
+      context: context(),
+      userDataPath: join(home, 'orca-data'),
+      workspaceFor: async () => () => null,
+      isOrcaProject: () => false,
+      listReaches: async () => (agent) => reached.has(agent)
+    }
+    const cursor = read('.cursor/mcp.json')
+    const row = (await listAgentMcpServers(host)).find((found) => found.name === 'cur')!
+    expect(row.removesFrom).toEqual(['cursor'])
+
+    // The user withdraws Orca from Cursor's file while the add is saving.
+    await moveAgentMcpServer(host, row.key, async () => reached.delete('cursor'))
+
+    expect(read('.cursor/mcp.json')).toBe(cursor)
+  })
+
+  it('takes a server out of only the agents its confirm named', async () => {
+    const host: AgentMcpImportHost = {
+      context: context(),
+      userDataPath: join(home, 'orca-data'),
+      workspaceFor: async () => () => null,
+      isOrcaProject: () => false,
+      // Claude's delivery problem cleared after the confirm named Codex alone.
+      listReaches: async () => () => true
+    }
+    const row = (await listAgentMcpServers(host)).find((found) => found.name === 'github')!
+    expect(row.removesFrom).toEqual(['claude', 'codex'])
+
+    await moveAgentMcpServer(host, row.key, async () => null, ['codex'])
+
+    expect(read('.claude.json')).toBe(CLAUDE_JSON)
+    expect(read('.codex/config.toml')).not.toContain('[mcp_servers.github]')
   })
 
   it('reads Grok’s file-wide disable list and leaves servers with tool limits in Grok', () => {

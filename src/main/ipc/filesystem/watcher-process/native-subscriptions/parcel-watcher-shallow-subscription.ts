@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import type { Event as ParcelWatcherEvent } from '@parcel/watcher'
 import { startShallowFileWatcher } from './parcel-watcher-shallow-file-subscription'
 import { closeFileSystemWatcher } from './rebinding-file-watch'
-import { watchedDirectoryDeletionCheck } from './windows-deleted-directory-watch'
+import { watchedDirectoryDeletionCheck } from '../../../../../shared/file-watch/windows-deleted-directory-watch'
 import { watcherDirectoryIdentity } from '../root-paths/watcher-directory-identity'
 
 export type ShallowWatcherSubscription = {

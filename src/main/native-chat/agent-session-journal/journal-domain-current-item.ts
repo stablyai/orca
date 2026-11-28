@@ -28,6 +28,7 @@ import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
 import { foldJournalTurnTextTails } from './journal-text-tail'
+import { writeJournalDomainItemRow } from './journal-domain-item-row-write'
 import {
   hydrateJournalStoredItem,
   journalStoredItemRow,
@@ -125,40 +126,26 @@ export function writeJournalDomainCurrentItem(
   const columns = journalDomainItemColumns(item, payload, next)
   const { metadata } = columns
   const row = journalStoredItemRow(db, prefix, item, payload, columns.values)
-  db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
-      hidden,original_stop_note_json,queue_command_turn,queue_failed_outcome,queue_failed_at,
-      queue_failure_witnessed_through,queue_failure_report_turn_item_id,placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')},output_blob)
-    VALUES(${Array.from({ length: 19 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})
-    ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
-      ordinal=excluded.ordinal, revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
-      owner_fence=excluded.owner_fence, execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
-      hidden=excluded.hidden, original_stop_note_json=excluded.original_stop_note_json,
-      queue_command_turn=excluded.queue_command_turn, queue_failed_outcome=excluded.queue_failed_outcome,
-      queue_failed_at=excluded.queue_failed_at, queue_failure_witnessed_through=excluded.queue_failure_witnessed_through,
-      queue_failure_report_turn_item_id=excluded.queue_failure_report_turn_item_id,placement_json=excluded.placement_json,
-      ${JOURNAL_DOMAIN_ITEM_COLUMNS.map((column) => `${column}=excluded.${column}`).join(',')},
-      output_blob=CASE WHEN ? THEN journal_items.output_blob ELSE excluded.output_blob END`).run(
-    ...prefix,
-    next.itemId,
-    ordinal,
-    next.revision,
-    next.sequence,
-    next.sequenceIndex ?? 0,
-    input.ownerFence,
-    input.executionOwner ?? null,
-    row.payload,
-    Number(input.hidden),
-    stopNote.originalStopNoteJson,
-    failure.commandTurn,
-    failure.failedOutcome,
-    failure.failedAt,
-    failure.witnessedThrough,
-    failure.reportTurnItemId,
-    journalDomainItemPlacement(next),
-    ...row.values,
-    row.blob,
-    Number(row.keep)
-  )
+  writeJournalDomainItemRow(db, prefix, next.itemId, [
+    ['ordinal', ordinal],
+    ['revision', next.revision],
+    ['sequence', next.sequence],
+    ['sequence_index', next.sequenceIndex ?? 0],
+    ['owner_fence', input.ownerFence],
+    ['execution_owner', input.executionOwner ?? null],
+    ['payload_json', row.payload],
+    ['hidden', Number(input.hidden)],
+    ['original_stop_note_json', stopNote.originalStopNoteJson],
+    ['queue_command_turn', failure.commandTurn],
+    ['queue_failed_outcome', failure.failedOutcome],
+    ['queue_failed_at', failure.failedAt],
+    ['queue_failure_witnessed_through', failure.witnessedThrough],
+    ['queue_failure_report_turn_item_id', failure.reportTurnItemId],
+    ['placement_json', journalDomainItemPlacement(next)],
+    ...JOURNAL_DOMAIN_ITEM_COLUMNS.map((column, index) => [column, row.values[index]] as const),
+    // A rewrite of a row whose output is already saved keeps its blob.
+    ...(row.keep ? [] : [['output_blob', row.blob] as const])
+  ])
   writeJournalDomainItemNames(
     db,
     target,

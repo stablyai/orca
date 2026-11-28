@@ -9,6 +9,7 @@ export const MOBILE_MCP_SERVER_RPC_METHODS = [
   'mcpServers.discover',
   'mcpServers.list',
   'mcpServers.move',
+  'mcpServers.previewPaste',
   'mcpServers.problems',
   'mcpServers.remove',
   'mcpServers.sessions.restart',

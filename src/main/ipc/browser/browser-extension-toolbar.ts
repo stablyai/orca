@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
 import type { BrowserExtensionActionResult } from '../../../shared/browser/extensions/browser-extension-types'
 import type { BrowserExtensionToolbarState } from '../../../shared/browser/extensions/browser-extension-toolbar-types'
@@ -15,14 +17,16 @@ import {
 import { setBrowserExtensionPinned } from '../../browser/extensions/actions/browser-extension-toolbar-pins'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
-const pageArgs = z.object({ browserPageId: z.string().min(1) })
-const extensionId = z.string().refine(isChromeExtensionId)
-const anchorSchema = z.object({
-  x: z.number().finite(),
-  y: z.number().finite(),
-  width: z.number().finite().nonnegative(),
-  height: z.number().finite().nonnegative()
-})
+const pageArgs = lazyZodSchema(() => z.object({ browserPageId: z.string().min(1) }))
+const extensionId = lazyZodSchema(() => z.string().refine(isChromeExtensionId))
+const anchorSchema = lazyZodSchema(() =>
+  z.object({
+    x: z.number().finite(),
+    y: z.number().finite(),
+    width: z.number().finite().nonnegative(),
+    height: z.number().finite().nonnegative()
+  })
+)
 const UNTRUSTED: BrowserExtensionActionResult = { ok: false, error: 'Not allowed' }
 
 const CHANNELS = [
@@ -33,11 +37,13 @@ const CHANNELS = [
 ] as const
 
 /** The browser toolbar's extension buttons; only the trusted Orca renderer may drive them. */
-export function registerBrowserExtensionToolbarHandlers(): void {
-  for (const channel of CHANNELS) {
-    ipcMain.removeHandler(channel)
+export function registerBrowserExtensionToolbarHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of CHANNELS) {
+      ipcMain.removeHandler(channel)
+    }
   }
-  ipcMain.handle(
+  ipc.handle(
     'browserExtensions:toolbarState',
     (event, args: unknown): Promise<BrowserExtensionToolbarState | null> | null => {
       const parsed = pageArgs.safeParse(args)
@@ -49,7 +55,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
         : null
     }
   )
-  ipcMain.handle('browserExtensions:setPinned', (event, args: unknown) => {
+  ipc.handle('browserExtensions:setPinned', (event, args: unknown) => {
     const parsed = z
       .object({ profileId: z.string().min(1), extensionId, pinned: z.boolean() })
       .safeParse(args)
@@ -67,7 +73,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
     }
     return { ok: true } satisfies BrowserExtensionActionResult
   })
-  ipcMain.handle('browserExtensions:activateAction', (event, args: unknown) => {
+  ipc.handle('browserExtensions:activateAction', (event, args: unknown) => {
     const parsed = pageArgs
       .extend({ extensionId, anchor: anchorSchema, popupOnly: z.boolean().optional() })
       .safeParse(args)
@@ -79,7 +85,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
       popupOnly: parsed.data.popupOnly === true
     })
   })
-  ipcMain.handle('browserExtensions:pageIcon', (event, args: unknown) => {
+  ipc.handle('browserExtensions:pageIcon', (event, args: unknown) => {
     const parsed = pageArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return null

@@ -22,6 +22,7 @@ import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import '../../../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../../../transport/connection/logical-client-cutover-error'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from '../composer/delivery/mobile-native-chat-send'
+import { translate } from '../../../i18n/mobile-i18n'
 
 export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
@@ -55,7 +56,8 @@ export function agentSessionReadFailureRefusal(failure: unknown) {
 
 export function agentSessionReadRefusalText(refusal: AgentSessionRefusalReference): string {
   return mobileAgentSessionWriteNoticeText(
-    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+    agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history'),
+    translate
   )
 }
 
@@ -167,7 +169,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       status: 'refused',
       code: result.refusal.code,
       message: mobileAgentSessionWriteNoticeText(
-        agentSessionWriteNoticeParts(failure, phoneWriteKind(fingerprintMethod, fields), context)
+        agentSessionWriteNoticeParts(failure, phoneWriteKind(fingerprintMethod, fields), context),
+        translate
       ),
       failure
     }
@@ -179,7 +182,12 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       return {
         status: 'failed',
         message: mobileAgentSessionWriteNoticeText(
-          agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields), context)
+          agentSessionWriteNoticeParts(
+            answered,
+            phoneWriteKind(fingerprintMethod, fields),
+            context
+          ),
+          translate
         ),
         failure: answered
       }
@@ -194,7 +202,8 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     return {
       status: 'failed',
       message: mobileAgentSessionWriteNoticeText(
-        agentSessionWriteNoticeParts({ kind: 'failed' }, phoneWriteKind(fingerprintMethod, fields))
+        agentSessionWriteNoticeParts({ kind: 'failed' }, phoneWriteKind(fingerprintMethod, fields)),
+        translate
       ),
       failure: { kind: 'failed' }
     }

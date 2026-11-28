@@ -30,6 +30,7 @@ import { mobileDiffReviewNotesForItem } from './review-notes/mobile-diff-comment
 import { useMobileDiffReviewNoteDraft } from './review-notes/use-mobile-diff-review-note-draft'
 import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
+import type { LineRange } from './diff-screen/MobileDiffReviewLines'
 
 const NO_COMMENTS: readonly DiffComment[] = []
 
@@ -54,7 +55,7 @@ type ControllerInput = {
 }
 
 export function useMobileDiffReviewController(input: ControllerInput) {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   const {
     client,
     connState,
@@ -85,7 +86,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const { composerBody, setComposerBody } = noteDraft
   const [actionError, setActionError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const worktreeLabel = getWorktreeLabel(name, worktreeId)
+  const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
   const { screenState, setScreenState, statusRevision, target, loadReviewData } =
     useMobileDiffReviewSnapshot({
       client,
@@ -166,6 +167,27 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     statusRevision
   })
 
+  // Lines picked in the loaded diff; another file or a reload of this one starts with none.
+  const loadedLines = diffState.kind === 'ready' ? diffState.lines : null
+  const [selection, setSelection] = useState<{ lines: object; range: LineRange } | null>(null)
+  const lineSelection =
+    selection !== null && selection.lines === loadedLines ? selection.range : null
+  const selectLines = useCallback(
+    (range: LineRange | null) =>
+      setSelection(range && loadedLines ? { lines: loadedLines, range } : null),
+    [loadedLines]
+  )
+  // A send that settles late clears only the lines it was about, never a pick made since.
+  const clearLines = useCallback(
+    (range: LineRange) =>
+      setSelection((current) =>
+        current?.range.startLine === range.startLine && current.range.line === range.line
+          ? null
+          : current
+      ),
+    []
+  )
+
   const comments = screenState.kind === 'ready' ? screenState.comments : NO_COMMENTS
   const { commentsByLine, staleCommentIds } = useMemo(
     () => mobileDiffReviewNotesForItem(comments, currentItem),
@@ -237,6 +259,9 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     currentItem,
     diffState,
     fileNotes: commentsByLine.get(0) ?? [],
+    lineSelection,
+    selectLines,
+    clearLines,
     filter,
     filteredQueue,
     queue,

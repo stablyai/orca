@@ -29,7 +29,8 @@ export function readWorkerTranscript(
 export const ORCHESTRATION_WORKER_TRANSCRIPT_METHODS = [
   defineOrchestrationMethod({
     name: ORCHESTRATION_WORKER_TRANSCRIPT_METHOD,
-    access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
+    // This computer's own log: a paired server's path names a file there, never one here.
+    access: { kind: 'localOnly', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerTranscriptParams,
     // Read only: opening a worker whose terminal is gone shows what it did, never restarts it.

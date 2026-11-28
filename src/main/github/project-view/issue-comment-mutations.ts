@@ -22,13 +22,16 @@ type RawIssueCommentResponse = {
   html_url?: string
 }
 
-function mapIssueComment(data: RawIssueCommentResponse, fallbackBody: string): PRComment {
+async function mapIssueComment(
+  data: RawIssueCommentResponse,
+  fallbackBody: string
+): Promise<PRComment> {
   return {
     id: data.id ?? Date.now(),
     author: data.user?.login ?? 'You',
     authorAvatarUrl: data.user?.avatar_url ?? '',
     body: data.body ?? fallbackBody,
-    bodyImageUrls: githubBodyImageUrls(data.body ?? fallbackBody, data.body_html),
+    bodyImageUrls: await githubBodyImageUrls(data.body ?? fallbackBody, data.body_html),
     createdAt: data.created_at ?? new Date().toISOString(),
     url: data.html_url ?? '',
     isBot: data.user?.type === 'Bot'
@@ -70,7 +73,7 @@ export async function addIssueCommentBySlug(
     projectGhExecOptions(args.host)
   )
   return result.ok
-    ? { ok: true, comment: mapIssueComment(result.data, args.body) }
+    ? { ok: true, comment: await mapIssueComment(result.data, args.body) }
     : { ok: false, error: result.error }
 }
 

@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { isDnrRegexSupported } from '../declarative-net-request/regex/regex-filter'
 import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
+import type { DnrExtensionRules } from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
 import {
   DnrApiError,
-  type DnrExtensionRules
-} from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
-import { DNR_ERRORS } from '../declarative-net-request/session/browser-extension-dnr-limits'
+  DNR_ERRORS
+} from '../declarative-net-request/session/browser-extension-dnr-limits'
 import {
   getDnrSessionRuntime,
   type DnrSessionExtension
@@ -31,41 +32,55 @@ export const DNR_NAMESPACE_PERMISSIONS = [
   'declarativeNetRequestWithHostAccess'
 ] as const
 
-const ruleIdsSchema = z.array(z.number().int())
-const updateRulesSchema = z
-  .object({ removeRuleIds: ruleIdsSchema.optional(), addRules: z.array(z.unknown()).optional() })
-  .loose()
-const ruleFilterSchema = z.object({ ruleIds: ruleIdsSchema.optional() }).loose().optional()
-const updateRulesetsSchema = z
-  .object({
-    enableRulesetIds: z.array(z.string()).optional(),
-    disableRulesetIds: z.array(z.string()).optional()
-  })
-  .loose()
-const updateStaticRulesSchema = z
-  .object({
-    rulesetId: z.string(),
-    disableRuleIds: ruleIdsSchema.optional(),
-    enableRuleIds: ruleIdsSchema.optional()
-  })
-  .loose()
-const regexOptionsSchema = z
-  .object({
-    regex: z.string(),
-    isCaseSensitive: z.boolean().optional(),
-    requireCapturing: z.boolean().optional()
-  })
-  .loose()
-const actionOptionsSchema = z
-  .object({
-    displayActionCountAsBadgeText: z.boolean().optional(),
-    tabUpdate: z.object({ tabId: z.number().int(), increment: z.number().int() }).optional()
-  })
-  .loose()
-const matchedRulesFilterSchema = z
-  .object({ tabId: z.number().int().optional(), minTimeStamp: z.number().optional() })
-  .loose()
-  .optional()
+const ruleIdsSchema = lazyZodSchema(() => z.array(z.number().int()))
+const updateRulesSchema = lazyZodSchema(() =>
+  z
+    .object({ removeRuleIds: ruleIdsSchema.optional(), addRules: z.array(z.unknown()).optional() })
+    .loose()
+)
+const ruleFilterSchema = lazyZodSchema(() =>
+  z.object({ ruleIds: ruleIdsSchema.optional() }).loose().optional()
+)
+const updateRulesetsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      enableRulesetIds: z.array(z.string()).optional(),
+      disableRulesetIds: z.array(z.string()).optional()
+    })
+    .loose()
+)
+const updateStaticRulesSchema = lazyZodSchema(() =>
+  z
+    .object({
+      rulesetId: z.string(),
+      disableRuleIds: ruleIdsSchema.optional(),
+      enableRuleIds: ruleIdsSchema.optional()
+    })
+    .loose()
+)
+const regexOptionsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      regex: z.string(),
+      isCaseSensitive: z.boolean().optional(),
+      requireCapturing: z.boolean().optional()
+    })
+    .loose()
+)
+const actionOptionsSchema = lazyZodSchema(() =>
+  z
+    .object({
+      displayActionCountAsBadgeText: z.boolean().optional(),
+      tabUpdate: z.object({ tabId: z.number().int(), increment: z.number().int() }).optional()
+    })
+    .loose()
+)
+const matchedRulesFilterSchema = lazyZodSchema(() =>
+  z
+    .object({ tabId: z.number().int().optional(), minTimeStamp: z.number().optional() })
+    .loose()
+    .optional()
+)
 
 function entryFor(caller: BrowserExtensionCaller): DnrSessionExtension {
   const entry = getDnrSessionRuntime(caller.session)?.extensions.get(caller.extension.id)

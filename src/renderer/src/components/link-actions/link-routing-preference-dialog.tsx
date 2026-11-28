@@ -1,27 +1,20 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { useAppStore } from '@/store'
-import { useTranslate } from '@/i18n/use-translate'
 import {
   LinkRoutingPreferenceDialogContext,
-  type LinkRoutingPreferenceDialogContextValue,
-  type LinkRoutingPreferenceDialogOptions
+  type LinkRoutingPreferenceDialogContextValue
 } from './link-routing-preference-dialog-context'
+import type { LinkRoutingPreferenceDialogRequest } from './LinkRoutingPreferenceDialogSurface'
 
-type LinkRoutingPreferenceDialogRequest = {
-  id: number
-  options: LinkRoutingPreferenceDialogOptions
-  resolve: (openInOrca: boolean) => void
-}
+const LazyLinkRoutingPreferenceDialogSurface = lazyWithRetry(
+  () =>
+    import('./LinkRoutingPreferenceDialogSurface').then((module) => ({
+      default: module.LinkRoutingPreferenceDialogSurface
+    })),
+  { reloadKey: 'link-routing-preference-dialog-surface' }
+)
 
 const PREVIEW_STORAGE_KEY = 'orca.previewLinkRoutingPreferenceDialog'
 const PREVIEW_DEFAULT_STORAGE_KEY = `${PREVIEW_STORAGE_KEY}.default`
@@ -31,24 +24,13 @@ export function LinkRoutingPreferenceDialogProvider({
 }: {
   children: React.ReactNode
 }): React.JSX.Element {
-  const t = useTranslate()
   const nextIdRef = useRef(0)
   const [queue, setQueue] = useState<LinkRoutingPreferenceDialogRequest[]>([])
   const activeRequest = queue[0] ?? null
-  const activeRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
+  const hasOpened = useLatchedOpen(activeRequest !== null)
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.setContextualToursBlockingSurfaceVisible
   )
-  const lastDisplayedRequestRef = useRef<LinkRoutingPreferenceDialogRequest | null>(activeRequest)
-  activeRequestRef.current = activeRequest
-  if (activeRequest) {
-    lastDisplayedRequestRef.current = activeRequest
-  }
-  // Why: Radix keeps dialog content mounted while closing; keep copy stable during exit animation.
-  const displayedRequest = activeRequest ?? lastDisplayedRequestRef.current
-  const openLinksInAppDefault = displayedRequest?.options.openLinksInAppDefault === true
-  const isMac = navigator.userAgent.includes('Mac')
-  const systemBrowserShortcut = isMac ? '⇧⌘' : 'Shift+Ctrl'
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
@@ -84,63 +66,30 @@ export function LinkRoutingPreferenceDialogProvider({
     })
   }, [requestPreference])
 
-  const settleActiveRequest = useCallback((openInOrca: boolean) => {
-    const request = activeRequestRef.current
-    if (!request) {
-      return
-    }
-    request.resolve(openInOrca)
-    setQueue((currentQueue) => {
-      if (currentQueue[0]?.id === request.id) {
-        return currentQueue.slice(1)
-      }
-      return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
-    })
-  }, [])
+  const settleRequest = useCallback(
+    (request: LinkRoutingPreferenceDialogRequest, openInOrca: boolean) => {
+      request.resolve(openInOrca)
+      setQueue((currentQueue) => {
+        if (currentQueue[0]?.id === request.id) {
+          return currentQueue.slice(1)
+        }
+        return currentQueue.filter((queuedRequest) => queuedRequest.id !== request.id)
+      })
+    },
+    []
+  )
 
   return (
     <LinkRoutingPreferenceDialogContext.Provider value={requestPreference}>
       {children}
-      <Dialog
-        open={activeRequest !== null}
-        onOpenChange={(open) => !open && settleActiveRequest(false)}
-      >
-        <DialogContent size="confirm" overlayClassName="!z-[140]" className="!z-[150]">
-          <DialogHeader>
-            <DialogTitle>
-              {openLinksInAppDefault
-                ? t(
-                    'components.link.routing.preference.dialog.keepInOrcaTitle',
-                    'Keep terminal links in Orca?'
-                  )
-                : t(
-                    'components.link.routing.preference.dialog.openInOrcaTitle',
-                    'Open terminal links in Orca?'
-                  )}
-            </DialogTitle>
-            <DialogDescription>
-              {t(
-                'components.link.routing.preference.dialog.shortcutSummary',
-                '{{shortcut}}-click opens your system browser once. Change this in Settings.',
-                { shortcut: systemBrowserShortcut }
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => settleActiveRequest(false)}>
-              {t(
-                'auto.components.link.routing.preference.dialog.system.button',
-                'Use system browser'
-              )}
-            </Button>
-            <Button size="sm" autoFocus onClick={() => settleActiveRequest(true)}>
-              {openLinksInAppDefault
-                ? t('auto.components.link.routing.preference.dialog.keep.orca.button', 'Keep Orca')
-                : t('auto.components.link.routing.preference.dialog.orca.button', 'Open in Orca')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {hasOpened ? (
+        <Suspense fallback={null}>
+          <LazyLinkRoutingPreferenceDialogSurface
+            activeRequest={activeRequest}
+            onSettle={settleRequest}
+          />
+        </Suspense>
+      ) : null}
     </LinkRoutingPreferenceDialogContext.Provider>
   )
 }

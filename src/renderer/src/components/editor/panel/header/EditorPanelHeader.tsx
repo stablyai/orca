@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { FloatingSplitTabCloseButton } from '@/components/floating-terminal/workspace/floating-split-tab-close-button'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   CUSTOM_EDITOR_SOURCE_METADATA,
@@ -14,6 +15,8 @@ import type { CustomEditorToggleValue, EditorToggleValue } from '../../view-mode
 import { MarkdownDefaultViewContextMenu } from '../../view-mode/MarkdownDefaultViewContextMenu'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
+import { SendNotesSlot } from '../../review-note-delivery/SendNotesButton'
+import { useClearNotesConfirm } from '../../review-note-delivery/notes-copy-clear'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,11 +27,15 @@ import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from '../editor-artifact-upload'
+import { useEditorHeaderReloadControls } from '../../external-changes/reload-from-disk/EditorHeaderReloadControls'
+import type { EditorReloadUi } from '../../external-changes/reload-from-disk/editor-reload-from-disk-feedback'
 
 const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>> = {}
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
+  /** The tab showing this file; a floating split closes it from here. */
+  viewStateId: string
   copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
@@ -62,10 +69,13 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   createArtifactRequest?: () => Promise<ArtifactWriteRequest>
+  /** Reload from Disk; absent where the panel can't reload (e.g. fixtures without a panel). */
+  onReloadFromDisk?: (ui?: EditorReloadUi) => void
 }
 
 export function EditorPanelHeader({
   activeFile,
+  viewStateId,
   copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
@@ -97,22 +107,29 @@ export function EditorPanelHeader({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
-  createArtifactRequest
+  createArtifactRequest,
+  onReloadFromDisk
 }: EditorPanelHeaderProps): React.JSX.Element {
   const t = useTranslate()
+  const headerRef = useRef<HTMLDivElement>(null)
+  const reloadControls = useEditorHeaderReloadControls(activeFile, headerRef, onReloadFromDisk)
   const { owner: commentOwner, comments: diffComments } = useVisibleWorktreeDiffComments(
     activeFile.worktreeId,
     activeFile
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
+  const clearNotes = useClearNotesConfirm()
+  const hasUnsentFileNotes = useMemo(
+    () =>
+      diffComments.some(
+        (comment) => comment.filePath === activeFile.relativePath && !comment.sentAt
+      ),
+    [activeFile.relativePath, diffComments]
+  )
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const fileDiffComments = useMemo(
-    () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
-    [activeFile.relativePath, diffComments]
-  )
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
@@ -140,7 +157,7 @@ export function EditorPanelHeader({
   )
 
   return (
-    <div className="editor-header">
+    <div className="editor-header" ref={headerRef}>
       <EditorPanelHeaderPath
         activeFile={activeFile}
         copiedPathVisible={copiedPathVisible}
@@ -148,6 +165,26 @@ export function EditorPanelHeader({
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
+      {isSingleDiff && (
+        <SendNotesSlot className="ml-1">
+          {/* Mount the menu only for a file with unsent notes; most diff headers have none. */}
+          {hasUnsentFileNotes ? (
+            <DiffNotesSendMenu
+              owner={commentOwner}
+              worktreeId={activeFile.worktreeId}
+              groupId={activeGroupId ?? activeFile.worktreeId}
+              comments={diffComments}
+              filePath={activeFile.relativePath}
+              showFileScope
+              align="start"
+              batch={{ size: 'sm' }}
+              requestClear={clearNotes.requestClear}
+            />
+          ) : null}
+        </SendNotesSlot>
+      )}
+      {clearNotes.dialog}
+      {reloadControls.headerControls}
       {canOpenPreview && (
         <TooltipProvider>
           <Tooltip>
@@ -196,20 +233,6 @@ export function EditorPanelHeader({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      )}
-      {isSingleDiff && fileDiffComments.length > 0 && (
-        <DiffNotesSendMenu
-          owner={commentOwner}
-          worktreeId={activeFile.worktreeId}
-          groupId={activeGroupId ?? activeFile.worktreeId}
-          comments={diffComments}
-          filePath={activeFile.relativePath}
-          showFileScope
-          triggerLabel="AI notes"
-          triggerCount={fileDiffComments.length}
-          triggerClassName="h-6 shrink-0 gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
-          iconClassName="size-3"
-        />
       )}
       {isDiffSurface && (
         <TooltipProvider>
@@ -340,6 +363,7 @@ export function EditorPanelHeader({
             <EditorFileLocationMenuItems file={activeFile} onCopyPath={onCopyPath} />
           ) : undefined
         }
+        reloadAction={reloadControls.menuItem}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}
@@ -356,6 +380,7 @@ export function EditorPanelHeader({
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />
+      <FloatingSplitTabCloseButton worktreeId={activeFile.worktreeId} tabId={viewStateId} />
     </div>
   )
 }

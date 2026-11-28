@@ -10,9 +10,9 @@ import {
 } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import type { AgentTurnOutcome } from '../../../../../../src/shared/agent-status/lifecycle/agent-turn-outcome'
-import { colors, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { feedback, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { useNow } from '../../../../hooks/use-now'
 
 // Stop ticking settled turns so old transcripts retain no timers.
@@ -41,7 +41,8 @@ export function MobileNativeChatTurnStatus({
   /** At the row's end, inside its hairline, while the turn is unsettled: a group turn's Stop. */
   trailing?: React.ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
   const t = useMobileTranslation()
   const bot = useContext(MobileNativeChatBotIdentityContext)
   const settled = workedSeconds != null || Boolean(pendingLabel)
@@ -102,7 +103,7 @@ export function MobileNativeChatTurnStatus({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -115,7 +116,7 @@ const styles = themedStyleSheet(() => ({
     borderBottomColor: colors.borderSubtle
   },
   pressed: {
-    opacity: 0.6
+    opacity: feedback.pressedOpacity
   },
   // A room names who spoke, as a chat's header names its agent.
   name: {

@@ -6,10 +6,7 @@ import {
   type ViewStyle,
   type ScrollViewInstance
 } from 'react-native'
-import { colors } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 // Reverse anchoring gives scrollTop=0 at the tail and negative offsets above; disable browser anchoring because the list restores parked readers itself.
 export function MobileNativeChatPageScroll({
   ref,
@@ -17,7 +14,7 @@ export function MobileNativeChatPageScroll({
   contentContainerStyle,
   ...props
 }: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
-  useMobileColorScheme()
+  const pageScroll = useThemedStyles(pageScrollSheet)
   return (
     <ScrollView
       ref={ref}
@@ -33,12 +30,12 @@ export function MobileNativeChatPageScroll({
 // RN Web passes it through to CSS; ViewStyle doesn't name it.
 type EndAnchored = ViewStyle & { overflowAnchor: 'none' }
 
-const pageScroll = themedStyleSheet(() => {
+const pageScrollSheet = themedStyleSheet((colors) => {
   const endAnchored: EndAnchored = {
     flexDirection: 'column-reverse',
     overflowAnchor: 'none',
     // Opaque scroller layer: some Android GPUs draw its transparent pixels black during selection (#36553).
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.chatCanvas
   }
   return {
     endAnchored,

@@ -200,6 +200,8 @@ export function insertPeerMailMessage(
     environmentId?: string
     remoteParty: string | null
     message: MessageInsert & { id: string; from: string }
+    /** Runs in the same savepoint as a first store; a duplicate skips it. */
+    onFirstStore?: () => void
   }
 ):
   | { message: MessageRow; duplicate: false }
@@ -233,6 +235,7 @@ export function insertPeerMailMessage(
          VALUES (?, ?, ?, ?)`
       )
       .run(message.id, params.conversationId, params.message.from, params.remoteParty)
+    params.onFirstStore?.()
     this.db.exec('RELEASE peer_mail_insert')
     return { message, duplicate: false }
   } catch (error) {

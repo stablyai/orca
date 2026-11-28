@@ -37,6 +37,8 @@ export function externalAutomationManagerCacheKey(key: ExternalAutomationManager
 
 export class ExternalAutomationManagerCache {
   private readonly entries = new Map<string, ExternalAutomationManagerCacheEntry>()
+  /** Bumped per invalidation so reads that began earlier cannot repopulate the owner. */
+  private readonly ownerGenerations = new Map<string, number>()
   private readonly ttlMs: number
   private readonly now: () => number
 
@@ -58,29 +60,8 @@ export class ExternalAutomationManagerCache {
     return this.now() - entry.updatedAt <= this.ttlMs ? entry : null
   }
 
-  write(
-    key: ExternalAutomationManagerCacheKey,
-    manager: ExternalAutomationManager | null
-  ): ExternalAutomationManagerCacheEntry {
-    return this.store(key, { manager, error: null, updatedAt: this.now() })
-  }
-
-  writeFailure(
-    key: ExternalAutomationManagerCacheKey,
-    error: unknown
-  ): ExternalAutomationManagerCacheEntry {
-    return this.store(key, {
-      manager: null,
-      error: describeExternalManagerFailure(error),
-      updatedAt: this.now()
-    })
-  }
-
-  invalidate(key: ExternalAutomationManagerCacheKey): void {
-    this.entries.delete(externalAutomationManagerCacheKey(key))
-  }
-
   invalidateOwner(ownerKey: string): void {
+    this.ownerGenerations.set(ownerKey, this.ownerGeneration(ownerKey) + 1)
     for (const key of this.entries.keys()) {
       if (key.startsWith(`${ownerKey}|`)) {
         this.entries.delete(key)
@@ -88,14 +69,14 @@ export class ExternalAutomationManagerCache {
     }
   }
 
-  clear(): void {
-    this.entries.clear()
+  private ownerGeneration(ownerKey: string): number {
+    return this.ownerGenerations.get(ownerKey) ?? 0
   }
 
   /** Cancellation propagates without replacing the previous cache entry. */
   async resolve(
     key: ExternalAutomationManagerCacheKey,
-    load: () => Promise<ExternalAutomationManager | null>,
+    load: (ownerGeneration: number) => Promise<ExternalAutomationManager | null>,
     options?: { refresh?: boolean }
   ): Promise<ExternalAutomationManagerCacheEntry> {
     if (!options?.refresh) {
@@ -104,14 +85,17 @@ export class ExternalAutomationManagerCache {
         return cached
       }
     }
+    const generation = this.ownerGeneration(key.ownerKey)
+    let entry: ExternalAutomationManagerCacheEntry
     try {
-      return this.write(key, await load())
+      entry = { manager: await load(generation), error: null, updatedAt: this.now() }
     } catch (error) {
       if (isExternalAutomationProbeCancelled(error)) {
         throw error
       }
-      return this.writeFailure(key, error)
+      entry = { manager: null, error: describeExternalManagerFailure(error), updatedAt: this.now() }
     }
+    return generation === this.ownerGeneration(key.ownerKey) ? this.store(key, entry) : entry
   }
 
   private store(

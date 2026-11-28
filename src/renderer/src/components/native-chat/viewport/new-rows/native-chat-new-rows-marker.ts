@@ -1,6 +1,11 @@
 // Mark the first row that arrived or kept growing while the reader was away.
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { stageBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import {
+  KEPT_TRANSCRIPTS_PER_TAB,
+  useNativeChatViewMemory
+} from '../../pane/ownership/native-chat-view-memory'
 import { useOrcaWindowForegroundFocused } from '@/attention/use-orca-window-foreground-focused'
 import { compareAgentJournalPositions } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
 import type { AgentJournalPosition } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -159,12 +164,34 @@ export function nativeChatNewRowsMarkerPlacement(
     : { key: nativeChatSlotKey(first), place: 'above-row' }
 }
 
+type Seen = {
+  watching: boolean
+  /** While the reader is away: where they had read to. */
+  left: NativeChatLeftAt | null
+  /** Stands until the reader answers. */
+  missed: NativeChatMissedRows | null
+  arriving: boolean
+}
+
+/** The reader looks away: an unanswered marker whose row still stands is kept, as they may be midway through it. */
+function leaving(
+  seen: Seen,
+  slots: readonly NativeChatTranscriptSlot[],
+  waitingSlots: readonly NativeChatTranscriptSlot[]
+): Seen {
+  const marked =
+    nativeChatNewRowsMarkerPlacement([...slots, ...waitingSlots], seen.missed) !== undefined
+  return { ...seen, watching: false, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) }
+}
+
 export function useNativeChatNewRowsMarker(
   slots: readonly NativeChatTranscriptSlot[],
   /** Rows held behind the running turn: seen and missed like any other, drawn outside `slots`. */
   waitingSlots: readonly NativeChatTranscriptSlot[],
   /** The pane is the one showing, and shows what the host holds now. */
-  isShowingLatest: boolean
+  isShowingLatest: boolean,
+  /** This transcript within its chat tab, so a released view keeps where its reader left off. */
+  memoryKey?: string
 ): {
   marker: NativeChatNewRowsMarkerState | undefined
   /** The slot drawing the marker, or -1. */
@@ -176,14 +203,39 @@ export function useNativeChatNewRowsMarker(
   const enabled = useAppStore((state) => nativeChatMarksNewMessages(state.settings))
   const focused = useOrcaWindowForegroundFocused(enabled && isShowingLatest)
   const watching = !enabled || focused
-  const [seen, setSeen] = useState<{
-    watching: boolean
-    /** While the reader is away: where they had read to. */
-    left: NativeChatLeftAt | null
-    /** Stands until the reader answers. */
-    missed: NativeChatMissedRows | null
-    arriving: boolean
-  }>({ watching, left: null, missed: null, arriving: false })
+  const kept = useNativeChatViewMemory<Seen>(
+    memoryKey === undefined ? undefined : `new-rows:${memoryKey}`,
+    KEPT_TRANSCRIPTS_PER_TAB
+  )
+  const [seenState, setSeen] = useState<Seen>(
+    () => kept.saved ?? { watching, left: null, missed: null, arriving: false }
+  )
+  let seen = seenState
+  // A transcript key that changes mid-view takes that transcript's own kept place, never this one's.
+  const [seenKey, setSeenKey] = useState(memoryKey)
+  if (seenKey !== memoryKey) {
+    seen = kept.saved ?? { watching, left: null, missed: null, arriving: false }
+    setSeenKey(memoryKey)
+    setSeen(seen)
+  }
+  const { write: keep } = kept
+  // With marking off nothing is tracked, so nothing is kept.
+  useEffect(() => keep(enabled ? seen : undefined), [enabled, keep, seen])
+  const latest = useRef({ enabled, seen, slots, waitingSlots })
+  useLayoutEffect(() => {
+    latest.current = { enabled, seen, slots, waitingSlots }
+  })
+  // Why: a hidden view runs no effects, so where the reader left is kept as it hides, before a release. Layout, so
+  // a key change keeps the old transcript's own place: this cleanup runs before `latest` takes the new one.
+  useLayoutEffect(
+    () => () => {
+      const { enabled: on, seen: held, slots: rows, waitingSlots: waiting } = latest.current
+      if (on && held.watching) {
+        keep(leaving(held, rows, waiting))
+      }
+    },
+    [keep]
+  )
   if (!enabled) {
     if (!seen.watching || seen.left !== null || seen.missed !== null) {
       setSeen({ watching, left: null, missed: null, arriving: false })
@@ -194,13 +246,16 @@ export function useNativeChatNewRowsMarker(
       const missed = seen.left ? nativeChatMissedRows(all, seen.left) : seen.missed
       setSeen({ watching, left: null, missed, arriving: seen.left !== null && missed !== null })
     } else {
-      // An unanswered marker whose row still stands is kept: the reader may be midway through it.
-      const marked = nativeChatNewRowsMarkerPlacement(all, seen.missed) !== undefined
-      setSeen({ ...seen, watching, left: marked ? null : nativeChatLeftAt(slots, waitingSlots) })
+      setSeen(leaving(seen, slots, waitingSlots))
     }
   }
   const { missed } = seen
-  const placement = useMemo(() => nativeChatNewRowsMarkerPlacement(slots, missed), [slots, missed])
+  // A streamed text revision places the marker as its base did.
+  const laidOut = stageBesideStreamedText(slots)
+  const placement = useMemo(
+    () => nativeChatNewRowsMarkerPlacement(laidOut, missed),
+    [laidOut, missed]
+  )
   const dismiss = useCallback(() => {
     // Where they left as well: an answer sent before the chat has caught up settles that too.
     setSeen((held) =>

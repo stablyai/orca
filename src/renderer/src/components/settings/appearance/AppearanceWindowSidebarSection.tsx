@@ -1,8 +1,7 @@
+import { Fragment } from 'react'
 import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsGroupNestedRows, SettingsGroupSubsection } from '../section-layout/SettingsGroup'
@@ -17,8 +16,7 @@ import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearan
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
-  getShowPinnedWorktreesInGroupsEntry,
-  getWorkspaceCardLayoutEntry
+  getShowPinnedWorktreesInGroupsEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 import {
@@ -28,6 +26,9 @@ import {
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
+import { getStatusBarMemoryEntry } from './appearance-status-bar-memory-search'
+import { StatusBarMemorySetting } from './StatusBarMemorySetting'
+import { recordStatusBarToggleInteraction } from './status-bar-toggle-feature-interaction'
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
@@ -41,32 +42,9 @@ type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   tilingWindowModeEntry?: SettingsSearchEntry
+  /** Absent when the drawn cards ignore the layout. */
+  workspaceCardLayoutEntry?: SettingsSearchEntry
   forceVisiblePrimary?: boolean
-}
-
-function recordStatusBarToggleInteraction(
-  id: StatusBarItem,
-  recordFeatureInteraction: (feature: FeatureInteractionId) => void
-): void {
-  if (id === 'resource-usage') {
-    recordFeatureInteraction('resource-manager')
-  } else if (id === 'ports') {
-    recordFeatureInteraction('ports')
-  } else if (id === 'ssh') {
-    recordFeatureInteraction('ssh')
-  } else if (
-    id === 'claude' ||
-    id === 'codex' ||
-    id === 'opencode-go' ||
-    id === 'kimi' ||
-    id === 'antigravity' ||
-    id === 'minimax' ||
-    id === 'grok' ||
-    id === 'cursor' ||
-    id === 'muse'
-  ) {
-    recordFeatureInteraction('usage-tracking')
-  }
 }
 
 /** Window & Sidebar appearance section: sidebar/chrome appearance, status bar controls, and layout advanced settings. */
@@ -74,6 +52,7 @@ export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
   tilingWindowModeEntry,
+  workspaceCardLayoutEntry,
   forceVisiblePrimary = false
 }: AppearanceWindowSidebarSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -92,7 +71,6 @@ export function AppearanceWindowSidebarSection({
   const setStatusBarUsageFormat = useAppStore((state) => state.setStatusBarUsageFormat)
   const leftSidebarAppearanceEntry = getLeftSidebarAppearanceEntry()
   const sidebarEntries = getSidebarEntries()
-  const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
   const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry(t)
   const statusBarTitle = t('auto.components.settings.AppearancePane.3a5d06686d', 'Status bar')
@@ -109,6 +87,8 @@ export function AppearanceWindowSidebarSection({
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
     matchesSettingsSearch(searchQuery, statusBarUsageFormatEntry) ||
+    (statusBarItems.includes('resource-usage') &&
+      matchesSettingsSearch(searchQuery, getStatusBarMemoryEntry())) ||
     visibleStatusBarToggles.some((toggle) =>
       matchesSettingsSearch(searchQuery, {
         title: toggle.title,
@@ -117,7 +97,7 @@ export function AppearanceWindowSidebarSection({
       })
     )
   const sidebarAdvancedMatches = matchesSettingsSearch(searchQuery, [
-    workspaceCardLayoutEntry,
+    ...(workspaceCardLayoutEntry ? [workspaceCardLayoutEntry] : []),
     ...sidebarEntries
   ])
   const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
@@ -208,23 +188,27 @@ export function AppearanceWindowSidebarSection({
             {visibleStatusBarToggles.map((toggle) => {
               const enabled = statusBarItems.includes(toggle.id)
               return (
-                <SearchableSetting
-                  key={toggle.id}
-                  title={toggle.title}
-                  description={toggle.description}
-                  keywords={toggle.keywords}
-                >
-                  <SettingsSwitchRow
-                    label={toggle.title}
-                    description={toggle.toggleDescription}
-                    checked={enabled}
-                    onChange={() => {
-                      recordStatusBarToggleInteraction(toggle.id, recordFeatureInteraction)
-                      toggleStatusBarItem(toggle.id)
-                    }}
-                    ariaLabel={toggle.title}
-                  />
-                </SearchableSetting>
+                <Fragment key={toggle.id}>
+                  <SearchableSetting
+                    title={toggle.title}
+                    description={toggle.description}
+                    keywords={toggle.keywords}
+                  >
+                    <SettingsSwitchRow
+                      label={toggle.title}
+                      description={toggle.toggleDescription}
+                      checked={enabled}
+                      onChange={() => {
+                        recordStatusBarToggleInteraction(toggle.id, recordFeatureInteraction)
+                        toggleStatusBarItem(toggle.id)
+                      }}
+                      ariaLabel={toggle.title}
+                    />
+                  </SearchableSetting>
+                  {toggle.id === 'resource-usage' && enabled ? (
+                    <StatusBarMemorySetting settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </Fragment>
               )
             })}
           </SettingsGroupNestedRows>
@@ -237,41 +221,43 @@ export function AppearanceWindowSidebarSection({
             <SettingsGroupSubsection
               title={t('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
             >
-              <SearchableSetting
-                title={workspaceCardLayoutEntry.title}
-                description={workspaceCardLayoutEntry.description}
-                keywords={workspaceCardLayoutEntry.keywords}
-              >
-                <SettingsRow
-                  label={workspaceCardLayoutEntry.title}
+              {workspaceCardLayoutEntry ? (
+                <SearchableSetting
+                  title={workspaceCardLayoutEntry.title}
                   description={workspaceCardLayoutEntry.description}
-                  control={
-                    <SettingsSegmentedControl
-                      value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
-                      onChange={(value) =>
-                        setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
-                      }
-                      ariaLabel={workspaceCardLayoutEntry.title}
-                      options={[
-                        {
-                          value: 'detailed',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
-                            'Detailed'
-                          )
-                        },
-                        {
-                          value: 'compact',
-                          label: t(
-                            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
-                            'Compact'
-                          )
+                  keywords={workspaceCardLayoutEntry.keywords}
+                >
+                  <SettingsRow
+                    label={workspaceCardLayoutEntry.title}
+                    description={workspaceCardLayoutEntry.description}
+                    control={
+                      <SettingsSegmentedControl
+                        value={settings.compactWorktreeCards ? 'compact' : 'detailed'}
+                        onChange={(value) =>
+                          setWorktreeCardMode(value === 'compact' ? 'Compact' : 'Default')
                         }
-                      ]}
-                    />
-                  }
-                />
-              </SearchableSetting>
+                        ariaLabel={workspaceCardLayoutEntry.title}
+                        options={[
+                          {
+                            value: 'detailed',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
+                              'Detailed'
+                            )
+                          },
+                          {
+                            value: 'compact',
+                            label: t(
+                              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
+                              'Compact'
+                            )
+                          }
+                        ]}
+                      />
+                    }
+                  />
+                </SearchableSetting>
+              ) : null}
 
               <SearchableSetting
                 title={t('auto.components.settings.AppearancePane.e0f9902e18', 'Show tasks button')}

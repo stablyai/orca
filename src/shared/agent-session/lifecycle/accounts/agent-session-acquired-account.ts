@@ -1,44 +1,51 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../schema/lazy-zod-schema'
 import {
   type AgentSessionLease,
   type AgentSessionRecord,
   agentSessionScopeKey
 } from '../agent-session-record'
 
-const path = z
-  .string()
-  .min(1)
-  .max(32_768)
-  .refine((value) => !value.includes('\0'))
-export const claudeAccountRecipeSchema = z.discriminatedUnion('route', [
+const path = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(32_768)
+    .refine((value) => !value.includes('\0'))
+)
+export const claudeAccountRecipeSchema = lazyZodSchema(() =>
+  z.discriminatedUnion('route', [
+    z
+      .object({
+        route: z.literal('managed'),
+        accountId: z
+          .string()
+          .min(1)
+          .max(512)
+          .regex(/^[a-zA-Z0-9_-]+$/),
+        home: path
+      })
+      .strict(),
+    z.object({ route: z.literal('system'), home: path, configDir: path.nullable() }).strict()
+  ])
+)
+export type ClaudeAccountRecipe = z.infer<typeof claudeAccountRecipeSchema>
+const acquiredAccountSchema = lazyZodSchema(() =>
   z
     .object({
-      route: z.literal('managed'),
-      accountId: z
-        .string()
-        .min(1)
-        .max(512)
-        .regex(/^[a-zA-Z0-9_-]+$/),
-      home: path
+      version: z.literal(1),
+      hostId: z.string().min(1).max(512),
+      sessionId: z.string().min(1).max(512),
+      scope: z.string().max(98_304),
+      context: z.string().max(512).nullable(),
+      fence: z.number().int().positive(),
+      observedThroughFence: z.number().int().positive(),
+      generation: z.string().min(1).max(512),
+      spawnToken: z.string().min(1).max(512),
+      recipe: claudeAccountRecipeSchema
     })
-    .strict(),
-  z.object({ route: z.literal('system'), home: path, configDir: path.nullable() }).strict()
-])
-export type ClaudeAccountRecipe = z.infer<typeof claudeAccountRecipeSchema>
-const acquiredAccountSchema = z
-  .object({
-    version: z.literal(1),
-    hostId: z.string().min(1).max(512),
-    sessionId: z.string().min(1).max(512),
-    scope: z.string().max(98_304),
-    context: z.string().max(512).nullable(),
-    fence: z.number().int().positive(),
-    observedThroughFence: z.number().int().positive(),
-    generation: z.string().min(1).max(512),
-    spawnToken: z.string().min(1).max(512),
-    recipe: claudeAccountRecipeSchema
-  })
-  .strict()
+    .strict()
+)
 export type AgentSessionAcquiredAccount = z.infer<typeof acquiredAccountSchema>
 
 /** This optional host observation never changes founding identity or saved choices. */

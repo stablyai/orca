@@ -7,6 +7,12 @@ import { StarNagCard } from '../../components/star-nag/StarNagCard'
 import { WorkspaceCleanupRunCard } from '../../components/workspace-cleanup/removal/run/WorkspaceCleanupRunCard'
 import { OverlayBoundary } from './app-root-surface-boundaries'
 
+const AgentCliUpdateCard = lazy(() =>
+  import('../../components/agent-cli-update/AgentCliUpdateCard').then((module) => ({
+    default: module.AgentCliUpdateCard
+  }))
+)
+
 const ChatUiHereCornerCard = lazy(() =>
   import('../../components/feature-tips/ChatUiHereCornerCard').then((module) => ({
     default: module.ChatUiHereCornerCard
@@ -22,6 +28,9 @@ const UnexpectedSignoutCard = lazy(() =>
     default: module.UnexpectedSignoutCard
   }))
 )
+
+// Temporarily disabled while fixing a bug where the card can stay stuck open.
+const AGENT_CLI_UPDATE_CARD_ENABLED = false
 
 /** The bottom-right notification stack and every card that shares it. */
 export function AppNotificationCards({
@@ -41,6 +50,13 @@ export function AppNotificationCards({
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.chat-ui-here-corner-card" resetKey={activeView}>
             <ChatUiHereCornerCard onClose={onChatUiHereCornerCardClose} />
+          </OverlayBoundary>
+        </Suspense>
+      ) : null}
+      {AGENT_CLI_UPDATE_CARD_ENABLED ? (
+        <Suspense fallback={null}>
+          <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+            <AgentCliUpdateCard />
           </OverlayBoundary>
         </Suspense>
       ) : null}

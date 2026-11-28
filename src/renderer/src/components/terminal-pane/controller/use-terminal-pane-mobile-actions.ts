@@ -6,6 +6,7 @@ import type { TerminalPaneContextController } from './use-terminal-pane-context-
 export function useTerminalPaneMobileActions(controller: TerminalPaneContextController) {
   const {
     cwd,
+    isVisibleRef,
     managerRef,
     paneCwdRef,
     paneTransportsRef,
@@ -16,6 +17,8 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     worktreeId
   } = controller
   const { restorePaneTerminalFit, restoreAllTerminalFits } = useMobileTerminalFitActions({
+    isVisibleRef,
+    managerRef,
     paneTransportsRef,
     refreshMobileOverlays,
     settingsRef

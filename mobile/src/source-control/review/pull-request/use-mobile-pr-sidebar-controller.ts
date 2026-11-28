@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import type { GitHubPRFileViewedState } from '../../../../../src/shared/github/pull-requests/pull-request-types'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { readHostQueryLive, useHostQuery } from '../../../query/host-query'
 import { isHostNotConnectedError } from '../../../query/host-query-errors'
 import { useLastShownData } from '../../../query/use-last-shown-data'
@@ -66,6 +67,7 @@ function readFailed(query: UseQueryResult<unknown>): boolean {
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { hostId, client, worktreeId, branch, headSha } = input
+  const t = useMobileTranslation()
   const queryClient = useQueryClient()
   const exec = useWorkspaceExecutionHost() ?? 'local'
   const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
@@ -176,7 +178,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       return { kind: 'hidden' }
     }
     if (!review) {
-      return reviewFailed ? prSidebarFailureState(reviewError) : { kind: 'loading' }
+      return reviewFailed ? prSidebarFailureState(reviewError, t) : { kind: 'loading' }
     }
     // A failed read of a PR or no-PR result keeps it on screen, marked until a read succeeds.
     const marked = reviewFailed ? { refreshFailed: true as const } : {}
@@ -210,7 +212,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     checksError,
     details,
     detailsFailed,
-    detailsDemanded
+    detailsDemanded,
+    t
   ])
 
   const scopeQueries = useMemo(

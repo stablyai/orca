@@ -44,6 +44,8 @@ import {
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 
+const EMPTY_WORKSPACE_STATUSES: SectionRowsArgs['workspaceStatuses'] = []
+
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
   let result: SidebarHostOption[] = []
@@ -143,6 +145,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
+  // PR cache and workspace statuses only affect grouping in their respective modes.
+  const prCacheForPlan = args.groupBy === 'pr-status' ? args.prCache : null
+  const workspaceStatusesForPlan =
+    args.groupBy === 'workspace-status' ? args.workspaceStatuses : EMPTY_WORKSPACE_STATUSES
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
@@ -151,9 +157,9 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         worktrees,
         repoMap,
         repoOfWorktree,
-        prGroupOf: createSidebarPRGroupReader(repoMap, args.prCache),
+        prGroupOf: createSidebarPRGroupReader(repoMap, prCacheForPlan),
         repoOrder,
-        workspaceStatuses: args.workspaceStatuses,
+        workspaceStatuses: workspaceStatusesForPlan,
         projectOrderBy: args.projectOrderBy,
         lineageById: args.worktreeLineageById,
         lineageParentIdentities,
@@ -179,10 +185,10 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       repos,
       repoMap,
       repoOfWorktree,
-      args.prCache,
+      prCacheForPlan,
       defaultHostId,
       repoOrder,
-      args.workspaceStatuses,
+      workspaceStatusesForPlan,
       args.projectOrderBy,
       args.worktreeLineageById,
       lineageParentIdentities,
@@ -212,8 +218,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     repoMap,
     worktreeMap: args.worktreeMap,
     worktreeLineageById: args.worktreeLineageById,
-    prCache: args.prCache,
-    workspaceStatuses: args.workspaceStatuses,
+    prCache: prCacheForPlan,
+    workspaceStatuses: workspaceStatusesForPlan,
     projectGroups: args.visibleProjectGroupsForRows,
     projectGrouping: args.projectGrouping,
     folderWorkspaces: args.visibleFolderWorkspacesForRows,

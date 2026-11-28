@@ -4,8 +4,10 @@ import {
 } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
-import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
-import { acpBotMcpServers } from '../../bots/bot-tools-acp'
+import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
+import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
+import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
+import { acpLaunchServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
@@ -47,6 +49,7 @@ import { linkedSkillsSection } from '../../native-chat/native-chat-skill-roots'
 import { noteManagedServerUse } from '../../node-runtime/managed-runtime-release'
 import type { AcpInstructionsLaunch } from './acp-instructions'
 import { acpInstructionsWithVisuals, visualsByInstructions } from './acp-visuals-instructions'
+import { withAcpToolFreeFolder } from '../session/acp-tool-free-run'
 import { withoutCallerIdentity } from '../../runtime/agent-session/environment/structured-session-child-env'
 
 /** The environment a launch's process gets; see `AcpLaunchSpec.sharedToolProcess`. */
@@ -67,15 +70,21 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   env: Record<string, string>
   envToDelete: string[]
   fullAccess: boolean
+  /** A tool-free run (`StructuredAgentLaunchBasis.toolFree`) and the empty folder it starts in. */
+  toolFree?: { cwd: string }
   /** See `AcpInstructionsLaunch`. */
   sessionMeta?: Record<string, unknown>
   sessionMetaOnReopen?: true
   takesSessionMeta?: AcpInstructionsLaunch['takesSessionMeta']
   sessionMetaOptional?: true
-  aroundNewSession?: AcpInstructionsLaunch['aroundNewSession']
+  aroundSessionOpen?: AcpInstructionsLaunch['aroundSessionOpen']
   release?: AcpInstructionsLaunch['release']
   /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
   mcpServers?: McpServer[]
+  /** Carries grants that end with this app (a bot's tool-relay token), so it can't outlive it. */
+  appBoundGrants?: true
+  /** `mcpServerSetKey` of the servers Orca delivered, not the agent's own (its config's). */
+  toolsKey?: string
   /** The saved model the launch line carries. */
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
@@ -181,7 +190,7 @@ export function acpStructuredLaunchPart(
   agentSpec: AcpLaunchSpec,
   deps: AcpStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
-  return async (basis, identity) => {
+  return withAcpToolFreeFolder(deps, async (basis, identity) => {
     const { record } = basis
     const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
     const accountHome = movedHome ?? record.accountHome
@@ -207,7 +216,7 @@ export function acpStructuredLaunchPart(
     // PATH may have changed since chat creation.
     const launchVersion = await checkAcpLaunchVersion(
       spec,
-      { command, prefixArgs, cwd, env },
+      { command, prefixArgs, cwd, env, chat: identity.sessionId },
       roots.length > 0,
       deps.probeVersion
     )
@@ -226,7 +235,20 @@ export function acpStructuredLaunchPart(
     })
     const loaded = skill?.loaded ?? []
     const skillLoaded = visuals && loaded.includes(visuals.skill) ? visuals : null
-    const tools = await basis.toolServers()
+    // A managed release's receipt names its version; other programs answer the check.
+    const launchedVersion = version ?? launchVersion.version
+    // The agent's own servers, which a same-named server from the host's list leaves running. Like
+    // its other tools, a read-only session gets none.
+    const ownServers = basis.readOnly
+      ? []
+      : ((await spec.ownMcpServers?.({
+          cwd,
+          env: childEnvironmentView(env, inherited, envToDelete),
+          version: launchedVersion
+        })) ?? [])
+    // An agent that ignores a session's servers gets none of the host list's; a bot's own are noted off.
+    const named = { env, cwd, also: ownServers.map((one) => one.name), hostOff: !!spec.botToolsOff }
+    const tools = await deliverHostMcpServersBesideConfig(basis, spec.agent, named)
     // Why a bot's tools are off for this agent; its chat starts without them and is told so.
     const toolsOff = tools.servers.length > 0 ? spec.botToolsOff : undefined
     const own = await basis.instructions(
@@ -250,22 +272,10 @@ export function acpStructuredLaunchPart(
     const instructions = delivered.launch
     const visualsLoaded = skillLoaded ?? (delivered.visuals ? visuals : null)
     const fullAccess = basis.permissionMode === 'full-access'
-    // A managed release's receipt names its version; other programs answer the check.
-    const launchedVersion = version ?? launchVersion.version
-    const botServers = toolsOff ? [] : acpBotMcpServers(tools)
-    // Like its bot tools, a read-only session gets none of the agent's own servers.
-    const ownServers = basis.readOnly
-      ? []
-      : ((await spec.ownMcpServers?.({
-          cwd,
-          env: childEnvironmentView(env, inherited, envToDelete),
-          version: launchedVersion
-        })) ?? [])
-    // On a shared name the bot's server wins.
-    const mcpServers = [
-      ...botServers,
-      ...ownServers.filter((own) => !botServers.some((bot) => bot.name === own.name))
-    ]
+    // The host list's never shares a name with the agent's own (above).
+    // A loader that needs the agent's version reads nothing without it (a kept agent's launch).
+    const ownRead = !spec.ownMcpServers || (launchedVersion ?? null) !== null
+    const { mcpServers, toolsKey } = await acpLaunchServers(tools, ownServers, toolsOff, ownRead)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     // A load restores the conversation's own model, and a stale role there would stop the agent
     // before it opens; resumed chats apply their model through the session instead.
@@ -291,11 +301,14 @@ export function acpStructuredLaunchPart(
               ...(instructions.sessionMetaOptional ? { sessionMetaOptional: true as const } : {})
             }
           : {}),
-        ...(instructions?.aroundNewSession
-          ? { aroundNewSession: instructions.aroundNewSession }
+        ...(instructions?.aroundSessionOpen
+          ? { aroundSessionOpen: instructions.aroundSessionOpen }
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
+        ...(toolsKey ? { toolsKey } : {}),
+        // A token this app's tool relay issued for this run ends with it, so the agent does too.
+        ...(tools.appBound ? { appBoundGrants: true as const } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
         ...(movedHome ? { launchedAccountHome: movedHome } : {}),
@@ -317,7 +330,7 @@ export function acpStructuredLaunchPart(
           : null
       },
       env: withNativeChatVisualsEnv(
-        withBotLaunchToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
+        withSessionMcpToolsEnv({ ...env, ...skill?.env, ...instructions?.env }, tools),
         visualsLoaded
       ),
       inheritedEnvToDelete: [
@@ -327,5 +340,5 @@ export function acpStructuredLaunchPart(
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
     }
-  }
+  })
 }

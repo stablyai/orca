@@ -1,23 +1,21 @@
 import { X } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
-type EditorFileTabCloseButtonProps = {
-  fileIsDirty: boolean
-  showsSelectionChrome: boolean
-  onClose: () => void
-}
-
-function EditorFileTabCloseButton({
+export function EditorFileTabCloseButton({
   fileIsDirty,
   showsSelectionChrome,
   onClose
-}: EditorFileTabCloseButtonProps): React.JSX.Element {
+}: {
+  fileIsDirty: boolean
+  showsSelectionChrome: boolean
+  onClose: () => void
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <button
       className={`flex items-center justify-center w-4 h-4 rounded-sm ${
         fileIsDirty
-          ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
+          ? 'hidden group-hover:flex group-focus-within:flex text-muted-foreground hover:text-foreground hover:bg-muted'
           : showsSelectionChrome
             ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
             : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
@@ -37,23 +35,35 @@ function EditorFileTabCloseButton({
   )
 }
 
-export function EditorFileTabCloseSlot({
+/** The dirty dot and close button share one slot so autosave cannot change tab width. */
+export function EditorFileTabStatusSlot({
+  isDirty,
   isPinned,
-  ...buttonProps
-}: EditorFileTabCloseButtonProps & { isPinned: boolean }): React.JSX.Element {
+  showsSelectionChrome,
+  onClose
+}: {
+  isDirty: boolean
+  isPinned: boolean
+  showsSelectionChrome: boolean
+  onClose: () => void
+}): React.JSX.Element {
   return (
-    // Share one dot/close slot so autosave cannot change tab width.
-    <div
-      className="relative flex items-center justify-center w-4 h-4 shrink-0"
-      data-tab-icon-badge=""
-    >
-      {buttonProps.fileIsDirty && (
+    <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
+      {isDirty && (
+        // Gives way to the close button on hover/focus; pinned tabs have none, so their dot stays.
         <span
-          className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden"
-          data-tab-dirty-dot=""
+          className={`absolute size-1.5 rounded-full bg-foreground/60${
+            isPinned ? '' : ' group-hover:hidden group-focus-within:hidden'
+          }`}
         />
       )}
-      {isPinned ? null : <EditorFileTabCloseButton {...buttonProps} />}
+      {!isPinned && (
+        <EditorFileTabCloseButton
+          fileIsDirty={isDirty}
+          showsSelectionChrome={showsSelectionChrome}
+          onClose={onClose}
+        />
+      )}
     </div>
   )
 }

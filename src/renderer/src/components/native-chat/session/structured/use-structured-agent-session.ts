@@ -1,7 +1,8 @@
 import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-message-edit-transport'
+import { useNativeChatViewGuardRef } from '../../pane/ownership/native-chat-view-memory'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useStructuredAgentSessionSendOptions } from './delivery/use-structured-agent-session-send-options'
 import { useStructuredAgentSessionSends } from './delivery/use-structured-agent-session-sends'
 import { useStructuredAgentSessionCommandWrite } from './writes/use-structured-agent-session-command-write'
@@ -83,7 +84,9 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     sessionId,
     transportEnabled && args.isVisible !== false
   )
-  const commandPending = useRef(false)
+  // Kept with the tab: a command still in flight from a released view refuses a second one here.
+  // Kept with the chat tab for this conversation and deleted when it settles, so replacements never pile up.
+  const commandPending = useNativeChatViewGuardRef('command-pending', false)
   const legacyLaunchStop = useStructuredLegacyLaunchStop(sessionId)
   const transportState = useStructuredAgentSessionTransportState(state, transportEnabled)
   const journalItems = transportState.journalItems

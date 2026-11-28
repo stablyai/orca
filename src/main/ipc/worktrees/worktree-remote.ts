@@ -43,7 +43,7 @@ import {
   getBranchConflictKind,
   getBranchConflictKindStrict
 } from '../../git/refs/resolution/repo-branch-conflict'
-import { resolveDefaultBaseRefWithLocalGit } from '../../git/refs/resolution/repo-default-base-ref'
+import { readDefaultBaseRefWithLocalGit } from '../../git/refs/resolution/repo-default-base-ref'
 import { WorktreeCreateCollisionError } from '../../../shared/new-workspace/worktree-create-collision'
 import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { hasLocalWorktreeBaseRef } from '../../git/worktrees/creation/worktree-base-ref-probe'
@@ -80,6 +80,7 @@ type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   cliProvenance?: CliWorkspaceProvenance
 }
 import {
+  getWorktreeNameGitPlatform,
   sanitizeWorktreeName,
   sanitizeWorktreeBranchName,
   computeWorktreePath,
@@ -1075,8 +1076,9 @@ async function performLocalWorktreeCreate(
   })
 
   const requestedName = args.name
-  const sanitizedName = sanitizeWorktreeName(args.name)
-  const branchSafeName = sanitizeWorktreeBranchName(args.name)
+  const gitPlatform = getWorktreeNameGitPlatform(repo.path, localWorktreeGitOptions)
+  const sanitizedName = sanitizeWorktreeName(args.name, gitPlatform)
+  const branchSafeName = sanitizeWorktreeBranchName(args.name, gitPlatform)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,
@@ -1093,7 +1095,7 @@ async function performLocalWorktreeCreate(
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: args.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
-    resolveDefaultBaseRef: () => resolveDefaultBaseRefWithLocalGit(localGitExecOptions),
+    resolveDefaultBaseRef: () => readDefaultBaseRefWithLocalGit(localGitExecOptions),
     isBaseUsable: async (baseBranchCandidate) => {
       if (runtime) {
         const remoteTrackingBase = await runtime.resolveRemoteTrackingBase(

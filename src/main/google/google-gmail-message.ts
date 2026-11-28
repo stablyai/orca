@@ -1,5 +1,6 @@
 // The Gmail message shape Orca reads, and what it takes from one: headers, text and attachments.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { GmailAttachment } from '../../shared/google/google-read-types'
 import { htmlToText } from './google-html-text'
 
@@ -11,40 +12,48 @@ export type Part = {
   body?: { data?: string; attachmentId?: string; size?: number }
   parts?: Part[]
 }
-export const PartSchema: z.ZodType<Part> = z.lazy(() =>
+export const PartSchema: z.ZodType<Part> = lazyZodSchema(() =>
+  z.lazy(() =>
+    z.object({
+      partId: z.string().optional(),
+      mimeType: z.string().optional(),
+      filename: z.string().optional(),
+      headers: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
+      body: z
+        .object({
+          data: z.string().optional(),
+          attachmentId: z.string().optional(),
+          size: z.number().optional()
+        })
+        .optional(),
+      parts: z.array(PartSchema).optional()
+    })
+  )
+)
+export const MessageSchema = lazyZodSchema(() =>
   z.object({
-    partId: z.string().optional(),
-    mimeType: z.string().optional(),
-    filename: z.string().optional(),
-    headers: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
-    body: z
-      .object({
-        data: z.string().optional(),
-        attachmentId: z.string().optional(),
-        size: z.number().optional()
-      })
-      .optional(),
-    parts: z.array(PartSchema).optional()
+    id: z.string(),
+    threadId: z.string(),
+    snippet: z.string().optional(),
+    labelIds: z.array(z.string()).optional(),
+    internalDate: z.string().optional(),
+    payload: PartSchema.optional()
   })
 )
-export const MessageSchema = z.object({
-  id: z.string(),
-  threadId: z.string(),
-  snippet: z.string().optional(),
-  labelIds: z.array(z.string()).optional(),
-  internalDate: z.string().optional(),
-  payload: PartSchema.optional()
-})
 export type Message = z.infer<typeof MessageSchema>
-export const ThreadSchema = z.object({
-  id: z.string(),
-  messages: z.array(MessageSchema).default([])
-})
-export const ThreadListSchema = z.object({
-  threads: z.array(z.object({ id: z.string() })).default([]),
-  nextPageToken: z.string().optional(),
-  resultSizeEstimate: z.number().optional()
-})
+export const ThreadSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    messages: z.array(MessageSchema).default([])
+  })
+)
+export const ThreadListSchema = lazyZodSchema(() =>
+  z.object({
+    threads: z.array(z.object({ id: z.string() })).default([]),
+    nextPageToken: z.string().optional(),
+    resultSizeEstimate: z.number().optional()
+  })
+)
 
 export const header = (message: Message, name: string): string | undefined =>
   message.payload?.headers?.find((entry) => entry.name.toLowerCase() === name.toLowerCase())?.value
@@ -79,12 +88,13 @@ export function bodyText(part: Part | undefined): string {
 export function attachmentsOf(message: Message): GmailAttachment[] {
   const found: GmailAttachment[] = []
   const walk = (node: Part): void => {
-    if (node.filename && node.body?.attachmentId && node.partId) {
+    const body = node.body
+    if (node.filename && body && (body.attachmentId || body.data !== undefined) && node.partId) {
       found.push({
         ref: `gmail:att:${message.id}:${node.partId}`,
         name: node.filename,
         ...(node.mimeType ? { type: node.mimeType } : {}),
-        ...(node.body.size !== undefined ? { size: node.body.size } : {})
+        ...(body.size !== undefined ? { size: body.size } : {})
       })
     }
     node.parts?.forEach(walk)

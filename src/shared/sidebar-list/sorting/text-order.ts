@@ -10,8 +10,30 @@ function isAsciiDigit(code: number): boolean {
 const COMBINING_MARKS = /\p{M}/gu
 const NON_ASCII = /[\u0080-\u{10ffff}]/u
 
+function isPureAscii(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    if (text.charCodeAt(i) >= 0x80) {
+      return false
+    }
+  }
+  return true
+}
+
+function isFoldedAscii(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i)
+    if (code >= 0x80 || (code >= 0x41 && code <= 0x5a)) {
+      return false
+    }
+  }
+  return true
+}
+
 /** Primary key: case and accents ignored, so "Éclair" sorts beside "eclair". */
 function foldSidebarText(text: string): string {
+  if (isFoldedAscii(text)) {
+    return text
+  }
   const lower = text.toLowerCase()
   return NON_ASCII.test(lower) ? lower.normalize('NFD').replace(COMBINING_MARKS, '') : lower
 }
@@ -69,12 +91,12 @@ function compareNatural(left: string, right: string): number {
         return lengthDelta < 0 ? -1 : 1
       }
       // Same digit count without leading zeros, so digit-wise order is numeric order.
-      const byDigits = compareCodePoints(
-        left.slice(leftStart, leftEnd),
-        right.slice(rightStart, rightEnd)
-      )
-      if (byDigits !== 0) {
-        return byDigits
+      for (let k = 0, len = leftEnd - leftStart; k < len; k += 1) {
+        const leftDigit = left.charCodeAt(leftStart + k)
+        const rightDigit = right.charCodeAt(rightStart + k)
+        if (leftDigit !== rightDigit) {
+          return leftDigit < rightDigit ? -1 : 1
+        }
       }
       i = leftEnd
       j = rightEnd
@@ -100,7 +122,10 @@ function compareFoldedThenCanonical(
   return (
     compareNatural(fold(left), fold(right)) ||
     // Why: "Alpha"/"alpha", "éclair"/"eclair" and "w02"/"w2" fold equal but must still order alike.
-    compareCodePoints(left.normalize('NFC'), right.normalize('NFC'))
+    compareCodePoints(
+      isPureAscii(left) ? left : left.normalize('NFC'),
+      isPureAscii(right) ? right : right.normalize('NFC')
+    )
   )
 }
 
@@ -112,12 +137,15 @@ export function compareSidebarText(left: string, right: string): number {
 
 /** compareSidebarText that folds each string once; build one per sort, since the cache grows with it. */
 export function createSidebarTextComparator(): (left: string, right: string) => number {
-  const foldedByText = new Map<string, string>()
+  let foldedByText: Map<string, string> | undefined
   const fold = (text: string): string => {
-    let folded = foldedByText.get(text)
+    if (isFoldedAscii(text)) {
+      return text
+    }
+    let folded = foldedByText?.get(text)
     if (folded === undefined) {
       folded = foldSidebarText(text)
-      foldedByText.set(text, folded)
+      ;(foldedByText ??= new Map()).set(text, folded)
     }
     return folded
   }

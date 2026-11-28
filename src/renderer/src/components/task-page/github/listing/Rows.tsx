@@ -135,7 +135,7 @@ export function TaskPageGitHubRows({
               }}
               className={cn(
                 // Match full-height sticky cells to the row surface/hover transition so columns do not flash separately.
-                'group/github-task-row grid min-h-12 cursor-pointer gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                'group/github-task-row grid min-h-12 cursor-pointer gap-3 rail-page-row-gutter py-2.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                 githubTaskGridClass
               )}
             >
@@ -166,7 +166,7 @@ export function TaskPageGitHubRows({
                     <RepoBadgeLabel
                       name={itemRepo.displayName}
                       color={itemRepo.badgeColor}
-                      badgeClassName="size-1.5"
+                      repo={itemRepo}
                       className="shrink-0 text-[11px] text-muted-foreground"
                     />
                   ) : null}

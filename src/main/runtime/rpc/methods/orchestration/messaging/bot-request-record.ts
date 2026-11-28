@@ -23,7 +23,8 @@ export function botRequestRecord(db: OrchestrationDb, messageId: string): BotReq
 }
 
 /** Whom a request acts for, and the event that started its chain, as this host recorded it; null
- *  when there is no readable record. */
+ *  when there is no readable record. Only a handoff passes on its place: a question's answer and
+ *  status mail go back by mail, so no work they start owes that place a result. */
 export function botRequestActsFor(
   db: OrchestrationDb,
   messageId: string
@@ -35,8 +36,11 @@ export function botRequestActsFor(
   return {
     askers: record.askers,
     ...(Array.isArray(record.askedBy) ? { askedBy: record.askedBy } : {}),
+    ...(record.purpose === 'status' ? { wantsNothing: true as const } : {}),
     ...(record.origin ? { origin: record.origin } : {}),
-    ...(record.originPlace ? { originPlace: record.originPlace } : {})
+    ...(record.originPlace && record.purpose === 'handoff'
+      ? { originPlace: record.originPlace }
+      : {})
   }
 }
 
