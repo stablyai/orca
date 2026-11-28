@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { cn } from '@/lib/class-names'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { botErrorMessage } from './bot-presentation'
@@ -58,12 +59,13 @@ export function BotRow({
   onBeginRenameConsumed
 }: BotRowProps): React.JSX.Element {
   const t = useTranslate()
+  const compact = useAppStore((state) => state.botSidebarView.compactRows === true)
   const details = useBotRowDetails(bot, home)
   const { workspaceId, status, hostLabel, offline, description, line, limit, now } = details
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
-  const age = offline ? null : botRowLineAge(line, now)
-  const hostPill = hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
+  const age = offline || compact ? null : botRowLineAge(line, now)
+  const hostPill = !compact && hostLabel ? <BotRowHostIcon label={hostLabel} /> : null
   // The Bots search matches purposes from what each listed row shows; it never reads SOUL.md.
   const purposeKey = botSidebarEntryKey(bot)
   useEffect(() => {
@@ -79,7 +81,12 @@ export function BotRow({
   }
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-8 rounded-md text-sm" />}
+      avatar={
+        <BotAvatar
+          bot={bot}
+          className={compact ? 'size-5 rounded text-xs' : 'size-8 rounded-md text-sm'}
+        />
+      }
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
@@ -104,7 +111,8 @@ export function BotRow({
       age={age}
       line={
         // Time by the name, Up next count under it; both end where the fold strip starts.
-        line || limit || description || fold || upNextNew > 0 || hostPill || offline ? (
+        !compact &&
+        (line || limit || description || fold || upNextNew > 0 || hostPill || offline) ? (
           <BotRowLineView
             line={line}
             limit={offline ? null : limit}

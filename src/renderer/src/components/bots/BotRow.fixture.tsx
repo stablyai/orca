@@ -380,6 +380,14 @@ export const botRowCases = defineFixture({
   )
 })
 
+export const compact = defineFixture({
+  ...botRowCases,
+  store: {
+    ...botRowCases.store,
+    botSidebarView: { ...DEFAULT_BOT_SIDEBAR_VIEW, compactRows: true }
+  }
+})
+
 function nextFriday5pm(): number {
   const date = new Date(now)
   date.setDate(date.getDate() + ((5 - date.getDay() + 7) % 7 || 7))
@@ -411,3 +419,4 @@ function stubSoulFiles(souls: Record<string, string>): void {
         : fs.readFile(args)
   })
 }
+import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../shared/bots/bot-sidebar-view'

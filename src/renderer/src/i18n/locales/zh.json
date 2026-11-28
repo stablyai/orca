@@ -29820,6 +29820,7 @@
       "filters": "筛选条件",
       "hidePaused": "隐藏已暂停的 bots",
       "hideSleepingWorkers": "隐藏休眠的工作者",
+      "compactRows": "精简视图",
       "hideSleepingWorkersAria": "隐藏没有任何内容在运行的 bot 工作者工作区",
       "allHidden": "所有 bots 均已暂停并隐藏"
     },

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Moon, Pause } from 'lucide-react'
+import { List, Moon, Pause } from 'lucide-react'
 import { DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { FilterToggleRow } from '@/components/sidebar/worktree-list/controls/FilterToggleRow'
 import { OptionChoiceSubmenu } from '@/components/sidebar/worktree-list/controls/OptionChoiceSubmenu'
@@ -58,6 +58,12 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
         choices={choices}
         value={view.sortBy}
         onChange={(sortBy) => setView({ sortBy })}
+      />
+      <FilterToggleRow
+        icon={<List className="size-3.5" />}
+        label={t('bots.options.compactRows', 'Compact view')}
+        checked={view.compactRows === true}
+        onChange={(compactRows) => setView({ compactRows })}
       />
       <DropdownMenuSeparator />
       <div className="flex items-center justify-between px-2 py-1">

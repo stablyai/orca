@@ -20,12 +20,14 @@ export type BotSidebarView = {
   hidePausedBots: boolean
   /** A bot's worker lines with nothing running drop off, as the projects' Hide sleeping. */
   hideSleepingWorkers: boolean
+  compactRows?: boolean
 }
 
 export const DEFAULT_BOT_SIDEBAR_VIEW: BotSidebarView = {
   sortBy: 'manual',
   hidePausedBots: false,
-  hideSleepingWorkers: false
+  hideSleepingWorkers: false,
+  compactRows: false
 }
 
 /** Saved or relayed options, any missing or unknown field at its default. */
@@ -36,7 +38,8 @@ export function normalizeBotSidebarView(value: unknown): BotSidebarView {
   return {
     sortBy: sortBy ?? DEFAULT_BOT_SIDEBAR_VIEW.sortBy,
     hidePausedBots: saved.hidePausedBots === true,
-    hideSleepingWorkers: saved.hideSleepingWorkers === true
+    hideSleepingWorkers: saved.hideSleepingWorkers === true,
+    compactRows: saved.compactRows === true
   }
 }
 

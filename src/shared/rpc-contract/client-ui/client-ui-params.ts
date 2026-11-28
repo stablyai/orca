@@ -154,7 +154,8 @@ export const UiUpdateFields = lazyZodSchema(() =>
         .object({
           sortBy: z.enum(['manual', 'smart', 'recent', 'name']),
           hidePausedBots: z.boolean(),
-          hideSleepingWorkers: z.boolean()
+          hideSleepingWorkers: z.boolean(),
+          compactRows: z.boolean().optional()
         })
         .optional(),
       botChatFolds: z.record(z.string(), z.enum(['open', 'folded'])).optional(),
