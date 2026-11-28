@@ -58,6 +58,12 @@ vi.mock('node:fs/promises', async (original) => {
         await fault.held
       }
       return fs.appendFile(...args)
+    },
+    rename: async (...args: Parameters<typeof fs.rename>) => {
+      if (fault.hold && String(args[0]).startsWith(fault.hold)) {
+        await fault.held
+      }
+      return fs.rename(...args)
     }
   }
 })
@@ -130,7 +136,7 @@ it('undoes only its own part file when a write, commit, abort or expiry ends an 
     (uploadId: string) => store.commitUpload({ callerKey: 'phone', uploadId }).catch(() => {}),
     (uploadId: string) => store.abortUpload({ callerKey: 'phone', uploadId }),
     async () => {
-      await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+      await vi.advanceTimersByTimeAsync(TTL_PAST)
     }
   ]
   for (const end of ends) {
@@ -178,19 +184,21 @@ it('removes the partial file a failed content write left in a folder it made', a
   expect(await exists(dirname(path))).toBe(false)
 })
 
+const TTL_PAST = 6 * 60 * 1000
+function hold(path: string): () => void {
+  let release = () => {}
+  fault.held = new Promise<void>((resolve) => (release = resolve))
+  fault.hold = path
+  return () => release()
+}
+
 it('never expires an upload while it is writing', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
   const { root, store, stage } = await storeIn()
-  const hold = (path: string) => {
-    let release = () => {}
-    fault.held = new Promise<void>((resolve) => (release = resolve))
-    fault.hold = path
-    return () => release()
-  }
   fault.uuid = TAKEN
   const releaseAdmission = hold(join(root, TAKEN))
   const admitting = stage('a.png')
-  await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+  await vi.advanceTimersByTimeAsync(TTL_PAST)
   releaseAdmission()
   const { uploadId } = await admitting
   const releaseAppend = hold(join(root, uploadId))
@@ -200,7 +208,7 @@ it('never expires an upload while it is writing', async () => {
     offset: 0,
     contentBase64: 'bWluZQ=='
   })
-  await vi.advanceTimersByTimeAsync(6 * 60 * 1000)
+  await vi.advanceTimersByTimeAsync(TTL_PAST)
   releaseAppend()
   await appending
   const committed = await store.commitUpload({ callerKey: 'phone', uploadId })
@@ -224,3 +232,56 @@ it.skipIf(process.getuid?.() === 0)(
     await chmod(part, 0o600)
   }
 )
+
+it('keeps the part and the committed file when expiry lands during a slow commit', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  const { root, store, stage } = await storeIn()
+  const { uploadId } = await stage('a.png')
+  await store.appendChunk({ callerKey: 'phone', uploadId, offset: 0, contentBase64: 'bWluZQ==' })
+  const theirs = join(root, uploadId, 'theirs.png')
+  await writeFile(theirs, 'theirs')
+  const part = join(root, uploadId, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  const release = hold(part)
+  const committing = store.commitUpload({ callerKey: 'phone', uploadId })
+  await vi.advanceTimersByTimeAsync(TTL_PAST)
+  expect(await readFile(part, 'utf8')).toBe('mine')
+  release()
+  const committed = await committing
+  expect(store.isUploadInFlight(uploadId)).toBe(false)
+  expect(vi.getTimerCount()).toBe(0)
+  await vi.advanceTimersByTimeAsync(TTL_PAST)
+  expect(await readFile(committed.path, 'utf8')).toBe('mine')
+  expect(await readFile(theirs, 'utf8')).toBe('theirs')
+})
+
+it('expires an incomplete upload one idle period after its last write, freeing its slot', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  const { root, store, stage } = await storeIn()
+  const { uploadId } = await stage('a.png')
+  const theirs = join(root, uploadId, 'theirs.png')
+  await writeFile(theirs, 'theirs')
+  const release = hold(join(root, uploadId))
+  const appending = store.appendChunk({
+    callerKey: 'phone',
+    uploadId,
+    offset: 0,
+    contentBase64: 'bWk='
+  })
+  await vi.advanceTimersByTimeAsync(TTL_PAST)
+  release()
+  await appending
+  expect(vi.getTimerCount()).toBe(1)
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000 - 1)
+  expect(store.isUploadInFlight(uploadId)).toBe(true)
+  await vi.advanceTimersByTimeAsync(1)
+  expect(store.isUploadInFlight(uploadId)).toBe(false)
+  expect(vi.getTimerCount()).toBe(0)
+  vi.useRealTimers()
+  const part = join(root, uploadId, AGENT_SESSION_ATTACHMENT_PART_FILE)
+  await expect.poll(() => exists(part)).toBe(false)
+  expect(await readFile(theirs, 'utf8')).toBe('theirs')
+  // All eight slots are free again.
+  for (let index = 0; index < 8; index++) {
+    await stage(`b${index}.png`)
+  }
+})
