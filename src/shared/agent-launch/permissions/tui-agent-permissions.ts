@@ -10,7 +10,9 @@ export const AUTO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   // Why: Cursor's server classifier runs safe tool calls and asks for the rest; its ACP server has no such mode.
   cursor: '--auto-review',
   // Why: agy --mode auto approves safe actions and asks on risky ones; ACP chats keep their own modes.
-  antigravity: '--mode auto'
+  antigravity: '--mode auto',
+  // Why: vibe --approval-policy smart-approve approves safe actions and asks on risky ones.
+  'mistral-vibe': '--approval-policy smart-approve'
 }
 
 export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
