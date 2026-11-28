@@ -1,6 +1,7 @@
 import * as z from 'zod'
 import type { GlobalSettings } from './global-settings-types'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
+import { isLocalWebhookBindAddress } from '../webhooks/local-webhook-bind-address'
 
 /** Settings a host reads for its own work, so Settings edits them on the host its picker names. */
 const HostOwnedSettingsSchema = z.object({
@@ -23,7 +24,11 @@ const HostOwnedSettingsSchema = z.object({
   antigravityServerAutoUpdateEnabled: z.boolean(),
   // The host runs the local webhook listener (shared/webhooks/local-webhook-settings.ts).
   localWebhooksEnabled: z.boolean(),
-  localWebhooksBindAddress: z.string().max(256),
+  // An IP literal, or empty for the default: a name the listener can't bind would leave no route.
+  localWebhooksBindAddress: z
+    .string()
+    .max(256)
+    .refine((value) => value.trim() === '' || isLocalWebhookBindAddress(value)),
   localWebhooksPort: z.number().int().min(1).max(65535),
   localWebhooksPublicUrl: z.string().max(2048)
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })

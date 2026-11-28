@@ -29,7 +29,10 @@ export const LocalHook = lazyZodSchema(() =>
     mintOperationId: z.string().min(1),
     rotateOperationId: z.string().optional(),
     rotateCancelled: z.number().int().nonnegative().optional(),
-    lastCall: z.object({ at: z.number(), state: z.enum(WEBHOOK_CALL_STATES) }).nullable()
+    // callId is the store's own, to tell which call is the last; the hook's view leaves it out.
+    lastCall: z
+      .object({ at: z.number(), state: z.enum(WEBHOOK_CALL_STATES), callId: z.string().optional() })
+      .nullable()
   })
 )
 export type LocalHook = z.infer<typeof LocalHook>
@@ -154,7 +157,9 @@ export function hookView(
     url: `${baseUrl}/hooks/${hook.hookId}`,
     adapter: null,
     previousKeyExpiresAt: previousLive ? hook.previousKeyExpiresAt : null,
-    lastCall: hook.lastCall ? { ...hook.lastCall, signatureValid: false } : null,
+    lastCall: hook.lastCall
+      ? { at: hook.lastCall.at, state: hook.lastCall.state, signatureValid: false }
+      : null,
     pendingCalls
   }
 }
@@ -208,10 +213,31 @@ export async function loadLocalWebhooks(path: string): Promise<StoredLocalWebhoo
   }
 }
 
-/** Calls taken but not yet handed to the host's webhooks, each with its hook. */
-export function queuedCalls(data: StoredLocalWebhooks): { hook: LocalHook; call: LocalCall }[] {
+const CALLS_PER_HOOK = 200
+const ENVELOPES_PER_HOOK = 50
+
+/** Past the caps, the hook's oldest settled calls let their envelope go, then go; queued ones stay,
+ *  since their senders were told they were taken. Returns the calls whose envelope went. */
+export function pruneSettledCalls(data: StoredLocalWebhooks, hookId: string): LocalCall[] {
+  const own = data.calls.filter((call) => call.hookId === hookId)
+  const settled = (call: LocalCall) => call.state !== 'queued'
+  const stale = own.slice(ENVELOPES_PER_HOOK).filter((call) => call.hasEnvelope && settled(call))
+  for (const call of stale) {
+    call.hasEnvelope = false
+  }
+  const dropped = new Set(own.slice(CALLS_PER_HOOK).filter(settled))
+  data.calls = data.calls.filter((call) => !dropped.has(call))
+  return stale
+}
+
+/** Calls taken but not yet handed to the host's webhooks, each with its hook; one hook's when named. */
+export function queuedCalls(
+  data: StoredLocalWebhooks,
+  hookId?: string
+): { hook: LocalHook; call: LocalCall }[] {
   return data.calls.flatMap((call) => {
     const hook = data.hooks.find((entry) => entry.hookId === call.hookId)
-    return hook && call.state === 'queued' ? [{ hook, call }] : []
+    const wanted = hookId === undefined || call.hookId === hookId
+    return hook && wanted && call.state === 'queued' ? [{ hook, call }] : []
   })
 }

@@ -16,6 +16,7 @@ import {
   newCallId,
   newHookId,
   newWebhookKey,
+  pruneSettledCalls,
   queuedCalls,
   writeOwnerOnlyFile,
   type LocalCall,
@@ -34,8 +35,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const PREVIOUS_KEY_MS = DAY_MS
 // A sender's delivery id is remembered this long, so its resend is dropped.
 const REPLAY_MS = DAY_MS
-const CALLS_PER_HOOK = 200
-const ENVELOPES_PER_HOOK = 50
+// Queued calls are never pruned (pruneSettledCalls); past this many, no new one is taken.
+const QUEUED_PER_HOOK = 50
 
 export class LocalWebhookStore {
   private loaded: Promise<StoredLocalWebhooks> | null = null
@@ -232,16 +233,14 @@ export class LocalWebhookStore {
     })
   }
 
-  /**
-   * A new call with its envelope (none for an ignored or paused one), newest kept within the caps.
-   * Null, storing nothing, when the hook is gone or the sender's key has ended since it was checked.
-   */
+  /** A new call with its envelope (none if ignored or paused); settled calls past the caps go. Stores
+   *  nothing for null (hook gone, or the sender's key ended since checked) or 'queue_full'. */
   async admit(
     hook: LocalHook,
     call: Omit<LocalCall, 'callId' | 'hookId' | 'hasEnvelope' | 'epoch'>,
     envelope: WebhookEnvelope | null,
     sender: { key?: string; deliveryId?: string } = {}
-  ): Promise<LocalCall | null> {
+  ): Promise<LocalCall | 'queue_full' | null> {
     const entry: LocalCall = {
       ...call,
       callId: newCallId(),
@@ -264,6 +263,9 @@ export class LocalWebhookStore {
       if (!current || keyEnded) {
         return null
       }
+      if (call.state === 'queued' && queuedCalls(data, hook.hookId).length >= QUEUED_PER_HOOK) {
+        return 'queue_full'
+      }
       data.calls.unshift(entry)
       if (deliveryId !== undefined) {
         // Saved with the call itself, so a resend is a duplicate exactly when its call was taken.
@@ -271,22 +273,15 @@ export class LocalWebhookStore {
         data.deliveries = data.deliveries.filter((other) => other.at > at - REPLAY_MS)
         data.deliveries.push({ hookId: hook.hookId, id: deliveryHash(deliveryId), at })
       }
-      current.lastCall = { at: call.receivedAt, state: call.state }
-      const own = data.calls.filter((other) => other.hookId === hook.hookId)
-      const stale = own.slice(ENVELOPES_PER_HOOK).filter((old) => old.hasEnvelope)
-      for (const old of stale) {
-        old.hasEnvelope = false
-      }
-      const dropped = new Set(own.slice(CALLS_PER_HOOK))
-      data.calls = data.calls.filter((other) => !dropped.has(other))
-      return stale
+      current.lastCall = { at: call.receivedAt, state: call.state, callId: entry.callId }
+      return pruneSettledCalls(data, hook.hookId)
     }).catch(async (error: unknown) => {
       await this.removeEnvelopes([entry])
       throw error
     })
     // A refused call's own envelope, or old ones pushed out: only after the save.
-    await this.removeEnvelopes(taken ?? [entry])
-    return taken ? entry : null
+    await this.removeEnvelopes(Array.isArray(taken) ? taken : [entry])
+    return Array.isArray(taken) ? entry : taken
   }
 
   /**
@@ -308,7 +303,7 @@ export class LocalWebhookStore {
       if (!taken) {
         call.reason = 'automation_not_listening'
       }
-      if (hook?.lastCall?.at === call.receivedAt) {
+      if (hook?.lastCall?.callId === call.callId) {
         hook.lastCall.state = call.state
       }
     })
@@ -351,10 +346,9 @@ export class LocalWebhookStore {
   }
 
   async view(hook: LocalHook, baseUrl: string): Promise<WebhookView> {
-    const pending = (await this.data()).calls.filter(
-      (c) => c.hookId === hook.hookId && isPending(c)
-    )
-    return hookView(hook, pending.length, baseUrl, this.now())
+    const { calls } = await this.data()
+    const pending = calls.filter((c) => c.hookId === hook.hookId && isPending(c)).length
+    return hookView(hook, pending, baseUrl, this.now())
   }
 
   /** The sample call a Send sample made; a repeat with the same operationId gets the same call. */

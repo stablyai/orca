@@ -59,8 +59,8 @@ export function localWebhookCalls(deps: LocalWebhookRoutesDeps): WebhookCloudCal
         truncated: false
       }
     )
-    // Null only for a sender's key a rotation ended; a sample names none.
-    if (!call) {
+    // Null only for a sender's key a rotation ended (a sample names none), or a full queue.
+    if (!call || call === 'queue_full') {
       throw new Error('the sample call was not taken')
     }
     await deps.deliver(hook, call)

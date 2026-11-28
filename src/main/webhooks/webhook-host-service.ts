@@ -278,8 +278,12 @@ export class WebhookHostService {
 
   async card(hookId: string): Promise<WebhookSummary> {
     const automation = this.automationOf(hookId)
+    const account = this.deps.account()
     const hook = webhookReadValue(await this.routes.get(hookId))
-    this.hooks.remember(hook)
+    // Local webhooks switched on or off meanwhile: the answer is not the new ledger's hook.
+    if (this.deps.account() === account) {
+      this.hooks.remember(hook)
+    }
     return webhookSummary(hook, automation)
   }
 

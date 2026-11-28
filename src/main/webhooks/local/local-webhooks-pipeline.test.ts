@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as z from 'zod'
 import type { AutomationRunEvent } from '../../../shared/automation-event-triggers'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
+import { WebhookHostLedger } from '../webhook-host-ledger'
 import { WebhookHostService } from '../webhook-host-service'
 import { deliverLocalCall } from './local-webhook-delivery'
 import { createLocalWebhookHandler } from './local-webhook-listener'
@@ -99,5 +100,51 @@ describe('a local webhook call', () => {
       key: hook.key,
       url: `http://127.0.0.1:6790/hooks/${hook.hookId}/${hook.key}`
     })
+  })
+
+  it("keeps a card's answer out of the ledger when local webhooks switched meanwhile", async () => {
+    dir = mkdtempSync(join(tmpdir(), 'local-webhooks-pipeline-'))
+    const store = new LocalWebhookStore(dir)
+    const hook = await store.mint('op-1', 'auto-1', 'bot-1')
+    const automation = webhookAutomation(hook)
+    const routes = localWebhookCalls({
+      store,
+      baseUrl: () => 'http://127.0.0.1:6790',
+      deliver: async () => {}
+    })
+    let account = 'local-webhooks'
+    const get = routes.get
+    // Local webhooks go off, signed in to Orca Cloud, while the local answer is on its way.
+    routes.get = (hookId) =>
+      get(hookId)?.then((answer) => {
+        account = 'cloud-account'
+        return answer
+      }) ?? null
+    service = new WebhookHostService({
+      userDataPath: dir,
+      account: () => account,
+      cloud: () => null,
+      local: () => routes,
+      automations: {
+        list: () => [automation],
+        runs: () => [],
+        setTriggers: () => {},
+        remove: () => {}
+      },
+      botFolder: () => null,
+      botFolders: () => [],
+      botExists: () => true,
+      newerAgentBotIds: () => new Set(),
+      bot: () => undefined,
+      notifyOwner: () => {},
+      runForEvent: async () => null
+    })
+    await service.card(hook.hookId)
+    const ledger = new WebhookHostLedger(
+      dir,
+      () => 'cloud-account',
+      () => new Set()
+    )
+    expect(ledger.hook(hook.hookId)).toBeUndefined()
   })
 })

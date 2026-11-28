@@ -186,6 +186,24 @@ describe('local webhook listener', () => {
     )
   })
 
+  it('tells apart delivery ids that differ only past the stored header length', async () => {
+    const path = `/hooks/${hook.hookId}/${hook.key}`
+    const prefix = 'd'.repeat(1024)
+    for (const suffix of ['-1', '-2']) {
+      const answer = await post(path, {}, { 'x-github-delivery': `${prefix}${suffix}` })
+      expect(await answer.json()).toMatchObject({ status: 'queued' })
+    }
+    expect(received).toHaveLength(2)
+  })
+
+  it('answers a retryable 503 while too many calls wait for handoff', async () => {
+    vi.spyOn(store, 'admit').mockResolvedValue('queue_full')
+    const answer = await post(`/hooks/${hook.hookId}/${hook.key}`, {})
+    expect(answer.status).toBe(503)
+    expect(answer.headers.get('retry-after')).toBe('60')
+    expect(received).toHaveLength(0)
+  })
+
   it('never stores Authorization or the key', async () => {
     await post(
       `/hooks/${hook.hookId}`,
@@ -252,9 +270,39 @@ describe('local webhook listener, keys and replays', () => {
     expect(received).toHaveLength(0)
   })
 
+  it('hands nothing over for a call whose hook paused and resumed while its body was read', async () => {
+    const authenticate = store.authenticate.bind(store)
+    let keyChecked: () => void = () => {}
+    const checked = new Promise<void>((resolve) => (keyChecked = resolve))
+    vi.spyOn(store, 'authenticate').mockImplementation(async (hookId, key) => {
+      const opened = await authenticate(hookId, key)
+      keyChecked()
+      return opened
+    })
+    const req = request(`${base}/hooks/${hook.hookId}/${hook.key}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' }
+    })
+    const answer = new Promise<string>((resolve) =>
+      req.on('response', (res) => {
+        let text = ''
+        res.on('data', (chunk) => (text += chunk))
+        res.on('end', () => resolve(text))
+      })
+    )
+    req.write('{"a":')
+    await checked
+    await store.setState(hook.hookId, 'paused')
+    await store.setState(hook.hookId, 'live')
+    req.end('1}')
+    const { callId } = JSON.parse(await answer)
+    expect(received).toHaveLength(0)
+    expect(await store.call(callId)).toMatchObject({ state: 'refused' })
+  })
+
   it('never hands over a call a stop-now rotation cancels, also one still running at handoff', async () => {
     const call = await store.admit(hook, { receivedAt: 1, state: 'queued' }, null)
-    if (!call) {
+    if (!call || call === 'queue_full') {
       throw new Error('not taken')
     }
     // Not awaited: the rotation is still running when the handoff starts.
@@ -330,7 +378,7 @@ describe('local webhook listener, keys and replays', () => {
     // The pause cancels calls already listed; this one was being stored while it ran.
     await store.setState(hook.hookId, 'paused')
     const call = await store.admit(hook, { receivedAt: 1, state: 'queued' }, null)
-    if (!call) {
+    if (!call || call === 'queue_full') {
       throw new Error('not taken')
     }
     const deps = {
@@ -349,7 +397,7 @@ describe('local webhook listener, keys and replays', () => {
 
   it('hands nothing over for a call that came in before a pause and resume', async () => {
     const call = await store.admit(hook, { receivedAt: 1, state: 'queued' }, null)
-    if (!call) {
+    if (!call || call === 'queue_full') {
       throw new Error('not taken')
     }
     // As if a pause and a resume both ran while the call was being stored.

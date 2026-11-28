@@ -81,6 +81,22 @@ const value = async <T>(result: Promise<{ ok: true; value: T } | { ok: false } |
   return answer.value
 }
 const mint = () => value(routes.mint({ operationId: 'op-1', automationId: 'a-1', botId: 'b-1' }))
+const ENVELOPE = {
+  receivedAt: 1,
+  contentType: null,
+  headers: {},
+  body: { kind: 'text' as const, value: '' },
+  truncated: false
+}
+/** A call the host was handed: pending, but no longer queued, so the caps may let its envelope go. */
+const handedOver = async (local: Parameters<LocalWebhookStore['admit']>[0]) => {
+  const call = await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)
+  if (!call || call === 'queue_full') {
+    throw new Error('not taken')
+  }
+  await store.handOverQueued(call.callId, () => true)
+  return call
+}
 
 describe('local webhook routes', () => {
   it("mints Orca Cloud's id and key formats, once per operation, and keeps them across restarts", async () => {
@@ -123,14 +139,16 @@ describe('local webhook routes', () => {
       truncated: false
     }
     for (let index = 0; index < 50; index++) {
-      await store.admit(local, { receivedAt: now, state: 'queued' }, envelope)
+      await handedOver(local)
     }
     removal.fail = true
     try {
       // The 51st call pushes the oldest envelope out, and its removal fails.
       const call = await store.admit(local, { receivedAt: now, state: 'queued' }, envelope)
-      expect(call).not.toBeNull()
-      expect(await new LocalWebhookStore(dir, () => now).call(call?.callId ?? '')).toBeDefined()
+      if (!call || call === 'queue_full') {
+        throw new Error('not taken')
+      }
+      expect(await new LocalWebhookStore(dir, () => now).call(call.callId)).toBeDefined()
     } finally {
       removal.fail = false
     }
@@ -180,7 +198,7 @@ describe('local webhook routes', () => {
       store.admit(local, { receivedAt: now, state: 'queued' }, null)
     ])
     expect(paused.status).toBe('rejected')
-    const taken = call.status === 'fulfilled' ? call.value : null
+    const taken = call.status === 'fulfilled' && call.value !== 'queue_full' ? call.value : null
     expect(taken).not.toBeNull()
     const reopened = new LocalWebhookStore(dir, () => now)
     expect((await reopened.hook(hook.hookId))?.state).toBe('live')
@@ -193,18 +211,54 @@ describe('local webhook routes', () => {
     if (!local) {
       throw new Error('no hook')
     }
-    const envelope = {
-      receivedAt: now,
-      contentType: null,
-      headers: {},
-      body: { kind: 'text' as const, value: '' },
-      truncated: false
-    }
     for (let index = 0; index < 51; index++) {
-      await store.admit(local, { receivedAt: now, state: 'queued' }, envelope)
+      await handedOver(local)
     }
     expect(await value(routes.rotate(hook.hookId, { operationId: 'r-1', stopNow: true }))).toEqual({
       cancelledCalls: 51
+    })
+  })
+
+  it('keeps queued calls past the caps, and refuses a new one once 50 wait', async () => {
+    const hook = await mint()
+    const local = await store.hook(hook.hookId)
+    if (!local) {
+      throw new Error('no hook')
+    }
+    const queued: string[] = []
+    for (let index = 0; index < 50; index++) {
+      const call = await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)
+      queued.push(call && call !== 'queue_full' ? call.callId : '')
+    }
+    expect(await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)).toBe(
+      'queue_full'
+    )
+    // Ignored calls fill the history caps, but push no queued call or its envelope out.
+    for (let index = 0; index < 200; index++) {
+      await store.admit(local, { receivedAt: now, state: 'ignored' }, null)
+    }
+    for (const callId of queued) {
+      expect(await store.envelope(callId)).not.toBeNull()
+    }
+    expect(await store.queued()).toHaveLength(50)
+  })
+
+  it('updates the last call only for that call, also one taken in the same millisecond', async () => {
+    const hook = await mint()
+    const local = await store.hook(hook.hookId)
+    if (!local) {
+      throw new Error('no hook')
+    }
+    const first = await store.admit(local, { receivedAt: now, state: 'queued' }, ENVELOPE)
+    await store.admit(local, { receivedAt: now, state: 'ignored' }, null)
+    if (!first || first === 'queue_full') {
+      throw new Error('not taken')
+    }
+    await store.handOverQueued(first.callId, () => true)
+    expect((await value(routes.get(hook.hookId))).lastCall).toEqual({
+      at: now,
+      state: 'ignored',
+      signatureValid: false
     })
   })
 

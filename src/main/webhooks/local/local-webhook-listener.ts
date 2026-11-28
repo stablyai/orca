@@ -111,8 +111,12 @@ function bearerKey(req: IncomingMessage): string | null {
 }
 
 function headerValue(req: IncomingMessage, name: string): string | undefined {
+  return fullHeaderValue(req, name)?.slice(0, MAX_HEADER_VALUE_LENGTH)
+}
+
+function fullHeaderValue(req: IncomingMessage, name: string): string | undefined {
   const value = req.headers[name]
-  return typeof value === 'string' ? value.slice(0, MAX_HEADER_VALUE_LENGTH) : undefined
+  return typeof value === 'string' ? value : undefined
 }
 
 /** The path's hook id and key, or null for any other path. */
@@ -175,6 +179,8 @@ export function createLocalWebhookHandler(
       notFound(res)
       return
     }
+    // The store's hook object changes in place: a pause and resume while the body is read raise this.
+    const epoch = hook.epoch
     if (!counts.take(hook.hookId, limits.perHookPerMinute, now())) {
       await deps.store.count(hook.hookId, 'over_budget')
       rateLimited(res)
@@ -219,7 +225,8 @@ export function createLocalWebhookHandler(
       notFound(res)
       return
     }
-    const deliveryId = DELIVERY_ID_HEADERS.map((name) => headerValue(req, name)).find(Boolean)
+    // Whole, not cut to the stored length: two ids with the same start are two deliveries.
+    const deliveryId = DELIVERY_ID_HEADERS.map((name) => fullHeaderValue(req, name)).find(Boolean)
     const claim = deliveryId === undefined ? null : `${hook.hookId} ${deliveryId}`
     let release = (): void => {}
     if (claim) {
@@ -236,7 +243,7 @@ export function createLocalWebhookHandler(
         send(res, 200, { status: 'duplicate' })
         return
       }
-      taken = await admit(hook, found, key, deliveryId, {
+      taken = await admit({ ...hook, epoch }, found, key, deliveryId, {
         contentType,
         body: parsed,
         headers: Object.fromEntries(
@@ -256,6 +263,10 @@ export function createLocalWebhookHandler(
       notFound(res)
       return
     }
+    if (taken === 'queue_full') {
+      send(res, 503, { error: 'queue_full' }, { 'retry-after': '60' })
+      return
+    }
     // A failed handoff leaves the call queued and retried, so the sender is answered as taken.
     if (taken.status === 'queued') {
       await deliverLocalCall(deps, hook, taken.call)
@@ -264,14 +275,16 @@ export function createLocalWebhookHandler(
   }
 
   /** Stores the call, with its delivery id; queued when the rule's filters take it. Null when a
-   *  stop-now rotation ended the key meanwhile. */
+   *  stop-now rotation ended the key meanwhile; 'queue_full' when too many calls wait for handoff. */
   const admit = async (
     hook: LocalHook,
     found: NonNullable<ReturnType<typeof hookAutomation>>,
     key: string,
     deliveryId: string | undefined,
     request: Pick<WebhookEnvelope, 'contentType' | 'headers' | 'body'>
-  ): Promise<{ call: LocalCall; status: 'queued' | 'ignored' | 'paused' } | null> => {
+  ): Promise<
+    { call: LocalCall; status: 'queued' | 'ignored' | 'paused' } | 'queue_full' | null
+  > => {
     const receivedAt = now()
     // The hook's own keys never reach the stored call, the run's file or its quote: replaced after
     // decoding, so an escaped or percent-encoded echo is caught too.
@@ -285,7 +298,7 @@ export function createLocalWebhookHandler(
         state === 'queued' ? envelope : null,
         { key, ...(deliveryId === undefined ? {} : { deliveryId }) }
       )
-      return call && { call, status: state }
+      return call === 'queue_full' ? call : call && { call, status: state }
     }
     if (hook.state === 'paused' || !found.automation.enabled) {
       return await stored('paused')

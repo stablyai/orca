@@ -1,6 +1,8 @@
 // Local webhooks: this host takes webhook calls on its own port instead of through Orca Cloud.
 import { resolveHostOwnedSetting } from '../settings/host-owned-settings'
 
+export { isLocalWebhookBindAddress } from './local-webhook-bind-address'
+
 /** The host's local webhook settings; each is host-owned (host-owned-settings.ts). */
 export type LocalWebhookSettings = {
   /** Calls on this host's own port, not through Orca Cloud. Off by default. */
@@ -40,7 +42,8 @@ export function localWebhookPublicUrlProblem(value: string): string | null {
 export function localWebhookBaseUrl(bindAddress: string, port: number, publicUrl: string): string {
   const trimmed = publicUrl.trim()
   if (trimmed !== '' && localWebhookPublicUrlProblem(trimmed) === null) {
-    return trimmed.replace(/\/+$/, '')
+    // As a sender parses it: a trailing backslash, for one, is a slash.
+    return new URL(trimmed).href.replace(/\/+$/, '')
   }
   const host = bindAddress.includes(':') ? `[${bindAddress}]` : bindAddress
   return `http://${host}:${port}`
@@ -59,17 +62,4 @@ export function localWebhookConfig(
   const port = resolveHostOwnedSetting(settings, 'localWebhooksPort')
   const publicUrl = resolveHostOwnedSetting(settings, 'localWebhooksPublicUrl')
   return { bindAddress, port, baseUrl: localWebhookBaseUrl(bindAddress, port, publicUrl) }
-}
-
-/** Whether the address is an IPv4 or IPv6 literal, as the listener binds. */
-export function isLocalWebhookBindAddress(address: string): boolean {
-  const trimmed = address.trim()
-  try {
-    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(trimmed)) {
-      return new URL(`http://${trimmed}`).hostname === trimmed
-    }
-    return trimmed.includes(':') && new URL(`http://[${trimmed}]`).hostname.length > 2
-  } catch {
-    return false
-  }
 }

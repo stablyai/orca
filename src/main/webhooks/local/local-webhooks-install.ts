@@ -59,10 +59,14 @@ export function installLocalWebhooks(deps: {
   let receive: (delivery: TriggerDelivery, event: AutomationRunEvent) => boolean = () => false
   const config = () => localWebhookConfig(deps.settings())
   let retry: NodeJS.Timeout | null = null
+  let stopped = false
   // Calls taken but not handed over (a failed handoff, or Orca quit first) go again while on.
   const redeliver = (): void => {
-    if (config()) {
-      void redeliverQueued(deliverDeps)
+    if (config() && !stopped) {
+      redeliverQueued(deliverDeps).catch((error: unknown) => {
+        console.warn('[webhooks] the queued local webhook calls could not be read', error)
+        deliverDeps.retryLater?.()
+      })
     }
   }
   const deliverDeps: LocalWebhookDeliverDeps = {
@@ -71,6 +75,9 @@ export function installLocalWebhooks(deps: {
     bots: deps.bots,
     receive: (delivery, event) => receive(delivery, event),
     retryLater: () => {
+      if (stopped) {
+        return
+      }
       retry ??= setTimeout(() => {
         retry = null
         redeliver()
@@ -88,7 +95,6 @@ export function installLocalWebhooks(deps: {
   let server: Server | null = null
   let listening: string | null = null
   let bindRetries = 0
-  let stopped = false
   // Off or moved: open keep-alive connections end too, so nothing is served on the old address.
   const close = (): void => {
     server?.close()
@@ -161,6 +167,10 @@ export function installLocalWebhooks(deps: {
     },
     stop: () => {
       stopped = true
+      // A handoff still running fails, so no run starts after this and its call stays queued.
+      receive = () => {
+        throw new Error('local webhooks stopped')
+      }
       if (retry) {
         clearTimeout(retry)
       }
