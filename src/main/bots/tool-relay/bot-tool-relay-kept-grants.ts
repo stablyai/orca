@@ -280,11 +280,13 @@ export class KeptRelayGrants {
    */
   answers(
     req: Pick<IncomingMessage, 'headers' | 'socket'>,
-    res: { shouldKeepAlive: boolean },
+    res: { shouldKeepAlive: boolean; once(event: 'finish', listener: () => void): unknown },
     ownPort: number
   ): boolean {
     if (this.frontOf.has(req.socket)) {
       res.shouldKeepAlive = false
+      // A handler's own `Connection: keep-alive` (an SDK's event stream) turns keep-alive back on.
+      res.once('finish', () => req.socket.end())
     }
     const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(req.headers.host ?? '')
     const port = match ? Number(match[1]) : null
