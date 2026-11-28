@@ -8,7 +8,11 @@ import {
 } from '../../../../../shared/terminal/input/terminal-input'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { TERMINAL_SEND_METHODS } from '../../../rpc/methods/terminal/terminal-send-method'
-import { registerBoundPty } from '../../../terminal/layout/bind-first-pane.test-fixture'
+import {
+  closeTabFirst,
+  movePaneFirst,
+  registerBoundPty
+} from '../../../terminal/layout/bind-first-pane.test-fixture'
 import { waitForWorkerAgentReady } from '../../../terminal/wait/launched-agent-composer-readiness'
 import {
   createDatabase,
@@ -337,6 +341,7 @@ describe('Agent-slept window pane wake', () => {
     const { db, runtime, handle } = await sleptPane()
     const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
 
+    closeTabFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID })
     await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await expect(waiting).resolves.toMatchObject({ handle, status: 'exited', satisfied: true })
@@ -445,6 +450,7 @@ describe('Agent-slept window pane wake', () => {
     await Promise.resolve()
     expect(settled).not.toHaveBeenCalled()
 
+    closeTabFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID })
     await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     await expect(waiting).resolves.toMatchObject({ handle, status: 'exited', satisfied: true })
     db.close()
@@ -456,6 +462,12 @@ describe('Agent-slept window pane wake', () => {
     const settled = vi.fn()
     void waiting.then(settled, settled)
 
+    movePaneFirst(runtime, TAB_ID, {
+      worktreeId: WORKTREE_ID,
+      tabId: MOVED_TAB_ID,
+      leafId: LEAF_ID,
+      ptyId: PTY_ID
+    })
     await runtime.syncWindowGraph(1, {
       tabs: [
         {

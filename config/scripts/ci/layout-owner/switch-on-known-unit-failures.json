@@ -100,66 +100,6 @@
     "row": "A7"
   },
   {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake settles under the same handle once the resumed agent is idle in the pane",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake wakes a reused slept agent before a worker start reads its process",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps a cursor read before the sleep reading what the resumed process prints",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps a pre-sleep cursor valid when the resumed spawn takes the handle before the graph",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake still answers as a slept agent after a wake and a second sleep (spawn binds first: false)",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake still answers as a slept agent after a wake and a second sleep (spawn binds first: true)",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps a woken agent's handle when its first, stopped process is evicted",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake ends an exit wait as exited when the slept pane is closed",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps a slept agent reachable by its handle after a reload while another workspace shows",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps an agent that slept while its tab was unmounted reachable by its handle",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake waits on through Agent Sleep's stop when the exit wait began while the agent was awake",
-    "row": "B1"
-  },
-  {
-    "file": "src/main/runtime/orchestration/mailbox/routing/slept-agent-wake.test.ts",
-    "test": "Agent-slept window pane wake keeps a moved slept pane its handle and its exit wait pending",
-    "row": "B1"
-  },
-  {
     "file": "src/renderer/src/store/slices/editor/buffers/editor-buffer-rejoin.test.ts",
     "test": "a dirty record whose last view closed without a prompt is dropped when a rename moves another file onto its path",
     "row": "A8"

@@ -99,10 +99,10 @@ export function bindPaneFirst(
   session.set(withBoundPane(current, pane), hostId)
 }
 
-export function movePaneFirst(
+/** Main's layout closes a tab, as a close command would; no-op with the switch off. */
+export function closeTabFirst(
   runtime: OrcaRuntimeService,
-  fromTabId: string,
-  pane: BoundPane,
+  tab: { worktreeId: string; tabId: string },
   hostId = 'local'
 ): void {
   if (!ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -111,22 +111,31 @@ export function movePaneFirst(
   const store = storeOf(runtime)
   const session = store?.getWorkspaceSession?.(hostId)
   if (!store?.setWorkspaceSession || !session) {
-    throw new Error('movePaneFirst needs a pane bindPaneFirst bound')
+    throw new Error('closeTabFirst needs a pane bindPaneFirst bound')
   }
-  const { [fromTabId]: _left, ...layouts } = session.terminalLayoutsByTabId
+  const { [tab.tabId]: _left, ...layouts } = session.terminalLayoutsByTabId
   store.setWorkspaceSession(
     {
       ...session,
       tabsByWorktree: {
         ...session.tabsByWorktree,
-        [pane.worktreeId]: (session.tabsByWorktree[pane.worktreeId] ?? []).filter(
-          (tab) => tab.id !== fromTabId
+        [tab.worktreeId]: (session.tabsByWorktree[tab.worktreeId] ?? []).filter(
+          (row) => row.id !== tab.tabId
         )
       },
       terminalLayoutsByTabId: layouts
     },
     hostId
   )
+}
+
+export function movePaneFirst(
+  runtime: OrcaRuntimeService,
+  fromTabId: string,
+  pane: BoundPane,
+  hostId = 'local'
+): void {
+  closeTabFirst(runtime, { worktreeId: pane.worktreeId, tabId: fromTabId }, hostId)
   bindPaneFirst(runtime, pane, hostId)
 }
 

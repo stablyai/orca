@@ -69,7 +69,10 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
       paneStartFact: (paneKey, binding) => this.paneStartStatuses?.get(paneKey, binding) ?? null,
       readyGraphPublisher: () => (this.graphStatus === 'ready' ? this.authoritativeWindowId : null),
       publish: (publisher, next) => {
-        this.syncWindowGraph(publisher, next, { includeAgentSenders: false })
+        this.syncWindowGraph(publisher, next, {
+          includeAgentSenders: false,
+          republishedByMain: true
+        })
       },
       heldRows: () => this.mobileSessionTabsByWorktree,
       replaceHeldRows: (worktreeId, next) => {

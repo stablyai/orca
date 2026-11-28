@@ -22,6 +22,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
   private readonly orchestrationReply = new AgentOrchestrationGraphRevision(
     this.agentOrchestrationProjection
   )
+  private publisherGraphs = 0
 
   /** A serve or orcad host: no owner window here ever answers a card. */
   servesWithoutWindow = (): boolean => this.servesHeadlessGraph
@@ -33,14 +34,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
   async syncWindowGraph(
     windowId: number,
     graph: RuntimeSyncWindowGraph | RuntimeRendererSyncWindowGraph,
-    options?: { includeAgentSenders?: boolean }
+    options?: { includeAgentSenders?: boolean; republishedByMain?: boolean }
   ): Promise<RuntimeSyncWindowGraphResult> {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
     assertBrowserPageInventoryFrames(graph.mobileSessionTabs)
     const rendererGeneration = this.admitWindowPublisher(windowId, graph)
     const previousTitleAuthority = this.captureSessionTitleAuthority()
-    const publishedMobileSessionTabs = graph.mobileSessionTabs
     const rendererGraph = graph
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
@@ -71,7 +71,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
       graph.unchangedMobileSessionWorktrees,
       mobileSessionResyncWorktrees,
       rendererGeneration,
-      publishedMobileSessionTabs
+      rendererGraph.mobileSessionTabs
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const rendererBindings =
@@ -301,10 +301,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
       cb()
     }
 
-    const replyLeaves = this.leaves
+    // Main reinstalling its own panes under the same publisher does not supersede that publisher's graph.
+    const publisherGraph = options?.republishedByMain
+      ? this.publisherGraphs
+      : ++this.publisherGraphs
     const consume = () => {
       if (
-        this.leaves !== replyLeaves ||
+        this.publisherGraphs !== publisherGraph ||
         this.authoritativeWindowId !== windowId ||
         this.graphStatus !== 'ready'
       ) {
