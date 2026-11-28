@@ -3,7 +3,10 @@ import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/fi
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
-import type { TopLevelView, VisibleWorkspaceHostIds } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type {
+  TopLevelView,
+  VisibleWorkspaceHostIds
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 
 import {
   type WorkspaceCleanupDismissal,
