@@ -51,6 +51,12 @@ export async function sendLocalRuntimeRequest<TResult>(
     restartWait.restart && isUnavailable(error)
       ? runtimeRestartingError(restartWait.restart)
       : error
+  // Every throw before the request's own frame is unsent. An orchestration request still keeps its
+  // key there, which may name an earlier attempt that ran; anything else stays as it was.
+  const unsentOr = (error: unknown, runtimeId: string | null): unknown =>
+    request.recoverUnsent && isUnavailable(error)
+      ? request.recover(markUnsent(error), runtimeId)
+      : error
   let graphPollMs = RUNTIME_GRAPH_READY_FIRST_POLL_MS
   for (;;) {
     let metadata: RuntimeMetadata
@@ -60,7 +66,7 @@ export async function sendLocalRuntimeRequest<TResult>(
       if (await retryDuringRestart(error)) {
         continue
       }
-      throw restartingOr(error)
+      throw unsentOr(restartingOr(error), null)
     }
     // A request shaped by an earlier answer must not reach a replacement that may lack what it saw.
     const pin =
@@ -69,7 +75,7 @@ export async function sendLocalRuntimeRequest<TResult>(
     if (pin && metadata.runtimeId !== pin) {
       // Refuse once; the caller's rerun starts over against the new runtime.
       restartWait.servedBy = null
-      throw runtimeRestartedSincePreflightError()
+      throw unsentOr(runtimeRestartedSincePreflightError(), metadata.runtimeId)
     }
     let expectedRuntimeSource
     try {
@@ -81,9 +87,9 @@ export async function sendLocalRuntimeRequest<TResult>(
         continue
       }
       if (!restartWait.restart && isUnavailable(error) && !isProcessRunning(metadata.pid)) {
-        throw runtimeNotRunningError()
+        throw unsentOr(runtimeNotRunningError(), metadata.runtimeId)
       }
-      throw restartingOr(error)
+      throw unsentOr(restartingOr(error), metadata.runtimeId)
     }
     // After waiting out a restart, send only once the new runtime's graph serves, so the request isn't refused.
     if (
@@ -125,11 +131,11 @@ export async function sendLocalRuntimeRequest<TResult>(
           continue
         }
         if (restartWait.restart) {
-          throw restartingOr(error)
+          throw unsentOr(restartingOr(error), metadata.runtimeId)
         }
         // Stale metadata from an app that exited: say plainly it isn't running, not "busy, retry".
         if (!isProcessRunning(metadata.pid)) {
-          throw runtimeNotRunningError()
+          throw unsentOr(runtimeNotRunningError(), metadata.runtimeId)
         }
       }
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.
@@ -153,6 +159,16 @@ async function isGraphReady(metadata: RuntimeMetadata): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/** Nothing of this request was written, so recovery must not read it as possibly delivered. */
+function markUnsent(error: unknown): unknown {
+  return error instanceof RuntimeClientError && !isRequestUnsent(error)
+    ? new RuntimeClientError(error.code, error.message, {
+        ...(error.data && typeof error.data === 'object' ? error.data : {}),
+        requestSent: false
+      })
+    : error
 }
 
 function isUnavailable(error: unknown): boolean {

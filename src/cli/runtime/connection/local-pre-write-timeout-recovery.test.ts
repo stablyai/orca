@@ -11,13 +11,18 @@ import {
   ORCHESTRATION_REPLAY_ONLY_RETRY_RUNTIME_CAPABILITY
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { getRuntimeMetadataPath } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { getRuntimeRestartMarkerPath } from '../../../shared/remote-runtime/bootstrap/runtime-restart-marker'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
+import { spawnSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { RuntimeClient } from '../client'
 import { RuntimeClientError } from './types'
 import { callOrchestrationMutation } from '../../orchestration/recovery/mutation-request'
 
 // A dial the test holds never connects, so the transport writes nothing on it.
+// A dial the test refuses fails its connect, as a socket nothing listens on does.
 const { dials } = vi.hoisted(() => ({
-  dials: { hold: new Set<number>(), count: 0, onHeld: (): void => {} }
+  dials: { hold: new Set<number>(), refuse: new Set<number>(), count: 0, onHeld: (): void => {} }
 }))
 vi.mock('node:net', async (importOriginal) => {
   const actual = await importOriginal<typeof NetModule>()
@@ -28,6 +33,12 @@ vi.mock('node:net', async (importOriginal) => {
       if (dials.hold.has(dials.count)) {
         dials.onHeld()
         return new actual.Socket()
+      }
+      if (dials.refuse.has(dials.count)) {
+        const socket = new actual.Socket()
+        const refused = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+        process.nextTick(() => socket.emit('error', refused))
+        return socket
       }
       return actual.createConnection(...args)
     }
@@ -68,6 +79,7 @@ beforeEach(async () => {
     vi.stubEnv(name, '')
   }
   dials.hold = new Set()
+  dials.refuse = new Set()
   dials.count = 0
   frames = []
   profile = await mkdtemp(join(tmpdir(), 'orca-pre-write-'))
@@ -275,5 +287,139 @@ describe('a local mutation dial that times out before its frame is written', () 
       orchestrationRequestId: sent[0]?.orchestrationRequestId,
       recovery: { disposition: 'outcome_unknown' }
     })
+  })
+})
+
+// A pid that has exited, so the runtime its metadata names is not running.
+const DEAD_PID = spawnSync(process.execPath, ['-e', '']).pid
+
+/** The served runtime's metadata, now naming a process that has exited. */
+async function runtimeExited(): Promise<void> {
+  const path = getRuntimeMetadataPath(profile)
+  const metadata: Record<string, unknown> = JSON.parse(await readFile(path, 'utf8'))
+  await writeFile(path, JSON.stringify({ ...metadata, pid: DEAD_PID }), { mode: 0o600 })
+}
+
+/** A restart marker past its overdue point whose quitting process has gone. */
+async function restartOverdue(): Promise<void> {
+  await writeFile(
+    getRuntimeRestartMarkerPath(profile),
+    JSON.stringify({ reason: 'relaunch', writtenAt: Date.now() - 60_000, pid: DEAD_PID })
+  )
+}
+
+describe('a local mutation dial refused after the contract probe', () => {
+  it.each([
+    ['the runtime exited', runtimeExited, /not running/],
+    ['a restart is overdue', restartOverdue, /restarted \d+ s ago/]
+  ])(
+    'keeps an explicit retry key and asks to inspect it when %s',
+    async (_case, arrange, message) => {
+      await arrange()
+      const retryKey = randomUUID()
+      // Dial 1 is the separate contract probe; dial 2 carries the mutation and is refused.
+      dials.refuse.add(2)
+
+      const error = await failure(
+        callOrchestrationMutation(
+          client([...ARGS, '--retry-request', retryKey]),
+          new Map<string, string | boolean>([['retry-request', retryKey]]),
+          'orchestration.send',
+          PARAMS,
+          { timeoutMs: TIMEOUT_MS },
+          0
+        )
+      )
+
+      expect(frames.map((frame) => frame.method)).toEqual(['status.get'])
+      expect(error.code).toBe('runtime_unavailable')
+      expect(error.message).toMatch(message)
+      expect(error.message).toContain('may already have taken effect')
+      expect(error.data).toMatchObject({
+        requestSent: false,
+        orchestrationRequestId: retryKey,
+        originalCommand: ['orca', ...ARGS],
+        recovery: {
+          disposition: 'outcome_unknown',
+          queryCommand: expect.arrayContaining(['request-show', retryKey]),
+          retryCommand: expect.arrayContaining(['--retry-request', retryKey])
+        }
+      })
+    }
+  )
+
+  it('reports a fresh key as never sent when the runtime exited', async () => {
+    await runtimeExited()
+    dials.refuse.add(2)
+
+    const error = await failure(
+      callOrchestrationMutation(
+        client(ARGS),
+        new Map(),
+        'orchestration.send',
+        PARAMS,
+        { timeoutMs: TIMEOUT_MS },
+        0
+      )
+    )
+
+    expect(mutationFrames()).toEqual([])
+    expect(error.data).toMatchObject({
+      requestSent: false,
+      orchestrationRequestId: expect.any(String),
+      recovery: {
+        disposition: 'not_sent',
+        retryCommand: expect.arrayContaining(['--retry-request'])
+      }
+    })
+  })
+})
+
+describe('requests whose unsent failure keeps no recovery', () => {
+  it('leaves a definitive oversized-frame refusal bare', async () => {
+    const error = await failure(
+      callOrchestrationMutation(
+        client(ARGS),
+        new Map(),
+        'orchestration.send',
+        { ...PARAMS, body: 'x'.repeat(MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES) },
+        { timeoutMs: TIMEOUT_MS },
+        0
+      )
+    )
+
+    expect(mutationFrames()).toEqual([])
+    expect(error.code).toBe('invalid_argument')
+    expect(error.data).toMatchObject({ effectsApplied: false, requestSent: false })
+    expect(error.data).not.toHaveProperty('orchestrationRequestId')
+    expect(error.data).not.toHaveProperty('recovery')
+  })
+
+  it('leaves a terminal prompt that timed out before its frame bare', async () => {
+    // A terminal prompt runs no contract probe, so dial 1 carries it.
+    dials.hold.add(1)
+    const opened = held()
+
+    const pending = failure(
+      client(['terminal', 'send']).call(
+        'terminal.send',
+        {
+          terminal: 'term_1',
+          text: 'hello',
+          enter: true,
+          agentPrompt: true,
+          client: { type: 'desktop' }
+        },
+        { timeoutMs: TIMEOUT_MS }
+      )
+    )
+    await opened
+    await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
+    const error = await pending
+
+    expect(frames).toEqual([])
+    expect(error.code).toBe('runtime_timeout')
+    expect(error.data).toEqual({ requestSent: false })
+    expect(error.message).not.toContain('Terminal prompt request ID')
   })
 })
