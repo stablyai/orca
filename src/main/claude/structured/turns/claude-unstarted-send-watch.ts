@@ -1,0 +1,157 @@
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { DISPATCH_DOUBT_PROVIDER_IDLE } from '../../../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
+import {
+  createStructuredAgentSessionLogger,
+  neverThrowingStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import {
+  rejectClaudeDispatchWaiters,
+  releaseClaudeDispatchWaitersInDoubt
+} from '../dispatch/claude-structured-dispatch'
+import type { ClaudeDispatchWaiter, ClaudeSession } from '../claude-structured-session-state'
+import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
+import { isRootClaudeFrame } from './claude-turn-opening'
+
+/**
+ * Idle followed by silence has no event of its own, so only a timer can end it. Claude answers a
+ * send taken while idle with `running`, `queued` and `started` in one burst (2.1.280 captures), and
+ * "idle can precede queued work starting" only for that burst: across 4,918 sends Orca wrote after a
+ * turn ended (952 local Claude transcripts), every one left Claude's queue within 0.72 s (p99.9
+ * 0.11 s). 30 s is 40x the slowest, matches Claude's control-request deadline, and keeps a stalled
+ * send from holding a chat's mail for long.
+ */
+export const CLAUDE_UNSTARTED_SEND_GRACE_MS = 30_000
+
+const defaultLogger = createStructuredAgentSessionLogger()
+
+/** A send Claude took while idle but never started is withdrawn and resent once, then failed; unconfirmed, released. */
+export class ClaudeUnstartedSendWatch {
+  private timer: ReturnType<typeof setTimeout> | undefined
+  private idle = false
+  /** Content withdrawn since Claude last started work; a second stall of it fails, not resent. */
+  private readonly withdrawn = new Set<string>()
+  /** Advances whenever Claude starts work, so a withdrawal answered after that is not recorded. */
+  private workGeneration = 0
+
+  constructor(
+    private readonly deps: {
+      sessionId: string
+      session: ClaudeSession
+      isCurrent: () => boolean
+      settle: ClaudeLateDispatchSettlement
+      timeoutMs?: number
+      logger?: StructuredAgentSessionLogger
+    }
+  ) {}
+
+  /** Only frames that can move a send restart the grace; background task progress never ends it. */
+  observe(message: Record<string, unknown>): void {
+    if (!isRootClaudeFrame(message)) {
+      return
+    }
+    const state = message.type === 'system' && message.subtype === 'session_state_changed'
+    if (state) {
+      this.idle = message.state === 'idle'
+    }
+    if (
+      message.type === 'assistant' ||
+      (message.type === 'command_lifecycle' && message.state === 'started')
+    ) {
+      this.withdrawn.clear()
+      this.workGeneration += 1
+    }
+    if (state || message.type === 'command_lifecycle' || message.type === 'user') {
+      this.rearm()
+    }
+  }
+
+  /** A send written while Claude is idle starts the grace if nothing else will. */
+  admitted(): void {
+    if (this.timer === undefined) {
+      this.rearm()
+    }
+  }
+
+  dispose(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+  }
+
+  private rearm(): void {
+    this.dispose()
+    if (this.idle && this.unstarted().length > 0) {
+      this.timer = setTimeout(() => void this.fire(), CLAUDE_UNSTARTED_SEND_GRACE_MS)
+      this.timer.unref?.()
+    }
+  }
+
+  private unstarted(): ClaudeDispatchWaiter[] {
+    return this.deps.session.dispatchWaiters.filter(
+      (waiter) => waiter.clientMessageId !== null && waiter.commandLifecycle !== 'started'
+    )
+  }
+
+  private live(): boolean {
+    return this.deps.isCurrent() && !this.deps.session.connection.closed
+  }
+
+  private async fire(): Promise<void> {
+    this.timer = undefined
+    const { session, settle, timeoutMs } = this.deps
+    // Earlier fires only: identical notices stalled together each get their own resend.
+    const resentContent = new Set(this.withdrawn)
+    for (const waiter of this.unstarted()) {
+      if (!this.live() || !this.idle) {
+        return
+      }
+      // An earlier withdrawal's wait can let this send echo or settle first.
+      if (!session.dispatchWaiters.includes(waiter)) {
+        continue
+      }
+      // A resend that stalls again fails back to the person instead of waiting to be resent.
+      const kind = resentContent.has(waiter.replayContentKey) ? 'providerRejected' : 'notDelivered'
+      // Claude's own `cancelled` frame usually settles the send before this answer; it uses this kind.
+      waiter.withdrawnAs = kind
+      const generation = this.workGeneration
+      const withdrawn = await session.connection
+        .cancelAsyncMessage(waiter.sentUuid, { timeoutMs })
+        .catch(() => false)
+      if (!withdrawn && !waiter.cancelledByClaude) {
+        delete waiter.withdrawnAs
+      } else if (generation === this.workGeneration) {
+        // Work started during the wait resets the cap, as it does for every withdrawal before it.
+        this.withdrawn.add(waiter.replayContentKey)
+      }
+      if (
+        !this.live() ||
+        !session.dispatchWaiters.includes(waiter) ||
+        waiter.commandLifecycle === 'started' ||
+        // Unconfirmed, and Claude is working again: its next idle rearms the grace.
+        (!withdrawn && !this.idle)
+      ) {
+        continue
+      }
+      neverThrowingStructuredAgentSessionLogger(this.deps.logger ?? defaultLogger).warn(
+        'Claude went idle without starting a send',
+        {
+          scope: 'claude-unstarted-send',
+          sessionId: this.deps.sessionId,
+          clientMessageId: waiter.clientMessageId,
+          outcome: withdrawn ? kind : 'released'
+        }
+      )
+      if (withdrawn) {
+        // Proven unrun: `notDelivered` requeues a card, `providerRejected` returns it to the person.
+        rejectClaudeDispatchWaiters(
+          session,
+          [waiter.sentUuid],
+          agentSessionFailureFact(kind),
+          settle
+        )
+      } else {
+        releaseClaudeDispatchWaitersInDoubt(session, [waiter], DISPATCH_DOUBT_PROVIDER_IDLE, settle)
+      }
+    }
+  }
+}

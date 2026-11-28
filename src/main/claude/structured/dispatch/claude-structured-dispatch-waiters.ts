@@ -9,7 +9,7 @@ export function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispat
   }
 }
 
-/** Queued sends may wait a whole turn; only provider or process evidence settles delivery, never time. */
+/** Queued sends may wait a whole turn; provider or process evidence settles delivery, time only asks Claude. */
 export function waitForReplay(
   session: ClaudeSession,
   acceptsResult: boolean,

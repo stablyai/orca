@@ -271,6 +271,7 @@ export async function acquireClaudeSession({
     })
     session.reportedOptions = observedOptions
     liveSession = session
+    replay.watchClaudeUnstartedSends(sessionId, session, sessions, deps)
     session.firstRootInit = firstRootInit
     session.orderedPermissionMode = permissions.orderedMode
     session.liveFullAccess = permissions.liveFullAccess
