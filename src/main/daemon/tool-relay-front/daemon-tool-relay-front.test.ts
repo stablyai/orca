@@ -123,7 +123,9 @@ describe.skipIf(process.platform === 'win32')('tool relay front protocol', () =>
     if (!app.destroyed) {
       await new Promise((resolve) => app.once('close', resolve))
     }
-    // The daemon's end closes a moment after this one; a regression would show by then.
+    // The daemon's end closes a moment after this one, with nothing outside it to wait on; a
+    // regression's idle check would have run by then.
+    // ast-grep-ignore: test-no-real-time-wait -- the daemon-side close has no observable signal here
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(idleChecks).not.toHaveBeenCalled()
   })
