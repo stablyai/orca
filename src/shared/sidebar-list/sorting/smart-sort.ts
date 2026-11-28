@@ -30,15 +30,29 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
 
 export type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id' | 'hostId'>
 
+function trimIfNeeded(value: string): string {
+  const len = value.length
+  if (len === 0) {
+    return ''
+  }
+  const first = value.charCodeAt(0)
+  const last = value.charCodeAt(len - 1)
+  if (first > 32 && first < 127 && last > 32 && last < 127) {
+    return value
+  }
+  return value.trim()
+}
+
 export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
-  const displayName = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+  const displayName =
+    typeof worktree.displayName === 'string' ? trimIfNeeded(worktree.displayName) : ''
   if (displayName) {
     return displayName
   }
 
   // Persisted/remote rows may omit displayName briefly after a rename clear; keep sorting render-safe.
   const pathLabel =
-    typeof worktree.path === 'string' ? getRuntimePathBasename(worktree.path).trim() : ''
+    typeof worktree.path === 'string' ? trimIfNeeded(getRuntimePathBasename(worktree.path)) : ''
   return pathLabel || worktree.id
 }
 
