@@ -1,5 +1,22 @@
+import { mergeDeferredReservedTypes } from '../terminal-pointer/mailbox-pointer-state'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxTerminal } from './mailbox-owner'
+
+export type ForegroundShellProbe = {
+  incarnationId: string | null
+  read: () => Promise<boolean>
+}
+
+type ReservedTypes = ReadonlySet<string> | undefined
+
+// Each mailbox keeps the types another path owns, so redelivery doesn't type them.
+type ProbeDeferral = {
+  mailboxes: Map<string, ReservedTypes>
+  started: boolean
+  joinedInFlight: boolean
+  /** This read was forced by joiners; its own joiners don't force another, so a stream of deliveries can't loop. */
+  forced: boolean
+}
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
   getDb: () => OrchestrationDb | null
@@ -12,10 +29,14 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
   canProbePtyLiveness: () => boolean
   controllerKnowsPtyIsLive: (ptyId: string) => boolean
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
+  /** The pane's agent process incarnation and a read of whether a shell, not it, is in front;
+   *  null when the pane names no agent or the host can't read its foreground per terminal. */
+  foregroundShellProbe: (ptyId: string) => ForegroundShellProbe | null
 }
 
 export class OrchestrationMailboxDeliveryTarget {
-  private readonly probeDeferredMailboxes = new Map<string, Set<string>>()
+  private readonly probeDeferrals = new Map<string, ProbeDeferral>()
+  private readonly forcedRereads = new Set<string>()
 
   constructor(private readonly deps: OrchestrationMailboxDeliveryTargetDependencies) {}
 
@@ -80,38 +101,91 @@ export class OrchestrationMailboxDeliveryTarget {
         }
   }
 
-  deferForAbsenceProbe(
+  /** Type only after async proof that the PTY exists and its agent, not a shell, is in front:
+   *  the agent's status outlives its exit, so mail would run in the shell it left.
+   *  `redeliver(mailbox, reprobe, reservedTypes)` types at once, or probes again when the proof went stale. */
+  deferForTerminalProbe(
     ptyId: string,
     mailboxHandle: string,
-    skipAbsenceProbe: boolean | undefined,
-    redeliver: (mailboxHandle: string) => void
+    skipProbe: boolean | undefined,
+    redeliver: (mailboxHandle: string, reprobe: boolean, reservedTypes: ReservedTypes) => void,
+    reservedTypes?: ReadonlySet<string>
   ): boolean {
-    if (
-      skipAbsenceProbe ||
-      !this.deps.canProbePtyLiveness() ||
-      this.deps.controllerKnowsPtyIsLive(ptyId)
-    ) {
+    if (skipProbe) {
+      return false
+    }
+    const probeAbsence =
+      this.deps.canProbePtyLiveness() && !this.deps.controllerKnowsPtyIsLive(ptyId)
+    const probeShell = this.deps.foregroundShellProbe(ptyId)
+    if (!probeAbsence && !probeShell) {
       return false
     }
     // A coordinator of several Runs can defer one mailbox per Run on the same probe.
-    const deferred = this.probeDeferredMailboxes.get(ptyId)
-    if (deferred) {
-      deferred.add(mailboxHandle)
+    const inFlight = this.probeDeferrals.get(ptyId)
+    if (inFlight) {
+      inFlight.mailboxes.set(
+        mailboxHandle,
+        mergeDeferredReservedTypes(
+          inFlight.mailboxes.has(mailboxHandle),
+          inFlight.mailboxes.get(mailboxHandle),
+          reservedTypes
+        )
+      )
+      // A later edge (the agent back at its prompt) may postdate the reading; one terminal's
+      // mailboxes delivered in the same turn don't.
+      inFlight.joinedInFlight ||= inFlight.started
       return true
     }
-    const mailboxes = new Set([mailboxHandle])
-    this.probeDeferredMailboxes.set(ptyId, mailboxes)
-    void this.deps
-      .isLeafPtyProvenAbsent(ptyId)
-      .then((absent) => {
-        this.probeDeferredMailboxes.delete(ptyId)
-        if (!absent) {
-          for (const deferredMailbox of mailboxes) {
-            setTimeout(() => redeliver(deferredMailbox), 0)
-          }
+    const deferral: ProbeDeferral = {
+      mailboxes: new Map([
+        [mailboxHandle, mergeDeferredReservedTypes(false, undefined, reservedTypes)]
+      ]),
+      started: false,
+      joinedInFlight: false,
+      forced: this.forcedRereads.delete(ptyId)
+    }
+    this.probeDeferrals.set(ptyId, deferral)
+    queueMicrotask(() => {
+      deferral.started = true
+    })
+    void Promise.all([
+      probeAbsence ? this.deps.isLeafPtyProvenAbsent(ptyId) : false,
+      probeShell ? probeShell.read() : false
+    ])
+      .then(([absent, shellInFront]) => {
+        // Any delivery after the read may be the agent's return edge; a shell verdict keeps mail
+        // unread only when none joined.
+        if (absent || (shellInFront && !deferral.joinedInFlight)) {
+          this.probeDeferrals.delete(ptyId)
+          return
         }
+        // Stays registered until the timer turn, so an arrival in between joins rather than racing it.
+        setTimeout(() => {
+          this.probeDeferrals.delete(ptyId)
+          // A joiner may postdate an "agent in front" read: the agent may have exited meanwhile,
+          // which leaves the PTY's incarnation unchanged. Only one such re-read per batch, so a
+          // stream of deliveries still types.
+          const staleAgent = deferral.joinedInFlight && !deferral.forced
+          const stale =
+            shellInFront ||
+            staleAgent ||
+            (probeShell !== null &&
+              this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
+          if (!shellInFront && staleAgent) {
+            this.forcedRereads.add(ptyId)
+          }
+          try {
+            // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
+            for (const [deferredMailbox, reserved] of deferral.mailboxes) {
+              redeliver(deferredMailbox, stale, reserved)
+            }
+          } finally {
+            // The re-read took it synchronously, or no delivery reached a read.
+            this.forcedRereads.delete(ptyId)
+          }
+        }, 0)
       })
-      .catch(() => this.probeDeferredMailboxes.delete(ptyId))
+      .catch(() => this.probeDeferrals.delete(ptyId))
     return true
   }
 }

@@ -145,6 +145,6 @@ export function registerFilesystemWriteHandlers(
     }
   )
 
-  registerFilesystemMutationHandlers(store)
-  registerAgentSessionAttachmentUploadHandlers()
+  registerFilesystemMutationHandlers(store, ipc)
+  registerAgentSessionAttachmentUploadHandlers(ipc)
 }

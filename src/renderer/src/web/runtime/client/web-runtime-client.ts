@@ -21,13 +21,12 @@ import { subscribeWebRuntimeFileWatch } from './web-runtime-file-watch-subscript
 import type { WebRuntimeConnectionState } from './web-runtime-connection-frame-router'
 import {
   pinWebRuntimeSubscription,
+  sharedRequestSubscriptionOptions,
   type WebRuntimeSubscribeOptions,
   type WebRuntimeSubscriptionCallbacks,
   type WebRuntimeTransportSubscription,
   type WebRuntimeTransportSubscriptionHandle
 } from './web-runtime-subscription-contract'
-
-const SHARED_CONNECTION_SUBSCRIPTION_METHODS = new Set(['files.watch'])
 
 export class WebRuntimeClient {
   private readonly transport: WebRuntimeConnectionTransport
@@ -126,27 +125,23 @@ export class WebRuntimeClient {
   ): Promise<WebRuntimeTransportSubscriptionHandle> {
     try {
       throwIfSignalAborted(options?.signal)
-      return SHARED_CONNECTION_SUBSCRIPTION_METHODS.has(method)
-        ? this.subscribeFileWatch(params, callbacks, options)
-        : this.subscribeDedicated(method, params, callbacks, options)
+      const sharedRequest = sharedRequestSubscriptionOptions(method, options)
+      return method === 'files.watch'
+        ? subscribeWebRuntimeFileWatch({
+            params,
+            callbacks,
+            subscribe: (wrapped) =>
+              this.subscribeOnCurrentConnection('files.watch', params, wrapped, options),
+            call: (callMethod, callParams, callOptions) =>
+              this.call(callMethod, callParams, callOptions),
+            teardownRetries: this.fileWatchTeardownRetries
+          })
+        : sharedRequest
+          ? this.subscribeOnCurrentConnection(method, params, callbacks, sharedRequest)
+          : this.subscribeDedicated(method, params, callbacks, options)
     } catch (error) {
       return Promise.reject(error)
     }
-  }
-
-  private async subscribeFileWatch(
-    params: unknown,
-    callbacks: WebRuntimeSubscriptionCallbacks,
-    options?: WebRuntimeSubscribeOptions
-  ): Promise<WebRuntimeTransportSubscriptionHandle> {
-    return subscribeWebRuntimeFileWatch({
-      params,
-      callbacks,
-      subscribe: (wrappedCallbacks) =>
-        this.subscribeOnCurrentConnection('files.watch', params, wrappedCallbacks, options),
-      call: (callMethod, callParams, callOptions) => this.call(callMethod, callParams, callOptions),
-      teardownRetries: this.fileWatchTeardownRetries
-    })
   }
 
   subscribeCrewAttempt(

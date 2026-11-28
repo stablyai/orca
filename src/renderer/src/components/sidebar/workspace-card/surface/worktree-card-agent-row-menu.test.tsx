@@ -8,7 +8,7 @@ import { useAppStore } from '@/store'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   clearWorktreeAgentExpansionStateForTests,
@@ -40,7 +40,7 @@ function renderAgentCard(mode: 'compact' | 'full') {
     sortOrder: 0,
     createdAt: 1
   }
-  const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+  const paneKey = chatPaneKey(tab.entityId)
   seedWorktreeAgentExpansionStateForTests(worktree.id, {
     expandedLineageParents: new Set(),
     expandedIdleChildGroups: new Set(),

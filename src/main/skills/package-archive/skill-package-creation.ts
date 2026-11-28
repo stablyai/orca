@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -18,6 +18,7 @@ import {
 } from './skill-package-identity'
 import { extractSkillPackageArchive } from './skill-package-extraction'
 import { writeSkillTarGzip, type SkillTarWriteEntry } from './skill-package-tar'
+import { copyPath } from '../../../shared/copy-path'
 
 export type CreatedSkillPackage = {
   manifest: SkillPackageManifestV1
@@ -70,7 +71,7 @@ async function createSkillPackageArchiveUnobserved(input: {
   const verificationDirectory = join(workDirectory, 'verification')
   const temporaryArchive = `${input.archivePath}.${process.pid}.${randomUUID()}.tmp`
   try {
-    await cp(input.sourceDirectory, stagedSkill, {
+    await copyPath(input.sourceDirectory, stagedSkill, {
       recursive: true,
       verbatimSymlinks: true,
       force: false,

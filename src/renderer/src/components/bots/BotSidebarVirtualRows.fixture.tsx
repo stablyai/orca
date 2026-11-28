@@ -10,10 +10,12 @@ const ROW_HEIGHT = 48
 // Simulated bots: each row's height stands in for its nested chat lines.
 function Rows({
   count,
-  initialHeights
+  initialHeights,
+  mountWithList = false
 }: {
   count: number
   initialHeights: Record<string, number>
+  mountWithList?: boolean
 }): React.JSX.Element {
   const listRef = useRef<HTMLDivElement | null>(null)
   const [entries] = useState(() =>
@@ -22,7 +24,7 @@ function Rows({
   const [heights, setHeights] = useState(initialHeights)
   const [hidden, setHidden] = useState(false)
   // Rows mount once the list has, as when the sidebar's bots load after it.
-  const [listMounted, setListMounted] = useState(false)
+  const [listMounted, setListMounted] = useState(mountWithList)
   const setHeight = (id: string, height: number): void =>
     setHeights((current) => ({ ...current, [id]: height }))
   // Like the sidebar search: show the list in one commit, then reveal at once.
@@ -63,7 +65,9 @@ function Rows({
         <div
           ref={(node) => {
             listRef.current = node
-            setListMounted(node !== null)
+            if (!mountWithList) {
+              setListMounted(node !== null)
+            }
           }}
           data-bot-sidebar-list=""
           className="bot-sidebar-scrollbar h-[400px] overflow-y-auto [overflow-anchor:none]"
@@ -71,7 +75,6 @@ function Rows({
           {listMounted ? (
             <BotSidebarVirtualRows
               entries={entries}
-              listRef={listRef}
               draggingId={null}
               revealId={undefined}
               renderEntry={(entry) => (
@@ -103,4 +106,10 @@ export const revealAfterHiddenShrink = defineFixture({
 export const growingRow = defineFixture({
   width: 320,
   render: () => <Rows count={20} initialHeights={{}} />
+})
+
+// Reopening the sidebar mounts the list and its rows in one commit, all at the estimated height.
+export const mountedWithList = defineFixture({
+  width: 320,
+  render: () => <Rows count={10} initialHeights={{}} mountWithList />
 })

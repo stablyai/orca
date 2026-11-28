@@ -10,7 +10,6 @@ import {
 } from '../../../src/shared/bots/bot-sidebar-workspaces'
 import { chatFoldSummary } from '../../../src/shared/bots/bot-chat-tree'
 import { botSidebarWorkerPagingLabel } from '../../../src/shared/bots/bot-sidebar-tree'
-import { structuredAgentSessionStatusPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-tab'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner } from '../agents/presentation/AgentSpinner'
 import { BotLineAgentLogos } from '../worktree/row-presentation/BotLineAgentLogos'
@@ -34,6 +33,7 @@ import type {
 } from './host-bot-row-facts'
 import { ChatBadgedIcon, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotTextButton } from './MobileBotTextButton'
+import { chatPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 
 // The chat's icon sits centred under the bot's 32 pt avatar and its title starts where the bot's
 // does; a worker's status under the chat's title, each child one step further in.
@@ -80,7 +80,7 @@ function ChatRowComponent({
       {
         active: false,
         folded: foldable && !open,
-        open: () => onOpen(home, structuredAgentSessionStatusPaneKey(chat.chatId)),
+        open: () => onOpen(home, chatPaneKey(chat.chatId)),
         toggle: null
       },
       { detail: 1 }

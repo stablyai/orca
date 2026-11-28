@@ -31,7 +31,7 @@ import { getWorktreeMetaGlyphPresence } from './worktree-meta-glyph-presence'
 import { MobileBotHomeRow } from '../../bots/MobileBotHomeRow'
 import { MobileBotWorkerLine } from '../../bots/MobileBotChatRows'
 import { botWorkspaceLineAgent } from '../../../../src/shared/bots/bot-sidebar-workspaces'
-import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { BotLineAgentLogos } from './BotLineAgentLogos'
 import { agentDotState } from '../agent-lineage/agent-row-display'
 import { useNow } from '../../hooks/use-now'
@@ -179,7 +179,7 @@ function WorktreeListRowComponent({
         onPress={() => {
           const chat = view.botFacts?.line.chatSessionId
           if (chat && onAgentPress) {
-            onAgentPress(item, structuredAgentSessionStatusPaneKey(chat))
+            onAgentPress(item, chatPaneKey(chat))
           } else {
             onPress(item)
           }

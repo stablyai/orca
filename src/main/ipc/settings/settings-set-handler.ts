@@ -19,6 +19,7 @@ import {
   normalizeComputerAwakeMode
 } from '../../../shared/app-lifecycle/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../../shared/ai-vault/search/ai-vault-search-settings'
+import { applySettingsUpdateSideEffects } from './settings-update-side-effects'
 
 export async function handleSettingsSet(
   store: Store,
@@ -114,7 +115,7 @@ export async function handleSettingsSet(
     'alwaysForceDeletePreservedBranches' in sanitizedArgs
       ? await store.updateSettingsAndFlush(sanitizedArgs, updateOptions)
       : store.updateSettings(sanitizedArgs, updateOptions)
-  const { applySettingsUpdateSideEffects } = await import('./settings-update-side-effects')
+  // Enter side effects synchronously after persisting so proxy request barriers activate before yielding.
   await applySettingsUpdateSideEffects({
     store,
     agentAwakeService,

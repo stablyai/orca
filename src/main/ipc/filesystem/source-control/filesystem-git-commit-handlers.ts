@@ -1,4 +1,5 @@
 import type { GitCommitAction } from '../../../../shared/git/commands/git-commit-action'
+import type { GitAbortOperationRequest } from '../../../../shared/git/status/git-status-types'
 import { applyCommit, recoverSequencer } from '../../../git/worktrees/checkout/commit-actions'
 import { createBranch } from '../../../git/worktrees/checkout/create-branch'
 import { ipcMain } from 'electron'
@@ -35,7 +36,11 @@ export function registerFilesystemGitCommitHandlers(
       `git:${method}`,
       async (
         _event,
-        args: { worktreePath: string; operation: GitCommitAction; connectionId?: string }
+        args: {
+          worktreePath: string
+          operation: GitCommitAction
+          connectionId?: string
+        } & GitAbortOperationRequest
       ) => {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
         const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -44,10 +49,13 @@ export function registerFilesystemGitCommitHandlers(
           args.worktreePath,
           worktreePath
         )
-        return recoverSequencer(worktreePath, args.operation, action, {
-          ...gitOptions,
-          admissionTier: 'interactive'
-        })
+        return recoverSequencer(
+          worktreePath,
+          args.operation,
+          action,
+          { ...gitOptions, admissionTier: 'interactive' },
+          { expectedRunIdentity: args.expectedRunIdentity }
+        )
       }
     )
   }

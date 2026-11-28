@@ -4,9 +4,10 @@ import { isRuntimeSubscriptionReplayResponse } from '../../../../../shared/remot
 import { useAppStore } from '../../../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { isFrameDrawnServerWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
-import { mirroredRuntimeEnvironmentIdForWorkspace } from '../workspace-selection/mirrored-workspace-owner'
+import { isActiveSessionSubscriptionSelected } from './active-session-subscription-selection'
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { recoverMirroredTerminalOrphansBeforeApply } from '../terminal-handles/mirror-terminal-orphan-recovery'
+import type { TerminalOrphanRecoveryOptions } from '../../hosted-terminals/recovery/web-session-terminal-orphan-recovery-options'
 import {
   installWindowVisibilitySubscriptionParking,
   type WindowVisibilitySubscriptionParking
@@ -89,33 +90,25 @@ export function installActiveSessionTabsSubscription({
     return undefined
   }
   const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
-  // Warm streams outlive selection; seed only the selected worktree on this host because IDs can collide across hosts.
-  const isSelected = (): boolean => {
-    const state = useAppStore.getState()
-    return (
-      state.activeWorktreeId === activeWorktreeId &&
-      mirroredRuntimeEnvironmentIdForWorkspace(state, activeWorktreeId) === environmentId
-    )
-  }
+  const isSelected = (): boolean =>
+    isActiveSessionSubscriptionSelected(environmentId, activeWorktreeId)
   const seeder = createInitialTerminalSeeder(environmentId, activeWorktreeId)
   let requestedRespawnAfterWake = false
   let hostAffirmedWorktree = false
 
-  const applyActiveSnapshot = async (
+  const applySnapshot = async (
     event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
     response: RuntimeRpcResponse<unknown>,
     isCurrent: () => boolean,
     receivedFrame: number,
+    recoveryOptions: TerminalOrphanRecoveryOptions,
     runtimeId?: string
   ): Promise<HostSessionMirrorSettle | null> => {
     const recovered = await recoverMirroredTerminalOrphansBeforeApply(
       useAppStore.getState(),
       event,
       environmentId,
-      {
-        expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
-        getCurrentState: () => useAppStore.getState()
-      }
+      recoveryOptions
     )
     if (
       !isCurrent() ||
@@ -256,9 +249,18 @@ export function installActiveSessionTabsSubscription({
               if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId)) {
                 return
               }
-              const frame = recordReceivedSessionTabsStreamFrame(environmentId, event, runtimeId)
+              const recoveryOptions = {
+                expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
+                getCurrentState: () => useAppStore.getState()
+              }
+              const frame = recordReceivedSessionTabsStreamFrame(
+                environmentId,
+                event,
+                runtimeId,
+                recoveryOptions
+              )
               visibilitySnapshotReceipt.current(environmentId, event, frame, runtimeId)
-              void applyActiveSnapshot(event, response, isCurrent, frame, runtimeId)
+              void applySnapshot(event, response, isCurrent, frame, recoveryOptions, runtimeId)
                 .catch((error) => {
                   if (isCurrent()) {
                     console.warn('[web-session-tabs-sync] active snapshot recovery failed:', error)

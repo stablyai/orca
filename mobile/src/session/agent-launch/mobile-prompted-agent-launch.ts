@@ -1,10 +1,7 @@
 import { translate } from '../../i18n/mobile-i18n'
 import { readAgentLaunchNotice } from './agent-launch-request'
 import type { AgentLaunchResult } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { LaunchedAgentOpens } from './launched-agent-opener'
 import type { MobileExistingAgentLaunch } from './mobile-existing-agent-launch'
 
@@ -25,10 +22,7 @@ export function launchedAgentOpens(result: AgentLaunchResult): LaunchedAgentOpen
   return outcome.kind === 'structured'
     ? {
         worktreeId,
-        paneKey: structuredAgentSessionPaneKey(
-          outcome.tabId ?? structuredAgentSessionTabId(outcome.sessionId),
-          outcome.sessionId
-        )
+        paneKey: chatPaneKey(outcome.sessionId)
       }
     : { worktreeId, paneKey: outcome.paneKey ?? null }
 }

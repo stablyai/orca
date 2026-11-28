@@ -149,13 +149,18 @@ async function dispatch(
   }
 }
 
+export function handleChromeWebStoreBridgeRequest(
+  event: Electron.IpcMainInvokeEvent,
+  request: unknown
+): Promise<ChromeWebStoreReply> | ChromeWebStoreReply {
+  const frame = resolveChromeWebStoreFrame(event)
+  if (!frame) {
+    return { error: 'Not allowed' } satisfies ChromeWebStoreReply
+  }
+  return dispatch(frame, request)
+}
+
 export function installChromeWebStoreBridgeHost(): void {
   ipcMain.removeHandler(BROWSER_EXTENSION_WEB_STORE_CHANNEL)
-  ipcMain.handle(BROWSER_EXTENSION_WEB_STORE_CHANNEL, (event, request: unknown) => {
-    const frame = resolveChromeWebStoreFrame(event)
-    if (!frame) {
-      return { error: 'Not allowed' } satisfies ChromeWebStoreReply
-    }
-    return dispatch(frame, request)
-  })
+  ipcMain.handle(BROWSER_EXTENSION_WEB_STORE_CHANNEL, handleChromeWebStoreBridgeRequest)
 }

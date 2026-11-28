@@ -5,6 +5,7 @@ import { basename, dirname, join } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { NEW_IPYNB_CONTENT } from '../../../shared/editor/notebooks/new-ipynb-content'
 import { isENOENT } from './filesystem-path-containment'
+import { tryLinkInsideWslDistro } from '../../wsl/filesystem/wsl-unc-hard-link'
 
 export async function createLocalFile(filePath: string): Promise<void> {
   const name = basename(filePath)
@@ -49,7 +50,7 @@ const NO_HARD_LINKS = new Set(['ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EPERM', 'EXDE
 
 // A hard link is the one portable create that is atomic and fails on a taken name. A volume
 // without them (exFAT, some network shares) refuses: a check-then-rename could replace a file
-// another program creates in between.
+// another program creates in between. WSL's share is the exception: the distro links it.
 async function publishNoClobber(tempPath: string, filePath: string): Promise<void> {
   try {
     await link(tempPath, filePath)
@@ -57,6 +58,9 @@ async function publishNoClobber(tempPath: string, filePath: string): Promise<voi
     const code = error instanceof Error && 'code' in error ? String(error.code) : ''
     if (!NO_HARD_LINKS.has(code)) {
       throw error
+    }
+    if (process.platform === 'win32' && (await tryLinkInsideWslDistro(tempPath, filePath))) {
+      return
     }
     throw new Error(
       `Can't add '${basename(filePath)}' here: this drive can't create files safely`,

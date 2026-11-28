@@ -2,11 +2,11 @@ import { z } from 'zod'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { isDnrRegexSupported } from '../declarative-net-request/regex/regex-filter'
 import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
+import type { DnrExtensionRules } from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
 import {
   DnrApiError,
-  type DnrExtensionRules
-} from '../declarative-net-request/session/browser-extension-dnr-extension-rules'
-import { DNR_ERRORS } from '../declarative-net-request/session/browser-extension-dnr-limits'
+  DNR_ERRORS
+} from '../declarative-net-request/session/browser-extension-dnr-limits'
 import {
   getDnrSessionRuntime,
   type DnrSessionExtension

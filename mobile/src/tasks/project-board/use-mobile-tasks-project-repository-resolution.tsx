@@ -187,7 +187,8 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     }
     return [...logins].sort().join(',')
   }, [projectRowDetail, projectRowItem?.content.assignees])
-  return Object.assign(model, {
+  return {
+    ...model,
     activeGitHubProjectKey,
     activeGitHubProjectViewId,
     activeGitHubProjectView,
@@ -199,7 +200,7 @@ export function useMobileTasksProjectRepositoryResolution(model: ProjectProjecti
     projectReviewerCandidates,
     projectSelectedReviewerLogins,
     projectMetadataSeedLogins
-  })
+  }
 }
 
 export type ProjectRepositoryResolutionModel = ReturnType<
