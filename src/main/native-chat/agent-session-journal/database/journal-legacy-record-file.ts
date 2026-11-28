@@ -1,13 +1,17 @@
-import { constants, lstatSync, statSync, type BigIntStats } from 'node:fs'
+import { constants, statSync } from 'node:fs'
 import { open } from 'node:fs/promises'
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { createJsonTokenReader } from '../../../../shared/json-stream/json-token-reader'
 import type Database from '../../../sqlite/sync-database'
 import { runJournalTransaction } from './journal-database'
-import { JournalDamageError } from '../replay/journal-open-failure'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
-import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
+import {
+  assertJournalLegacyRecordFilesStable,
+  changedRecordFile,
+  recordFileIdentity,
+  type RecordFile
+} from './journal-legacy-record-identity'
 import { validateLegacyAgentSessionTabs } from './journal-legacy-record-tabs'
 import {
   isReadableAgentSessionStoreOperation,
@@ -15,7 +19,6 @@ import {
   isReadableRetiredAgentSessionClaimKey
 } from '../../../runtime/agent-session/records/agent-session-store-row-rules'
 
-type RecordFile = { path: string; identity: string | null }
 type Generation = 'primary' | 'backup'
 const CHUNK_BYTES = 64 * 1024
 const OBJECT_SECTIONS = ['records', 'operations', 'unusableRecords'] as const
@@ -28,10 +31,7 @@ type StagedGeneration = {
   tabs: 'sessionTabs' | 'visibleSessionIds' | null
 }
 
-export type JournalLegacyRecordSnapshot = {
-  files: readonly [RecordFile, RecordFile]
-  loaded: (StagedGeneration & { salvage: boolean }) | null
-}
+export type JournalLegacyRecordSnapshot = (StagedGeneration & { salvage: boolean }) | null
 
 export function createJournalLegacyRecordStage(db: Database.Database): void {
   db.pragma('journal_mode = WAL')
@@ -47,29 +47,6 @@ export function createJournalLegacyRecordStage(db: Database.Database): void {
       PRIMARY KEY (generation, section, key)
     );
   `)
-}
-
-function recordFileIdentity(stats: BigIntStats): string {
-  return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(':')
-}
-
-function captureRecordFile(path: string): string | null {
-  // A dangling link is present and cannot certify absence.
-  return lstatSync(path, { throwIfNoEntry: false })
-    ? recordFileIdentity(statSync(path, { bigint: true }))
-    : null
-}
-
-function changedRecordFile(): Error {
-  return new Error('the original chat records changed during initialization')
-}
-
-export function assertJournalLegacyRecordFilesStable(files: readonly RecordFile[]): void {
-  for (const { path, identity } of files) {
-    if (captureRecordFile(path) !== identity) {
-      throw changedRecordFile()
-    }
-  }
 }
 
 /** Reads only the opened file's initial extent and rechecks the handle and name before fallback. */
@@ -291,19 +268,14 @@ async function stageRecordFile(
 
 /** Only absence or malformed content permits recovery from an older copy. */
 export async function readJournalLegacyRecordSnapshot(
-  stateDirectory: string,
+  files: readonly [RecordFile, RecordFile],
   stage: Database.Database,
   checkCancellation: () => void
-): Promise<JournalLegacyRecordSnapshot> {
+): Promise<JournalLegacyRecordSnapshot | 'corrupt'> {
   checkCancellation()
-  const [primaryPath, backupPath] = journalLegacyRecordPaths(stateDirectory)
-  const files = [
-    { path: primaryPath, identity: captureRecordFile(primaryPath) },
-    { path: backupPath, identity: captureRecordFile(backupPath) }
-  ] as const
   const [primary, backup] = files
   if (primary.identity === null && backup.identity === null) {
-    return { files, loaded: null }
+    return null
   }
   const latest =
     primary.identity === null
@@ -324,10 +296,10 @@ export async function readJournalLegacyRecordSnapshot(
   assertJournalLegacyRecordFilesStable(files)
   checkCancellation()
   if (latest) {
-    return { files, loaded: { ...latest, salvage: recovered !== null } }
+    return { ...latest, salvage: recovered !== null }
   }
   if (recovered) {
-    return { files, loaded: { ...recovered, salvage: false, tabs: null } }
+    return { ...recovered, salvage: false, tabs: null }
   }
-  throw new JournalDamageError('the original chat records and their backup could not be read')
+  return 'corrupt'
 }

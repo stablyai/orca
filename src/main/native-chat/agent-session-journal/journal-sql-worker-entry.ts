@@ -82,7 +82,8 @@ async function open(): Promise<void> {
       await initializeJournalDomainDatabase(
         stateDirectory,
         typeof workerData.hostId === 'string' ? workerData.hostId : undefined,
-        checkInitialization
+        checkInitialization,
+        workerData.legacySessionTabIds
       )
     }
     checkInitialization()

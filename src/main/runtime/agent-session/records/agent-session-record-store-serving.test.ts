@@ -111,6 +111,53 @@ it('retires the opening record-store worker and leaves its upgrade retryable', a
   }
 })
 
+it('reuses a corrupt input refusal only for the same source and candidate generation', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-original-chats-corrupt-'))
+  try {
+    const journal = journalDatabasePath(root)
+    const { db } = openJournalDatabase(journal)
+    db.pragma('user_version=3')
+    db.close()
+    const [primary, backup] = journalLegacyRecordPaths(root)
+    mkdirSync(dirname(primary))
+    writeFileSync(primary, '{"ignored":"' + 'x'.repeat(128 * 1024))
+    const location = {
+      ...startupOpen.localAgentSessionRecordStoreLocation([]),
+      stateDirectory: root,
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath()
+    }
+    const outcome = () => openAgentSessionRecordStoreOnce(location).catch((error: unknown) => error)
+    const initial = await outcome()
+    expect(initial).toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
+    expect(await outcome()).toBe(initial)
+    const { db: source } = openJournalDatabase(journal)
+    source.exec("INSERT INTO journal_sessions VALUES('new-chat','workspace-1','epoch')")
+    source.pragma('user_version=3')
+    source.close()
+    const afterSourceWrite = await outcome()
+    expect(afterSourceWrite).not.toBe(initial)
+    expect(afterSourceWrite).toMatchObject({
+      refusal: { details: { reason: 'journalCorrupt' } }
+    })
+    expect(await outcome()).toBe(afterSourceWrite)
+    expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
+    await retireAgentSessionRecordStore(async () => {})
+    expect(await outcome()).not.toBe(afterSourceWrite)
+    writeFileSync(
+      backup,
+      '{"schemaVersion":2,"hostId":"local","records":{},"operations":{},"retiredClaimKeys":[],"unusableRecords":{}}'
+    )
+    await openAgentSessionRecordStoreOnce(location)
+    expect(existsSync(journalDomainDatabasePath(root))).toBe(true)
+  } finally {
+    await retireAgentSessionRecordStore(async (opened) => opened?.journalDatabase.close())
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 it('reaches old-history retirement at serving on empty profiles through both hosts, unless shutting down', async () => {
   vi.stubEnv('ORCA_APP_VERSION', '1.0.1')
   const location = startupOpen.localAgentSessionRecordStoreLocation

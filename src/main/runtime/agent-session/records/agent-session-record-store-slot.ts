@@ -8,10 +8,18 @@ import {
 } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { hasJournalLegacyRecordFile } from '../../../native-chat/agent-session-journal/database/journal-legacy-record-paths'
+import {
+  captureJournalLegacyRecordFiles,
+  captureJournalLegacyRecordSource,
+  journalLegacyRecordFingerprint,
+  JournalLegacyRecordCorruptionError
+} from '../../../native-chat/agent-session-journal/database/journal-legacy-record-identity'
+import { journalOpenRefusalError } from '../../../native-chat/agent-session-journal/replay/journal-open-failure'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import { readDeletedChats } from './agent-session-record-forgets'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../installation/structured-agent-session-journal-open'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../installation/structured-agent-session-host-refusal'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { setAgentProcessChatReader } from '../../../memory/agent-process-registry'
 
@@ -46,6 +54,30 @@ type RecordStoreSlot = {
 
 let opening: RecordStoreSlot | null = null
 const pendingDatabaseClose = new Set<JournalSqlDatabase>()
+let malformedRecordFile:
+  | { stateDirectory: string; fingerprint: string; refusal: ReturnType<typeof journalOpenRefusalError> }
+  | undefined
+
+function unchangedMalformedRecordFile(stateDirectory: string) {
+  const previous = malformedRecordFile
+  if (previous?.stateDirectory === stateDirectory) {
+    try {
+      if (
+        !existsSync(journalDomainDatabasePath(stateDirectory)) &&
+        previous.fingerprint === journalLegacyRecordFingerprint([
+          ...captureJournalLegacyRecordSource(stateDirectory),
+          ...captureJournalLegacyRecordFiles(stateDirectory)
+        ])
+      ) {
+        return previous.refusal
+      }
+    } catch {
+      // Unverifiable inputs must go through the writer again.
+    }
+  }
+  malformedRecordFile = undefined
+  return undefined
+}
 
 /** Keep failed standalone/open-failure closes owned until a later stop or open retries them. */
 export async function closeAgentSessionRecordStoreDatabase(
@@ -77,8 +109,12 @@ export function openAgentSessionRecordStoreOnce(
   const slot: RecordStoreSlot = {
     stateDirectory: location.stateDirectory,
     initialization,
-    opened: openRecordStore(location, initialization.signal).then(
+    opened: openRecordStore(
+      { ...location, legacySessionTabIds: [...location.legacySessionTabIds] },
+      initialization.signal
+    ).then(
       (opened) => {
+        malformedRecordFile = undefined
         if (opened.journalDatabase.readOnly) {
           location.logger.warn(
             'old chat journal: not checked (store uses a newer schema; opened read-only)',
@@ -138,9 +174,24 @@ async function openRecordStore(
   signal: AbortSignal
 ): Promise<OpenedAgentSessionRecordStore> {
   await closeAgentSessionRecordStoreDatabase()
+  signal.throwIfAborted()
+  const refused = unchangedMalformedRecordFile(location.stateDirectory)
+  if (refused) {
+    recordStructuredAgentSessionHostInstallRefusal(refused)
+    throw refused
+  }
   const { journalDatabase, records } = await openStructuredAgentSessionSqlJournalDatabase({
     ...location,
     signal,
+    onOpenFailure: (refusal) => {
+      if (refusal.cause instanceof JournalLegacyRecordCorruptionError) {
+        malformedRecordFile = {
+          stateDirectory: location.stateDirectory,
+          fingerprint: refusal.cause.fingerprint,
+          refusal
+        }
+      }
+    },
     closeFailedOpen: closeAgentSessionRecordStoreDatabase
   })
   try {
@@ -166,6 +217,7 @@ async function openRecordStore(
 export function retireAgentSessionRecordStore(
   retire: (opened: OpenedAgentSessionRecordStore | null) => Promise<void>
 ): Promise<void> {
+  malformedRecordFile = undefined
   const slot = opening
   if (!slot) {
     return retire(null)

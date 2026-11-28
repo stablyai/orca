@@ -72,12 +72,22 @@ export class JournalSqlDatabase {
 
   static async open(
     stateDirectory: string,
-    options: JournalSqlDatabaseOptions & { writerPath?: string; signal?: AbortSignal }
+    options: JournalSqlDatabaseOptions & {
+      writerPath?: string
+      signal?: AbortSignal
+      legacySessionTabIds?: readonly string[]
+    }
   ): Promise<JournalSqlDatabase> {
     const { signal } = options
     signal?.throwIfAborted()
     const filename = journalDomainDatabasePath(stateDirectory)
-    const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath, options.hostId)
+    const writer = new JournalSqlOwner(
+      filename,
+      stateDirectory,
+      options.writerPath,
+      options.hostId,
+      options.legacySessionTabIds
+    )
     const cancel = () => writer.cancelInitialization()
     signal?.addEventListener('abort', cancel, { once: true })
     try {

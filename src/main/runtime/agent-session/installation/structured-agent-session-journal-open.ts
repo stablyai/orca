@@ -30,9 +30,10 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
     hostId: string
     logger: StructuredAgentSessionLogger
     closeFailedOpen?: (database: JournalSqlDatabase) => Promise<void>
+    onOpenFailure?: (refusal: ReturnType<typeof journalOpenRefusalError>) => void
   } & Pick<
     Parameters<typeof JournalSqlDatabase.open>[1],
-    'writerPath' | 'readerPath' | 'onMaintenanceTick' | 'signal'
+    'writerPath' | 'readerPath' | 'onMaintenanceTick' | 'signal' | 'legacySessionTabIds'
   >
 ) {
   let journalDatabase: JournalSqlDatabase | undefined
@@ -42,6 +43,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
       writerPath: args.writerPath,
       readerPath: args.readerPath,
       signal: args.signal,
+      legacySessionTabIds: args.legacySessionTabIds,
       onMaintenanceTick: args.onMaintenanceTick,
       onMaintenanceError: (error, sessionId) =>
         args.logger.error('maintaining the chat journal database failed', {
@@ -61,6 +63,7 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
     if (!args.signal?.aborted) {
       logOpenFailureOnce(args.logger, error)
       const refusal = journalOpenRefusalError(error)
+      args.onOpenFailure?.(refusal)
       recordStructuredAgentSessionHostInstallRefusal(refusal)
       failure = refusal
     }

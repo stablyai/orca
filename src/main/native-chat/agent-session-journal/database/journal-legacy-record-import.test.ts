@@ -112,6 +112,68 @@ function saveRecords(
 }
 
 it.each([false, true])(
+  'keeps recorded SQL closures while seeding new saved chats (whole backup: %s)',
+  async (wholeBackup) => {
+    const { root, journal, primary, backup } = profile(3, createAgentSessionRecordTablesSql())
+    const source = new Database(journal)
+    try {
+      source
+        .prepare('INSERT INTO agent_session_records VALUES (?,?)')
+        .run('closed-chat', JSON.stringify(stored('closed-chat', 'SQL name')))
+      source.exec("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+      if (wholeBackup) {
+        source
+          .prepare('INSERT INTO agent_session_records VALUES (?,?)')
+          .run('opened-chat', JSON.stringify(stored('opened-chat')))
+        source
+          .prepare('INSERT INTO agent_session_tabs VALUES(?,?,0)')
+          .run(structuredAgentSessionTabId('conflict-chat'), 'opened-chat')
+      }
+    } finally {
+      source.close()
+    }
+    const opaque = { schemaVersion: 99, future: 'original opaque value' }
+    saveRecords(
+      wholeBackup ? backup : primary,
+      {
+        'closed-chat': stored('closed-chat', 'JSON name'),
+        'saved-chat': stored('saved-chat'),
+        'opaque-chat': opaque,
+        'conflict-chat': stored('conflict-chat'),
+        'stale-chat': stored('stale-chat')
+      },
+      wholeBackup
+        ? { sessionTabs: [{ sessionId: 'stale-chat', tabId: 'stale-backup-tab' }] }
+        : {}
+    )
+    if (wholeBackup) {
+      writeFileSync(primary, '{ malformed')
+    }
+    const saved = ['closed-chat', 'saved-chat', 'opaque-chat', 'conflict-chat']
+    const expected = [
+      [structuredAgentSessionTabId('saved-chat'), 'saved-chat'],
+      [structuredAgentSessionTabId('opaque-chat'), 'opaque-chat'],
+      [structuredAgentSessionTabId('conflict-chat'), wholeBackup ? 'opened-chat' : 'conflict-chat']
+    ]
+    for (const savedIds of [saved, []]) {
+      const db = new Database(
+        await initializeJournalDomainDatabase(root, 'local', undefined, savedIds)
+      )
+      try {
+        const state = loadAgentSessionStoreRows(db)
+        expect(state.sessionTabs?.entries()).toEqual(expected)
+        expect(state.records.get('closed-chat')?.conversationName).toBe('SQL name')
+        expect(state.records.has('stale-chat')).toBe(true)
+        expect(state.unreadableRecords.get('opaque-chat')?.raw).toEqual(opaque)
+        expect(() => requireWritableAgentSessionRecord(state, 'opaque-chat')).toThrow()
+      } finally {
+        db.close()
+      }
+    }
+  }
+)
+
+it.each([false, true])(
   'preserves owed v3 SQL values and tab identity (explicit index: %s)',
   async (explicit) => {
     const { root, journal, primary } = profile(3, createAgentSessionRecordTablesSql())
@@ -122,10 +184,12 @@ it.each([false, true])(
         .run('owed-chat', JSON.stringify(stored('owed-chat', 'SQL chat')))
       source.exec(`INSERT INTO agent_session_records VALUES('hidden-chat','opaque SQL record');
       INSERT INTO agent_session_tabs VALUES('owed-custom-tab','owed-chat',0);
-      INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1');
       INSERT INTO agent_session_store_meta VALUES('journal.legacy-revision:owed-chat','saved baseline');
       INSERT INTO journal_sessions VALUES('historical','workspace-1','epoch');
       INSERT INTO journal_rows VALUES('historical','epoch',1,10,'{}');`)
+      if (explicit) {
+        source.exec("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+      }
     } finally {
       source.close()
     }

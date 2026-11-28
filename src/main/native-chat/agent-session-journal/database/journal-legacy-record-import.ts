@@ -3,6 +3,7 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   decodePersistedAgentSessionRecord,
   encodeAgentSessionRecord
@@ -90,7 +91,7 @@ function readLegacyDeletionAuthority(db: Database.Database) {
   }
 }
 
-type LoadedRecordSnapshot = NonNullable<JournalLegacyRecordSnapshot['loaded']>
+type LoadedRecordSnapshot = NonNullable<JournalLegacyRecordSnapshot>
 
 const RECORD_JOINS = `LEFT JOIN legacy_rows p ON p.generation=?1 AND p.section='records' AND p.key=ids.id
   LEFT JOIN legacy_rows u ON u.generation=?1 AND u.section='unusableRecords' AND u.key=ids.id
@@ -121,13 +122,27 @@ function mergeLegacyRecordRows(
   db: Database.Database,
   stage: Database.Database,
   { generation, salvage, tabs }: LoadedRecordSnapshot,
+  legacySessionTabIds: readonly string[],
   checkCancellation: () => void
 ): void {
   const wasDeleted = readLegacyDeletionAuthority(db)
   const sqlRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-  if (tabs === null) {
-    db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(AGENT_SESSION_TABS_RECORDED)
-  } else {
+  // A recorded SQL index is both the set of open tabs and proof of which SQL chats closed.
+  const recordedSql = db
+    .prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+    .get(AGENT_SESSION_TABS_RECORDED)
+  const savedPositions = new Map<string, number>()
+  if (tabs === null && recordedSql) {
+    for (const id of legacySessionTabIds) {
+      checkCancellation()
+      if (!savedPositions.has(id)) {
+        savedPositions.set(id, savedPositions.size - legacySessionTabIds.length)
+      }
+    }
+  }
+  const insertTab = db.prepare(`INSERT INTO agent_session_tabs(tab_id,session_id,position)
+    VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
+  if (tabs !== null || savedPositions.size > 0) {
     stage.exec('CREATE TABLE sql_tab_sessions (id TEXT PRIMARY KEY)')
     const copySqlTab = stage.prepare(
       'INSERT INTO sql_tab_sessions VALUES(?) ON CONFLICT(id) DO NOTHING'
@@ -140,6 +155,12 @@ function mergeLegacyRecordRows(
         copySqlTab.run(session_id)
       }
     })
+  }
+  const sqlTab =
+    tabs !== null || savedPositions.size > 0
+      ? stage.prepare('SELECT 1 FROM sql_tab_sessions WHERE id=?')
+      : undefined
+  if (tabs !== null) {
     const tabQuery =
       tabs === 'sessionTabs'
         ? 'SELECT session_id,tab_id FROM validated_tabs WHERE generation=? ORDER BY position'
@@ -150,20 +171,17 @@ function mergeLegacyRecordRows(
             .prepare('SELECT count(*) AS total FROM validated_tabs WHERE generation=?')
             .get(generation)
         : stage.prepare('SELECT count(*) AS total FROM visible_tabs').get()
-    const sqlTab = stage.prepare('SELECT 1 FROM sql_tab_sessions WHERE id=?')
     const record = stage.prepare(
       `SELECT ${RECORD_COLUMNS} FROM (SELECT ?3 AS id) ids ${RECORD_JOINS}`
     )
-    const insert = db.prepare(`INSERT INTO agent_session_tabs(tab_id,session_id,position)
-      VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
     let position = -Number(tabCount?.total)
     for (const { session_id, tab_id } of stage.prepare(tabQuery).iterate(generation)) {
       checkCancellation()
       const id = String(session_id)
-      if (!sqlTab.get(id) && !sqlRecord.get(id)) {
+      if (!sqlTab?.get(id) && !sqlRecord.get(id)) {
         const saved = record.get(generation, Number(salvage), id)
         if (!wasDeleted(id, saved && decodeStagedRecord(saved))) {
-          insert.run(tab_id, id, position)
+          insertTab.run(tab_id, id, position)
         }
       }
       position += 1
@@ -174,6 +192,13 @@ function mergeLegacyRecordRows(
 
   const insertRecord = db.prepare(`INSERT INTO agent_session_records(session_id,record_json)
     VALUES(?,?) ON CONFLICT(session_id) DO NOTHING`)
+  const insertOriginal = (id: string, body: string): void => {
+    const { changes } = insertRecord.run(id, body)
+    const position = savedPositions.get(id)
+    if (changes && position !== undefined && !sqlTab?.get(id)) {
+      insertTab.run(structuredAgentSessionTabId(id), id, position)
+    }
+  }
   const records = stage.prepare(`WITH ids(id) AS (
     SELECT key FROM legacy_rows WHERE generation=?1 AND section='records'
     UNION ALL SELECT u.key FROM legacy_rows u WHERE u.generation=?1 AND u.section='unusableRecords'
@@ -188,7 +213,7 @@ function mergeLegacyRecordRows(
     }
     const setAside = stagedQuarantine(row)
     if (!loaded) {
-      insertRecord.run(id, JSON.stringify(setAside?.raw ?? null))
+      insertOriginal(id, JSON.stringify(setAside?.raw ?? null))
       continue
     }
     let record = generation === 'backup' ? withBackupFence(loaded) : loaded
@@ -202,9 +227,9 @@ function mergeLegacyRecordRows(
       if (record !== loaded) {
         throw new JournalDamageError('the original chat record could not preserve its backup fence')
       }
-      insertRecord.run(id, JSON.stringify(encodeAgentSessionRecord(loaded)))
+      insertOriginal(id, JSON.stringify(encodeAgentSessionRecord(loaded)))
     } else {
-      insertRecord.run(id, JSON.stringify(encoded))
+      insertOriginal(id, JSON.stringify(encoded))
     }
   }
   const insertOperation = db.prepare(`INSERT INTO agent_session_operations(operation_key,row_json)
@@ -230,8 +255,9 @@ export function importJournalLegacyRecordSnapshot(
   source: Database.Database,
   db: Database.Database,
   stage: Database.Database,
-  { loaded }: JournalLegacyRecordSnapshot,
+  loaded: JournalLegacyRecordSnapshot,
   hostId: string,
+  legacySessionTabIds: readonly string[],
   checkCancellation: () => void
 ): void {
   checkCancellation()
@@ -246,7 +272,7 @@ export function importJournalLegacyRecordSnapshot(
   }
   runJournalTransaction(db, () => {
     if (loaded) {
-      mergeLegacyRecordRows(db, stage, loaded, checkCancellation)
+      mergeLegacyRecordRows(db, stage, loaded, legacySessionTabIds, checkCancellation)
     }
     for (const { session_id } of db
       .prepare(`SELECT r.session_id FROM agent_session_records r

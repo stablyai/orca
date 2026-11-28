@@ -33,18 +33,25 @@ import {
 } from './journal-legacy-source-receipt'
 import { captureJournalLegacyInitializationSource } from './journal-legacy-source-capture'
 import {
-  assertJournalLegacyRecordFilesStable,
   createJournalLegacyRecordStage,
-  readJournalLegacyRecordSnapshot,
-  type JournalLegacyRecordSnapshot
+  readJournalLegacyRecordSnapshot
 } from './journal-legacy-record-file'
+import {
+  assertJournalLegacyRecordFilesStable,
+  captureJournalLegacyRecordFiles,
+  captureJournalLegacyRecordSource,
+  journalLegacyRecordFingerprint,
+  JournalLegacyRecordCorruptionError,
+  type RecordFile
+} from './journal-legacy-record-identity'
 import { importJournalLegacyRecordSnapshot } from './journal-legacy-record-import'
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(
   stateDirectory: string,
   hostId: string = LOCAL_EXECUTION_HOST_ID,
-  checkCancellation: () => void = () => undefined
+  checkCancellation: () => void = () => undefined,
+  legacySessionTabIds: readonly string[] = []
 ): Promise<string> {
   checkCancellation()
   const destination = journalDomainDatabasePath(stateDirectory)
@@ -66,7 +73,7 @@ export async function initializeJournalDomainDatabase(
     const initialSource = captureJournalLegacyInitializationSource(sourcePath)
     const savedReceipt = JSON.stringify(initialSource.receipt)
     const stability = JSON.stringify(initialSource.stability)
-    let recordFiles: JournalLegacyRecordSnapshot['files'] | undefined
+    let recordFiles: readonly RecordFile[] | undefined
     const assertSourceStable = (): void => {
       if (
         initialSource.stability.disposition !== 'copied-source' ||
@@ -98,22 +105,37 @@ export async function initializeJournalDomainDatabase(
             checkCancellation: recordFileSource ? checkCancellation : undefined
           })
           if (recordFileSource) {
+            const sourceFiles = captureJournalLegacyRecordSource(stateDirectory)
+            const files = captureJournalLegacyRecordFiles(stateDirectory)
+            recordFiles = files
             const stage = new Database(join(temporary, 'records-stage.db'))
             try {
               createJournalLegacyRecordStage(stage)
               const recordSnapshot = await readJournalLegacyRecordSnapshot(
-                stateDirectory,
+                files,
                 stage,
                 checkCancellation
               )
-              recordFiles = recordSnapshot.files
               assertStable()
+              if (recordSnapshot === 'corrupt') {
+                const currentSourceFiles = captureJournalLegacyRecordSource(stateDirectory)
+                if (
+                  journalLegacyRecordFingerprint(currentSourceFiles) !==
+                  journalLegacyRecordFingerprint(sourceFiles)
+                ) {
+                  throw new Error('the original chat journal changed during initialization')
+                }
+                throw new JournalLegacyRecordCorruptionError(
+                  journalLegacyRecordFingerprint([...sourceFiles, ...files])
+                )
+              }
               importJournalLegacyRecordSnapshot(
                 source,
                 db,
                 stage,
                 recordSnapshot,
                 hostId,
+                legacySessionTabIds,
                 checkCancellation
               )
             } finally {

@@ -63,7 +63,8 @@ export class JournalSqlOwner {
       currentWorkerEntryLayout(__dirname),
       'journal-sql-worker-entry.js'
     ),
-    hostId?: string
+    hostId?: string,
+    legacySessionTabIds?: readonly string[]
   ) {
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-writer',
@@ -71,6 +72,7 @@ export class JournalSqlOwner {
         filename,
         stateDirectory,
         hostId,
+        legacySessionTabIds,
         initializationCancelled: this.initializationCancelled
       },
       execArgv: []

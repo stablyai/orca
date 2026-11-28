@@ -74,13 +74,13 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
   private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
-  private readonly unreadableSavedTabs = new WeakMap<
-    readonly Tab[],
-    {
-      index: AgentSessionStoreState['sessionTabs']
-      ids: readonly string[]
-    }
-  >()
+  private unreadableSavedTabs: {
+    index: AgentSessionStoreState['sessionTabs']
+    idsByTabs: WeakMap<readonly Tab[], readonly string[]>
+  } = {
+    index: null,
+    idsByTabs: new WeakMap()
+  }
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
@@ -247,9 +247,15 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   unverifiableSavedSessionIds(tabs: readonly Tab[]): readonly string[] {
     const { state } = this
     const index = state.sessionTabs ?? state.unrecordedSessionTabs ?? null
-    const cached = this.unreadableSavedTabs.get(tabs)
-    if (cached && cached.index === index) {
-      return cached.ids
+    if (this.unreadableSavedTabs.index !== index) {
+      this.unreadableSavedTabs = {
+        index,
+        idsByTabs: new WeakMap()
+      }
+    }
+    const cached = this.unreadableSavedTabs.idsByTabs.get(tabs)
+    if (cached) {
+      return cached
     }
     const ids = new Set<string>()
     for (const tab of tabs) {
@@ -267,7 +273,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
       }
     }
     const result = [...ids]
-    this.unreadableSavedTabs.set(tabs, { index, ids: result })
+    this.unreadableSavedTabs.idsByTabs.set(tabs, result)
     return result
   }
 
