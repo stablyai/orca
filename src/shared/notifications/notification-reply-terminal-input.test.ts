@@ -1,5 +1,12 @@
 import { expect, it } from 'vitest'
-import { notificationReplyInputIsEmpty } from '../../../mobile/src/notifications/reply/notification-reply-terminal-input'
+import {
+  notificationReplyInputIsEmpty,
+  notificationReplyTerminalClient
+} from '../../../mobile/src/notifications/reply/notification-reply-terminal-input'
+import {
+  terminalInputSourceForClient,
+  resolveMobileFloorClientId
+} from '../../main/runtime/rpc/methods/terminal/terminal-input-delivery'
 import { terminalComposerDraftSchema } from '../../../mobile/src/terminal/host-operations/terminal-reply-schema'
 
 it('accepts an omitted empty composer draft while protecting existing text and missing snapshots', () => {
@@ -19,4 +26,13 @@ it('accepts an omitted empty composer draft while protecting existing text and m
     )
   ).toBe(false)
   expect(notificationReplyInputIsEmpty(terminalComposerDraftSchema.parse({}).terminal)).toBe(false)
+})
+
+it('admits the paired headless reply as programmatic input without claiming a mobile subscriber', () => {
+  const client = notificationReplyTerminalClient()
+  expect(
+    terminalInputSourceForClient(client, { kind: 'paired-device', deviceId: 'paired-phone' })
+  ).toBe('programmatic')
+  expect(resolveMobileFloorClientId(null, client)).toBeNull()
+  expect(terminalInputSourceForClient(client)).toBe('desktop')
 })

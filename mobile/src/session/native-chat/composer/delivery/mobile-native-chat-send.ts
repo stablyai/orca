@@ -34,6 +34,7 @@ type MobileNativeChatSendArgs = {
   enter?: boolean
   resolvedLaunchDraft?: { text: string; createdAt: number }
   mobileClient?: MobileTerminalClient
+  inputClient?: { id: string; type: 'mobile' | 'desktop' }
   // Share this deadline across all heal/paste/text or selector writes in one user action.
   deadline?: number
   requireWriteSettlement?: true
@@ -121,6 +122,7 @@ export async function readMobileNativeChatInputClear(args: {
 export async function sendMobileNativeChatMessageWithOutcome(
   args: MobileNativeChatSendArgs
 ): Promise<MobileNativeChatWriteOutcome> {
+  const inputClient = args.inputClient ?? args.mobileClient
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
   // Starting an underfunded final write risks delivery followed by a false timeout.
@@ -143,7 +145,7 @@ export async function sendMobileNativeChatMessageWithOutcome(
           ? { requireStartupDialog: args.requireStartupDialog }
           : {}),
         ...(args.resolvedLaunchDraft ? { resolvedLaunchDraft: args.resolvedLaunchDraft } : {}),
-        ...(args.mobileClient ? { client: args.mobileClient } : {})
+        ...(inputClient ? { client: inputClient } : {})
       },
       // Spend reconnect and write time from one deadline so the composer cannot remain locked for twice its budget.
       { timeoutMs, budgetSpansConnect: true }

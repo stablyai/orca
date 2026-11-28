@@ -9,7 +9,10 @@ import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/ex
 import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { itemComment } from '../../bots/items/bot-item-operations'
 import { nativeChatTerminalDraftRead } from '../../terminal/session/mobile-session-terminal-operations'
-import { notificationReplyInputIsEmpty } from './notification-reply-terminal-input'
+import {
+  notificationReplyInputIsEmpty,
+  notificationReplyTerminalClient
+} from './notification-reply-terminal-input'
 import { groupRead, groupSend } from '../../bots/bot-group-operations'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 
@@ -111,7 +114,7 @@ export async function sendNotificationReply(
             enter: false,
             requireAgentStatus: 'sendable',
             expectedIncarnationId: target.expectedIncarnationId,
-            mobileClient: { id: host.deviceToken, type: 'mobile' },
+            inputClient: notificationReplyTerminalClient(),
             deadline,
             requireWriteSettlement: true
           })
@@ -129,7 +132,7 @@ export async function sendNotificationReply(
         enter: true,
         expectedIncarnationId: target.expectedIncarnationId,
         requireAgentStatus: 'sendable',
-        mobileClient: { id: host.deviceToken, type: 'mobile' },
+        inputClient: notificationReplyTerminalClient(),
         deadline,
         requireWriteSettlement: true
       })
