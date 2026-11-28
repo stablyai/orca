@@ -19,13 +19,25 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { CodexFrameRow } from './codex-frame-row-write'
 
 type ErrorInfo = { error: string; status?: number }
 type TerminalSignature = { code?: string; message?: string; status?: number }
+/** Whether a terminal frame's row was shown: the writer decides, and may drop it for a person's
+ *  Stop. `whenStopped`: a repeat of it that waits on that decision. */
+type TerminalDecision = { state: 'pending' | 'shown' | 'stopped'; whenStopped?: () => void }
 type FailureEvidence =
   | { phase: 'retry'; info: ErrorInfo; text: string }
-  | { phase: 'terminal'; signature: TerminalSignature }
+  | { phase: 'terminal'; signature: TerminalSignature; decision: TerminalDecision }
+
+function settleDecision(decision: TerminalDecision, stopped: boolean): void {
+  decision.state = stopped ? 'stopped' : 'shown'
+  const repeat = decision.whenStopped
+  decision.whenStopped = undefined
+  if (stopped) {
+    repeat?.()
+  }
+}
 
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
@@ -69,10 +81,12 @@ export class CodexTurnFailures {
       account?: () => AgentSessionAccountKind | undefined
       localClock?: boolean
       activeTurn: (threadId: string) => string | null
+      /** When the frame being handled was received. */
+      receivedAt?: () => number
       append: (
         threadId: string,
         payload: unknown,
-        frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & { body: AgentJournalStatusItem }
+        frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & CodexFrameRow
       ) => CodexJournalTranslationAdmission
     }
   ) {
@@ -83,7 +97,8 @@ export class CodexTurnFailures {
     kind: string,
     payload: unknown,
     errorPayload: unknown,
-    threadId: string
+    threadId: string,
+    observedAt = this.deps.receivedAt?.()
   ): CodexJournalTranslationAdmission {
     const translated = unhandledProviderFrameJournalItem('codex', kind, payload, undefined, {
       reportsFailure: true
@@ -92,6 +107,7 @@ export class CodexTurnFailures {
       return CODEX_JOURNAL_ADMITTED
     }
     const failure = this.failure(errorPayload, threadId, this.deps.account?.())
+    const decision: TerminalDecision = { state: 'pending' }
     const admission = this.deps.append(threadId, payload, {
       ...translated,
       body: {
@@ -102,13 +118,16 @@ export class CodexTurnFailures {
           agentName: 'Codex',
           surface: 'row'
         })
-      }
+      },
+      ...(observedAt === undefined ? {} : { observedAt }),
+      onDecided: (stopped) => settleDecision(decision, stopped)
     })
     if (admission.accepted) {
       this.admittedTerminal(
         errorPayload,
         threadId,
-        readCodexTurnId(payload) ?? this.deps.activeTurn(threadId)
+        readCodexTurnId(payload) ?? this.deps.activeTurn(threadId),
+        decision
       )
     }
     return admission
@@ -126,9 +145,24 @@ export class CodexTurnFailures {
       return CODEX_JOURNAL_ADMITTED
     }
     const errorPayload = { turnId, error: turn.error, willRetry: false }
-    const admission = this.repeatsTerminal(errorPayload, threadId, turnId)
-      ? CODEX_JOURNAL_ADMITTED
-      : this.appendTerminal('notification:turn/completed', payload, errorPayload, threadId)
+    const observedAt = this.deps.receivedAt?.()
+    const write = () =>
+      this.appendTerminal(
+        'notification:turn/completed',
+        payload,
+        errorPayload,
+        threadId,
+        observedAt
+      )
+    // The same error's earlier row stands for this one only once shown; one a person's Stop dropped
+    // leaves this end to be decided at its own receipt time.
+    const repeated = this.repeatedTerminal(errorPayload, threadId, turnId)
+    let admission: CodexJournalTranslationAdmission = CODEX_JOURNAL_ADMITTED
+    if (!repeated || repeated.state === 'stopped') {
+      admission = write()
+    } else if (repeated.state === 'pending') {
+      repeated.whenStopped = () => void write()
+    }
     if (admission.accepted) {
       onShown(turnId)
     }
@@ -203,24 +237,34 @@ export class CodexTurnFailures {
     }
   }
 
-  private repeatsTerminal(payload: unknown, threadId: string, turnId: string): boolean {
+  /** The decision on the same error's earlier row in this turn, if one was written. */
+  private repeatedTerminal(
+    payload: unknown,
+    threadId: string,
+    turnId: string
+  ): TerminalDecision | null {
     const key = scopeKey(threadId, turnId)
     const previous = key ? this.evidence.get(key) : undefined
     if (previous?.phase !== 'terminal') {
-      return false
+      return null
     }
     const next = terminalSignature(payload)
-    return (
-      (next.code === undefined || next.code === previous.signature.code) &&
+    return (next.code === undefined || next.code === previous.signature.code) &&
       (next.message === undefined || next.message === previous.signature.message) &&
       (next.status === undefined || next.status === previous.signature.status)
-    )
+      ? previous.decision
+      : null
   }
 
-  private admittedTerminal(payload: unknown, threadId: string, turnId: string | null): void {
+  private admittedTerminal(
+    payload: unknown,
+    threadId: string,
+    turnId: string | null,
+    decision: TerminalDecision
+  ): void {
     const key = scopeKey(threadId, turnId)
     if (key) {
-      this.remember(key, { phase: 'terminal', signature: terminalSignature(payload) })
+      this.remember(key, { phase: 'terminal', signature: terminalSignature(payload), decision })
     }
   }
 

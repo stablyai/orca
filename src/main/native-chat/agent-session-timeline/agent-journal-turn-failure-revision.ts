@@ -76,7 +76,7 @@ export function refineAgentJournalQuotaTurnEnd(
     readAgentSessionFailureFact(row.body.failure)?.kind === 'usageLimitReached'
   const stopped =
     lifecycle.completedAt !== undefined &&
-    view.stopDecidesTurn(lifecycle.turnId, lifecycle.completedAt)
+    view.stopDecidesFailure(lifecycle.turnId, lifecycle.completedAt)
   const outcome = quota ? (stopped ? 'cancellation' : 'failure') : undefined
   const target = { identity: turn }
   return resolveAgentJournalTurnRowWrite(

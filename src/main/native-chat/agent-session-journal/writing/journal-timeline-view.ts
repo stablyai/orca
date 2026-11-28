@@ -59,7 +59,8 @@ export function journalTimelineView(state: JournalReducerState): JournalTimeline
 export function journalTimelineItemsView(
   item: (itemId: string) => AgentJournalRenderItem | null,
   items: () => Iterable<AgentJournalRenderItem>,
-  stopDecidesTurn: JournalTimelineView['stopDecidesTurn'] = () => false
+  stopDecidesTurn: JournalTimelineView['stopDecidesTurn'] = () => false,
+  stopDecidesFailure: JournalTimelineView['stopDecidesFailure'] = () => false
 ): JournalTimelineView {
   return {
     item,
@@ -85,8 +86,7 @@ export function journalTimelineItemsView(
     contextWindowHeld: () => journalTimelineContextWindowHeld(items()),
     unsettled: (turnItemId) => unsettledJournalTimelineItems(items(), turnItemId),
     stopDecidesTurn,
-    // No saved Stop in an in-memory population: a failure keeps its row.
-    stopDecidesFailure: () => false
+    stopDecidesFailure
   }
 }
 

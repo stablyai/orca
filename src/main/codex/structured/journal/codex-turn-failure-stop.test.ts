@@ -1,161 +1,196 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { ensureAgentSessionAttachmentClaimTables } from '../../../native-chat/agent-session-attachments/agent-session-attachment-claims'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalStopEvent } from '../../../native-chat/agent-session-journal/durable-rows/journal-row-schema'
 import { STOP_DECIDES_FAILURE_MS } from '../../../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
-import { applyJournalDomainControlCommand } from '../../../native-chat/agent-session-journal/journal-domain-control-command'
-import { migrateJournalDomainSchema } from '../../../native-chat/agent-session-journal/journal-domain-schema'
-import { journalDomainTimelineReads } from '../../../native-chat/agent-session-journal/journal-domain-timeline-reads'
-import { resolveJournalTimelineItem } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
-import Database from '../../../sqlite/sync-database'
-import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
+import {
+  errorRows,
+  openStopJournal
+} from '../../../native-chat/agent-session-journal/journal-stop-writer.test-fixture'
+import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 
-// Codex's error row for a failed turn, written by the real frame writer and resolved by the real
-// journal writer's view of a saved Stop, as the chat shows it.
+// Codex's error rows for a failed turn, through the real translator into the real journal writer,
+// against the Stop that writer saved: as the chat shows them.
 const NOW = 1_800_000_000_000
 const TURN = 'provider-turn'
-const target = { sessionId: 'chat-1', epoch: 'e' }
-const SCOPE: AgentJournalTurnScope = { kind: 'turn', turnItemId: 'turn-item' }
-let dir = ''
-let db: Database
-beforeEach(() => {
-  vi.useFakeTimers()
-  dir = mkdtempSync(join(tmpdir(), 'orca-codex-failure-stop-'))
-  db = new Database(join(dir, 'journal.db'))
-  migrateJournalDomainSchema(db)
-  ensureAgentSessionAttachmentClaimTables(db)
-  db.prepare(
-    `INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence)
-     VALUES('workspace','chat-1','e',10,1)`
-  ).run()
-})
+const THREAD = 'thread-1'
+const ERROR = { message: 'stream disconnected before completion' }
+let journal: ReturnType<typeof openStopJournal> | null = null
+beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
+  journal?.close()
+  journal = null
   vi.useRealTimers()
-  db.close()
-  rmSync(dir, { recursive: true, force: true })
 })
 
-const stop = (reason: JournalStopEvent['reason'], at: number, turnId = TURN) => {
-  db.exec('BEGIN IMMEDIATE')
-  applyJournalDomainControlCommand(
-    db,
-    target,
-    { kind: 'stop-accept', event: { reason }, fence: 1, liveTurnId: turnId },
-    {},
-    at
-  )
-  db.exec('COMMIT')
-}
-
-/** The chat's rows: what the writer keeps of each of the frame writer's writes. */
-function chat() {
-  const rows: AgentJournalItemBody[] = []
-  const admitted = { accepted: true } as const
-  const sink = {
-    appendItem: (_identity: unknown, body: AgentJournalItemBody) => {
-      rows.push(body)
-    },
-    tryAppendItem: (_identity: unknown, body: AgentJournalItemBody) => {
-      rows.push(body)
-      return admitted
-    },
-    tryReviseResolvedItem: (
-      reservedBytes: number,
-      resolution: Parameters<typeof resolveJournalTimelineItem>[1]
-    ) => {
-      const view = journalDomainTimelineReads(db, target)
-      const result = resolveJournalTimelineItem(view, resolution, SCOPE, reservedBytes)
-      if (result.kind === 'resolved') {
-        rows.push(result.item.body)
-      }
-      return admitted
-    },
-    appendTombstone: () => {},
-    publish: () => {},
-    tryPublish: () => admitted
+/** A running Codex turn. `deferred`: the writer resolves writes only when drained. */
+function codexTurn(options: { deferred?: boolean; command?: true } = {}) {
+  journal = openStopJournal({ deferred: options.deferred })
+  const chat = journal
+  const translator = createCodexJournalTranslator({
+    sink: chat.sink,
+    primaryThreadId: () => THREAD,
+    sessionId: 'chat-1'
+  })
+  if (options.command) {
+    // A compaction: its journal turn is the command's own, and a provider turn carries it.
+    translator.beginCommand({
+      clientMessageId: 'compact',
+      turnId: 'command-turn',
+      identity: { provider: 'orca', clientMessageId: 'command-turn-row' },
+      resultIdentity: { provider: 'orca', clientMessageId: 'command-result' },
+      running: { kind: 'turn', turnId: 'command-turn', state: 'running', startedAt: NOW - 60_000 }
+    })
   }
-  const frames = new CodexJournalGenericFrames(
-    {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the frame writer calls only these sink members.
-      sink: sink as unknown as StructuredAgentSessionEventSink,
-      acquisitionId: 'acquisition',
-      attributionFor: () => ({ turnScope: SCOPE })
-    },
-    () => TURN
-  )
-  const errorRows = () => rows.filter((body) => body.kind === 'status' && body.failure)
-  return { frames, errorRows }
-}
-
-// Codex ends the turn as failed, with the error it hit.
-const failedCompletion = {
-  threadId: 'thread-1',
-  turn: { id: TURN, status: 'failed', error: { message: 'stream disconnected before completion' } }
-}
-// Codex's own error notice for the turn, before it completes.
-const errorNotice = {
-  threadId: 'thread-1',
-  turnId: TURN,
-  willRetry: false,
-  error: { message: 'stream disconnected before completion' }
-}
-
-/** The error rows the chat shows after a failed turn ending at `at`. */
-function shownAfterFailure(at: number, frame: 'completion' | 'notice' = 'completion') {
-  vi.setSystemTime(at)
-  const { frames, errorRows } = chat()
-  if (frame === 'completion') {
-    frames.appendCompletionFailure(failedCompletion, 'thread-1', () => {})
-  } else {
-    frames.appendUnhandled('notification:error', errorNotice, 'thread-1')
+  // `processedAt`: when the translator handles the frame, which a busy host makes later than its receipt.
+  const send = (method: string, params: object, observedAt: number, processedAt = observedAt) => {
+    vi.setSystemTime(processedAt)
+    translator.handle({
+      type: 'notification',
+      sessionId: 'chat-1',
+      threadId: THREAD,
+      method,
+      params: { threadId: THREAD, ...params },
+      observedAt
+    })
   }
-  return errorRows()
+  send('turn/started', { turn: { id: TURN } }, NOW - 60_000)
+  chat.drain()
+  return {
+    stop: (reason: JournalStopEvent['reason'], turnId = options.command ? 'command-turn' : TURN) =>
+      chat.stop(reason, NOW, turnId),
+    notice: (at: number, processedAt?: number) =>
+      send('error', { turnId: TURN, willRetry: false, error: ERROR }, at, processedAt),
+    failed: (at: number) =>
+      send('turn/completed', { turn: { id: TURN, status: 'failed', error: ERROR } }, at),
+    drain: () => chat.drain(),
+    errors: () => errorRows(chat.items()),
+    outcome: () =>
+      chat
+        .items()
+        .map((item) => readAgentJournalTurn(item.body))
+        .find((turn) => turn?.turnId === TURN)?.outcome
+  }
 }
 
 describe('a person stops a Codex turn that Codex then reports as failed', () => {
-  it('shows no error row for the failed completion', () => {
-    stop('user-stop', NOW)
-    expect(shownAfterFailure(NOW + 2_000)).toEqual([])
+  it('shows no error row for the failed completion, and the turn reads stopped', () => {
+    const turn = codexTurn()
+    turn.stop('user-stop')
+    turn.failed(NOW + 2_000)
+    expect(turn.errors()).toEqual([])
+    expect(turn.outcome()).toBe('cancellation')
   })
 
-  it('shows no error row for its error notice either', () => {
-    stop('user-stop', NOW)
-    expect(shownAfterFailure(NOW + 1_000, 'notice')).toEqual([])
+  it('shows none for its error notice and completion', () => {
+    const turn = codexTurn()
+    turn.stop('user-stop')
+    turn.notice(NOW + 1_000)
+    turn.failed(NOW + 1_500)
+    expect(turn.errors()).toEqual([])
   })
 
   it('shows none when the person closed the chat on it', () => {
-    stop('user-close', NOW)
-    expect(shownAfterFailure(NOW + 1_000)).toEqual([])
+    const turn = codexTurn()
+    turn.stop('user-close')
+    turn.failed(NOW + 1_000)
+    expect(turn.errors()).toEqual([])
+  })
+
+  it('judges the row by when Codex sent it, not when Orca got to it', () => {
+    const turn = codexTurn()
+    turn.stop('user-stop')
+    turn.notice(NOW + STOP_DECIDES_FAILURE_MS - 1_000, NOW + STOP_DECIDES_FAILURE_MS + 10_000)
+    expect(turn.errors()).toEqual([])
+  })
+
+  it('drops it at the Stop itself and at the window’s far edge', () => {
+    for (const at of [NOW, NOW + STOP_DECIDES_FAILURE_MS]) {
+      const turn = codexTurn()
+      turn.stop('user-stop')
+      turn.notice(at)
+      expect(turn.errors()).toEqual([])
+      journal?.close()
+      journal = null
+    }
+  })
+
+  it('shows none for a stopped command turn', () => {
+    const turn = codexTurn({ command: true })
+    turn.stop('user-stop')
+    turn.notice(NOW + 2_000)
+    expect(turn.errors()).toEqual([])
+  })
+
+  it('waits on the writer, then shows none when the completion is in the window too', () => {
+    const turn = codexTurn({ deferred: true })
+    turn.stop('user-stop')
+    turn.notice(NOW + 29_000)
+    turn.failed(NOW + 29_500)
+    turn.drain()
+    expect(turn.errors()).toEqual([])
   })
 })
 
-describe('a real Codex failure keeps its error row', () => {
-  it('with no Stop', () => {
-    expect(shownAfterFailure(NOW)).toHaveLength(1)
+describe('a real Codex failure keeps exactly one error row', () => {
+  it('with no Stop, notice and completion alike', () => {
+    for (const deferred of [false, true]) {
+      const turn = codexTurn({ deferred })
+      turn.notice(NOW)
+      turn.failed(NOW + 500)
+      turn.drain()
+      expect(turn.errors()).toHaveLength(1)
+      expect(turn.outcome()).toBe('failure')
+      journal?.close()
+      journal = null
+    }
   })
 
-  it('when it fails long after the Stop', () => {
-    stop('user-stop', NOW)
-    expect(shownAfterFailure(NOW + STOP_DECIDES_FAILURE_MS + 1)).toHaveLength(1)
+  it('one millisecond past the window', () => {
+    const turn = codexTurn()
+    turn.stop('user-stop')
+    turn.notice(NOW + STOP_DECIDES_FAILURE_MS + 1)
+    expect(turn.errors()).toHaveLength(1)
   })
 
-  it('when it failed before the Stop', () => {
-    stop('user-stop', NOW)
-    expect(shownAfterFailure(NOW - 1)).toHaveLength(1)
+  it('when its completion fails past the window after a notice the Stop dropped', () => {
+    for (const deferred of [false, true]) {
+      const turn = codexTurn({ deferred })
+      turn.stop('user-stop')
+      turn.notice(NOW + 29_000)
+      turn.failed(NOW + 31_000)
+      turn.drain()
+      expect(turn.errors()).toHaveLength(1)
+      expect(turn.outcome()).toBe('failure')
+      journal?.close()
+      journal = null
+    }
+  })
+
+  it('when it failed before the Stop, even though the turn then reads stopped', () => {
+    // The notice is a real error from before the Stop, so its row stays.
+    const turn = codexTurn()
+    turn.notice(NOW - 1_000)
+    turn.stop('user-stop')
+    turn.failed(NOW + 2_000)
+    expect(turn.errors()).toHaveLength(1)
+    expect(turn.outcome()).toBe('cancellation')
   })
 
   it('when the Stop was for another turn', () => {
-    stop('user-stop', NOW, 'earlier-turn')
-    expect(shownAfterFailure(NOW + 1_000)).toHaveLength(1)
+    const turn = codexTurn()
+    turn.stop('user-stop', 'earlier-turn')
+    turn.failed(NOW + 1_000)
+    expect(turn.errors()).toHaveLength(1)
   })
 
   it('when Orca, not a person, stopped it', () => {
-    stop('host-stop', NOW)
-    expect(shownAfterFailure(NOW + 1_000)).toHaveLength(1)
+    for (const reason of ['host-stop', 'evict', 'context-clear'] as const) {
+      const turn = codexTurn()
+      turn.stop(reason)
+      turn.failed(NOW + 1_000)
+      expect(turn.errors()).toHaveLength(1)
+      journal?.close()
+      journal = null
+    }
   })
 })

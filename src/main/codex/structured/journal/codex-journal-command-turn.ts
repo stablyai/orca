@@ -57,6 +57,11 @@ export class CodexJournalCommandTurn {
       : null
   }
 
+  /** The journal turn a provider turn's rows belong to: the command's own when it carries one. */
+  journalTurnId(providerTurnId: string): string {
+    return this.carried.get(providerTurnId)?.command.turnId ?? providerTurnId
+  }
+
   /** An unclaimed command has no provider turn to interrupt. */
   providerTurnId(turnId: string): string | undefined {
     if (this.awaiting?.turnId === turnId) {

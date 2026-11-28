@@ -82,7 +82,7 @@ export function journalClaudeResult(
   // A Stop changes only an unaborted error's reading; the writer decides it at its position.
   const stopCheck =
     turnId !== null && claudeResultOutcome(message) !== claudeResultOutcome(message, true)
-      ? { turnId, endedAt: observedAt }
+      ? { turnId, endedAt: observedAt, failure: true as const }
       : null
   // Retry owed prompt cancellations before a command result can return.
   if (settlesTurn) {

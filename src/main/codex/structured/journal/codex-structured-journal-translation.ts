@@ -145,6 +145,7 @@ function createCodexTranslation(
     },
     handle: (event) => {
       const primaryThreadId = deps.primaryThreadId?.() ?? null
+      genericFrames.receive(event.type === 'notification' ? event.observedAt : undefined)
       if (event.type === 'notification' && primaryThreadId !== null) {
         // Register execution first so rows from this frame carry the child's run.
         observeCodexExecutionFrame(

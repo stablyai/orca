@@ -6,7 +6,9 @@ import { getJournalInputOrder } from '../input-order/journal-input-order-registr
 
 import type {
   AgentJournalItemBody,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalTurnItem,
+  AgentJournalTurnLifecycle
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -151,6 +153,36 @@ export function personStopDecidesFailure(
   )
 }
 
+// A restore may keep an end's clock only to the second.
+const SAME_END_MS = 1_000
+
+/** The same end of a turn a Stop already decided, written again: its own write at the same time,
+ *  or a failure for it within that Stop's window (a provider's completion after the Stop's own
+ *  settle, a duplicate completion), or one whose clock a restore lost or rounded. */
+function keepsStoppedEnd(
+  state: TurnEndState,
+  previous: AgentJournalTurnLifecycle,
+  body: AgentJournalTurnItem
+): boolean {
+  if (previous.outcome !== 'cancellation' || previous.turnId !== body.turnId) {
+    return false
+  }
+  if (previous.completedAt === body.completedAt) {
+    return true
+  }
+  if (body.outcome !== 'failure') {
+    return false
+  }
+  if (body.completedAt === undefined) {
+    return true
+  }
+  return (
+    personStopDecidesFailure(state, body.turnId, body.completedAt) ||
+    (previous.completedAt !== undefined &&
+      Math.abs(body.completedAt - previous.completedAt) < SAME_END_MS)
+  )
+}
+
 /** Preserve success verdicts and already-ended turns; otherwise apply the latest matching personal
  *  Stop. A failure reads as the Stop's only when it ended soon after that Stop. */
 export function turnEndAfterStop(
@@ -163,12 +195,11 @@ export function turnEndAfterStop(
   }
   const previous = readAgentJournalTurn(state.items.get(itemId)?.body)
   if (previous && previous.state !== 'running' && previous.state !== 'unverifiable') {
-    // A later revision of the end the Stop already decided keeps that verdict.
-    if (previous.outcome === 'cancellation' && previous.completedAt === body.completedAt) {
-      return { ...body, state: previous.state, outcome: 'cancellation' }
-    }
-    // An already-written end predates this Stop.
-    return body
+    // A later revision of the end the Stop already decided keeps that verdict; any other
+    // already-written end predates this Stop.
+    return keepsStoppedEnd(state, previous, body)
+      ? { ...body, state: previous.state, outcome: 'cancellation' }
+      : body
   }
   const stopped =
     body.outcome === 'failure'

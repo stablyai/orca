@@ -2,7 +2,6 @@ import {
   unhandledProviderFrameJournalItem,
   type UnhandledProviderFrameJournalItem
 } from '../../../native-chat/agent-session-wire/providers/unhandled-provider-frame'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   type CodexJournalTranslationAdmission,
   type CodexJournalTranslatorDeps,
@@ -19,17 +18,19 @@ import {
   readCodexTurnId,
   readCodexErrorWillRetry
 } from '../../app-server/codex-structured-thread-facts'
-import {
-  type AgentJournalStatusItem,
-  AGENT_JOURNAL_THREAD_SCOPE
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   CODEX_PLAN_UPDATED_FRAME_KIND,
   isWordlessProviderFrame
 } from '../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 import { CodexTurnFailures } from './codex-turn-failures'
-import { codexTerminalTurnId, writeCodexFrameRow } from './codex-frame-row-write'
+import {
+  defaultCodexFrameSchedule,
+  publishCodexFrames,
+  writeCodexFrameRow,
+  type CodexFrameRow
+} from './codex-frame-row-write'
 import { CodexStartupWarnings } from './codex-startup-warnings'
 import { boundedTurnBucket } from './codex-generic-frame-bucket'
 
@@ -40,16 +41,6 @@ type SuppressedSummary = {
   count: number
   publishedCount: number
   producer?: { threadId: string; turnId: string }
-}
-
-function defaultSchedule(run: () => void, ms: number): () => void {
-  const timer = setTimeout(run, ms)
-  timer.unref?.()
-  return () => clearTimeout(timer)
-}
-
-function publish(sink: StructuredAgentSessionEventSink): CodexJournalTranslationAdmission {
-  return sink.tryPublish ? sink.tryPublish() : (sink.publish(), CODEX_JOURNAL_ADMITTED)
 }
 
 export class CodexJournalGenericFrames {
@@ -64,13 +55,15 @@ export class CodexJournalGenericFrames {
   private fallbackSequence = 0
   private cancelSuppressionFlush: (() => void) | null = null
   private readonly failures: CodexTurnFailures
+  private receivedAt: number | undefined
 
   constructor(
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
-      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account' | 'localClock'
+      'sink' | 'schedule' | 'coalesceMs' | 'acquisitionId' | 'account' | 'localClock' | 'now'
     > & {
       attributionFor: CodexRowAttribution
+      stopTurnId?: (providerTurnId: string) => string
     },
     private readonly activeTurn: (threadId: string) => string | null
   ) {
@@ -78,9 +71,10 @@ export class CodexJournalGenericFrames {
       account: deps.account,
       localClock: deps.localClock === true,
       activeTurn,
+      receivedAt: () => this.receiptTime(),
       append: (threadId, payload, frame) => this.appendFrameRow(threadId, payload, frame)
     })
-    this.schedule = deps.schedule ?? defaultSchedule
+    this.schedule = deps.schedule ?? defaultCodexFrameSchedule
     this.suppressionCoalesceMs = deps.coalesceMs ?? 60
   }
 
@@ -113,6 +107,15 @@ export class CodexJournalGenericFrames {
     return this.failures.appendCompletion(payload, threadId, onShown)
   }
 
+  /** The frame being handled: its receipt time, as its turn's boundary reads it. */
+  receive(observedAt: number | undefined): void {
+    this.receivedAt = observedAt
+  }
+
+  private receiptTime(): number {
+    return this.receivedAt ?? this.deps.now?.() ?? Date.now()
+  }
+
   forgetTurnFailure(threadId: string, turnId: string): void {
     this.failures.forget(threadId, turnId)
   }
@@ -120,8 +123,7 @@ export class CodexJournalGenericFrames {
   appendFrameRow(
     threadId: string,
     payload: unknown,
-    translated: {
-      body: AgentJournalStatusItem
+    translated: CodexFrameRow & {
       classification: UnhandledProviderFrameJournalItem['classification']
       turnScope?: UnhandledProviderFrameJournalItem['turnScope']
     }
@@ -152,22 +154,15 @@ export class CodexJournalGenericFrames {
       }
     }
     this.fallbackSequence += 1
-    const terminalTurnId = codexTerminalTurnId(translated.body, frameTurnId)
-    const identity = {
-      provider: 'orca' as const,
-      clientMessageId: terminalTurnId
-        ? `terminal-failure:codex:${JSON.stringify([threadId, terminalTurnId])}`
-        : `provider-frame:codex:${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`
-    }
     const attribution = this.deps.attributionFor(threadId, frameTurnId)
     attribution.turnScope = translated.turnScope ?? attribution.turnScope
-    const admission = writeCodexFrameRow(
-      this.deps.sink,
-      identity,
-      translated.body,
-      attribution,
-      terminalTurnId
-    )
+    const admission = writeCodexFrameRow(this.deps.sink, attribution, translated, {
+      threadId,
+      frameTurnId,
+      fallbackKey: `${this.deps.acquisitionId ?? 'acquisition'}:${this.fallbackSequence}`,
+      ...(this.deps.stopTurnId ? { stopTurnId: this.deps.stopTurnId } : {}),
+      receivedAt: this.receiptTime()
+    })
     if (!admission.accepted) {
       this.fallbackSequence -= 1
       return admission
@@ -181,7 +176,7 @@ export class CodexJournalGenericFrames {
           : { ...rows, drawn: rows.drawn + 1 }
     )
     this.recordBucket(bucket)
-    const publication = publish(this.deps.sink)
+    const publication = publishCodexFrames(this.deps.sink)
     if (publication.accepted && translated.body.failure?.kind === 'providerRetrying') {
       this.failures.observeRetry(payload, threadId)
     }
@@ -229,7 +224,7 @@ export class CodexJournalGenericFrames {
       wrote = true
     }
     if (wrote) {
-      const admission = publish(this.deps.sink)
+      const admission = publishCodexFrames(this.deps.sink)
       if (!admission.accepted) {
         blocked ??= admission
       } else {
