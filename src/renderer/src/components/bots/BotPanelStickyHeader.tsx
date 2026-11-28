@@ -19,7 +19,7 @@ export function BotPanelStickyHeader({ children }: { children: ReactNode }): Rea
     if (!node || !root || typeof IntersectionObserver === 'undefined') {
       return
     }
-    // Fires only as the scroller's top edge crosses the sentinel, so a scroll renders this at most twice.
+    // A zero-height sentinel stops intersecting on the first positive scroll offset.
     const observer = new IntersectionObserver(
       ([entry]) => setScrolledUnder(entry ? !entry.isIntersecting : false),
       { root }
@@ -32,7 +32,7 @@ export function BotPanelStickyHeader({ children }: { children: ReactNode }): Rea
       <div
         ref={sentinel}
         aria-hidden
-        className="pointer-events-none invisible absolute inset-x-0 top-0 h-px"
+        className="pointer-events-none invisible absolute inset-x-0 top-0 h-0"
       />
       <div
         data-bot-panel-sticky-header=""
