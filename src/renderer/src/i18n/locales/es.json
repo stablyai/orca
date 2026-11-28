@@ -23421,6 +23421,9 @@
           "never": "Nunca"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Ajustes de compatibilidad de bajo nivel para solucionar problemas. Estos ajustes se guardan en este equipo, no en {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Variables de entorno disponibles"
       },

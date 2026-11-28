@@ -1,8 +1,9 @@
-import { lstat, opendir } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { posix } from 'node:path'
 import { DirectoryListingBudget } from '../../file-listing/directory-listing-budget'
 import { ProcessTableCaptureError } from '../tables/process-table-snapshot'
 import { monotonicNow } from '../../concurrency/deadline-settle-notifier'
+import { openDirectory } from '../../open-directory'
 
 type DarwinTerminalNameDeps = {
   openDirectory: (path: string) => Promise<AsyncIterable<{ name: string }>>
@@ -10,7 +11,7 @@ type DarwinTerminalNameDeps = {
 }
 
 const deviceFilesystem: DarwinTerminalNameDeps = {
-  openDirectory: (path) => opendir(path),
+  openDirectory: (path) => openDirectory(path),
   readDevice: (path) => lstat(path, { bigint: true })
 }
 

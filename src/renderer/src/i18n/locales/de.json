@@ -23498,6 +23498,9 @@
           "never": "Nie"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Systemnahe Kompatibilitätseinstellungen zur Fehlerbehebung. Diese Einstellungen werden auf diesem Computer gespeichert, nicht auf {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Verfügbare Umgebungsvariablen"
       },

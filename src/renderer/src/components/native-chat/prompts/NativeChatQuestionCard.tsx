@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import { useNativeChatQuestionForm } from './use-native-chat-question-form'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
@@ -16,7 +17,6 @@ import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-aut
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
 import { useNativeChatQuestionStepHeight } from './use-native-chat-question-step-height'
 import {
-  useReportNativeChatQuestionDraft,
   foldNativeChatQuestionOnEscape,
   confirmNativeChatQuestionOnCardEnter,
   type NativeChatQuestionCardProps
@@ -51,7 +51,8 @@ export function NativeChatQuestionCard({
   shouldFocus = false,
   answerInputRef,
   look,
-  draft
+  draft,
+  memoryKey
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const t = useTranslate()
   const column = usePromptCardColumn('px-3 pb-4 sm:px-4')
@@ -59,18 +60,10 @@ export function NativeChatQuestionCard({
   const surfaceRef = useRef<HTMLDivElement>(null)
   const blocked = isSubmitting || isCancelling
   const autoAdvance = useNativeChatQuestionAutoAdvance(blocked)
-  const [index, setIndex] = useState(0)
+  const { index, setIndex, selections, setSelections, otherText, setOtherText } =
+    useNativeChatQuestionForm({ prompt, freeTextInputs, draft, memoryKey })
   useNativeChatPromptCardFocus(cardRef, shouldFocus, index)
   useNativeChatQuestionStepHeight(surfaceRef, index)
-  // Use indices because labels can repeat and the agent commits numbered rows.
-  const [selections, setSelections] = useState<number[][]>(
-    () => draft?.selections ?? prompt.questions.map(() => [])
-  )
-  const [otherText, setOtherText] = useState<string[]>(
-    () =>
-      draft?.otherText ?? prompt.questions.map((_, qi) => freeTextInputs?.[qi]?.initialValue ?? '')
-  )
-  useReportNativeChatQuestionDraft(draft, selections, otherText)
   // Holds a sent answer until the next commit, which carries the caller's own pending state;
   // after it, isSubmitting decides, so a refused, thrown or failed send leaves the card retryable.
   const latchRef = useRef(false)

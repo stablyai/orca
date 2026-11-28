@@ -22,6 +22,11 @@ export const WSL_DISTRO_HOLDER_POLL_SECONDS = 15
  */
 export const WSL_DISTRO_HOLDER_IGNORED_PROCESS_NAMES = ['systemd', '(sd-pam)', 'dbus-daemon']
 
+/** Shells a login may start; any other child of `login` (a profile's `exec server`) still counts. */
+const LOGIN_SHELL_NAMES = ['bash', 'zsh', 'sh', 'dash', 'ksh', 'mksh', 'ash', 'fish', 'tcsh', 'csh']
+  .flatMap((name) => [name, `-${name}`])
+  .join('|')
+
 /** At most this many process names go into the blocked note, so a busy distro stays cheap. */
 export const WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX = 5
 
@@ -40,8 +45,9 @@ export function buildWslDistroHolderScript(
     'rm -f "$f" "$b" "$b".*',
     // Fails toward holding: any live process of this user outside the holder itself counts, so a
     // distro whose default user is root never releases; so does a /proc it cannot read, or a
-    // status file it cannot parse. One exception: with /proc mounted hidepid, another user's
-    // container shim is invisible and does not hold. Leaves the first names it found in $why.
+    // status file it cannot parse. Exceptions: WSL's parked login shell (below), and with /proc
+    // mounted hidepid another user's container shim is invisible and does not hold. Leaves the
+    // first names it found in $why.
     'user_busy() {',
     'why=; c=0',
     `[ -r "${procRoot}/$$/status" ] || { why=proc-unreadable; return 0; }`,
@@ -57,7 +63,10 @@ export function buildWslDistroHolderScript(
     'case $n in containerd-shim*) ;; *)',
     '[ "$u" = "$me" ] && [ "$pp" != "$$" ] || continue',
     'case $s in Z*) continue ;; esac',
-    `case $n in ${ignored}) continue ;; esac ;;`,
+    `case $n in ${ignored}) continue ;; esac`,
+    // WSL's systemd mode parks a login shell under root's `/bin/login -f`: plumbing, not work.
+    `pn= pu=; case $n in ${LOGIN_SHELL_NAMES}) { while read -r k v r; do case $k in Name:) pn=$v ;; Uid:) pu=$v; break ;; esac; done < "${procRoot}/$pp/status"; } 2>/dev/null ;; esac`,
+    '[ "$pn" = login ] && [ "$pu" = 0 ] && continue ;;',
     'esac',
     `why="$why $n"; c=$((c + 1)); [ "$c" -lt ${WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX} ] || return 0`,
     'done; [ -n "$why" ]; }',
