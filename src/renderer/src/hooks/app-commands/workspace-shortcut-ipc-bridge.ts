@@ -3,6 +3,7 @@ import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/workspace-boa
 import { activateTabNumberShortcut } from '@/lib/keyboard/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/workspace/search/palette/cmd-j-row-index-jump'
 import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/worktree-list/listing/visible-worktrees'
+import { getFocusedWorkspaceIdentity } from '@/components/sidebar/worktree-list/navigation/focused-workspace-identity'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
@@ -31,7 +32,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onOpenNewWorkspace(() => {
       const store = useAppStore.getState()
-      openNewWorkspaceFromShortcut(store)
+      openNewWorkspaceFromShortcut(store, getFocusedWorkspaceIdentity())
     })
   )
 
