@@ -5,11 +5,12 @@ import {
   createInheritedOrcaIdentityDropBanner,
   HOST_ENTRY_FILE_NAMES
 } from './inherited-orca-identity-banner'
+import { createLayoutOwnerBanner } from './layout-owner-banner'
 import { MAIN_BUILD_ENTRY_POINTS } from './main-build-entry-points'
 
 // postBanner lands after minification and Rolldown shifts index.js.map past it, keeping crash traces on the right line.
 export function createMainEntryPostBanner(
-  chunk: Rollup.RenderedChunk,
+  chunk: Pick<Rollup.RenderedChunk, 'fileName' | 'moduleIds'>,
   startupDiagnosticsBanner: (chunkName: string) => string
 ): string {
   const identityDrop = HOST_ENTRY_FILE_NAMES.has(chunk.fileName)
@@ -22,5 +23,10 @@ export function createMainEntryPostBanner(
     throw new Error('Main startup must stay in index.js so __dirname resolves app assets')
   }
   // Source guards run after Rollup’s require prelude, too late to handle missing bootstrap dependencies.
-  return identityDrop + createBootstrapFatalExitBanner() + startupDiagnosticsBanner(chunk.fileName)
+  return (
+    identityDrop +
+    createLayoutOwnerBanner() +
+    createBootstrapFatalExitBanner() +
+    startupDiagnosticsBanner(chunk.fileName)
+  )
 }

@@ -96,6 +96,7 @@ import {
   handleMainProcessPreflightFailure
 } from './main-process-preflight-failure'
 import { ensureWindowsAppDataPath } from './windows-startup/windows-app-data-path'
+import { warnIfLayoutOwnerFlagMoved } from '../layout-owner/desktop-layout-owner-flag'
 
 export type MainProcessPreflightOptions = {
   focusExistingWindow: (request: { background?: boolean }) => void
@@ -195,6 +196,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   setAppEnvironment(new ElectronAppEnvironment())
   // Capture after overrides, before ready-time app naming can change userData on case-sensitive filesystems.
   initDataPath()
+  void warnIfLayoutOwnerFlagMoved(getCanonicalUserDataPath())
   startEventLoopDelayProbe('main', getCanonicalUserDataPath())
   if (process.platform === 'win32') {
     void Promise.all([

@@ -12,6 +12,7 @@ import {
 import type { ContextualTourId } from '../../../src/shared/feature-education/contextual-tours/contextual-tours'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { expectAppTookLayoutOwner, expectWebClientTookLayoutOwner } from './layout-owner-build'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
@@ -156,6 +157,7 @@ export async function launchPairedWebClient(
       }
     )
     page = await pagePromise
+    await expectWebClientTookLayoutOwner(hubApp, page)
     if (options.waitForWorkspace !== false) {
       await page.locator('[data-worktree-sidebar]').waitFor({ state: 'visible', timeout: 30_000 })
     }
@@ -232,6 +234,7 @@ export async function launchPairedElectronClient(
     )
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
+    await expectAppTookLayoutOwner(app, homeIsolation.env, page)
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
     await page.waitForFunction(
       () => window.__store?.getState().workspaceSessionReady === true,
