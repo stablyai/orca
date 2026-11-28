@@ -115,7 +115,7 @@ export function RuntimeServerRow({
   const row = useRuntimeServerRowState(environment, details)
   const remoteUpdate = reconcileRemoteServerUpdateEntry(
     remoteUpdateSnapshot,
-    row.descriptorStatus?.appVersion
+    row.liveUpdateEvidence
   )
   const managedForgettable = managed ? managedServerForgettable(managed, row.serverReplaced) : false
   const actionBusy = connecting || switching || disconnecting || removing

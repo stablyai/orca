@@ -123,7 +123,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
           )
           set((state) => {
             const next = new Map(state.remoteServerUpdates)
-            next.set(environment.id, entry)
+            next.set(environment.id, { ...entry, observedAt: Date.now() })
             return { remoteServerUpdates: next }
           })
         })
@@ -151,7 +151,12 @@ export const createRemoteServerUpdatesSlice: StateCreator<
     set((state) => {
       const next = new Map(state.remoteServerUpdates)
       for (const entry of entries) {
-        next.set(entry.environmentId, { ...entry, phase: 'queued', error: null })
+        next.set(entry.environmentId, {
+          ...entry,
+          phase: 'queued',
+          error: null,
+          observedAt: Date.now()
+        })
       }
       return { remoteServerUpdates: next, remoteServerUpdatesRunning: true }
     })
@@ -166,7 +171,7 @@ export const createRemoteServerUpdatesSlice: StateCreator<
             (progress) => {
               set((state) => {
                 const next = new Map(state.remoteServerUpdates)
-                next.set(entry.environmentId, progress)
+                next.set(entry.environmentId, { ...progress, observedAt: Date.now() })
                 return { remoteServerUpdates: next }
               })
             },

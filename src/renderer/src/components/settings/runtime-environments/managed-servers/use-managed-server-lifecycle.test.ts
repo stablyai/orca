@@ -18,12 +18,12 @@ vi.mock('@/store/slices/runtime-status/views/use-runtime-status-view', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 
-function managedStatus(deferred: boolean): OrcadManagedRuntimeStatus {
+function managedStatus(version: 'old' | 'new', deferred: boolean): OrcadManagedRuntimeStatus {
   return {
     environmentId: 'env-test',
     sshTargetId: 'ssh-test',
-    activeVersion: deferred ? '1.2.0+old' : '1.3.0+new',
-    activeAppVersion: deferred ? '1.2.0' : '1.3.0',
+    activeVersion: version === 'old' ? '1.2.0+old' : '1.3.0+new',
+    activeAppVersion: version === 'old' ? '1.2.0' : '1.3.0',
     previousVersion: null,
     activatedAt: null,
     rollbackAvailable: false,
@@ -41,11 +41,24 @@ function managedStatus(deferred: boolean): OrcadManagedRuntimeStatus {
       : null
   }
 }
+const DEFERRED = managedStatus('old', true)
+const UPDATED = managedStatus('new', false)
 
+type PendingRead = {
+  resolve: (status: OrcadManagedRuntimeStatus) => void
+  reject: (error: Error) => void
+}
+
+/** getStatus calls held until a test settles them, so their order is explicit. */
 function setup() {
-  let deferred = true
+  const reads: PendingRead[] = []
+  const getStatus = vi.fn(
+    () =>
+      new Promise<OrcadManagedRuntimeStatus>((resolve, reject) => {
+        reads.push({ resolve, reject })
+      })
+  )
   let finishUpdate: () => void = () => {}
-  const getStatus = vi.fn(async () => managedStatus(deferred))
   const update = vi.fn(
     () =>
       new Promise((resolve) => {
@@ -55,29 +68,29 @@ function setup() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only getStatus and update here.
   const api = { getStatus, update } as unknown as ManagedOrcadPreloadApi
   const hook = renderHook(() =>
-    useManagedServerLifecycle({
-      api,
-      environment: { id: 'env-test' },
-      onChanged: () => {}
-    })
+    useManagedServerLifecycle({ api, environment: { id: 'env-test' }, onChanged: () => {} })
   )
-  return {
-    hook,
-    getStatus,
-    landUpdate: () => {
-      deferred = false
-    },
-    finishUpdate: () => finishUpdate()
+  const settle = async (index: number, result: OrcadManagedRuntimeStatus | Error) => {
+    await act(async () => {
+      if (result instanceof Error) {
+        reads[index].reject(result)
+      } else {
+        reads[index].resolve(result)
+      }
+      await Promise.resolve()
+    })
   }
+  const rerenderWith = async (runtimeId: string | null) => {
+    mocks.runtimeId = runtimeId
+    await act(async () => {
+      hook.rerender()
+      await Promise.resolve()
+    })
+  }
+  return { hook, getStatus, reads, settle, rerenderWith, finishUpdate: () => finishUpdate() }
 }
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    await Promise.resolve()
-  })
-}
-
-describe('useManagedServerLifecycle runtime restarts', () => {
+describe('useManagedServerLifecycle status reads', () => {
   beforeEach(() => {
     mocks.runtimeId = 'runtime-old'
   })
@@ -85,54 +98,141 @@ describe('useManagedServerLifecycle runtime restarts', () => {
     cleanup()
   })
 
-  it('reloads status when the server comes back as a new runtime, dropping a stale deferral', async () => {
-    const { hook, getStatus, landUpdate } = setup()
-    await settle()
-    expect(getStatus).toHaveBeenCalledTimes(1)
-    expect(hook.result.current.status?.deferredUpdate).not.toBeNull()
+  describe('stale reads (RS-01)', () => {
+    it('keeps the newer status when an older read succeeds late', async () => {
+      const { hook, reads, settle } = setup()
+      await act(async () => {
+        void hook.result.current.loadStatus()
+      })
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      await settle(0, DEFERRED)
+      expect(hook.result.current.status).toBe(UPDATED)
+      expect(hook.result.current.busy).toBeNull()
+    })
 
-    landUpdate()
-    mocks.runtimeId = 'runtime-new'
-    hook.rerender()
-    await settle()
-    expect(getStatus).toHaveBeenCalledTimes(2)
-    expect(hook.result.current.status?.deferredUpdate).toBeNull()
-    expect(hook.result.current.status?.activeAppVersion).toBe('1.3.0')
+    it('keeps the newer status when an older read fails late', async () => {
+      const { hook, reads, settle } = setup()
+      await act(async () => {
+        void hook.result.current.loadStatus()
+      })
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      await settle(0, new Error('ssh: connection reset'))
+      expect(hook.result.current.status).toBe(UPDATED)
+      expect(hook.result.current.statusError).toBeNull()
+    })
+
+    it('stays loading until the newest read settles', async () => {
+      const { hook, reads, settle } = setup()
+      await act(async () => {
+        void hook.result.current.loadStatus()
+      })
+      expect(reads).toHaveLength(2)
+      await settle(0, DEFERRED)
+      expect(hook.result.current.busy).toBe('status')
+      expect(hook.result.current.status).toBeNull()
+      await settle(1, UPDATED)
+      expect(hook.result.current.busy).toBeNull()
+    })
+
+    it('keeps an action busy when a status read settles during it', async () => {
+      const { hook, reads, settle, finishUpdate } = setup()
+      await settle(0, DEFERRED)
+      let running: Promise<void> = Promise.resolve()
+      act(() => {
+        running = hook.result.current.run('update')
+      })
+      await act(async () => {
+        void hook.result.current.loadStatus()
+      })
+      await settle(1, DEFERRED)
+      expect(hook.result.current.busy).toBe('update')
+
+      await act(async () => {
+        finishUpdate()
+        await running
+      })
+      // The action's own follow-up read.
+      expect(reads).toHaveLength(3)
+      await settle(2, UPDATED)
+      expect(hook.result.current.busy).toBeNull()
+      expect(hook.result.current.status).toBe(UPDATED)
+    })
   })
 
-  it('does not reload on first contact or for the same runtime', async () => {
-    mocks.runtimeId = null
-    const { hook, getStatus } = setup()
-    await settle()
-    mocks.runtimeId = 'runtime-old'
-    hook.rerender()
-    await settle()
-    hook.rerender()
-    await settle()
-    expect(getStatus).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves the reload to an Update that restarted the server itself', async () => {
-    const { hook, getStatus, landUpdate, finishUpdate } = setup()
-    await settle()
-    let running: Promise<void> = Promise.resolve()
-    act(() => {
-      running = hook.result.current.run('update')
+  describe('runtime coverage (RS-02)', () => {
+    it('reads again on first contact when the mount read ran before it', async () => {
+      mocks.runtimeId = null
+      const { hook, reads, settle, rerenderWith } = setup()
+      await settle(0, DEFERRED)
+      expect(hook.result.current.status?.deferredUpdate).not.toBeNull()
+      await rerenderWith('runtime-new')
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      expect(hook.result.current.status?.deferredUpdate).toBeNull()
     })
-    landUpdate()
-    mocks.runtimeId = 'runtime-new'
-    hook.rerender()
-    await settle()
-    // A reload now would clear the Update's busy state while it is still running.
-    expect(getStatus).toHaveBeenCalledTimes(1)
-    expect(hook.result.current.busy).toBe('update')
 
-    await act(async () => {
-      finishUpdate()
-      await running
+    it('reads again when a server returns as a new runtime after a gap', async () => {
+      const { hook, reads, settle, rerenderWith } = setup()
+      await settle(0, DEFERRED)
+      await rerenderWith(null)
+      expect(reads).toHaveLength(1)
+      await rerenderWith('runtime-new')
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      expect(hook.result.current.status).toBe(UPDATED)
     })
-    await settle()
-    expect(getStatus).toHaveBeenCalledTimes(2)
-    expect(hook.result.current.status?.deferredUpdate).toBeNull()
+
+    it('does not read again for the same runtime, even after a gap', async () => {
+      const { reads, settle, rerenderWith } = setup()
+      await settle(0, DEFERRED)
+      await rerenderWith('runtime-old')
+      await rerenderWith(null)
+      await rerenderWith('runtime-old')
+      expect(reads).toHaveLength(1)
+    })
+
+    it('does not repeat a read already started under the new runtime', async () => {
+      const { hook, reads, settle, rerenderWith, finishUpdate } = setup()
+      await settle(0, DEFERRED)
+      let running: Promise<void> = Promise.resolve()
+      act(() => {
+        running = hook.result.current.run('update')
+      })
+      // The server restarts during the Update: the action reads when it ends.
+      await rerenderWith('runtime-new')
+      expect(reads).toHaveLength(1)
+      expect(hook.result.current.busy).toBe('update')
+      await act(async () => {
+        finishUpdate()
+        await running
+      })
+      expect(reads).toHaveLength(2)
+      await rerenderWith('runtime-new')
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      expect(hook.result.current.status?.deferredUpdate).toBeNull()
+    })
+
+    it('reads again when the runtime changes after the follow-up read started', async () => {
+      const { hook, reads, settle, rerenderWith, finishUpdate } = setup()
+      await settle(0, DEFERRED)
+      let running: Promise<void> = Promise.resolve()
+      act(() => {
+        running = hook.result.current.run('update')
+      })
+      await act(async () => {
+        finishUpdate()
+        await running
+      })
+      expect(reads).toHaveLength(2)
+      // Freshness of the follow-up read is not established for a runtime seen after it began.
+      await rerenderWith('runtime-new')
+      expect(reads).toHaveLength(3)
+      await settle(2, UPDATED)
+      await settle(1, DEFERRED)
+      expect(hook.result.current.status).toBe(UPDATED)
+    })
   })
 })

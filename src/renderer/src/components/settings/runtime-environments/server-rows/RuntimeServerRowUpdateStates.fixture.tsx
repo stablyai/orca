@@ -12,6 +12,8 @@ import { RuntimeServerRow } from './runtime-server-row'
 // The last check saw 1.8.0; the rows differ in what the server reports now.
 const CHECKED_VERSION = '1.8.0'
 const RELEASE = '1.9.0'
+// Each host answered after the update state was recorded.
+const CHECKED_AT = 1_000
 
 type Scene = {
   id: string
@@ -104,13 +106,14 @@ function snapshot(scene: Scene): RemoteServerUpdateEntry {
     support: null,
     error: scene.phase === 'failed' ? 'Download failed' : null,
     managedOverSsh: Boolean(scene.managed),
-    clientVersion: RELEASE
+    clientVersion: RELEASE,
+    observedAt: CHECKED_AT
   }
 }
 
 function liveStatus(scene: Scene): RuntimeEnvironmentStatus {
   const { result } = createCompatibleRuntimeStatusResponse(`${scene.id}-runtime`)
-  return { status: { ...result, appVersion: scene.liveVersion }, checkedAt: 1 }
+  return { status: { ...result, appVersion: scene.liveVersion }, checkedAt: CHECKED_AT + 1 }
 }
 
 function lifecycle(status: OrcadManagedRuntimeStatus): ManagedServerLifecycle {
