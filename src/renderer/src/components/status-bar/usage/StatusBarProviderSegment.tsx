@@ -315,8 +315,11 @@ export function ProviderSegment({
   }
 
   // Why: calm is honest only while the kept bars are recent; old ones still deserve the warning.
+  // A notice (e.g. no subscription) is not a failure, so its kept bars never carry the alert.
   const isStale =
-    p.status === 'error' && (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
+    p.status === 'error' &&
+    !isUsageStatusNotice(p) &&
+    (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
   const showBalance = isExtraUsageActive(p)
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
