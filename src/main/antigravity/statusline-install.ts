@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import { parse, type ParseError } from 'jsonc-parser'
 import { quotePosixShellUnlessPlain } from '../../shared/shell/launch/shell-argument-quoting'
 import { writePluginFileAtomically } from '../plugins/installation/plugin-atomic-file-write'
+import type { AntigravityStatusLineStatus } from '../../shared/agent-usage/rate-limits/antigravity-statusline-status'
 import { getAntigravityStatusLineScript } from './statusline-script'
 import {
   insertStatusLineMember,
@@ -14,12 +15,6 @@ import {
 
 const SCRIPT_FILE_NAME = 'antigravity-statusline.sh'
 const RECORD_FILE_NAME = 'antigravity-statusline.json'
-
-export type AntigravityStatusLineStatus = {
-  state: 'installed' | 'not_installed' | 'error'
-  configPath: string
-  detail: string | null
-}
 
 export type AntigravityStatusLineOptions = { homeDir?: string }
 

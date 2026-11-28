@@ -19,6 +19,10 @@ import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/servic
 import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
+import {
+  antigravityAccountIdForEmail,
+  applyAntigravityStatusLineSetting
+} from '../../antigravity/statusline-setting'
 import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -74,6 +78,13 @@ export function createProviderAccountServices(
   )
   store.onSettingsChanged((updates, settings) => {
     void agentView.reconcile(settings)
+    if ('antigravityStatusLineUsageEnabled' in updates) {
+      const enabled = updates.antigravityStatusLineUsageEnabled === true
+      void applyAntigravityStatusLineSetting(enabled)
+      if (!enabled) {
+        rateLimits.clearAntigravityUsage()
+      }
+    }
     if (updates.claudeOAuthUsageEnabled === false) {
       rateLimits.discardClaudeOAuthUsage()
     } else if (updates.claudeOAuthUsageEnabled === true) {
@@ -159,6 +170,14 @@ export function createProviderAccountServices(
     apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
+  rateLimits.setAntigravityLiveUsageResolver({
+    isEnabled: () => store.getSettings().antigravityStatusLineUsageEnabled === true,
+    accountIdForEmail: antigravityAccountIdForEmail
+  })
+  // Reinstalling is idempotent and refreshes the managed script after an Orca update.
+  if (store.getSettings().antigravityStatusLineUsageEnabled === true) {
+    void applyAntigravityStatusLineSetting(true)
+  }
   // Hidden Muse meters must not spawn the Muse CLI.
   rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
