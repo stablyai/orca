@@ -8,16 +8,32 @@ import {
 } from './daemon-host-reclaim'
 import { getDaemonHostRootDir, isPackagedElectronWin32 } from './daemon-host-relocation'
 
-export async function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): Promise<void> {
+/** Pass `recheck` to re-read pid evidence right before each delete, so a version pinned since the snapshot survives. */
+export async function pruneOldDaemonHosts(
+  evidence: PinnedDaemonVersionsEvidence,
+  recheck?: () => Promise<PinnedDaemonVersionsEvidence>
+): Promise<void> {
   if (!isPackagedElectronWin32()) {
     return
   }
   // Decide on version dirs first: awaiting staging cleanup before them would let the pid evidence go stale.
-  await pruneSupersededVersions(evidence)
+  await pruneSupersededVersions(evidence, recheck)
   await pruneDaemonHostStaging()
 }
 
-async function pruneSupersededVersions(evidence: PinnedDaemonVersionsEvidence): Promise<void> {
+function exitedIn(evidence: PinnedDaemonVersionsEvidence, version: string): boolean {
+  // Only a complete runtime-directory listing permits treating unrecorded versions as unowned.
+  return (
+    evidence.status === 'complete' &&
+    (evidence.versionLiveness.get(version) ?? { status: 'exited' }).status === 'exited'
+  )
+}
+
+// Cross-process race left: a version can still publish between this re-check and the delete; a shared lock would close it.
+async function pruneSupersededVersions(
+  evidence: PinnedDaemonVersionsEvidence,
+  recheck: (() => Promise<PinnedDaemonVersionsEvidence>) | undefined
+): Promise<void> {
   if (evidence.status === 'unverifiable') {
     console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
     return
@@ -35,9 +51,10 @@ async function pruneSupersededVersions(evidence: PinnedDaemonVersionsEvidence): 
     if (!entry.isDirectory() || entry.name === version) {
       continue
     }
-    // Only a complete runtime-directory listing permits treating unrecorded versions as unowned.
-    const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
-    await reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
+    if (!exitedIn(evidence, entry.name) || (recheck && !exitedIn(await recheck(), entry.name))) {
+      continue
+    }
+    await reclaimUnownedDaemonHostDir({ status: 'exited' }, join(root, entry.name))
   }
 }
 

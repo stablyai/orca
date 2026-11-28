@@ -1,4 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
+import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ProcessLivenessVerdict } from '../../endpoint/identity/daemon-incarnation-evidence-types'
 import { parseDaemonPidFile } from '../../endpoint/identity/daemon-pid-file-parse'
@@ -52,6 +53,37 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
       parsed.appVersion,
       mergeProcessLivenessVerdict(versionLiveness.get(parsed.appVersion), verdict)
     )
+  }
+  return { status: 'complete', versionLiveness }
+}
+
+/** Removal-time re-check: same verdicts read off the event loop; corrupt records veto without quarantine. */
+export async function recheckPinnedDaemonVersions(
+  runtimeDir: string
+): Promise<PinnedDaemonVersionsEvidence> {
+  const versionLiveness = new Map<string, ProcessLivenessVerdict>()
+  let names
+  try {
+    names = (await readdir(runtimeDir)).filter((name) => /^daemon-v\d+\.pid$/.test(name))
+  } catch {
+    return { status: 'unverifiable', reason: 'the daemon runtime directory could not be read' }
+  }
+  for (const name of names) {
+    const parsed = parseDaemonPidFile(
+      await readFile(join(runtimeDir, name), 'utf8').catch(() => '')
+    )
+    if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
+      return { status: 'unverifiable', reason: `the daemon pid file is unreadable: ${name}` }
+    }
+    if (parsed.appVersion !== null) {
+      versionLiveness.set(
+        parsed.appVersion,
+        mergeProcessLivenessVerdict(
+          versionLiveness.get(parsed.appVersion),
+          inspectProcessLiveness(parsed.pid)
+        )
+      )
+    }
   }
   return { status: 'complete', versionLiveness }
 }

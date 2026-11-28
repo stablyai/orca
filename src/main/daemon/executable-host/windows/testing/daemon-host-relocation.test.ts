@@ -403,6 +403,21 @@ describe('pruneOldDaemonHosts', () => {
     expect(existsSync(join(root, '1.0.0'))).toBe(false)
   })
 
+  it('keeps a version pinned after the snapshot when the removal-time recheck sees it live', async () => {
+    const root = getDaemonHostRootDir()
+    for (const v of ['9.9.9', '1.0.0', '2.0.0']) {
+      mkdirSync(join(root, v), { recursive: true })
+    }
+    const recheck = vi.fn(async () => ({
+      status: 'complete' as const,
+      versionLiveness: new Map([['1.0.0', { status: 'live' as const }]])
+    }))
+    await pruneOldDaemonHosts({ status: 'complete', versionLiveness: new Map() }, recheck)
+    expect(existsSync(join(root, '1.0.0'))).toBe(true)
+    expect(existsSync(join(root, '2.0.0'))).toBe(false)
+    expect(recheck).toHaveBeenCalled()
+  })
+
   it('keeps a host when its pid liveness query is permission denied', async () => {
     const root = getDaemonHostRootDir()
     const runtimeDir = join(userDataDir, 'daemon')
