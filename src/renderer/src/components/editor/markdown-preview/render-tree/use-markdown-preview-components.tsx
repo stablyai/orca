@@ -109,6 +109,10 @@ const annotatedBlockComponents = {
       <table {...props}>{children}</table>
     )
   },
+  tr: function MarkdownPreviewTableRow({ node, children, ...props }) {
+    const { renderAnnotatedTableRow } = useMarkdownPreviewAnnotations()
+    return renderAnnotatedTableRow(node as MarkdownPreviewPositionNode, props, children)
+  },
   li: function MarkdownPreviewListItem({ node, children, ...props }) {
     const {
       activeAnnotationBlockKey,
