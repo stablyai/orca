@@ -81,7 +81,11 @@ describe('a reply to mail its sender has since followed up', () => {
   })
 
   it("counts a worker and its coordinator's newer mail on another thread, since it is one task", () => {
-    const dispatch = createRootDispatch(db, db.createTask({ spec: 'Sign in' }).id, 'term_helper')
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ spec: 'Sign in', runId }).id,
+      'term_helper'
+    )
     const mailbox = `dispatch:${dispatch.id}`
     const toWorker = mail(`run:${runId}`, mailbox, 'Sign-in in progress')
     const newer = mail(`run:${runId}`, mailbox, 'Grok is signed in')
