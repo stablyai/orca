@@ -12,7 +12,7 @@ import {
 } from '../bot-types'
 import { botMembersFullError, planBotMemberAdds } from '../bots/bot-member-capacity'
 import { BotTakeOverSchema } from '../bots/bot-take-over'
-import { normalizeBotTags } from '../bots/bot-tags'
+import { applyBotTagEdit, normalizeBotTags } from '../bots/bot-tags'
 import { botLookAround, patchLookAround } from '../bots/bot-look-around'
 import { withBotOfferAnswer } from '../bots/bot-offer-answers'
 import { type BotCancelledWait, withBotCancelledWait } from '../bots/bot-cancelled-waits'
@@ -189,7 +189,9 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   } = updates
   const next: Bot = { ...bot, ...rest }
   if (tags !== undefined) {
-    const normalized = normalizeBotTags(tags)
+    const normalized = Array.isArray(tags)
+      ? normalizeBotTags(tags)
+      : applyBotTagEdit(bot.tags ?? [], tags)
     if (normalized.length > 0) {
       next.tags = normalized
     } else {

@@ -6,26 +6,43 @@ import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import { readHostBots } from '@/lib/bot-catalog-snapshot'
 import { useBotHostHas } from '@/lib/bot-host-status'
-import { BOTS_TAGS_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_TAG_EDIT_RUNTIME_CAPABILITY,
+  BOTS_TAGS_RUNTIME_CAPABILITY
+} from '../../../../../shared/bot-runtime-capabilities'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_TAG_LIMIT,
-  normalizeBotTags,
-  truncateBotTag
+  limitBotTagDraft,
+  normalizeBotTags
 } from '../../../../../shared/bots/bot-tags'
+import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
+
+function limitDraft(
+  field: HTMLInputElement,
+  suffixStart = field.selectionEnd ?? field.value.length
+) {
+  const limited = limitBotTagDraft(field.value, suffixStart)
+  if (limited !== field.value) {
+    const caret = limited.length - (field.value.length - suffixStart)
+    field.value = limited
+    field.setSelectionRange(caret, caret)
+  }
+}
 
 export function BotSettingsTags({
   bot,
   update
 }: {
   bot: Bot
-  update: (patch: { tags: string[] }) => Promise<Bot | null>
+  update: (patch: BotUpdateParams['updates']) => Promise<Bot | null>
 }): React.JSX.Element | null {
   const t = useTranslate()
   const supported = useBotHostHas(bot.hostId, BOTS_TAGS_RUNTIME_CAPABILITY)
+  const supportsTagEdits = useBotHostHas(bot.hostId, BOTS_TAG_EDIT_RUNTIME_CAPABILITY)
   const input = useRef<HTMLInputElement>(null)
-  const composing = useRef(false)
+  const compositionSuffix = useRef<string | null>(null)
   if (!supported) {
     return null
   }
@@ -37,6 +54,11 @@ export function BotSettingsTags({
     const current = readHostBots(bot.hostId).find(({ id }) => id === bot.id) ?? bot
     return current.tags ?? []
   }
+  const removeTag = (tag: string): void => {
+    void update({
+      tags: supportsTagEdits ? { remove: tag } : readTags().filter((value) => value !== tag)
+    })
+  }
   const commitDraft = (field: HTMLInputElement): void => {
     if (!field.value) {
       return
@@ -45,16 +67,16 @@ export function BotSettingsTags({
     const next = normalizeBotTags([...current, ...field.value.split(',')])
     field.value = ''
     if (next.length > current.length) {
-      void update({ tags: next })
+      void update({ tags: supportsTagEdits ? { add: next.slice(current.length) } : next })
     }
   }
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
     const value = event.currentTarget.value
     if (event.key === 'Backspace' && !event.repeat && !value) {
-      const current = readTags()
-      if (current.length > 0) {
+      const tag = readTags().at(-1)
+      if (tag) {
         event.preventDefault()
-        void update({ tags: current.slice(0, -1) })
+        removeTag(tag)
       }
     } else if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault()
@@ -68,9 +90,18 @@ export function BotSettingsTags({
     const text = ('clipboardData' in event ? event.clipboardData : event.dataTransfer).getData(
       'text'
     )
-    if (!field.readOnly && !composing.current && text.includes(',')) {
+    if (!field.readOnly && compositionSuffix.current === null && text.includes(',')) {
       event.preventDefault()
-      field.setRangeText(text)
+      const start = field.selectionStart ?? field.value.length
+      const end = field.selectionEnd ?? start
+      const suffix = field.value.slice(end)
+      field.setRangeText(text, start, end, 'end')
+      if (suffix) {
+        const lastTagStart = start + text.lastIndexOf(',') + 1
+        field.value =
+          field.value.slice(0, lastTagStart) +
+          limitBotTagDraft(field.value.slice(lastTagStart), start + text.length - lastTagStart)
+      }
       commitDraft(field)
     }
   }
@@ -94,7 +125,7 @@ export function BotSettingsTags({
                   aria-label={t('bots.settingsView.tags.remove', 'Remove tag {{tag}}', { tag })}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
-                    void update({ tags: readTags().filter((value) => value !== tag) })
+                    removeTag(tag)
                     input.current?.focus()
                   }}
                 >
@@ -114,27 +145,34 @@ export function BotSettingsTags({
               }
               readOnly={atLimit}
               onChange={({ currentTarget }) => {
-                if (!composing.current) {
-                  currentTarget.value = truncateBotTag(currentTarget.value)
+                if (compositionSuffix.current === null) {
+                  limitDraft(currentTarget)
                 }
               }}
               onPaste={onTransfer}
               onDrop={onTransfer}
-              onCompositionStart={() => {
-                composing.current = true
+              onCompositionStart={({ currentTarget }) => {
+                compositionSuffix.current = currentTarget.value.slice(
+                  currentTarget.selectionEnd ?? currentTarget.value.length
+                )
               }}
               onCompositionEnd={({ currentTarget }) => {
-                composing.current = false
-                currentTarget.value = truncateBotTag(currentTarget.value)
+                const suffix = compositionSuffix.current
+                compositionSuffix.current = null
+                const suffixStart =
+                  suffix !== null && currentTarget.value.endsWith(suffix)
+                    ? currentTarget.value.length - suffix.length
+                    : undefined
+                limitDraft(currentTarget, suffixStart)
               }}
               onBlur={(event) => {
                 if (event.currentTarget === document.activeElement) {
                   return
                 }
-                if (!composing.current) {
+                if (compositionSuffix.current === null) {
                   commitDraft(event.currentTarget)
                 }
-                composing.current = false
+                compositionSuffix.current = null
               }}
               onKeyDown={onKeyDown}
             />

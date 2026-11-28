@@ -7,6 +7,7 @@ import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import { refusedForOlderHostPurposeLimit } from '../../../../shared/bots/bot-proposal'
+import { BOT_TAGS_FULL } from '../../../../shared/bots/bot-tags'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
 import {
   agentSessionRefusalFailure,
@@ -116,6 +117,9 @@ export function botErrorMessage(error: unknown): string {
   // Runtime errors carry the controller's code as their message.
   if (error instanceof Error && error.message === 'bot_name_taken') {
     return translate('bots.errors.nameTaken', 'Another bot already has that name.')
+  }
+  if (error instanceof Error && error.message === BOT_TAGS_FULL) {
+    return translate('bots.settingsView.tags.limit', 'Tag limit reached')
   }
   if (error instanceof Error && error.message === 'bot_avatar_home_unreadable') {
     return translate(

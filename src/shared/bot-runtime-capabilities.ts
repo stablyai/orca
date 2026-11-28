@@ -68,6 +68,9 @@ export const BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY = 'bots.avatar-outfit.v1' as 
 // Host stores tags on the bot record (bots.update `tags`); offered only where advertised.
 export const BOTS_TAGS_RUNTIME_CAPABILITY = 'bots.tags.v1' as const
 
+// Host applies tag edits to its current list; older hosts accept only a replacement array.
+export const BOTS_TAG_EDIT_RUNTIME_CAPABILITY = 'bots.tags.edit.v1' as const
+
 // Host keeps a window's drawing of a mascot's look as the bot's Slack icon (bots.avatar.slackIcon.wanted, .upload);
 // an older host sends Slack the plain mascot, so a window draws one only where this is advertised.
 export const BOTS_SLACK_ICON_RUNTIME_CAPABILITY = 'bots.slack-icon.v1' as const
@@ -127,6 +130,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
   BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY,
   BOTS_TAGS_RUNTIME_CAPABILITY,
+  BOTS_TAG_EDIT_RUNTIME_CAPABILITY,
   BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY,
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_WAITING_CAPABILITY,

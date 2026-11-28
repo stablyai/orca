@@ -123,6 +123,11 @@ const BotMemberKeySchema = lazyZodSchema(() =>
   })
 )
 
+// Bound raw UTF-16 input without rejecting 32 supplementary code points.
+// Storage normalization trims and caps the cleaned tag at 32 code points.
+const BotTag = lazyZodSchema(() => z.string().max(BOT_TAG_LENGTH * 2))
+const BotTagList = lazyZodSchema(() => z.array(BotTag).max(BOT_TAG_LIMIT))
+
 export const BotUpdate = lazyZodSchema(() =>
   z.object({
     botId: requiredString('Missing bot id'),
@@ -140,10 +145,13 @@ export const BotUpdate = lazyZodSchema(() =>
         avatarOutfit: BotStoredOutfitSchema.nullable().optional(),
         paused: z.boolean().optional(),
         sidebarOrder: z.number().int().nonnegative().optional(),
-        // A Unicode code point can take two UTF-16 units.
+        /** An array replaces all tags; an edit applies to the tags saved on the host. */
         tags: z
-          .array(z.string().max(BOT_TAG_LENGTH * 2))
-          .max(BOT_TAG_LIMIT)
+          .union([
+            BotTagList,
+            z.strictObject({ add: BotTagList }),
+            z.strictObject({ remove: BotTag })
+          ])
           .optional(),
         /** null clears the override. */
         permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).nullable().optional(),
