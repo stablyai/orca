@@ -3603,6 +3603,12 @@
       "skills": {
         "count_one": "{{count}} skill",
         "count_other": "{{count}} skills"
+      },
+      "tools": {
+        "hostMcpAllOff_one": "{{count}} on this host, off for {{agent}}",
+        "hostMcpAllOff_other": "{{count}} on this host, all off for {{agent}}",
+        "hostMcpSomeOff_one": "· {{count}} off for {{agent}}",
+        "hostMcpSomeOff_other": "· {{count}} off for {{agent}}"
       }
     },
     "diagnostics": {

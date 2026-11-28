@@ -9,7 +9,9 @@ import { botTarget, callBotRpc } from '@/lib/bot-hosts'
 import { botToolErrorMessage } from '@/components/bots/bot-tools-client'
 import { changed } from '@/components/bots/bot-tools-revision'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useMcpServers, useStableMcpTarget } from '../mcp-servers/use-mcp-servers'
 import { mcpServerTitle } from '../mcp-servers/mcp-server-words'
 
@@ -17,9 +19,14 @@ import { mcpServerTitle } from '../mcp-servers/mcp-server-words'
  * The host's servers this bot's agent gets. A server can be off for an agent, so a host whose servers
  * are all off for it says so instead of claiming it has none.
  */
-function HostServerNames({ bot }: { bot: Bot }): React.JSX.Element {
+function HostServerNames({
+  bot,
+  target
+}: {
+  bot: Bot
+  target: RuntimeClientTarget
+}): React.JSX.Element {
   const t = useTranslate()
-  const target = useStableMcpTarget(botTarget(bot))
   const { list, error } = useMcpServers(target)
   if (error) {
     // Never "none": the list wasn't read. It reads again on the next change or visit.
@@ -56,11 +63,14 @@ function HostServerNames({ bot }: { bot: Bot }): React.JSX.Element {
       </span>
     )
   }
+  // The names give way first, but keep a third of the line; the count after them truncates past that.
+  // The no-break space keeps "Linear, Sentry · 2 off" one phrase in the text and to screen readers.
   return (
-    <span className="flex min-w-0 gap-1 text-xs text-muted-foreground">
-      <span className="truncate">{names.join(', ')}</span>
+    <span className="flex min-w-0 text-xs text-muted-foreground">
+      <span className="min-w-0 truncate">{names.join(', ')}</span>
       {off > 0 ? (
-        <span className="shrink-0">
+        <span className="max-w-[66%] min-w-0 shrink-0 truncate">
+          {'\u00a0'}
           {t('settings.bots.tools.hostMcpSomeOff', '· {{count}} off for {{agent}}', {
             count: off,
             agent,
@@ -80,6 +90,7 @@ export function BotHostMcpServersRow({
   enabled: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const target = useStableMcpTarget(botTarget(bot))
   const [saving, setSaving] = useState(false)
   const title = t('settings.bots.tools.hostMcp', 'Your MCP servers')
   const set = (next: boolean): void => {
@@ -96,7 +107,13 @@ export function BotHostMcpServersRow({
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-medium">{title}</span>
-        <HostServerNames bot={bot} />
+        {/* One per host and bot: switching hosts under the same bot id never shows the last host's
+            list or error, nor lets its late reply land. */}
+        <HostServerNames
+          key={`${getRuntimeTargetHostId(target)}\u0000${bot.id}`}
+          bot={bot}
+          target={target}
+        />
       </span>
       <Switch
         checked={enabled}

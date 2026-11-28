@@ -5,6 +5,7 @@ import type {
   BotSkillProjectView
 } from '../../../../../shared/bots/bot-skill-projects'
 import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { McpServer } from '../../../../../shared/mcp-servers/mcp-servers'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { BotSkillsSection } from './BotSkillsSection'
 import { BotToolsSection } from './BotToolsSection'
@@ -106,27 +107,33 @@ function atlas(extra: Partial<Bot> = {}): Bot {
   }
 }
 
-const HOST_SERVERS = ['linear', 'sentry', 'postgres', 'context7'].map((name, index) => ({
-  id: `server-0000000${index}`,
-  name,
-  detail: `https://mcp.${name}.dev/mcp`,
-  transport: 'http',
-  remote: false,
-  agentsOff: [] as string[],
-  workspaces: { later: true, on: [], off: [] },
-  sharedProcess: false
-}))
+function hostServer(name: string, index: number, agentsOff: string[] = []): McpServer {
+  return {
+    id: `server-${String(index).padStart(8, '0')}`,
+    name,
+    detail: `https://mcp.${name}.dev/mcp`,
+    transport: 'http',
+    remote: false,
+    agentsOff,
+    workspaces: { later: true, on: [], off: [] },
+    sharedProcess: false
+  }
+}
+
+const HOST_SERVERS: McpServer[] = ['linear', 'sentry', 'postgres', 'context7'].map((name, index) =>
+  hostServer(name, index)
+)
 
 /** The host's list off for `agentsOff` on every server at or past `from`: some or all off for an agent. */
-function offFrom(from: number, agentsOff: string[]): typeof HOST_SERVERS {
+function offFrom(from: number, agentsOff: string[]): McpServer[] {
   return HOST_SERVERS.map((server, index) => (index >= from ? { ...server, agentsOff } : server))
 }
 
+/** Per server: on; off for Codex only (still on for this Claude Code bot); off; off for both. */
+const SOME_OFF: string[][] = [[], ['codex'], ['claude'], ['claude', 'codex']]
+
 /** `servers: null` answers mcpServers.list with an error, as a host that can't read its list does. */
-function stubRuntime(
-  hostMcpServers?: boolean,
-  servers: typeof HOST_SERVERS | null = HOST_SERVERS
-): void {
+function stubRuntime(hostMcpServers?: boolean, servers: McpServer[] | null = HOST_SERVERS): void {
   const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
     ...(servers === null
       ? {}
@@ -225,10 +232,26 @@ export const hostMcpServersSomeOff = defineFixture({
   setup: () =>
     stubRuntime(
       true,
-      HOST_SERVERS.map((server, index) => ({
-        ...server,
-        agentsOff: [[], ['codex'], ['claude'], ['claude', 'codex']][index]!
-      }))
+      HOST_SERVERS.map((server, index) => ({ ...server, agentsOff: SOME_OFF[index] ?? [] }))
+    ),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** The narrow Tools panel with long names: the names keep room and the off count clears the switch. */
+export const hostMcpServersSomeOffNarrow = defineFixture({
+  width: 360,
+  store: { repos: REPOS },
+  setup: () =>
+    stubRuntime(
+      true,
+      [
+        'atlassian-confluence',
+        'google-workspace',
+        'postgres-analytics',
+        'kubernetes',
+        'cloudflare',
+        'stripe-billing'
+      ].map((name, index) => hostServer(name, index, index >= 3 ? ['claude'] : []))
     ),
   render: () => <Page bot={linked} skills={false} />
 })
