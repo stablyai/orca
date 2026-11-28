@@ -12,6 +12,13 @@ const LEAF = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const SIBLING = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const PANE = `tab_r:${LEAF}`
 
+/** The command run the layout writer receives from main. */
+class LayoutCommandRunProbe extends OrcaRuntimeService {
+  commandRun(command: WindowLayoutCommand): LayoutCommandRunOptions | undefined {
+    return this.layoutCommandRun(command)
+  }
+}
+
 // Only main stops a restarted pane's terminal before its write; the switch-off build has no such stop.
 describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('a pane restarted in place', () => {
   it('keeps its pane when the old terminal exits after the restart stopped it', async () => {
@@ -55,16 +62,16 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('a pane restarted in place', () => {
       flushOrThrow: () => undefined
     })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake carries every store method a pane exit reaches.
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new LayoutCommandRunProbe(store as never)
     runtime.registerPty('pty-old', 'wt', null, { tabId: 'tab_r', leafId: LEAF })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: kill is the only controller call the restart's stop makes.
     runtime.setPtyController({ kill: () => true } as never)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reads the protected command run the layout writer receives.
-    const run = (
-      runtime as unknown as {
-        layoutCommandRun: (command: WindowLayoutCommand) => LayoutCommandRunOptions | undefined
-      }
-    ).layoutCommandRun({ type: 'restartPane', workspace: 'wt', tabId: 'tab_r', paneKey: PANE })
+    const run = runtime.commandRun({
+      type: 'restartPane',
+      workspace: 'wt',
+      tabId: 'tab_r',
+      paneKey: PANE
+    })
 
     expect(run?.stopBeforeWrite?.(['pty-old'])).toBe(true)
     // The killed shell's exit lands after the stop, before the replacement binds.
