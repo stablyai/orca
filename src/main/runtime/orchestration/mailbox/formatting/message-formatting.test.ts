@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { MessageRow } from '../../db/orchestration-records'
 import type { BotRequestRecord } from '../../../../bots/bot-request-view'
+import type { PluginService } from '../../../../plugins/plugin-service'
+import { setPluginServiceForRpc } from '../../../rpc/methods/plugins/plugins'
 import { peerMailSenderSnapshot } from '../../federation/peer-mail/peer-mail-sender-snapshot'
 import {
   formatMessageBanner,
@@ -63,6 +65,32 @@ const linkedPeer = (row: MessageRow): MessageFormattingOptions => ({
 describe('the mail header', () => {
   it("names this Orca's own sender by its handle, as before", () => {
     expect(header(message())).toBe('──── From: TERM_ABC (term_abc) (handoff) ────')
+  })
+
+  it('names a plugin sender by the manifest name the host approved, keeping its handle', () => {
+    const row = message({ from_handle: 'plugin:local.project-coordinator', type: 'status' })
+    expect(header(row, { senderName: 'Project Coordinator' })).toBe(
+      '──── From: Project Coordinator (plugin:local.project-coordinator) (status) ────'
+    )
+    expect(header(row)).toBe(
+      '──── From: PLUGIN:LOCAL.PROJECT-COORDINATOR (plugin:local.project-coordinator) (status) ────'
+    )
+  })
+
+  it('names a plugin sender by its installed manifest name, without a sender override', () => {
+    const row = message({ from_handle: 'plugin:local.approved-plugin', type: 'status' })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pluginSenderName reads only findValidPlugin; PluginService is a class, so a structural double needs the cast.
+    setPluginServiceForRpc({
+      findValidPlugin: (pluginKey) =>
+        pluginKey === 'local.approved-plugin' ? { manifest: { name: '  Approved Plugin  ' } } : null
+    } as unknown as PluginService)
+    try {
+      expect(header(row)).toBe(
+        '──── From: Approved Plugin (plugin:local.approved-plugin) (status) ────'
+      )
+    } finally {
+      setPluginServiceForRpc(null)
+    }
   })
 
   it("names a paired computer's bot, or an agent there, never its raw address", () => {
