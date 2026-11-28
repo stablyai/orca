@@ -168,6 +168,24 @@ it.each(['folded', 'remounted'] as const)(
   }
 )
 
+it("keeps a reopened line waiting when the box's Enter answers another line", () => {
+  const uid = 'reopen-enter-other'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  const words = 'Wait for the dry run'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  act(() => hook.result.current.steps!.reopen(0))
+  enter(hook, words)
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: '' }, 'immediate')
+  )
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.reopened).toBe(0)
+})
+
 it('posts the set once a reopened line is folded back by its own pick', () => {
   const { hook, posted } = steps('reopen-confirm-last')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
