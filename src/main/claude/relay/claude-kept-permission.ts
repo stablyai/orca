@@ -298,7 +298,14 @@ export function applyLive(
     if (mode === 'own' || bypassRefused(session, mode)) {
       return
     }
-    await applyPick(session, claudePermissionModeFor(mode), timeoutMs())
+    const picked = claudePermissionModeFor(mode)
+    const applying = applyPick(session, picked, timeoutMs())
+    // The pick is recorded synchronously; a newer one makes this one stale.
+    const holds = claudePermissionPickHolds(session)
+    // Withheld (a cut that may still release): the next message writes it.
+    if (!(await applying) && holds()) {
+      session.keptModeOwed = picked
+    }
   }
 }
 

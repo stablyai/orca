@@ -13,7 +13,7 @@ import { claudeInPlan } from './claude-full-access-refusal'
 import { leaveClaudePlanModeOnApproval } from './claude-plan-approval-mode'
 import { pickClaudePermissionMode } from './claude-permission-picks'
 import { setClaudeAllowedPermissionMode } from './claude-permission-mode-ladder'
-import { applyKeptClaudeModeOwed } from '../../relay/claude-kept-permission'
+import { applyKeptClaudeModeOwed, applyLive } from '../../relay/claude-kept-permission'
 
 const startupWarning =
   "Claude didn't start this chat in Approve for me, so Claude uses Ask for approval instead."
@@ -222,6 +222,26 @@ it("keeps a kept agent's owed Ask for the next message when its write is withhel
   send.abort()
 
   await applyKeptClaudeModeOwed(session, undefined, send.signal).catch(() => {})
+  expect(writes).toEqual([])
+  expect(session.keptModeOwed).toBe('default')
+})
+
+it("owes a kept agent's live pick to the next message when a cut withholds its write", async () => {
+  const { session, writes } = permissionTestSession('bypassPermissions')
+  await openPermissionTestSession(session, 'bypassPermissions')
+  finishPermissionCatchUp(session)
+  Object.assign(session.connection, { kept: {} })
+  // An admitted close holds its cut; its end may still fail and release it.
+  session.permissionDispatchCuts = 1
+
+  await applyLive(
+    new Map([['chat', session]]),
+    () => undefined
+  )({
+    sessionId: 'chat',
+    fence: session.fence,
+    mode: 'ask'
+  })
   expect(writes).toEqual([])
   expect(session.keptModeOwed).toBe('default')
 })
