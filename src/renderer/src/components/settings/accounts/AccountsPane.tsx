@@ -102,15 +102,18 @@ export function AccountsPane({
     wslHostDistro,
     t
   )
+  // Route all account actions to the Settings-selected owner, independent of focused host (#7973).
   const accountOwner = hostScope.target
   const isRemoteAccountScope = accountOwner.kind === 'environment'
   const scopeEnvironmentId = runtimeTargetEnvironmentId(hostScope.target)
+  // Late select/remove results belong to their original owner, not the newly shown host.
   const accountOwnerKey = getProviderAccountsOwnerKey(accountOwner)
   const currentAccountOwnerKeyRef = useRef(accountOwnerKey)
   useEffect(() => {
     currentAccountOwnerKeyRef.current = accountOwnerKey
   }, [accountOwnerKey])
   const isCurrentAccountOwner = (): boolean => currentAccountOwnerKeyRef.current === accountOwnerKey
+  // Keep real names separate so scope labels cannot interpolate prose fallbacks.
   const remoteServerName = isRemoteAccountScope
     ? (runtimeEnvironments.find((environment) => environment.id === scopeEnvironmentId)?.name ??
       null)
@@ -126,6 +129,7 @@ export function AccountsPane({
     ? accountRuntime.label
     : getRuntimeSentenceLabel(accountRuntime)
   const localAccountRuntimeSentenceLabel = getRuntimeSentenceLabel(localAccountRuntime)
+  // Reassure desktop users that remote scope did not delete local accounts (#8186); web clients cannot switch back to local accounts.
   const remoteAccountScopeNotice =
     isRemoteAccountScope && !isWebClientLocation() ? (
       <ProviderHostScopeControl
@@ -134,6 +138,7 @@ export function AccountsPane({
         className="text-xs"
       />
     ) : null
+
   const [ownerCodexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
@@ -141,6 +146,7 @@ export function AccountsPane({
   const [ownerClaudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  // A remote host's usage comes only from its own stream; this desktop's polls describe other logins.
   const [ownerUsage, setOwnerUsage] = useState<{
     environmentId: string
     rateLimits: RateLimitState | null
@@ -156,6 +162,7 @@ export function AccountsPane({
     claudeShown: claudeSectionShown,
     codexShown: codexSectionShown
   })
+  // This desktop's names change with its settings, e.g. a rename in another window.
   const localNames = isRemoteAccountScope ? undefined : settings.managedAccountDisplayNames
   const codexAccounts = useMemo(
     () => withManagedAccountDisplayNames(ownerCodexAccounts, localNames, 'codex'),
@@ -165,6 +172,7 @@ export function AccountsPane({
     () => withManagedAccountDisplayNames(ownerClaudeAccounts, localNames, 'claude'),
     [ownerClaudeAccounts, localNames]
   )
+  // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
   const [renameTarget, setRenameTarget] = useState<RenameAccountTarget | null>(null)
@@ -194,8 +202,10 @@ export function AccountsPane({
     accountRuntime,
     accountVisibilityOptions
   )
+  // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
+  // Desktop rate-limit polls cannot describe remote-owned auth warnings.
   const activeCodexAuthWarning = codexAccountsLoaded
     ? getCodexAccountAuthWarning({
         limits: isRemoteAccountScope ? null : codexRateLimits,
@@ -206,19 +216,24 @@ export function AccountsPane({
         authKind: activeCodexAccountId === null ? systemCodexIdentity?.authKind : undefined
       })
     : null
+  // An unusable ~/.codex leaves the mirror serving stale settings; surface why edits are ignored.
   const [codexConfigSync, setCodexConfigSync] = useState<CodexConfigSyncStatus | null>(null)
   useEffect(() => {
+    // Sync status describes local host homes; WSL/remote scopes mirror unrelated homes.
     if (isRemoteAccountScope || accountRuntime.runtime !== 'host') {
       setCodexConfigSync(null)
       return
     }
+    // Retry transient managed-home locks serially; lock release changes no effect dependency and overlapping polls could apply stale results.
     return watchCodexConfigSyncStatus(setCodexConfigSync)
+    // Selection changes choose a different mirrored home; refetch rather than describe the previous account.
   }, [isRemoteAccountScope, accountRuntime.runtime, activeCodexAccountId, codexAccountsLoaded])
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
+
   const recordOpenCodeSettingEdit = (field: 'cookie' | 'workspaceId' | 'apiKey'): void => {
     if (recordedOpenCodeSettingEditsRef.current.has(field)) {
       return
@@ -226,6 +241,7 @@ export function AccountsPane({
     recordedOpenCodeSettingEditsRef.current.add(field)
     recordFeatureInteraction('usage-tracking')
   }
+  // Usage credentials belong beside the selected host’s poller.
   const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
   const usageHostSettings = useUsageHostSettings(
     accountOwner,
@@ -233,12 +249,15 @@ export function AccountsPane({
     settings,
     updateSettings
   )
+
   useEffect(() => {
     const owner: RuntimeClientTarget = scopeEnvironmentId
       ? { kind: 'environment', environmentId: scopeEnvironmentId }
       : { kind: 'local' }
+    // Keep remote watchers open for streamed usage after the initial snapshot; local watchers resolve once.
     const watcher = watchProviderAccounts(owner, {
       onSnapshot: (snapshot) => {
+        // Failed-provider rosters are substituted empty data; retain prior state and keep the loaded gate shut.
         if (!snapshot.failedProviders?.includes('codex')) {
           setCodexAccounts(snapshot.codex)
           setCodexAccountsLoaded(true)
@@ -265,6 +284,8 @@ export function AccountsPane({
       watcher.close()
     }
   }, [scopeEnvironmentId])
+
+  // One construction site: each runner reads the owner ref only when its action settles.
   const { runCodexAccountAction, runClaudeAccountAction, renameAccount } =
     createAccountsPaneRunners({
       settings,
@@ -333,7 +354,9 @@ export function AccountsPane({
     runCodexAccountAction,
     recordOpenCodeSettingEdit
   }
+  // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
   const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
+  const managedDataShown = !searchQuery || /opencode|devin|account/i.test(searchQuery)
   const visibleSections = [
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
@@ -355,13 +378,13 @@ export function AccountsPane({
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
-    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
+    managedDataShown ? (
       <ManagedDataAccountsSection key={accountOwnerKey} provider="opencode" target={accountOwner} />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model, t)
       : null,
-    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
+    managedDataShown ? (
       <ManagedDataAccountsSection
         key={`devin:${accountOwnerKey}`}
         provider="devin"
@@ -388,6 +411,7 @@ export function AccountsPane({
       />
     ) : null
   ]
+
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
