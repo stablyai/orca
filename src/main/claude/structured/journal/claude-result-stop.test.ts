@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { STOP_DECIDES_FAILURE_MS } from '../../../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
 import {
   errorRows,
   openStopJournal
@@ -10,6 +9,8 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 // Claude's error result after a person's Stop, through the real translator into the real journal
 // writer: the Stop decides it only within its window, as it does Codex's failed end.
 const NOW = 1_800_000_000_000
+// The Stop's window, written out: the production constant doesn't exist before the fix.
+const WINDOW_MS = 30_000
 const SESSION = 'claude-session-1'
 let journal: ReturnType<typeof openStopJournal>
 beforeEach(() => {
@@ -78,14 +79,14 @@ describe('a Claude error result after a person stopped the turn', () => {
   it('reads as stopped at the window’s edge', () => {
     const { send, turnId } = claudeTurn()
     journal.stop('user-stop', NOW, turnId)
-    send(errorResult, NOW + STOP_DECIDES_FAILURE_MS)
+    send(errorResult, NOW + WINDOW_MS)
     expect(turnOf()).toMatchObject({ outcome: 'cancellation' })
   })
 
   it('keeps its failure and error row past the window', () => {
     const { send, turnId } = claudeTurn()
     journal.stop('user-stop', NOW, turnId)
-    send(errorResult, NOW + STOP_DECIDES_FAILURE_MS + 1_000)
+    send(errorResult, NOW + WINDOW_MS + 1_000)
     expect(turnOf()).toMatchObject({ outcome: 'failure' })
     expect(errorRows(journal.items()).length).toBeGreaterThan(0)
   })

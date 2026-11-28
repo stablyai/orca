@@ -154,7 +154,22 @@ export function personStopDecidesFailure(
 }
 
 // A restore may keep an end's clock only to the second.
-const SAME_END_MS = 1_000
+const SECOND_MS = 1_000
+const toSecond = (at: number, round: (value: number) => number) => round(at / SECOND_MS) * SECOND_MS
+
+/** The stopped end's own clock as a restore kept it, to the second: a whole second the stopped end
+ *  rounds to, at the Stop's second or later and within its window. */
+function restoredStoppedEnd(state: TurnEndState, previousAt: number, at: number): boolean {
+  const stop = state.queuePauseMarks.latestStop
+  return (
+    stop !== null &&
+    stopIsAPersons(stop.event.reason) &&
+    at % SECOND_MS === 0 &&
+    (toSecond(previousAt, Math.floor) === at || toSecond(previousAt, Math.round) === at) &&
+    at >= toSecond(stop.event.at, Math.floor) &&
+    at - stop.event.at <= STOP_DECIDES_FAILURE_MS
+  )
+}
 
 /** The same end of a turn a Stop already decided, written again: its own write at the same time,
  *  or a failure for it within that Stop's window (a provider's completion after the Stop's own
@@ -179,7 +194,7 @@ function keepsStoppedEnd(
   return (
     personStopDecidesFailure(state, body.turnId, body.completedAt) ||
     (previous.completedAt !== undefined &&
-      Math.abs(body.completedAt - previous.completedAt) < SAME_END_MS)
+      restoredStoppedEnd(state, previous.completedAt, body.completedAt))
   )
 }
 

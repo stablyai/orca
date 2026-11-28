@@ -16,6 +16,7 @@ import type { JournalStepOutcome, JournalWriterStep } from './writing/journal-wr
 // A chat's real journal and its real writer: each write a provider sink admits runs as the SQL
 // writer's steps, at the time of the fake clock, against the Stop the journal saved. `deferred`:
 // writes wait for `drain()`, as the writer's queue resolves them after the producer moves on.
+// `rejecting`: the writer's queue refuses every resolved write, as under backpressure.
 
 export const target = { sessionId: 'chat-1', epoch: 'e' }
 const FENCE = 1
@@ -31,6 +32,7 @@ export function openStopJournal(options: { deferred?: boolean } = {}) {
      VALUES('workspace','chat-1','e',10,1)`
   ).run()
   const queued: (() => void)[] = []
+  let rejecting = false
   const write = (
     steps: JournalWriterStep[],
     onResolved?: (outcomes: JournalStepOutcome[]) => void
@@ -61,21 +63,23 @@ export function openStopJournal(options: { deferred?: boolean } = {}) {
     options: Parameters<typeof structuredAgentSessionJournalAppendOptions>[1],
     onOutcome?: (outcome: JournalStepOutcome) => void
   ) =>
-    write(
-      [
-        {
-          kind: 'resolved-item',
-          reservedBytes,
-          resolution,
-          options: structuredAgentSessionJournalAppendOptions(FENCE, options)
-        }
-      ],
-      (outcomes) => {
-        if (outcomes[0]) {
-          onOutcome?.(outcomes[0])
-        }
-      }
-    )
+    rejecting
+      ? ({ accepted: false, reason: 'backpressure' } as const)
+      : write(
+          [
+            {
+              kind: 'resolved-item',
+              reservedBytes,
+              resolution,
+              options: structuredAgentSessionJournalAppendOptions(FENCE, options)
+            }
+          ],
+          (outcomes) => {
+            if (outcomes[0]) {
+              onOutcome?.(outcomes[0])
+            }
+          }
+        )
   const item: StructuredAgentSessionEventSink['appendItem'] = (identity, body, options) => {
     write([
       {
@@ -102,6 +106,9 @@ export function openStopJournal(options: { deferred?: boolean } = {}) {
   return {
     db,
     sink,
+    reject: (on: boolean) => {
+      rejecting = on
+    },
     /** Runs the writes a deferred writer still holds, oldest first, and any they queue. */
     drain: () => {
       for (let next = queued.shift(); next; next = queued.shift()) {

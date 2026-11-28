@@ -19,10 +19,11 @@ import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import { applyJournalDomainControlCommand } from '../journal-domain-control-command'
 import { normalizeJournalDomainItemBody } from '../journal-domain-item-normalization'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
-import { STOP_DECIDES_FAILURE_MS } from './journal-stop-turn-end'
 
 // The real journal writer's Stop and its write-time turn-end rule, with each provider's own end.
 const NOW = 1_800_000_000_000
+// The Stop's window, written out: the production constant doesn't exist before the fix.
+const WINDOW_MS = 30_000
 const target = { sessionId: 'chat-1', epoch: 'e' }
 let dir = ''
 let db: Database
@@ -143,7 +144,7 @@ describe('a real failure keeps its error', () => {
 
   it('when it fails long after the Stop', () => {
     stop('user-stop', NOW)
-    const late = NOW + STOP_DECIDES_FAILURE_MS + 1
+    const late = NOW + WINDOW_MS + 1
     expect(saved(codexEnd('failed', late))).toMatchObject({ outcome: 'failure' })
     expect(saved(claudeErrorEnd(late))).toMatchObject({ outcome: 'failure' })
   })

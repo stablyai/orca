@@ -19,6 +19,8 @@ import { STOP_DECIDES_FAILURE_MS } from './journal-stop-turn-end'
 // The in-memory writer's rows for a turn's end after a Stop, the same rule the persisted writer
 // applies: its window's edges, Orca's own stops, and the same end written again.
 const NOW = 1_800_000_000_000
+// The Stop's window, written out: the production constant doesn't exist before the fix.
+const WINDOW_MS = 30_000
 const TURN = 'provider-turn'
 const ITEM = 'turn-item'
 
@@ -69,12 +71,16 @@ function written(
 const PERSON = { reason: 'user-stop' } as const
 
 describe('the window a person’s Stop decides a failure in', () => {
+  it('is 30 s', () => {
+    expect(STOP_DECIDES_FAILURE_MS).toBe(WINDOW_MS)
+  })
+
   it('holds from the Stop itself to 30 000 ms after it, and no further', () => {
     expect(written(failedAt(NOW), PERSON)).toMatchObject({ outcome: 'cancellation' })
-    expect(written(failedAt(NOW + STOP_DECIDES_FAILURE_MS), PERSON)).toMatchObject({
+    expect(written(failedAt(NOW + WINDOW_MS), PERSON)).toMatchObject({
       outcome: 'cancellation'
     })
-    expect(written(failedAt(NOW + STOP_DECIDES_FAILURE_MS + 1), PERSON)).toMatchObject({
+    expect(written(failedAt(NOW + WINDOW_MS + 1), PERSON)).toMatchObject({
       outcome: 'failure'
     })
   })
@@ -109,6 +115,18 @@ describe('the same stopped end written again', () => {
     const stop = { reason: 'user-stop', at: NOW + 300 } as const
     expect(written(failedAt(NOW), stop, stoppedAt(NOW + 700))).toMatchObject({
       outcome: 'cancellation'
+    })
+  })
+
+  it('takes a distinct failure one millisecond past the window, next to a stopped end at its edge', () => {
+    expect(
+      written(failedAt(NOW + WINDOW_MS + 1), PERSON, stoppedAt(NOW + WINDOW_MS))
+    ).toMatchObject({ outcome: 'failure' })
+  })
+
+  it('takes a failure from just before the Stop, next to a stopped end just after it', () => {
+    expect(written(failedAt(NOW - 500), PERSON, stoppedAt(NOW + 200))).toMatchObject({
+      outcome: 'failure'
     })
   })
 
