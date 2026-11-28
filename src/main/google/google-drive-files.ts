@@ -32,6 +32,7 @@ export type DriveFile = z.infer<typeof DriveFileSchema>
 
 // Drive ids are long; a short word is a folder's name, never an id.
 const ID = /^[A-Za-z0-9_-]{19,}$/
+const MAX_FOLDER_SEARCH_PAGES = 20
 const LINKED_ID = [
   /\/(?:document|spreadsheets|presentation|drawings|forms|file)\/(?:u\/\d+\/)?d\/([A-Za-z0-9_-]+)/,
   /\/folders\/([A-Za-z0-9_-]+)/,
@@ -108,18 +109,50 @@ export async function resolveFolder(
     'q',
     `mimeType = '${FOLDER_TYPE}' and name = ${driveQuoted(trimmed)} and trashed = false`
   )
-  url.searchParams.set('fields', 'files(id,name)')
+  url.searchParams.set('fields', 'files(id,name),nextPageToken,incompleteSearch')
   url.searchParams.set('pageSize', '5')
   url.searchParams.set('includeItemsFromAllDrives', 'true')
   url.searchParams.set('corpora', 'allDrives')
-  const found = await api.get(
-    'drive',
-    url.toString(),
-    parseGoogleJson(
-      z.object({ files: z.array(z.object({ id: z.string(), name: z.string() })).default([]) })
-    )
+  const parsePage = parseGoogleJson(
+    z.object({
+      files: z.array(z.object({ id: z.string(), name: z.string() })).default([]),
+      nextPageToken: z.string().optional(),
+      incompleteSearch: z.boolean().optional()
+    })
   )
-  const [only, ...others] = found.files
+  const matches: { id: string; name: string }[] = []
+  let pageToken: string | undefined
+  let pagesRead = 0
+  do {
+    if (pageToken) {
+      url.searchParams.set('pageToken', pageToken)
+    }
+    const found = await api.get('drive', url.toString(), parsePage)
+    pagesRead += 1
+    if (found.incompleteSearch) {
+      throw new GoogleToolError(
+        `Folder search was incomplete for "${inlineName(trimmed)}". Pass the folder id.`
+      )
+    }
+    for (const folder of found.files) {
+      if (!matches.some((match) => match.id === folder.id)) {
+        matches.push(folder)
+      }
+      if (matches.length === 5) {
+        break
+      }
+    }
+    if (matches.length > 1) {
+      break
+    }
+    pageToken = found.nextPageToken
+    if (pageToken && pagesRead >= MAX_FOLDER_SEARCH_PAGES) {
+      throw new GoogleToolError(
+        `Folder search was incomplete for "${inlineName(trimmed)}". Pass the folder id.`
+      )
+    }
+  } while (pageToken)
+  const [only, ...others] = matches
   if (!only) {
     throw new GoogleToolError(
       `No folder named "${inlineName(trimmed)}" in ${api.email}'s Drive. \`orca drive search\` finds it; \`orca drive mkdir\` makes one.`
@@ -127,7 +160,7 @@ export async function resolveFolder(
   }
   if (others.length > 0) {
     throw new GoogleToolError(
-      `Several folders are named "${inlineName(trimmed)}": ${found.files.map((folder) => folder.id).join(', ')}. Pass the id.`
+      `Several folders are named "${inlineName(trimmed)}": ${matches.map((folder) => folder.id).join(', ')}. Pass the id.`
     )
   }
   return only
