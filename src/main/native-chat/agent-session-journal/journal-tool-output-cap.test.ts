@@ -3,19 +3,19 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { capJournalToolOutput } from './journal-tool-output-cap'
 
 function toolItem(head: string): AgentJournalRenderItem {
-  const item = {
+  return {
     itemId: 'tool-1',
     revision: 2,
     sequence: 3,
+    observedAt: 0,
     body: {
       kind: 'tool-call',
-      toolName: 'Bash',
+      name: 'Bash',
       state: 'completed',
       input: {},
       output: { head, byteLength: Buffer.byteLength(head), digest: 'd1', truncated: false }
     }
   }
-  return item as unknown as AgentJournalRenderItem
 }
 
 describe('capJournalToolOutput', () => {
