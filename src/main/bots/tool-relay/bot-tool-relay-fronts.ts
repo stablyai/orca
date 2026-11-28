@@ -56,7 +56,10 @@ export class ToolRelayFronts {
     /** Takes a front's connection, with the port of the front it came through. */
     private readonly accept: (socket: Socket, port: number | null) => void,
     /** The grants a daemon start holds for the agents it keeps, from each serve's reply. */
-    private readonly adopt: (client: DaemonClient, kept: readonly ToolRelayFrontKeptRelay[]) => void,
+    private readonly adopt: (
+      client: DaemonClient,
+      kept: readonly ToolRelayFrontKeptRelay[]
+    ) => void,
     /** A kept agent's relay ended on that start, so its grants went there. */
     private readonly keptEnded: (client: DaemonClient, relayId: string) => void
   ) {}

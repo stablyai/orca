@@ -111,24 +111,19 @@ export class ProviderRelayHost {
       return { refused: 'unavailable' }
     }
     const relayId = `r-${process.pid}-${randomUUID()}`
-    // Held before the agent starts, so its first tool call already has its grant.
-    this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
-    const managed = this.spawnHolding(relayId, () =>
-      spawn(
-        { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
-        {
-          site: 'daemon-provider-relay',
-          allowHost: false,
-          platform: this.platform,
-          inheritedEnv: {},
-          ownerExecutable: spec.ownerExecutable
-        }
-      )
+    const managed = spawn(
+      { command: spec.command, args: spec.args, cwd: spec.cwd, env: spec.env },
+      {
+        site: 'daemon-provider-relay',
+        allowHost: false,
+        platform: this.platform,
+        inheritedEnv: {},
+        ownerExecutable: spec.ownerExecutable
+      }
     )
     const failure: { error: (Error & { code?: unknown }) | null } = { error: null }
     managed.child.on('error', (error: Error & { code?: unknown }) => void (failure.error ??= error))
-    // Grants held for an agent whose relay never forms go with it.
-    const relay: ProviderRelay = this.spawnHolding(relayId, () => new ProviderRelay({
+    const relay = new ProviderRelay({
       relayId,
       chatKey,
       agent: typeof agent === 'string' && agent.length <= MAX_CHAT_KEY_CHARS ? agent : null,
@@ -155,7 +150,9 @@ export class ProviderRelayHost {
         this.cap.detached(relay)
       },
       onIdleUnread: () => this.cap.idleUnread(relay)
-    }))
+    })
+    // Held once its relay formed, before any I/O, so it goes with that relay and nothing outlives it.
+    this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     relay.pending.kept.configure(keep)
     this.relays.set(relayId, relay)
@@ -281,15 +278,6 @@ export class ProviderRelayHost {
   }
 
   /** A launch that throws before its relay exists leaves no grant behind. */
-  private spawnHolding<T>(relayId: string, start: () => T): T {
-    try {
-      return start()
-    } catch (error) {
-      this.toolRelayFront?.forgetKept(relayId)
-      throw error
-    }
-  }
-
   private requireRelay(relayId: unknown): ProviderRelay {
     const relay = typeof relayId === 'string' ? this.relays.get(relayId) : undefined
     if (!relay) {
