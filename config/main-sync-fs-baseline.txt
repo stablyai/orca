@@ -315,7 +315,6 @@
 5 src/main/orca-profiles/storage/profile-legacy-state-import.ts
 4 src/main/orcad/account-launch/orcad-host-account-launch-env-store.ts
 2 src/main/orcad/account-launch/orcad-wsl-host-claude-profile-refresh.ts
-1 src/main/orcad/artifact-slots/orcad-artifact-identity.ts
 2 src/main/orcad/artifact-slots/orcad-artifact-materializer.ts
 2 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
 2 src/main/orcad/browser-providers/orcad-agent-browser-binary.ts

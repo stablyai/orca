@@ -1,5 +1,5 @@
 // Hosts may have routes/proxies the desktop lacks; archive and executable hashes still enforce the pin.
-import { copyFile, link, mkdtemp } from 'node:fs/promises'
+import { copyFile, link, mkdtemp, rm } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import {
   nodeDistMirrorUrl,
@@ -19,6 +19,9 @@ import {
 } from '../../ssh/remote-host/ssh-remote-platform'
 import { configuredNodeDistMirror } from '../../node-runtime/node-dist-mirror-setting'
 import { DesktopDownloadUnreachableError } from '../../node-runtime/pinned-runtime-materializer'
+import { uploadFileViaExecStdin } from '../../ssh/file-transfer/ssh-exec-stdin-file-transfer'
+import { uploadRemoteInstallDirectory } from './remote-install-transfers'
+import type { RemoteInstallTransport } from './remote-install-transport'
 import { remoteSha256Command } from './remote-sha256-command'
 
 export const HOST_NODE_DOWNLOAD_OK = 'ORCA_NODE_HOST_DOWNLOAD_OK'
@@ -206,11 +209,10 @@ export async function stageNodeRuntimeArchive(args: {
   /** See hostDownloadNodeRuntimeCommand. */
   hostConnectTimeoutSeconds?: number
   exec: (command: string, options: { signal?: AbortSignal; timeoutMs?: number }) => Promise<string>
-  upload: (localDir: string) => Promise<void>
-  /** Expose the local stage immediately for caller cleanup. */
-  onLocalStage: (localDir: string) => void
+  conn: RemoteInstallTransport
+  remoteStep: (upload: () => Promise<void>) => Promise<void>
   signal?: AbortSignal
-}): Promise<{ archive: string }> {
+}): Promise<{ archive: string; transfer: 'uploaded' | 'host-downloaded' }> {
   let archivePath: string
   try {
     archivePath = await args.archivePath()
@@ -220,6 +222,7 @@ export async function stageNodeRuntimeArchive(args: {
       throw desktopError
     }
     return {
+      transfer: 'host-downloaded',
       archive: await downloadNodeRuntimeOnHost({
         ...args,
         desktopError,
@@ -227,12 +230,33 @@ export async function stageNodeRuntimeArchive(args: {
       })
     }
   }
-  const uploadDir = await mkdtemp(join(dirname(archivePath), '.runtime-upload-'))
-  args.onLocalStage(uploadDir)
   const archive = basename(archivePath)
-  await link(archivePath, join(uploadDir, archive)).catch(() =>
-    copyFile(archivePath, join(uploadDir, archive))
-  )
-  await args.upload(uploadDir)
-  return { archive }
+  if (args.host.os === 'darwin') {
+    await args.remoteStep(() =>
+      uploadFileViaExecStdin(
+        args.conn,
+        archivePath,
+        joinRemotePath(args.host, args.stageDir, archive),
+        {
+          signal: args.signal,
+          sha256: pinnedNodeRuntimeAsset(args.target).archiveSha256
+        }
+      )
+    )
+  } else {
+    const uploadDir = await mkdtemp(join(dirname(archivePath), '.runtime-upload-'))
+    try {
+      await link(archivePath, join(uploadDir, archive)).catch(() =>
+        copyFile(archivePath, join(uploadDir, archive))
+      )
+      await args.remoteStep(() =>
+        uploadRemoteInstallDirectory(args.conn, uploadDir, args.stageDir, args.host, {
+          signal: args.signal
+        })
+      )
+    } finally {
+      await rm(uploadDir, { recursive: true, force: true }).catch(() => {})
+    }
+  }
+  return { archive, transfer: 'uploaded' }
 }

@@ -11,15 +11,16 @@ import { REMOTE_INSTALL_TIMEOUT_MS } from '../../managed-server/install/remote-d
 import type { RemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 import { makePosixWriteFileCommand } from '../system-transport/file-transfer/system-ssh-file-binary-transfer'
 import { collectLocalUploadPlan } from '../system-transport/file-transfer/system-ssh-file-transfer'
+import { remoteSha256Command } from '../../managed-server/install/remote-sha256-command'
 
 export const EXEC_STDIN_WRITE_DONE = 'ORCA_EXEC_STDIN_WRITE_DONE'
 
-type ExecStdinOptions = { signal?: AbortSignal }
+type ExecStdinOptions = { signal?: AbortSignal; sha256?: string }
 
 export function makeExecStdinWriteFileCommand(
   remotePath: string,
   byteLength: number,
-  options: { token: string; executable?: boolean }
+  options: { token: string; executable?: boolean; sha256?: string }
 ): string {
   if (!Number.isSafeInteger(byteLength) || byteLength < 0) {
     throw new Error(`Invalid upload size: ${byteLength}`)
@@ -31,6 +32,9 @@ export function makeExecStdinWriteFileCommand(
     makePosixWriteFileCommand(part),
     // Why tr: BSD `wc -c` pads its count with spaces.
     `[ "$(wc -c < ${escapedPart} | tr -d ' ')" = ${byteLength} ]`,
+    ...(options.sha256
+      ? [`[ "$(${remoteSha256Command(escapedPart)})" = ${quotePosixShell(options.sha256)} ]`]
+      : []),
     ...(options.executable ? [`chmod 755 ${escapedPart}`] : []),
     `mv -f ${escapedPart} ${quotePosixShell(remotePath)}`,
     `echo ${EXEC_STDIN_WRITE_DONE}`
@@ -49,7 +53,11 @@ async function writeViaExecStdin(
   const token = randomBytes(8).toString('hex')
   const output = await execCommand(
     conn,
-    makeExecStdinWriteFileCommand(remotePath, byteLength, { token, executable }),
+    makeExecStdinWriteFileCommand(remotePath, byteLength, {
+      token,
+      executable,
+      sha256: options?.sha256
+    }),
     // Runtime archives on slow links need the deploy deadline, not the 30s probe timeout.
     { signal: options?.signal, stdin, timeoutMs: REMOTE_INSTALL_TIMEOUT_MS }
   )
@@ -58,13 +66,7 @@ async function writeViaExecStdin(
   }
 }
 
-export async function uploadFileViaExecStdin(
-  conn: RemoteInstallTransport,
-  localPath: string,
-  remotePath: string,
-  options?: ExecStdinOptions
-): Promise<void> {
-  options?.signal?.throwIfAborted()
+export async function openLocalUploadFile(localPath: string): ReturnType<typeof open> {
   const sourceStat = await lstat(localPath)
   if (sourceStat.isSymbolicLink() || !sourceStat.isFile()) {
     throw new Error(`Unsupported upload source: ${localPath}`)
@@ -80,6 +82,23 @@ export async function uploadFileViaExecStdin(
     ) {
       throw new Error(`File changed during upload: ${localPath}`)
     }
+    return handle
+  } catch (error) {
+    await handle.close()
+    throw error
+  }
+}
+
+export async function uploadFileViaExecStdin(
+  conn: RemoteInstallTransport,
+  localPath: string,
+  remotePath: string,
+  options?: ExecStdinOptions
+): Promise<void> {
+  options?.signal?.throwIfAborted()
+  const handle = await openLocalUploadFile(localPath)
+  try {
+    const opened = await handle.stat()
     const input = handle.createReadStream({ autoClose: false })
     await writeViaExecStdin(
       conn,
