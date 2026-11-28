@@ -9,10 +9,7 @@ import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -21,8 +18,7 @@ import {
 
 export const LINEAGE_PARENT = testOrcaSessionId('ca1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 export const LINEAGE_CHILD = testOrcaSessionId('ce3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
-export const canonicalChatRow = (id: string): string =>
-  structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+export const canonicalChatRow = (id: string): string => chatPaneKey(id)
 
 /** Production assignment projection and host row attachment; no preassembled agent output. */
 export function publicLineageFixture(worktreeId = 'repo::/workspace') {

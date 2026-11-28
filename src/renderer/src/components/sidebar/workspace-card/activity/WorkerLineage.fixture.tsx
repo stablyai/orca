@@ -1,9 +1,9 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import WorktreeCardAgents from './WorktreeCardAgents'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const now = 1_792_983_600_000
 const tabs: Tab[] = [
@@ -23,7 +23,7 @@ const tabs: Tab[] = [
   sortOrder: index,
   createdAt: now
 }))
-const [parent, child] = tabs.map((tab) => structuredAgentSessionPaneKey(tab.id, tab.entityId))
+const [parent, child] = tabs.map((tab) => chatPaneKey(tab.entityId))
 const entries: AgentStatusEntry[] = [parent, child].map((paneKey, index) => ({
   paneKey,
   worktreeId: 'fixture-workspace',

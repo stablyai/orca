@@ -35,6 +35,8 @@ import {
   type DraggedWorktreeCopies
 } from './dragged-worktree-copies'
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+
 function readManualOrderCatalog(): WorktreeManualOrderCatalog {
   const state = useAppStore.getState()
   return buildWorktreeManualOrderCatalog({
@@ -61,9 +63,8 @@ export function useWorktreeStatusMutations(args: {
   sortBy: SortBy
 }) {
   const { workspaceStatuses, sortBy } = args
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
-  const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
-  const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
+  const { updateWorktreeMeta, updateWorktreesMeta, setWorktreesPinnedAndReveal } =
+    getAppStoreState()
 
   const moveWorktreesToStatus = useCallback(
     (

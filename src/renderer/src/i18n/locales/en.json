@@ -15814,7 +15814,10 @@
             "operationAbortConfirm": "Select again to abort",
             "operationResolve": "Resolve",
             "operationMoreActions": "More actions",
-            "operationResolveLabel": "Resolve conflicts with AI"
+            "operationResolveLabel": "Resolve conflicts with AI",
+            "operationRunChangedTitle": "Nothing was aborted",
+            "operationRunChangedDescription": "The operation changed after Abort was chosen. Check its current state and try again.",
+            "operationRunUnknown": "Can't tell which run is paused, so Abort is off here. Refresh Source Control, or abort it in a terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

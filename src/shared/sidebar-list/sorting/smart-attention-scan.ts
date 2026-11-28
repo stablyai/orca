@@ -5,6 +5,7 @@ import type { TerminalLayoutSnapshot } from '../../workspace-layout/terminal-tab
 import type { Worktree } from '../../worktree/types'
 import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
 import {
+  IDLE,
   buildExplicitEntriesByTabId,
   buildExplicitEntriesByWorktreeId,
   collectTabPaneInputs,
@@ -28,9 +29,15 @@ export function buildSmartAttentionIndexes(
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): SmartAttentionIndexes {
   const mirroredTabIds = new Set<string>()
-  for (const tabs of Object.values(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      mirroredTabIds.add(tab.id)
+  if (tabsByWorktree) {
+    for (const worktreeId in tabsByWorktree) {
+      if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+        continue
+      }
+      const tabs = tabsByWorktree[worktreeId]
+      for (let i = 0; i < tabs.length; i += 1) {
+        mirroredTabIds.add(tabs[i].id)
+      }
     }
   }
   return {
@@ -52,17 +59,26 @@ export function resolveWorktreeAttention(
   },
   now: number
 ): WorktreeAttention {
-  const tabs = sources.tabsByWorktree?.[worktree.id] ?? []
+  const tabs = sources.tabsByWorktree?.[worktree.id]
+  const attributed = indexes.entriesByAttributedWorktreeId.get(worktree.id)
+  const hasTabs = tabs !== undefined && tabs.length > 0
+  if (!hasTabs && (!attributed || attributed.length === 0)) {
+    return IDLE
+  }
+  let panes: PaneInput[] | undefined
   // Why: hook stamps can precede tab mirroring; once mirrored, live tab ownership wins so both worktrees aren't promoted.
-  const panes: PaneInput[] = (indexes.entriesByAttributedWorktreeId.get(worktree.id) ?? [])
-    .filter((entry) => {
+  if (attributed) {
+    for (let i = 0; i < attributed.length; i += 1) {
+      const entry = attributed[i]
       const parsed = parsePaneKey(entry.paneKey)
-      return parsed !== null && !indexes.mirroredTabIds.has(parsed.tabId)
-    })
-    // No mirrored tab means no renderer live-PTY evidence to hold these hooks above Idle.
-    .map((entry) => ({ kind: 'hook' as const, entry, hasLivePty: false }))
-  if (tabs.length === 0) {
-    return resolveAttention(panes, now)
+      if (parsed !== null && !indexes.mirroredTabIds.has(parsed.tabId)) {
+        // No mirrored tab means no renderer live-PTY evidence to hold these hooks above Idle.
+        ;(panes ??= []).push({ kind: 'hook', entry, hasLivePty: false })
+      }
+    }
+  }
+  if (!hasTabs) {
+    return panes ? resolveAttention(panes, now) : IDLE
   }
   const paneSources: TabPaneInputSources = {
     entriesByTabId: indexes.entriesByTabId,
@@ -70,10 +86,16 @@ export function resolveWorktreeAttention(
     runtimePaneTitlesByTabId: sources.runtimePaneTitlesByTabId,
     terminalLayoutsByTabId: sources.terminalLayoutsByTabId
   }
-  for (const tab of tabs) {
-    panes.push(...collectTabPaneInputs(tab, worktree.lastActivityAt, paneSources, now))
+  for (let i = 0; i < tabs.length; i += 1) {
+    const tabPanes = collectTabPaneInputs(tabs[i], worktree.lastActivityAt, paneSources, now)
+    if (tabPanes.length > 0) {
+      panes ??= []
+      for (let j = 0; j < tabPanes.length; j += 1) {
+        panes.push(tabPanes[j])
+      }
+    }
   }
-  return resolveAttention(panes, now)
+  return panes ? resolveAttention(panes, now) : IDLE
 }
 
 /** Resolve attention once per workspace with per-pane hook authority and live-PTY-gated title fallbacks. */

@@ -3,6 +3,7 @@ import { savePastedTextAsWebAgentSessionAttachment } from '../agents/web-pasted-
 import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
 import { createWebJiraFilterStateApi } from '../jira/web-jira-filter-state-api'
 import { WEB_PENDING_LINK_API } from './web-pending-link-api'
+import { createWebUiNativeWindowApi } from './web-ui-native-window'
 import type { PreloadApi } from '../../../../../preload/api-types'
 import {
   readWebClipboardPasteContent,
@@ -31,18 +32,62 @@ import {
 import { callRuntimeResult } from '../../runtime/client/web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from '../web-storage'
+import { writeWebChatReadMarkEdits, type WebChatReadMarks } from './web-chat-read-mark-storage'
+
+type UIUpdates = Parameters<PreloadApi['ui']['set']>[0]
+export type WebUiApi = NonNullable<PreloadApi['ui']> & {
+  setPersistedUIWithAck: (
+    updates: UIUpdates,
+    marks: Partial<WebChatReadMarks>,
+    baseline: WebChatReadMarks
+  ) => { marks: WebChatReadMarks; request: Promise<void> }
+}
 
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
-export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
+export function createWebUiApi(): WebUiApi {
   const explorerRoots = createWebExplorerRootSync()
   /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
-  const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
+  const prepareHostUpdates = (updates: UIUpdates) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
     const hostUpdates = omitPairingLocalUiFields(updates)
     explorerRoots.prepare(environmentId, hostUpdates)
     return { environmentId, hostUpdates }
   }
+  const sendHostUpdatesWithAck = async (updates: UIUpdates): Promise<void> => {
+    const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+    await callRuntimeResult('ui.set', hostUpdates, 15_000)
+    explorerRoots.acknowledge(environmentId, hostUpdates)
+    if (
+      updates.explorerDisplayRootByWorktree !== undefined &&
+      hostUpdates.explorerDisplayRootByWorktree === undefined
+    ) {
+      throw new Error('Explorer root preference is pending host support')
+    }
+  }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+  const persistLocalUpdates = (updates: UIUpdates): void => {
+    const next = mergeWebUIState(readLocalWebUIState(), updates)
+    writeJson(UI_STORAGE_KEY, next)
+    zoomLevel = next.uiZoomLevel
+  }
+  const persistHostState = (incoming: PairedUiState) => {
+    const local = readLocalWebUIState()
+    const next = {
+      ...mergeHostWebUIState(local, incoming),
+      osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, incoming),
+      featureInteractions: mergeFeatureInteractionState(
+        local.featureInteractions,
+        incoming.featureInteractions
+      ),
+      contextualToursSeenIds: mergeContextualTourSeenIds(
+        local.contextualToursSeenIds,
+        incoming.contextualToursSeenIds
+      )
+    }
+    writeJson(UI_STORAGE_KEY, next)
+    zoomLevel = next.uiZoomLevel
+    return next
+  }
   return {
     ...createWebJiraFilterStateApi(),
     /** Hydrates from the active host after replaying pending roots, falling back to local state on failure or host changes. */
@@ -57,31 +102,14 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
           return readLocalWebUIState()
         }
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return persistHostState(result.ui)
       } catch {
         return readLocalWebUIState()
       }
     },
     /** Persists locally first and attempts the host write without propagating offline failures to fire-and-forget callers. */
     set: async (updates) => {
-      const next = mergeWebUIState(readLocalWebUIState(), updates)
-      writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
+      persistLocalUpdates(updates)
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
       try {
@@ -93,18 +121,22 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     /** Rejects failed or stripped host updates so the diff writer cannot acknowledge preferences the host never received. */
     setWithAck: async (updates) => {
-      const next = mergeWebUIState(readLocalWebUIState(), updates)
-      writeJson(UI_STORAGE_KEY, next)
-      zoomLevel = next.uiZoomLevel
-      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-      await callRuntimeResult('ui.set', hostUpdates, 15_000)
-      explorerRoots.acknowledge(environmentId, hostUpdates)
-      if (
-        updates.explorerDisplayRootByWorktree !== undefined &&
-        hostUpdates.explorerDisplayRootByWorktree === undefined
-      ) {
-        throw new Error('Explorer root preference is pending host support')
-      }
+      persistLocalUpdates(updates)
+      await sendHostUpdatesWithAck(updates)
+    },
+    setPersistedUIWithAck: (updates, marks, baseline) => {
+      let nextZoomLevel = zoomLevel
+      const persisted = readLocalWebUIState((project) =>
+        writeWebChatReadMarkEdits(marks, baseline, {
+          mergeUI: (stored) => {
+            const next = mergeWebUIState(project(stored), updates)
+            nextZoomLevel = next.uiZoomLevel
+            return next
+          }
+        })
+      )
+      zoomLevel = nextZoomLevel
+      return { marks: persisted, request: sendHostUpdatesWithAck(updates) }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()
@@ -126,22 +158,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           id,
           15_000
         )
-        const local = readLocalWebUIState()
-        const next = {
-          ...mergeHostWebUIState(local, result.ui),
-          osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
-          featureInteractions: mergeFeatureInteractionState(
-            local.featureInteractions,
-            result.ui.featureInteractions
-          ),
-          contextualToursSeenIds: mergeContextualTourSeenIds(
-            local.contextualToursSeenIds,
-            result.ui.contextualToursSeenIds
-          )
-        }
-        writeJson(UI_STORAGE_KEY, next)
-        zoomLevel = next.uiZoomLevel
-        return next
+        return persistHostState(result.ui)
       } catch {
         return optimistic
       }
@@ -271,26 +288,6 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     notifySleepingMailAvailability: () => {},
     requestSleepingMailSnapshot: () => {},
     onTerminalZoom: () => noopUnsubscribe,
-    // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
-    onSystemResumed: () => noopUnsubscribe,
-    syncTrafficLights: () => {},
-    setMarkdownEditorFocused: () => {},
-    setRichMarkdownContextMenuTarget: () => {},
-    markPlainTextContextMenuTarget: () => {},
-    setTerminalInputFocused: () => {},
-    setFloatingFocus: () => {},
-    setShortcutRecorderFocused: () => {},
-    onRichMarkdownContextCommand: () => noopUnsubscribe,
-    onFullscreenChanged: () => noopUnsubscribe,
-    minimize: () => {},
-    maximize: () => {},
-    onMaximizeChanged: () => noopUnsubscribe,
-    onWindowActiveChanged: () => noopUnsubscribe,
-    requestClose: () => {},
-    popupMenu: () => {},
-    onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {},
-    cancelWindowClose: () => {},
-    notifyWindowRevealed: () => {}
+    ...createWebUiNativeWindowApi()
   }
 }
