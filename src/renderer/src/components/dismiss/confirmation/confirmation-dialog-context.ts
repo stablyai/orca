@@ -27,7 +27,8 @@ export type ConfirmationDialogOptions = {
   confirmVariant?: 'default' | 'destructive'
   surface?: 'security'
   /** Content that can outgrow a small or zoomed window: the whole dialog scrolls within it,
-   *  opening at the top so the title shows, while Tab still scrolls each button into view. */
+   *  opening at the top. When it overflows, focus starts on the title, never an unseen button;
+   *  Tab scrolls each button into view. When it fits, focus starts as `initialFocus` says. */
   scrollable?: boolean
   /** Asked while a menu stays open under it, e.g. a picker that commits on a tab, so it sits above menus. */
   aboveMenus?: boolean

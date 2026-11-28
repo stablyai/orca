@@ -172,9 +172,15 @@ function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element 
     <div className="mt-0.5 min-w-0">
       {/* The description keeps its own type; the tone and weight sit on the line inside it. */}
       <DialogDescription asChild>
-        <p className="flex items-center gap-2">
-          <ShieldAlert className={cn('size-4 shrink-0', TONE[tone].icon)} aria-hidden />
-          <span className={cn('min-w-0 text-sm leading-5 font-medium', TONE[tone].ink)}>
+        <p className="flex items-start gap-2">
+          <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', TONE[tone].icon)} aria-hidden />
+          {/* A paired server's machine name can be one long unbroken word. */}
+          <span
+            className={cn(
+              'min-w-0 text-sm leading-5 font-medium [overflow-wrap:anywhere]',
+              TONE[tone].ink
+            )}
+          >
             {t('bots.access.confirmWarning', BOT_ACCESS_COPY.confirmWarning, place)}
           </span>
         </p>

@@ -341,20 +341,26 @@ function DialogFooter({
 function DialogTitle({
   className,
   size = 'default',
+  focusable = false,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title> & {
   /** `display` is the large headline of the two-column feature tip dialogs; `compact` is a short
    *  confirmation's title. */
   size?: 'default' | 'display' | 'compact'
+  /** Script can focus it (not Tab), with the keyboard ring: where a tall dialog opens while its
+   *  buttons are still off screen. */
+  focusable?: boolean
 }) {
   const { unified } = useDialogLayout()
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
       data-size={size}
+      tabIndex={focusable ? -1 : undefined}
       className={cn(
         'text-lg leading-snug font-semibold break-words data-[size=compact]:text-sm data-[size=display]:text-2xl data-[size=display]:leading-tight data-[size=display]:tracking-tight md:data-[size=display]:text-[1.75rem]',
         unified && 'text-[15px] data-[size=compact]:text-[15px]',
+        focusable && 'rounded-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
         className
       )}
       {...props}
