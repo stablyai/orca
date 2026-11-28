@@ -69,6 +69,6 @@ export function parseTerminalChoicePrompt(screen: string | null | undefined): Ch
     title: question,
     ...(detail ? { detail } : {}),
     options: options.map((option) => ({ label: option.label, send: option.number })),
-    screenMenu: JSON.stringify([question, ...options.map((option) => option.label)])
+    screenMenu: JSON.stringify([question, detail, ...options.map((option) => option.label)])
   }
 }
