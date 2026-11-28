@@ -1,6 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../component-fixtures/fixture-bot-panel'
 import { stubBots } from '../../component-fixtures/fixture-bots'
+import { publishBotNeedsYou } from '@/lib/bot-catalog-snapshot'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
@@ -42,30 +43,36 @@ const awakeStatuses: AgentStatusEntry[] = awakeOwners.slice(1).map((owner) => ({
   lastAssistantMessage: 'The review is ready.'
 }))
 
+function awakeChatTabs(
+  owners: readonly { id: string; folderWorkspaceId: string; chatSessionId: string }[]
+) {
+  return Object.fromEntries(
+    owners.map((owner) => {
+      const workspaceId = folderWorkspaceKey(owner.folderWorkspaceId)
+      return [
+        workspaceId,
+        [
+          makeUnifiedTab({
+            id: structuredAgentSessionTabId(owner.chatSessionId),
+            entityId: owner.chatSessionId,
+            worktreeId: workspaceId,
+            groupId: `group-${owner.id}`,
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude'
+          })
+        ]
+      ]
+    })
+  )
+}
+
 export const awakeRows = defineFixture({
   width: 640,
   store: {
     agentStatusByPaneKey: acceptedAgentStatuses(
       awakeStatuses.map((entry) => [entry.paneKey, entry])
     ),
-    unifiedTabsByWorktree: Object.fromEntries(
-      awakeOwners.map((owner) => {
-        const workspaceId = folderWorkspaceKey(owner.folderWorkspaceId)
-        return [
-          workspaceId,
-          [
-            makeUnifiedTab({
-              id: structuredAgentSessionTabId(owner.chatSessionId),
-              entityId: owner.chatSessionId,
-              worktreeId: workspaceId,
-              groupId: `group-${owner.id}`,
-              contentType: 'agent-session',
-              agentSessionAgent: 'claude'
-            })
-          ]
-        ]
-      })
-    ),
+    unifiedTabsByWorktree: awakeChatTabs(awakeOwners),
     structuredChatSleptAtByPaneKey: Object.fromEntries(
       awakeOwners.map((owner) => [chatPaneKey(owner.chatSessionId), null])
     )
@@ -97,6 +104,77 @@ export const awakeRows = defineFixture({
             </div>
           ))
         )}
+      </div>
+    </ConfirmationDialogProvider>
+  )
+})
+
+const roster = (
+  [
+    ['Release manager', 'H1', 'Release notes are ready.', 0],
+    ['Code reviewer', 'K2', 'Ready.', 2],
+    ['Build engineer', 'A1', null, 0],
+    ['Support triage', 'B1', 'Sorted the open tickets.', 0],
+    ['Planning assistant', 'D1', 'Ready.', 1],
+    ['Incident response', 'F1', 'Ready.', 3],
+    ['Docs editor', 'G1', 'Updated the setup guide.', 0],
+    ['Research assistant', 'M1', 'Ready.', 0],
+    ['Test engineer', 'I1', 'Ready.', 1],
+    ['Inbox assistant', 'E1', null, 0],
+    ['Design reviewer', 'J1', 'Ready.', 2],
+    ['Data analyst', 'L2', 'Checked the weekly report.', 0]
+  ] as const
+).map(([name, mascot, activity, count], index) => {
+  const id = `roster-${index}`
+  const owner = {
+    ...fixtureCos,
+    id,
+    name,
+    folderWorkspaceId: `fw-${id}`,
+    chatSessionId: id,
+    avatar: mascotAvatar(mascot)
+  }
+  const entry: AgentStatusEntry = {
+    ...awakeStatuses[0],
+    paneKey: chatPaneKey(id),
+    worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
+    state: activity ? 'done' : 'working',
+    updatedAt: now - (index + 1) * 60_000,
+    stateStartedAt: now - (index + 1) * 60_000,
+    lastAssistantMessage: activity ?? undefined
+  }
+  return { owner, entry, count }
+})
+
+export const needsYouRows = defineFixture({
+  width: 300,
+  store: {
+    agentStatusByPaneKey: acceptedAgentStatuses(roster.map(({ entry }) => [entry.paneKey, entry])),
+    unifiedTabsByWorktree: awakeChatTabs(roster.map(({ owner }) => owner))
+  },
+  setup: () => {
+    stubBots(roster.map(({ owner }) => owner))
+    publishBotNeedsYou('local', {
+      counts: Object.fromEntries(roster.map(({ owner, count }) => [owner.id, count])),
+      at: now
+    })
+  },
+  render: () => (
+    <ConfirmationDialogProvider>
+      <div className="flex flex-col bg-worktree-sidebar py-1 pr-1.5 text-worktree-sidebar-foreground">
+        {roster.map(({ owner }, index) => (
+          <BotRow
+            key={owner.id}
+            bot={owner}
+            home={makeFolderWorkspace({
+              id: owner.folderWorkspaceId,
+              name: owner.name,
+              isUnread: index === 3 || index === 4
+            })}
+            isActive={index === 1}
+            onOpen={() => {}}
+          />
+        ))}
       </div>
     </ConfirmationDialogProvider>
   )
