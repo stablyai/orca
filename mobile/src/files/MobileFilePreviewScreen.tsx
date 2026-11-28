@@ -295,19 +295,18 @@ function MobileFilePreviewDocument({ route }: Props) {
   // Unmount retires pending saves; a refused back keeps the document and its save alive.
   const leave = useCallback(() => router.back(), [router])
   const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
+  const dropEditDraft = () => editDraftKey && dropDocumentEditDraft(editDraftKey)
   const { confirmingDiscard, requestBack, stay, discard } = useMobileFilePreviewBack({
     hasUnsavedDraft,
     leave,
-    onDiscard: () => editDraftKey && dropDocumentEditDraft(editDraftKey)
+    onDiscard: dropEditDraft
   })
-  // Reload drops the draft for what disk holds now, as desktop's Reload does.
-  const reloadFromDisk = useCallback(() => {
+  // Reload, once confirmed, drops the draft for what disk holds now.
+  const reloadFromDisk = () => {
     revertDraft()
-    if (editDraftKey) {
-      dropDocumentEditDraft(editDraftKey)
-    }
+    dropEditDraft()
     void loadPreview()
-  }, [editDraftKey, loadPreview, revertDraft])
+  }
 
   return (
     <View style={styles.container}>
@@ -402,6 +401,7 @@ function MobileFilePreviewDocument({ route }: Props) {
         fallback={
           conflict && editing ? (
             <MobileFilePreviewConflictBar
+              hostId={previewParams?.hostId ?? ''}
               conflict={conflict}
               saving={saving}
               onReload={reloadFromDisk}
