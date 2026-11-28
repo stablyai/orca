@@ -40,6 +40,7 @@ export function useNativeChatQuestionStepHeight(
     stepRef.current = step
     // The step's scrollers are reused, so a new step starts each of them back at the top.
     if (changed) {
+      surface?.scrollTo({ top: 0 })
       for (const scroller of surface?.querySelectorAll<HTMLElement>(STEP_SCROLLERS) ?? []) {
         scroller.scrollTop = 0
       }
