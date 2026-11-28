@@ -76,22 +76,22 @@ export function restoreNotificationReplyDrafts(
   store: DraftStore,
   scope: string,
   apply: (text: string) => Promise<boolean>
-): Promise<void> {
+): Promise<boolean> {
   return runKeyedSerializedOperation(queues, pendingKey(scope), async () => {
     const read = await store.read('draft', [pendingKey(scope)])
     if (read.status !== 'ok') {
-      return
+      return false
     }
     for (const draft of readDrafts(read.values[0] ?? null)) {
       const applied = await store.read('draft', [appliedKey(draft.id)])
       if (applied.status !== 'ok') {
-        return
+        return false
       }
       if (applied.values[0] !== null) {
         continue
       }
       if (!(await apply(draft.text))) {
-        return
+        return false
       }
       if (
         !(
@@ -100,8 +100,9 @@ export function restoreNotificationReplyDrafts(
           ])
         ).written
       ) {
-        return
+        return false
       }
     }
+    return true
   })
 }

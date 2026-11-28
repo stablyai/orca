@@ -1,4 +1,4 @@
-import { NotificationReplyFailure } from './notification-reply-failure'
+import { NotificationReplyFailure } from './notification-reply-failure-reason'
 import { loadHosts } from '../../host-catalog/host-store'
 import { openHostLogicalClient } from '../../transport/connection/host-logical-client'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'

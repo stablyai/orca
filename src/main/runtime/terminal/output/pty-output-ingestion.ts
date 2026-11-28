@@ -1,3 +1,4 @@
+import { observeTerminalInputScreen } from './terminal-input-screen-observation'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import type {
   RuntimePtyWorktreeRecord,
@@ -115,9 +116,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
     this.maybeHydrateHeadlessFromRenderer(ptyId)
     // The shared tracker processes every title in byte order, preserving coalesced working-to-idle transitions (#1083).
     this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryReplies)
-    if (data.length > 0) {
-      this.terminalRunFacts.recordOutput(ptyId)
-    }
+    observeTerminalInputScreen(this.terminalRunFacts, ptyId, this.headlessTerminals.get(ptyId))
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     const ptyTailBefore = pty
