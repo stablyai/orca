@@ -1,12 +1,11 @@
-// Hover or keyboard focus swaps the age for Done, Snooze, and More on open items.
+// Hover or keyboard focus swaps the age for Done, Snooze, and Cancel on open items.
 import { memo, useId } from 'react'
-import { Check, CircleCheck, CircleSlash, Clock, MoreHorizontal } from 'lucide-react'
+import { Check, Clock, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useMenuPointerExitClose } from '@/components/ui/menu-pointer-exit-close'
@@ -153,6 +152,7 @@ function BotItemRowView({
   const closed = item.status === 'done' || item.status === 'canceled'
   const doneLabel = t('bots.items.row.done', 'Done')
   const snoozeLabel = t('bots.items.snooze.menu', 'Snooze')
+  const cancelLabel = t('bots.items.row.cancel', 'Cancel')
   // Needs you's question, or what Waiting waits on, shows in the row's hover card; the row stays one
   // line like the others.
   const question = !stale && !snoozed && item.status === 'needs_you' ? item.question : null
@@ -285,10 +285,10 @@ function BotItemRowView({
               {doneLabel}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu>
+          <DropdownMenu open={menu.open} onOpenChange={menu.onOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild ref={triggerRef} {...menu.triggerProps}>
                   <Button
                     variant="ghost-on-accent"
                     size="icon-xs"
@@ -303,33 +303,26 @@ function BotItemRowView({
                 {snoozeLabel}
               </TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" {...menu.contentProps}>
               <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} inSubmenu={false} />
             </DropdownMenuContent>
           </DropdownMenu>
-          <DropdownMenu open={menu.open} onOpenChange={menu.onOpenChange}>
-            <DropdownMenuTrigger asChild ref={triggerRef} {...menu.triggerProps}>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
                 variant="ghost-on-accent"
                 size="icon-xs"
-                aria-label={t('bots.items.row.more', 'More')}
+                aria-label={cancelLabel}
                 tabIndex={tabbable ? undefined : -1}
+                onClick={() => onAction(item, { kind: 'cancel' })}
               >
-                <MoreHorizontal className="size-3.5" />
+                <X className="size-3.5" />
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" {...menu.contentProps}>
-              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'done' })}>
-                <CircleCheck />
-                {t('bots.items.menu.done', 'Done')}
-              </DropdownMenuItem>
-              <BotItemSnoozeMenuItems items={[item]} snoozing={snoozing} />
-              <DropdownMenuItem onSelect={() => onAction(item, { kind: 'cancel' })}>
-                <CircleSlash />
-                {t('bots.items.menu.cancel', 'Cancel')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {cancelLabel}
+            </TooltipContent>
+          </Tooltip>
         </span>
       )}
     </div>

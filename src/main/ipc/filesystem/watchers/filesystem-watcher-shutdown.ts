@@ -2,6 +2,7 @@ import { disposeWatcherProcess } from '../watcher-process/parcel-watcher-process
 import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 import { trackDetachedLocalUnsubscribe } from './filesystem-watcher-listener-lifecycle'
 import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
+import { resetLocalWatchPauseState } from './filesystem-watcher-pause-state'
 
 export async function closeAllWatchers(): Promise<void> {
   for (const lifetime of watcherLifecycleState.senderLifetimes.values()) {
@@ -15,6 +16,7 @@ export async function closeAllWatchers(): Promise<void> {
     retry.cancelWait()
   }
   watcherLifecycleState.pendingLocalCapacityRetries.clear()
+  resetLocalWatchPauseState()
 
   for (const timer of watcherLifecycleState.pendingTeardowns.values()) {
     clearTimeout(timer)

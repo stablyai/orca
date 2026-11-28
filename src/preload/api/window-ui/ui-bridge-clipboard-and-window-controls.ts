@@ -13,6 +13,10 @@ import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layou
 import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
 import type {
+  ClipboardPasteContent,
+  ReadClipboardPasteContentOptions
+} from '../../../shared/clipboard/clipboard-paste-content'
+import type {
   AgentPaneActivityReply,
   AgentPaneActivityRequest
 } from '../../../shared/agent-status/presentation/agent-list-status'
@@ -102,7 +106,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readText', options),
-  readClipboardLinkHtml: (): Promise<string> => ipcRenderer.invoke('clipboard:readLinkHtml'),
+  readClipboardPasteContent: (
+    options?: ReadClipboardPasteContentOptions
+  ): Promise<ClipboardPasteContent> => ipcRenderer.invoke('clipboard:readPasteContent', options),
   readSelectionClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
     ipcRenderer.invoke('clipboard:readSelectionText', options),
   saveClipboardImageAsTempFile: (args?: {
@@ -118,7 +124,6 @@ export const uiClipboardAndWindowControlsApi = {
     agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
   }): Promise<string> => ipcRenderer.invoke('clipboard:savePastedTextAsFile', args),
   clipboardHasImage: (): Promise<boolean> => ipcRenderer.invoke('clipboard:hasImage'),
-  readClipboardFilePaths: (): Promise<string[]> => ipcRenderer.invoke('clipboard:readFilePaths'),
   restoreNativeChatPastes: (
     paths: string[]
   ): Promise<{ path: string; kept: boolean; exists: boolean }[]> =>

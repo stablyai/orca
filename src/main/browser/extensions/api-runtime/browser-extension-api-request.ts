@@ -3,6 +3,7 @@ import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionInvokeResult } from '../../../../shared/browser/extensions/browser-extension-channels'
 import {
   BrowserExtensionApiError,
+  ensureBrowserExtensionNamespacesRegistered,
   extensionHasNamespacePermission,
   getBrowserExtensionNamespace,
   type BrowserExtensionCaller,
@@ -67,6 +68,7 @@ export async function handleBrowserExtensionApiRequest(
       throw new BrowserExtensionApiError('Malformed extension API request')
     }
     const request = parsed.data
+    await ensureBrowserExtensionNamespacesRegistered()
     const namespace = getBrowserExtensionNamespace(request.namespace)
     if (!namespace) {
       throw new BrowserExtensionApiError(`chrome.${request.namespace} is not available`)

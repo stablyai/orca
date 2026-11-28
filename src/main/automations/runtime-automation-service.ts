@@ -76,7 +76,15 @@ export function createRuntimeAutomationService(input: {
         if (run && handle.startsWith('automation:')) {
           if (!run.chatSessionId) {
             const records = await runtime.openAgentSessionRecordStore()
-            const receipt = readAutomationRunReceipt(records, run)
+            const bot = store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
+            // A run that sends its own prompt has no launch receipt: its prompt's chat is its receipt.
+            const receipt =
+              readAutomationRunReceipt(records, run) ??
+              (bot
+                ? await (
+                    await import('./observation/self-sent-run-restart-recovery')
+                  ).selfSentRunReceipt(runtime, run)
+                : null)
             const agent =
               tuiAgentDisplayName(
                 store.listAutomations().find((entry) => entry.id === run?.automationId)?.agentId ??
@@ -125,6 +133,10 @@ export function createRuntimeAutomationService(input: {
               )
               const { observeAutomationChatRun } =
                 await import('./observation/runtime-chat-run-observer')
+              if (sentByRun) {
+                const recovery = await import('./observation/self-sent-run-restart-recovery')
+                await recovery.sendRunPromptKeptAtRestart(runtime, run, options.signal)
+              }
               return await observeAutomationChatRun(runtime, run, options.signal, sentByRun)
             } catch (error) {
               if (options.signal.aborted) {
