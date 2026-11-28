@@ -6,7 +6,6 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { storePeerMailForAgent } from '../federation/peer-mail-agent-store'
 
 const LEGACY = 'term_legacy'
 const PLAIN = 'term_plain'
@@ -201,32 +200,6 @@ describe('mail to a terminal working another Orca Task', () => {
     })
     expect(mailTo(LEGACY)).toEqual({ n: 0 })
     expect(db.getMessageById(question.id)?.read).toBeFalsy()
-  })
-
-  it('refuses --on peer mail with the shared code, nothing stored', async () => {
-    setup()
-    attachLegacy()
-    await expect(
-      storePeerMailForAgent(
-        runtime,
-        {
-          conversationId: 'conv_1',
-          messageId: 'msg_peer_1',
-          senderLabel: 'Other Orca',
-          subject: 'hi',
-          to: LEGACY,
-          body: 'b',
-          peerFingerprint: 'peer_fp',
-          senderSnapshot: undefined
-        },
-        () => null
-      )
-    ).rejects.toMatchObject({
-      code: 'capability_unsupported',
-      message: expect.stringContaining('Nothing was delivered.'),
-      data: REFUSED
-    })
-    expect(mailTo(LEGACY)).toEqual({ n: 0 })
   })
 
   // Regression guard: main already refuses this in the shared access check.

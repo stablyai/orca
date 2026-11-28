@@ -9,7 +9,7 @@ import { botRequestUnansweredText } from '../../../../../bots/bot-request-view'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { awaitsAnswer } from '../../../../../bots/bot-request-policy'
 import { botRequestRecord } from './bot-request-record'
-import { resolveReplyRecipient } from './recipient-routing'
+import { resolveBareOrchestrationRecipient, resolveReplyRecipient } from './recipient-routing'
 import { mayNameSession } from './session-recipient'
 import {
   peerMailSender,
@@ -150,10 +150,22 @@ function reachableSender(
     })
   } catch (error) {
     if (error instanceof OrchestrationError) {
-      // A sender working another Orca's Task reads its own mail again once that Task settles.
       const from = request.from_handle
-      const attached = legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))
-      return attached || senderLineageUnproven(from) ? 'unverified' : 'gone'
+      // The notice keeps main's routing for a sender working another Orca's Task: it reads it after.
+      if (legacyAttachmentRefusal(db, from, runtime.getLiveTerminalPaneKey(from))) {
+        const kept = resolveBareOrchestrationRecipient({
+          runtime,
+          db,
+          handle: from,
+          senderRunId: request.run_id,
+          terminalRecipient: null,
+          keepLegacyAttachedRouting: true
+        })
+        if (kept.ok) {
+          return { to: kept.to, runId: kept.runId ?? request.run_id }
+        }
+      }
+      return senderLineageUnproven(from) ? 'unverified' : 'gone'
     }
     throw error
   }
