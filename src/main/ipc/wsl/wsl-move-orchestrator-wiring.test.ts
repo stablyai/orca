@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({
-  handlers: new Map<string, (...args: unknown[]) => unknown>(),
-  constructed: 0,
-  triggers: [] as [string, string][],
-  sent: [] as [string, unknown][],
-  gateOpen: true
-}))
+const state = vi.hoisted(() => {
+  const triggers: [string, string][] = []
+  const sent: [string, unknown][] = []
+  return {
+    handlers: new Map<string, (...args: unknown[]) => unknown>(),
+    constructed: 0,
+    triggers,
+    sent,
+    gateOpen: true
+  }
+})
 
 const SIDECAR_RECORDS = [{ distro: 'Ubuntu', state: 'failed' }]
 const MAIN_WINDOW = { id: 7 }
@@ -77,8 +81,8 @@ describe('registerWslMoveOrchestrator', () => {
     vi.resetModules()
     state.handlers.clear()
     state.constructed = 0
-    state.triggers = []
-    state.sent = []
+    state.triggers.length = 0
+    state.sent.length = 0
     state.gateOpen = true
   })
 
