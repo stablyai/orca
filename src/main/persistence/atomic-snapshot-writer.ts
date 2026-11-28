@@ -1,7 +1,10 @@
-import { chmodSync, mkdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs'
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { renameFileWithWindowsRetryAsync } from '../../shared/file-write/windows-retry-file-operations'
+import {
+  renameFileWithWindowsRetry,
+  renameFileWithWindowsRetryAsync
+} from '../../shared/file-write/windows-retry-file-operations'
 import {
   durableWriteTempPath,
   removeStaleDurableWriteTempFiles
@@ -75,7 +78,7 @@ export class AtomicSnapshotWriter {
       mode: this.options.fileMode
     })
     try {
-      renameSync(tmpFile, file)
+      renameFileWithWindowsRetry(tmpFile, file)
     } catch (error) {
       try {
         unlinkSync(tmpFile)

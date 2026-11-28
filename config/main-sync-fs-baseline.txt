@@ -346,7 +346,7 @@
 8 src/main/orcad/runtime-launch/windows-breakaway-launcher.ts
 2 src/main/orcad/serve-startup/orcad-cli-launcher.ts
 1 src/main/orcad/serve-startup/orcad-command-arguments.ts
-6 src/main/persistence/atomic-snapshot-writer.ts
+5 src/main/persistence/atomic-snapshot-writer.ts
 5 src/main/persistence/loading-store/user-data-path.ts
 4 src/main/persistence/migrating-orcad-catalog/blob-transfer/orcad-migration-blob-installers.ts
 3 src/main/persistence/migrating-orcad-catalog/blob-transfer/orcad-migration-blob-staging.ts
@@ -578,7 +578,7 @@
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
-14 src/shared/secure-storage/secure-file.ts
+13 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

@@ -1,16 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AtomicSnapshotWriter } from './atomic-snapshot-writer'
 
-// windows-retry-file-operations imports the named rename binding, so it must be mocked at the module.
-const renameMock = vi.hoisted(() => ({ fn: vi.fn<typeof NodeFsPromises.rename>() }))
+// windows-retry-file-operations imports the named rename bindings, so they must be mocked at the module.
+const renameMock = vi.hoisted(() => ({
+  fn: vi.fn<typeof NodeFsPromises.rename>(),
+  sync: vi.fn<typeof NodeFs.renameSync>()
+}))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   renameMock.fn.mockImplementation(actual.rename)
   return { ...actual, rename: renameMock.fn }
+})
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  renameMock.sync.mockImplementation(actual.renameSync)
+  return { ...actual, renameSync: renameMock.sync }
 })
 
 const eperm = (): Error =>
@@ -45,6 +54,7 @@ describe('AtomicSnapshotWriter', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     renameMock.fn.mockClear()
+    renameMock.sync.mockClear()
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -57,6 +67,20 @@ describe('AtomicSnapshotWriter', () => {
 
     expect(readFileSync(file, 'utf8')).toBe('async content')
     expect(renameMock.fn).toHaveBeenCalledTimes(2)
+    expect(tmpFiles()).toEqual([])
+  })
+
+  it('publishes a writeSync through a transient Windows rename EPERM', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    renameMock.sync.mockImplementationOnce(() => {
+      throw eperm()
+    })
+    const writer = new AtomicSnapshotWriter(() => file)
+
+    writer.writeSync(() => 'sync content')
+
+    expect(readFileSync(file, 'utf8')).toBe('sync content')
+    expect(renameMock.sync).toHaveBeenCalledTimes(2)
     expect(tmpFiles()).toEqual([])
   })
 

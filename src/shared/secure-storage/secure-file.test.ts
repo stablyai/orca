@@ -1,7 +1,16 @@
-import { chmodSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import * as fs from 'node:fs'
+import {
+  chmodSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   __resetSecureFileHardenedPathsForTests,
   hardenExistingSecureFile,
@@ -9,6 +18,7 @@ import {
 } from './secure-file'
 
 const posixModeIt = process.platform === 'win32' ? it.skip : it
+const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 
 describe('POSIX secure files', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -64,3 +74,35 @@ describe('POSIX secure files', () => {
 function statMode(path: string): number {
   return statSync(path).mode & 0o777
 }
+
+describeOnWindows('Windows secure file publish', () => {
+  it('retries a locked rename and publishes nothing once shouldPublish refuses', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const targetPath = join(userDataPath, 'secret.json')
+    const renameSync = vi.spyOn(fs, 'renameSync')
+    const locked = () => {
+      throw Object.assign(new Error('EPERM: operation not permitted, rename'), { code: 'EPERM' })
+    }
+    try {
+      writeSecureFile(targetPath, 'old')
+      // A scanner holding the staged file releases it before the next attempt.
+      renameSync.mockImplementationOnce(locked)
+      writeSecureFile(targetPath, 'new')
+      expect(readFileSync(targetPath, 'utf8')).toBe('new')
+
+      renameSync.mockImplementationOnce(locked)
+      let checks = 0
+      expect(
+        writeSecureFile(targetPath, 'later', {
+          shouldPublish: () => (checks += 1) === 1
+        })
+      ).toBe(false)
+      expect(checks).toBe(2)
+      expect(readFileSync(targetPath, 'utf8')).toBe('new')
+      expect(readdirSync(userDataPath).filter((name) => name.endsWith('.tmp'))).toEqual([])
+    } finally {
+      renameSync.mockRestore()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+})
