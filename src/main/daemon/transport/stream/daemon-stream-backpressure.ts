@@ -220,10 +220,13 @@ export class DaemonStreamBackpressure {
 
   /** Pause, unpausable, keep-tail and credit all go, so the next refresh starts from Flowing. */
   private dropRecords(sessionId: string): void {
-    this.stallReleasedSessions.delete(sessionId)
+    const wasKeepTail = this.stallReleasedSessions.delete(sessionId)
     this.unpausableSessions.delete(sessionId)
     this.forgetPause(sessionId)
-    this.onDroppabilityChanged(sessionId)
+    // Only keep-tail changes droppability; anything else would rescan every backlog per attach or detach.
+    if (wasKeepTail) {
+      this.onDroppabilityChanged(sessionId)
+    }
   }
 
   /** A terminating, exited or viewerless producer is never asked to pause; it is skipped until 'released' or its output drains. */
@@ -239,11 +242,8 @@ export class DaemonStreamBackpressure {
   }
 
   private dropRecordIfUnused(sessionId: string): void {
-    if (
-      !this.pausedAtBySession.has(sessionId) &&
-      !this.unpausableSessions.has(sessionId) &&
-      !this.stallReleasedSessions.has(sessionId)
-    ) {
+    const records = [this.pausedAtBySession, this.unpausableSessions, this.stallReleasedSessions]
+    if (!records.some((record) => record.has(sessionId))) {
       this.recordIncarnation.delete(sessionId)
     }
   }

@@ -171,4 +171,43 @@ describe('DaemonStreamBackpressure pause calls', () => {
       expect(lookups).toBe(detachedCount)
     }
   )
+
+  it.each([300, 3_000])(
+    'a detach and reattach rescan no backlogs with %i queued sessions, and the producer re-pauses',
+    (queuedSessions) => {
+      let visits = 0
+      let pauseCalls = 0
+      let viewer: true | 'detached' = true
+      const producer = new SessionProducerPause({ pause: () => {}, resume: () => {} })
+      const backpressure: DaemonStreamBackpressure = new DaemonStreamBackpressure(
+        (_sessionId, isPaused, onStall) => {
+          if (!isPaused) {
+            return producer.resumeClient('stream')
+          }
+          pauseCalls += 1
+          return producer.pause('stream', viewer, onStall)
+        },
+        () => {
+          visits += 1
+          return false
+        },
+        () => backpressure.refresh()
+      )
+      const queued = new Map<string, number>([['tui', 200 * 1024]])
+      for (let i = 0; i < queuedSessions; i++) {
+        queued.set(`quiet-${i}`, 100)
+      }
+      backpressure.setQueued('client', queued)
+      const afterPausing = visits
+
+      viewer = 'detached'
+      producer.release({ resume: true, reason: 'released' })
+      viewer = true
+      producer.noteViewerAttached(true)
+      expect(visits).toBe(afterPausing)
+
+      backpressure.setQueued('client', queued)
+      expect(pauseCalls).toBe(2)
+    }
+  )
 })

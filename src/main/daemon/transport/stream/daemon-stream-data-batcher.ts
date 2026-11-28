@@ -303,8 +303,8 @@ export class DaemonStreamDataBatcher {
 
     const socket = client.streamSocket
     const frames = streamFramesFor(client.streamFraming)
-    flushDaemonStreamSession(batch, sessionId, this.maxLineBytes, frames, (line) =>
-      this.write(clientId, sessionId, socket, line)
+    flushDaemonStreamSession(batch, sessionId, this.maxLineBytes, frames, (line, carries) =>
+      this.write(clientId, sessionId, socket, line, undefined, carries)
     )
     if (batch.queue.length === 0) {
       this.pendingByClient.delete(clientId)
