@@ -1,3 +1,4 @@
+import { openPairedMarkdownFileLink } from '@/components/editor/markdown/link-routing/open-paired-markdown-file-link'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
@@ -90,6 +91,17 @@ export function createMarkdownLinkAction(
       if (target.kind === 'file') {
         const { line, column } = target
         if (target.relativePath === undefined) {
+          if (sourceOwner.kind === 'runtime' && ctx.worktreeId) {
+            await openPairedMarkdownFileLink({
+              absolutePath: target.absolutePath,
+              worktreeId: ctx.worktreeId,
+              environmentId: sourceOwner.runtimeEnvironmentId,
+              previewAnchor: new URL(target.uri).hash.slice(1) || undefined,
+              line,
+              column
+            })
+            return
+          }
           if (
             isLocalPathOpenBlocked(
               getLinkSourceLocalOpenOwner(initialState, sourceOwner, ctx.worktreeId)

@@ -1,7 +1,11 @@
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { dirname } from '@/lib/path'
-import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import {
+  findFirstIndexedWorktree,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MarkdownPreviewSourceOpenFile } from '../render-tree/markdown-preview-types'
@@ -158,8 +162,18 @@ export function findMarkdownPreviewTargetWorktree(
 export function resolveMarkdownPreviewSourceWorktree(
   worktreesByRepo: Record<string, Worktree[]>,
   sourceWorktreeId: string | null | undefined,
-  filePath: string
+  filePath: string,
+  runtimeEnvironmentId?: string | null
 ): Worktree | null {
+  if (runtimeEnvironmentId) {
+    return sourceWorktreeId
+      ? findIndexedWorktreeOwnerForHost(
+          worktreesByRepo,
+          sourceWorktreeId,
+          toRuntimeExecutionHostId(runtimeEnvironmentId)
+        )
+      : null
+  }
   const sourceWorktree = sourceWorktreeId
     ? (findFirstIndexedWorktree(worktreesByRepo, sourceWorktreeId) ?? null)
     : null

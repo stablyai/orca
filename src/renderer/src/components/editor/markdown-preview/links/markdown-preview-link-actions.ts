@@ -1,3 +1,4 @@
+import { openPairedMarkdownFileLink } from '../../markdown/link-routing/open-paired-markdown-file-link'
 import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
@@ -174,6 +175,17 @@ export async function handleMarkdownPreviewLinkClick({
     sourceOwner
   )
   if (!targetWorktree) {
+    if (sourceOwner.kind === 'runtime' && sourceRoutingWorktreeId) {
+      await openPairedMarkdownFileLink({
+        absolutePath,
+        worktreeId: sourceRoutingWorktreeId,
+        environmentId: sourceOwner.runtimeEnvironmentId,
+        line: lineTarget?.line,
+        column: lineTarget?.column,
+        previewAnchor: target.hash.slice(1)
+      })
+      return
+    }
     if (sourceRoutingWorktreeId && worktreeRoot) {
       void activateMarkdownLink(href, {
         sourceFilePath: filePath,
