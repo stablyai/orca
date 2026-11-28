@@ -288,8 +288,11 @@ export class ToolRelayFronts {
     }
     watched.opening.add(frontConnectionId)
     try {
-      // The daemon re-announces held connections while it answers the serve request.
-      await watched.served.catch(() => {})
+      // The daemon re-announces held connections while it answers the serve request. Unserved,
+      // its kept agents' tokens aren't known: the connection stays held and gets the 503.
+      if (!(await watched.served.then(() => true, () => false))) {
+        return
+      }
       // One retry: the daemon announces a held connection once per serving connection.
       for (let attempt = 0; attempt < 2 && !this.closed; attempt += 1) {
         const opened = await openDaemonToolRelayConnection(
@@ -320,10 +323,14 @@ export class ToolRelayFronts {
 
   /** Read once per connection, bounded, and dropped when it fails so the next one reads again. */
   private token(client: DaemonClient, watched: Watched): Promise<string> {
+    if (watched.token) {
+      return watched.token
+    }
     const signal = AbortSignal.any([this.closing.signal, AbortSignal.timeout(TOKEN_READ_MS)])
-    const read = (watched.token ??= readFile(client.tokenPath, { encoding: 'utf8', signal }).then(
-      (token) => token.trim()
-    ))
+    const read = readFile(client.tokenPath, { encoding: 'utf8', signal }).then((token) =>
+      token.trim()
+    )
+    watched.token = read
     read.catch(() => {
       if (watched.token === read) {
         watched.token = null

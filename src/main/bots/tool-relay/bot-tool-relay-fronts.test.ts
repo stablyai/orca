@@ -95,6 +95,8 @@ describe.skipIf(process.platform === 'win32')('tool relay fronts', () => {
         `POST /bot-tools/abcdefgh/mcp HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\n{}`
       )
       expect(answer).toMatch(/^HTTP\/1\.1 401 /)
+      // Said in the answer too, so the agent's client never reuses a socket the relay closes.
+      expect(answer).toMatch(/\r\nconnection: close\r\n/i)
     }
     const cleanup = await agentCall(
       port,

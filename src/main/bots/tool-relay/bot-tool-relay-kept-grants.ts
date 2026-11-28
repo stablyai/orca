@@ -1,7 +1,7 @@
 // The relay's grants with what keeps them across an app restart: a chat's launch hands its grant to
 // the daemon start whose front its agent's tools reach, and that start holds it in memory for as long
 // as the agent's relay runs, then hands it back when a restarted app serves its front.
-import type { IncomingMessage, Server } from 'node:http'
+import type { IncomingMessage, Server, ServerResponse } from 'node:http'
 import type { Socket } from 'node:net'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import type { DaemonClient } from '../../daemon/transport/client/daemon-client'
@@ -280,13 +280,16 @@ export class KeptRelayGrants {
    */
   answers(
     req: Pick<IncomingMessage, 'headers' | 'socket'>,
-    res: { shouldKeepAlive: boolean; once(event: 'finish', listener: () => void): unknown },
+    res: ServerResponse,
     ownPort: number
   ): boolean {
     if (this.frontOf.has(req.socket)) {
-      res.shouldKeepAlive = false
-      // A handler's own `Connection: keep-alive` (an SDK's event stream) turns keep-alive back on.
-      res.once('finish', () => req.socket.end())
+      // Said in the answer, so no client reuses the socket: a handler's own `Connection` header
+      // (an SDK's event stream sends keep-alive) is dropped, since writeHead sets each through here.
+      const setHeader = res.setHeader.bind(res)
+      setHeader('connection', 'close')
+      res.setHeader = (name, value) =>
+        name.toLowerCase() === 'connection' ? res : setHeader(name, value)
     }
     const match = /^(?:127\.0\.0\.1|localhost):(\d+)$/.exec(req.headers.host ?? '')
     const port = match ? Number(match[1]) : null

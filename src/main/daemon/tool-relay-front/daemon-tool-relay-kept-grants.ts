@@ -72,7 +72,7 @@ export function readToolRelayFrontKept(value: unknown): ToolRelayFrontKept | nul
 export class DaemonToolRelayKeptGrants {
   private readonly relays = new Map<string, ToolRelayFrontKeptRelay>()
 
-  /** Before the agent spawns; false when nothing usable was sent. */
+  /** Once the agent's relay formed, before any I/O; false when nothing usable was sent. */
   keep(relayId: string, chatKey: string, sent: unknown): boolean {
     const kept = readToolRelayFrontKept(sent)
     if (!kept || (kept.grants.length === 0 && !kept.caller)) {
@@ -82,7 +82,7 @@ export class DaemonToolRelayKeptGrants {
     return true
   }
 
-  /** The relay ended (or never started): its agent's tokens are no one's from now on. */
+  /** The relay ended or was removed: its agent's tokens are no one's from now on. */
   forget(relayId: string): boolean {
     return this.relays.delete(relayId)
   }

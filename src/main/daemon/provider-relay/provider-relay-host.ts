@@ -277,7 +277,6 @@ export class ProviderRelayHost {
     await waitAtMost(Promise.all(relays.map((relay) => relay.dispose())), DISPOSE_WAIT_MS)
   }
 
-  /** A launch that throws before its relay exists leaves no grant behind. */
   private requireRelay(relayId: unknown): ProviderRelay {
     const relay = typeof relayId === 'string' ? this.relays.get(relayId) : undefined
     if (!relay) {
