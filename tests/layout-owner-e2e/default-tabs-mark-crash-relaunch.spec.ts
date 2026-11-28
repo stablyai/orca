@@ -1,15 +1,11 @@
 // Crash before debounced saves or terminal starts can persist default-tab marks; relaunch must not apply the defaults again.
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { waitForSessionReady } from './helpers/store'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 const TEMPLATES = [{ title: 'p6-default-a' }, { title: 'p6-default-b' }]
 const TITLES = TEMPLATES.map((template) => template.title)
 
@@ -144,7 +140,7 @@ const countTitled = (tabs: { title: string | null }[], title: string) =>
   tabs.filter((tab) => tab.title === title).length
 
 test.describe('default tabs across a crash before the first terminal start', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'layout-owner path only')
   test.skip(process.platform === 'win32', 'Uses POSIX SIGKILL to simulate a crash')
 
   test('a workspace that had no default tabs does not get ones added later', async ({

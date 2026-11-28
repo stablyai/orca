@@ -4,9 +4,11 @@ import {
   setupLayoutOwnerRuntime,
   WORKTREE_ID
 } from '../layout/orca-runtime-layout-owner-start-fixture'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
+import { storeOf } from '../layout/profile-session-store.test-fixture'
 
 it('publishes a rename and reset for a live terminal the open host window holds no pane for', async () => {
-  const { runtime } = setupLayoutOwnerRuntime()
+  const { runtime, session } = setupLayoutOwnerRuntime()
   setRuntimeDesktopSurface({
     showNotification: () => false,
     hasWindow: () => true,
@@ -20,7 +22,18 @@ it('publishes a rename and reset for a live terminal the open host window holds 
   const ptyId = 'pty-paired-title'
   const rowId = `${tabId}::${leafId}`
   runtime.attachWindow(1)
-  runtime.registerPty(ptyId, WORKTREE_ID, null, { tabId, leafId, terminalHandle: handle })
+  registerBoundPty(runtime, ptyId, WORKTREE_ID, null, { tabId, leafId, terminalHandle: handle })
+  // Main's tab carries the title the window shows (switch on, main binds the pane).
+  const saved = session()
+  storeOf(runtime)?.setWorkspaceSession?.({
+    ...saved,
+    tabsByWorktree: {
+      ...saved.tabsByWorktree,
+      [WORKTREE_ID]: (saved.tabsByWorktree[WORKTREE_ID] ?? []).map((tab) =>
+        tab.id === tabId ? { ...tab, customTitle: 'Original title' } : tab
+      )
+    }
+  })
   try {
     await runtime.syncWindowGraph(1, {
       tabs: [],

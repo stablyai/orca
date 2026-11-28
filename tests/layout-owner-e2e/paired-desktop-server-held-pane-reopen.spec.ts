@@ -3,7 +3,7 @@
  * build's terminal service may still run it) on the desktop's existing newer-build banner, and its
  * Reopen goes to the server's main: the server stops that service and starts the pane, which binds.
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   pnpm exec playwright test tests/e2e/paired-desktop-server-held-pane-reopen.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
@@ -39,10 +39,8 @@ import {
   readHostHandles,
   waitForWorktree
 } from './helpers/paired-desktop-server-terminal-tab'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 const NEWER_PROTOCOL = PROTOCOL_VERSION + 1
 const BANNER_TITLE = 'This terminal was opened in a newer version of Orca'
 
@@ -127,7 +125,7 @@ async function paneBannerText(
 }
 
 test.describe("paired desktop reopens a switch-on server's held pane", () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
   test.skip(process.platform === 'win32', 'The fake terminal service is a Unix socket')
 
   test('the server pane shows the banner, Reopen goes to the server, and the pane binds', async ({

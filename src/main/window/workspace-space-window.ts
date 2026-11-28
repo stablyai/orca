@@ -12,7 +12,7 @@ import {
   stepUIZoomLevel,
   type UIZoomDirection
 } from '../../shared/app-lifecycle/windows/ui-zoom-level'
-import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { sharedPreloadWindowArguments } from './shared-preload-window-arguments'
 
 let spaceWindow: BrowserWindow | null = null
 
@@ -54,7 +54,6 @@ export function createOrFocusWorkspaceSpaceWindow(
   }
 
   // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
-  const wslArguments = wslHostsWindowArguments()
   const window = new BrowserWindow({
     width: 1180,
     height: 820,
@@ -69,7 +68,7 @@ export function createOrFocusWorkspaceSpaceWindow(
       sandbox: true,
       partition: 'orca-workspace-space-window',
       webviewTag: false,
-      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
+      additionalArguments: sharedPreloadWindowArguments()
     }
   })
   spaceWindow = window

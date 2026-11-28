@@ -5,6 +5,8 @@ import { spawnProcess } from '@orca/process-host'
 import { createElectronHomeIsolation } from './electron-home-isolation'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { resolveElectronExecutable } from './daemon-generation-runtime-fixture'
+import { expectRuntimeTookLayoutOwner } from './layout-owner-build'
+import { RuntimeClient } from '../../../src/cli/runtime/client'
 
 export type CliServe = {
   userDataDir: string
@@ -134,6 +136,14 @@ export async function startCliServe(
     timeoutMs: 240_000,
     parseReady: parseReadiness
   }).catch(async (error: unknown) => {
+    await stopHost()
+    throw error
+  })
+  await expectRuntimeTookLayoutOwner(new RuntimeClient(profile.userDataDir, 30_000, null, null), {
+    ...profile.env,
+    ...extraEnv
+  }).catch(async (error: unknown) => {
+    await serve.stop()
     await stopHost()
     throw error
   })
