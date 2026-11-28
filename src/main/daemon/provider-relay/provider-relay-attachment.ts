@@ -147,7 +147,8 @@ export class ProviderRelayAttachment {
     this.nudge = setTimeout(() => {
       this.nudge = null
       const seq = askedSeq()
-      if (seq !== null) {
+      // A client that isn't reading gets no pile of asks: the next nudge asks for the current seq.
+      if (seq !== null && this.stream.socket.writableNeedDrain !== true) {
         this.askForAck(seq)
       }
       this.whilePaused(true, askedSeq, Math.min(delayMs * 2, RELAY_ACK_NUDGE_MAX_MS))
