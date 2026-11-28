@@ -179,7 +179,7 @@ export function monitorWorkerSetup(args: {
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
         to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
-        subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+        subject: `Setup failed for worker ${args.dispatchId}`,
         type: 'status',
         priority: 'high',
         payload: JSON.stringify({
