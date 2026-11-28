@@ -5,7 +5,7 @@ import {
   type Editor,
   type NodeViewProps
 } from '@tiptap/react'
-import { Users } from 'lucide-react'
+import { SquareTerminal, Users } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
@@ -19,6 +19,7 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
   const t = useTranslate()
   const label = String(node.attrs.label)
   const agentType = String(node.attrs.agentType ?? '')
+  const terminal = node.attrs.kind === 'terminal'
   return (
     <NodeViewWrapper
       as="span"
@@ -27,17 +28,24 @@ function AgentReferencePill({ node, selected }: NodeViewProps): React.JSX.Elemen
       data-native-chat-agent-reference={node.attrs.address}
     >
       <NativeChatPromptPill
-        icon={Users}
+        icon={terminal ? SquareTerminal : Users}
         // The agent's logo where it was picked from a list that knows it; older drafts keep the generic icon.
+        // A terminal chip always shows the terminal icon.
         avatar={
-          agentType ? (
+          agentType && !terminal ? (
             <AgentTypeIcon agentType={agentType} size={12} className="size-3" />
           ) : undefined
         }
         label={label}
-        spokenLabel={t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
-          name: label
-        })}
+        spokenLabel={
+          terminal
+            ? t('components.native-chat.composer.terminalPillLabel', 'Terminal: {{name}}', {
+                name: label
+              })
+            : t('components.native-chat.composer.agentPillLabel', 'Agent: {{name}}', {
+                name: label
+              })
+        }
         selected={selected}
       />
     </NodeViewWrapper>
@@ -54,6 +62,8 @@ export const NativeChatAgentReference = Node.create({
     label: { default: '' },
     address: { default: '' },
     hostKey: { default: '' },
+    kind: { default: '' },
+    session: { default: '' },
     agentType: { default: '' }
   }),
   addNodeView: () => ReactNodeViewRenderer(AgentReferencePill),
@@ -70,7 +80,7 @@ export const NativeChatAgentReference = Node.create({
   ]
 })
 
-/** A draft holds each agent once: references already in it, or repeated in the list, are skipped. */
+/** A draft holds each agent once per kind: references already in it, or repeated in the list, are skipped. */
 export function insertAgentReferences(
   editor: Editor,
   candidates: OrchestrationAgentReference[]
@@ -81,11 +91,11 @@ export function insertAgentReferences(
   const present = new Set<string>()
   editor.state.doc.descendants((node) => {
     if (node.type.name === NativeChatAgentReference.name) {
-      present.add(`${node.attrs.hostKey}\0${node.attrs.address}`)
+      present.add(`${node.attrs.hostKey}\0${node.attrs.address}\0${node.attrs.kind}`)
     }
   })
-  const references = candidates.filter(({ hostKey, address }) => {
-    const key = `${hostKey}\0${address}`
+  const references = candidates.filter(({ hostKey, address, kind }) => {
+    const key = `${hostKey}\0${address}\0${kind ?? ''}`
     return !present.has(key) && Boolean(present.add(key))
   })
   if (references.length === 0) {
@@ -101,7 +111,7 @@ export function insertAgentReferences(
     references.flatMap((attrs, index) => [
       {
         type: NativeChatAgentReference.name,
-        attrs: { ...attrs, agentType: attrs.agentType ?? '' }
+        attrs: { ...attrs, session: attrs.session ?? '', agentType: attrs.agentType ?? '' }
       },
       ...(index < references.length - 1 || !hasRightSeparator ? [{ type: 'text', text: ' ' }] : [])
     ])

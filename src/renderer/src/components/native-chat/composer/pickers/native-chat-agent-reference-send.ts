@@ -3,11 +3,13 @@ import { promptLeafString } from '../editor/native-chat-prompt-document-text'
 import {
   agentReferenceNote,
   agentReferenceToken,
+  isAgentReferenceKind,
   isPublicOrchestrationAddress,
   mayHoldAgentReferences,
   printableAgentLabel,
   type OrchestrationAgentReference
 } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import {
   projectNativeChatPastedText,
   projectNativeChatPastedTextParts
@@ -41,14 +43,23 @@ export function serializeNativeChatAgentReferences(
   const occurrences: (SelectedReference | string)[] = []
   const render = (node: JSONContent): string => {
     if (node.type === 'nativeChatAgentReference') {
-      const { label, address, hostKey } = node.attrs ?? {}
+      const { label, address, hostKey, kind, session } = node.attrs ?? {}
       if (typeof label !== 'string' || typeof address !== 'string' || typeof hostKey !== 'string') {
         return ''
       }
-      const reference = { label, address, hostKey }
+      const reference = {
+        label,
+        address,
+        hostKey,
+        kind: isAgentReferenceKind(kind) ? kind : undefined,
+        // The note prints only a real session address.
+        session:
+          typeof session === 'string' && parseOrcaSessionAddress(session) ? session : undefined
+      }
       const literal = agentReferenceToken(reference)
       if (isPublicOrchestrationAddress(address)) {
-        const key = JSON.stringify([hostKey, address])
+        // A crew chip and a terminal chip can name one terminal; each kind keeps its own note.
+        const key = JSON.stringify([hostKey, address, reference.kind])
         let target = selected.get(key)
         if (!target) {
           target = {
@@ -143,7 +154,7 @@ export function serializeNativeChatAgentReferences(
     .map((part) => (typeof part === 'string' ? part : `@${part.opaque.label}`))
     .join('')
   const notes = [...selected.values()].map(({ reference, label }) =>
-    agentReferenceNote(label, reference.address)
+    agentReferenceNote(label, reference.address, reference.kind, reference.session)
   )
   return layout === 'goal'
     ? `${body.trimEnd()} ${notes.join(' ')}`

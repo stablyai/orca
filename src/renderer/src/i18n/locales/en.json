@@ -21767,6 +21767,7 @@
         "skillPillLabel": "Skill: {{name}}",
         "filePillLabel": "File: {{name}}",
         "agentPillLabel": "Agent: {{name}}",
+        "terminalPillLabel": "Terminal: {{name}}",
         "backToBots": "Back to bots",
         "botChats": "Chats",
         "botChatsCount": "{{name}}'s chats, {{chatCount}}",
