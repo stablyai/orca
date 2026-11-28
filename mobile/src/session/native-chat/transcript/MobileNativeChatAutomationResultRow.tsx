@@ -5,7 +5,7 @@ import { MobileNativeChatMarkdown } from './message-content/MobileNativeChatMark
 import { CHAT_PROSE_SCALE } from './messages/mobile-native-chat-message-styles'
 import { MobileAutomationRowFrame } from './MobileAutomationRowFrame'
 
-/** An automation run's result in its bot's Chat, as its row; opens into the result. */
+/** An automation run's result in its bot's Chat, as its row; opens into the result when it has one. */
 export function MobileNativeChatAutomationResultRow({
   note,
   fontScale
@@ -29,11 +29,13 @@ export function MobileNativeChatAutomationResultRow({
       disclosureKey={`automation-result:${note.runId}`}
       fontScale={fontScale}
     >
-      <MobileNativeChatMarkdown
-        content={note.result}
-        rangeSelectable
-        textScale={CHAT_PROSE_SCALE * fontScale}
-      />
+      {note.result ? (
+        <MobileNativeChatMarkdown
+          content={note.result}
+          rangeSelectable
+          textScale={CHAT_PROSE_SCALE * fontScale}
+        />
+      ) : null}
     </MobileAutomationRowFrame>
   )
 }

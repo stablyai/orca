@@ -62,13 +62,15 @@ export function NativeChatAutomationResultRow({
       onToggle={() => setOpen(!open)}
     >
       <>
-        <NativeChatMarkdown
-          content={note.result}
-          variant="document"
-          renderCodeBlock={NativeChatCodeBlock}
-          className="text-sm text-card-foreground"
-        />
-        <div className="mt-2">
+        {note.result ? (
+          <NativeChatMarkdown
+            content={note.result}
+            variant="document"
+            renderCodeBlock={NativeChatCodeBlock}
+            className="text-sm text-card-foreground"
+          />
+        ) : null}
+        <div>
           <button
             type="button"
             className={RUN_LINK_BUTTON}
