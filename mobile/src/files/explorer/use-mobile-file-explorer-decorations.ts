@@ -65,13 +65,13 @@ const ignoredPathsQuery = defineHostQuery({
       return reply.value
     }
     // Older desktops without git.checkIgnored return method_not_found; transient failures must retry, not cache [].
-    if (isMobileGitUnavailableReply(outcome.raw)) {
+    if (isMobileGitUnavailableReply(outcome)) {
       return []
     }
     throw new Error(
-      outcome.raw.ok
+      outcome.ok
         ? 'Invalid git.checkIgnored reply'
-        : outcome.raw.error.message || 'git.checkIgnored failed'
+        : outcome.error.message || 'git.checkIgnored failed'
     )
   }
 })

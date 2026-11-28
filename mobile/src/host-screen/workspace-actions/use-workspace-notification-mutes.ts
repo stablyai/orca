@@ -68,7 +68,7 @@ export function useWorkspaceNotificationMutes(args: {
             return
           }
           // Fall back to read-modify-write only on older hosts without ui.setWorkspaceNotificationMuted.
-          if (atomicReply.raw.ok || atomicReply.raw.error.code !== 'method_not_found') {
+          if (atomicReply.ok || atomicReply.error.code !== 'method_not_found') {
             return
           }
           const fresh = await readMutes(client)
