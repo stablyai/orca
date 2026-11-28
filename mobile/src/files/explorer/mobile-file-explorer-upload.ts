@@ -14,6 +14,7 @@ import { isFileExistsErrorMessage } from '../mutation-ownership/file-exists-erro
 import {
   explorerWorktreeSelector,
   freeCopyPaths,
+  noFreeCopyNameMessage,
   type ExplorerTarget
 } from './mobile-file-explorer-mutations'
 
@@ -162,7 +163,7 @@ export async function uploadStagedFileAsCopy(
       throw error
     }
   }
-  throw new Error(`No free name for a copy of ${file.name}`)
+  throw new Error(noFreeCopyNameMessage(file.name))
 }
 
 /** The name Keep Both would use now; undefined when the host can't say. */

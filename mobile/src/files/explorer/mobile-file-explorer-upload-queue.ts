@@ -6,10 +6,12 @@ import {
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ExplorerTarget } from './mobile-file-explorer-mutations'
 import { runUpload } from './mobile-file-explorer-upload-run'
+import { watchClientsForReconnect } from './mobile-file-explorer-upload-client-watch'
 import { forgetProgress, setProgress } from './mobile-file-explorer-upload-progress'
 
 /** `offline`: waits for the host to come back, then starts that file again (the host dropped what it had). */
-export type UploadStatus = 'waiting' | 'offline' | 'uploading' | 'clash' | 'failed'
+/** `unconfirmed`: the commit got no answer, so the row asks the user to check rather than retry. */
+export type UploadStatus = 'waiting' | 'offline' | 'uploading' | 'clash' | 'failed' | 'unconfirmed'
 
 export type UploadRow = {
   readonly id: string
@@ -38,6 +40,8 @@ type Job = UploadRow & {
 type Batch = {
   uploaded: number
   lost: number
+  /** Keep Both or Skip chosen for every clash of the pick, including ones still to come. */
+  clashChoice?: 'keepBoth' | 'skip'
   /** The folder's listing is out of date: a file landed, or may have. */
   refreshFolder: () => void
   onDone: (result: { uploaded: number; lost: number; folder: string }) => void
@@ -55,8 +59,6 @@ const listeners = new Set<() => void>()
 const rowsByScope = new Map<string, readonly UploadRow[]>()
 // Only scopes with jobs: what the route says about reaching the workspace's host.
 const unreachable = new Set<string>()
-// One state listener per client that has offline uploads, and none once they're gone.
-const clientWatches = new Map<RpcClient, () => void>()
 let keepAlive: ReturnType<typeof setInterval> | null = null
 let running = false
 let nextId = 0
@@ -70,7 +72,10 @@ function publish(next: readonly Job[]): void {
       unreachable.delete(scope)
     }
   }
-  watchOfflineClients()
+  watchClientsForReconnect(
+    new Set(jobs.filter((job) => job.status === 'offline').map((job) => job.client)),
+    (client) => resume((job) => job.client === client && !unreachable.has(job.scope))
+  )
   // Only while a transfer runs and others wait behind it: a stalled queue lets its files lapse after
   // the shell's five minutes, so the page's few picked-file slots free up for chat attachments.
   const behind =
@@ -83,28 +88,6 @@ function publish(next: readonly Job[]): void {
   }
   for (const listener of listeners) {
     listener()
-  }
-}
-
-function watchOfflineClients(): void {
-  const offline = new Set(jobs.filter((job) => job.status === 'offline').map((job) => job.client))
-  for (const [client, stop] of clientWatches) {
-    if (!offline.has(client)) {
-      stop()
-      clientWatches.delete(client)
-    }
-  }
-  for (const client of offline) {
-    if (!clientWatches.has(client)) {
-      clientWatches.set(
-        client,
-        client.onStateChange((state) => {
-          if (state === 'connected') {
-            resume((job) => job.client === client && !unreachable.has(job.scope))
-          }
-        })
-      )
-    }
   }
 }
 
@@ -216,6 +199,10 @@ export function noteUploadHostReachable(scope: string, reachable: boolean): void
 /** Keep Both or Skip for one clash, or for every clash of its pick. */
 export function resolveClash(id: string, choice: 'keepBoth' | 'skip', applyToAll: boolean): void {
   const clash = jobs.find((job) => job.id === id)
+  const batch = clash && batches.get(clash.batch)
+  if (applyToAll && batch) {
+    batch.clashChoice = choice
+  }
   const chosen = jobs.filter(
     (job) => job.status === 'clash' && (job.id === id || (applyToAll && job.batch === clash?.batch))
   )
@@ -288,23 +275,21 @@ async function run(job: Job): Promise<void> {
       return
     case 'unconfirmed':
       batches.get(job.batch)?.refreshFolder()
-      update(job.id, { status: 'failed', error: verdict.message })
+      update(job.id, { status: 'unconfirmed', error: verdict.message })
       return
-    case 'clash':
-      update(job.id, {
-        status: 'clash',
-        copyName: verdict.copyName,
-        promptClosed: false
-      })
+    case 'clash': {
+      const choice = batches.get(job.batch)?.clashChoice
+      update(job.id, { status: 'clash', copyName: verdict.copyName, promptClosed: false })
+      if (choice) {
+        resolveClash(job.id, choice, false)
+      }
       return
+    }
     case 'cut':
       if (!reachable(job)) {
         update(job.id, { status: 'offline' })
       } else if (verdict.transport && job.restarts < MAX_RESTARTS) {
-        update(job.id, {
-          status: 'waiting',
-          restarts: job.restarts + 1
-        })
+        update(job.id, { status: 'waiting', restarts: job.restarts + 1 })
       } else {
         update(job.id, { status: 'failed', error: verdict.message })
       }

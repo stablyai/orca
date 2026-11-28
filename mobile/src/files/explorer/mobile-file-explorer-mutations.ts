@@ -233,6 +233,16 @@ export const explorerCopy = defineHostMutation({
   ]
 })
 
+export function noFreeCopyNameMessage(name: string): string {
+  return translate(
+    'files.fileExplorerRowActions.noFreeCopyName',
+    'No free name for a copy of {{name}}',
+    {
+      name
+    }
+  )
+}
+
 /** Free names for a copy of `name` in `parent`, in desktop's order ("a copy.txt", "a copy 2.txt"), checked ten at a time. */
 export async function* freeCopyPaths(
   client: RpcClient,
@@ -274,7 +284,7 @@ export async function duplicateExplorerFile(
       throw error
     }
   }
-  throw new Error(`No free name for a copy of ${source.name}`)
+  throw new Error(noFreeCopyNameMessage(source.name))
 }
 
 type DeleteVars = { target: ExplorerTarget; relativePath: string; isDirectory: boolean }

@@ -2118,7 +2118,8 @@
       "shareTooLarge": "大於 256 MB 的檔案無法從手機分享",
       "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案",
       "uploadHere": "上傳到這裡",
-      "uploadFiles": "上傳檔案"
+      "uploadFiles": "上傳檔案",
+      "noFreeCopyName": "沒有可用於 {{name}} 副本的名稱"
     },
     "fileExplorerUpload": {
       "waiting": "等待中",
@@ -2142,7 +2143,8 @@
       "lost_one": "有 {{count}} 個檔案未上傳：手機已釋放它。請重新選擇。",
       "lost_other": "有 {{count}} 個檔案未上傳：手機已釋放它們。請重新選擇。",
       "nameTaken": "名稱已被使用 · 點一下以選擇",
-      "workspaceRoot": "工作區根目錄"
+      "workspaceRoot": "工作區根目錄",
+      "unconfirmed": "無法確認上傳。請檢查資料夾。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",

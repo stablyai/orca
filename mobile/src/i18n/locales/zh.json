@@ -2214,7 +2214,8 @@
       "shareTooLarge": "大于 256 MB 的文件无法从手机共享",
       "shareHostOutdated": "请更新运行此工作区的 Orca 以共享文件",
       "uploadHere": "上传到这里",
-      "uploadFiles": "上传文件"
+      "uploadFiles": "上传文件",
+      "noFreeCopyName": "没有可用于 {{name}} 副本的名称"
     },
     "fileExplorerUpload": {
       "waiting": "等待中",
@@ -2238,7 +2239,8 @@
       "lost_one": "有 {{count}} 个文件未上传：手机已释放它。请重新选择。",
       "lost_other": "有 {{count}} 个文件未上传：手机已释放它们。请重新选择。",
       "nameTaken": "名称已被占用 · 轻点以选择",
-      "workspaceRoot": "工作区根目录"
+      "workspaceRoot": "工作区根目录",
+      "unconfirmed": "无法确认上传。请检查文件夹。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",

@@ -2121,7 +2121,8 @@
       "shareTooLarge": "Dateien über 256 MB können nicht vom Telefon geteilt werden",
       "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen",
       "uploadHere": "Hierher hochladen",
-      "uploadFiles": "Dateien hochladen"
+      "uploadFiles": "Dateien hochladen",
+      "noFreeCopyName": "Kein freier Name für eine Kopie von {{name}}"
     },
     "fileExplorerUpload": {
       "waiting": "Wartet",
@@ -2145,7 +2146,8 @@
       "lost_one": "{{count}} Datei wurde nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
       "lost_other": "{{count}} Dateien wurden nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
       "nameTaken": "Name vergeben · Zum Auswählen tippen",
-      "workspaceRoot": "den Stammordner des Arbeitsbereichs"
+      "workspaceRoot": "den Stammordner des Arbeitsbereichs",
+      "unconfirmed": "Der Upload konnte nicht bestätigt werden. Prüfe den Ordner."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",

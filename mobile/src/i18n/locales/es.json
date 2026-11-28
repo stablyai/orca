@@ -2181,7 +2181,8 @@
       "shareTooLarge": "Los archivos de más de 256 MB no se pueden compartir desde el teléfono",
       "shareHostOutdated": "Actualiza Orca donde se ejecuta este espacio de trabajo para compartir archivos",
       "uploadHere": "Subir aquí",
-      "uploadFiles": "Subir archivos"
+      "uploadFiles": "Subir archivos",
+      "noFreeCopyName": "No hay un nombre libre para una copia de {{name}}"
     },
     "fileExplorerUpload": {
       "waiting": "En espera",
@@ -2208,7 +2209,8 @@
       "lost_one": "{{count}} archivo no se subió: el teléfono lo descartó. Vuelve a elegirlo.",
       "lost_other": "{{count}} archivos no se subieron: el teléfono los descartó. Vuelve a elegirlos.",
       "nameTaken": "Nombre en uso · Toca para elegir",
-      "workspaceRoot": "la raíz del espacio de trabajo"
+      "workspaceRoot": "la raíz del espacio de trabajo",
+      "unconfirmed": "No se pudo confirmar la subida. Revisa la carpeta."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código fuente Markdown cargado",

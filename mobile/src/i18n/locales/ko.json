@@ -2117,7 +2117,8 @@
       "shareTooLarge": "256MB보다 큰 파일은 휴대폰에서 공유할 수 없습니다",
       "shareHostOutdated": "파일을 공유하려면 이 워크스페이스가 실행되는 곳의 Orca를 업데이트하세요",
       "uploadHere": "여기에 업로드",
-      "uploadFiles": "파일 업로드"
+      "uploadFiles": "파일 업로드",
+      "noFreeCopyName": "{{name}} 사본에 쓸 수 있는 이름이 없습니다"
     },
     "fileExplorerUpload": {
       "waiting": "대기 중",
@@ -2141,7 +2142,8 @@
       "lost_one": "파일 {{count}}개가 업로드되지 않았습니다. 휴대폰이 파일을 놓았습니다. 다시 선택하세요.",
       "lost_other": "파일 {{count}}개가 업로드되지 않았습니다. 휴대폰이 파일을 놓았습니다. 다시 선택하세요.",
       "nameTaken": "이름이 이미 있음 · 탭하여 선택",
-      "workspaceRoot": "워크스페이스 루트"
+      "workspaceRoot": "워크스페이스 루트",
+      "unconfirmed": "업로드를 확인할 수 없습니다. 폴더를 확인하세요."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",

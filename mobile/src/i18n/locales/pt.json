@@ -2183,7 +2183,8 @@
       "shareTooLarge": "Arquivos maiores que 256 MB não podem ser compartilhados pelo celular",
       "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos",
       "uploadHere": "Enviar para cá",
-      "uploadFiles": "Enviar arquivos"
+      "uploadFiles": "Enviar arquivos",
+      "noFreeCopyName": "Nenhum nome livre para uma cópia de {{name}}"
     },
     "fileExplorerUpload": {
       "waiting": "Aguardando",
@@ -2210,7 +2211,8 @@
       "lost_one": "{{count}} arquivo não foi enviado: o celular o descartou. Escolha-o de novo.",
       "lost_other": "{{count}} arquivos não foram enviados: o celular os descartou. Escolha-os de novo.",
       "nameTaken": "Nome em uso · Toque para escolher",
-      "workspaceRoot": "a raiz do espaço de trabalho"
+      "workspaceRoot": "a raiz do espaço de trabalho",
+      "unconfirmed": "Não foi possível confirmar o envio. Verifique a pasta."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",

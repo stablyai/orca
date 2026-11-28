@@ -2117,7 +2117,8 @@
       "shareTooLarge": "256 MB を超えるファイルはスマートフォンから共有できません",
       "shareHostOutdated": "ファイルを共有するには、このワークスペースを実行している Orca を更新してください",
       "uploadHere": "ここにアップロード",
-      "uploadFiles": "ファイルをアップロード"
+      "uploadFiles": "ファイルをアップロード",
+      "noFreeCopyName": "{{name}} のコピーに使える名前がありません"
     },
     "fileExplorerUpload": {
       "waiting": "待機中",
@@ -2141,7 +2142,8 @@
       "lost_one": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
       "lost_other": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
       "nameTaken": "同じ名前があります · タップして選択",
-      "workspaceRoot": "ワークスペースのルート"
+      "workspaceRoot": "ワークスペースのルート",
+      "unconfirmed": "アップロードを確認できませんでした。フォルダを確認してください。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",

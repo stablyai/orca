@@ -2288,7 +2288,8 @@
       "shareTooLarge": "256 MB’tan büyük dosyalar telefondan paylaşılamaz",
       "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin",
       "uploadHere": "Buraya yükle",
-      "uploadFiles": "Dosya yükle"
+      "uploadFiles": "Dosya yükle",
+      "noFreeCopyName": "{{name}} kopyası için boş ad yok"
     },
     "fileExplorerUpload": {
       "waiting": "Bekliyor",
@@ -2312,7 +2313,8 @@
       "lost_one": "{{count}} dosya yüklenmedi: telefon onu bıraktı. Yeniden seçin.",
       "lost_other": "{{count}} dosya yüklenmedi: telefon onları bıraktı. Yeniden seçin.",
       "nameTaken": "Ad kullanımda · Seçmek için dokunun",
-      "workspaceRoot": "çalışma alanının kökü"
+      "workspaceRoot": "çalışma alanının kökü",
+      "unconfirmed": "Yükleme doğrulanamadı. Klasörü kontrol edin."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",

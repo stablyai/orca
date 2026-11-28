@@ -2181,7 +2181,8 @@
       "shareTooLarge": "Les fichiers de plus de 256 Mo ne peuvent pas être partagés depuis le téléphone",
       "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers",
       "uploadHere": "Importer ici",
-      "uploadFiles": "Importer des fichiers"
+      "uploadFiles": "Importer des fichiers",
+      "noFreeCopyName": "Aucun nom libre pour une copie de {{name}}"
     },
     "fileExplorerUpload": {
       "waiting": "En attente",
@@ -2208,7 +2209,8 @@
       "lost_one": "{{count}} fichier n'a pas été importé : le téléphone l'a libéré. Choisissez-le à nouveau.",
       "lost_other": "{{count}} fichiers n'ont pas été importés : le téléphone les a libérés. Choisissez-les à nouveau.",
       "nameTaken": "Nom déjà pris · Touchez pour choisir",
-      "workspaceRoot": "la racine de l’espace de travail"
+      "workspaceRoot": "la racine de l’espace de travail",
+      "unconfirmed": "Impossible de confirmer l'importation. Vérifiez le dossier."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",

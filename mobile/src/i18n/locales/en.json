@@ -2360,7 +2360,8 @@
       "shareTooLarge": "Files larger than 256 MB can’t be shared from the phone",
       "shareHostOutdated": "Update Orca where this workspace runs to share files",
       "uploadHere": "Upload Here",
-      "uploadFiles": "Upload Files"
+      "uploadFiles": "Upload Files",
+      "noFreeCopyName": "No free name for a copy of {{name}}"
     },
     "fileExplorerUpload": {
       "waiting": "Waiting",
@@ -2387,7 +2388,8 @@
       "workspaceRoot": "the workspace root",
       "lost": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
       "uploaded": "Uploaded {{count}} files to {{folder}}",
-      "clashTitleSeveral": "{{count}} files are already in {{folder}}"
+      "clashTitleSeveral": "{{count}} files are already in {{folder}}",
+      "unconfirmed": "Couldn't confirm the upload. Check the folder."
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
