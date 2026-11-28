@@ -74,6 +74,9 @@ export function useRevealFocusedTabStripSlot({
       if (!isTabStripPointerGestureRevealOnRelease()) {
         return undefined
       }
+      if (tabClosedThisCommitRef.current) {
+        return undefined
+      }
       let removeReleaseListener = (): void => {}
       const closeGeneration = tabCloseGenerationRef.current
       removeReleaseListener = onTabStripPointerGestureRelease(() => {
