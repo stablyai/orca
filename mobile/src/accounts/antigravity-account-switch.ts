@@ -1,3 +1,4 @@
+import { ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS } from '../../../src/shared/agent-accounts/antigravity/antigravity-account-types'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { Translate } from '../i18n/mobile-i18n'
 import { callAgentSession } from '../session/native-chat/agent-session/mobile-structured-agent-session-rpc'
@@ -14,7 +15,12 @@ export async function requestAntigravitySelect(
   accountId: string
 ): Promise<AntigravityAccountState> {
   return selectAntigravityAccount.interpret(
-    await selectAntigravityAccount.request(client, { target: ANTIGRAVITY_HOST_TARGET, accountId })
+    // Reading agy's login may raise a keychain dialog on the host; desktop waits as long.
+    await selectAntigravityAccount.request(
+      client,
+      { target: ANTIGRAVITY_HOST_TARGET, accountId },
+      { timeoutMs: ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS }
+    )
   )
 }
 
