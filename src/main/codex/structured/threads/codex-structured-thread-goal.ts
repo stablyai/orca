@@ -120,6 +120,9 @@ export async function changeCodexThreadGoalWithSettings(
   try {
     if (startsWork) {
       const requested = resolvedCodexGoalSettings(session, input.executionOptions)
+      const selectedModel = input.executionOptions?.model
+      const requestedInput =
+        selectedModel === undefined ? requested : { ...requested, model: selectedModel }
       let previousApplied = session.appliedTurnOptions
       let previousInput = session.appliedTurnInputOptions
       let invalidatedApplied: CodexSession['appliedTurnOptions']
@@ -144,7 +147,7 @@ export async function changeCodexThreadGoalWithSettings(
             session.appliedTurnOptions = { ...invalidatedApplied, ...requested }
           }
           if (session.appliedTurnInputOptions === invalidatedInput) {
-            session.appliedTurnInputOptions = { ...invalidatedInput, ...requested }
+            session.appliedTurnInputOptions = { ...invalidatedInput, ...requestedInput }
           }
         },
         () => {
@@ -167,7 +170,7 @@ export async function changeCodexThreadGoalWithSettings(
             if (requested[key] !== undefined && requested[key] !== known[key]) {
               delete known[key]
             }
-            if (requested[key] !== undefined && requested[key] !== knownInput[key]) {
+            if (requestedInput[key] !== undefined && requestedInput[key] !== knownInput[key]) {
               delete knownInput[key]
             }
           }

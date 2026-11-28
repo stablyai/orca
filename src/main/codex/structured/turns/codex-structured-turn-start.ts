@@ -12,6 +12,7 @@ import { reportedCodexPermissionMode } from '../threads/codex-structured-thread-
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import {
   agentSessionFailureFact,
+  providerDiagnostic,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -21,6 +22,29 @@ import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-ser
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { codexRunningOrOpeningTurn, codexStopTarget } from './codex-structured-turn-open-wait'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
+import { codexThreadModel } from '../launch/codex-thread-model-selection'
+
+function turnModel(host: CodexTurnHost, id: string | undefined): string | undefined {
+  if (id === undefined) {
+    return undefined
+  }
+  try {
+    return codexThreadModel(id, host.selectedModelProvider)
+  } catch (error) {
+    throw new StructuredAgentSessionInputNotAdmitted({
+      state: 'rejected',
+      ...codexDispatchRejection(
+        agentSessionFailureFact('providerRejected', {
+          detail: providerDiagnostic(
+            error instanceof Error ? error.message : 'Invalid configured Codex model selection',
+            'log'
+          ),
+          neverReachedAgent: true
+        })
+      )
+    })
+  }
+}
 
 /** false means correlation capacity refused the send before writing; null turnId means an unnamed answer. */
 export async function startCodexTurn(
@@ -30,6 +54,8 @@ export async function startCodexTurn(
     onReply?: () => void
   }
 ): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
+  // Steering has no model override either; reject cross-provider input before it can be sent.
+  turnModel(host, input.turnOptions ? input.turnOptions.model : host.options.get('model'))
   // Arm before writing: echoes and turn/started can arrive before the reply.
   if (!host.dispatchEchoes.arm(input.clientMessageId, input.requestedAt)) {
     return false
@@ -81,6 +107,8 @@ export async function startCodexTurn(
     previousInput = host.appliedTurnInputOptions
     inputChoices = input.executionOptions ?? input.turnOptions ?? Object.fromEntries(host.options)
     previousOptions = input.turnOptions ? new Map(host.options) : null
+    const choices = input.turnOptions ?? Object.fromEntries(host.options)
+    const requestedModel = turnModel(host, choices.model)
     if (input.turnOptions) {
       host.options.clear()
       for (const [key, value] of Object.entries(
@@ -91,10 +119,8 @@ export async function startCodexTurn(
     }
     requested = {
       interactionMode: 'default',
-      ...compileCodexMessageOptions(
-        captureCodexMessageCompilerInputs(host),
-        input.turnOptions ?? Object.fromEntries(host.options)
-      )
+      ...compileCodexMessageOptions(captureCodexMessageCompilerInputs(host), choices),
+      ...(requestedModel !== undefined ? { model: requestedModel } : {})
     }
     const { interactionMode, ...nativeOptions } = requested
     const collaborationMode = {

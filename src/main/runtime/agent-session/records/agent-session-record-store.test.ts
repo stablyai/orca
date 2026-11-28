@@ -218,6 +218,42 @@ describe('acquisition path', () => {
 })
 
 describe('concurrent claims', () => {
+  it('preserves a configured Codex model once the first send can start the provider', async () => {
+    const store = await open()
+    const identity = {
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' }
+    } as const
+    const founded = await store.founding.commit(reserveRequest(identity))
+    const sessionId = founded.record.sessionId
+    const model = 'codex-provider:["local","local-model"]'
+    const pickModel = (fence: number, value: string, startupPending = false) =>
+      store.updateRecord(sessionId, {
+        kind: 'pick-option',
+        args: { sessionId, fence, key: 'model', value, models: undefined, startupPending, now: NOW }
+      })
+    const starting = {
+      refusal: { code: 'agent_session_operation_invalid', details: { reason: 'providerStarting' } }
+    }
+
+    await pickModel(founded.record.lease.runtimeFence, model)
+    await expect(pickModel(founded.record.lease.runtimeFence, 'gpt-5', true)).rejects.toMatchObject(
+      starting
+    )
+    const { record } = await store.reserveOwner(
+      reserveRequest({ ...identity, expectedFence: founded.record.lease.runtimeFence })
+    )
+    const fence = record.lease.runtimeFence
+    await store.commitProcessIdentity({ sessionId, fence, process: processIdentity(), now: NOW })
+    const live = await store.proveOwner({ sessionId, fence, now: NOW })
+    expect(live.providerHandleChain).toEqual([])
+    await expect(pickModel(fence, 'gpt-5')).rejects.toMatchObject(starting)
+    await pickModel(fence, model)
+    expect(store.getRecord(sessionId)?.options?.model).toBe(
+      'codex-provider:["local","local-model"]'
+    )
+  })
+
   it('grants exactly one of two concurrent reservations at the next fence', async () => {
     const store = await open()
     await establishOwner(store)

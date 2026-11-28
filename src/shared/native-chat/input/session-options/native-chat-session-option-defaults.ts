@@ -23,6 +23,7 @@ import {
   encodeStructuredAgentSessionOptionValue
 } from '../../../agent-session/options/selection/structured-agent-session-option-codec'
 import { confirmsListedEffortAtSend } from '../../../agent-session/options/model-catalog/agent-model-catalog-ownership'
+import { isCodexProviderModelId } from '../../../agent-session/options/model-catalog/codex-provider-model'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
@@ -211,6 +212,11 @@ export function updateNativeChatSessionOptionDefaults(args: {
    * adopting one would emit -m on later launches and can fail on accounts lacking that model. */
   adoptModelAsLaunchDefault?: boolean
 }): PersistedNativeChatSessionOptions {
+  const pickedModel = args.optionId === 'model' ? String(args.value) : args.modelId
+  // Shared launch preferences can also seed a Codex terminal.
+  if (args.agent === 'codex' && isCodexProviderModelId(pickedModel)) {
+    return args.persisted ?? {}
+  }
   const currentAgent = args.persisted?.[args.agent]
   const currentModelValues = currentAgent?.valuesByModel?.[args.modelId] ?? {}
   const valuesByModel = {
@@ -225,9 +231,7 @@ export function updateNativeChatSessionOptionDefaults(args: {
     ...args.persisted,
     [args.agent]: {
       ...currentAgent,
-      ...(args.adoptModelAsLaunchDefault === false
-        ? {}
-        : { model: args.optionId === 'model' ? String(args.value) : args.modelId }),
+      ...(args.adoptModelAsLaunchDefault === false ? {} : { model: pickedModel }),
       valuesByModel
     }
   }

@@ -10,6 +10,7 @@ import type { AgentSessionExecutionOptions } from '../../../../shared/agent-sess
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { captureCodexMessageCompilerInputs } from '../catalog/codex-structured-service-tier'
+import { codexThreadModel } from '../launch/codex-thread-model-selection'
 import {
   compileCodexMessageOptions,
   codexMessageInputOptions,
@@ -17,11 +18,13 @@ import {
 } from '../../../../shared/agent-session/options/codex-message-compiler'
 
 export function resolvedCodexGoalSettings(
-  _session: CodexSession,
+  session: CodexSession,
   choices: AgentSessionExecutionOptions = {}
 ) {
   return {
-    ...(choices.model !== undefined ? { model: choices.model } : {}),
+    ...(choices.model !== undefined
+      ? { model: codexThreadModel(choices.model, session.selectedModelProvider) }
+      : {}),
     ...(choices.effort !== undefined ? { effort: choices.effort } : {})
   }
 }

@@ -20,6 +20,7 @@ import { isMissingProviderExecutable } from '../../../provider-process/provider-
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from '../../app-server/codex-app-server-session'
 import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import { codexModelProfileFiles } from './codex-configured-provider-models'
 import { codexProjectConfigIsolationArgs } from './codex-project-config-isolation'
 import { applyCodexConfiguredLaunchDefaults } from '../launch/codex-configured-launch-defaults'
 import {
@@ -105,20 +106,18 @@ export function createCodexModelCatalogProbe(
         : definedEnv(environment)),
       CODEX_HOME: accountHomePath
     }
+    const configHome =
+      resolvePath(accountHomePath) === resolvePath(resolveOrcaManagedCodexHomePath())
+        ? getSystemCodexHomePath()
+        : accountHomePath
+    const modelProfileFiles = await codexModelProfileFiles(configHome)
     return {
       inputStamp: await agentModelCatalogInputStamp({
         command,
         prefixArgs,
         cwd: listIn ?? process.cwd(),
         env: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
-        configFiles: [
-          join(
-            resolvePath(accountHomePath) === resolvePath(resolveOrcaManagedCodexHomePath())
-              ? getSystemCodexHomePath()
-              : accountHomePath,
-            'config.toml'
-          )
-        ]
+        configFiles: [join(configHome, 'config.toml'), ...modelProfileFiles]
       }),
       identity: { command, args, cwd: listIn, overlay: Object.entries(overlay).sort() },
       run: async (
@@ -198,6 +197,7 @@ export function createCodexModelCatalogProbe(
             const listing = await fetchCodexModelCatalogListing({
               connection: rpc,
               cwd,
+              modelProfileFiles,
               operation: runOperation,
               timeoutMs: null,
               publish: observe

@@ -5,6 +5,7 @@ import {
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
+import { parseCodexModelId } from '../../../../shared/agent-session/options/model-catalog/codex-provider-model'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerRequestError
@@ -24,6 +25,7 @@ export type CodexOpenedThread = {
   thread?: Record<string, unknown>
   historyMode?: 'legacy' | 'paginated'
   model?: string
+  selectedModelProvider?: string
   effort?: string | null
   /** Present, including null, only when this app-server reports the effective tier. */
   serviceTier?: string | null
@@ -93,6 +95,7 @@ export async function openCodexThread(
     ...launch.permissionPolicy,
     ...(Object.keys(config).length > 0 ? { config } : {})
   }
+  const selected = launch.model ? parseCodexModelId(launch.model) : undefined
   const startThread = (): Promise<unknown> => {
     throwIfSignalAborted(signal)
     return connection.request(
@@ -101,7 +104,8 @@ export async function openCodexThread(
         ...threadSettings,
         // Codex shows a server's form in Full Access only on a user thread.
         threadSource: 'user',
-        ...(launch.model ? { model: launch.model } : {}),
+        ...(selected ? { model: selected.model } : {}),
+        ...(selected?.provider ? { modelProvider: selected.provider } : {}),
         // A resumed thread keeps the instructions it started with; Codex ignores new ones.
         ...(launch.developerInstructions
           ? { developerInstructions: launch.developerInstructions }
@@ -196,6 +200,11 @@ export async function openCodexThread(
       ? (result.thread as Record<string, unknown>)
       : {}
   const model = nonEmptyString(result.model)
+  const modelProvider = nonEmptyString(result.modelProvider) ?? nonEmptyString(thread.modelProvider)
+  // A saved chat keeps its provider. Confirm an explicitly selected one before admitting input.
+  if (selected?.provider && modelProvider !== selected.provider) {
+    throw new Error('Codex did not open the chat with the selected model provider')
+  }
   const effort = nonEmptyString(result.reasoningEffort)
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
@@ -209,6 +218,7 @@ export async function openCodexThread(
       ? { historyMode: thread.historyMode }
       : {}),
     ...(model ? { model } : {}),
+    ...(selected?.provider ? { selectedModelProvider: selected.provider } : {}),
     ...(effort || result.reasoningEffort === null ? { effort } : {}),
     ...(sandbox ? { sandbox } : {}),
     ...(serviceTierKnown ? { serviceTier } : {})
