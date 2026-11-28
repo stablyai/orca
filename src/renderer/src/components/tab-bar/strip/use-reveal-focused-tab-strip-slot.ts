@@ -1,6 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react'
 import {
   isTabStripPointerGestureActive,
+  isTabStripPointerGestureRevealOnRelease,
   onTabStripPointerGestureRelease
 } from './tab-strip-pointer-gesture'
 import { findTabStripSlot, revealTabStripSlot } from './tab-strip-slot-geometry'
@@ -70,6 +71,9 @@ export function useRevealFocusedTabStripSlot({
     if (isTabStripPointerGestureActive()) {
       requestAnimationFrame(updateTabStripOverflowState)
       recordScrollAnchor()
+      if (!isTabStripPointerGestureRevealOnRelease()) {
+        return undefined
+      }
       let removeReleaseListener = (): void => {}
       const closeGeneration = tabCloseGenerationRef.current
       removeReleaseListener = onTabStripPointerGestureRelease(() => {
