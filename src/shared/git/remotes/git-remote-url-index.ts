@@ -9,8 +9,9 @@ export type GitRemoteVerboseEntry = {
   direction: 'fetch' | 'push'
 }
 
-// Greedy prefix so a URL containing spaces or parentheses keeps them.
-const REMOTE_VERBOSE_URL_PATTERN = /^(.*) \((fetch|push)\)$/
+// Greedy prefix so a URL containing spaces or parentheses keeps them. A partial-clone
+// remote appends its object filter after the marker, as in `<url> (fetch) [blob:none]`.
+const REMOTE_VERBOSE_URL_PATTERN = /^(.*) \((fetch|push)\)(?: \[[^\]\r\n]*\])?$/
 
 /** Parse one `<name>\t<url> (fetch|push)` row. */
 export function parseGitRemoteVerboseLine(line: string): GitRemoteVerboseEntry | null {
