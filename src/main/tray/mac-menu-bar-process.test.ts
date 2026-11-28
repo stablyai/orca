@@ -148,6 +148,11 @@ it('keeps a helper whose open menu defers an update', () => {
   helper.send({ type: 'deferred', id: helper.requests.at(-1)!.id })
   vi.advanceTimersByTime(60_000)
   expect(helper.kill).not.toHaveBeenCalled()
+  // The menu closes and the deferred apply hangs: the next focus still replaces the helper.
+  process.probe()
+  expect(helper.requests.at(-1)!.type).toBe('ping')
+  vi.advanceTimersByTime(16_000)
+  expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
 it('replaces a hung helper on the next probe and keeps no timer while idle', () => {

@@ -24,6 +24,8 @@ type Generation = {
   appliedRevision: number
   sequence: number
   probe: number | null
+  /** The open menu holds the outstanding update; its UI thread still answers probes. */
+  deferred: boolean
   started: number
 }
 
@@ -73,7 +75,8 @@ export class MacMenuBarProcess {
     // A focus/activation means the system is awake, so a missed resume can't disable checks.
     this.deadline.resume()
     // An outstanding (or menu-deferred) update already proves or tests liveness.
-    const idle = generation && generation.sentRevision === generation.appliedRevision
+    const idle =
+      generation && (generation.sentRevision === generation.appliedRevision || generation.deferred)
     if (!idle || !generation.ready || generation.retired || this.deadline.armed) {
       return
     }
@@ -127,6 +130,7 @@ export class MacMenuBarProcess {
       appliedRevision: 0,
       sequence: 0,
       probe: null,
+      deferred: false,
       started: performance.now()
     }
     this.current = generation
@@ -162,14 +166,8 @@ export class MacMenuBarProcess {
     const fault = (): void => {
       void this.retire(generation)
     }
-    child.on('error', () => {
-      // Failed spawn has no process and emits no exit; a live child still needs observed exit.
-      if (!child.pid) {
-        finish()
-      } else {
-        fault()
-      }
-    })
+    // Failed spawn has no process and emits no exit; a live child still needs observed exit.
+    child.on('error', () => (child.pid ? fault() : finish()))
     for (const stream of [child.stdin, child.stdout, child.stderr]) {
       stream.on('error', fault)
     }
@@ -195,17 +193,19 @@ export class MacMenuBarProcess {
           this.flush()
         } else if (message.type === 'pong' && message.id === generation.probe) {
           generation.probe = null
-          if (generation.sentRevision === generation.appliedRevision) {
+          if (generation.sentRevision === generation.appliedRevision || generation.deferred) {
             this.deadline.disarm()
           }
         } else if (message.type === 'deferred' && message.id === generation.sentRevision) {
           // The menu is open and its UI thread answered; the helper applies on close.
+          generation.deferred = true
           if (generation.probe === null) {
             this.deadline.disarm()
           }
         } else if (message.type === 'applied' && message.id === generation.sentRevision) {
           const first = generation.appliedRevision === 0
           generation.appliedRevision = message.id
+          generation.deferred = false
           if (generation.probe === null) {
             this.deadline.disarm()
           }
@@ -255,6 +255,7 @@ export class MacMenuBarProcess {
       return
     }
     generation.sentRevision = this.revision
+    generation.deferred = false
     this.write(generation, { type: 'state', id: this.revision, snapshot: this.desired })
     this.arm(generation)
   }
