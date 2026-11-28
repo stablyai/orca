@@ -11,8 +11,9 @@ import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { watchHostRevocation } from './host-revocation-watch'
 import {
   setHostPairingRefused,
-  setHostRelayRouted
+  setHostReachesOffLan
 } from '../../host-descriptors/direct-pairing-installations'
+import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
 import { createUndialableDirectClient, skipsDirectEndpoint } from './undialable-direct-endpoint'
 import { readvertiseOnPageChange } from './mobile-runtime-capability-negotiation'
 
@@ -29,7 +30,7 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
     return logical
   }
 
-  setHostRelayRouted(host.id, host.relay !== undefined)
+  setHostReachesOffLan(host.id, host.relay !== undefined || isTailscaleEndpoint(host.endpoint))
   const endpointLifecycle = startMobileEndpointLifecycle(logical, host, onLog)
   endpointLifecycle.setForeground(AppState.currentState === 'active')
   const appStateSubscription = AppState.addEventListener('change', (state) => {
