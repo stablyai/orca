@@ -16769,7 +16769,7 @@
           "runStatusDispatchFailed": "Falhou"
         },
         "runContent": {
-          "noOutput": "Nenhum conteúdo de saída disponível."
+          "noOutput": "Sem saída."
         },
         "runViewState": {
           "viewRun": "Ver execução",

@@ -1414,7 +1414,7 @@
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
       "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개",
-      "tapToPairAgain": "탭하여 데스크톱과 다시 페어링하세요."
+      "tapToPairAgain": "탭하여 다시 페어링"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "호스트 호환성 확인 중"
@@ -5102,7 +5102,7 @@
       "started": "시작됨",
       "trigger": "트리거",
       "output": "출력",
-      "noOutput": "사용 가능한 출력 내용이 없습니다.",
+      "noOutput": "출력이 없습니다.",
       "loadingRuns": "실행 로드 중…",
       "loading": "로드 중…",
       "hourly": "매시간",
@@ -6620,7 +6620,7 @@
         "count": "항목 {{count}}개"
       },
       "empty": {
-        "allClear": "확인이 필요한 것이 없습니다"
+        "allClear": "확인할 항목이 없습니다"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."

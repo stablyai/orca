@@ -1469,7 +1469,7 @@
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
       "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}",
-      "tapToPairAgain": "Toca para volver a emparejar tu escritorio."
+      "tapToPairAgain": "Toca para volver a emparejar"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Comprobando la compatibilidad del host"
@@ -5247,7 +5247,7 @@
       "started": "Iniciado",
       "trigger": "Desencadenante",
       "output": "Salida",
-      "noOutput": "No hay contenido de salida disponible.",
+      "noOutput": "Sin salida.",
       "loadingRuns": "Cargando ejecuciones…",
       "loading": "Cargando…",
       "hourly": "Cada hora",

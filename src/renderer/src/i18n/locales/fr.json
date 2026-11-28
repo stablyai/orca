@@ -19799,7 +19799,7 @@
           "runStatusDispatchFailed": "Échec"
         },
         "runContent": {
-          "noOutput": "Aucun contenu de sortie disponible."
+          "noOutput": "Aucune sortie."
         },
         "runViewState": {
           "viewRun": "Voir l’exécution",
@@ -29956,7 +29956,7 @@
       "newThreadTab": "Nouveau fil",
       "items": {
         "orNames": "{{names}} ou {{last}}",
-        "emptyBotsNeedsYou": "Rien de la part de {{names}} ne requiert votre action",
+        "emptyBotsNeedsYou": "Rien à traiter chez {{names}}",
         "emptyBots": "Aucun élément de {{names}}",
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "filterNamed": "Filtrer les éléments, filtre actif : {{filter}}",

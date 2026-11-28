@@ -1408,14 +1408,14 @@
     },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
-      "needsYou_one": "{{count}} 個需要你處理",
-      "needsYou_other": "{{count}} 個需要你處理",
+      "needsYou_one": "{{count}} 個需要你",
+      "needsYou_other": "{{count}} 個需要你",
       "openHost": "開啟 {{title}}",
       "pairingInvalid": "配對已失效",
       "pairingTemporarilyUnavailable": "配對暫時無法使用",
       "unlockHint": "解鎖手機後，點一下以重試",
       "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中",
-      "tapToPairAgain": "點一下以重新與電腦配對"
+      "tapToPairAgain": "點一下重新配對"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "正在檢查主機相容性"
@@ -3645,8 +3645,11 @@
       "stop": "停止",
       "yes": "是"
     },
+    "sidebar": {
+      "needsYou": "需要你"
+    },
     "tabsSheet": {
-      "needsYou": "需要你處理",
+      "needsYou": "需要你",
       "working": "工作中",
       "everythingElse": "其他",
       "closeTab": "關閉 {{title}}",
@@ -5093,7 +5096,7 @@
       "started": "開始",
       "trigger": "觸發",
       "output": "輸出",
-      "noOutput": "沒有可用的輸出內容。",
+      "noOutput": "暫無輸出。",
       "loadingRuns": "正在載入執行...",
       "loading": "載入中…",
       "hourly": "每小時",
@@ -5534,7 +5537,7 @@
       "placeholder": "搜尋代理程式"
     },
     "sections": {
-      "needsYou": "需要你處理",
+      "needsYou": "需要你",
       "working": "執行中",
       "done": "已完成",
       "offline": "離線",
@@ -5654,16 +5657,17 @@
       "connect": "連線 {{service}}"
     },
     "groups": {
+      "needsYou": "· 需要你",
       "group": "群組",
       "peerTold": "{{from}} 告知了 {{to}}",
       "items": {
         "emptyTitle": "此群組還沒有事項",
-        "needsYouCount_one": "{{count}} 個需要你處理",
-        "needsYouCount_other": "{{count}} 個需要你處理",
+        "needsYouCount_one": "{{count}} 個需要你",
+        "needsYouCount_other": "{{count}} 個需要你",
         "workingCount_one": "{{count}} 個執行中",
         "workingCount_other": "{{count}} 個執行中",
         "filterBot": "機器人",
-        "needsYouCount": "{{count}} 個需要你處理",
+        "needsYouCount": "{{count}} 個需要你",
         "workingCount": "{{count}} 個執行中"
       },
       "newThreadTab": "建立討論串",
@@ -5733,9 +5737,11 @@
         "anotherAgent": "另一個代理程式"
       },
       "status": {
+        "needsYou": "需要你",
         "waiting": "等待中"
       },
       "filter": {
+        "needsYou": "只顯示需要你的事項",
         "clearAll": "清除篩選"
       },
       "tab": "項目",
@@ -5762,7 +5768,8 @@
         "next": "下一個項目"
       },
       "empty": {
-        "allClear": "沒有需要你處理的事項"
+        "needsYou": "暫無事項需要你。",
+        "allClear": "暫無事項需要你"
       },
       "write": {
         "offline": "{{host}} 已離線。"
@@ -6415,8 +6422,9 @@
     },
     "saveFailed": "無法儲存",
     "chats": {
+      "needsYou": "需要你",
       "readFailedTitle": "無法載入聊天",
-      "needsYouCount": "{{count}} 個需要你處理",
+      "needsYouCount": "{{count}} 個需要你",
       "open": "開啟",
       "delete": "刪除聊天"
     },
