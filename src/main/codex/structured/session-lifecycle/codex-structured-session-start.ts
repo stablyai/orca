@@ -271,7 +271,7 @@ export async function openCodexStructuredSession(
     session.backgroundTasks,
     keptTurns,
     connection.relay?.endedWork()?.command,
-    connection.relay?.openWork()?.command,
+    connection.relay?.openWork()?.command ?? kept.open,
     kept.spawns
   )
   connection.relay?.releaseOutput()

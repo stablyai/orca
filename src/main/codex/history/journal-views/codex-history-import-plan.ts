@@ -70,7 +70,8 @@ export function createCodexHistoryImportPlan(input: {
     }
     const identity = codexTurnLifecycleIdentity(input.sessionId, turn.id)
     const scope: AgentJournalTurnScope = { kind: 'turn', turnItemId: turn.key }
-    const lifecycle = historicalTurnLifecycle(input.threadId, turn.source, input.liveTurns)
+    const live = input.liveTurns === true && turn.reported === 'inProgress'
+    const lifecycle = historicalTurnLifecycle(input.threadId, turn.source, live)
     if (!lifecycle) {
       observations.release()
       return

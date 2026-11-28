@@ -20,7 +20,7 @@ import {
 } from '../items/codex-collab-agent-tool-call'
 import {
   keptCodexThreadIds,
-  savedRunningCodexHelperThreads,
+  savedRunningCodexRows,
   seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
   type KeptCodexSpawn,
@@ -43,7 +43,12 @@ const KEPT_UNREACHABLE_DETAIL =
 type Connection = Pick<CodexAppServerConnection, 'request'>
 
 /** What a kept agent says of itself at reattach: each thread's turns and its children. */
-export type KeptCodexSnapshot = { turns: KeptCodexTurn[]; spawns: KeptCodexSpawn[] }
+export type KeptCodexSnapshot = {
+  turns: KeptCodexTurn[]
+  spawns: KeptCodexSpawn[]
+  /** Commands open on a shared server, from the chat's saved running rows ([threadId, itemId]). */
+  open?: string[][]
+}
 
 type ThreadRead = { turn: KeptCodexTurn | null; source: ChildSource | null }
 
@@ -301,15 +306,13 @@ export async function openKeptCodexState(input: {
   onError: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexSnapshot> {
   const { connection, translator, journal } = input
+  const saved =
+    connection.relay?.rebuilt === true
+      ? await savedRunningCodexRows(journal?.reads, input.threadId).catch(() => null)
+      : null
   const snapshot = await readKeptCodexSnapshot({
     ...input,
-    carriedThreadIds: [
-      ...keptCodexThreadIds(connection.relay),
-      // A shared server carries no thread ids: helpers saved as running are read from Codex.
-      ...(connection.relay?.rebuilt === true
-        ? await savedRunningCodexHelperThreads(journal?.reads, input.threadId).catch(() => [])
-        : [])
-    ],
+    carriedThreadIds: [...keptCodexThreadIds(connection.relay), ...(saved?.helpers ?? [])],
     ownServer: connection.relay?.ownServer === true
   }).catch(async (error: unknown) => {
     input.onError(input.threadId, error)
@@ -324,11 +327,20 @@ export async function openKeptCodexState(input: {
     )
   })
   await seedKeptCodexCommandOutput(translator, journal, snapshot.turns)
+  // A saved running command Codex already reports ended is no longer open.
+  const ended = new Set(
+    snapshot.turns.flatMap(({ threadId, items }) =>
+      items.flatMap((item) => (item.status === 'inProgress' ? [] : [`${threadId}\u0000${item.id}`]))
+    )
+  )
+  const open = saved?.commands.filter(
+    ([threadId, itemId]) => !ended.has(`${threadId}\u0000${itemId}`)
+  )
   await seedCarriedKeptCodexCommands(
     translator,
     journal,
     snapshot.turns,
-    connection.relay?.openWork()?.command
+    connection.relay?.openWork()?.command ?? open
   )
-  return snapshot
+  return open ? { ...snapshot, open } : snapshot
 }

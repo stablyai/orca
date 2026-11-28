@@ -219,4 +219,6 @@ export type CodexHistoryObservedTurn = {
   saved: AgentJournalRenderItem | null
   key: string
   hidden: boolean
+  /** Codex's own latest status for the turn, kept even when its other facts are set aside. */
+  reported?: unknown
 }

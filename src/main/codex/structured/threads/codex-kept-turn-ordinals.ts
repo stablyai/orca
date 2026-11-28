@@ -218,20 +218,21 @@ export function settleKeptCodexHelperTurns(
   translator.flush()
 }
 
-/** The Codex thread a saved item row came from, read from its key; null when it names none. */
-function codexRowThreadId(itemId: string): string | null {
+/** The Codex thread and item a saved item row came from, read from its key. */
+function codexRowAddress(itemId: string): [string, string] | null {
   const identity = parseAgentJournalItemKey(itemId)
-  if (identity?.provider === 'codex') {
-    return identity.threadId
-  }
   const id = identity?.provider === 'orca' ? identity.clientMessageId : ''
   if (id.startsWith('codex-item:')) {
-    return id.slice('codex-item:'.length).split(':')[0] || null
+    const rest = id.slice('codex-item:'.length)
+    const at = rest.indexOf(':')
+    return at > 0 ? [rest.slice(0, at), rest.slice(at + 1)] : null
   }
   if (id.startsWith('codex-history-item:')) {
     try {
       const parts: unknown = JSON.parse(id.slice('codex-history-item:'.length))
-      return Array.isArray(parts) && typeof parts[1] === 'string' ? parts[1] : null
+      return Array.isArray(parts) && typeof parts[1] === 'string' && typeof parts[3] === 'string'
+        ? [parts[1], parts[3]]
+        : null
     } catch {
       return null
     }
@@ -240,20 +241,28 @@ function codexRowThreadId(itemId: string): string | null {
 }
 
 /**
- * Helper threads whose saved tool row still runs: on a shared server, one may have ended while no
- * app was attached, and its end replays nowhere, so the reopen reads it from Codex too.
+ * What a shared server's chat saved as still running, since a shared server carries no open work:
+ * helper threads with a running row (one may have ended while no app was attached, so its latest
+ * turn is read from Codex), and running commands ([threadId, itemId]), whose saved output the
+ * live stream continues; Codex's history can leave a running command out.
  */
-export async function savedRunningCodexHelperThreads(
+export async function savedRunningCodexRows(
   reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'visitItems'> | undefined,
   primaryThreadId: string
-): Promise<string[]> {
-  const threads = new Set<string>()
+): Promise<{ helpers: string[]; commands: string[][] }> {
+  const helpers = new Set<string>()
+  const commands: string[][] = []
   await reads?.visitItems({ kinds: ['tool-call'] }, (itemId, _sequence, body) => {
-    const threadId =
-      body.kind === 'tool-call' && body.state === 'running' && codexRowThreadId(itemId)
-    if (threadId && threadId !== primaryThreadId) {
-      threads.add(threadId)
+    const address = body.kind === 'tool-call' && body.state === 'running' && codexRowAddress(itemId)
+    if (!address) {
+      return
+    }
+    if (address[0] !== primaryThreadId) {
+      helpers.add(address[0])
+    }
+    if (body.kind === 'tool-call' && Object.hasOwn(jsonObject(body.input) ?? {}, 'command')) {
+      commands.push(address)
     }
   })
-  return [...threads]
+  return { helpers: [...helpers], commands }
 }
