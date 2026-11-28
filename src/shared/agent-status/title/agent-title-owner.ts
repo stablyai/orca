@@ -1,7 +1,7 @@
 import { rebrandPiStateTitle } from './providers/pi-state-title-marker'
 import { detectAgentStatusFromTitle } from './agent-title-status'
 import { getAgentLabel } from './agent-title-identity'
-import { STRONG_IDLE_KEYWORDS_RE } from './agent-title-core'
+import { STRONG_IDLE_KEYWORDS_RE, STRONG_PERMISSION_KEYWORDS_RE } from './agent-title-core'
 import type { AgentStatusEntry, AgentType } from '../contracts/agent-status-types'
 import {
   getSyntheticAgentTitleProfile,
@@ -81,9 +81,7 @@ function hasPermissionSuffix(title: string, sourceProfile: SyntheticAgentTitlePr
   const normalizedTitle = title.trim().toLowerCase()
   return (
     normalizedTitle === sourceProfile.permissionLabel.toLowerCase() ||
-    normalizedTitle.includes('action required') ||
-    normalizedTitle.includes('permission') ||
-    normalizedTitle.includes('waiting')
+    STRONG_PERMISSION_KEYWORDS_RE.test(title)
   )
 }
 
