@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  antigravityBarBuckets,
+  antigravityBarProvider,
   readAntigravityStatusLinePost,
   readAntigravityStatusLineQuota
 } from './antigravity-statusline-quota'
@@ -113,28 +113,36 @@ describe('readAntigravityStatusLinePost', () => {
   })
 })
 
-describe('antigravityBarBuckets', () => {
-  it('leads with Gemini pools, else the third-party 5h pool', () => {
-    const quota = {
-      'gemini-5h': { remaining_fraction: 0.5 },
-      '3p-5h': { remaining_fraction: 0.5 },
-      '3p-weekly': { remaining_fraction: 0.5 }
-    }
-    const both = readAntigravityStatusLineQuota(payload(quota), NOW)
-    expect(antigravityBarBuckets(both?.buckets).map((bucket) => bucket.name)).toEqual(['Gemini 5h'])
-    const only = readAntigravityStatusLineQuota(
+describe('antigravityBarProvider', () => {
+  const quota = {
+    'gemini-5h': { remaining_fraction: 0.6, reset_time: '2026-11-28T12:00:00Z' },
+    'gemini-weekly': { remaining_fraction: 0.4, reset_time: '2026-12-01T00:00:00Z' },
+    '3p-5h': { remaining_fraction: 0.1, reset_time: '2026-11-28T11:00:00Z' },
+    '3p-weekly': { remaining_fraction: 0.2, reset_time: '2026-12-02T00:00:00Z' }
+  }
+
+  it('draws Gemini 5h and weekly as plain windows, leaving the pools to the menus', () => {
+    const reading = readAntigravityStatusLineQuota(payload(quota), NOW)
+    const bar = antigravityBarProvider(reading!)
+    expect(bar.buckets).toBeUndefined()
+    expect(bar.session?.usedPercent).toBe(40)
+    expect(bar.weekly?.usedPercent).toBe(60)
+    expect(reading?.buckets).toHaveLength(4)
+  })
+
+  it('falls back to the third-party pool when Gemini reports no window', () => {
+    const reading = readAntigravityStatusLineQuota(
       payload({ '3p-5h': quota['3p-5h'], '3p-weekly': quota['3p-weekly'] }),
       NOW
     )
-    expect(antigravityBarBuckets(only?.buckets).map((bucket) => bucket.name)).toEqual([
-      'Claude · GPT 5h'
-    ])
-    const weeklyOnly = readAntigravityStatusLineQuota(
-      payload({ '3p-weekly': quota['3p-weekly'] }),
-      NOW
+    const bar = antigravityBarProvider(reading!)
+    expect(bar.session).toMatchObject({ usedPercent: 90, windowMinutes: 300 })
+    expect(bar.weekly).toMatchObject({ usedPercent: 80, windowMinutes: 10080 })
+    expect(bar.session).not.toHaveProperty('name')
+    const weeklyOnly = antigravityBarProvider(
+      readAntigravityStatusLineQuota(payload({ '3p-weekly': quota['3p-weekly'] }), NOW)!
     )
-    expect(antigravityBarBuckets(weeklyOnly?.buckets).map((bucket) => bucket.name)).toEqual([
-      'Claude · GPT weekly'
-    ])
+    expect(weeklyOnly.session).toBeNull()
+    expect(weeklyOnly.weekly?.usedPercent).toBe(80)
   })
 })

@@ -127,21 +127,29 @@ export function readAntigravityStatusLinePost(
   return form ? readAntigravityStatusLineQuota(form.payload, receivedAt) : null
 }
 
-/** The pool the status bar leads with: Gemini's windows, else the first pool that is present. */
-export function antigravityBarBuckets(
-  buckets: readonly RateLimitBucket[] | undefined
-): RateLimitBucket[] {
-  const all = buckets ?? []
-  const gemini = all.filter(
-    (bucket) =>
-      bucket.name === ANTIGRAVITY_POOL_LABELS.gemini5h ||
-      bucket.name === ANTIGRAVITY_POOL_LABELS.geminiWeekly
-  )
-  if (gemini.length > 0) {
-    return gemini
+/**
+ * What the status bar draws, so it takes the standard session/weekly path other providers use:
+ * Gemini's two windows, else the third-party pool's. The named pools stay on `p` for the menus.
+ */
+export function antigravityBarProvider(p: ProviderRateLimits): ProviderRateLimits {
+  if (p.provider !== 'antigravity' || p.session || p.weekly) {
+    return p.provider === 'antigravity' ? { ...p, buckets: undefined } : p
   }
-  const first = [ANTIGRAVITY_POOL_LABELS.thirdParty5h, ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly]
-    .map((name) => all.find((bucket) => bucket.name === name))
-    .find((bucket) => bucket !== undefined)
-  return first ? [first] : []
+  const pool = (name: string): RateLimitWindow | null => {
+    const bucket = p.buckets?.find((candidate) => candidate.name === name)
+    return bucket
+      ? {
+          usedPercent: bucket.usedPercent,
+          windowMinutes: bucket.windowMinutes,
+          resetsAt: bucket.resetsAt,
+          resetDescription: bucket.resetDescription
+        }
+      : null
+  }
+  return {
+    ...p,
+    session: pool(ANTIGRAVITY_POOL_LABELS.thirdParty5h),
+    weekly: pool(ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly),
+    buckets: undefined
+  }
 }

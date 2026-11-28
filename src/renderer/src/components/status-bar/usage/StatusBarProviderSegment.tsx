@@ -278,7 +278,7 @@ export function ProviderSegment({
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
-    ? mode === 'compact' || provider === 'antigravity'
+    ? mode === 'compact'
       ? getUsageHeadlineSection(p, t, 'all')
       : getTightestUsageSection(p, t, 'all')
     : null
