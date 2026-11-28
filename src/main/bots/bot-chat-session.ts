@@ -258,7 +258,7 @@ export async function requireStructuredHost(
 
 /** A new native chat in the bot's home, through native chat's own create, on the bot's agent (and its
  *  model, options and permission override, if any); the launch adds the preamble. With `message`, that message starts it,
- *  under the caller's id so its turn can be found. A `background` one (a thread's or a run's) gets no
+ *  under the caller's id so its turn can be found. A `background: true` chat (a thread's or a run's) gets no
  *  tab; it waits in the bot's Activity. */
 export async function startBotSession(
   runtime: OrcaRuntimeService,
@@ -266,7 +266,8 @@ export async function startBotSession(
   input: {
     sessionId?: string
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
-    background?: true
+    /** A request chat keeps its durable tab but only publishes it once the mail is admitted. */
+    background?: true | 'until-admitted'
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
@@ -280,7 +281,7 @@ export async function startBotSession(
   const saved = botStartOptions(
     () => runtime.requireStore().getSettings(),
     bot,
-    input.background === true
+    Boolean(input.background)
   )
   const launch = supportedStructuredSeedOptions(bot.agent, saved)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
@@ -294,9 +295,10 @@ export async function startBotSession(
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {})
   }
   const host = () => requireStructuredHost(runtime)
-  const create = input.background
-    ? createBackgroundStructuredAgentSession
-    : createStructuredAgentSessionForWorktree
+  const create =
+    input.background === true
+      ? createBackgroundStructuredAgentSession
+      : createStructuredAgentSessionForWorktree
   const created = await create({
     runtime,
     ensureHost: host,
@@ -326,6 +328,7 @@ export async function startBotSession(
     beforeFirstMessage: input.beforeFirstMessage,
     beforeDelivery: input.beforeDelivery,
     atRest: true,
+    ...(input.background === 'until-admitted' ? { publishTab: false as const } : {}),
     activate: false
   })
   // An at-rest chat whose tab was unconfirmed still exists, and showing it publishes the tab again;

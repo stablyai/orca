@@ -56,8 +56,17 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       ...BOT_NOTES,
       "Run from a bot's chat it lists that bot's own chats, this one marked; --bot lists another bot's. Each row starts with the chat's id, the only thing --chat takes; the title only helps match your owner's words.",
       'Earlier Home Chats, closed when a new one started, take no mail and are hidden; --all shows them too.',
+      'To reopen a chat in its bot workspace, run `orca bot chats open <id> --focus`.',
       '`orca orchestration send --to bot:<name> --chat <id> --type question|handoff` mails that chat instead of the Home Chat, and its answer comes back to you the same way. Your own other chats take mail too, --chat new starts a new one titled from --subject, and with no --chat it lands in the Home Chat; only the chat you send from is refused.'
     ]
+  },
+  {
+    path: ['bot', 'chats', 'open'],
+    summary: "Reopen an existing bot chat's tab and history",
+    usage: 'orca bot chats open <id> [--focus] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'id', 'focus'],
+    positionalArgs: ['id'],
+    notes: ['Use the id from `orca bot chats`. Pass --focus to select its tab.']
   },
   {
     path: ['bot', 'new-chat'],

@@ -102,6 +102,10 @@ export const BotChats = lazyZodSchema(() =>
   })
 )
 
+export const BotChatsOpen = lazyZodSchema(() =>
+  z.object({ chatId: requiredString('Missing chat id'), focus: OptionalBoolean })
+)
+
 /** Every bot with what it is for; run from a bot's chat, that bot is marked as itself. */
 /** `allComputers`: the paired servers' bots too, after this host's own; `withoutChats`: no Chats
  *  line, so no bot's chats are read. */

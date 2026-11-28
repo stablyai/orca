@@ -13,6 +13,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.chat.reset',
   'bots.chatTree',
   'bots.chats',
+  'bots.chats.open',
   'bots.chats.own',
   'bots.chats.search',
   'bots.chats.seen',
