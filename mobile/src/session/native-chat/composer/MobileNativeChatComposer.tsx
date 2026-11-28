@@ -15,6 +15,7 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerModeRow } from './field/MobileNativeChatComposerModeRow'
+import { MobileClaudeStatusRow } from './MobileClaudeStatusRow'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
@@ -278,6 +279,7 @@ export function MobileNativeChatComposer({
         {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
+        <MobileClaudeStatusRow status={sessionOptions?.controller.claudeSessionStatus} />
         <Animated.View style={[styles.bar, collapse.frame]} testID="native-chat-composer">
           <View
             style={[styles.barContent, collapsed && styles.barContentPill]}

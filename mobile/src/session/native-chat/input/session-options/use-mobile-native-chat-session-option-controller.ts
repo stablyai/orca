@@ -1,3 +1,4 @@
+import type { ClaudeSessionStatus } from '../../../../../../src/shared/native-chat/claude-session-status'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMobileNativeChatModelDiscovery } from './use-mobile-native-chat-model-discovery'
 import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
@@ -35,6 +36,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   isWorking: boolean
   /** The terminal agent's status row: its model, live effort and session, as desktop reads them. */
   reportedStatus?: Pick<AgentStatusEntry, 'model' | 'modelSwitchCommand' | 'providerSession'> | null
+  /** The session file's view of a terminal-backed Claude chat, shown by the composer's status row. */
+  sessionReport?: ClaudeSessionStatus | null
   structured: {
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -62,6 +65,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     isTabChatView,
     isWorking,
     reportedStatus,
+    sessionReport,
     structured,
     toggleTabChatView,
     worktreeId
@@ -108,6 +112,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModel: reportedStatus?.model ?? null,
     reportedEffort: reportedStatus?.providerSession?.effort,
     reportingSessionId: reportedStatus?.providerSession?.id,
+    sessionReport,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     writeSettings

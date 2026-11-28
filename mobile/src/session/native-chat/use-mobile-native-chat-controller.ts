@@ -230,6 +230,7 @@ export function useMobileNativeChatController(args: {
       isTabChatView,
       isWorking: activeTurn.isWorking,
       reportedStatus: activeSessionTab?.agentStatus,
+      sessionReport: nativeChatLane.claudeSessionStatus,
       structured: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,

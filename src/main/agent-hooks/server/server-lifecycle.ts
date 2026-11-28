@@ -9,9 +9,11 @@ import { join } from 'node:path'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   readClaudeStatusLineForm,
-  readClaudeStatusLineRateLimits
+  readClaudeStatusLineRateLimits,
+  readClaudeStatusLineSessionWindow
 } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { readClaudeStatusLineModel } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-statusline-model'
+import { noteClaudeSessionWindow } from '../../native-chat/claude-session-window-store'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -128,6 +130,10 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
         if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
           const form = readClaudeStatusLineForm(body)
           if (form) {
+            const sessionWindow = readClaudeStatusLineSessionWindow(form)
+            if (sessionWindow) {
+              noteClaudeSessionWindow(sessionWindow.sessionId, sessionWindow.windowTokens)
+            }
             const statusLineEvent = readClaudeStatusLineRateLimits(form)
             if (statusLineEvent) {
               this.onClaudeStatusLine?.(statusLineEvent)

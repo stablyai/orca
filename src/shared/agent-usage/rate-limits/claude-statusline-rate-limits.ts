@@ -98,3 +98,22 @@ export function readClaudeStatusLineRateLimits({
     sevenDay
   }
 }
+
+/** The window Claude reports for this session; null when the payload does not state one. */
+export function readClaudeStatusLineSessionWindow({
+  payload
+}: ClaudeStatusLineForm): { sessionId: string; windowTokens: number } | null {
+  const sessionId =
+    'session_id' in payload && typeof payload.session_id === 'string' ? payload.session_id : ''
+  const contextWindow = 'context_window' in payload ? payload.context_window : undefined
+  const windowTokens =
+    typeof contextWindow === 'object' &&
+    contextWindow !== null &&
+    'context_window_size' in contextWindow
+      ? finiteNumber(contextWindow.context_window_size)
+      : undefined
+  if (!sessionId || !windowTokens || windowTokens <= 0) {
+    return null
+  }
+  return { sessionId, windowTokens }
+}
