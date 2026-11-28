@@ -15021,7 +15021,10 @@
             "operationResolve": "해결",
             "operationResolveLabel": "AI로 충돌 해결",
             "operationMoreActions": "추가 작업",
-            "operationAbortConfirm": "다시 선택하면 중단됩니다"
+            "operationAbortConfirm": "다시 선택하면 중단됩니다",
+            "operationRunChangedTitle": "중단된 작업이 없습니다",
+            "operationRunChangedDescription": "중단을 선택한 후 작업이 바뀌었습니다. 현재 상태를 확인하고 다시 시도하세요.",
+            "operationRunUnknown": "일시 중지된 실행을 확인할 수 없어 여기서는 중단할 수 없습니다. 소스 제어를 새로 고치거나 터미널에서 중단하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",

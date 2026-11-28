@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { registerLazyIpcHandleGroup } from '../../lazy-ipc-handle-group'
+import { registerFilesystemGitAbortHandlers } from './filesystem-git-abort-handlers'
 import type {
   GitConflictOperation,
   GitStagingArea,
@@ -10,11 +11,7 @@ import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } f
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { getStatus } from '../../../git/source-control/status/status-read'
 import { getSubmoduleStatus } from '../../../git/source-control/submodules/submodule-status'
-import {
-  abortMerge,
-  abortRebase,
-  detectConflictOperation
-} from '../../../git/source-control/mutations/git-conflict-operation'
+import { detectConflictOperation } from '../../../git/source-control/mutations/git-conflict-operation'
 import { getDiff } from '../../../git/source-control/diffs/file-diff'
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
@@ -251,33 +248,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     }
   )
 
-  ipcMain.handle(
-    'git:abortMerge',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      await abortMerge(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
-    }
-  )
-
-  ipcMain.handle(
-    'git:abortRebase',
-    async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
-      )
-      await abortRebase(worktreePath, { ...gitOptions, admissionTier: 'interactive' })
-    }
-  )
+  registerFilesystemGitAbortHandlers(context)
 
   ipcMain.handle(
     'git:diff',
