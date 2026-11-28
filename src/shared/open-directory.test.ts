@@ -1,3 +1,5 @@
+import type * as Fs from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, opendir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -5,22 +7,32 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The Windows path must never reach opendir, which is what crashes there.
-function refuseOnWindows<T extends (...args: never[]) => unknown>(real: T): T {
-  return ((...args: Parameters<T>) => {
-    if (process.platform === 'win32') {
-      throw new Error('opendir called on Windows')
-    }
-    return real(...args)
-  }) as T
+function refuseOnWindows(): void {
+  if (process.platform === 'win32') {
+    throw new Error('opendir called on Windows')
+  }
 }
 vi.mock('node:fs', async (original) => {
-  const fs = await original<typeof import('node:fs')>()
-  return { ...fs, opendirSync: refuseOnWindows(fs.opendirSync) }
+  const fs = await original<typeof Fs>()
+  return {
+    ...fs,
+    opendirSync: (...args: Parameters<typeof fs.opendirSync>) => {
+      refuseOnWindows()
+      return fs.opendirSync(...args)
+    }
+  }
 })
 vi.mock('node:fs/promises', async (original) => {
-  const fs = await original<typeof import('node:fs/promises')>()
-  return { ...fs, opendir: refuseOnWindows(fs.opendir) }
+  const fs = await original<typeof FsPromises>()
+  return {
+    ...fs,
+    opendir: (...args: Parameters<typeof fs.opendir>) => {
+      refuseOnWindows()
+      return fs.opendir(...args)
+    }
+  }
 })
+
 import { openDirectory, openDirectorySync, type DirectoryHandle } from './open-directory'
 
 const originalPlatform = process.platform
