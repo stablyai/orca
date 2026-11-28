@@ -28,6 +28,10 @@ function findOrderBy(jql: string): number {
   return -1
 }
 
+export function hasJiraJqlOrderBy(jql: string): boolean {
+  return findOrderBy(jql.trim()) >= 0
+}
+
 export function appendJiraJqlPredicate(jql: string, predicate: string): string {
   const trimmed = jql.trim()
   const orderByIndex = findOrderBy(trimmed)
