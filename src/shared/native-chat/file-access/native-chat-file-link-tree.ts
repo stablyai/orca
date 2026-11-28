@@ -176,7 +176,9 @@ function splitUnquotedText(value: string, exists: FileLinkExists): MarkdownNode[
 }
 
 function exactFileLink(value: string, exists: FileLinkExists): ParsedTerminalFileLink | null {
-  const exactLink = extractTerminalFileLinks(value).find(
+  const { links, guesses } = extractTerminalFileLinkReadings(value)
+  // Literal paths with an unmatched `)` are returned as guesses so host verification decides.
+  const exactLink = [...links, ...guesses].find(
     (link) => link.startIndex === 0 && link.endIndex === value.length
   )
   if (exactLink && isLinkifiableFile(exactLink, false)) {

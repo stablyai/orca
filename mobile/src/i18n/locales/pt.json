@@ -18,7 +18,10 @@
       "title": "Contas",
       "useReset": "Redefinir agora",
       "weeklyWindow": "7d",
-      "pairingInvalidMessage": "Emparelhe novamente este telefone com seu desktop para ver suas contas."
+      "pairingInvalidMessage": "Emparelhe novamente este telefone com seu desktop para ver suas contas.",
+      "signedOut": "Desconectado",
+      "addAccount": "Adicionar conta",
+      "signIn": "Entrar"
     },
     "claude": {
       "usageSignInLabel": "Entrar novamente",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}}% restante"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "O dispositivo que iniciou este login parou de responder.",
+        "superseded": "Uma alteração de conta neste host interrompeu o login. Inicie novamente.",
+        "noPrompt": "O comando de login do servidor não mostrou um link de login em um minuto. Atualize o Orca no servidor e tente novamente.",
+        "failed": "Falha no login. Tente novamente."
+      },
+      "starting": "Iniciando login em {{host}}…",
+      "copied": "Copiado",
+      "copyLink": "Copiar link",
+      "continue": "Continuar",
+      "copyCode": "Copiar código",
+      "signingIn": "Entrando…",
+      "tryAgain": "Tentar novamente",
+      "titleClaude": "Entrar no Claude",
+      "titleCodex": "Entrar no Codex",
+      "savedOn": "Salvo em {{host}}",
+      "newCode": "Obter um novo código",
+      "openPage": "Abrir a página de login",
+      "pasteStep": "Colar o código",
+      "codePlaceholder": "Código da página",
+      "enterCodeStep": "Digitar este código",
+      "waitingForPage": "Aguardando você concluir na página",
+      "signedInAs": "Conectado como {{email}}"
     }
   },
   "agentHistory": {
@@ -440,7 +468,10 @@
       "modelFallback": "Claude mudou de modelo: {{from}} → {{to}}.",
       "signIn": "Entrar",
       "signInHint": "Abre um terminal no computador que executa este chat",
-      "forkedFrom": "Ramificado de"
+      "forkedFrom": "Ramificado de",
+      "notSignedIn": "O {{agent}} não está conectado à conta.",
+      "signInAccountHint": "Entra novamente nesta conta no computador que executa este chat",
+      "signedInSendAgain": "Login feito. Envie novamente."
     },
     "ciResultLine": {
       "failingLead": "CI falhando em",
@@ -1470,7 +1501,7 @@
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade",
-      "tapToPairAgain": "Toque para parear novamente com seu desktop"
+      "tapToPairAgain": "Toque para parear novamente"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Verificando a compatibilidade do host"
@@ -1490,7 +1521,10 @@
       "connectHint": "Adicione seu site do Jira no Orca para desktop em Configurações → Integrações e verifique novamente.",
       "connectOnDesktop": "Conecte o Jira no seu desktop",
       "credentialUnreadable": "Não foi possível ler as credenciais salvas do Jira: {{credentialError}}",
-      "updateDesktop": "Atualize o Orca neste host"
+      "updateDesktop": "Atualize o Orca neste host",
+      "connectTitle": "Conecte sua conta do Jira",
+      "connectMessage": "Navegue e comece a trabalhar nas suas issues atribuídas do Jira direto em Tarefas.",
+      "connect": "Conectar Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copiar código",
@@ -2109,7 +2143,9 @@
       "loadFailed": "Não foi possível carregar os arquivos",
       "title": "Arquivos",
       "truncatedList": "{{worktreeLabel}} - Mostrando os primeiros 5000",
-      "loading": "Carregando arquivos…"
+      "loading": "Carregando arquivos…",
+      "newEntry": "Novo",
+      "add": "Adicionar"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
@@ -2124,7 +2160,59 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copiar Nome",
-      "copyRelativePath": "Copiar Caminho Relativo"
+      "copyRelativePath": "Copiar Caminho Relativo",
+      "newFile": "Novo arquivo",
+      "newFolder": "Nova pasta",
+      "rename": "Renomear",
+      "duplicate": "Duplicar",
+      "create": "Criar",
+      "fileName": "Nome do arquivo",
+      "folderName": "Nome da pasta",
+      "deleteTitle": "Excluir {{name}}?",
+      "deleteFileDetail": "Isso exclui o arquivo permanentemente. Não é possível desfazer.",
+      "deleteFolderDetail": "Isso exclui a pasta e seu conteúdo permanentemente. Não é possível desfazer.",
+      "duplicateFailed": "Não foi possível duplicar {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "A cópia pode estar incompleta. Verifique-a e tente novamente.",
+      "deleteFailed": "Não foi possível excluir {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Ainda está lá. Verifique a pasta e tente novamente.",
+      "renameFailed": "Não foi possível renomear {{name}}. {{reason}}",
+      "newFileFailed": "Não foi possível criar o arquivo. {{reason}}",
+      "newFolderFailed": "Não foi possível criar a pasta. {{reason}}",
+      "share": "Compartilhar",
+      "shareFailed": "Não foi possível compartilhar {{name}}",
+      "shareTooLarge": "Arquivos maiores que 256 MB não podem ser compartilhados pelo celular",
+      "shareHostOutdated": "Atualize o Orca onde este workspace é executado para compartilhar arquivos",
+      "uploadHere": "Enviar para cá",
+      "uploadFiles": "Enviar arquivos",
+      "noFreeCopyName": "Nenhum nome livre para uma cópia de {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Aguardando",
+      "waitingForConnection": "Aguardando conexão",
+      "failed": "{{reason}} · Toque para tentar de novo",
+      "failedReason": "Falha no envio",
+      "dismiss": "Não enviar {{name}}",
+      "tooLarge": "Arquivos com mais de {{max}} MB ainda não podem ser enviados pelo celular.",
+      "busy": "Você pode enviar até {{max}} arquivos por vez.",
+      "pickFailed": "Não foi possível abrir seus arquivos. {{reason}}",
+      "clashMessage": "Já está em {{folder}}",
+      "keepBoth": "Manter ambos",
+      "keepBothAs": "Salva como {{name}}",
+      "keepBothCopies": "Salva cada um como cópia",
+      "skip": "Pular",
+      "skipAll": "Pular todos",
+      "uploaded_many": "{{count}} arquivos enviados para {{folder}}",
+      "uploaded_one": "{{count}} arquivo enviado para {{folder}}",
+      "uploaded_other": "{{count}} arquivos enviados para {{folder}}",
+      "clashTitleSeveral_many": "{{count}} arquivos já estão em {{folder}}",
+      "clashTitleSeveral_one": "{{count}} arquivo já está em {{folder}}",
+      "clashTitleSeveral_other": "{{count}} arquivos já estão em {{folder}}",
+      "lost_many": "{{count}} arquivos não foram enviados: o celular os descartou. Escolha-os de novo.",
+      "lost_one": "{{count}} arquivo não foi enviado: o celular o descartou. Escolha-o de novo.",
+      "lost_other": "{{count}} arquivos não foram enviados: o celular os descartou. Escolha-os de novo.",
+      "nameTaken": "Nome em uso · Toque para escolher",
+      "workspaceRoot": "a raiz do espaço de trabalho",
+      "unconfirmed": "Não foi possível confirmar o envio. Verifique a pasta."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copiar código-fonte Markdown carregado",
@@ -5090,7 +5178,17 @@
     "runtimeHydration": {
       "loadFailed": "Falha ao carregar as configurações de Tarefas"
     },
-    "rerunUnsuccessful": "Repetir verificações"
+    "rerunUnsuccessful": "Repetir verificações",
+    "jiraConnect": {
+      "title": "Conectar Jira",
+      "siteUrl": "sua-equipe.atlassian.net",
+      "email": "E-mail da Atlassian",
+      "apiToken": "Token de API",
+      "storageHint": "Seu token fica armazenado neste host, criptografado quando o sistema operacional permite.",
+      "createToken": "Criar um token de API",
+      "failed": "Falha na conexão",
+      "serverNeedsUpdate": "Este servidor precisa de uma atualização do Orca primeiro. Conecte o Jira pelo Orca para desktop."
+    }
   },
   "terminal": {
     "keyDefinitions": {
@@ -5253,7 +5351,7 @@
       "started": "Iniciado",
       "trigger": "Acionador",
       "output": "Saída",
-      "noOutput": "Nenhum conteúdo de saída disponível.",
+      "noOutput": "Saída indisponível.",
       "loadingRuns": "Carregando execuções…",
       "loading": "Carregando…",
       "hourly": "De hora em hora",

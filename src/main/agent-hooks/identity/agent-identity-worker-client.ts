@@ -25,8 +25,8 @@ import {
 const WORKER_ENTRY_FILENAME = 'agent-identity-worker-entry.js'
 // One operation's budget from dispatch: a cold open (version read, WAL setup, DDL) plus a lock wait.
 const OPERATION_TIMEOUT_MS = 10_000
-// Identity work comes in bursts (hydration, new agents); an idle worker is released.
-const IDLE_TEARDOWN_MS = 60_000
+// Identity work comes in bursts (hydration, new agents); release the idle V8 isolate promptly.
+const IDLE_TEARDOWN_MS = 10_000
 
 /** `undefined`: the worker could not answer (spawn, open, lock, timeout); never a settled miss. */
 export type AgentIdentityLookup = { id: OrcaSessionId | null } | undefined

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { canReadWorkspaceReferenceReview } from './workspace-reference-review-source'
 import { useWslHostOffForRepo } from './use-wsl-host-off-review'
@@ -41,7 +41,7 @@ export function useWorkspaceReferenceDetails(
   // Its WSL host is off: show what is cached as last known, and don't ask the host.
   const hostOff = useWslHostOffForRepo(repo)
   const requests = useMemo((): readonly ReferenceRequest[] => {
-    const attachments = getWorkspaceAttachments(workspace)
+    const attachments = getReadonlyWorkspaceAttachments(workspace)
     if (attachments.length === 0) {
       return EMPTY_REQUESTS
     }

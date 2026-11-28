@@ -5,11 +5,13 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FsChangedPayload } from '../../../../../shared/file-watch/filesystem-change-event'
 import { externalChangePathKeyFor } from '@/store/slices/editor/buffers/editor-buffer-identity'
 import {
-  getLocalWindowsWslPathIdentity,
   isCaseInsensitiveRuntimeRoot,
-  normalizeRuntimePathForComparison,
-  type LocalWindowsWslPathIdentity
+  normalizeRuntimePathForComparison
 } from '../../../../../shared/file-access/cross-platform-path'
+import {
+  getLocalWindowsWslPathIdentity,
+  type LocalWindowsWslPathIdentity
+} from '../../../../../shared/file-access/wsl-path-aliases'
 
 // NFC can only fold a spelling that has a non-ASCII code unit, so ASCII paths skip the cross-spelling index.
 const NON_ASCII = /[\u0080-\uffff]/

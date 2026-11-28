@@ -39,7 +39,6 @@ const HEALTH_SETTINGS = [
   'nativeChatShellEnvironmentVariables',
   // Why: the saved method picks the home new Antigravity chats run agy in (hostAlternative).
   'antigravityChatAuth',
-  'antigravityManagedAgyEnabled',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -80,7 +79,7 @@ async function observeHostAgent(
     return { agent, state: 'available' }
   }
   return seen.status === 'tooOld'
-    ? { agent, state: 'refused', reason: 'agent' }
+    ? { agent, state: 'refused', reason: 'too-old' }
     : { agent, state: 'unknown' }
 }
 

@@ -36,11 +36,20 @@ export function gcStaleWorktreeMeta(state: PersistedState): number {
   state.worktreeMeta ??= {}
   state.worktreeLineageById ??= {}
   state.workspaceLineageByChildKey ??= {}
-  const repoById = new Map(state.repos.map((repo) => [repo.id, repo]))
-  const projectIds = new Set((state.projects ?? []).map((project) => project.id))
+  const repoById = new Map<string, (typeof state.repos)[number]>()
+  for (const repo of state.repos) {
+    repoById.set(repo.id, repo)
+  }
+  const projectIds = new Set<string>()
+  for (const project of state.projects ?? []) {
+    projectIds.add(project.id)
+  }
   const now = Date.now()
   let removed = 0
-  for (const key of Object.keys(state.worktreeMeta)) {
+  for (const key in state.worktreeMeta) {
+    if (!Object.hasOwn(state.worktreeMeta, key)) {
+      continue
+    }
     // Folder-workspace instance keys are workspace records, not checkout metadata.
     if (key.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)) {
       continue

@@ -33,7 +33,7 @@ import {
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
-import type { AcpLaunchSpec } from './acp-launch-contract'
+import type { AcpLaunchSpec, AcpPreparedAccount } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
 import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
@@ -87,6 +87,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   toolsKey?: string
   /** The saved model the launch line carries. */
   launchModel?: string
+  /** Set by the account's preparation (`prepareAcpLaunch`). */
+  preparedAccount?: AcpPreparedAccount
   /** The launched program's version, when its check or managed release names it. */
   version?: string
   /** The home this launch moved the chat to, which the chat keeps from now on. */

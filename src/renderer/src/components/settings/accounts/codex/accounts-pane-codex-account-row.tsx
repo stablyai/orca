@@ -7,7 +7,7 @@ import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observat
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
-import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
+import { getCodexAccountAuthWarning } from '../../../../../../shared/agent-accounts/codex/codex-account-auth-warning'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView

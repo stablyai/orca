@@ -51,30 +51,36 @@ export const claudeSignIn = defineFixture({
   )
 })
 
-export const codexInstall = defineFixture({
-  width: 720,
-  render: () => (
-    <div className="native-chat-appearance p-4">
-      <NativeChatComposerNotices
-        notices={structuredSessionNotices({
-          launch: {
-            lifecycle: 'failed',
-            failure: {
-              kind: 'refused',
-              code: 'agent_session_operation_invalid',
-              details: { reason: 'cliMissing' }
+function cliInstall(agentLabel: string, phase: 'install' | 'recheck' = 'install') {
+  return defineFixture({
+    width: 720,
+    render: () => (
+      <div className="native-chat-appearance p-4">
+        <NativeChatComposerNotices
+          notices={structuredSessionNotices({
+            launch: {
+              lifecycle: 'failed',
+              failure: {
+                kind: 'refused',
+                code: 'agent_session_operation_invalid',
+                details: { reason: 'cliMissing' }
+              },
+              retry: () => {}
             },
-            retry: () => {}
-          },
-          agentLabel: 'Codex',
-          sessionError: null,
-          composerError: null,
-          setup: { signIn: null, install: { phase: 'install', busy: false, run: () => {} } }
-        })}
-      />
-    </div>
-  )
-})
+            agentLabel,
+            sessionError: null,
+            composerError: null,
+            setup: { signIn: null, install: { phase, busy: false, run: () => {} } }
+          })}
+        />
+      </div>
+    )
+  })
+}
+
+export const codexInstall = cliInstall('Codex')
+export const antigravityInstall = cliInstall('Antigravity')
+export const antigravityInstallRecheck = cliInstall('Antigravity', 'recheck')
 
 export const antigravitySignIn = defineFixture({
   width: 720,
@@ -124,7 +130,17 @@ export const conversationInOtherFolder = defineFixture({
   )
 })
 
-function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this computer') {
+const TOO_OLD = {
+  codex: { label: 'Codex', installedVersion: '0.130.0', minimumVersion: '0.136.0' },
+  antigravity: { label: 'Antigravity', installedVersion: '1.5.2', minimumVersion: '1.5.5' }
+} as const
+
+function cliTooOld(
+  phase: 'idle' | 'running' | 'failed',
+  hostName = 'this computer',
+  agent: keyof typeof TOO_OLD = 'codex'
+) {
+  const { label, installedVersion, minimumVersion } = TOO_OLD[agent]
   return defineFixture({
     width: 720,
     render: () => (
@@ -136,17 +152,11 @@ function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this comp
               failure: {
                 kind: 'refused',
                 code: 'agent_session_operation_invalid',
-                details: {
-                  agentInstallation: {
-                    agent: 'codex',
-                    installedVersion: '0.130.0',
-                    minimumVersion: '0.136.0'
-                  }
-                }
+                details: { agentInstallation: { agent, installedVersion, minimumVersion } }
               },
               retry: () => {}
             },
-            agentLabel: 'Codex',
+            agentLabel: label,
             hostName,
             sessionError: null,
             composerError: null,
@@ -172,7 +182,8 @@ function codexTooOld(phase: 'idle' | 'running' | 'failed', hostName = 'this comp
   })
 }
 
-export const codexTooOldUpdate = codexTooOld('idle')
-export const codexTooOldUpdating = codexTooOld('running')
-export const codexTooOldUpdateFailed = codexTooOld('failed')
-export const codexTooOldOnServer = codexTooOld('idle', 'Build server')
+export const codexTooOldUpdate = cliTooOld('idle')
+export const codexTooOldUpdating = cliTooOld('running')
+export const codexTooOldUpdateFailed = cliTooOld('failed')
+export const codexTooOldOnServer = cliTooOld('idle', 'Build server')
+export const antigravityTooOldUpdate = cliTooOld('idle', 'this computer', 'antigravity')

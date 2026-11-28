@@ -1,4 +1,13 @@
 {
+  "accounts": {
+    "hostSignIn": {
+      "errors": {
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
+        "ownerSilent": "The device that started this sign-in stopped answering.",
+        "superseded": "An account change on this host stopped the sign-in. Start it again."
+      }
+    }
+  },
   "agentHistory": {
     "interrupted": {
       "count_one": "{{count}} chat was interrupted",
@@ -952,6 +961,8 @@
       }
     },
     "notice": {
+      "accountNotMoved": "Couldn't move this chat to {{to}}: {{reason}}",
+      "accountSwitch": "Finishing this turn on {{from}}. Your next message uses {{to}}.",
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
     "queuedMessages": {
@@ -1108,6 +1119,16 @@
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
       "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
       "sessionLost": "Dictation lost its connection to the computer. Try again."
+    }
+  },
+  "files": {
+    "fileExplorerUpload": {
+      "clashTitleSeveral_one": "{{count}} file is already in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} files are already in {{folder}}",
+      "lost_one": "{{count}} file wasn't uploaded: the phone let go of it. Pick it again.",
+      "lost_other": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "uploaded_one": "Uploaded {{count}} file to {{folder}}",
+      "uploaded_other": "Uploaded {{count}} files to {{folder}}"
     }
   },
   "home": {

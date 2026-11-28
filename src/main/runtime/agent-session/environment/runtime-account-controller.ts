@@ -253,7 +253,9 @@ export class RuntimeAccountController {
   ): Promise<CodexRateLimitResetRpcResult> {
     const { claudeAccounts, codexAccounts } = this.requireServices()
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
+    // A phone replaces its whole snapshot with this one, so it keeps the OpenCode and Devin profiles.
     const snapshot = {
+      ...this.streamDataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
       rateLimits: result.rateLimits

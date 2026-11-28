@@ -37,13 +37,13 @@ import { getExplicitTarget } from './automation-target-flags'
 import {
   getEnabledFlag,
   getOptionalProviderFlag,
-  getPrecheckFlag,
   getProviderFlag,
   getReuseSessionFlag,
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
 import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import { getPrecheckFlag, readPrecheckFlags, resolvePrecheck } from './automation-precheck-flag'
 import { assertAutomationFieldsSupported } from './automation-host-support'
 import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
 import { getTimezoneFlags } from './automation-timezone-flag'
@@ -193,10 +193,10 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const id = getRequiredStringFlag(flags, 'id')
     // Built before the owner read so a contradictory flag still fails without a runtime call.
+    const precheckFlags = readPrecheckFlags(flags)
     const updates = {
       name: getOptionalStringFlag(flags, 'name'),
       prompt: getOptionalStringFlag(flags, 'prompt'),
-      precheck: getPrecheckFlag(flags),
       agentId: getOptionalProviderFlag(flags),
       extraAgentArgs: getExtraAgentArgsFlag(flags),
       ...(setupDecision !== undefined ? { setupDecision } : {}),
@@ -219,6 +219,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       client,
       id
     )
+    const precheck = resolvePrecheck(precheckFlags, current.precheck)
     assertAutomationSetupMode(
       setupDecision,
       updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
@@ -237,7 +238,11 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(destination ? { destination } : {}),
       // A setup choice that relies on the current mode must not land after a switch to existing.
       ...(setupDecision && !updates.workspaceMode ? { expectedWorkspaceMode: 'new_per_run' } : {}),
-      updates: bot ? { ...updates, bot } : updates,
+      updates: {
+        ...updates,
+        ...(precheck !== undefined ? { precheck } : {}),
+        ...(bot ? { bot } : {})
+      },
       ...callerChat()
     })
     printSavedAutomation(result, json, on, current)

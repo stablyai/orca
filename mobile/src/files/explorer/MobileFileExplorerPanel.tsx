@@ -33,7 +33,7 @@ import { fileDirectoryQuery, type DirectoryRead } from './mobile-file-explorer-o
 import { fileExplorerStylesSheet } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
-import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
+import { useMobileFileExplorerActions } from './use-mobile-file-explorer-actions'
 import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
 import { useMobileFileExplorerDecorations } from './use-mobile-file-explorer-decorations'
 import { useMobileNativeChatFileSearch } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
@@ -176,7 +176,6 @@ export function MobileFileExplorerPanel(props: {
   )
   const [panelWidth, setPanelWidth] = useState(0)
   const [filterBarHeight, setFilterBarHeight] = useState(0)
-  const { openRowActions, rowActionsSheet } = useMobileFileExplorerRowActions()
   const insets = useSafeAreaInsets()
   const worktreeLabel = getWorktreeLabel(name, worktreeId, t)
 
@@ -294,6 +293,16 @@ export function MobileFileExplorerPanel(props: {
     },
     [embedded, hostId, name, onRequestClose, router, worktreeId]
   )
+  const { openRowActions, rootMenuButton, newEntry, overlays } = useMobileFileExplorerActions({
+    hostId,
+    client,
+    scope,
+    target,
+    pagedListing: rootRead?.kind === 'directory',
+    headerless: headerless === true,
+    setExpanded,
+    previewFile
+  })
 
   const renderItem: ListRenderItem<FileExplorerRow> = ({ item }) => {
     return (
@@ -330,6 +339,7 @@ export function MobileFileExplorerPanel(props: {
         )
       }
       title={t('files.fileExplorerPanel.title', 'Files')}
+      trailing={rootMenuButton}
       refreshing={refreshing}
       subtitle={
         rootRead?.kind === 'legacy' && rootRead.truncated
@@ -378,6 +388,7 @@ export function MobileFileExplorerPanel(props: {
       <MobileStateView
         icon={FolderOpen}
         title={t('files.fileExplorerPanel.emptyState', 'No files found')}
+        action={newEntry.stateAction}
       />
     ) : (
       <FlatList
@@ -416,9 +427,10 @@ export function MobileFileExplorerPanel(props: {
           placeholder={t('files.fileExplorerPanel.searchPlaceholder', 'Search files')}
           bottomInset={insets.bottom}
           onCoveredHeightChange={setFilterBarHeight}
+          primary={newEntry.searchBarButton}
         />
       ) : null}
-      {rowActionsSheet}
+      {overlays(treeReady ? filterBarHeight : insets.bottom)}
     </View>
   )
 }

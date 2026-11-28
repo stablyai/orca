@@ -144,7 +144,8 @@ export async function fetchServerWorkspaces(
   client: RpcClient,
   snapshots: ServerRowSnapshots
 ): Promise<FetchedServerWorkspaces | null> {
-  const hosts = await relayHostsFeed(client).read()
+  // Every server: an open folder route resolves members on one this phone also pairs with directly.
+  const hosts = await relayHostsFeed(client).readAll()
   return hosts ? { hosts, rows: await snapshots.read(client, hosts) } : null
 }
 
@@ -180,4 +181,33 @@ export function applyServerWorkspaces(
       : fetched.hosts
   const unchanged = hosts === previous.hosts && areWorktreeListsEqual(worktrees, previous.worktrees)
   return unchanged ? previous : { hosts, worktrees }
+}
+
+// Per reply: the same reply and listing give the same rows, so a list does not rebuild every poll.
+const listedByReply = new WeakMap<
+  ServerWorkspaces,
+  { listed: readonly MobileRelayHost[]; shown: ServerWorkspaces }
+>()
+
+/** Only servers a list shows: one this phone pairs with directly is listed under that pairing. */
+export function listedServerWorkspaces(
+  workspaces: ServerWorkspaces,
+  listed: readonly MobileRelayHost[] | null
+): ServerWorkspaces {
+  if (listed === null) {
+    return workspaces
+  }
+  const kept = listedByReply.get(workspaces)
+  if (kept?.listed === listed) {
+    return kept.shown
+  }
+  const shownIds = new Set<string>(listed.map((host) => host.hostId))
+  const shown = workspaces.hosts.every((host) => shownIds.has(host.hostId))
+    ? workspaces
+    : {
+        hosts: workspaces.hosts.filter((host) => shownIds.has(host.hostId)),
+        worktrees: workspaces.worktrees.filter((row) => !row.hostId || shownIds.has(row.hostId))
+      }
+  listedByReply.set(workspaces, { listed, shown })
+  return shown
 }

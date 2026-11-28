@@ -8,8 +8,9 @@ import {
 import { checkDaemonHealth } from '../../health/daemon-health'
 import {
   collectPinnedDaemonVersions,
-  pruneOldDaemonHosts
-} from '../../executable-host/windows/daemon-host-relocation'
+  recheckPinnedDaemonVersions
+} from '../../executable-host/windows/daemon-host-pinned-versions'
+import { pruneOldDaemonHosts } from '../../executable-host/windows/daemon-host-prune'
 import {
   cleanupFailedDaemonAdoption,
   releaseDaemonAdoptionLease,
@@ -81,7 +82,9 @@ export async function initDaemonPtyProvider(
   // Publish the spawner and adapter together after initialization succeeds.
   const info = await newSpawner.ensureRunning()
   // Reclaim superseded hosts after every adoption or spawn, retaining current and live-pinned versions.
-  pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
+  void pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir), () =>
+    recheckPinnedDaemonVersions(runtimeDir)
+  )
   const launchMode = newSpawner.getHandle()?.mode
   const quarantine = newSpawner.getHandle()?.quarantine
   logDaemonMilestone('daemon-current-ready')

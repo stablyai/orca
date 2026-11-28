@@ -4,7 +4,7 @@ import {
   CONNECTOR_ASKER_PLACE_KINDS,
   ConnectorAskerVia,
   type ConnectorAsker
-} from './connectors/connector-cloud-contract'
+} from './connector-asker-contract'
 import { CONNECTOR_SOURCES, type ConnectorSource } from './connectors/external-conversation-link'
 
 /** A message someone without access wrote in the thread, held until this one carried it. */

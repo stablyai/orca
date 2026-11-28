@@ -1,5 +1,4 @@
 import type { RefObject } from 'react'
-import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'

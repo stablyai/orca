@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   MobileRelayEndpointSchema,
   type MobileRelayEndpoint

@@ -18,7 +18,7 @@ export function useBrowserNewTabLinkedItems(
     worktree,
     repo,
     settings: foundation.settings,
-    projectGroups: foundation.projectGroups,
+    hasProjectGroups: foundation.hasProjectGroups,
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })

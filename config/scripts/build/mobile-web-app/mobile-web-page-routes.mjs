@@ -3,8 +3,10 @@
 // Builder owns declarations and manifest checks MobileWebBundleRouteSchema. Haptics census derives required token from every reachable seam.
 // Every route offers the device store; without it (an older shell) the page keeps its data in memory only.
 const DEVICE_STORE_GRANT = 'native.store.rows'
+// Every route lists relayed servers; with this a page hides those the phone pairs with directly.
+const DIRECT_PAIRINGS_GRANT = 'native.pairings.installations'
 
-export const MOBILE_WEB_PAGE_ROUTES = [
+const DECLARED_PAGE_ROUTES = [
   // Home needs navigate/storage for session hops and app pins; shared protocol-wall Update action needs externalLink. Wide ownsHostArea permits sidebar.
   // New bot's import copies the message for the old bot; Shared links' Copy link writes and From a link's Paste reads.
   {
@@ -57,11 +59,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    // Older shells cannot open PDFs; the preview asks for an app update instead.
+    // Older shells cannot open PDFs; the preview asks for an app update instead. Without native.file.share the row sheet has no Share.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -73,6 +76,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -137,11 +141,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it; without sideStripCover the shell guesses from the location whether the chat is under its usage rings.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; the docked Files has no Share without native.file.share; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it; without sideStripCover the shell guesses from the location whether the chat is under its usage rings.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',
@@ -152,3 +157,8 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     ]
   }
 ]
+
+export const MOBILE_WEB_PAGE_ROUTES = DECLARED_PAGE_ROUTES.map((route) => ({
+  ...route,
+  optionalGrants: [...(route.optionalGrants ?? []), DIRECT_PAIRINGS_GRANT]
+}))

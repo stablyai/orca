@@ -80,17 +80,22 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       // is already authoritative for this explicit target.
       return [targetWorktree]
     }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
-    )
+    const allMeta = this.store.getAllWorktreeMeta()
+    const worktreeIds = new Set<string>()
+    for (const worktreeId in allMeta) {
+      if (!Object.hasOwn(allMeta, worktreeId)) {
+        continue
+      }
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      if (
+        parsed?.repoId === target.repoId &&
+        Boolean(parsed.worktreePath) &&
+        (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
+          isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
+      ) {
+        worktreeIds.add(worktreeId)
+      }
+    }
     worktreeIds.add(targetWorktreeId)
 
     const resolved: ResolvedWorktree[] = []

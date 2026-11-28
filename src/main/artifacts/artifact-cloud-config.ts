@@ -1,10 +1,10 @@
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 
 const PRODUCTION_ARTIFACTS_API_URL = 'https://share.onorca.dev'
 
 function isPackaged(): boolean {
   try {
-    return app?.isPackaged === true
+    return getAppEnvironment().isPackaged()
   } catch {
     return false
   }

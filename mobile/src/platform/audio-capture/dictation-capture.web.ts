@@ -11,7 +11,6 @@ import {
   useNativeVerbs,
   type NativeVerbs
 } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
-import '../../hooks/mobile-dictation-pending-audio-budget'
 import {
   DICTATION_CAPTURE_DRAIN_INTERVAL_MS,
   type DictationCapture,

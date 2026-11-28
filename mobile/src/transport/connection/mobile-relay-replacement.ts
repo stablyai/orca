@@ -1,6 +1,3 @@
-import '../encryption/mobile-relay-e2ee-link'
-import '../encryption/mobile-e2ee-v2-physical-channel'
-import '../relay/replacement-session-authentication'
 import type { RelayReconnectController } from '../relay/mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 

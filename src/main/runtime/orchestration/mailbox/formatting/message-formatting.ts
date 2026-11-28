@@ -11,6 +11,7 @@ import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { OrchestrationMailContent } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { BOT_ITEM_MAIL_SENDER } from '../../../../../shared/bots/bot-item-mail-sender'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
 import {
   formatReportFollowUpLine,
   type ReportFollowUpAction
@@ -179,7 +180,11 @@ export function formatMessageBannerWithContent(
 
   if (authority === 'current' && options.followUp) {
     lines.push(`[${formatReportFollowUpLine(options.followUp, options.cliCommand ?? 'orca')}]`)
-  } else if (authority === 'current' && msg.from_handle !== BOT_ITEM_MAIL_SENDER) {
+  } else if (
+    authority === 'current' &&
+    msg.from_handle !== BOT_ITEM_MAIL_SENDER &&
+    msg.from_handle !== BACKGROUND_WAKE_SENDER
+  ) {
     const explicitFrom =
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''

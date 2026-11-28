@@ -35,7 +35,6 @@ type SourceIdentityActionsInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
-import '@/lib/workspace/creation/new-workspace'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName

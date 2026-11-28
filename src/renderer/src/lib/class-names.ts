@@ -3,7 +3,7 @@ import { extendTailwindMerge } from 'tailwind-merge'
 
 // Unregistered, tailwind-merge reads the theme's extra text steps as colors and drops them.
 const twMerge = extendTailwindMerge({
-  extend: { theme: { text: ['2xs', '3xs', 'chat-code'] } }
+  extend: { theme: { text: ['2xs', '3xs', 'chat-code', 'settings-detail'] } }
 })
 
 export function cn(...inputs: ClassValue[]) {

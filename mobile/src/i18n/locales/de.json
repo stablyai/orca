@@ -18,7 +18,10 @@
       "title": "Konten",
       "useReset": "Jetzt zurücksetzen",
       "pairingInvalidMessage": "Dieses Smartphone erneut mit dem Desktop koppeln, um dessen Konten anzuzeigen.",
-      "weeklyWindow": "7 Tage"
+      "weeklyWindow": "7 Tage",
+      "signedOut": "Abgemeldet",
+      "addAccount": "Konto hinzufügen",
+      "signIn": "Anmelden"
     },
     "claude": {
       "usageSignInLabel": "Erneut anmelden",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}} % übrig"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "Das Gerät, auf dem diese Anmeldung gestartet wurde, antwortet nicht mehr.",
+        "superseded": "Eine Kontoänderung auf diesem Host hat die Anmeldung abgebrochen. Die Anmeldung erneut starten.",
+        "noPrompt": "Der Anmeldebefehl auf dem Server hat innerhalb einer Minute keinen Anmeldelink angezeigt. Aktualisiere Orca auf dem Server und versuche es dann erneut.",
+        "failed": "Anmeldung fehlgeschlagen. Erneut versuchen."
+      },
+      "starting": "Anmeldung auf {{host}} wird gestartet…",
+      "copied": "Kopiert",
+      "copyLink": "Link kopieren",
+      "continue": "Fortfahren",
+      "copyCode": "Code kopieren",
+      "signingIn": "Anmeldung läuft…",
+      "tryAgain": "Erneut versuchen",
+      "titleClaude": "Bei Claude anmelden",
+      "titleCodex": "Bei Codex anmelden",
+      "savedOn": "Gespeichert auf {{host}}",
+      "newCode": "Neuen Code anfordern",
+      "openPage": "Anmeldeseite öffnen",
+      "pasteStep": "Code einfügen",
+      "codePlaceholder": "Code von der Seite",
+      "enterCodeStep": "Diesen Code eingeben",
+      "waitingForPage": "Warten, bis du auf der Seite fertig bist",
+      "signedInAs": "Angemeldet als {{email}}"
     }
   },
   "agentHistory": {
@@ -433,7 +461,10 @@
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
       "signIn": "Anmelden",
       "signInHint": "Öffnet ein Terminal auf dem Computer, auf dem dieser Chat läuft",
-      "forkedFrom": "Abgezweigt von"
+      "forkedFrom": "Abgezweigt von",
+      "notSignedIn": "{{agent}} ist nicht angemeldet.",
+      "signInAccountHint": "Meldet dieses Konto auf dem Computer, auf dem dieser Chat läuft, erneut an",
+      "signedInSendAgain": "Angemeldet. Erneut senden."
     },
     "ciResultLine": {
       "failingLead": "CI fehlgeschlagen bei",
@@ -1418,7 +1449,7 @@
       "pairingTemporarilyUnavailable": "Kopplung vorübergehend nicht verfügbar",
       "unlockHint": "Telefon entsperren, dann zum erneuten Versuch tippen",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} aktiv",
-      "tapToPairAgain": "Zum erneuten Koppeln mit dem Desktop tippen"
+      "tapToPairAgain": "Zum erneuten Koppeln tippen"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Host-Kompatibilität wird geprüft"
@@ -1438,7 +1469,10 @@
       "connectHint": "Die Jira-Site in Orca auf dem Computer unter Einstellungen → Integrationen hinzufügen und anschließend erneut prüfen.",
       "connectOnDesktop": "Jira auf dem Computer verbinden",
       "credentialUnreadable": "Die Jira-Zugangsdaten sind gespeichert, können aber nicht gelesen werden: {{credentialError}}",
-      "updateDesktop": "Orca auf diesem Host aktualisieren"
+      "updateDesktop": "Orca auf diesem Host aktualisieren",
+      "connectTitle": "Jira-Konto verbinden",
+      "connectMessage": "Durchsuche deine zugewiesenen Jira-Vorgänge und beginne die Arbeit direkt in Aufgaben.",
+      "connect": "Jira verbinden"
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
@@ -2047,7 +2081,9 @@
       "loading": "Dateien werden geladen…",
       "loadFailed": "Dateien konnten nicht geladen werden.",
       "title": "Dateien",
-      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt"
+      "truncatedList": "{{worktreeLabel}} – Erste 5000 werden angezeigt",
+      "newEntry": "Neu",
+      "add": "Hinzufügen"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
@@ -2062,7 +2098,56 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Namen kopieren",
-      "copyRelativePath": "Relativen Pfad kopieren"
+      "copyRelativePath": "Relativen Pfad kopieren",
+      "newFile": "Neue Datei",
+      "newFolder": "Neuer Ordner",
+      "rename": "Umbenennen",
+      "duplicate": "Duplizieren",
+      "create": "Erstellen",
+      "fileName": "Dateiname",
+      "folderName": "Ordnername",
+      "deleteTitle": "{{name}} löschen?",
+      "deleteFileDetail": "Dadurch wird die Datei dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "deleteFolderDetail": "Dadurch werden der Ordner und sein Inhalt dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+      "duplicateFailed": "{{name}} konnte nicht dupliziert werden. {{reason}}",
+      "duplicateUnconfirmed": "Die Kopie ist möglicherweise unvollständig. Prüfe sie und versuche es erneut.",
+      "deleteFailed": "{{name}} konnte nicht gelöscht werden. {{reason}}",
+      "deleteUnconfirmed": "Es ist noch vorhanden. Prüfe den Ordner und versuche es erneut.",
+      "renameFailed": "{{name}} konnte nicht umbenannt werden. {{reason}}",
+      "newFileFailed": "Die Datei konnte nicht erstellt werden. {{reason}}",
+      "newFolderFailed": "Der Ordner konnte nicht erstellt werden. {{reason}}",
+      "share": "Teilen",
+      "shareFailed": "{{name}} konnte nicht geteilt werden",
+      "shareTooLarge": "Dateien über 256 MB können nicht vom Telefon geteilt werden",
+      "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen",
+      "uploadHere": "Hierher hochladen",
+      "uploadFiles": "Dateien hochladen",
+      "noFreeCopyName": "Kein freier Name für eine Kopie von {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Wartet",
+      "waitingForConnection": "Wartet auf Verbindung",
+      "failed": "{{reason}} · Zum Wiederholen tippen",
+      "failedReason": "Hochladen fehlgeschlagen",
+      "dismiss": "{{name}} nicht hochladen",
+      "tooLarge": "Dateien über {{max}} MB können noch nicht vom Telefon hochgeladen werden.",
+      "busy": "Du kannst bis zu {{max}} Dateien gleichzeitig hochladen.",
+      "pickFailed": "Deine Dateien konnten nicht geöffnet werden. {{reason}}",
+      "clashMessage": "Bereits in {{folder}}",
+      "keepBoth": "Beide behalten",
+      "keepBothAs": "Wird als {{name}} gespeichert",
+      "keepBothCopies": "Speichert jede als Kopie",
+      "skip": "Überspringen",
+      "skipAll": "Alle überspringen",
+      "uploaded_one": "{{count}} Datei nach {{folder}} hochgeladen",
+      "uploaded_other": "{{count}} Dateien nach {{folder}} hochgeladen",
+      "clashTitleSeveral_one": "{{count}} Datei ist bereits in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} Dateien sind bereits in {{folder}}",
+      "lost_one": "{{count}} Datei wurde nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
+      "lost_other": "{{count}} Dateien wurden nicht hochgeladen, das Telefon hat sie verworfen. Wähle sie erneut aus.",
+      "nameTaken": "Name vergeben · Zum Auswählen tippen",
+      "workspaceRoot": "den Stammordner des Arbeitsbereichs",
+      "unconfirmed": "Der Upload konnte nicht bestätigt werden. Prüfe den Ordner."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",
@@ -4941,6 +5026,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."
+    },
+    "jiraConnect": {
+      "title": "Jira verbinden",
+      "siteUrl": "dein-team.atlassian.net",
+      "email": "Atlassian-E-Mail",
+      "apiToken": "API-Token",
+      "storageHint": "Dein Token wird auf diesem Host gespeichert und verschlüsselt, sofern das Betriebssystem es unterstützt.",
+      "createToken": "API-Token erstellen",
+      "failed": "Verbindung fehlgeschlagen",
+      "serverNeedsUpdate": "Dieser Server braucht zuerst ein Orca-Update. Verbinde Jira stattdessen in Orca Desktop."
     }
   },
   "terminal": {

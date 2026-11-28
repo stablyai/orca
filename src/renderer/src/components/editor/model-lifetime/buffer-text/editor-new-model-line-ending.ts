@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import type { AppState } from '@/store/types'
 import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
@@ -21,6 +21,9 @@ export function resolveOpenFileNewModelLineEnding(
   fileId: string,
   language: string
 ): EditorLineEnding | null {
+  if (language === 'shellscript') {
+    return null
+  }
   const file = state.openFiles?.find((entry) => entry.id === fileId)
   if (!file) {
     return null
@@ -107,15 +110,23 @@ export function useNewModelLineEnding(
   fileId: string,
   language: string
 ): void {
-  const lineEnding = useAppStoreWithHostStatuses((state, statuses) =>
-    resolveOpenFileNewModelLineEnding(state, statuses, fileId, language)
+  const model = mountedEditor?.getModel()
+  const activeModel = model && model.uri.toString() === modelUri ? model : null
+  const selectLineEnding = useCallback(
+    (state: AppState, statuses: RuntimeStatuses): EditorLineEnding | null => {
+      if (!activeModel || isExistingFileModel(activeModel) || language === 'shellscript') {
+        return null
+      }
+      return resolveOpenFileNewModelLineEnding(state, statuses, fileId, language)
+    },
+    [activeModel, fileId, language]
   )
+  const lineEnding = useAppStoreWithHostStatuses(selectLineEnding)
   useEffect(() => {
-    const model = mountedEditor?.getModel()
-    if (!model || model.uri.toString() !== modelUri) {
+    if (!activeModel) {
       return
     }
-    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri)
+    const tracker = trackNewModelLineEnding(activeModel, lineEnding, modelUri)
     return () => tracker.dispose()
-  }, [mountedEditor, modelUri, lineEnding])
+  }, [activeModel, modelUri, lineEnding])
 }

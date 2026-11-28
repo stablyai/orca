@@ -268,9 +268,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
-  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: chats
-   *  run the user's own agy or, where there is none, refuse as agy not found. Absent means on. */
-  antigravityManagedAgyEnabled?: boolean
   /** No longer read: Orca's Antigravity ACP server is retired. Kept so older clients' updates of
    *  this host-owned key are still accepted. */
   antigravityServerAutoUpdateEnabled?: boolean

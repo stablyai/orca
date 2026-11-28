@@ -17429,14 +17429,18 @@
           "resetDone": "Значок и цвет сброшены",
           "undo": "Отменить",
           "styleLetters": "Буквы",
-          "stylePicture": "Изображение",
-          "resetAppearance": "Сбросить значок и цвет",
+          "styleImage": "Изображение",
           "faviconPlaceholder": "Сайт для favicon",
           "lettersInput": "До 2 букв",
           "lettersPlaceholder": "1–2 буквы",
           "useLetters": "Использовать «{{value0}}»",
-          "usingGitHubAvatar": "Используется аватар GitHub",
-          "openSettings": "Открыть настройки"
+          "openSettings": "Открыть настройки",
+          "noIconFound": "Значок не найден",
+          "githubAvatar": "Аватар GitHub",
+          "websiteIcon": "Значок сайта",
+          "fetchIcon": "Загрузить",
+          "uploadTooLarge": "Больше 256 КБ",
+          "options": "Параметры"
         }
       },
       "pet": {
@@ -20479,7 +20483,7 @@
           "runStatusDispatchFailed": "Ошибка"
         },
         "runContent": {
-          "noOutput": "Нет доступного содержимого вывода."
+          "noOutput": "Нет вывода."
         },
         "runViewState": {
           "viewRun": "Просмотреть запуск",
@@ -23662,10 +23666,7 @@
         "refused": "Google отклонил учётные данные этого чата.",
         "usageLimit": "Для этого входа достигнут лимит использования.",
         "signInGoogle": "Войти через Google",
-        "yourAgy": "Ваш agy",
         "yourAgyVersion": "Ваш agy · v{{version}}",
-        "orcasAgy": "agy из Orca",
-        "orcasAgyVersion": "agy из Orca · v{{version}}",
         "runsOn": "Запускается через: {{program}}",
         "keepsOwnLogin": "Этот чат сохраняет собственный вход agy через Google. Новые чаты используют способ входа: {{method}}.",
         "apiKeyEnvironment": "Из вашего окружения",
@@ -26541,7 +26542,6 @@
       "noEmailNotSaved": "agy не сообщил адрес электронной почты · не сохранено",
       "saveShort": "Сохранить",
       "active": "Активна",
-      "runtime": "Среда выполнения",
       "chatTitle": "Чат Antigravity",
       "terminalTitle": "agy в терминале",
       "terminalDescription": "Использует собственные сохранённые учётные записи agy. Переключение применяется к новым сессиям agy.",

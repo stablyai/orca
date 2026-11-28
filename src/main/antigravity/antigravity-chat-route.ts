@@ -32,6 +32,9 @@ function savedChatAuthMethod(value: unknown): string | null {
 export const savedChatAuthIsPersonal = (value: unknown): boolean =>
   savedChatAuthMethod(value) === 'oauth-personal'
 
+export const savedChatAuthUsesGeminiApiKey = (value: unknown): boolean =>
+  savedChatAuthMethod(value) === 'gemini-api-key'
+
 /** Google sign-in, personal or Enterprise: chats use agy's own login, wherever they run. */
 export function savedChatAuthUsesAgyLogin(value: unknown): boolean {
   const method = savedChatAuthMethod(value)

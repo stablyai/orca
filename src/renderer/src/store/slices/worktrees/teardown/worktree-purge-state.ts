@@ -1,5 +1,6 @@
 import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
+import { forgetDiffCommentFailureOwners } from '../../diff-comments/diff-comment-failure-owners'
 import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
@@ -99,6 +100,7 @@ export function buildFullWorktreePurgeState(
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetDisplayedPanesForWorktrees(normalizedTargets.map(({ id }) => ({ id })))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
+  forgetDiffCommentFailureOwners(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
   for (const worktreeId of worktreeIdSet) {

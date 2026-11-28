@@ -18,7 +18,10 @@
       "title": "Учётные записи",
       "useReset": "Сбросить лимиты",
       "weeklyWindow": "7 дн.",
-      "pairingInvalidMessage": "Заново выполните сопряжение этого телефона с компьютером, чтобы увидеть его учётные записи."
+      "pairingInvalidMessage": "Заново выполните сопряжение этого телефона с компьютером, чтобы увидеть его учётные записи.",
+      "signedOut": "Вход не выполнен",
+      "addAccount": "Добавить учётную запись",
+      "signIn": "Войти"
     },
     "claude": {
       "usageSignInLabel": "Войти снова",
@@ -29,6 +32,31 @@
     },
     "codex": {
       "usageSignInLabel": "Вход не выполнен"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "Устройство, на котором был начат этот вход, перестало отвечать.",
+        "superseded": "Вход прерван из-за смены учётной записи на этом сервере. Начните заново.",
+        "noPrompt": "Команда входа на сервере не показала ссылку для входа в течение минуты. Обновите Orca на сервере и повторите попытку.",
+        "failed": "Не удалось войти. Повторите попытку."
+      },
+      "starting": "Начало входа на {{host}}…",
+      "copied": "Скопировано",
+      "copyLink": "Копировать ссылку",
+      "continue": "Продолжить",
+      "copyCode": "Копировать код",
+      "signingIn": "Вход…",
+      "tryAgain": "Повторить",
+      "titleClaude": "Вход в Claude",
+      "titleCodex": "Вход в Codex",
+      "savedOn": "Сохраняется на {{host}}",
+      "newCode": "Получить новый код",
+      "openPage": "Открыть страницу входа",
+      "pasteStep": "Вставить код",
+      "codePlaceholder": "Код со страницы",
+      "enterCodeStep": "Ввести этот код",
+      "waitingForPage": "Ожидание завершения на странице",
+      "signedInAs": "Вход выполнен: {{email}}"
     }
   },
   "agentHistory": {
@@ -448,7 +476,10 @@
       "signInHint": "Открывает терминал на компьютере с этим чатом",
       "forkedFrom": "Ответвление от",
       "botCreated": "Бот создан",
-      "autoReviewDenied": "Автоматическая проверка {{agent}} отклонила: {{action}}"
+      "autoReviewDenied": "Автоматическая проверка {{agent}} отклонила: {{action}}",
+      "notSignedIn": "Вход в {{agent}} не выполнен.",
+      "signInAccountHint": "Повторно входит в этот аккаунт на компьютере, где работает этот чат",
+      "signedInSendAgain": "Вход выполнен. Отправьте снова."
     },
     "ciResultLine": {
       "failingLead": "CI с ошибками в",
@@ -1580,7 +1611,7 @@
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
-      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
+      "tapToPairAgain": "Нажмите для повторного сопряжения"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -1600,7 +1631,10 @@
       "connectHint": "Добавьте сайт Jira в Orca на компьютере в разделе «Настройки → Интеграции», затем проверьте снова.",
       "connectOnDesktop": "Подключите Jira на компьютере",
       "credentialUnreadable": "Не удалось прочитать сохранённые данные Jira: {{credentialError}}",
-      "updateDesktop": "Обновите Orca на этом сервере"
+      "updateDesktop": "Обновите Orca на этом сервере",
+      "connectTitle": "Подключите аккаунт Jira",
+      "connectMessage": "Просматривайте назначенные вам задачи Jira и начинайте работу прямо из раздела «Задачи».",
+      "connect": "Подключить Jira"
     },
     "markdownBlocks": {
       "copyCode": "Копировать код",
@@ -2229,7 +2263,9 @@
       "loadFailed": "Не удалось загрузить файлы",
       "title": "Файлы",
       "truncatedList": "{{worktreeLabel}} — показаны первые 5000",
-      "loading": "Загрузка файлов…"
+      "loading": "Загрузка файлов…",
+      "newEntry": "Создать",
+      "add": "Добавить"
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
@@ -2244,7 +2280,62 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",
-      "copyRelativePath": "Копировать относительный путь"
+      "copyRelativePath": "Копировать относительный путь",
+      "newFile": "Новый файл",
+      "newFolder": "Новая папка",
+      "rename": "Переименовать",
+      "duplicate": "Дублировать",
+      "create": "Создать",
+      "fileName": "Имя файла",
+      "folderName": "Имя папки",
+      "deleteTitle": "Удалить {{name}}?",
+      "deleteFileDetail": "Файл будет удалён безвозвратно. Это действие нельзя отменить.",
+      "deleteFolderDetail": "Папка и её содержимое будут удалены безвозвратно. Это действие нельзя отменить.",
+      "duplicateFailed": "Не удалось дублировать {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "Копия может быть неполной. Проверьте её и повторите попытку.",
+      "deleteFailed": "Не удалось удалить {{name}}. {{reason}}",
+      "deleteUnconfirmed": "Он всё ещё на месте. Проверьте папку и повторите попытку.",
+      "renameFailed": "Не удалось переименовать {{name}}. {{reason}}",
+      "newFileFailed": "Не удалось создать файл. {{reason}}",
+      "newFolderFailed": "Не удалось создать папку. {{reason}}",
+      "share": "Поделиться",
+      "shareFailed": "Не удалось поделиться {{name}}",
+      "shareTooLarge": "Файлы больше 256 МБ нельзя отправить с телефона",
+      "shareHostOutdated": "Обновите Orca там, где работает это рабочее пространство, чтобы делиться файлами",
+      "uploadHere": "Загрузить сюда",
+      "uploadFiles": "Загрузить файлы",
+      "noFreeCopyName": "Нет свободного имени для копии {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Ожидание",
+      "waitingForConnection": "Ожидание подключения",
+      "failed": "{{reason}} · Нажмите, чтобы повторить",
+      "failedReason": "Не удалось загрузить",
+      "dismiss": "Не загружать {{name}}",
+      "tooLarge": "Файлы больше {{max}} МБ пока нельзя загрузить с телефона.",
+      "busy": "За раз можно загрузить не больше {{max}} файлов.",
+      "pickFailed": "Не удалось открыть файлы. {{reason}}",
+      "clashMessage": "Уже есть в {{folder}}",
+      "keepBoth": "Оставить оба",
+      "keepBothAs": "Сохранится как {{name}}",
+      "keepBothCopies": "Каждый сохранится как копия",
+      "skip": "Пропустить",
+      "skipAll": "Пропустить все",
+      "uploaded_few": "{{count}} файла загружено в {{folder}}",
+      "uploaded_many": "{{count}} файлов загружено в {{folder}}",
+      "uploaded_one": "{{count}} файл загружен в {{folder}}",
+      "uploaded_other": "{{count}} файла загружено в {{folder}}",
+      "clashTitleSeveral_few": "{{count}} файла уже есть в {{folder}}",
+      "clashTitleSeveral_many": "{{count}} файлов уже есть в {{folder}}",
+      "clashTitleSeveral_one": "{{count}} файл уже есть в {{folder}}",
+      "clashTitleSeveral_other": "{{count}} файла уже есть в {{folder}}",
+      "lost_few": "{{count}} файла не загружены: телефон их отпустил. Выберите их снова.",
+      "lost_many": "{{count}} файлов не загружены: телефон их отпустил. Выберите их снова.",
+      "lost_one": "{{count}} файл не загружен: телефон его отпустил. Выберите его снова.",
+      "lost_other": "{{count}} файла не загружены: телефон их отпустил. Выберите их снова.",
+      "nameTaken": "Имя занято · Нажмите, чтобы выбрать",
+      "workspaceRoot": "корень рабочей области",
+      "unconfirmed": "Не удалось подтвердить загрузку. Проверьте папку."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",
@@ -5302,7 +5393,17 @@
     "runtimeHydration": {
       "loadFailed": "Не удалось загрузить настройки задач"
     },
-    "rerunUnsuccessful": "Повторить проверки"
+    "rerunUnsuccessful": "Повторить проверки",
+    "jiraConnect": {
+      "title": "Подключить Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Почта Atlassian",
+      "apiToken": "API-токен",
+      "storageHint": "Токен хранится на этом хосте и шифруется, если ОС это поддерживает.",
+      "createToken": "Создать API-токен",
+      "failed": "Не удалось подключиться",
+      "serverNeedsUpdate": "Сначала обновите Orca на этом сервере. Или подключите Jira в Orca на компьютере."
+    }
   },
   "terminal": {
     "keyDefinitions": {
@@ -5468,7 +5569,7 @@
       "started": "Начало",
       "trigger": "Триггер",
       "output": "Вывод",
-      "noOutput": "Нет доступного содержимого вывода.",
+      "noOutput": "Нет доступного вывода.",
       "loadingRuns": "Загрузка запусков…",
       "loading": "Загрузка…",
       "hourly": "Каждый час",

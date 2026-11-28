@@ -21,6 +21,8 @@ import {
   type DirectoryCache,
   type FileExplorerRow
 } from './file-tree'
+import { useUploadRows } from './mobile-file-explorer-upload-queue'
+import { withUploadRows } from './mobile-file-explorer-upload-rows'
 
 type WorkspaceFileSearch = Pick<
   ReturnType<typeof useMobileNativeChatFileSearch>,
@@ -53,6 +55,8 @@ export function useMobileFileExplorerRows({
   connected: boolean
 }) {
   // Held with the scope it was typed in, so a new worktree starts unfiltered without an effect.
+  // This workspace's uploads show inside the folders they go to.
+  const uploads = useUploadRows(scope)
   const [scopedFilter, setScopedFilter] = useState({ scope, text: '' })
   const filter = scopedFilter.scope === scope ? scopedFilter.text : ''
   const setFilter = useCallback((text: string) => setScopedFilter({ scope, text }), [scope])
@@ -98,7 +102,7 @@ export function useMobileFileExplorerRows({
   const contentFiles = content.result?.files
   const rows = useMemo<FileExplorerRow[]>(() => {
     if (!filtering) {
-      return flattenDirectoryCache(directoryCache, expanded)
+      return withUploadRows(flattenDirectoryCache(directoryCache, expanded), uploads, expanded)
     }
     const hits = contentFiles ? contentSearchRows(contentFiles) : []
     return [
@@ -108,7 +112,7 @@ export function useMobileFileExplorerRows({
         : []),
       ...hits
     ]
-  }, [contentFiles, directoryCache, expanded, filtering, searchPaths])
+  }, [contentFiles, directoryCache, expanded, filtering, searchPaths, uploads])
 
   const toggleDirectory = useCallback(
     (relativePath: string) => {
