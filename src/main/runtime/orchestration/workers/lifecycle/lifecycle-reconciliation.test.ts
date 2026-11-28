@@ -155,6 +155,60 @@ describe('lifecycle reconciliation', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
+  it('keeps a question open for its answer across the report a running worker sends', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const asked = db.createQuestion({
+      runId: 'run_legacy_local',
+      dispatchId: dispatch.id,
+      askerHandle: 'term_worker',
+      question: 'which name?'
+    })
+    // The worker asked, then ended its turn on the question and reported what it had done so far.
+    const report = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Progress while waiting on the question',
+      type: 'worker_done',
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: dispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
+    expect(db.getQuestion(asked.message.id)?.status).toBe('pending')
+    // A pending question is what marks that clean turn-end as deliberate rather than a silent stop.
+    expect(db.awaitsAnswerToLatestQuestion(dispatch.id)).toBe(true)
+  })
+
+  it('closes a question when the worker reports the failure that ended it', () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const asked = db.createQuestion({
+      runId: 'run_legacy_local',
+      dispatchId: dispatch.id,
+      askerHandle: 'term_worker',
+      question: 'which name?'
+    })
+    const report = db.insertMessage({
+      runId: 'run_legacy_local',
+      from: 'term_worker',
+      to: 'term_coordinator',
+      subject: 'Failed while waiting on the question',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'failed' })
+    })
+
+    expect(reconcileLifecycleMessage(db, report).action).toBe('failed')
+    expect(db.getQuestion(asked.message.id)?.status).toBe('closed')
+    expect(db.awaitsAnswerToLatestQuestion(dispatch.id)).toBe(false)
+  })
+
   it('rejects mismatched opaque pane keys instead of treating them as legacy', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'work' })

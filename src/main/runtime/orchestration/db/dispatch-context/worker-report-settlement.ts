@@ -244,9 +244,15 @@ export function settleWorkerReportInTransaction(
     expectedDispatchStatus,
     params.outcome === 'failed' ? params.result : undefined
   )
-  this.closeQuestionsForDispatch(params.dispatchId)
-  for (const sibling of siblingDispatchIds) {
-    this.closeQuestionsForDispatch(sibling.id)
+  // A question outlives the report that happened to pass through its worker's Dispatch. It is
+  // raised by a running dispatch and answered at the Run home; closing it here dropped a question
+  // the coordinator still shows, and an unanswerable one made the worker's clean turn-end read as
+  // a stop without a report (#51737). Answering and settlement close it.
+  if (params.outcome === 'failed') {
+    this.closeQuestionsForDispatch(params.dispatchId)
+    for (const sibling of siblingDispatchIds) {
+      this.closeQuestionsForDispatch(sibling.id)
+    }
   }
   if (reportingWorker && this.workerAutoReleaseEnabled?.() !== false) {
     this.armWorkerTerminalAutoReleaseStatement(params.dispatchId)
