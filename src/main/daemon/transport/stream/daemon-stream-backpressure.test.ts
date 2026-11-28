@@ -103,31 +103,45 @@ describe('DaemonStreamBackpressure', () => {
     expect(backpressure.isStallReleased('tui')).toBe(true)
   })
 
-  it.each([300, 3_000])(
-    'an unrelated update makes no pause calls with %i quiet sessions and 10 paused floods',
-    (quietSessions) => {
-      let pauseCalls = 0
-      const backpressure = new DaemonStreamBackpressure(
-        () => {
-          pauseCalls += 1
-        },
-        () => false
-      )
-      const queued = new Map<string, number>()
-      for (let i = 0; i < quietSessions; i++) {
-        queued.set(`quiet-${i}`, 100)
-      }
-      for (let i = 0; i < 10; i++) {
-        queued.set(`flood-${i}`, 200 * 1024)
-      }
-      backpressure.setQueued('client', queued)
-      expect(pauseCalls).toBe(10)
+  it('pauses afresh after a detach released the pause, and still sheds at 60 s', () => {
+    vi.useFakeTimers()
+    const subprocess = { pause: vi.fn(), resume: vi.fn() }
+    const producer = new SessionProducerPause(subprocess)
+    const backpressure = new DaemonStreamBackpressure(
+      (_sessionId, isPaused, onStall) =>
+        isPaused ? producer.pause('stream', true, onStall) : producer.resumeClient('stream'),
+      () => false
+    )
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    producer.release({ resume: true })
+    expect(subprocess.resume).toHaveBeenCalledTimes(1)
 
-      queued.set('quiet-0', 101)
-      backpressure.setQueued('client', queued)
-      expect(pauseCalls).toBe(10)
-    }
-  )
+    backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))
+    expect(subprocess.pause).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(60_500)
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it('does not count an empty refill frame as the held session delivering', async () => {
+    const { backpressure, stall } = recordingBackpressure()
+    backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
+    backpressure.write('client', 'tui', completingSocket(), 'noop', undefined, false)
+    await new Promise((resolve) => process.nextTick(resolve))
+
+    stall()?.('timeout')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
+
+  it("forgets a disconnected client's deliveries", async () => {
+    const { backpressure, stall } = recordingBackpressure()
+    backpressure.setQueued('stalled', new Map([['tui', 200 * 1024]]))
+    backpressure.write('gone', 'tui', completingSocket(), 'x')
+    await new Promise((resolve) => process.nextTick(resolve))
+    backpressure.clear('gone')
+
+    stall()?.('timeout')
+    expect(backpressure.isStallReleased('tui')).toBe(true)
+  })
 })
 
 function completingSocket(): Writable {

@@ -4,7 +4,7 @@ export type DaemonStreamDataBatcherOptions = {
   onProducerBackpressureChanged?: (
     sessionId: string,
     paused: boolean,
-    onStallTimeout?: (reason: 'input' | 'timeout') => void
+    onStallTimeout?: (reason: 'input' | 'timeout' | 'released') => void
   ) => boolean | void
   isSessionAttachedToClient?: (clientId: string, sessionId: string) => boolean
   isSessionDroppable?: (sessionId: string) => boolean

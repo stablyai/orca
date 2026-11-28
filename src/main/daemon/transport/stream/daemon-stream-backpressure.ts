@@ -14,7 +14,7 @@ const PRESSURED_SESSION_LOW_WATER_BYTES = 32 * 1024
 // A stalled session resumes without shedding only when its own output was delivered this recently.
 const DELIVERY_PROGRESS_WINDOW_MS = 10_000
 
-type StallReason = 'input' | 'timeout'
+type StallReason = 'input' | 'timeout' | 'released'
 
 type ClientBacklog = {
   queuedChars: Map<string, number>
@@ -32,7 +32,7 @@ export class DaemonStreamBackpressure {
   private readonly stallReleasedSessions = new Set<string>()
   private pressured = false
   // A paused session's own completed writes since it paused; cleared on resume, so it never outlives the pause.
-  private readonly deliveredAtByPausedSession = new Map<string, number>()
+  private readonly deliveredAtByPausedSession = new Map<string, { at: number; clientId: string }>()
   private readonly longPauseLog = new LongPauseLogLimiter()
 
   constructor(
@@ -65,7 +65,9 @@ export class DaemonStreamBackpressure {
     sessionId: string,
     socket: Pick<Socket, 'write'>,
     line: string | Buffer,
-    onComplete?: () => void
+    onComplete?: () => void,
+    // A no-op refill frame moves none of this session's output, so it is not its delivery.
+    carriesSessionOutput = true
   ): void {
     const client = this.getOrCreateClient(clientId)
     const bytes =
@@ -78,10 +80,11 @@ export class DaemonStreamBackpressure {
       if (this.clients.get(clientId) === client) {
         if (
           !error &&
+          carriesSessionOutput &&
           this.pausedAtBySession.has(sessionId) &&
           this.ownsSession(clientId, sessionId)
         ) {
-          this.deliveredAtByPausedSession.set(sessionId, Date.now())
+          this.deliveredAtByPausedSession.set(sessionId, { at: Date.now(), clientId })
         }
         const remaining = (client.pendingWriteBytes.get(sessionId) ?? 0) - bytes
         if (remaining > 0) {
@@ -175,6 +178,12 @@ export class DaemonStreamBackpressure {
   }
 
   private onStall(sessionId: string, reason: StallReason): void {
+    if (reason === 'released') {
+      // The producer already runs again; forget the pause so the next refresh pauses afresh.
+      this.pausedAtBySession.delete(sessionId)
+      this.deliveredAtByPausedSession.delete(sessionId)
+      return
+    }
     if (this.deliveryProgressed(sessionId)) {
       // A draining consumer resumes losslessly so the program can read input; the next refresh re-pauses.
       if (this.pausedAtBySession.has(sessionId)) {
@@ -192,8 +201,8 @@ export class DaemonStreamBackpressure {
   }
 
   private deliveryProgressed(sessionId: string): boolean {
-    const deliveredAt = this.deliveredAtByPausedSession.get(sessionId)
-    return deliveredAt !== undefined && Date.now() - deliveredAt < DELIVERY_PROGRESS_WINDOW_MS
+    const delivered = this.deliveredAtByPausedSession.get(sessionId)
+    return delivered !== undefined && Date.now() - delivered.at < DELIVERY_PROGRESS_WINDOW_MS
   }
 
   /** Release a stalled producer into keep-tail dropping; lost contact does not prove child exit. */
@@ -213,9 +222,16 @@ export class DaemonStreamBackpressure {
   clear(clientId?: string): void {
     if (clientId === undefined) {
       this.clients.clear()
+      this.deliveredAtByPausedSession.clear()
       this.stallReleasedSessions.clear()
     } else {
       this.clients.delete(clientId)
+      // A dead connection's deliveries prove nothing about the session's current consumer.
+      for (const [sessionId, delivered] of this.deliveredAtByPausedSession) {
+        if (delivered.clientId === clientId) {
+          this.deliveredAtByPausedSession.delete(sessionId)
+        }
+      }
     }
     this.refresh()
   }

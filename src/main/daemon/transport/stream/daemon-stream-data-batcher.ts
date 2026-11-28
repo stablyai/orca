@@ -256,7 +256,7 @@ export class DaemonStreamDataBatcher {
       if (!socket.destroyed) {
         const sessionId = retained[0].sessionId
         this.heldRefill.arm(clientId, frames.noop(sessionId), (line, complete) =>
-          this.write(clientId, sessionId, socket, line, complete)
+          this.write(clientId, sessionId, socket, line, complete, false)
         )
       }
       return
@@ -269,10 +269,11 @@ export class DaemonStreamDataBatcher {
     sessionId: string,
     socket: Socket,
     line: string | Buffer,
-    onComplete?: () => void
+    onComplete?: () => void,
+    carriesSessionOutput = true
   ): void {
     if (this.backpressure) {
-      this.backpressure.write(clientId, sessionId, socket, line, onComplete)
+      this.backpressure.write(clientId, sessionId, socket, line, onComplete, carriesSessionOutput)
     } else {
       socket.write(line, onComplete)
     }

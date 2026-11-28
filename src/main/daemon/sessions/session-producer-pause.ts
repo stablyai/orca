@@ -4,8 +4,9 @@ import {
   isTerminalPointerReportOnly
 } from '../../../shared/terminal/input/terminal-untyped-input'
 
-/** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed. */
-export type StreamStallReason = 'input' | 'timeout'
+/** 'input': typed input waited 2 s behind the pause; 'timeout': the 60 s no-progress deadline passed;
+ *  'released': detach or teardown dropped the pause, so the owner must pause afresh. */
+export type StreamStallReason = 'input' | 'timeout' | 'released'
 
 // A dropped resume notification must not wedge a shell; a still-flooded client can pause it again.
 export const PRODUCER_PAUSE_FAILSAFE_MS = 5_000
@@ -97,6 +98,7 @@ export class SessionProducerPause {
       clearTimeout(this.failsafeTimer)
       this.failsafeTimer = null
     }
+    const onStreamStall = this.streamBackpressured ? this.onStreamStall : null
     this.clearStreamStallWatchdog()
     if (!this.paused && !this.streamBackpressured) {
       return
@@ -106,6 +108,7 @@ export class SessionProducerPause {
     if (opts.resume) {
       this.subprocess.resume?.()
     }
+    onStreamStall?.('released')
   }
 
   /** Typed input while stream-paused asks the stall owner to resume in 2 s; replies and pointer reports don't. */
