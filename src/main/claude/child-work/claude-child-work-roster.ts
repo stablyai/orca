@@ -27,6 +27,27 @@ export function claudeRosterStarts(
   })
 }
 
+/** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
+export function claudeRosterStart(
+  id: string,
+  task: Record<string, unknown>
+): Record<string, unknown> {
+  return { ...task, type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
+}
+
+/** The frame that proves a task runs, for a lease confirm: a running update reports it under the patch,
+ *  and `task_progress` is emitted only while it runs. Null when the frame proves nothing about a resume. */
+export function claudeRunningFrame(
+  message: Record<string, unknown>
+): Record<string, unknown> | null {
+  // Only `running` proves a resume: a pending or paused task may never run again.
+  const patch = record(message.patch)
+  if (patch?.status === 'running') {
+    return patch
+  }
+  return message.status === 'running' || message.subtype === 'task_progress' ? message : null
+}
+
 /** Whether this frame ends the lead's turn (`result`). A tool result instead marks the live tasks whose
  *  own call it answers, the lead's or a subagent's (forwarded with its parent_tool_use_id); only those
  *  can be survivors, so a stray or late `result` never touches a command whose call still runs. */

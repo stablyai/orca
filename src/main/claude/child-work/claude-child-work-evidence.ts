@@ -24,6 +24,8 @@ export type EndedClaudeTask = {
   run: string | undefined
   outcome: AgentChildWorkOutcome
   task?: DecodedClaudeTask
+  /** What the ending said, restated if a wake that guessed past it expires. */
+  reported?: { lastMessage?: string; totalTokens?: number }
 }
 
 export type DecodedClaudeTask = {
