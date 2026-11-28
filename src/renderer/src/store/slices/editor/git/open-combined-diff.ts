@@ -19,6 +19,26 @@ function hasCombinableBranchCompare(
   )
 }
 
+/** The Changes tab id openAllDiffs uses for this worktree's copy. */
+export function combinedUncommittedDiffId(
+  worktreeId: string,
+  contentOwner: ReturnType<typeof editorOpenOwner>,
+  areaFilter?: string,
+  uncommittedOnly = false
+): string {
+  // Own id so an Uncommitted tab never turns an open All Changes tab uncommitted-only.
+  const baseId = areaFilter
+    ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
+    : uncommittedOnly
+      ? `${worktreeId}::all-diffs::uncommitted-only`
+      : `${worktreeId}::all-diffs::uncommitted`
+  return qualifyEditorContentId(
+    baseId,
+    contentOwner.runtimeEnvironmentId,
+    contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
+  )
+}
+
 export function createOpenCombinedDiff(
   set: EditorSet,
   get: EditorGet
@@ -38,17 +58,7 @@ export function createOpenCombinedDiff(
         options?.uncommittedOnly === true ||
         (options?.wholeScope === true &&
           !hasCombinableBranchCompare(get().gitBranchCompareSummaryByWorktree[worktreeId]))
-      // Own id so an Uncommitted tab never turns an open All Changes tab uncommitted-only.
-      const baseId = areaFilter
-        ? `${worktreeId}::all-diffs::uncommitted::${areaFilter}`
-        : uncommittedOnly
-          ? `${worktreeId}::all-diffs::uncommitted-only`
-          : `${worktreeId}::all-diffs::uncommitted`
-      const id = qualifyEditorContentId(
-        baseId,
-        contentOwner.runtimeEnvironmentId,
-        contentOwner.operationProvenance?.generation.route.executionHostId ?? undefined
-      )
+      const id = combinedUncommittedDiffId(worktreeId, contentOwner, areaFilter, uncommittedOnly)
       const label = areaFilter
         ? ({ staged: 'Staged Changes', unstaged: 'Changes', untracked: 'Untracked Files' }[
             areaFilter

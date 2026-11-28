@@ -17,6 +17,8 @@ export type RuntimeTerminalWriteOptions = {
   inputSource?: TerminalInputSource
   inputKind: TerminalInputKind
   signal?: AbortSignal
+  /** performance.now() at arrival; bounds a queued frame's endpoint re-attach wait. */
+  arrivedAt?: number
   beforeWrite?: (ptyId: string) => void | Promise<void>
   reserveWrite?: (ptyId: string) => void
   afterWrite?: (ptyId: string) => void | Promise<void>

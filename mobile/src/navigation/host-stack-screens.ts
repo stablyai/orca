@@ -1,79 +1,55 @@
-import { translate } from '../i18n/mobile-i18n'
+import type { Translate } from '../i18n/mobile-i18n'
 
 // Keep native/page stack declarations in sync.
 export const HOST_STACK_SCREENS = [
   {
     name: '[hostId]/index',
-    get title() {
-      return translate('navigation.hostStackScreens.host', 'Host')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.host', 'Host')
   },
   {
     name: '[hostId]/edit',
-    get title() {
-      return translate('navigation.hostStackScreens.editHost', 'Edit host')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.editComputer', 'Edit computer')
   },
   {
     name: '[hostId]/accounts',
-    get title() {
-      return translate('navigation.hostStackScreens.accounts', 'Accounts')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.accounts', 'Accounts')
   },
   {
     name: '[hostId]/mcp',
-    get title() {
-      return translate('navigation.hostStackScreens.mcpServers', 'MCP servers')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.mcpServers', 'MCP servers')
   },
   {
     name: '[hostId]/tasks',
-    get title() {
-      return translate('navigation.hostStackScreens.tasks', 'Tasks')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.tasks', 'Tasks')
   },
   {
     name: '[hostId]/automations',
-    get title() {
-      return translate('navigation.hostStackScreens.automations', 'Automations')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.automations', 'Automations')
   },
   {
     name: '[hostId]/session/[worktreeId]',
-    get title() {
-      return translate('navigation.hostStackScreens.terminal', 'Terminal')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.terminal', 'Terminal')
   },
   {
     name: '[hostId]/source-control/[worktreeId]',
-    get title() {
-      return translate('navigation.hostStackScreens.sourceControl', 'Source Control')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.sourceControl', 'Source Control')
   },
   {
     name: '[hostId]/agent-history/[worktreeId]',
-    get title() {
-      return translate('navigation.hostStackScreens.agentSessionHistory', 'Agent Session History')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.agentSessionHistory', 'Agent history')
   },
   {
     name: '[hostId]/review/[worktreeId]',
-    get title() {
-      return translate('navigation.hostStackScreens.changes', 'Changes')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.changes', 'Changes')
   },
   {
     name: '[hostId]/pr/[worktreeId]',
-    get title() {
-      return translate('navigation.hostStackScreens.pullRequest', 'Pull Request')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.pullRequest', 'Pull Request')
   },
   // Declare catch-all last for its title; named children must match first. Undeclared routes would render with group options anyway.
   {
     name: '[hostId]/[...page]',
-    get title() {
-      return translate('navigation.hostStackScreens.workspace', 'Workspace')
-    }
+    title: (t: Translate) => t('navigation.hostStackScreens.workspace', 'Workspace')
   }
 ] as const
 

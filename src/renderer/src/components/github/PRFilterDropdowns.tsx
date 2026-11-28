@@ -1,8 +1,12 @@
-import React, { useMemo, useState } from 'react'
-import { ListFilter, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
+import { RailPageFilterButton } from '@/components/rail-page/RailPageToolbar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/class-names'
 import {
   useRepoLabelsBySlug,
   useRepoAssigneesBySlug
@@ -17,15 +21,20 @@ import {
   type PRFilterChange,
   type SectionKey
 } from '@/components/github/PRFilterSections'
+import { PRFilterValueMenu } from '@/components/github/PRFilterValueMenu'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { TaskViewPresetId } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type Props = {
   parsed: ParsedTaskQuery
+  defaultFilters: ParsedTaskQuery
+  activeCount: number
+  presets?: React.ReactNode
   kind: 'prs' | 'issues'
   authorLogins: string[]
   // Scope metadata to the first selected repo; one popover cannot enumerate every repo’s labels and users.
@@ -33,6 +42,7 @@ type Props = {
   /** Host that owns the repo the primary slug came from. */
   ownerTarget?: RuntimeClientTarget | null
   onChange: (change: PRFilterChange) => void
+  onSetDefaultPreset?: (preset: TaskViewPresetId) => void
 }
 
 export type { PRFilterChange } from '@/components/github/PRFilterSections'
@@ -75,19 +85,60 @@ function ActivePill({
   )
 }
 
+const DRILL_IN_FOCUSABLE_SELECTOR =
+  'button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+function cycleDrillInFocus(container: HTMLElement | null, reverse: boolean): void {
+  if (!container) {
+    return
+  }
+  const focusables = Array.from(
+    container.querySelectorAll<HTMLElement>(DRILL_IN_FOCUSABLE_SELECTOR)
+  ).filter((el) => el.offsetParent !== null)
+  if (focusables.length === 0) {
+    return
+  }
+  const activeIndex = focusables.findIndex(
+    (el) => el === document.activeElement || el.contains(document.activeElement)
+  )
+  const nextIndex =
+    activeIndex === -1
+      ? reverse
+        ? focusables.length - 1
+        : 0
+      : (activeIndex + (reverse ? -1 : 1) + focusables.length) % focusables.length
+  focusables[nextIndex]?.focus()
+}
+
 export default function PRFilterDropdowns({
   parsed,
+  defaultFilters,
+  activeCount,
+  presets,
   kind,
   authorLogins,
   primarySlug,
   ownerTarget,
-  onChange
+  onChange,
+  onSetDefaultPreset
 }: Props): React.JSX.Element {
-  const t = useTranslate()
   const [openSection, setOpenSection] = useState<SectionKey | null>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
+  const drillInRef = useRef<HTMLDivElement>(null)
   // Each author pick reloads the list, so keep the authors visible at open as candidates.
   const [authorLoginsAtOpen, setAuthorLoginsAtOpen] = useState<string[]>([])
+
+  useEffect(() => {
+    if (kind !== 'prs' || !popoverOpen || openSection === null) {
+      return
+    }
+    const frame = requestAnimationFrame(() => {
+      drillInRef.current
+        ?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')
+        ?.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [kind, popoverOpen, openSection])
   const owner = primarySlug?.owner ?? null
   const repo = primarySlug?.repo ?? null
   const hasPrimarySlug = popoverOpen && owner !== null && repo !== null
@@ -144,155 +195,233 @@ export default function PRFilterDropdowns({
   >(null)
   const reviewerMode = reviewerModeOverride ?? reviewerKind
 
-  // Expose any non-default status as a removable pill.
-  const statusActive = (parsed.state !== null && parsed.state !== 'open') || parsed.draft
-  const statusPillValue = ((): string | null => {
-    const parts: string[] = []
-    if (parsed.state === 'closed' || parsed.state === 'merged') {
-      parts.push(filterStateLabel(parsed.state, t))
-    } else if (parsed.state === 'all') {
-      parts.push(t('auto.components.github.PRFilterDropdowns.anyState', 'Any'))
-    }
-    if (parsed.draft) {
-      parts.push(filterDraftLabel(t))
-    }
-    return parts.length > 0 ? parts.join(' · ') : null
-  })()
-
-  const activeCount =
-    (statusActive ? 1 : 0) +
-    (parsed.authors.length > 0 ? 1 : 0) +
-    (parsed.assignee ? 1 : 0) +
-    (reviewerActive ? 1 : 0) +
-    (parsed.labels.length > 0 ? 1 : 0)
-
   const handleSelect = (change: PRFilterChange): void => {
     onChange(change)
     setOpenSection(null)
   }
 
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <Popover
-        open={popoverOpen}
-        onOpenChange={(next) => {
-          setPopoverOpen(next)
-          if (next) {
-            setAuthorLoginsAtOpen(authorLogins)
-          } else {
-            setOpenSection(null)
-          }
-        }}
-      >
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={cn(
-              'h-8 gap-1.5 rounded-md border-border/60 bg-background px-2.5 text-xs font-medium text-foreground shadow-xs hover:bg-muted/60',
-              activeCount > 0 && 'border-border'
-            )}
-          >
-            <ListFilter className="size-3.5" />
-            {t('auto.components.github.PRFilterDropdowns.79c54552f7', 'Filters')}
-            {activeCount > 0 ? (
-              <span className="ml-0.5 rounded-full bg-muted px-1.5 text-[10px] font-medium text-foreground">
-                {activeCount}
-              </span>
-            ) : null}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent align="start" className="w-72 p-0">
+  const handleOpenChange = (next: boolean): void => {
+    setPopoverOpen(next)
+    if (next) {
+      setAuthorLoginsAtOpen(authorLogins)
+    } else {
+      setOpenSection(null)
+    }
+  }
+
+  const handlePickSection = (s: SectionKey): void => {
+    // Reset reviewer mode to the parsed query on each menu visit.
+    if (s === 'reviewer') {
+      setReviewerModeOverride(null)
+    }
+    setOpenSection(s)
+  }
+
+  const clearAll =
+    activeCount > 0
+      ? () => {
+          onChange({
+            authors: defaultFilters.authors,
+            assignee: defaultFilters.assignee,
+            reviewer: getReviewer(defaultFilters),
+            labels: defaultFilters.labels,
+            state: defaultFilters.state ?? 'all',
+            draft: defaultFilters.draft
+          })
+          setReviewerModeOverride(null)
+          setPopoverOpen(false)
+        }
+      : null
+
+  const sectionDetail =
+    openSection !== null ? (
+      <SectionDetail
+        section={openSection}
+        parsed={parsed}
+        authorOpts={authorOpts}
+        userOpts={userOpts}
+        labelOpts={labelOpts}
+        labelsLoading={hasPrimarySlug && labelsState.loading}
+        labelsError={hasPrimarySlug ? labelsState.error : null}
+        usersLoading={hasPrimarySlug && assigneesState.loading}
+        usersError={hasPrimarySlug ? assigneesState.error : null}
+        reviewerMode={reviewerMode}
+        setReviewerMode={setReviewerModeOverride}
+        onBack={() => setOpenSection(null)}
+        onSelect={handleSelect}
+      />
+    ) : null
+
+  if (kind === 'prs') {
+    return (
+      <DropdownMenu open={popoverOpen} onOpenChange={handleOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <RailPageFilterButton activeCount={activeCount} />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          density="comfortable"
+          variant={openSection ? 'picker' : 'default'}
+          className="w-[300px] max-w-(--radix-dropdown-menu-content-available-width)"
+        >
           {openSection === null ? (
+            <PRFilterValueMenu
+              parsed={parsed}
+              reviewerActive={reviewerActive}
+              reviewerKind={reviewerKind}
+              onChange={onChange}
+              onPick={handlePickSection}
+              onClearAll={clearAll}
+              onSetDefaultPreset={onSetDefaultPreset}
+            />
+          ) : (
+            <div
+              ref={drillInRef}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  return
+                }
+                if (event.key === 'Tab') {
+                  // Radix DropdownMenu calls preventDefault() on Tab; manage drill-in focus order directly.
+                  event.preventDefault()
+                  event.stopPropagation()
+                  cycleDrillInFocus(drillInRef.current, event.shiftKey)
+                  return
+                }
+                // Keep Command search typing and arrow navigation out of Radix menu typeahead.
+                event.stopPropagation()
+              }}
+            >
+              {sectionDetail}
+            </div>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    )
+  }
+
+  return (
+    <Popover open={popoverOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <RailPageFilterButton activeCount={activeCount} />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-w-(--radix-popover-content-available-width)">
+        {openSection === null ? (
+          <>
+            {presets}
             <SectionMenu
               parsed={parsed}
               kind={kind}
               reviewerActive={reviewerActive}
               reviewerKind={reviewerKind}
-              onPick={(s) => {
-                // Reset reviewer mode to the parsed query on each menu visit.
-                if (s === 'reviewer') {
-                  setReviewerModeOverride(null)
-                }
-                setOpenSection(s)
-              }}
-              onClearAll={
-                activeCount > 0
-                  ? () => {
-                      onChange({
-                        authors: [],
-                        assignee: null,
-                        reviewer: null,
-                        labels: [],
-                        state: 'open',
-                        draft: false
-                      })
-                      setReviewerModeOverride(null)
-                      setPopoverOpen(false)
-                    }
-                  : null
-              }
+              onPick={handlePickSection}
+              onClearAll={clearAll}
             />
-          ) : (
-            <SectionDetail
-              section={openSection}
-              parsed={parsed}
-              kind={kind}
-              authorOpts={authorOpts}
-              userOpts={userOpts}
-              labelOpts={labelOpts}
-              labelsLoading={hasPrimarySlug && labelsState.loading}
-              labelsError={hasPrimarySlug ? labelsState.error : null}
-              usersLoading={hasPrimarySlug && assigneesState.loading}
-              usersError={hasPrimarySlug ? assigneesState.error : null}
-              reviewerMode={reviewerMode}
-              setReviewerMode={setReviewerModeOverride}
-              onBack={() => setOpenSection(null)}
-              onSelect={handleSelect}
-            />
-          )}
-        </PopoverContent>
-      </Popover>
-      {statusPillValue ? (
+          </>
+        ) : (
+          sectionDetail
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+type FilterPill = {
+  key: string
+  label: string
+  value: string | null
+  reset: PRFilterChange
+}
+
+function getReviewer(query: ParsedTaskQuery): PRFilterChange['reviewer'] {
+  if (query.reviewedBy) {
+    return { kind: 'reviewed-by', login: query.reviewedBy }
+  }
+  return query.reviewRequested ? { kind: 'requested', login: query.reviewRequested } : null
+}
+
+function sameValues(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value) => right.includes(value))
+}
+
+export function getPRFilterPills(
+  parsed: ParsedTaskQuery,
+  base: ParsedTaskQuery,
+  t: Translate
+): FilterPill[] {
+  const pills: FilterPill[] = []
+  const state = parsed.state ?? 'all'
+  const baseState = base.state ?? 'all'
+  const reviewer = getReviewer(parsed)
+  const baseReviewer = getReviewer(base)
+  const stateLabel =
+    state === 'all'
+      ? t('auto.components.github.PRFilterDropdowns.anyState', 'Any')
+      : filterStateLabel(state, t)
+  if (state !== baseState || parsed.draft !== base.draft) {
+    pills.push({
+      key: 'status',
+      label: t('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status'),
+      value: parsed.draft ? `${stateLabel} · ${filterDraftLabel(t)}` : stateLabel,
+      reset: { state: baseState, draft: base.draft }
+    })
+  }
+  if (!sameValues(parsed.authors, base.authors)) {
+    pills.push({
+      key: 'author',
+      label: t('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author'),
+      value: filterAuthorsValue(parsed.authors, t),
+      reset: { authors: base.authors }
+    })
+  }
+  if (!sameValues(parsed.labels, base.labels)) {
+    pills.push({
+      key: 'label',
+      label: t('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label'),
+      value: filterLabelsValue(parsed.labels, t),
+      reset: { labels: base.labels }
+    })
+  }
+  if (reviewer?.kind !== baseReviewer?.kind || reviewer?.login !== baseReviewer?.login) {
+    pills.push({
+      key: 'reviewer',
+      label:
+        (reviewer ?? baseReviewer)?.kind === 'reviewed-by'
+          ? t('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
+          : t('auto.components.github.PRFilterDropdowns.b27b7e526c', 'Review from'),
+      value: reviewer?.login ?? null,
+      reset: { reviewer: baseReviewer }
+    })
+  }
+  if (parsed.assignee !== base.assignee) {
+    pills.push({
+      key: 'assignee',
+      label: t('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee'),
+      value: parsed.assignee,
+      reset: { assignee: base.assignee }
+    })
+  }
+  return pills
+}
+
+export function PRFilterPills({
+  pills,
+  onChange
+}: {
+  pills: readonly FilterPill[]
+  onChange: Props['onChange']
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {pills.map(({ key, label, value, reset }) => (
         <ActivePill
-          label={t('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status')}
-          value={statusPillValue}
-          onClear={() => onChange({ state: 'open', draft: false })}
+          key={key}
+          label={label}
+          value={value ?? t('auto.components.github.PRFilterDropdowns.anyState', 'Any')}
+          onClear={() => onChange(reset)}
         />
-      ) : null}
-      {parsed.authors.length > 0 ? (
-        <ActivePill
-          label={t('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author')}
-          value={filterAuthorsValue(parsed.authors, t) ?? ''}
-          onClear={() => onChange({ authors: [] })}
-        />
-      ) : null}
-      {parsed.labels.length > 0 ? (
-        <ActivePill
-          label={t('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
-          value={filterLabelsValue(parsed.labels, t) ?? ''}
-          onClear={() => onChange({ labels: [] })}
-        />
-      ) : null}
-      {reviewerActive ? (
-        <ActivePill
-          label={
-            reviewerKind === 'reviewed-by'
-              ? t('auto.components.github.PRFilterDropdowns.7f1ba66c3e', 'Reviewed by')
-              : t('auto.components.github.PRFilterDropdowns.b27b7e526c', 'Review from')
-          }
-          value={reviewerActive}
-          onClear={() => onChange({ reviewer: null })}
-        />
-      ) : null}
-      {parsed.assignee ? (
-        <ActivePill
-          label={t('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee')}
-          value={parsed.assignee}
-          onClear={() => onChange({ assignee: null })}
-        />
-      ) : null}
+      ))}
     </div>
   )
 }

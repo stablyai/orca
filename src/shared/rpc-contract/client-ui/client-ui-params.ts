@@ -106,6 +106,7 @@ export const TopLevelViewSchema = lazyZodSchema(() =>
       'automations',
       'space',
       'skills',
+      'plugins',
       // Bot templates was a view before it became a dialog; an older peer can still send it.
       'botTemplates',
       'artifacts',
@@ -204,6 +205,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
       _portsStatusBarDefaultAdded: z.boolean().optional(),
       _kimiStatusBarDefaultAdded: z.boolean().optional(),
       _minimaxStatusBarDefaultAdded: z.boolean().optional(),
+      // Retired with Antigravity usage; older clients still send it.
       _antigravityStatusBarDefaultAdded: z.boolean().optional(),
       _grokStatusBarDefaultAdded: z.boolean().optional(),
       _cursorStatusBarDefaultAdded: z.boolean().optional(),
@@ -224,7 +226,6 @@ export const UiUpdateFields = lazyZodSchema(() =>
               kimi: z.string().optional(),
               minimax: z.string().optional(),
               grok: z.string().optional(),
-              antigravity: z.string().optional(),
               cursor: z.string().optional(),
               zcode: z.string().optional(),
               muse: z.string().optional()

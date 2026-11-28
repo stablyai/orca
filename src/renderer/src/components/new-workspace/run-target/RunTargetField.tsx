@@ -54,6 +54,10 @@ export default function RunTargetField({
 }): React.JSX.Element {
   const t = useTranslate()
   const [tooltipOpen, setTooltipOpen] = useState(false)
+  // Opening the list ends a tooltip, so closing it (Escape) doesn't bring the tooltip back unasked.
+  if (open && tooltipOpen) {
+    setTooltipOpen(false)
+  }
   // The visible name is drawn over the search input and hidden from assistive tech, so the committed
   // target is its description: it holds whatever is typed or highlighted, until a row is picked.
   const committedId = useId()

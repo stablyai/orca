@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
 import {
@@ -12,6 +12,7 @@ import {
 import { linkMobilePr } from '../../creation/mobile-pr-link'
 import { TextField } from '../../../../components/composer-input/TextField'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { composerInputStylesSheet } from '../../../../components/composer-input/composer-input-styles'
 
 type Props = {
   client: RpcClient | null
@@ -31,7 +32,9 @@ function parsePrReference(input: string): number | null {
 
 // Use inline View inside sidebar ScrollView; nested BottomDrawer overlay clips, matching compose-form constraint.
 export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Props) {
-  useMobileColorScheme()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [input, setInput] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -89,6 +92,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
         autoCapitalize="none"
         autoCorrect={false}
         editable={!submitting}
+        style={composerInputStyles.filledField}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable
@@ -114,7 +118,7 @@ export function MobileLinkPrForm({ client, worktreeId, onCancel, onLinked }: Pro
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   headingRow: {
     flexDirection: 'row',
     alignItems: 'center',

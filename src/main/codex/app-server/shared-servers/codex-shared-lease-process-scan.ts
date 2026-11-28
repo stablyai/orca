@@ -75,7 +75,7 @@ function byTag(entries: readonly (readonly [number, string | null])[]) {
     entries.flatMap(([pid, tag]) => (tag === leaseId ? [pid] : []))
 }
 
-type LinuxProcess = { parent: number | null; name: string }
+export type LinuxProcess = { parent: number | null; name: string }
 
 /** Name and parent from /proc/<pid>/stat; the name may hold spaces or parens, so split on the last. */
 function parseStat(stat: string): LinuxProcess {
@@ -93,7 +93,7 @@ const isLauncherName = (name: string | undefined): boolean =>
 
 /** Own-user processes with their parent and name, from one `ps` child so Electron main parses one
  *  table instead of walking /proc; the walk is the fallback where ps can't run. */
-const readOwnLinuxProcesses = coalescedReading(
+export const readOwnLinuxProcesses = coalescedReading(
   async () => (await readOwnLinuxProcessesWithPs()) ?? (await walkOwnLinuxProcesses())
 )
 

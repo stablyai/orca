@@ -26,8 +26,10 @@ import {
 } from '../../db/federation/paired-server-asks-store'
 import type { PairedServerAsks } from './paired-server-asks-pull'
 import { notifyPairedServerCardsChanged } from './paired-server-card-notices'
+import { replySubject } from '../../../../../shared/orchestration/mailbox/reply-subject'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 
-const Withdrawn = z.object({ requestId: z.string().min(1) })
+const Withdrawn = lazyZodSchema(() => z.object({ requestId: z.string().min(1) }))
 
 export type PulledItem = {
   conversationId: string
@@ -68,9 +70,10 @@ export function declinePairedServerAsk(
   queuePeerMailReply(db, ask.conversationId, noticeId, {
     senderLabel: `${ask.to} on ${machine}`,
     fromAddress: ask.to,
-    subject: ask.subject.startsWith('Re: ') ? ask.subject : `Re: ${ask.subject}`,
+    subject: replySubject(ask.subject),
     body: `Declined on ${machine}.`,
     threadId: ask.messageId,
+    replyTo: ask.messageId,
     notice: { requestId: ask.messageId }
   })
   notifyPeerMailQueued(db.db)
@@ -229,6 +232,7 @@ export async function importPairedServerItem(
           senderLabel: data.senderLabel,
           subject: data.subject,
           threadId: data.threadId ?? undefined,
+          replyTo: data.replyTo,
           to: data.to,
           body: data.body,
           peerFingerprint: asks.pairing,

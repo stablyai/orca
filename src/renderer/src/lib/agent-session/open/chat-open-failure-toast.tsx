@@ -1,13 +1,16 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { AlertCircle, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { useToastHeightChange } from '@/components/ui/toast-height-change'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** What a failed chat open knows: whether its agent is still resuming, the raw cause, and how to try again. */
 export type ChatOpenUnavailable = {
   starting?: boolean
+  /** A plain sentence saying why, shown under the title; not raw output. */
+  message?: string
   detail?: string
   retry?: () => void
 }
@@ -84,6 +87,7 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
       () => (
         <ChatOpenFailureCard
           key={failureId}
+          message={context.message}
           detail={detail || undefined}
           onDismiss={onDismiss}
           onRetry={onRetry}
@@ -104,11 +108,13 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
 }
 
 export function ChatOpenFailureCard({
+  message,
   detail,
   onDismiss,
   onRetry,
   onResize
 }: {
+  message?: string
   detail?: string
   onDismiss: () => void
   onRetry?: () => void
@@ -118,21 +124,7 @@ export function ChatOpenFailureCard({
   const [open, setOpen] = useState(false)
   const detailId = useId()
   const cardRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const card = cardRef.current
-    if (!card) {
-      return
-    }
-    let height = card.offsetHeight
-    const observer = new ResizeObserver(() => {
-      if (card.offsetHeight !== height) {
-        height = card.offsetHeight
-        onResize?.()
-      }
-    })
-    observer.observe(card)
-    return () => observer.disconnect()
-  }, [onResize])
+  useToastHeightChange(cardRef, onResize)
   return (
     <div
       ref={cardRef}
@@ -145,6 +137,12 @@ export function ChatOpenFailureCard({
           {chatOpenUnavailableText.openFailed()}
         </p>
       </div>
+      {message ? (
+        // pl-6 = icon + gap, so the reason starts at the title's edge.
+        <p data-message className="mt-1 pl-6 leading-snug text-muted-foreground">
+          {message}
+        </p>
+      ) : null}
       {detail ? (
         // pl-6 = icon + gap, so the disclosure and raw text start at the title's edge.
         <div className="mt-1 flex flex-col gap-1.5 pl-6 text-muted-foreground">

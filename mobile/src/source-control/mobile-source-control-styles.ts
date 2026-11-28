@@ -1,10 +1,10 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet, themedStyles } from '../theme/themed-styles'
-import { diffStyles } from './changes/mobile-source-control-diff-styles'
-import { listStyles } from './changes/mobile-source-control-list-styles'
+import { diffStylesSheet } from './changes/mobile-source-control-diff-styles'
+import { listStylesSheet } from './changes/mobile-source-control-list-styles'
 
-const baseStyles = themedStyleSheet(() => ({
+const baseStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -17,12 +17,12 @@ const baseStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
+    paddingTop: spacing.xs
   },
+  // A 44 pt row target, as tall as the touch it takes.
   branchButton: {
     flexShrink: 1,
-    minHeight: 32,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6
@@ -30,32 +30,13 @@ const baseStyles = themedStyleSheet(() => ({
   branchText: {
     flexShrink: 1,
     color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
+    fontSize: 15,
+    fontWeight: '500'
   },
-  conflictBanner: {
-    marginTop: spacing.sm,
-    padding: spacing.md,
-    gap: spacing.sm,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusAmber
-  },
-  conflictBannerTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  conflictBannerTitle: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  conflictBannerText: {
+  conflictNote: {
+    paddingBottom: spacing.sm,
     color: colors.textSecondary,
-    fontSize: typography.metaSize
+    fontSize: 13
   },
   commitsRow: {
     minHeight: 48,
@@ -65,72 +46,45 @@ const baseStyles = themedStyleSheet(() => ({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
+  commitsRowPressed: {
+    backgroundColor: colors.translucentFill
+  },
   commitsRowText: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: typography.bodySize
+    fontSize: 15
   },
   syncText: {
     marginLeft: 'auto',
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  abortButton: {
-    minHeight: 32,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radii.control,
-    borderWidth: 1,
-    borderColor: colors.statusAmber,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0
-  },
-  abortPressed: {
-    opacity: 0.75
-  },
-  abortButtonDisabled: {
-    opacity: 0.45
-  },
-  abortText: {
-    color: colors.statusAmber,
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    textTransform: 'capitalize'
-  },
-  reconnectBanner: {
+  // One quiet line for every state and error above the list: no boxes, no borders.
+  feedbackLine: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.lg,
-    marginBottom: -spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusAmber
+    paddingTop: spacing.sm
   },
-  reconnectBannerText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize
+  feedbackText: {
+    flexShrink: 1,
+    paddingTop: spacing.sm,
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18
   },
-  actionError: {
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.surface,
-    backgroundColor: colors.bgRaised,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.statusRed
+  feedbackError: {
+    color: colors.statusRed
   },
-  actionErrorText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    lineHeight: 16
+  // About six lines; a long hook log scrolls here instead of pushing the files away.
+  feedbackScroll: {
+    maxHeight: 116,
+    flexGrow: 0
   }
 }))
 
-export const styles = themedStyles(() => ({ ...baseStyles, ...listStyles, ...diffStyles }))
+export const stylesSheet = themedStyles((_colors, scheme) => ({
+  ...baseStylesSheet.resolve(scheme),
+  ...listStylesSheet.resolve(scheme),
+  ...diffStylesSheet.resolve(scheme)
+}))

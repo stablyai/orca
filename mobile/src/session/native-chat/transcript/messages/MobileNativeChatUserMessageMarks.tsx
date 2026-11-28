@@ -14,10 +14,10 @@ import {
 import { MobileConnectorSourceIcon } from '../../../../bots/MobileConnectorSourceIcon'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
-import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
+import { pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { MobileNativeChatAutomationResultsCarried } from '../MobileNativeChatBotRowNotes'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileColors } from '../../../../theme/use-mobile-color-scheme'
 import { MobileSlackMirrorPostLine } from '../../slack-mirror/MobileSlackMirrorPost'
 import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack-mirror'
 import { slackMirrorPostedAsker } from '../../../../../../src/shared/connectors/slack-mirror-state'
@@ -30,6 +30,7 @@ const ICON_SIZE = 12
 
 // The phone has no avatar cache, so a person shows by initials, as the desktop does when it can't load one.
 function Initials({ name }: { name: string }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.initials}>
       <Text style={styles.initialsText}>{connectorAskerInitials(name)}</Text>
@@ -45,7 +46,7 @@ export function MobileNativeChatConnectorAskerTag({
   /** Only the place: a sender tag beside it already names who typed it. */
   nameless?: boolean
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const view = connectorAskerTagView(asker, t)
   const { own, name, place, open } = view
@@ -90,7 +91,7 @@ export function MobileNativeChatConnectorAskerTag({
 
 /** "Sam Lee · Sam's MacBook Pro"; the phone has no tooltip, so it speaks the full line. */
 function MobileNativeChatTypedByTag({ typist }: { typist: OtherPersonTypist }): React.JSX.Element {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { name, computer, label } = otherPersonTypistWords(typist, t)
   return (
@@ -113,6 +114,7 @@ function MobileTypedMessageTags({
 }: {
   message: NativeChatMessage
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
   const typist = message.typedByOther
@@ -142,6 +144,7 @@ export function MobileQueuedTypedByLine({
   typist: OtherPersonTypist
   textStyle: StyleProp<TextStyle>
 }): React.JSX.Element {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { name, computer, label } = otherPersonTypistWords(typist, t)
   return (
@@ -171,6 +174,7 @@ export function MobileNativeChatConnectorMarks({
   /** Aligned to the person's bubble. */
   end: boolean
 }): React.JSX.Element | null {
+  const styles = useThemedStyles(stylesSheet)
   const { asker } = message
   if (!asker) {
     return tagged && end ? <MobileTypedMessageTags message={message} /> : null
@@ -202,7 +206,8 @@ export function MobileNativeChatUserMessageNotes({
 }
 
 export function MobileNativeChatSentAsGoal(): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <View style={styles.sentAsGoal}>
@@ -220,7 +225,8 @@ export function MobileNativeChatConnectorNoAccessNote({
 }: {
   asker: ConnectorMessageAsker
 }): React.JSX.Element | null {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [open, setOpen] = useState(false)
   const view = connectorNoAccessView(asker, t)
@@ -272,7 +278,7 @@ export function MobileNativeChatConnectorNoAccessNote({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   marks: {
     alignItems: 'flex-start',
     gap: spacing.xs,

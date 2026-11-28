@@ -6,6 +6,7 @@ import {
   pluginPathFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE
 } from '../manifest/plugin-schema-field-docs'
+import { lazyZodSchema, unwrapLazyZodSchema } from '../../schema/lazy-zod-schema'
 
 const NEXT = PLUGIN_MANIFEST_V2_SINCE
 
@@ -142,46 +143,53 @@ export const PLUGIN_THEME_BACKGROUND_RULE_TEXT = imageRuleText('theme-background
 
 /** A catalog image: a file in the catalog repository at the vouched catalog commit, pinned by
  *  hash, so a listing shows it before any plugin is downloaded and nothing is hotlinked. */
-const catalogImageSchema = z
-  .strictObject({
-    path: pluginRelativePathSchema.meta(
-      pluginPathFieldDoc('File in the catalog repository, relative to its root.', NEXT, [
-        'assets/acme.gleam/cover.png'
-      ])
-    ),
-    alt: altSchema,
-    sha256: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/, 'must be a lowercase SHA-256 hex digest')
-      .meta(pluginFieldDoc("SHA-256 of the file's bytes; Orca refuses bytes that differ.", NEXT)),
-    width: z
-      .number()
-      .int()
-      .min(1)
-      .max(4096)
-      .meta(pluginFieldDoc('Width in pixels.', NEXT, [1600])),
-    height: z
-      .number()
-      .int()
-      .min(1)
-      .max(4096)
-      .meta(pluginFieldDoc('Height in pixels.', NEXT, [1000]))
-  })
-  .meta({ id: 'CatalogImage', description: 'An image stored in the catalog repository.' })
+const catalogImageSchema = lazyZodSchema(() =>
+  z
+    .strictObject({
+      path: pluginRelativePathSchema.meta(
+        pluginPathFieldDoc('File in the catalog repository, relative to its root.', NEXT, [
+          'assets/acme.gleam/cover.png'
+        ])
+      ),
+      alt: altSchema,
+      sha256: z
+        .string()
+        .regex(/^[0-9a-f]{64}$/, 'must be a lowercase SHA-256 hex digest')
+        .meta(pluginFieldDoc("SHA-256 of the file's bytes; Orca refuses bytes that differ.", NEXT)),
+      width: z
+        .number()
+        .int()
+        .min(1)
+        .max(4096)
+        .meta(pluginFieldDoc('Width in pixels.', NEXT, [1600])),
+      height: z
+        .number()
+        .int()
+        .min(1)
+        .max(4096)
+        .meta(pluginFieldDoc('Height in pixels.', NEXT, [1000]))
+    })
+    .meta({ id: 'CatalogImage', description: 'An image stored in the catalog repository.' })
+)
 
-export const pluginCatalogImagesSchema = z
-  .strictObject({
-    icon: catalogImageSchema.optional(),
-    cover: catalogImageSchema.optional(),
-    screenshots: z
-      .array(catalogImageSchema)
-      .max(PLUGIN_SCREENSHOT_LIMIT)
-      .optional()
-      .meta(pluginFieldDoc(`Screenshots, at most ${PLUGIN_SCREENSHOT_LIMIT}.`, NEXT))
-  })
-  .meta({
-    id: 'CatalogImages',
-    description: `Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon ${imageRuleText('icon')} Cover ${imageRuleText('cover')} Screenshots ${imageRuleText('screenshot')} Images must not imitate Orca's trust badges.`
-  })
+export const pluginCatalogImagesSchema = lazyZodSchema(() => {
+  // z.toJSONSchema sees one "CatalogImage" object: mixing the proxy (array element)
+  // with the materialized schema (.optional() result) would duplicate the registry id.
+  const catalogImage = unwrapLazyZodSchema(catalogImageSchema)
+  return z
+    .strictObject({
+      icon: catalogImage.optional(),
+      cover: catalogImage.optional(),
+      screenshots: z
+        .array(catalogImage)
+        .max(PLUGIN_SCREENSHOT_LIMIT)
+        .optional()
+        .meta(pluginFieldDoc(`Screenshots, at most ${PLUGIN_SCREENSHOT_LIMIT}.`, NEXT))
+    })
+    .meta({
+      id: 'CatalogImages',
+      description: `Images extracted from the release by catalog CI, which re-encodes them and strips metadata. Same rules as the manifest: icon ${imageRuleText('icon')} Cover ${imageRuleText('cover')} Screenshots ${imageRuleText('screenshot')} Images must not imitate Orca's trust badges.`
+    })
+})
 
 export type PluginCatalogImages = z.infer<typeof pluginCatalogImagesSchema>

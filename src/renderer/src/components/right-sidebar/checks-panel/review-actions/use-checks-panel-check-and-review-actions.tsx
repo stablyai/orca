@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubPRStackMapNavigationModifiers } from '../../hosted-review/provider-actions/GitHubPRStackMap'
 import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelReviewLinkActions } from './use-checks-panel-review-link-actions'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndReviewActionsInput) {
   const {
@@ -81,73 +82,74 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     }
     const requestKey = stateRequestKey
     setIsFixingChecksWithAI(true)
-    try {
-      const checkRunDetailsByCheckKey = await collectFixChecksPromptDetails(
-        fixChecks,
-        async (check) => {
-          const isGitLabJob = Boolean(check.gitlabJobId)
-          if (
-            !isGitLabJob &&
-            (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
-          ) {
-            return null
+    await runWithFinally(
+      async () => {
+        const checkRunDetailsByCheckKey = await collectFixChecksPromptDetails(
+          fixChecks,
+          async (check) => {
+            const isGitLabJob = Boolean(check.gitlabJobId)
+            if (
+              !isGitLabJob &&
+              (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
+            ) {
+              return null
+            }
+            try {
+              // Give GitLab fix prompts the same failure logs as the sidebar, not just check names.
+              return isGitLabJob
+                ? await loadGitLabJobLogDetails({
+                    repoPath: repo.path,
+                    repoId: repo.id,
+                    repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+                    check,
+                    projectRef: gitLabProjectRefRef.current
+                  })
+                : await fetchPRCheckDetails(
+                    repo.path,
+                    {
+                      checkRunId: check.checkRunId,
+                      workflowRunId: check.workflowRunId,
+                      checkName: check.name,
+                      url: check.url,
+                      prRepo: pr?.prRepo ?? null
+                    },
+                    { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
+                  )
+            } catch {
+              console.warn('[ChecksPanel] failed to load check details for AI fix prompt')
+              return null
+            }
           }
-          try {
-            // Give GitLab fix prompts the same failure logs as the sidebar, not just check names.
-            return isGitLabJob
-              ? await loadGitLabJobLogDetails({
-                  repoPath: repo.path,
-                  repoId: repo.id,
-                  repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
-                  check,
-                  projectRef: gitLabProjectRefRef.current
-                })
-              : await fetchPRCheckDetails(
-                  repo.path,
-                  {
-                    checkRunId: check.checkRunId,
-                    workflowRunId: check.workflowRunId,
-                    checkName: check.name,
-                    url: check.url,
-                    prRepo: pr?.prRepo ?? null
-                  },
-                  { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
-                )
-          } catch {
-            console.warn('[ChecksPanel] failed to load check details for AI fix prompt')
-            return null
-          }
-        }
-      )
-      if (!isCurrentAsyncResult(requestKey)) {
-        return
-      }
-      const basePrompt = buildFixBrokenChecksPrompt({
-        reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
-        reviewNumber: activeReview.number,
-        reviewTitle: activeReview.title,
-        reviewUrl: activeReview.url,
-        checks: fixChecks,
-        checkRunDetailsByCheckKey
-      })
-      const started = await startFixChecksAgent({
-        repoId: repo.id,
-        basePrompt,
-        worktreeId: activeWorktreeId,
-        groupId: activeWorktreeId,
-        launchSource: 'task_page'
-      })
-      if (started) {
-        toast.success(
-          translate(
-            'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
-            'Started an AI agent for the broken checks.'
-          )
         )
-      }
-    } finally {
-      setIsFixingChecksWithAI(false)
-    }
+        if (!isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        const basePrompt = buildFixBrokenChecksPrompt({
+          reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
+          reviewNumber: activeReview.number,
+          reviewTitle: activeReview.title,
+          reviewUrl: activeReview.url,
+          checks: fixChecks,
+          checkRunDetailsByCheckKey
+        })
+        const started = await startFixChecksAgent({
+          repoId: repo.id,
+          basePrompt,
+          worktreeId: activeWorktreeId,
+          groupId: activeWorktreeId,
+          launchSource: 'task_page'
+        })
+        if (started) {
+          toast.success(
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.2ef90c9819',
+              'Started an AI agent for the broken checks.'
+            )
+          )
+        }
+      },
+      () => setIsFixingChecksWithAI(false)
+    )
   }, [
     activeReview,
     activeWorktreeId,
@@ -181,135 +183,140 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
       setChecksLoading(true)
       setCommentsLoading(true)
       let requestKey: string | null = null
-      try {
-        const refreshedPR = await fetchPRForBranch(repo.path, branch, {
-          force: true,
-          repoId: repo.id,
-          repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-          worktreeId: activeWorktreeId ?? undefined,
-          linkedPRNumber,
-          userRefresh: true
-        })
-        if (!isCurrentRequestContext()) {
-          return
-        }
-        await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-          repoPath: repo.path,
-          repoId: repo.id,
-          repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-          branch,
-          linkedGitHubPR: linkedPRNumber,
-          userRefresh: true,
-          linkedGitLabMR,
-          linkedBitbucketPR,
-          linkedAzureDevOpsPR,
-          linkedGiteaPR
-        }).catch(() => null)
-        if (!isCurrentRequestContext()) {
-          return
-        }
-        if (!refreshedPR) {
-          if (isCurrentAsyncResult(stateRequestKey)) {
-            const message = translate(
-              'checksPanel.linkedReviewUnavailable',
-              'Could not load the linked pull request.'
-            )
-            setChecksError(message)
-            setCommentsError(message)
-          }
-          return
-        }
-        const refreshedRequestKey = checksPanelAsyncResultKey(
-          prCacheKey,
-          branch,
-          refreshedPR.number,
-          refreshedPR.prRepo,
-          refreshedPR.headSha
-        )
-        requestKey = refreshedRequestKey
-        if (!isCurrentRequestContext()) {
-          return
-        }
-        asyncResultKeyRef.current = refreshedRequestKey
-        await Promise.all([
-          fetchPRChecks(
-            repo.path,
-            refreshedPR.number,
-            branch,
-            refreshedPR.headSha,
-            refreshedPR.prRepo,
-            {
+      await runWithFinally(
+        async () => {
+          try {
+            const refreshedPR = await fetchPRForBranch(repo.path, branch, {
               force: true,
               repoId: repo.id,
               repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-              throwOnError: true,
-              wakeWslDistro: true,
+              worktreeId: activeWorktreeId ?? undefined,
+              linkedPRNumber,
               userRefresh: true
-            }
-          )
-            .then(
-              (result) => {
-                if (isCurrentAsyncResult(refreshedRequestKey)) {
-                  setChecks(result)
-                }
-              },
-              (err) => {
-                if (!isCurrentAsyncResult(refreshedRequestKey)) {
-                  return
-                }
-                console.warn('Failed to fetch PR checks:', err)
-                setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
-              }
-            )
-            .finally(() => {
-              if (isCurrentAsyncResult(refreshedRequestKey)) {
-                setChecksLoading(false)
-              }
-            }),
-          fetchPRComments(repo.path, refreshedPR.number, {
-            force: true,
-            repoId: repo.id,
-            repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
-            prRepo: refreshedPR.prRepo,
-            userRefresh: true
-          })
-            .then(
-              (result) => {
-                if (isCurrentAsyncResult(refreshedRequestKey)) {
-                  setComments(result)
-                }
-              },
-              (err) => {
-                if (!isCurrentAsyncResult(refreshedRequestKey)) {
-                  return
-                }
-                console.warn('Failed to fetch PR comments:', err)
-                setComments(null)
-              }
-            )
-            .finally(() => {
-              if (isCurrentAsyncResult(refreshedRequestKey)) {
-                setCommentsLoading(false)
-              }
             })
-        ])
-      } catch (err) {
-        if (isCurrentRequestContext() && isCurrentAsyncResult(requestKey ?? stateRequestKey)) {
-          console.warn('Failed to refresh linked GitHub PR:', err)
-          const message = checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo))
-          setChecksError(message)
-          setCommentsError(message)
+            if (!isCurrentRequestContext()) {
+              return
+            }
+            await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+              repoPath: repo.path,
+              repoId: repo.id,
+              repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+              branch,
+              linkedGitHubPR: linkedPRNumber,
+              userRefresh: true,
+              linkedGitLabMR,
+              linkedBitbucketPR,
+              linkedAzureDevOpsPR,
+              linkedGiteaPR
+            }).catch(() => null)
+            if (!isCurrentRequestContext()) {
+              return
+            }
+            if (!refreshedPR) {
+              if (isCurrentAsyncResult(stateRequestKey)) {
+                const message = translate(
+                  'checksPanel.linkedReviewUnavailable',
+                  'Could not load the linked pull request.'
+                )
+                setChecksError(message)
+                setCommentsError(message)
+              }
+              return
+            }
+            const refreshedRequestKey = checksPanelAsyncResultKey(
+              prCacheKey,
+              branch,
+              refreshedPR.number,
+              refreshedPR.prRepo,
+              refreshedPR.headSha
+            )
+            requestKey = refreshedRequestKey
+            if (!isCurrentRequestContext()) {
+              return
+            }
+            asyncResultKeyRef.current = refreshedRequestKey
+            await Promise.all([
+              fetchPRChecks(
+                repo.path,
+                refreshedPR.number,
+                branch,
+                refreshedPR.headSha,
+                refreshedPR.prRepo,
+                {
+                  force: true,
+                  repoId: repo.id,
+                  repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+                  throwOnError: true,
+                  wakeWslDistro: true,
+                  userRefresh: true
+                }
+              )
+                .then(
+                  (result) => {
+                    if (isCurrentAsyncResult(refreshedRequestKey)) {
+                      setChecks(result)
+                    }
+                  },
+                  (err) => {
+                    if (!isCurrentAsyncResult(refreshedRequestKey)) {
+                      return
+                    }
+                    console.warn('Failed to fetch PR checks:', err)
+                    setChecksError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
+                  }
+                )
+                .finally(() => {
+                  if (isCurrentAsyncResult(refreshedRequestKey)) {
+                    setChecksLoading(false)
+                  }
+                }),
+              fetchPRComments(repo.path, refreshedPR.number, {
+                force: true,
+                repoId: repo.id,
+                repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+                prRepo: refreshedPR.prRepo,
+                userRefresh: true
+              })
+                .then(
+                  (result) => {
+                    if (isCurrentAsyncResult(refreshedRequestKey)) {
+                      setComments(result)
+                    }
+                  },
+                  (err) => {
+                    if (!isCurrentAsyncResult(refreshedRequestKey)) {
+                      return
+                    }
+                    console.warn('Failed to fetch PR comments:', err)
+                    setComments(null)
+                  }
+                )
+                .finally(() => {
+                  if (isCurrentAsyncResult(refreshedRequestKey)) {
+                    setCommentsLoading(false)
+                  }
+                })
+            ])
+          } catch (err) {
+            if (isCurrentRequestContext() && isCurrentAsyncResult(requestKey ?? stateRequestKey)) {
+              console.warn('Failed to refresh linked GitHub PR:', err)
+              const message = checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo))
+              setChecksError(message)
+              setCommentsError(message)
+            }
+          }
+        },
+        () => {
+          if (requestKey === null && isCurrentRequestContext()) {
+            setChecksLoading(false)
+            setCommentsLoading(false)
+          }
+          if (requestKey !== null && isCurrentAsyncResult(requestKey)) {
+            setChecksLoading(false)
+            setCommentsLoading(false)
+          }
         }
-      } finally {
-        if (requestKey === null && isCurrentRequestContext()) {
-          setChecksLoading(false)
-          setCommentsLoading(false)
-        }
-        if (requestKey !== null && isCurrentAsyncResult(requestKey)) {
-          setChecksLoading(false)
-          setCommentsLoading(false)
-        }
-      }
+      )
     },
     [
       activeWorktreeId,

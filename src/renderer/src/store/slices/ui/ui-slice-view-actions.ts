@@ -48,7 +48,12 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
       ) {
         state.recordViewVisit('automations')
       }
-      set({ automationsPageNextVisitMode: 'push', automationsPageFocusTitleOnOpen: true })
+      // Why: a bot's filter request is for the visit that set it, never a later ordinary open.
+      set({
+        automationsPageNextVisitMode: 'push',
+        automationsPageFocusTitleOnOpen: true,
+        automationsPageBotFilterRequest: null
+      })
       set((state) => ({
         activeView: 'automations',
         previousViewBeforeAutomations:
@@ -57,9 +62,12 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
             : state.activeView
       }))
     },
+    automationsPageBotFilterRequest: null,
+    setAutomationsPageBotFilterRequest: (bot) => set({ automationsPageBotFilterRequest: bot }),
     closeAutomationsPage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeAutomations,
+        automationsPageBotFilterRequest: null,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations'),
         automationsPageNextVisitMode: 'push'
       })),
@@ -136,6 +144,16 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     closeMobilePage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeMobile
+      })),
+    openPluginsPage: () =>
+      set((state) => ({
+        activeView: 'plugins',
+        previousViewBeforePlugins:
+          state.activeView === 'plugins' ? state.previousViewBeforePlugins : state.activeView
+      })),
+    closePluginsPage: () =>
+      set((state) => ({
+        activeView: state.previousViewBeforePlugins
       })),
     setNewWorkspaceDraft: (draft) => set({ newWorkspaceDraft: draft }),
     clearNewWorkspaceDraft: () => set({ newWorkspaceDraft: null })

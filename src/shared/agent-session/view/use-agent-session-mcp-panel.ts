@@ -12,13 +12,46 @@ export type AgentSessionMcpRequest = (
 
 export type AgentSessionMcpPanelState = {
   /** null while the first read is in flight. */
-  result: Exclude<AgentSessionMcpResult, { status: 'ok' }> | { status: 'ok' } | null
+  result:
+    | Exclude<AgentSessionMcpResult, { status: 'ok' | 'not-running' }>
+    | { status: 'ok' | 'not-running' }
+    | null
   servers: readonly AgentSessionMcpServer[]
   /** The action in flight, one at a time. */
   pending: Exclude<AgentSessionMcpOperation, { action: 'status' }> | null
   signIn: AgentSessionMcpSignIn | null
   /** The last action's refusal, as the agent worded it; null message means no detail. */
-  failure: { server: string; message: string | null } | null
+  failure: AgentSessionMcpFailure | null
+}
+
+export type AgentSessionMcpFailure = {
+  server: string
+  message: string | null
+  /** A reconnect that left the server failed: the row says so even when the reason is unchanged. */
+  stillFailing?: true
+}
+
+/** A reconnect the agent ran that left the server failed, or that it refused with a reason. */
+function reconnectStillFailing(
+  operation: AgentSessionMcpOperation,
+  reply: AgentSessionMcpResult
+): AgentSessionMcpFailure | null {
+  if (operation.action !== 'reconnect') {
+    return null
+  }
+  if (reply.status === 'failed') {
+    return reply.message === null
+      ? null
+      : { server: operation.server, message: reply.message, stillFailing: true }
+  }
+  const row =
+    reply.status === 'ok'
+      ? reply.servers.find((server) => server.name === operation.server)
+      : undefined
+  // The status line gives the reason, which may change while the note stands.
+  return row?.status === 'failed'
+    ? { server: operation.server, message: null, stillFailing: true }
+    : null
 }
 
 const POLL_MS = 2_000
@@ -37,7 +70,9 @@ export function createAgentSessionMcpPanelHook({
   return function useAgentSessionMcpPanel(
     request: AgentSessionMcpRequest,
     openUrl: (url: string) => void,
-    refreshKey?: unknown
+    refreshKey?: unknown,
+    /** `reconnectFeedback`: a reconnect that leaves the server failed says so (hosts with MCP servers on). */
+    { reconnectFeedback = false }: { reconnectFeedback?: boolean } = {}
   ) {
     const [state, setState] = useState<AgentSessionMcpPanelState>({
       result: null,
@@ -53,6 +88,10 @@ export function createAgentSessionMcpPanelHook({
     // Bumped as each action starts and ends, so a read that overlapped one can't show older state.
     const actions = useRef(0)
     const mounted = useRef(true)
+    const feedback = useRef(reconnectFeedback)
+    feedback.current = reconnectFeedback
+    const stillFailing = (operation: AgentSessionMcpOperation, reply: AgentSessionMcpResult) =>
+      feedback.current ? reconnectStillFailing(operation, reply) : null
     useEffect(() => {
       mounted.current = true
       return () => {
@@ -74,10 +113,24 @@ export function createAgentSessionMcpPanelHook({
             if (!server && reply.status === 'failed' && current.result?.status === 'ok') {
               return current
             }
-            // A failed action keeps the list; a failed first read replaces it.
+            // A failed action keeps the list; a failed first read replaces it. An agent at rest
+            // lists what its host knows its next start gets.
             return server && reply.status === 'failed'
-              ? { ...current, pending, failure: { server, message: reply.message } }
-              : { ...current, pending, result: reply, servers: [], signIn: null }
+              ? {
+                  ...current,
+                  pending,
+                  failure: stillFailing(operation, reply) ?? {
+                    server,
+                    message: reply.message
+                  }
+                }
+              : {
+                  ...current,
+                  pending,
+                  result: reply.status === 'not-running' ? { status: 'not-running' } : reply,
+                  servers: (reply.status === 'not-running' && reply.servers) || [],
+                  signIn: null
+                }
           }
           const signIn =
             reply.signIn ??
@@ -92,7 +145,8 @@ export function createAgentSessionMcpPanelHook({
             servers: reply.servers,
             pending,
             signIn,
-            failure: operation.action === 'status' ? current.failure : null
+            failure:
+              operation.action === 'status' ? current.failure : stillFailing(operation, reply)
           }
         })
       },

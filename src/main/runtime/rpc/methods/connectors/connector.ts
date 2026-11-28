@@ -7,12 +7,15 @@ import {
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
 import {
   ConnectorReply,
+  ConnectorWakeReplyPlace,
   CONNECTOR_REPLY_HTML_PAGE_AS_FILE
 } from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
 import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { defineMethod } from '../../core'
+import { readBotTurnOrigin } from '../orchestration/messaging/bot-turn-origin'
+import { wakeReplyPlace } from '../../../../bots/bot-wake-reply-place'
 import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
@@ -116,6 +119,27 @@ export const CONNECTOR_METHODS = [
         )
       }
       return { ...sent.value, place: target.place }
+    }
+  }),
+  // `orca orchestration worker-start`: the thread a later turn of its own may tell, if it wants to.
+  defineMethod({
+    name: 'connector.wakeReplyPlace',
+    permission: 'workspace',
+    params: ConnectorWakeReplyPlace,
+    handler: async ({ sessionId }, context) => {
+      const { runtime } = context
+      const bot = runtime.bots.enabled() ? botOfSession(runtime.bots, sessionId) : null
+      // Only the chat itself names where its own turn started.
+      if (!bot || sessionCallerOf(context.orchestrationCaller)?.sessionId !== sessionId) {
+        return { place: null }
+      }
+      const seam = runtime.getExternalConversationSeam()
+      const target = seam?.replyTarget(chatPaneKey(sessionId)) ?? null
+      const delivered = seam?.deliveredTurn(sessionId) ?? false
+      const placed = await wakeReplyPlace(bot.id, target, delivered, () =>
+        readBotTurnOrigin(runtime, runtime.getOrchestrationDb(), sessionId).catch(() => null)
+      )
+      return placed ?? { place: null }
     }
   }),
   CONNECTOR_ACT_METHOD,

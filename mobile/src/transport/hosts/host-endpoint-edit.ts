@@ -1,3 +1,4 @@
+import type { Translate } from '../../i18n/mobile-i18n'
 import {
   displayHostEndpoint,
   endpointPort,
@@ -12,7 +13,8 @@ export type HostEndpointEditResolution =
 
 export function resolveHostEndpointEdit(
   storedEndpoint: string,
-  input: string
+  input: string,
+  t: Translate
 ): HostEndpointEditResolution {
   const displayedEndpoint = displayHostEndpoint(storedEndpoint)
   if (input.trim() === displayedEndpoint) {
@@ -24,12 +26,12 @@ export function resolveHostEndpointEdit(
     ? '443'
     : (endpointPort(storedEndpoint) ?? (fallbackScheme === 'wss' ? '443' : undefined))
   const options = { fallbackPort, fallbackScheme }
-  const normalizedInput = normalizeHostEndpoint(input, options)
+  const normalizedInput = normalizeHostEndpoint(input, options, t)
   if (!normalizedInput.ok) {
     return { kind: 'invalid', error: normalizedInput.error }
   }
 
-  const normalizedDisplay = normalizeHostEndpoint(displayedEndpoint, options)
+  const normalizedDisplay = normalizeHostEndpoint(displayedEndpoint, options, t)
   if (
     sameEndpointAuthority(normalizedInput.endpoint, storedEndpoint) ||
     (normalizedDisplay.ok &&

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   clearMiniMaxApiKeyCredential,
   clearMiniMaxSessionCookieCredential,
@@ -8,16 +9,19 @@ import {
 } from '../../minimax/minimax-credential-commands'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 
-export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService | null): void {
-  ipcMain.handle('minimaxCredentials:getStatus', () => getMiniMaxCredentialsStatus())
-  ipcMain.handle('minimaxCredentials:saveCookie', (_event, cookie: unknown) =>
+export function registerMiniMaxCredentialsHandlers(
+  rateLimits: RateLimitService | null,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle('minimaxCredentials:getStatus', () => getMiniMaxCredentialsStatus())
+  ipc.handle('minimaxCredentials:saveCookie', (_event, cookie: unknown) =>
     saveMiniMaxSessionCookieCredential(rateLimits, cookie)
   )
-  ipcMain.handle('minimaxCredentials:clearCookie', () =>
+  ipc.handle('minimaxCredentials:clearCookie', () =>
     clearMiniMaxSessionCookieCredential(rateLimits)
   )
-  ipcMain.handle('minimaxCredentials:saveApiKey', (_event, key: unknown) =>
+  ipc.handle('minimaxCredentials:saveApiKey', (_event, key: unknown) =>
     saveMiniMaxApiKeyCredential(rateLimits, key)
   )
-  ipcMain.handle('minimaxCredentials:clearApiKey', () => clearMiniMaxApiKeyCredential(rateLimits))
+  ipc.handle('minimaxCredentials:clearApiKey', () => clearMiniMaxApiKeyCredential(rateLimits))
 }

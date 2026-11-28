@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type {
   RemoveWorktreeResult,
   ForceDeleteWorktreeBranchResult
@@ -43,10 +44,13 @@ import {
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { teardownStops } from '../../../runtime/workspaces/removal/owned-session-teardown-policy'
 
-export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): void {
+export function registerWorktreeForgetHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { mainWindow, store, runtime, worktreeRemovalsInFlight } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:forgetLocal',
     async (
       _event,
@@ -155,7 +159,7 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:forceDeletePreservedBranch',
     async (
       _event,

@@ -37,7 +37,9 @@ const REASONS: Record<string, string> = {
 }
 
 function parseHours(value: string | undefined): { from: string; to: string } {
-  const match = /^(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})$/.exec(value?.trim() ?? '09:00-17:00')
+  const match = /^(\d{1,2}):([0-5]\d)\s*-\s*(\d{1,2}):([0-5]\d)$/.exec(
+    value?.trim() ?? '09:00-17:00'
+  )
   const pad = (hours: string | undefined, minutes: string | undefined) =>
     `${String(hours).padStart(2, '0')}:${minutes}`
   const from = match ? pad(match[1], match[2]) : ''

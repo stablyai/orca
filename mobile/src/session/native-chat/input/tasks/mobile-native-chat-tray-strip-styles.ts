@@ -1,15 +1,15 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 
 /** The collapsible box every live-work strip above the composer shares. */
-export const trayStripStyles = themedStyleSheet(() => ({
+export const trayStripStylesSheet = themedStyleSheet((colors) => ({
   list: {
     marginHorizontal: spacing.lg,
     marginVertical: spacing.xs
   },
   box: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.chatPanel,
     borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,

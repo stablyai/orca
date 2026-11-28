@@ -94,6 +94,17 @@ export function botCreateErrorMessage(
     : botErrorMessage(error)
 }
 
+/** A room rename's refusal; a host too old to rename a thread says to update it. */
+export function botGroupRenameErrorMessage(error: unknown): string {
+  return error instanceof RuntimeRpcCallError && error.code === 'method_not_found' && error.target
+    ? translate(
+        'bots.groups.renameThreadNeedsHostUpdate',
+        'Update Orca on {{host}} to rename threads.',
+        { host: structuredAgentSessionTargetPlace(useAppStore.getState(), error.target, translate) }
+      )
+    : botErrorMessage(error)
+}
+
 export function botErrorMessage(error: unknown): string {
   const coded = botFailureMessage(error)
   if (coded) {

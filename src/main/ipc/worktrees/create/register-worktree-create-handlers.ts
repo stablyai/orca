@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type {
   CreateWorktreeArgs,
@@ -35,10 +36,13 @@ import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 
-export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
+export function registerWorktreeCreateHandlers(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { mainWindow, store, runtime, options } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:create',
     async (_event, rawArgs: CreateWorktreeArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)
@@ -120,7 +124,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:runApprovedSetup',
     (_event, args: RunApprovedWorktreeSetupArgs): Promise<RunApprovedWorktreeSetupResult> =>
       // A click on the trust prompt is the user's act, so it may start the repo's WSL distro.
@@ -129,7 +133,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
       })
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'worktrees:adoptProvisionedRoot',
     async (_event, rawArgs: AdoptProvisionedRootArgs): Promise<CreateWorktreeResult> => {
       const args = normalizeLinkedWorkItemFields(rawArgs)

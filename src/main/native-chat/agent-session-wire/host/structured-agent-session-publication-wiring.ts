@@ -1,3 +1,4 @@
+import { forgetProviderRelayRunVerdict } from '../../../provider-relay/app-provider-relays'
 import { observeNativeChatPromptSubmissions } from '../../../telemetry/native-chat-prompt-submissions'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -24,7 +25,12 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.observeRows()?.(id, journal, rows)
       observeNativeChatPromptSubmissions(journal, rows)
     },
-    forget: (id) => input.client().requestFailures.forget(id),
+    forget: (id) => {
+      input.client().requestFailures.forget(id)
+      // A closed chat's undecided run is asked again at its next open.
+      forgetProviderRelayRunVerdict(id)
+      input.delivery().closed(id)
+    },
     deliver: (id, journal, inputChanged) => {
       input.client().subscribers.deliverFrames(id, journal, undefined, inputChanged)
       input.client().publishJournal(id, journal, true, inputChanged)

@@ -4,6 +4,7 @@ import {
   structuredAgentSessionTargetForTab
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { collectTabPtyIds } from './running-terminal-close-guard'
 import { probePtyRunningWork } from './pty-running-work-probe'
@@ -50,7 +51,7 @@ function hasRunningChat(): boolean {
   return false
 }
 
-/** Quit and the running-work opt-out consent to local process termination (#524); warn for SSH relay work that may die after detach grace, including unverifiable hosts. Paired runtimes retain terminals independently (#29916), and local probe failures have no transport ambiguity. */
+/** Quit and the running-work opt-out consent to local process termination (#524); warn for SSH relay work that may die after detach grace, including unverifiable hosts. Paired runtimes retain terminals across window close and quit (#29916), and local probe failures have no transport ambiguity. */
 export async function assessWindowCloseRunningWork(params: {
   isQuitting: boolean
 }): Promise<WindowCloseRunningWork> {
@@ -62,9 +63,9 @@ export async function assessWindowCloseRunningWork(params: {
       .flatMap((worktreeTabs) => worktreeTabs ?? [])
       .flatMap((tab) => collectTabPtyIds(state, tab.id))
   )
-  const candidatePtyIds = remoteWorkOnly
-    ? [...ptyIds].filter((ptyId) => parseAppSshPtyId(ptyId) !== null)
-    : [...ptyIds]
+  const candidatePtyIds = [...ptyIds].filter((ptyId) =>
+    remoteWorkOnly ? parseAppSshPtyId(ptyId) !== null : !isRemoteRuntimePtyId(ptyId)
+  )
   const probes = candidatePtyIds.length
     ? await probePtyRunningWork(candidatePtyIds, { timeoutMs: WINDOW_CLOSE_PROBE_TIMEOUT_MS })
     : []

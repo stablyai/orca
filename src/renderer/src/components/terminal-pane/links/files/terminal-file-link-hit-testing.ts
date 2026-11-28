@@ -1,6 +1,9 @@
 import { readTerminalPathExistence } from './terminal-path-exists-cache'
 import type { TerminalPathExistsCache } from './terminal-path-exists-cache'
-import { findTerminalFileLinksAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
+import {
+  findTerminalFileLinksAtBufferPosition,
+  findSoftWrappedTerminalHttpLinkAtBufferPosition
+} from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
 import { terminalLogicalLinkHasOscLink } from '../../../../../../shared/terminal/links/terminal-osc-link-cells'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
@@ -58,6 +61,13 @@ export function openFilePathLinkAtBufferPosition(
     homeOnHost: true
   }
   const readings = findTerminalFileLinksAtBufferPosition(buffer, position, terminalColumns)
+  // Why: a URL's own fragments parse as paths, but a ',' or ';' path glued on (CSV) stays a file, as before.
+  if (
+    !readings.links.some((link) => /[,;]/.test(link.logicalLine.text[link.startIndex - 1] ?? '')) &&
+    findSoftWrappedTerminalHttpLinkAtBufferPosition(buffer, position, terminalColumns)
+  ) {
+    return false
+  }
   const links: ClickedFileLink[] = []
   for (const [parsed, guess] of [
     ...readings.links.map((link) => [link, false] as const),

@@ -53,6 +53,8 @@ export type TerminalDocumentHostSeams = {
   start: () => TerminalDocumentStart
   viewportRect: () => TerminalDocumentViewportRect
   observeViewport: (onChange: (change: TerminalViewportChange) => void) => () => void
+  // The page can open its tabs sidebar from a leftward swipe the terminal hands it; a native WebView has no page to hand to.
+  handsSwipesToPage: boolean
   // Scope element reads to each mount so overlapping route transitions cannot bind both terminals to the first host.
   // Null resolves document at call time for native WebViews instead of capturing it during scope construction.
   root: ParentNode | null

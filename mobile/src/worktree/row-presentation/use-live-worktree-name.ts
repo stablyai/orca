@@ -41,7 +41,7 @@ export function useLiveWorktreeName({
   routeName,
   worktreeId
 }: Params): LiveWorktreeName {
-  useMobileTranslation()
+  const t = useMobileTranslation()
   // Floating workspaces have no worktree record; probing would keep fallback polling forever.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
@@ -218,7 +218,7 @@ export function useLiveWorktreeName({
 
   if (isFloatingWorkspace) {
     return {
-      name: getFloatingWorkspaceTitle(),
+      name: getFloatingWorkspaceTitle(t),
       path: null,
       hostId: 'local',
       branch: null,

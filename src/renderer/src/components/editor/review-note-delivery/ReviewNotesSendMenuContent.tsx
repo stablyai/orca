@@ -66,6 +66,7 @@ export function ReviewNotesSendMenuContent({
   prompt,
   promptDelivery = 'submit-after-ready',
   launchSource = 'notes_send',
+  canSendPrompt,
   onPromptDelivered,
   onPromptHandedOff,
   mode = 'send'
@@ -77,6 +78,7 @@ export function ReviewNotesSendMenuContent({
   mode?: 'send' | 'add-to-chat'
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchSource?: LaunchSource
+  canSendPrompt?: () => boolean
   onPromptDelivered?: () => void
   /** Given each send's own result the moment its prompt is handed to an agent. */
   onPromptHandedOff?: (delivered: Promise<unknown>) => void
@@ -163,7 +165,8 @@ export function ReviewNotesSendMenuContent({
         )
       )
 
-      const sending = send()
+      const sending = Promise.resolve()
+        .then(send)
         .then((result) => {
           if (result.status === 'sent') {
             onSent()
@@ -206,47 +209,47 @@ export function ReviewNotesSendMenuContent({
     [onPromptHandedOff]
   )
 
-  const sendToAgentTarget = useCallback(
-    (target: NotesSendAgentTarget) => {
-      if (!hasPrompt || target.status !== 'eligible') {
-        return
-      }
+  const sendToAgentTarget = (target: NotesSendAgentTarget): void => {
+    if (!hasPrompt || target.status !== 'eligible') {
+      return
+    }
 
-      const currentEligibility = resolveCurrentSendTargetEligibility(target, worktreeId)
-      if (currentEligibility.status !== 'eligible') {
-        toast.message(currentEligibility.disabledReason)
-        return
-      }
-      if (mode === 'add-to-chat') {
-        void addQuoteToAgent(worktreeId, target.messageTarget, prompt).then((result) => {
-          if (result.status !== 'sent') {
-            toast.info(
-              activeAgentNotesSendFailureMessage(result.status, {
-                explicitTarget: true,
-                subject: 'selection'
-              })
-            )
-          }
+    const currentEligibility = resolveCurrentSendTargetEligibility(target, worktreeId)
+    if (currentEligibility.status !== 'eligible') {
+      toast.message(currentEligibility.disabledReason)
+      return
+    }
+    if (mode === 'add-to-chat') {
+      void addQuoteToAgent(worktreeId, target.messageTarget, prompt).then((result) => {
+        if (result.status !== 'sent') {
+          toast.info(
+            activeAgentNotesSendFailureMessage(result.status, {
+              explicitTarget: true,
+              subject: 'selection'
+            })
+          )
+        }
+      })
+      return
+    }
+
+    if (canSendPrompt && !canSendPrompt()) {
+      return
+    }
+    runNotesSend(
+      () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
+      () => {
+        onPromptDelivered?.()
+        // Match sidebar telemetry for follow-up notes sent through the dropdown.
+        track('agent_prompt_sent', {
+          agent_kind: agentKindForAgentType(target.agentType),
+          launch_source: launchSource,
+          request_kind: 'followup'
         })
-        return
-      }
-
-      runNotesSend(
-        () => sendMessageToAgent({ worktreeId, prompt, target: target.messageTarget }),
-        () => {
-          onPromptDelivered?.()
-          // Match sidebar telemetry for follow-up notes sent through the dropdown.
-          track('agent_prompt_sent', {
-            agent_kind: agentKindForAgentType(target.agentType),
-            launch_source: launchSource,
-            request_kind: 'followup'
-          })
-        },
-        { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
-      )
-    },
-    [hasPrompt, mode, runNotesSend, worktreeId, prompt, onPromptDelivered, launchSource]
-  )
+      },
+      { explicitTarget: true, structured: target.messageTarget.kind === 'structured-session' }
+    )
+  }
 
   return (
     <>
@@ -279,6 +282,7 @@ export function ReviewNotesSendMenuContent({
         prompt={prompt}
         promptDelivery={mode === 'add-to-chat' ? 'draft' : promptDelivery}
         launchSource={launchSource}
+        canSendPrompt={canSendPrompt}
         onPromptDelivered={onPromptDelivered}
         onPromptHandedOff={onPromptHandedOff}
         disabled={!hasPrompt}
