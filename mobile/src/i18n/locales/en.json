@@ -2211,7 +2211,8 @@
       "emptyState": "No files found",
       "loading": "Loading files…",
       "searching": "Searching…",
-      "searchPlaceholder": "Search files"
+      "searchPlaceholder": "Search files",
+      "inFiles": "In files"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2284,6 +2285,7 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
+      "openAtLine": "Open {{name}} at line {{line}}",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
       "ignored": "Ignored by .gitignore"
