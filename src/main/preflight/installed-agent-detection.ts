@@ -1,3 +1,4 @@
+import { readZcodeTerminalLaunchAdmission } from '../zcode/terminal-launch-admission'
 // orca skills loads detection outside Electron; exclude integration-client dependencies.
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -132,6 +133,15 @@ export async function detectInstalledAgents(
       probe.requiredCommands.every((required) => found.has(required))
     ) {
       detected.push(id)
+    }
+  }
+  if (runtime !== 'wsl' && detected.includes('zcode')) {
+    const admission = await readZcodeTerminalLaunchAdmission({
+      commandSettings: { agentCmdOverrides: options?.agentCmdOverrides ?? undefined },
+      pathEnv: process.env.PATH ?? process.env.Path
+    })
+    if (admission.status !== 'available') {
+      return detected.filter((agent) => agent !== 'zcode')
     }
   }
   return detected

@@ -1,3 +1,4 @@
+import { resolveZcodeOfficialRuntime } from './zcode-official-runtime'
 import { runProcess } from '@orca/process-host'
 import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import {
@@ -52,6 +53,9 @@ async function resolveZCodeCommand(
 }
 
 async function probe({ program, prefixArgs }: ZCodeCommand): Promise<ZCodeInteractiveCapability> {
+  if (await resolveZcodeOfficialRuntime(program)) {
+    return 'missing-tui'
+  }
   try {
     const result = await runProcess({
       program,

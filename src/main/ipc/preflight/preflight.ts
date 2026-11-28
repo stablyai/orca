@@ -14,6 +14,7 @@ import type { PreflightRuntimeContext } from './preflight-runtime-target'
 import type { RemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
 
 import { readZCodeInteractiveCapability } from '../../zcode/interactive-capability'
+import { resolveZcodeCliInvocation } from '../../zcode/zcode-cli-invocation'
 import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
@@ -72,8 +73,31 @@ export function registerPreflightHandlers(
       })
   )
 
-  ipc.handle('preflight:zcodeInteractiveCapability', async () =>
-    readZCodeInteractiveCapability(store?.getSettings())
+  ipc.handle(
+    'preflight:zcodeSetupInvocation',
+    async (_event, args: { commandOverride?: string; cliArgs: string[] }) => {
+      const invocation = await resolveZcodeCliInvocation({
+        pathEnv: process.env.PATH ?? process.env.Path,
+        ...(args.commandOverride
+          ? { commandSettings: { agentCmdOverrides: { zcode: args.commandOverride } } }
+          : {})
+      })
+      return {
+        command: invocation.command,
+        args: [...invocation.prefixArgs, ...args.cliArgs],
+        env: invocation.envOverlay
+      }
+    }
+  )
+
+  ipc.handle(
+    'preflight:zcodeInteractiveCapability',
+    async (_event, args?: { commandOverride?: string }) =>
+      readZCodeInteractiveCapability(
+        args?.commandOverride
+          ? { agentCmdOverrides: { zcode: args.commandOverride } }
+          : store?.getSettings()
+      )
   )
 
   ipc.handle(

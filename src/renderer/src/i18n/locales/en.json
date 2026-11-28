@@ -14427,7 +14427,9 @@
           "terminalTitle": "ZCode sign-in",
           "terminalLabel": "ZCode sign-in terminal",
           "apiKeyInstructions": "Press Enter to start ZCode, then enter /login and choose the API-key option for your plan site. Enter the key in ZCode’s masked prompt.",
-          "oauthInstructions": "Press Enter to run the sign-in command, then open the authorization URL printed by ZCode. Sign-in is saved on this terminal’s execution host."
+          "oauthInstructions": "Press Enter to run the sign-in command, then open the authorization URL printed by ZCode. Sign-in is saved on this terminal’s execution host.",
+          "apiKeyTuiRequired": "The ZCode desktop bundle can run browser sign-in, but API-key setup requires a standalone ZCode CLI that ships the terminal UI.",
+          "resolveFailed": "Could not resolve the installed ZCode CLI."
         },
         "ZcodePlanAccountsSection": {
           "site": {
