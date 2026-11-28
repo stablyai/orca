@@ -63,6 +63,7 @@ let readOnly = true
 let fault: unknown
 let closing = false
 let scheduled = false
+let idleShrinkTimer: ReturnType<typeof setTimeout> | undefined
 const queue = new JournalSqlWriterQueue()
 let parking: JournalSqlWalParking | undefined
 const clock = new JournalSqlQueueClock(() => parking?.mark() ?? { bulk: 0, urgent: 0 })
@@ -126,6 +127,7 @@ port.on('message', (request: JournalSqlRequest) => {
     })
     return
   }
+  clearTimeout(idleShrinkTimer)
   if (request.command.type === 'close') {
     closing = true
     checkpointClosing = checkpoint?.close()
@@ -291,5 +293,16 @@ function scheduleNextDrain(): void {
     setImmediate(() => {
       void drain()
     })
+  } else if (!closing && db) {
+    clearTimeout(idleShrinkTimer)
+    idleShrinkTimer = setTimeout(() => {
+      if (db && !closing && !db.isTransaction) {
+        try {
+          db.pragma('shrink_memory')
+        } catch {
+          // Best-effort idle memory release.
+        }
+      }
+    }, 10_000).unref?.()
   }
 }

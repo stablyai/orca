@@ -57,17 +57,14 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   retireForWorker(): ProfileStateWriterInitialization {
     this.assertActive()
-    if (this.observedRevision === undefined || this.backupRotation !== undefined) {
+    const revision = this.observedRevision
+    if (revision === undefined || this.backupRotation !== undefined) {
       throw new Error('Profile state worker handoff requires an admitted bootstrap authority')
     }
-    const initialization = {
-      databasePath: this.databasePath,
-      profileId: this.profileId,
-      revision: this.observedRevision
-    }
+    const { databasePath, profileId } = this
     this.close()
     this.retired = true
-    return initialization
+    return { databasePath, profileId, revision }
   }
 
   initializeFromRevision(revision: number): void {
@@ -252,6 +249,10 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.backupRotation?.assertIdle()
     this.close()
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
+  }
+
+  get openDatabase() {
+    return this.writableDatabase?.db
   }
 
   /** Only a graceful shutdown refreshes legacy rows; quarantine and maintenance closes must not write. */
