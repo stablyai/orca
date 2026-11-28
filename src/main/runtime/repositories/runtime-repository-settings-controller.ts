@@ -38,7 +38,6 @@ type RepositoryUpdates = Partial<
     | 'upstream'
     | 'hookSettings'
     | 'editorFormatter'
-    | 'worktreeBaseRef'
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
@@ -55,6 +54,7 @@ type RepositoryUpdates = Partial<
     | 'projectGroupId'
   >
 > & {
+  worktreeBaseRef?: Repo['worktreeBaseRef'] | null
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
@@ -126,8 +126,11 @@ export class RuntimeRepositorySettingsController {
     const store = this.requireStore()
     const repo = await this.deps.resolveRepo(repoSelector)
     assertWslMoveRepoWritable(store, repo)
-    const { setupAgentStartupPolicy, ...rowUpdates } = updates
-    const sanitizedUpdates = omitUndefined(rowUpdates)
+    const { setupAgentStartupPolicy, worktreeBaseRef, ...rowUpdates } = updates
+    const sanitizedUpdates = {
+      ...omitUndefined(rowUpdates),
+      ...(worktreeBaseRef !== undefined ? { worktreeBaseRef: worktreeBaseRef ?? undefined } : {})
+    }
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
     }

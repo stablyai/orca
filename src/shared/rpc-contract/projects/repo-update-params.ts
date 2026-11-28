@@ -64,7 +64,8 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       // Changes only this hook setting on the row as saved now; older hosts strip it and change nothing.
       setupAgentStartupPolicy: z.enum(['start-immediately', 'wait-for-setup']).optional(),
       editorFormatter: editorFormatterSchema.optional(),
-      worktreeBaseRef: OptionalString,
+      // Why nullable: JSON drops an undefined key, so null is the wire sentinel that clears the pin.
+      worktreeBaseRef: OptionalString.nullable().optional(),
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),

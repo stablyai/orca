@@ -1,4 +1,10 @@
+import { toast } from 'sonner'
+import { useTranslate } from '@/i18n/use-translate'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import {
+  planSourceControlCompareBaseRefWrite,
+  type SourceControlCompareBaseRefWrite
+} from './compare-base-ref-write'
 import { SourceControlDialogLayer } from './dialog-layer'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
@@ -8,6 +14,7 @@ export function SourceControlPanelDialogs({
   activeWorktree,
   model
 }: SourceControlPanelReadyProps) {
+  const t = useTranslate()
   const {
     activeConnectionId,
     activeGroupId,
@@ -50,6 +57,50 @@ export function SourceControlPanelDialogs({
     updateWorktreeMeta
   } = model
 
+  const closeAndRefreshCompare = (): void => {
+    setBaseRefDialogOpen(false)
+    window.setTimeout(() => void refreshBranchCompare(), 0)
+  }
+
+  const applyCompareBaseRefWrite = (write: SourceControlCompareBaseRefWrite): boolean => {
+    if (!write.worktreeUpdate) {
+      return false
+    }
+    void updateWorktreeMeta(write.worktreeUpdate.worktreeId, {
+      baseRef: write.worktreeUpdate.baseRef
+    })
+    return true
+  }
+
+  // Why awaited: the project pin is shared by every workspace, so success must not be claimed before the write lands.
+  const applyProjectBaseRefWrite = async (
+    write: SourceControlCompareBaseRefWrite,
+    successMessage: string | null
+  ): Promise<void> => {
+    if (!write.repoUpdate) {
+      return
+    }
+    const saved = await updateRepo(write.repoUpdate.repoId, {
+      worktreeBaseRef: write.repoUpdate.worktreeBaseRef
+    })
+    if (!saved) {
+      toast.error(
+        t(
+          'auto.components.right.sidebar.SourceControl.e03eb08e1e',
+          'Could not save the project default'
+        )
+      )
+      return
+    }
+    if (successMessage) {
+      toast.success(successMessage)
+    }
+    closeAndRefreshCompare()
+  }
+
+  const clearsProjectDefault =
+    !baseRefOwnedByWorktree && Boolean(activeRepo.worktreeBaseRef?.trim())
+
   return (
     <SourceControlDialogLayer
       clearNotesOpen={resolvedPendingDiffCommentsClear !== null}
@@ -67,23 +118,59 @@ export function SourceControlPanelDialogs({
       baseRefHostId={model.scope?.executionHostId ?? undefined}
       pickerBaseRef={pickerBaseRef}
       onSelectBaseRef={(ref) => {
-        if (baseRefOwnedByWorktree && activeWorktreeId) {
-          void updateWorktreeMeta(activeWorktreeId, { baseRef: ref })
-        } else {
-          void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
+        if (
+          !applyCompareBaseRefWrite(
+            planSourceControlCompareBaseRefWrite({
+              action: 'select',
+              worktreeId: activeWorktreeId,
+              ref
+            })
+          )
+        ) {
+          return
         }
-        setBaseRefDialogOpen(false)
-        window.setTimeout(() => void refreshBranchCompare(), 0)
+        closeAndRefreshCompare()
       }}
-      onUsePrimaryBaseRef={() => {
-        if (baseRefOwnedByWorktree && activeWorktreeId) {
-          void updateWorktreeMeta(activeWorktreeId, { baseRef: undefined })
-        } else {
-          void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
-        }
-        setBaseRefDialogOpen(false)
-        window.setTimeout(() => void refreshBranchCompare(), 0)
-      }}
+      onUsePrimaryBaseRef={
+        baseRefOwnedByWorktree
+          ? () => {
+              if (
+                applyCompareBaseRefWrite(
+                  planSourceControlCompareBaseRefWrite({
+                    action: 'use-project-default',
+                    worktreeId: activeWorktreeId
+                  })
+                )
+              ) {
+                closeAndRefreshCompare()
+              }
+            }
+          : clearsProjectDefault
+            ? () =>
+                void applyProjectBaseRefWrite(
+                  planSourceControlCompareBaseRefWrite({
+                    action: 'clear-project-default',
+                    repoId: activeRepo.id
+                  }),
+                  null
+                )
+            : undefined
+      }
+      usePrimaryBaseRefLabel={
+        baseRefOwnedByWorktree
+          ? t('auto.components.right.sidebar.SourceControl.3138a3323d', 'Use project default')
+          : undefined
+      }
+      onSetAsProjectDefault={() =>
+        void applyProjectBaseRefWrite(
+          planSourceControlCompareBaseRefWrite({
+            action: 'set-project-default',
+            repoId: activeRepo.id,
+            ref: pickerBaseRef
+          }),
+          t('auto.components.right.sidebar.SourceControl.032b4cd034', 'Saved as project default')
+        )
+      }
       sourceControlAiActionsVisible={sourceControlAiActionsVisible}
       resolveConflictsEditor={resolveConflictsEditor}
       resolveConflictsComposerOpen={resolveConflictsComposerOpen}
