@@ -48,6 +48,11 @@ function isRendered(element: Element): boolean {
   return element.getClientRects().length > 0
 }
 
+function clipsPinnedContent(element: Element): boolean {
+  const overflowY = getComputedStyle(element).overflowY
+  return overflowY !== 'auto' && overflowY !== 'scroll'
+}
+
 /** Every in-flow item ends inside the dock, and no item was flexed down far enough to clip a pinned part. */
 export function nativeChatDockFits(dock: HTMLElement): boolean {
   const box = dock.getBoundingClientRect()
@@ -66,6 +71,9 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
     // Its own item, so a squeezed item (one the next item then overlaps) cannot pass for fitting.
     const bounds = [box]
     for (const outer of [dockItemOf(items, pinned), pinned.closest(CLIP_SELECTOR)]) {
+      if (outer?.matches(CLIP_SELECTOR) && !clipsPinnedContent(outer)) {
+        continue
+      }
       if (outer) {
         bounds.push(outer.getBoundingClientRect())
       }
