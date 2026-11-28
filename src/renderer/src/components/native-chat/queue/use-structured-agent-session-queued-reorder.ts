@@ -44,6 +44,15 @@ function sameOrder(a: readonly QueuedMessageCard[], b: readonly QueuedMessageCar
   return a.length === b.length && a.every((card, index) => card.messageId === b[index]?.messageId)
 }
 
+/** The fresh cards in the previewed order: a republish that keeps the order still shows its text and holds. */
+function inOrderOf(
+  order: readonly QueuedMessageCard[],
+  fresh: QueuedMessageCard[]
+): QueuedMessageCard[] {
+  const byId = new Map(fresh.map((card) => [card.messageId, card]))
+  return order.map((card) => byId.get(card.messageId) ?? card)
+}
+
 /** `cards` are the ones the person drags; `held` is every card the host holds, mail drawn in the
  *  transcript included, previewed with the same move so the queue's head stays right meanwhile. */
 export function useStructuredAgentSessionQueuedReorder(
@@ -122,8 +131,8 @@ export function useStructuredAgentSessionQueuedReorder(
     }
   }, [stale, setPreview])
   return {
-    cards: previewing ? preview.cards : cards,
-    held: previewing ? preview.held : held,
+    cards: previewing ? inOrderOf(preview.cards, cards) : cards,
+    held: previewing ? inOrderOf(preview.held, held) : held,
     ...(transport.reorderCapable ? { reorder: { scope, pending, move } } : {})
   }
 }

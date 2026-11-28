@@ -44,15 +44,40 @@ export function releaseNativeChatViewTabs(tabIds: Iterable<string>): void {
   }
 }
 
-/** Runs `release` when the tab closes, unless the returned cancel runs first (a remounted view took it back). */
+/** Open in any workspace: a tab a rename or drag moved still counts. Walks the tabs, so only for rare events. */
+function isTabIdOpen(tabId: string): boolean {
+  return Object.values(useAppStore.getState().unifiedTabsByWorktree).some((tabs) =>
+    tabs.some((entry) => entry.id === tabId)
+  )
+}
+
+let pageHideInstalled = false
+/** A reload or quit winds up what released views left open, as their own `pagehide` handlers would have. */
+function windUpOnPageHide(): void {
+  if (pageHideInstalled || typeof window === 'undefined') {
+    return
+  }
+  pageHideInstalled = true
+  window.addEventListener('pagehide', () => {
+    const pending = [...onRelease.values()].flatMap((set) => [...set])
+    onRelease.clear()
+    pending.forEach((release) => release())
+  })
+}
+
+/**
+ * Runs `release` when the tab closes or the page goes away, unless the returned cancel runs first (a remounted
+ * view took it back). Registered when a view unmounts, which is rare, so the open-tab check can walk the tabs.
+ */
 export function onNativeChatViewTabRelease(
   tab: NativeChatViewTab,
   release: () => void
 ): () => void {
-  if (!isNativeChatViewTabLive(tab)) {
+  if (!isTabIdOpen(tab.tabId)) {
     release()
     return () => {}
   }
+  windUpOnPageHide()
   let set = onRelease.get(tab.tabId)
   if (!set) {
     set = new Set()

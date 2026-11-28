@@ -72,3 +72,48 @@ it('a chat released mid-edit keeps the edit open for its next view, and the tab 
   releaseNativeChatViewTabs([TAB.tabId])
   expect(close).toHaveBeenCalledWith(edit)
 })
+
+it('an edit left in a released chat is handed back on reload, and kept when its tab moves workspace', () => {
+  const close = vi.fn((edit?: NativeChatQueuedEditSession | null) => void edit)
+  const mount = (tab: { tabId: string; worktreeId: string }) =>
+    renderHook(
+      () => {
+        const kept = useKeptNativeChatQueuedEdit()
+        useNativeChatQueuedEditLifetime({
+          scope: 'scope',
+          shownScope: undefined,
+          active: kept.active,
+          reopen: kept.reopen,
+          close,
+          render: () => {}
+        })
+        return kept
+      },
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <NativeChatViewTabContext value={tab}>{children}</NativeChatViewTabContext>
+        )
+      }
+    )
+  const body = {
+    kind: 'message' as const,
+    role: 'user' as const,
+    blocks: [{ type: 'text' as const, text: 'draft' }]
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hand-back reads the draft fields, scope and lease only.
+  const edit = {
+    ...createNativeChatQueuedEditDraft(body, 'chat-draft'),
+    scope: 'scope',
+    uncertain: false,
+    lease: { end: () => {} }
+  } as unknown as NativeChatQueuedEditSession
+  const first = mount(TAB)
+  first.result.current.active.current = edit
+  // The tab moves to another workspace, as a rename does, and its old view unmounts.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-2': [{ id: TAB.tabId } as Tab] } })
+  first.unmount()
+  expect(close).not.toHaveBeenCalled()
+  window.dispatchEvent(new Event('pagehide'))
+  expect(close).toHaveBeenCalledWith(edit)
+})

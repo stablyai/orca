@@ -74,7 +74,7 @@ export function useGoogleSignIn(
           },
           (prompt, way) => show({ kind: 'waiting', prompt, way })
         )
-        show({ kind: 'idle' })
+        show(IDLE)
         return connected
       } catch (error) {
         if (own.current.runs === run) {

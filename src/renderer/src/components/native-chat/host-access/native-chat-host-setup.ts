@@ -1,5 +1,9 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
-import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
+import {
+  beginClaudeAccountSignIn,
+  endClaudeAccountSignIn,
+  useClaudeAccountSigningIn
+} from './claude-account-sign-in-pending'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -137,26 +141,22 @@ function useManagedClaudeSignIn(
   failure: unknown,
   failureRows: number
 ): NativeChatSignIn | null {
-  // Kept with the chat tab, read synchronously: the notice and a transcript row both sign in, and a second
-  // press, even from a view that replaced a released one, would cancel the first login.
-  const [signingIn, setSigningIn, readSigningIn] = useNativeChatViewGuard(
-    `claude-sign-in:${accountId ?? ''}`,
-    false
-  )
+  // Per account, read synchronously: the notice and a transcript row both sign in, and a second press from any
+  // view, a remounted one included, would cancel the first login.
+  const signingIn = useClaudeAccountSigningIn(accountId)
   const [signedInFor, setSignedInFor] = useState<{ failure: unknown; rows: number } | null>(null)
   const signIn = useCallback(() => {
-    if (!accountId || readSigningIn()) {
+    if (!accountId || !beginClaudeAccountSignIn(accountId)) {
       return
     }
-    setSigningIn(true)
     void signInToClaudeAccount(accountId)
       .then((signedIn) => {
         if (signedIn) {
           setSignedInFor({ failure, rows: failureRows })
         }
       })
-      .finally(() => setSigningIn(false))
-  }, [accountId, failure, failureRows, readSigningIn, setSigningIn])
+      .finally(() => endClaudeAccountSignIn(accountId))
+  }, [accountId, failure, failureRows])
   const signedInSinceFailure =
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
