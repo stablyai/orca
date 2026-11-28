@@ -34,7 +34,10 @@ const HOSTS = 'Use these hostnames?'
 const GO = 'Go ahead without a separate OK?'
 const PLAN = 'Post the plan first?'
 const ask = {
-  questions: [HOSTS, GO, PLAN].map((prompt) => ({ prompt, options: [{ label: 'Yes' }, { label: 'No' }] }))
+  questions: [HOSTS, GO, PLAN].map((prompt) => ({
+    prompt,
+    options: [{ label: 'Yes' }, { label: 'No' }]
+  }))
 }
 
 // An item asking three questions, with its ask's comment as the host stores and reads it.
@@ -159,10 +162,18 @@ it('swaps a pick for another, and keeps it when picked again', () => {
   const { hook, posted } = steps('swap')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null, null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    null,
+    null
+  ])
   act(() => hook.result.current.steps!.reopen(0))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null, null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    null,
+    null
+  ])
   expect(hook.result.current.steps!.reopened).toBeNull()
   act(() => hook.result.current.steps!.send())
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → No`])
@@ -182,7 +193,11 @@ it('answers a reopened line from the box: Enter replaces its pick, and Send post
   expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
   act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine!.id))
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
   expect(hook.result.current.steps!.reopened).toBeNull()
   act(() => hook.result.current.steps!.send())
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${words}\n${GO} → No`])
@@ -222,7 +237,11 @@ it('keeps a started draft on its own line when another line reopens', () => {
     hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
   )
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', words, null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    words,
+    null
+  ])
 })
 
 it('shows "Replying to" again on a reopened line whose × was closed', () => {
@@ -243,7 +262,11 @@ it('shows "Replying to" again on a reopened line whose × was closed', () => {
     hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
   )
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
 })
 
 // Both picked, line 0 reopened, and its replacement started in the box.
@@ -272,7 +295,11 @@ it("keeps a reopened line's draft on it when another line's pick changes", () =>
   expect(hook.result.current.steps!.reopened).toBe(0)
   enter(hook, words)
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'Yes', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'Yes',
+    null
+  ])
 })
 
 it("keeps a reopened line's draft on it across a restart", () => {
@@ -283,7 +310,11 @@ it("keeps a reopened line's draft on it across a restart", () => {
   expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
   enter(hook, words)
   expect(posted).toEqual([])
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([words, 'No', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
 })
 
 it('posts a plain comment typed after a reopened line folds back, its pick kept', () => {
@@ -331,11 +362,12 @@ it('holds an answer with images, files and skills like a pick; Send posts them a
       [skill]
     )
   )
-  // Held, both: nothing posts until Send.
+  // Held, both, with a line still open: nothing posts until Send.
   expect(posted).toEqual([])
   expect(hook.result.current.steps!.picks.map((pick) => pick?.images)).toEqual([
     ['/tmp/a.png'],
-    ['/tmp/b.png', '/tmp/c.png']
+    ['/tmp/b.png', '/tmp/c.png'],
+    undefined
   ])
   act(() => hook.result.current.steps!.send())
   expect(posted).toHaveLength(1)
