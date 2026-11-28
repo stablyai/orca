@@ -546,4 +546,85 @@ describe('post-reply idle-stop dedupe for open chat workers', () => {
       'Worker exited without reporting'
     ])
   })
+
+  function startTurn(): void {
+    observeChatWorkerWorking(WORKER_SESSION, {
+      getDb: () => db,
+      isWaitingForMail: () => false,
+      notify: () => {}
+    })
+  }
+
+  function workerStatus(to: string, threadId?: string): void {
+    db.insertMessage({
+      from: WORKER_ADDRESS,
+      to,
+      subject: 'Status',
+      body: 'Still on it.',
+      type: 'status',
+      ...(threadId ? { threadId } : {}),
+      runId
+    })
+  }
+
+  it("counts a reply sent to another Run's mailbox when that Run is coordinated by the same coordinator", () => {
+    const reporter = createReporter()
+    const otherRun = (coordinator: string) => {
+      const run = db.createRun({
+        objective: 'another run',
+        coordinatorHandle: null,
+        coordinatorPaneKey: null,
+        coordinatorOrcaSessionId: null
+      })
+      db.db
+        .prepare('INSERT INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)')
+        .run(run.id, coordinator)
+      return run.id
+    }
+    const sameCoordinatorRun = otherRun(COORDINATOR_ADDRESS)
+    const strangerRun = otherRun('term_stranger')
+
+    const question = sendCoordinatorMail('question')
+    startTurn()
+    workerStatus(`run:${sameCoordinatorRun}`, question.id)
+    completeTurn(reporter, 'turn-other-run')
+    expect(stopEscalations()).toEqual([])
+
+    const next = sendCoordinatorMail('next')
+    startTurn()
+    workerStatus(`run:${strangerRun}`, next.id)
+    completeTurn(reporter, 'turn-stranger-run')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+  })
+
+  it('counts a report sent earlier in the turn, before coordinator mail the turn took later', () => {
+    const reporter = createReporter()
+    const first = sendCoordinatorMail('first')
+    startTurn()
+    workerStatus(`run:${runId}`, first.id)
+    sendCoordinatorMail('keep waiting')
+    completeTurn(reporter, 'turn-mail-after-reply')
+    expect(stopEscalations()).toEqual([])
+  })
+
+  it('sends one clean-finish escalation per worker within the cooldown', () => {
+    const reporter = createReporter()
+    sendCoordinatorMail('silent 1')
+    startTurn()
+    completeTurn(reporter, 'turn-silent-1')
+    sendCoordinatorMail('silent 2')
+    startTurn()
+    completeTurn(reporter, 'turn-silent-2')
+    expect(stopEscalations()).toEqual(['Worker stopped without reporting'])
+
+    db.db
+      .prepare(
+        "UPDATE messages SET created_at = datetime('now', '-11 minutes') WHERE subject = 'Worker stopped without reporting'"
+      )
+      .run()
+    sendCoordinatorMail('silent 3')
+    startTurn()
+    completeTurn(reporter, 'turn-silent-3')
+    expect(stopEscalations()).toHaveLength(2)
+  })
 })
