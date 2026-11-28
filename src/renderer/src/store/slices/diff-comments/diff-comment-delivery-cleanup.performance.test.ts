@@ -1,6 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
-import { createStore, host, note, OWNER, shown } from './diff-comment-delivery-cleanup.test-fixture'
+import {
+  cleanupCalls,
+  createStore,
+  host,
+  note,
+  OWNER,
+  shown
+} from './diff-comment-delivery-cleanup.test-fixture'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }
@@ -8,6 +15,7 @@ vi.mock('sonner', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  host.ignoresCleanup = false
   host.gate = null
 })
 
@@ -89,3 +97,17 @@ it.each([300, 3000])(
     expect(shown(store)).toHaveLength(count - 1)
   }
 )
+
+// PR #42482: some launch paths report one delivery success twice; the host gets one removal command.
+it('asks the host once when one success is reported twice', async () => {
+  const a = note('a')
+  const store = createStore([a])
+  const first = store.getState().clearDeliveredDiffComments(OWNER, [a])
+  const second = store.getState().clearDeliveredDiffComments(OWNER, [a])
+  expect(await Promise.all([first, second])).toEqual([true, true])
+  // A report after the note is gone needs no host work either.
+  expect(await store.getState().clearDeliveredDiffComments(OWNER, [a])).toBe(true)
+  expect(cleanupCalls()).toBe(1)
+  expect(shown(store)).toEqual([])
+  expect(host.notes).toEqual([])
+})

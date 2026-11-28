@@ -4,7 +4,6 @@ import {
   isNoteInFlight
 } from '@/components/notes/delivery/notes-send-in-flight'
 import {
-  cleanupCalls,
   createStore,
   host,
   note,
@@ -25,19 +24,6 @@ describe('removing delivered review notes', () => {
     vi.clearAllMocks()
     host.ignoresCleanup = false
     host.gate = null
-  })
-
-  it('asks the host once when one success is reported twice', async () => {
-    const a = note('a')
-    const store = createStore([a])
-    const first = store.getState().clearDeliveredDiffComments(OWNER, [a])
-    const second = store.getState().clearDeliveredDiffComments(OWNER, [a])
-    expect(await Promise.all([first, second])).toEqual([true, true])
-    // A report after the note is gone needs no host work either.
-    expect(await store.getState().clearDeliveredDiffComments(OWNER, [a])).toBe(true)
-    expect(cleanupCalls()).toBe(1)
-    expect(shown(store)).toEqual([])
-    expect(host.notes).toEqual([])
   })
 
   it('keeps a note the host did not remove out of Send, and Remove removes it', async () => {
