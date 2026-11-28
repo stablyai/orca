@@ -4,6 +4,7 @@ type ResolveWorktreeCreateBaseArgs = {
   /** Resolves null when the repo has no default base; a rejection means the lookup itself failed. */
   resolveDefaultBaseRef: () => Promise<string | null>
   isBaseUsable: (baseBranch: string) => Promise<boolean>
+  onPersistedBaseSelected?: (baseBranch: string, defaultBaseRef: string) => Promise<void>
   /** Caller-specific remedy for a failed lookup, e.g. naming the CLI flag. */
   explicitBaseHint?: string
 }
@@ -37,6 +38,14 @@ export async function resolveWorktreeCreateBase(
   if (repoWorktreeBaseRef === defaultBaseRef) {
     return repoWorktreeBaseRef
   }
-  // Stale persisted refs fall back to the detected default; usable custom refs stay authoritative.
-  return (await args.isBaseUsable(repoWorktreeBaseRef)) ? repoWorktreeBaseRef : defaultBaseRef
+  // Unusable persisted refs fall back to the detected default; usable custom refs stay authoritative.
+  if (await args.isBaseUsable(repoWorktreeBaseRef)) {
+    try {
+      await args.onPersistedBaseSelected?.(repoWorktreeBaseRef, defaultBaseRef)
+    } catch {
+      // Advisory diagnostics must never block worktree creation.
+    }
+    return repoWorktreeBaseRef
+  }
+  return defaultBaseRef
 }

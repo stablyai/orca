@@ -167,12 +167,14 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       { createRuntimeLocalManagedWorktree },
       { buildRuntimeSetupReceipt, prepareRuntimeLocalWorktreeSetup },
       { notifyLineageRepos },
-      { startRuntimeLocalWorktreeTerminals }
+      { startRuntimeLocalWorktreeTerminals },
+      { baseDriftWarningResult }
     ] = await Promise.all([
       import('./runtime-local-worktree-create'),
       import('./runtime-local-worktree-setup'),
       import('../../../workspaces/catalog/worktree-lineage-change-notification'),
-      import('../startup/runtime-local-worktree-terminal-startup')
+      import('../startup/runtime-local-worktree-terminal-startup'),
+      import('../../../git/worktrees/creation/worktree-base-drift-warning')
     ])
     const localCreate = await createRuntimeLocalManagedWorktree({
       request: args,
@@ -210,7 +212,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
     const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
-    let { warning } = preparedSetup
+    const { warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -243,7 +245,6 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning,
       ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
-    warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
@@ -273,7 +274,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
       ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
-      ...(warning ? { warning } : {}),
+      ...baseDriftWarningResult(localCreate.localBaseRefDriftWarning, terminalWarning),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
