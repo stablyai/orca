@@ -31,11 +31,12 @@ export function acpModelMenuModels(input: {
       : model.id === currentModel
         ? undefined
         : dialect.familyEfforts?.(model.id, state?.availableModels ?? [])
-    // A current-session menu supplies no negative evidence about an unobserved model.
+    // A current-session menu supplies no negative evidence about an unobserved model. An empty
+    // advertised menu marked unknown says the dialect has no opinion, not that the model has none.
     const sessionMenu =
       model.id === currentModel
         ? { efforts: sessionEfforts }
-        : (modelOption || effortOption) && !advertised
+        : (modelOption || effortOption) && (!advertised || advertised.effortsKnown === false)
           ? { efforts: [], effortsKnown: false as const }
           : { efforts: [] }
     return {
