@@ -132,6 +132,12 @@ export function NativeChatComposerField({
     ownBoldChord(input.selectionStart !== input.selectionEnd)
     onTextareaSelect(input)
   })
+  const editorFocus = useLatestHandler(() => {
+    const input = textareaRef.current
+    if (input) {
+      ownBoldChord(input.selectionStart !== input.selectionEnd)
+    }
+  })
   // An open picker takes Tab first, so the suggestion only shows and accepts while none is.
   const suggestion = autocomplete.mode === 'none' ? promptSuggestion : undefined
   const editorKeyDownCapture = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -283,6 +289,7 @@ export function NativeChatComposerField({
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onBlur={editorBlur}
+              onFocus={editorFocus}
               onCompositionStart={editorCompositionStart}
               onCompositionEnd={editorCompositionEnd}
               onPasteCapture={editorPaste}

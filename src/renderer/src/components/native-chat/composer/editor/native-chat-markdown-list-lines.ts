@@ -12,7 +12,7 @@ type ListLine = { start: number; end: number; indent: number; marker: string; co
 const LIST_LINE = /^( *)([-*]|\d+\.) /
 
 function lineAt(text: string, offset: number): { start: number; end: number } {
-  const start = text.lastIndexOf('\n', offset - 1) + 1
+  const start = offset === 0 ? 0 : text.lastIndexOf('\n', offset - 1) + 1
   const newline = text.indexOf('\n', offset)
   return { start, end: newline === -1 ? text.length : newline }
 }
@@ -33,9 +33,6 @@ function parseListLine(text: string, offset: number): ListLine | null {
 }
 
 const isNumbered = (marker: string): boolean => marker.length > 1 || /\d/.test(marker)
-// Nesting needs the parent's content column in Markdown: 2 for "- ", 3 for "1. ".
-const indentWidth = (marker: string): number => (isNumbered(marker) ? 3 : 2)
-
 function renumberAfter(
   text: string,
   from: number,
@@ -85,6 +82,35 @@ export function continueListAtEnter(text: string, caret: number): NativeChatText
   return { edits, selection: { from: after, to: after } }
 }
 
+type ListRow = { start: number; end: number; list: ListLine | null }
+
+function listRows(text: string): ListRow[] {
+  const rows: ListRow[] = []
+  for (let start = 0; start <= text.length;) {
+    const { end } = lineAt(text, start)
+    rows.push({ start, end, list: parseListLine(text, start) })
+    start = end + 1
+  }
+  return rows
+}
+
+/** How far the item at `first` moves: to the parent item's content column, or out to its indent. */
+function indentDelta(rows: ListRow[], first: number, outdent: boolean): number {
+  const head = rows[first].list!
+  const ownWidth = isNumbered(head.marker) ? 3 : 2
+  let parent: ListLine | undefined
+  for (let i = first - 1; i >= 0 && rows[i].list && !parent; i--) {
+    const above = rows[i].list!
+    parent =
+      above.indent < head.indent || (!outdent && above.indent === head.indent) ? above : parent
+  }
+  if (outdent) {
+    return parent ? parent.indent - head.indent : -Math.min(ownWidth, head.indent)
+  }
+  const column = parent ? parent.contentStart - parent.start : 0
+  return column > head.indent ? column - head.indent : ownWidth
+}
+
 /** Tab / Shift+Tab on the list items the selection touches; null when its first line is no item. */
 export function shiftListIndent(
   text: string,
@@ -92,38 +118,75 @@ export function shiftListIndent(
   to: number,
   outdent: boolean
 ): NativeChatTextChange | null {
-  if (!parseListLine(text, from)) {
+  const rows = listRows(text)
+  const first = rows.findIndex((row) => from >= row.start && from <= row.end)
+  if (!rows[first]?.list) {
     return null
   }
-  const edits: NativeChatTextEdit[] = []
-  let shift = 0
-  let firstShift = 0
-  for (let offset = from, first = true; first || offset < to;) {
-    const line = parseListLine(text, offset)
-    if (line) {
-      const width = indentWidth(line.marker)
-      const delta = outdent ? -Math.min(width, line.indent) : width
-      if (delta > 0) {
-        edits.push({ from: line.start, to: line.start, text: ' '.repeat(delta) })
-      } else if (delta < 0) {
-        edits.push({ from: line.start, to: line.start - delta, text: '' })
-      }
-      shift += delta
-      firstShift = first ? delta : firstShift
-    }
-    first = false
-    offset = lineAt(text, offset).end + 1
+  let last = first
+  while (last + 1 < rows.length && rows[last + 1].start < to) {
+    last++
   }
+  const delta = indentDelta(rows, first, outdent)
+  const shifts = rows.map((row, i) =>
+    row.list && i >= first && i <= last ? Math.max(delta, -row.list.indent) : 0
+  )
+  const indents = rows.map((row, i) => (row.list?.indent ?? 0) + shifts[i])
+  // Numbered siblings count on from the previous one; a moved item that starts a group restarts at 1.
+  const numbers: number[] = []
+  rows.forEach((row, i) => {
+    if (!row.list || !isNumbered(row.list.marker)) {
+      return
+    }
+    let previous: number | undefined
+    for (let j = i - 1; j >= 0 && rows[j].list && indents[j] >= indents[i]; j--) {
+      if (indents[j] === indents[i]) {
+        previous = numbers[j]
+        break
+      }
+    }
+    const kept = shifts[i] !== 0 ? 1 : Number.parseInt(row.list.marker, 10)
+    numbers[i] = previous === undefined ? kept : previous + 1
+  })
+  const edits: NativeChatTextEdit[] = []
+  rows.forEach((row, i) => {
+    const line = row.list
+    if (!line || i < first) {
+      return
+    }
+    // Number edit first: at an unindented line it shares its start with the indent insert.
+    if (numbers[i] !== undefined && `${numbers[i]}.` !== line.marker) {
+      edits.push({
+        from: line.start + line.indent,
+        to: line.contentStart - 1,
+        text: `${numbers[i]}.`
+      })
+    }
+    if (shifts[i] > 0) {
+      edits.push({ from: line.start, to: line.start, text: ' '.repeat(shifts[i]) })
+    } else if (shifts[i] < 0) {
+      edits.push({ from: line.start, to: line.start - shifts[i], text: '' })
+    }
+  })
   if (edits.length === 0) {
     return null
   }
-  const start = parseListLine(text, from)!.start
-  // Only the first line's shift moves the start; a caret inside its indent stays at its line start.
-  return {
-    edits,
-    selection: { from: Math.max(start, from + firstShift), to: Math.max(start, to + shift) }
-  }
+  // An endpoint inside a deleted or replaced range lands at its start.
+  const map = (offset: number): number =>
+    edits.reduce(
+      (mapped, e) =>
+        offset >= e.to
+          ? mapped + e.text.length - (e.to - e.from)
+          : offset > e.from
+            ? mapped - (offset - e.from)
+            : mapped,
+      offset
+    )
+  return { edits, selection: { from: map(from), to: map(to) } }
 }
+
+const starRun = (text: string, tail: boolean): number =>
+  (tail ? /\*+$/ : /^\*+/).exec(text)?.[0].length ?? 0
 
 /** Cmd/Ctrl+B or I: wrap the selection in `mark`, or unwrap it when it already is. */
 export function toggleInlineMark(
@@ -133,12 +196,13 @@ export function toggleInlineMark(
   mark: string
 ): NativeChatTextChange {
   const n = mark.length
+  // An odd run of `*` carries italic; two is bold alone, three is bold and italic.
+  const oddRun = (a: number, b: number): boolean => Math.min(a, b) % 2 === 1
   const outside =
     from >= n &&
     text.slice(from - n, from) === mark &&
     text.slice(to, to + n) === mark &&
-    // `*` inside `**bold**` is part of the bold mark, not an italic one.
-    (n > 1 || (text[from - 2] !== '*' && text[to + n] !== '*'))
+    (n > 1 || oddRun(starRun(text.slice(0, from), true), starRun(text.slice(to), false)))
   if (outside) {
     return {
       edits: [
@@ -148,11 +212,12 @@ export function toggleInlineMark(
       selection: { from: from - n, to: to - n }
     }
   }
+  const selected = text.slice(from, to)
   const inside =
     to - from >= 2 * n &&
     text.slice(from, from + n) === mark &&
     text.slice(to - n, to) === mark &&
-    (n > 1 || (text[from + 1] !== '*' && text[to - 2] !== '*'))
+    (n > 1 || oddRun(starRun(selected, false), starRun(selected, true)))
   if (inside) {
     return {
       edits: [

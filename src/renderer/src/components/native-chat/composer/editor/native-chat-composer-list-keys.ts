@@ -16,7 +16,7 @@ function changeFor(
 ): NativeChatTextChange | null {
   const mod = isMacPlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
   const key = event.key.toLowerCase()
-  if (mod && !event.altKey && !event.shiftKey && (key === 'b' || key === 'i')) {
+  if (mod && !event.altKey && !event.shiftKey && (key === 'i' || (key === 'b' && from !== to))) {
     return toggleInlineMark(text, from, to, key === 'b' ? '**' : '*')
   }
   if (event.metaKey || event.ctrlKey || event.altKey) {
