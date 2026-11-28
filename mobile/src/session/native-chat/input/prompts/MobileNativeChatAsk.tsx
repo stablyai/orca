@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { Keyboard, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
@@ -57,8 +57,9 @@ type Props = {
   questionKeys?: readonly string[]
   /** Unsent picks and typed words kept by question key, so a card that closes opens with them. */
   drafts?: MobileNativeChatAskDrafts
-  /** How many lines the answer box opens at and grows to; 3 and 7 by default. */
-  answerLines?: { min: number; max: number }
+  /** The answer box's lines and look in place of the card's own (3 to 7 lines, filled), for a host card
+   *  that frames it. */
+  answerField?: Pick<ComponentProps<typeof MessageBox>, 'lines' | 'style'>
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
@@ -77,7 +78,7 @@ export function MobileNativeChatAsk({
   notice,
   questionKeys,
   drafts,
-  answerLines
+  answerField
 }: Props): React.JSX.Element | null {
   const styles = useThemedStyles(stylesSheet)
   const colors = useMobileColors()
@@ -372,7 +373,7 @@ export function MobileNativeChatAsk({
             }
             // A declared input (Pi's `input`) is one line unless it asks for more, as on desktop.
             multiline={freeTextInput ? freeTextInput.multiline === true : true}
-            lines={answerLines}
+            {...answerField}
             onSubmitEditing={confirm}
             autoFocus
           />

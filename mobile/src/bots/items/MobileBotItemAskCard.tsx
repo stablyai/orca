@@ -3,7 +3,7 @@
 // words, one question at a time when there are several. The answers post as one comment naming the ask,
 // so the agent wakes once; lines left unanswered close as skipped. Not now folds it to the chat's strip.
 import { useContext, useEffect, useRef, useState } from 'react'
-import { Keyboard } from 'react-native'
+import { Keyboard, StyleSheet } from 'react-native'
 import {
   botItemQuestionLine,
   type BotItemQuestionShape
@@ -14,6 +14,7 @@ import type { BotItem, BotItemEvent } from '../../../../src/shared/bots/bot-item
 import type { AskAnswerSelection } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { spacing } from '../../theme/mobile-theme'
 import { MobileNativeChatAsk } from '../../session/native-chat/input/prompts/MobileNativeChatAsk'
 import type { MobileNativeChatCollapsedPrompt } from '../../session/native-chat/input/prompts/MobileNativeChatPromptStrip'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
@@ -25,8 +26,20 @@ import {
 
 type OpenAsk = { askId: string; shape: BotItemQuestionShape; open: number[] }
 
-// The answer box opens two lines tall under the question, not chat's three, and grows to the usual seven.
-const ANSWER_LINES = { min: 2, max: 7 }
+// The message text pads itself 6 across (composer-input-styles' messageText).
+const TEXT_INSET = 6
+// The card is the answer box's frame: no fill or inset of its own, its words on the question's edge. It
+// opens two lines tall, not chat's three, and grows to the usual seven.
+const styles = StyleSheet.create({
+  answerField: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    marginHorizontal: -TEXT_INSET,
+    marginBottom: spacing.xs
+  }
+})
+const ANSWER_FIELD = { lines: { min: 2, max: 7 }, style: styles.answerField }
 
 /** The waiting ask's lines no comment answered yet; the item's own copy of its question stands in until
  *  its event is read. */
@@ -197,7 +210,7 @@ export function useMobileBotItemAskSlot({
         }}
         cancelLabel={t('bots.items.ask.notNow', 'Not now')}
         onCollapse={fold}
-        answerLines={ANSWER_LINES}
+        answerField={ANSWER_FIELD}
       />
     )
   }

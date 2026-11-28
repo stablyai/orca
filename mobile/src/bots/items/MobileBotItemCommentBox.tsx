@@ -103,7 +103,7 @@ export function MobileBotItemCommentBox({
   question?: BotItemWaitingQuestion | null
   /** Its "Replying to" closed (×) on that question, kept with the draft as on the desktop. */
   replyMark: BotItemReplyMarkState
-  /** The field, which the page focuses for a quote. */
+  /** The field, held by the page. */
   fieldRef: RefObject<TextInputInstance | null>
 }) {
   const colors = useMobileColors()
