@@ -236,10 +236,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     if (statusRead?.kind === 'unavailable') {
       return {
         kind: 'unavailable',
-        message: t(
-          'sourceControl.loaders.updateDesktop',
-          'Update Orca on this host to use Source Control on mobile.'
-        )
+        message: t('sourceControl.loaders.needsNewerOrca', 'Source control needs a newer version.')
       }
     }
     if (!statusEnabled) {

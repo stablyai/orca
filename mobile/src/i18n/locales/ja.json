@@ -77,9 +77,7 @@
       "skipped_one": "{{count}} 件のトランスクリプトをスキップしました",
       "skipped_other": "{{count}} 件のトランスクリプトをスキップしました",
       "title": "Agent セッション履歴",
-      "unavailable": "Agent セッション履歴を利用できません",
       "unknownHostPlatform": "ホストのプラットフォームを判別できません。",
-      "updateHost": "Agent セッション履歴を表示するには、このホストの Orca を更新してください。",
       "waitingForHost": "ホストの接続待ち…",
       "workspace": "ワークスペース"
     },
@@ -275,8 +273,7 @@
       "certificateChallengeExpired": "この証明書の承認は期限切れです。ページを再試行して、承認をもう一度リクエストしてください。",
       "certificateChallengeChanged": "証明書のリクエストが変更されました。ページを再試行して、警告の内容を改めて確認してください。",
       "certificateProceedFailed": "Orca はこの証明書のリクエストを承認できませんでした。ページを再試行して、もう一度お試しください。",
-      "certificateChallengeUnavailable": "この証明書のリクエストは利用できなくなりました。ページを再試行して、もう一度リクエストしてください。",
-      "certificateProceedNeedsHostUpdate": "スマートフォンから証明書の警告を承認するには、このホストの Orca を更新してください。"
+      "certificateChallengeUnavailable": "この証明書のリクエストは利用できなくなりました。ページを再試行して、もう一度リクエストしてください。"
     },
     "pagePrompt": {
       "downloadStarted": "ホスト上の {{path}} にダウンロードしています",
@@ -1198,7 +1195,6 @@
       },
       "title": "MCP サーバー",
       "notRunning": "MCP サーバーは次のメッセージを送信すると接続されます。",
-      "unsupported": "ここで MCP サーバーを管理するには、このチャットのホストの Orca を更新してください。",
       "readFailed": "MCP サーバーを読み込めませんでした。",
       "retry": "再試行",
       "empty": "このチャットには MCP サーバーが設定されていません。",
@@ -1465,7 +1461,6 @@
       "connectHint": "デスクトップの Orca で「設定 → 連携」から Jira サイトを追加し、再確認してください。",
       "connectOnDesktop": "デスクトップで Jira に接続",
       "credentialUnreadable": "Jira の認証情報は保存されていますが、読み取れません：{{credentialError}}",
-      "updateDesktop": "このホストの Orca を更新",
       "connectTitle": "Jira アカウントを接続",
       "connectMessage": "割り当てられた Jira 課題をタスクから直接閲覧して作業を始められます。",
       "connect": "Jira を接続"
@@ -2235,7 +2230,6 @@
       "scheduled": "スケジュール実行",
       "showFor": "自動化を表示するデスクトップ",
       "toggleFailed": "{{name}} を更新できませんでした",
-      "updateDesktop": "自動化を使用するには、{{desktop}} の Orca を更新してください。",
       "pairComputer": "自動化を表示・実行するには、デスクトップとペアリングしてください。"
     },
     "listFooter": {
@@ -2366,7 +2360,6 @@
       "ignoredNamesMore": "{{names}} など",
       "ignoredNamesCount": "{{names}} 他 {{value0}} 件",
       "ignoredUnchecked": "無視されたファイルを完全には確認できませんでした",
-      "needsUpdate": "スマートフォンからこのワークスペースを削除するには、コンピュータの Orca を更新してください。",
       "removeTitle": "ワークスペースを削除",
       "removeFolderMessage": "「{{name}}」を Orca から削除しますか？ディスク上のフォルダーは残ります。"
     },
@@ -2992,7 +2985,6 @@
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
       "commitLoadFailed": "このコミットを読み込めません。",
       "commitDiffUnavailable": "コミットの差分は利用できません。",
-      "desktopUpdateRequired": "モバイルで変更をレビューするには、このホストの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
@@ -3388,8 +3380,7 @@
       "messageNotSent": "メッセージは送信されませんでした"
     },
     "tabStrip": {
-      "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
-      "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。"
+      "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -4218,8 +4209,7 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "loadFailed": "ソース管理を読み込めませんでした。",
-      "updateDesktop": "モバイルでソース管理を使うには、このホストの Orca を更新してください。"
+      "loadFailed": "ソース管理を読み込めませんでした。"
     },
     "modals": {
       "discardButton": "破棄",
@@ -4687,9 +4677,7 @@
       "connectLinearButton": "Linear に接続",
       "connectLinearMessage": "「タスク」から、担当する Linear の Issue を確認して作業を開始できます。",
       "connectLinearTitle": "Linear アカウントを接続する",
-      "jiraStatusFailed": "Jira の状態の読み取りに失敗しました。",
-      "updateDesktopMessage": "モバイルの「タスク」画面には、このホストに新しいバージョンの Orca が必要です。",
-      "updateDesktopTitle": "このホストの Orca を更新"
+      "jiraStatusFailed": "Jira の状態の読み取りに失敗しました。"
     },
     "options": {
       "all": "全て",

@@ -8,6 +8,7 @@ import {
   MobileStateView
 } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { HostUpdateNotice } from '../../../host-update-notice/HostUpdateNotice'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'
 import { MobilePanZoomImage } from '../../../files/media/presentation/MobilePanZoomImage'
 import { filePreviewStylesSheet } from '../../../files/preview/mobile-file-preview-styles'
@@ -75,6 +76,9 @@ export function MobileDiffReviewBody({
         title={t('components.diffReviewBody.loadingReview', 'Loading review...')}
       />
     )
+  }
+  if (screenState.kind === 'unavailable' && screenState.hostUpdate) {
+    return <HostUpdateNotice variant="screen" feature={screenState.message} />
   }
   if (screenState.kind === 'unavailable') {
     return (

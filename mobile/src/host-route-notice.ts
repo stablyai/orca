@@ -1,3 +1,5 @@
+import { translate } from './i18n/mobile-i18n'
+
 // Carry the notice with navigation because the bouncing session screen unmounts before a toast can survive.
 
 export const HOST_ROUTE_NOTICES = {
@@ -30,6 +32,9 @@ export function visibleHostRouteNotice(
   return hostRouteNoticeMessage(notice)
 }
 
-export function serverUpdateNeededNotice(hostLabel: string): string {
-  return `Update Orca on ${hostLabel} to open its workspaces from your phone.`
+/** The shared update notice's toast line for a server the computer updates, so it has no phone action. */
+export function serverUpdateNeededNotice(serverLabel: string): string {
+  return translate('host.updateNotice.toast', 'Needs a newer Orca on {{host}}', {
+    host: serverLabel
+  })
 }

@@ -25,6 +25,8 @@ import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { MobileRepoIcon } from '../components/icons/MobileRepoIcon'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { useRepoLookById } from './catalog/host-repo-looks'
+import { HostUpdateToast } from '../host-update-notice/HostUpdateNotice'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 // The sheet's one muted line: the project, then the branch when the name doesn't already say it.
 function workspaceSubjectLine(row: Worktree): string {
@@ -36,6 +38,7 @@ function workspaceSubjectLine(row: Worktree): string {
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
   const colors = useMobileColors()
   const t = useMobileTranslation()
+  const insets = useSafeAreaInsets()
   const {
     actions,
     catalog,
@@ -197,7 +200,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         />
 
         <ConfirmModal
-          visible={actions.deleteFailure != null}
+          visible={actions.deleteFailure != null && !actions.deleteFailure.hostUpdate}
           title={t('hostScreen.hostScreenOverlays.deleteFailed', 'Failed to delete "{{name}}"', {
             name: actions.deleteFailure?.item.displayName || actions.deleteFailure?.item.repo
           })}
@@ -208,6 +211,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
           onCancel={actions.dismissDeleteFailure}
         />
       </BottomDrawerModalHost>
+
+      <HostUpdateToast
+        visible={actions.deleteFailure?.hostUpdate === true}
+        onDismiss={actions.dismissDeleteFailure}
+        bottomInset={insets.bottom}
+        {...(hostId ? { hostId } : {})}
+      />
 
       <ConfirmModal
         visible={state.confirmRemoveHost}

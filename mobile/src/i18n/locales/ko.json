@@ -77,9 +77,7 @@
       "skipped_one": "대화 기록 {{count}}개 건너뜀",
       "skipped_other": "대화 기록 {{count}}개 건너뜀",
       "title": "에이전트 세션 기록",
-      "unavailable": "에이전트 세션 기록 사용 불가",
       "unknownHostPlatform": "호스트 플랫폼을 확인할 수 없습니다.",
-      "updateHost": "에이전트 세션 기록을 보려면 이 호스트의 Orca를 업데이트하세요.",
       "waitingForHost": "호스트 대기 중…",
       "workspace": "워크스페이스"
     },
@@ -275,8 +273,7 @@
       "certificateChallengeExpired": "이 인증서 승인이 만료되었습니다. 페이지를 다시 시도해 새로 요청하세요.",
       "certificateChallengeChanged": "인증서 요청이 변경되었습니다. 페이지를 다시 시도하고 새 경고를 확인하세요.",
       "certificateProceedFailed": "Orca가 이 인증서 요청을 승인하지 못했습니다. 페이지를 다시 시도한 후 다시 요청하세요.",
-      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요.",
-      "certificateProceedNeedsHostUpdate": "휴대폰에서 인증서 경고를 무시하고 계속하려면 이 호스트의 Orca를 업데이트하세요."
+      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요."
     },
     "pagePrompt": {
       "downloadStarted": "호스트의 {{path}}에 다운로드하는 중",
@@ -1198,7 +1195,6 @@
       },
       "title": "MCP 서버",
       "notRunning": "다음 메시지를 보내면 MCP 서버가 연결됩니다.",
-      "unsupported": "여기서 MCP 서버를 관리하려면 이 채팅 호스트의 Orca를 업데이트하세요.",
       "readFailed": "MCP 서버를 불러오지 못했습니다.",
       "retry": "다시 시도",
       "empty": "이 채팅에 설정된 MCP 서버가 없습니다.",
@@ -1465,7 +1461,6 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "이 호스트의 Orca 업데이트",
       "connectTitle": "Jira 계정 연결",
       "connectMessage": "할당된 Jira 이슈를 작업에서 바로 둘러보고 작업을 시작하세요.",
       "connect": "Jira 연결"
@@ -2247,7 +2242,6 @@
       "scheduled": "예약됨",
       "showFor": "자동화를 볼 데스크톱",
       "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
-      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요.",
       "pairComputer": "자동화를 보고 실행하려면 데스크톱을 페어링하세요."
     },
     "listFooter": {
@@ -2375,7 +2369,6 @@
       "ignoredNamesMore": "{{names}} 외",
       "ignoredNamesCount": "{{names}} 외 {{value0}}개",
       "ignoredUnchecked": "무시된 파일을 모두 확인하지 못했습니다",
-      "needsUpdate": "휴대폰에서 이 워크스페이스를 삭제하려면 컴퓨터의 Orca를 업데이트하세요.",
       "removeTitle": "워크스페이스 제거",
       "removeFolderMessage": "Orca에서 \"{{name}}\"을(를) 제거하시겠습니까? 디스크의 폴더는 그대로 유지됩니다."
     },
@@ -3001,7 +2994,6 @@
       "committedDiffUnavailable": "커밋된 차이점을 사용할 수 없습니다.",
       "commitLoadFailed": "이 커밋을 불러올 수 없습니다",
       "commitDiffUnavailable": "커밋 차이점을 표시할 수 없습니다",
-      "desktopUpdateRequired": "모바일에서 변경 사항을 리뷰하려면 이 호스트의 Orca를 업데이트하세요.",
       "diffLoadFailed": "차이점을 불러올 수 없습니다.",
       "reviewNotesLoadFailed": "리뷰 메모를 불러올 수 없습니다."
     },
@@ -3397,8 +3389,7 @@
       "messageNotSent": "메시지가 전송되지 않음"
     },
     "tabStrip": {
-      "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요.",
-      "quickCommandsUpdateRequired": "빠른 명령을 사용하려면 데스크톱 업데이트가 필요합니다."
+      "checkingCapabilities": "데스크톱에서 지원하는 기능을 확인 중입니다. 잠시 후 다시 시도하세요."
     },
     "terminalActionSheetActions": {
       "clearTerminal": "터미널 지우기",
@@ -4227,8 +4218,7 @@
       "pullRequest": "PR"
     },
     "loaders": {
-      "loadFailed": "소스 제어를 로드할 수 없습니다.",
-      "updateDesktop": "모바일에서 소스 제어를 사용하려면 이 호스트의 Orca를 업데이트하세요."
+      "loadFailed": "소스 제어를 로드할 수 없습니다."
     },
     "modals": {
       "discardButton": "버리기",
@@ -4727,9 +4717,7 @@
       "connectLinearButton": "Linear 연결",
       "connectLinearMessage": "작업 화면에서 할당받은 Linear 이슈를 바로 살펴보고 작업을 시작하세요.",
       "connectLinearTitle": "Linear 계정 연결",
-      "jiraStatusFailed": "Jira 상태를 읽지 못했습니다.",
-      "updateDesktopMessage": "모바일 작업 화면을 사용하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다.",
-      "updateDesktopTitle": "이 호스트의 Orca 업데이트"
+      "jiraStatusFailed": "Jira 상태를 읽지 못했습니다."
     },
     "options": {
       "all": "모두",

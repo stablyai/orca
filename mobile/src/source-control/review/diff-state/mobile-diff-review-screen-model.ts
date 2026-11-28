@@ -27,7 +27,8 @@ export type ReviewScreenState =
       comments: DiffComment[]
       reviewState: MobileDiffReviewState
     }
-  | { kind: 'unavailable'; message: string }
+  /** `hostUpdate`: the computer's Orca is too old, rather than this phone's. */
+  | { kind: 'unavailable'; message: string; hostUpdate?: true }
   | { kind: 'error'; message: string }
 
 export type MobileDiffReviewCommit = {

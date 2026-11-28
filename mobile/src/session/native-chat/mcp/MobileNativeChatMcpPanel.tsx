@@ -33,6 +33,7 @@ import { McpButton } from './mobile-native-chat-mcp-button'
 import { composerInputStylesSheet } from '../../../components/composer-input/composer-input-styles'
 import { useThemedStyles } from '../../../theme/themed-styles'
 import { useSignInLinkCopy } from '../../../bots/tools/use-sign-in-link-copy'
+import { useHostUpdateNoticeTarget } from '../../../host-update-notice/HostUpdateNotice'
 
 type McpAction = Exclude<AgentSessionMcpOperation, { action: 'status' }>
 
@@ -109,14 +110,7 @@ function McpTrayBody(props: MobileNativeChatMcpPanelProps & { t: Translate }) {
     return null
   }
   if (result.status === 'unsupported') {
-    return (
-      <Notice
-        text={t(
-          'chat.mcp.unsupported',
-          "Update Orca on this chat's host to manage MCP servers here."
-        )}
-      />
-    )
+    return <McpHostUpdateNotice t={t} />
   }
   if (result.status === 'failed') {
     return (
@@ -175,6 +169,23 @@ function McpServerList(props: MobileNativeChatMcpPanelProps & { t: Translate }) 
         </View>
       ))}
     </ScrollView>
+  )
+}
+
+/** The shared update notice in the tray's own shape: the computer's name and its one action. */
+function McpHostUpdateNotice({ t }: { t: Translate }) {
+  const target = useHostUpdateNoticeTarget()
+  return (
+    <Notice
+      text={t('chat.mcp.needsNewerOrca', 'Update Orca on {{host}} to manage MCP servers here.', {
+        host: target.name
+      })}
+      action={
+        target.action ? (
+          <McpButton label={target.action.label} tone="secondary" onPress={target.action.onPress} />
+        ) : undefined
+      }
+    />
   )
 }
 

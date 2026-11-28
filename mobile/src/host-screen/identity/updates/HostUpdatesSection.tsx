@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import {
@@ -12,10 +12,8 @@ import {
   agentCliUpdateStartable,
   type AgentCliUpdateHostRow
 } from '../../../../../src/shared/agent-launch/installation/agent-cli-update-runs'
-import {
-  REMOTE_SERVER_UPDATE_CAPABILITY,
-  REMOTE_SERVER_UPDATE_MOBILE_CAPABILITY
-} from '../../../../../src/shared/remote-runtime/host-catalog/remote-server-update'
+import { REMOTE_SERVER_UPDATE_MOBILE_CAPABILITY } from '../../../../../src/shared/remote-runtime/host-catalog/remote-server-update'
+import { canUpdateOrcaFromPhone } from '../../../host-descriptors/host-orca-update-support'
 import { useRpcClientContext } from '../../../transport/connection/client-context'
 import { useHostProtocolGates } from '../../../components/host-connection/host-protocol-gates-context'
 import { LIST_LEADING_INSET, ListRow } from '../../../components/list/ListGroup'
@@ -61,6 +59,8 @@ export function HostUpdatesSection(props: {
   client: RpcClient | null
   online: boolean
   showToast: (message: string) => void
+  /** Arrived from a "needs a newer Orca" notice: open the update, or say how to update. */
+  openUpdate?: boolean
 }) {
   const t = useMobileTranslation()
   const colors = useMobileColors()
@@ -145,10 +145,7 @@ export function HostUpdatesSection(props: {
   // A sheet already under way keeps its row, even once the computer stops offering the version.
   const latest = orca.entry && orca.entry.phase !== 'updated' ? orca.entry.targetVersion : offered
   const support = orca.snapshot?.support ?? hostUpdateSupport
-  const automatic =
-    orcaUpdates &&
-    hostCapabilities.includes(REMOTE_SERVER_UPDATE_CAPABILITY) &&
-    support?.automatic === true
+  const automatic = canUpdateOrcaFromPhone(hostCapabilities, support)
   const orcaDue = latest !== null && latest !== installed
   // A finished update is settled by the toast that says so, once the sheet is closed.
   const closeSheet = () => setSheetOpen(false)
@@ -174,10 +171,25 @@ export function HostUpdatesSection(props: {
     }
   }
 
+  const openedFromNotice = useRef(false)
+  useEffect(() => {
+    if (props.openUpdate && automatic && orcaDue && !openedFromNotice.current) {
+      openedFromNotice.current = true
+      openSheet()
+    }
+  })
+
   if (!installed && listed.length === 0) {
     return null
   }
-  const updateSteps = hostManualUpdateSteps(hostUpdateSupport, hostCapabilities, t)
+  const updateSteps =
+    hostManualUpdateSteps(hostUpdateSupport, hostCapabilities, t) ??
+    // Arrived to update with nothing the phone can install: a desktop too old to take it from a
+    // phone, or one whose updater hasn't found the version yet, updates from its own window.
+    (props.openUpdate &&
+    (!automatic || (!orcaDue && orca.snapshot?.status.state !== 'not-available'))
+      ? t('host.edit.updateStepsDesktop', 'On the computer, open Orca and check for updates.')
+      : null)
   if (listed.length === 0 && !orcaDue) {
     const upToDate = orca.snapshot?.status.state === 'not-available'
     return (

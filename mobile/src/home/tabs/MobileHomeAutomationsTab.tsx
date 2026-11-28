@@ -5,6 +5,7 @@ import Animated, { FadeIn } from 'react-native-reanimated'
 import { toAutomationOwnerPrecondition } from '../../../../src/shared/automations/ownership/automation-owner-precondition'
 import {
   automationErrorMessage,
+  automationHostOutdated,
   automationOutcomeUnknownMessage
 } from '../../automations/automation-error'
 import { automationUpdateWrite } from '../../automations/automation-operations'
@@ -29,6 +30,7 @@ import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import { MobileHomeAutomationRow, MobileHomeAutomationRunRow } from './MobileHomeAutomationRows'
 import { MobileHomeHostPill, useHomeTabHost } from './MobileHomeHostPill'
 import { MobileHomeTabHeader } from './MobileHomeTabHeader'
+import { HostUpdateNotice } from '../../host-update-notice/HostUpdateNotice'
 
 const RECENT_RUN_LIMIT = 5
 const UPDATE_OPTIONS = { failWhenDisconnected: true }
@@ -111,24 +113,18 @@ function HostAutomations(props: {
   if (!catalog.loaded) {
     if (catalog.error) {
       // The catalog reports an old desktop's missing automation methods with this sentence.
-      const outdated =
-        catalog.error ===
-        t(
-          'automations.mobile.hostUnavailable',
-          'Automations are unavailable on this host. Update Orca on that host and reconnect.'
-        )
-      return (
+      const outdated = automationHostOutdated(catalog.error, t)
+      return outdated ? (
+        <HostUpdateNotice
+          hostId={props.host.id}
+          hostName={desktop}
+          variant="screen"
+          feature={t('home.automationsTab.needsNewerOrca', 'Automations need a newer version.')}
+        />
+      ) : (
         <AutomationsEmpty
           title={emptyTitle}
-          message={
-            outdated
-              ? t(
-                  'home.automationsTab.updateDesktop',
-                  'Update Orca on {{desktop}} to use automations.',
-                  { desktop }
-                )
-              : describeLoadError(catalog.error, t).message
-          }
+          message={describeLoadError(catalog.error, t).message}
         />
       )
     }

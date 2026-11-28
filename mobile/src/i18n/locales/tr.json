@@ -73,9 +73,7 @@
       "skipped_one": "{{count}} transkript atlandı",
       "skipped_other": "{{count}} transkript atlandı",
       "title": "Ajan Oturum Geçmişi",
-      "unavailable": "Ajan Oturum Geçmişi Kullanılamıyor",
       "unknownHostPlatform": "Sunucunun platformu belirlenemedi.",
-      "updateHost": "Ajan oturum geçmişine göz atmak için bu sunucudaki Orca'yı güncelleyin.",
       "waitingForHost": "Sunucu bekleniyor…",
       "workspace": "Çalışma Alanı",
       "hideDetails": "Ayrıntıları gizle",
@@ -306,8 +304,7 @@
       "certificateChallengeExpired": "Bu sertifika onayının süresi doldu. Yeni bir onay istemek için sayfayı yeniden deneyin.",
       "certificateChallengeChanged": "Sertifika isteği değişti. Sayfayı yeniden deneyin ve yeni uyarıyı inceleyin.",
       "certificateProceedFailed": "Orca bu sertifika isteğini onaylayamadı. Sayfayı yeniden deneyin ve tekrar deneyin.",
-      "certificateChallengeUnavailable": "Bu sertifika isteği artık kullanılamıyor. Yeni bir istek için sayfayı yeniden deneyin.",
-      "certificateProceedNeedsHostUpdate": "Telefonunuzdan sertifika uyarılarını kabul etmek için ana bilgisayardaki Orca’yı güncelleyin."
+      "certificateChallengeUnavailable": "Bu sertifika isteği artık kullanılamıyor. Yeni bir istek için sayfayı yeniden deneyin."
     },
     "pagePrompt": {
       "downloadStarted": "Sunucuda {{path}} konumuna indiriliyor",
@@ -908,7 +905,6 @@
       },
       "title": "MCP sunucuları",
       "notRunning": "MCP sunucuları sonraki mesajınızı gönderdiğinizde bağlanır.",
-      "unsupported": "MCP sunucularını burada yönetmek için bu sohbetin ana makinesindeki Orca’yı güncelleyin.",
       "readFailed": "MCP sunucuları yüklenemedi.",
       "retry": "Yeniden dene",
       "empty": "Bu sohbet için ayarlanmış MCP sunucusu yok.",
@@ -1592,7 +1588,6 @@
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne Jira sitenizi ekleyin, ardından yeniden kontrol edin.",
       "connectOnDesktop": "Bilgisayarınızda Jira'yı bağlayın",
       "credentialUnreadable": "Jira bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
-      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin",
       "connectTitle": "Jira hesabını bağla",
       "connectMessage": "Sana atanan Jira kayıtlarına göz at ve doğrudan Görevler’den çalışmaya başla.",
       "connect": "Jira’yı bağla"
@@ -2410,7 +2405,6 @@
       "scheduled": "Zamanlanmış",
       "showFor": "Otomasyonları gösterilecek masaüstü",
       "toggleFailed": "{{name}} güncellenemedi",
-      "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin.",
       "pairComputer": "Otomasyonları görüntülemek ve çalıştırmak için bir masaüstü bilgisayarla eşleştirin."
     },
     "listFooter": {
@@ -2469,7 +2463,6 @@
     "bots": {
       "noBotsTitle": "Henüz bot yok",
       "seeAll": "Tüm botları gör",
-      "updateOneBody": "Bu bilgisayardaki Orca sürümü botları henüz telefonunuzda gösteremiyor.",
       "updateManyTitle": "Bilgisayarlarınızdaki Orca’yı güncelleyin",
       "updateManyBody": "Bilgisayarlarınızdaki Orca sürümü botları henüz telefonunuzda gösteremiyor.",
       "offOneBody": "Botları açmak için {{host}} üzerinde Orca’yı açın ve Ayarlar › Botlar › Botları etkinleştir yolunu izleyin.",
@@ -2669,7 +2662,6 @@
       "ignoredNamesMore": "{{names}} ve diğerleri",
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi",
-      "needsUpdate": "Bu çalışma alanını telefonunuzdan silebilmek için bilgisayarınızdaki Orca’yı güncelleyin.",
       "removeTitle": "Çalışma alanını kaldır",
       "removeFolderMessage": "“{{name}}” Orca’dan kaldırılsın mı? Diskteki klasör korunur."
     },
@@ -3207,7 +3199,6 @@
       "committedChangesFailed": "Commit'lenmiş değişiklikler yüklenemedi",
       "committedChangesUnavailable": "Commit'lenmiş değişiklikler kullanılamıyor",
       "committedDiffUnavailable": "Commit'lenmiş diff kullanılamıyor",
-      "desktopUpdateRequired": "Değişiklikleri mobilde incelemek için bu sunucudaki Orca'yı güncelleyin.",
       "diffLoadFailed": "Diff yüklenemedi",
       "reviewNotesLoadFailed": "İnceleme notları yüklenemedi",
       "commitLoadFailed": "Bu commit yüklenemedi",
@@ -3614,8 +3605,7 @@
       "messageNotSent": "Mesaj gönderilmedi"
     },
     "tabStrip": {
-      "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin",
-      "quickCommandsUpdateRequired": "Hızlı komutlar için masaüstü uygulaması güncellenmeli"
+      "checkingCapabilities": "Masaüstü özellikleri kontrol ediliyor — birazdan tekrar deneyin"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminali Temizle",
@@ -4517,8 +4507,7 @@
       "pullRequest": "Pull request"
     },
     "loaders": {
-      "loadFailed": "Kaynak kontrolü yüklenemedi",
-      "updateDesktop": "Mobilde Kaynak Kontrolü özelliğini kullanmak için bu sunucudaki Orca'yı güncelleyin."
+      "loadFailed": "Kaynak kontrolü yüklenemedi"
     },
     "modals": {
       "discardButton": "At",
@@ -4998,9 +4987,7 @@
       "connectLinearButton": "Linear'ı bağla",
       "connectLinearMessage": "Doğrudan Görevler bölümünden size atanan Linear sorunlarına göz atın ve üzerlerinde çalışmaya başlayın.",
       "connectLinearTitle": "Linear hesabınızı bağlayın",
-      "jiraStatusFailed": "Jira durumu okunamadı",
-      "updateDesktopMessage": "Bu mobil Görevler görünümü için bu sunucuda Orca'nın daha yeni bir sürümü gerekiyor.",
-      "updateDesktopTitle": "Bu sunucudaki Orca'yı güncelleyin"
+      "jiraStatusFailed": "Jira durumu okunamadı"
     },
     "options": {
       "all": "Tümü",

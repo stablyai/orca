@@ -53,7 +53,7 @@ export default function EditHostScreen() {
   const t = useMobileTranslation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { hostId } = useLocalSearchParams<{ hostId: string }>()
+  const { hostId, update } = useLocalSearchParams<{ hostId: string; update?: string }>()
   const primeHosts = usePrimeHosts()
   const refreshHostClient = useRefreshHostClient()
   const forgetHostClient = useForgetHostClient()
@@ -319,6 +319,7 @@ export default function EditHostScreen() {
               client={hostConnection.client}
               online={hostConnection.state === 'connected'}
               showToast={showToast}
+              openUpdate={update === 'orca'}
             />
 
             <SettingsSection>

@@ -74,9 +74,7 @@
       "skipped_one": "{{count}} transcrição ignorada",
       "skipped_other": "{{count}} transcrições ignoradas",
       "title": "Histórico de Sessões de Agente",
-      "unavailable": "Histórico de Sessões de Agente Indisponível",
       "unknownHostPlatform": "Não foi possível determinar a plataforma do host.",
-      "updateHost": "Atualize o Orca neste host para consultar o histórico de sessões de agente.",
       "waitingForHost": "Aguardando host…",
       "workspace": "Espaço de Trabalho",
       "hideDetails": "Ocultar detalhes",
@@ -282,8 +280,7 @@
       "certificateChallengeExpired": "Esta aprovação de certificado expirou. Tente novamente a página para solicitar uma nova.",
       "certificateChallengeChanged": "A solicitação de certificado foi alterada. Tente novamente a página e revise o novo aviso.",
       "certificateProceedFailed": "O Orca não conseguiu aprovar esta solicitação de certificado. Tente novamente a página.",
-      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova.",
-      "certificateProceedNeedsHostUpdate": "Atualize o Orca neste host para aceitar avisos de certificado pelo celular."
+      "certificateChallengeUnavailable": "Esta solicitação de certificado não está mais disponível. Tente novamente a página para solicitar uma nova."
     },
     "pagePrompt": {
       "downloadStarted": "Baixando para {{path}} no host",
@@ -1245,7 +1242,6 @@
       },
       "title": "Servidores MCP",
       "notRunning": "Os servidores MCP se conectam quando você envia sua próxima mensagem.",
-      "unsupported": "Atualize o Orca no host deste chat para gerenciar os servidores MCP aqui.",
       "readFailed": "Não foi possível carregar os servidores MCP.",
       "retry": "Tentar novamente",
       "empty": "Não há servidores MCP configurados para este chat.",
@@ -1521,7 +1517,6 @@
       "connectHint": "Adicione seu site do Jira no Orca para desktop em Configurações → Integrações e verifique novamente.",
       "connectOnDesktop": "Conecte o Jira no seu desktop",
       "credentialUnreadable": "Não foi possível ler as credenciais salvas do Jira: {{credentialError}}",
-      "updateDesktop": "Atualize o Orca neste host",
       "connectTitle": "Conecte sua conta do Jira",
       "connectMessage": "Navegue e comece a trabalhar nas suas issues atribuídas do Jira direto em Tarefas.",
       "connect": "Conectar Jira"
@@ -2304,7 +2299,6 @@
       "scheduled": "Agendadas",
       "showFor": "Mostrar automações de",
       "toggleFailed": "Não foi possível atualizar {{name}}",
-      "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações.",
       "pairComputer": "Pareie um desktop para ver e executar automações."
     },
     "listFooter": {
@@ -2448,7 +2442,6 @@
       "ignoredNamesMore": "{{names}} e outros",
       "ignoredNamesCount": "{{names}} +{{value0}}",
       "ignoredUnchecked": "Não foi possível verificar completamente os arquivos ignorados",
-      "needsUpdate": "Atualize o Orca no seu computador para excluir este espaço de trabalho pelo celular.",
       "removeTitle": "Remover Espaço de Trabalho",
       "removeFolderMessage": "Remover \"{{name}}\" do Orca? A pasta no disco será mantida."
     },
@@ -3111,7 +3104,6 @@
       "committedChangesFailed": "Falha ao carregar alterações commitadas",
       "committedChangesUnavailable": "Alterações commitadas indisponíveis",
       "committedDiffUnavailable": "Diff de alterações commitadas indisponível",
-      "desktopUpdateRequired": "Atualize o Orca neste host para revisar alterações no celular.",
       "diffLoadFailed": "Não foi possível carregar o diff",
       "reviewNotesLoadFailed": "Não foi possível carregar as notas de revisão",
       "commitLoadFailed": "Não foi possível carregar este commit",
@@ -3513,8 +3505,7 @@
       "messageNotSent": "Mensagem não enviada"
     },
     "tabStrip": {
-      "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes",
-      "quickCommandsUpdateRequired": "Atualize o desktop para usar comandos rápidos"
+      "checkingCapabilities": "Verificando os recursos do desktop — tente novamente em instantes"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpar Terminal",
@@ -4362,8 +4353,7 @@
       "pullRequest": "Pull request"
     },
     "loaders": {
-      "loadFailed": "Não foi possível carregar o controle de versão",
-      "updateDesktop": "Atualize o Orca neste host para usar o controle de versão no celular."
+      "loadFailed": "Não foi possível carregar o controle de versão"
     },
     "modals": {
       "discardButton": "Descartar",
@@ -4834,9 +4824,7 @@
       "connectLinearButton": "Conectar Linear",
       "connectLinearMessage": "Veja as issues do Linear atribuídas a você e comece a trabalhar nelas diretamente em Tarefas.",
       "connectLinearTitle": "Conecte sua conta do Linear",
-      "jiraStatusFailed": "Falha ao ler o status do Jira",
-      "updateDesktopMessage": "Esta visualização de Tarefas no celular requer uma versão mais recente do Orca neste host.",
-      "updateDesktopTitle": "Atualize o Orca neste host"
+      "jiraStatusFailed": "Falha ao ler o status do Jira"
     },
     "options": {
       "all": "Todos",

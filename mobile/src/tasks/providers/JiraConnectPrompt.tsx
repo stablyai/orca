@@ -2,6 +2,7 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
+import { HostUpdateNotice } from '../../host-update-notice/HostUpdateNotice'
 
 type Props = {
   credentialError: string | null
@@ -23,7 +24,16 @@ export function JiraConnectPrompt({
 }: Props) {
   const colors = useMobileColors()
   const t = useMobileTranslation()
-  const canConnect = onConnect !== null && !unavailableReason
+  if (unavailableReason) {
+    return (
+      <HostUpdateNotice
+        variant="screen"
+        feature={t('components.jiraConnectPrompt.needsNewerOrca', 'Jira needs a newer version.')}
+        {...(bottomInset !== undefined ? { bottomInset } : {})}
+      />
+    )
+  }
+  const canConnect = onConnect !== null
   const unreadable = credentialError
     ? t(
         'components.jiraConnectPrompt.credentialUnreadable',
@@ -35,14 +45,11 @@ export function JiraConnectPrompt({
     <MobileStateView
       iconElement={<TaskProviderLogo provider="jira" size={24} color={colors.textMuted} />}
       title={
-        unavailableReason
-          ? t('components.jiraConnectPrompt.updateDesktop', 'Update Orca on this host')
-          : canConnect
-            ? t('components.jiraConnectPrompt.connectTitle', 'Connect your Jira account')
-            : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')
+        canConnect
+          ? t('components.jiraConnectPrompt.connectTitle', 'Connect your Jira account')
+          : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')
       }
       message={
-        unavailableReason ??
         unreadable ??
         (canConnect
           ? t(

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
-import { GitBranch } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   MobileLoadErrorState,
@@ -9,6 +8,7 @@ import {
   MobileStateView
 } from '../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { HostUpdateNotice } from '../host-update-notice/HostUpdateNotice'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlRefresh } from './panel/use-mobile-source-control-refresh'
@@ -286,11 +286,7 @@ export function MobileSourceControlPanel({
     screenState.kind === 'loading' ? (
       <MobileStateView loading title={t('sourceControl.panel.loading', 'Loading changes…')} />
     ) : screenState.kind === 'unavailable' ? (
-      <MobileStateView
-        icon={GitBranch}
-        title={t('sourceControl.panel.unavailableTitle', 'Source Control Unavailable')}
-        message={screenState.message}
-      />
+      <HostUpdateNotice hostId={hostId} variant="screen" feature={screenState.message} />
     ) : screenState.kind === 'error' && connState !== 'connected' ? (
       <MobileOfflineState onReconnect={statusRetry} />
     ) : screenState.kind === 'error' ? (
