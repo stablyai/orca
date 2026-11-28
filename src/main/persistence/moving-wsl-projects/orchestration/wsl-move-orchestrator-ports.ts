@@ -18,8 +18,8 @@ export type WslMoveOrchestratorLoad =
       kind: 'readable'
       records: Map<string, WslMoveOrchestratorRecord>
       unknownKeys: ReadonlySet<string>
-      /** Present after an unparseable file was set aside: the distros the user acted on since. */
-      heldUntilUserActs?: readonly string[]
+      /** An unparseable file was set aside and the distros it may have declined are not listed yet. */
+      holdDistrosOnceListed?: boolean
     }
   | { kind: 'unreadable' }
 
@@ -76,8 +76,10 @@ export type WslMoveOrchestratorPorts = {
   /** Throws on failure; never called before a load succeeded. */
   save: (
     records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
-    heldUntilUserActs?: readonly string[]
+    holdDistrosOnceListed?: boolean
   ) => void
+  /** The distros installed now (the WSL registry); null when it cannot be read. */
+  listKnownDistros: () => Promise<readonly string[] | null>
   /** Returns the cancel. */
   schedule: (delayMs: number, run: () => void) => () => void
   /** One row per state change; `cause` is the preview or result behind it. */

@@ -69,7 +69,7 @@ const stateSchema = lazyZodSchema(() =>
         'finish-pending'
       ]),
       until: z.number().optional(),
-      cause: z.enum(['released-here', 'removed']).optional()
+      cause: z.enum(['released-here', 'removed', 'state-lost']).optional()
     }),
     z.object({
       kind: z.literal('done'),
@@ -96,8 +96,8 @@ const fileSchema = lazyZodSchema(() =>
   z.object({
     version: z.literal(1),
     distros: z.record(z.string(), z.unknown()),
-    /** Set once an unparseable file was set aside: the distros the user has acted on since. */
-    heldUntilUserActs: z.array(z.string()).optional()
+    /** An unparseable file was set aside: hold every distro until those it may have declined are listed. */
+    holdDistrosOnceListed: z.literal(true).optional()
   })
 )
 
@@ -109,7 +109,7 @@ export type WslMoveOrchestratorStore = {
   load: () => WslMoveOrchestratorLoad
   save: (
     records: ReadonlyMap<string, WslMoveOrchestratorRecord>,
-    heldUntilUserActs?: readonly string[]
+    holdDistrosOnceListed?: boolean
   ) => void
 }
 
@@ -118,7 +118,7 @@ type SidecarRead =
   | { kind: 'read-failed'; code: string }
   | { kind: 'corrupt' }
   | { kind: 'unsupported'; version: number }
-  | { kind: 'readable'; distros: Record<string, unknown>; heldUntilUserActs?: string[] }
+  | { kind: 'readable'; distros: Record<string, unknown>; holdDistrosOnceListed?: true }
 
 /** The sidecar's load and save; a newer build's record is written back as read. */
 export function createWslMoveOrchestratorStore(
@@ -137,8 +137,12 @@ export function createWslMoveOrchestratorStore(
       console.warn(`[wsl-move] ${message}`, ...(detail === undefined ? [] : [detail]))
     }
   }
-  const write = (distros: Record<string, unknown>, heldUntilUserActs?: readonly string[]) =>
-    writeDurableSecureJsonFile(path, { version: 1, distros, heldUntilUserActs })
+  const write = (distros: Record<string, unknown>, holdDistrosOnceListed?: boolean) =>
+    writeDurableSecureJsonFile(path, {
+      version: 1,
+      distros,
+      ...(holdDistrosOnceListed ? { holdDistrosOnceListed: true } : {})
+    })
   const load = (): WslMoveOrchestratorLoad => {
     if (unsupported) {
       return { kind: 'unreadable' }
@@ -175,11 +179,16 @@ export function createWslMoveOrchestratorStore(
       kept = {}
       try {
         // Written now, so a restart before any save still holds every distro the file may have declined.
-        write({}, [])
+        write({}, true)
       } catch (error) {
         console.warn('[wsl-move] Could not record the hold after setting state aside', error)
       }
-      return { kind: 'readable', records: new Map(), unknownKeys: new Set(), heldUntilUserActs: [] }
+      return {
+        kind: 'readable',
+        records: new Map(),
+        unknownKeys: new Set(),
+        holdDistrosOnceListed: true
+      }
     }
     lastWarning = null
     if (read.kind !== 'readable') {
@@ -200,13 +209,13 @@ export function createWslMoveOrchestratorStore(
       kind: 'readable',
       records,
       unknownKeys: new Set(Object.keys(kept)),
-      heldUntilUserActs: read.heldUntilUserActs
+      holdDistrosOnceListed: read.holdDistrosOnceListed === true
     }
   }
-  const save: WslMoveOrchestratorStore['save'] = (records, heldUntilUserActs) => {
+  const save: WslMoveOrchestratorStore['save'] = (records, holdDistrosOnceListed) => {
     // Once this build wrote its own record for a distro, a prune of it must not bring back the old.
     kept = Object.fromEntries(Object.entries(kept).filter(([key]) => !records.has(key)))
-    write({ ...kept, ...Object.fromEntries(records) }, heldUntilUserActs)
+    write({ ...kept, ...Object.fromEntries(records) }, holdDistrosOnceListed)
   }
   return { load, save }
 }

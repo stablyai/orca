@@ -1,8 +1,13 @@
 /** The orchestrator's hold on its sidecar: nothing moves on its own or saves before it is read. */
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
+import { wslMoveJournalKey } from '../../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
-import { sameWslMoveOrchestratorRecord } from './wsl-move-orchestrator-transitions'
+import { applyWslMoveReleasedByUser } from './wsl-move-orchestrator-external-transitions'
+import {
+  newWslMoveOrchestratorRecord,
+  sameWslMoveOrchestratorRecord
+} from './wsl-move-orchestrator-transitions'
 
 /** Waits before re-trying a save a sharing violation refused (another process held the file). */
 export const WSL_MOVE_SIDECAR_SAVE_RETRY_MS = [50, 250, 1_000] as const
@@ -17,18 +22,22 @@ function isTransientSaveError(error: unknown): boolean {
 
 export class WslMoveOrchestratorSidecar {
   private loaded = false
-  /** After an unparseable file was set aside (persisted in the file), hold all but released ones. */
-  private holdAll = false
+  /** After an unparseable file was set aside, every distro waits until the installed ones are listed. */
+  private awaitingList = false
   /** Distros whose record only a newer build can parse: automatic steps leave them alone. */
   private readonly unknown = new Set<string>()
   private readonly releasedByUser = new Set<string>()
   /** What the user did before the file was read, replayed onto its records once it is. */
   private readonly replays = new Map<string, Replay[]>()
+  private listing = false
   private saveRetries = 0
   private cancelRetry: (() => void) | null = null
 
   constructor(
-    private readonly ports: Pick<WslMoveOrchestratorPorts, 'load' | 'save' | 'schedule'>
+    private readonly ports: Pick<
+      WslMoveOrchestratorPorts,
+      'load' | 'save' | 'schedule' | 'listKnownDistros' | 'now' | 'appVersion'
+    >
   ) {}
 
   get isLoaded(): boolean {
@@ -48,12 +57,7 @@ export class WslMoveOrchestratorSidecar {
     if (result.kind === 'missing') {
       return true
     }
-    if (result.heldUntilUserActs) {
-      this.holdAll = true
-      for (const key of result.heldUntilUserActs) {
-        this.releasedByUser.add(key)
-      }
-    }
+    this.awaitingList = result.holdDistrosOnceListed === true
     for (const key of result.unknownKeys) {
       if (!this.releasedByUser.has(key)) {
         this.unknown.add(key)
@@ -83,7 +87,40 @@ export class WslMoveOrchestratorSidecar {
   }
 
   holdsAutomaticSteps(key: string): boolean {
-    return !this.loaded || this.unknown.has(key) || (this.holdAll && !this.releasedByUser.has(key))
+    return (
+      !this.loaded || this.unknown.has(key) || (this.awaitingList && !this.releasedByUser.has(key))
+    )
+  }
+
+  get isAwaitingDistroList(): boolean {
+    return this.awaitingList
+  }
+
+  /** Parks each installed distro without a record (Move releases it); later ones move normally. */
+  holdListedDistros(records: Records, alive: () => boolean): Promise<boolean> | null {
+    if (!this.awaitingList || this.listing) {
+      return null
+    }
+    this.listing = true
+    return this.ports
+      .listKnownDistros()
+      .catch(() => null)
+      .then((distros) => {
+        this.listing = false
+        if (!distros || !alive() || !this.awaitingList) {
+          return false
+        }
+        const now = this.ports.now()
+        for (const distro of distros) {
+          const key = wslMoveJournalKey(distro)
+          if (!records.has(key) && !this.releasedByUser.has(key)) {
+            const fresh = newWslMoveOrchestratorRecord(distro, this.ports.appVersion, now)
+            records.set(key, applyWslMoveReleasedByUser(fresh, now, 'state-lost'))
+          }
+        }
+        this.awaitingList = false
+        return true
+      })
   }
 
   /** The user acted on the distro, which ends any hold on it. */
@@ -99,7 +136,7 @@ export class WslMoveOrchestratorSidecar {
     }
     this.cancelRetryNow()
     try {
-      this.ports.save(records, this.holdAll ? [...this.releasedByUser] : undefined)
+      this.ports.save(records, this.awaitingList)
       this.saveRetries = 0
     } catch (error) {
       const delay = WSL_MOVE_SIDECAR_SAVE_RETRY_MS[this.saveRetries]

@@ -38,9 +38,13 @@ describe('WSL move orchestrator sidecar', () => {
   let path: string
   let ports: Fake
   let orchestrator: WslMoveOrchestrator | undefined
-  const start = (): WslMoveOrchestrator => {
+  const start = (installed: string[] = []): WslMoveOrchestrator => {
     const store = createWslMoveOrchestratorStore(userDataPath, () => 42)
-    ports = fakePorts({ load: store.load, save: store.save })
+    ports = fakePorts({
+      load: store.load,
+      save: store.save,
+      listKnownDistros: async () => installed
+    })
     orchestrator = new WslMoveOrchestrator(ports)
     return orchestrator
   }
@@ -83,22 +87,26 @@ describe('WSL move orchestrator sidecar', () => {
     expect(stateOf(orchestrator, 'Ubuntu-C')).toMatchObject({ reason: 'not-now' })
   })
 
-  it('sets an unparseable sidecar aside and moves nothing on its own, even after a restart', async () => {
+  it('holds the distros installed when an unparseable sidecar is set aside, across a restart', async () => {
     const whole = JSON.stringify({ version: 1, distros: Object.fromEntries(records('Ubuntu-B')) })
     const truncated = whole.slice(0, -2)
     writeFileSync(path, truncated)
 
-    const orchestrator = start()
+    const orchestrator = start(['Ubuntu-B'])
+    await orchestrator.whenIdle()
     await orchestrator.trigger('Ubuntu-B', 'connect')
-    await orchestrator.userAction('Ubuntu-A', 'not-now')
+    await orchestrator.trigger('Ubuntu-New', 'connect')
     await orchestrator.whenIdle()
 
-    expect(ports.start).not.toHaveBeenCalled()
     expect(readFileSync(`${path}.corrupt-42`, 'utf8')).toBe(truncated)
-    expect(Object.keys(distrosOnDisk(path))).toEqual([wslMoveJournalKey('Ubuntu-A')])
+    expect(vi.mocked(ports.start).mock.calls.map(([distro]) => distro)).toEqual(['Ubuntu-New'])
+    expect(stateOf(orchestrator, 'Ubuntu-B')).toMatchObject({
+      reason: 'declined',
+      cause: 'state-lost'
+    })
 
     orchestrator.dispose()
-    const restarted = start()
+    const restarted = start(['Ubuntu-B', 'Ubuntu-New'])
     await restarted.trigger('Ubuntu-B', 'connect')
     await restarted.whenIdle()
     expect(ports.start).not.toHaveBeenCalled()

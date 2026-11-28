@@ -18,8 +18,8 @@ export type WslMoveOrchestratorTrigger =
   /** A backoff retry or deferred re-check; runs only while the host stays ready. */
   | 'timer'
 
-/** "Use on this computer again" (`released-here`) or a Remove of the distro's host (`removed`). */
-export type WslMoveOrchestratorDeclineCause = 'released-here' | 'removed'
+/** "Use on this computer again", a host Remove, or `state-lost`: a set-aside record may have declined. */
+export type WslMoveOrchestratorDeclineCause = 'released-here' | 'removed' | 'state-lost'
 
 /** Why the orchestrator stopped trying on its own; each needs the user. */
 export type WslMoveOrchestratorParkReason =

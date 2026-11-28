@@ -43,8 +43,18 @@ export function wslMoveOrchestratorLine(
       }
     case 'declined':
       // A removed host has no row to show this on; re-adding it clears the decline.
-      return state.cause === 'removed'
-        ? null
+      if (state.cause === 'removed') {
+        return null
+      }
+      return state.cause === 'state-lost'
+        ? {
+            kind: 'declined',
+            text: t(
+              'wslMove.orchestrator.stateLost',
+              "Moving to the {{distro}} host waits for you: Orca couldn't read its record of your earlier choices.",
+              { distro: record.distro }
+            )
+          }
         : {
             kind: 'declined',
             text: t(

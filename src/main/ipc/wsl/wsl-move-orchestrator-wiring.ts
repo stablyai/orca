@@ -169,6 +169,8 @@ function createOrchestrator(
         createWslMoveUndoPorts(store, userDataPath)
       ),
     load: sidecar.load,
+    listKnownDistros: async () =>
+      (await readWslDistroRegistrations())?.map((registration) => registration.distro) ?? null,
     save: sidecar.save,
     schedule: (delayMs, run) => {
       const timer = setTimeout(run, delayMs)

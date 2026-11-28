@@ -54,6 +54,7 @@ export class WslMoveOrchestrator {
   constructor(private readonly ports: WslMoveOrchestratorPorts) {
     this.sidecar = new WslMoveOrchestratorSidecar(ports)
     this.adopt()
+    this.holdListedDistros()
     void this.prune().catch((error: unknown) =>
       console.warn('[wsl-move] Could not prune inactive moves', error)
     )
@@ -95,6 +96,7 @@ export class WslMoveOrchestrator {
       return
     }
     this.retryLoad()
+    this.holdListedDistros()
     // An unread sidecar may hold this distro's decline: only the user's own act moves it now.
     if (trigger !== 'user' && this.sidecar.holdsAutomaticSteps(key)) {
       return
@@ -162,6 +164,18 @@ export class WslMoveOrchestrator {
     }
   }
 
+  /** After a set-aside file, parks each installed distro until the user acts; retried per wake. */
+  private holdListedDistros(): void {
+    const held = this.sidecar.holdListedDistros(this.records, () => !this.disposed)
+    if (!held) {
+      return
+    }
+    const listing: Promise<void> = held
+      .then((changed) => (changed ? this.saveAndPublish() : undefined))
+      .finally(() => this.inFlight.delete(listing))
+    this.inFlight.add(listing)
+  }
+
   /** The user added the distro's host themselves, which takes back a decline. */
   hostAddedByUser(distro: string): void {
     this.retryLoad()
@@ -172,10 +186,8 @@ export class WslMoveOrchestrator {
     // Kept even with no record yet, so a decline in a file read later is taken back too.
     this.sidecar.noteWhileUnread(key, take)
     const current = this.records.get(key)
-    const stored = current && this.commit(key, 'user', take(current), undefined, take)
-    if (stored === undefined || stored === current) {
-      // Nothing changed to save, but the release from a persisted hold must outlive a restart.
-      this.saveAndPublish()
+    if (current) {
+      this.commit(key, 'user', take(current), undefined, take)
     }
   }
 
