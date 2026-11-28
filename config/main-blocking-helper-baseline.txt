@@ -162,7 +162,7 @@
 1 src/main/browser/sessions/browser-session-frame-preloads.ts
 1 src/main/browser/sessions/profiles/browser-session-meta-store.ts
 1 src/main/browser/sessions/profiles/browser-session-profile-retirement.ts
-6 src/main/browser/sessions/profiles/browser-session-registry.ts
+5 src/main/browser/sessions/profiles/browser-session-registry.ts
 1 src/main/browser/site-settings/browser-profile-site-store.ts
 1 src/main/browser/site-settings/display/browser-site-display-store.ts
 1 src/main/browser/site-settings/permissions/browser-site-permission-store.ts
