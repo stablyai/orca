@@ -198,11 +198,9 @@ export class DaemonRouterPreRpcRetirement {
       const result = await decision
       if (result.state === 'retiring') {
         this.forget(adapter)
-      } else if (this.disposed) {
-        return
-      } else if (result.state === 'busy') {
+      } else if (!this.disposed && result.state === 'busy') {
         this.checkAgainLater(adapter)
-      } else if (result.state === 'unverifiable') {
+      } else if (!this.disposed && result.state === 'unverifiable') {
         // Unanswered proves nothing (another client may have given it work); asking again soon also reopens it.
         if (this.recheckDelays.has(adapter)) {
           this.checkAgainLater(adapter)
