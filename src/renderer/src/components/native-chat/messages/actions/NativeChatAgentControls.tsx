@@ -1,5 +1,4 @@
 import { ArrowUp } from 'lucide-react'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -21,7 +20,6 @@ export function NativeChatAgentControls({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const scrollLabel = t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')
   return (
     // Row chrome, not transcript: find skips it. The row owns a minimum gap above it, so every answer
     // gets at least this much: it collapses with the last block's bottom margin, and a larger one wins.
@@ -32,21 +30,15 @@ export function NativeChatAgentControls({
         <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
       ) : null}
       {action}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={onScrollToTop}
-            aria-label={scrollLabel}
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowUp className="size-3.5" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {scrollLabel}
-        </TooltipContent>
-      </Tooltip>
+      <button
+        type="button"
+        onClick={onScrollToTop}
+        aria-label={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        title={t('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
+        className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <ArrowUp className="size-3.5" />
+      </button>
       <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )

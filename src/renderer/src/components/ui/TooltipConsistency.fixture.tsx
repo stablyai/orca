@@ -85,17 +85,16 @@ function hoveredControl(selector: string) {
   })
 }
 
-export const scroll = hoveredControl('[aria-label="Scroll this message to top"]')
 export const fork = hoveredControl('[aria-label="Fork from this response"]')
 export const usage = hoveredControl('[data-fixture-provider] > span')
 export const overflow = hoveredControl('[data-fixture-overflow] > span')
 export const sidebar = hoveredControl('[data-sidebar-section-fold="bots"]')
 
-export const keyboardScroll = defineFixture({
+export const keyboardFork = defineFixture({
   width: 640,
   render: () => <ReportedControls />,
   interact: (frame) => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
-    frame.querySelector<HTMLButtonElement>('[aria-label="Scroll this message to top"]')?.focus()
+    frame.querySelector<HTMLButtonElement>('[aria-label="Fork from this response"]')?.focus()
   }
 })
