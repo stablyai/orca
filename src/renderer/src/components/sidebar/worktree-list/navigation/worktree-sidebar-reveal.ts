@@ -65,7 +65,10 @@ export function getRevealTargetBounds(
   if (!surface?.hasAttribute('data-worktree-card-surface')) {
     return null
   }
-  const boundary = surface.lastElementChild
+  // Why: a card's descendants render right after its surface (or its context-menu scope), not inside it.
+  const parent = surface.parentElement
+  const cardRoot = parent?.hasAttribute('data-worktree-context-menu-scope') ? parent : surface
+  const boundary = cardRoot.nextElementSibling
   return boundary?.hasAttribute('data-worktree-lineage-children')
     ? {
         start: bounds.start,
