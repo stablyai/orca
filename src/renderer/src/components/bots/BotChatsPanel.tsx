@@ -33,7 +33,8 @@ import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatPaging } from './BotChatRowControls'
 import { botErrorMessage } from './bot-presentation'
 import { useBotOwnChatTree } from './use-bot-chat-tree'
-import { useBotForWorkspace } from './bot-workspace'
+import { useBotForWorkspace, useBotGroupForWorkspace } from './bot-workspace'
+import { BotGroupChatsPanel } from './BotGroupChatsPanel'
 import { BotPanelHeader } from './BotPanelHeader'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
@@ -71,6 +72,10 @@ function ChatsReadNote({ retry }: { retry: () => void }): React.JSX.Element {
 export default function BotChatsPanel(): React.JSX.Element | null {
   const workspaceId = useAppStore((s) => s.activeWorktreeId)
   const bot = useBotForWorkspace(workspaceId)
+  const group = useBotGroupForWorkspace(bot ? null : workspaceId)
+  if (group) {
+    return <BotGroupChatsPanel key={group.id} group={group} />
+  }
   return bot ? <BotChatsTab key={bot.id} bot={bot} /> : null
 }
 
