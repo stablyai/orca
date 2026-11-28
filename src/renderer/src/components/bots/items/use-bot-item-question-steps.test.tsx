@@ -168,6 +168,17 @@ it.each(['folded', 'remounted'] as const)(
   }
 )
 
+it('posts the set once a reopened line is folded back by its own pick', () => {
+  const { hook, posted } = steps('reopen-confirm-last')
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  act(() => hook.result.current.steps!.reopen(0))
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
+  expect(posted).toEqual([])
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes`])
+})
+
 it('swaps a pick for another, and keeps it when picked again', () => {
   const { hook, posted } = steps('swap')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))

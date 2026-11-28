@@ -219,7 +219,8 @@ export function useBotItemQuestionSteps(
       if (index === reopened) {
         setReopenedAt(null)
       }
-      if (!botItemHeldAnswerIsReply(held[index], words)) {
+      // Its pick again on a reopened line keeps it, and settles the line as a new answer would.
+      if (!botItemHeldAnswerIsReply(held[index], words) || index === reopened) {
         holdOrSend(index, botItemHeldAnswer(words))
       }
     }
