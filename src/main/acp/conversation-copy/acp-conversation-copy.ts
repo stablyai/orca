@@ -20,6 +20,7 @@ import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
+import { isBuiltinAcpAgent } from '../launch/acp-launch-contract'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 
@@ -222,7 +223,8 @@ async function assertCopyCliVersion(
   const { command, prefixArgs, cwd, env } = launch
   const checking = checkAcpLaunchVersion(spec, { command, prefixArgs, cwd, env }, false)
   const version = await waitForPromiseWithSignal(checking, signal)
-  if (version.status === 'tooOld') {
+  // Only a built-in agent has a minimum release; a custom agent's command is never too old.
+  if (version.status === 'tooOld' && isBuiltinAcpAgent(spec.agent)) {
     throw AgentCliInstallationError.tooOld(spec.agent, version)
   }
 }
