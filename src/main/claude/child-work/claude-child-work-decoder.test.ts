@@ -64,6 +64,14 @@ function finishOwnerThenChildEnds(decoder: ClaudeChildWorkDecoder): AgentChildWo
   return observe(decoder, notification(CHILD, 'toolu_child', 'completed', OWNER))
 }
 
+function elapse(ms: number): void {
+  vi.advanceTimersByTime(ms)
+}
+
+function progress(taskId: string, toolUseId: string): Record<string, unknown> {
+  return { type: 'system', subtype: 'task_progress', task_id: taskId, tool_use_id: toolUseId }
+}
+
 function states(evidence: AgentChildWorkEvidence[]): [string, string][] {
   return evidence.flatMap((edge): [string, string][] =>
     edge.type === 'live' ? [[edge.child.handle.id, edge.child.state]] : []
@@ -76,13 +84,16 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
   it('settles the owner back to its recorded ending once the wake lease runs out', () => {
     const decoder = new ClaudeChildWorkDecoder()
     expect(states(finishOwnerThenChildEnds(decoder))).toContainEqual([OWNER, 'working'])
-    const endedAt = Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS
-    expect(decoder.wakeExpiryAt()).toBe(endedAt)
-    expect(decoder.drain(endedAt - 1)).toEqual([])
-    expect(decoder.drain(endedAt)).toEqual([
+    expect(decoder.wakeExpiryAt()).toBe(performance.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
+    // A wall-clock correction backwards must not stretch the lease.
+    vi.setSystemTime(NOW - 3_600_000)
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS - 1)
+    expect(decoder.drain(Date.now())).toEqual([])
+    elapse(1)
+    expect(decoder.drain(Date.now())).toEqual([
       {
         type: 'ended',
-        observedAt: endedAt,
+        observedAt: Date.now(),
         handle: { idKind: 'task_id', id: OWNER, runId: PARENT },
         outcome: 'succeeded',
         lastMessage: `${OWNER} summary`
@@ -94,57 +105,44 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
   it('keeps the owner working when Claude does resume it inside the lease', () => {
     const decoder = new ClaudeChildWorkDecoder()
     finishOwnerThenChildEnds(decoder)
+    observe(decoder, progress(OWNER, PARENT))
+    expect(decoder.wakeExpiryAt()).toBeUndefined()
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS * 2)
+    expect(decoder.drain(Date.now())).toEqual([])
+  })
+
+  it('keeps the lease for a frame from an older run or a roster that merely lists the owner', () => {
+    const decoder = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(decoder)
+    observe(decoder, { ...progress(OWNER, 'toolu_parent_stale'), status: 'running' })
     observe(decoder, {
       type: 'system',
-      subtype: 'task_progress',
-      task_id: OWNER,
-      tool_use_id: PARENT,
-      summary: 'still working'
+      subtype: 'background_tasks_changed',
+      tasks: [{ task_id: OWNER, task_type: 'local_agent', description: 'owner' }]
     })
-    expect(decoder.wakeExpiryAt()).toBeUndefined()
-    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS * 2)).toEqual([])
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS)
+    expect(decoder.drain(Date.now()).map((edge) => edge.type)).toEqual(['ended'])
   })
 
-  it('keeps the lease when a running report for the owner is from an older run', () => {
-    const decoder = new ClaudeChildWorkDecoder()
-    finishOwnerThenChildEnds(decoder)
-    const stale = { task_id: OWNER, tool_use_id: 'toolu_parent_stale', status: 'running' }
-    observe(decoder, { type: 'system', subtype: 'task_progress', ...stale })
-    observe(decoder, { type: 'system', subtype: 'background_tasks_changed', tasks: [stale] })
-    const evidence = decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
-    expect(evidence.map((edge) => edge.type)).toEqual(['ended'])
-  })
+  it('lets a real ending stand, inside the lease or after it, against late frames of that run', () => {
+    const inside = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(inside)
+    observe(inside, notification(OWNER, PARENT, 'completed'))
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS)
+    expect(inside.drain(Date.now())).toEqual([])
+    expect(states(observe(inside, progress(OWNER, PARENT)))).toEqual([])
 
-  it('never puts back the guessed ending over a real one that arrived inside the lease', () => {
-    const decoder = new ClaudeChildWorkDecoder()
-    finishOwnerThenChildEnds(decoder)
-    observe(decoder, notification(OWNER, PARENT, 'completed'))
-    expect(decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)).toEqual([])
-    // That run is over: a late frame from it must not reopen the row with no lease left.
-    const late = observe(decoder, {
-      type: 'system',
-      subtype: 'task_progress',
-      task_id: OWNER,
-      tool_use_id: PARENT,
-      summary: 'late'
-    })
-    expect(states(late)).toEqual([])
+    const after = new ClaudeChildWorkDecoder()
+    finishOwnerThenChildEnds(after)
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS)
+    after.drain(Date.now())
+    observe(after, notification(OWNER, PARENT, 'completed'))
+    expect(states(observe(after, progress(OWNER, PARENT)))).toEqual([])
   })
 
   it('revives an expired owner, with its saved name, only from a report that it runs', () => {
     const decoder = new ClaudeChildWorkDecoder()
     observe(decoder, start(OWNER, PARENT))
-    observe(decoder, {
-      type: 'system',
-      subtype: 'task_updated',
-      task_id: OWNER,
-      tool_use_id: PARENT,
-      patch: { name: 'explorer', task_type: 'local_agent' }
-    })
-    observe(decoder, start(CHILD, 'toolu_child'))
-    observe(decoder, notification(OWNER, PARENT, 'completed'))
-    observe(decoder, notification(CHILD, 'toolu_child', 'completed', OWNER))
-    decoder.drain(Date.now() + CLAUDE_CHILD_WAKE_LEASE_MS)
     const update = (patch: Record<string, unknown>) =>
       observe(decoder, {
         type: 'system',
@@ -153,6 +151,12 @@ describe('a child ending wakes a finished subagent it was launched from', () => 
         tool_use_id: PARENT,
         patch
       })
+    update({ name: 'explorer', task_type: 'local_agent' })
+    observe(decoder, start(CHILD, 'toolu_child'))
+    observe(decoder, notification(OWNER, PARENT, 'completed'))
+    observe(decoder, notification(CHILD, 'toolu_child', 'completed', OWNER))
+    elapse(CLAUDE_CHILD_WAKE_LEASE_MS)
+    decoder.drain(Date.now())
     expect(states(update({ description: 'late metadata' }))).toEqual([])
     const live = update({ status: 'running' }).find(
       (edge) => edge.type === 'live' && edge.child.handle.id === OWNER

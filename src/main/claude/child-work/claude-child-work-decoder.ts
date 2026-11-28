@@ -64,13 +64,6 @@ export class ClaudeChildWorkDecoder {
       return
     }
     if (message.subtype === 'background_tasks_changed') {
-      for (const { id, task } of tf.claudeRosterConfirmations(message)) {
-        // Same currency gate as a task frame: a stale entry must not cancel a held wake.
-        const selected = this.taskInvocations.selection(task, id)
-        if (!selected || (selected.current && !selected.invocation.excluded)) {
-          this.wake.confirmRunning(id, task)
-        }
-      }
       const known = { live: this.live, ended: this.ended, parentOf: this.taskInvocations.parentOf }
       for (const [id, task] of tf.claudeRosterStarts(message, known)) {
         this.started(id, task, true)
@@ -145,14 +138,14 @@ export class ClaudeChildWorkDecoder {
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
 
-  /** When a held wake stops guessing; the host restates the row then, as no frame need arrive again. */
+  /** When, on the monotonic clock, a held wake stops guessing; the host restates the row then. */
   wakeExpiryAt(): number | undefined {
     return this.wake.earliestExpiry()
   }
 
   drain(observedAt: number): AgentChildWorkEvidence[] {
     // A wake that outlived its lease restores the ending it guessed past, before this drain reads it.
-    this.wake.settleExpired(observedAt)
+    this.wake.settleExpired()
     const pending = this.pending
     this.pending = []
     return pending.map((edge) => edge(observedAt))

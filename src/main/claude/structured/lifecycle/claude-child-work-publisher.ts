@@ -45,7 +45,7 @@ export class ClaudeChildWorkPublisher {
 
   private restateDueWokenRow(sessionId: string, session: ClaudeSession): void {
     const expiry = session.childWork.wakeExpiryAt()
-    const due = this.timers.arm(sessionId, expiry, this.deps.now?.() ?? Date.now())
+    const due = this.timers.arm(sessionId, expiry, performance.now())
     if (due) {
       this.publish(sessionId, session)
     }

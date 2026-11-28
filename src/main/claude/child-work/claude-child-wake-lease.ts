@@ -7,8 +7,10 @@ import type { DecodedClaudeTask, EndedClaudeTask } from './claude-child-work-evi
 /** Long enough for a resumed owner's first frame, short enough that a wrong guess settles quickly. */
 export const CLAUDE_CHILD_WAKE_LEASE_MS = 60_000
 
-/** `at` is stamped at the next drain, so the lease runs on the same clock that settles it. */
-type Wake = { at?: number; owner: EndedClaudeTask }
+/** `at` is on the monotonic clock, so a wall-clock correction cannot stretch or shorten a lease. */
+type Wake = { at: number; owner: EndedClaudeTask }
+
+const monotonicNow = (): number => performance.now()
 
 /** What a wake reaches back into the decoder to undo or confirm. */
 export type ClaudeChildWakeHost = {
@@ -28,7 +30,10 @@ export class ClaudeChildWake {
   /** Owners whose wake ran out, so a later confirmed running report can still restore them. */
   private readonly expired = new Set<string>()
 
-  constructor(private readonly host: ClaudeChildWakeHost) {}
+  constructor(
+    private readonly host: ClaudeChildWakeHost,
+    private readonly now: () => number = monotonicNow
+  ) {}
 
   /** A child's ending wakes the subagent it was launched from, showing it working from that frame, not a restart. */
   fromEnding(
@@ -51,7 +56,7 @@ export class ClaudeChildWake {
     this.host.showWorking(ownerId, owner.task)
     // Why: Claude does not resume an owner whose remaining descendants end later (or one whose
     // worktree is gone), so the guess must expire or the row stays working until the chat closes.
-    this.wakes.set(ownerId, { owner })
+    this.wakes.set(ownerId, { at: this.now() + CLAUDE_CHILD_WAKE_LEASE_MS, owner })
   }
 
   /** The provider says this owner runs: the guess was right, or an expired wake is undone and re-admitted. */
@@ -62,16 +67,19 @@ export class ClaudeChildWake {
     }
   }
 
+  /** A real ending replaces the guess, and nothing of that run may be revived afterwards. */
   drop(id: string): void {
     this.wakes.delete(id)
+    this.expired.delete(id)
   }
 
   /** Settle the wakes that ran out before anyone reads the row; no further frame need arrive. */
-  settleExpired(now: number): void {
-    for (const wake of this.wakes.values()) {
-      wake.at ??= now + CLAUDE_CHILD_WAKE_LEASE_MS
+  settleExpired(): void {
+    if (this.wakes.size === 0) {
+      return
     }
-    const due = [...this.wakes].filter(([, wake]) => wake.at! <= now)
+    const now = this.now()
+    const due = [...this.wakes].filter(([, wake]) => wake.at <= now)
     for (const [ownerId, wake] of due) {
       this.wakes.delete(ownerId)
       this.host.restore(ownerId, wake.owner)
@@ -82,13 +90,11 @@ export class ClaudeChildWake {
     }
   }
 
-  /** The next moment a wake stops guessing; the host rests the row then. */
+  /** The next moment, on the monotonic clock, a wake stops guessing; the host restates the row then. */
   earliestExpiry(): number | undefined {
     let earliest: number | undefined
     for (const { at } of this.wakes.values()) {
-      if (at !== undefined) {
-        earliest = earliest === undefined ? at : Math.min(earliest, at)
-      }
+      earliest = earliest === undefined ? at : Math.min(earliest, at)
     }
     return earliest
   }

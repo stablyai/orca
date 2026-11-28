@@ -4,7 +4,7 @@ import {
   taskAliasId,
   taskId
 } from '../background-tasks/claude-background-task-frames'
-import { claudeRosterEntries, type DecodedClaudeTask } from './claude-child-work-evidence'
+import type { DecodedClaudeTask } from './claude-child-work-evidence'
 
 /** The roster entries a background-tasks frame starts or refreshes: a subagent's task, or one already
  *  running here that Claude has moved to the background. The decoder still checks each entry against
@@ -30,19 +30,6 @@ export function claudeRosterStarts(
       ? [[id, task]]
       : []
   })
-}
-
-/** A roster entry that reports the owner running proves the provider resumes it. One that does not
- *  says nothing about the resume, so it must not revive an owner the lease settled. */
-export function claudeRosterConfirmations(
-  message: Record<string, unknown>
-): { id: string; task: Record<string, unknown> }[] {
-  if (!Array.isArray(message.tasks)) {
-    return []
-  }
-  return claudeRosterEntries(message.tasks)
-    .filter((entry) => entry.live)
-    .map(({ id, task }) => ({ id, task }))
 }
 
 /** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
