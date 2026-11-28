@@ -1,0 +1,14 @@
+{
+  "capturedAt": "2026-10-07T02:25:19.030Z",
+  "platform": "win32",
+  "command": [
+    "kiro-cli",
+    "chat",
+    "--tui",
+    "--v3"
+  ],
+  "cols": 120,
+  "rows": 32,
+  "note": "Kiro CLI 2.27.1 TUI on the V3 engine (`kiro-cli chat --tui --v3`), Windows ConPTY, IAM Identity Center account, empty folder, model claude-opus-5.5. One prompt typed at 10s (\"Reply with just the word hi\"); the turn runs to the idle composer and --duration 45 ends the capture. OSC titles appear only before the first paint: ConPTY's executable path, a static `kiro`, then `Windows PowerShell`. None through working, done or idle.",
+  "exitCode": 1
+}
