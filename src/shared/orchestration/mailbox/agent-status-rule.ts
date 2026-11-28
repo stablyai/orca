@@ -1,3 +1,3 @@
 /** The one rule for where work stands, said the same way in every help, preamble and guide. */
 export const AGENT_STATUS_RULE =
-  'Where work stands lives on its task (worker) or item (bot): update yours, read theirs; that wakes no one. Mail another agent only to ask, hand off, answer or escalate; that wakes it.'
+  'Status never wakes: put where your work stands on your item (bot) or task (worker), and read theirs there. To answer an agent waiting on you, reply to its message (orca orchestration reply --id <msg>); to make one act, send a question or handoff.'

@@ -147,6 +147,23 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     expect(mail.runtime.notifyMessageArrived).toHaveBeenCalledTimes(1)
   })
 
+  it("a status answering the other bot's open question wakes it as the reply", async () => {
+    const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question', body: 'b' })
+    const receipt = await mail.sent(DOCS_CHAT, {
+      to: 'bot:Ranger',
+      type: 'status',
+      subject: 'PR is ready',
+      body: 'merge it'
+    })
+
+    expect(messageCount()).toEqual({ n: 2 })
+    expect(mail.runtime.notifyMessageArrived).toHaveBeenCalledTimes(2)
+    const answer = mail.db.getMessageById(receipt.message.id)
+    expect(answer?.reply_to).toBe(asked.message.id)
+    expect(answer?.to_handle).toBe(`orca_session_id:${RANGER_THREAD}`)
+    expect(receipt.next).toContain(`orca orchestration reply --id ${asked.message.id}`)
+  })
+
   it('a reply to a question still wakes the asker', async () => {
     const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question', body: 'b' })
     await mail.reply(DOCS_CHAT, { id: asked.message.id, body: 'yes' })

@@ -14,6 +14,8 @@ import type { BotItemRecord } from '../../../../../bots/bot-items-schema'
 import type { BotItemsRemote } from '../../../../../bots/bot-items-ops'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { RpcContext } from '../../../core'
+import { replyToWaiting, waitingRequest } from './bot-status-reply'
 import {
   creatorSession,
   refuse,
@@ -83,16 +85,16 @@ export function assertNoStatusFiles(
 /** A bot's own status send is recorded instead of sent, after the checks any bot request passes;
  *  null for any other mail. */
 export async function statusNoteInstead(
-  context: { runtime: OrcaRuntimeService; recordMutationReceipt?: (receipt: unknown) => void },
+  context: RpcContext,
   mail: {
-    params: StatusMail & { type?: string }
+    params: StatusMail & { type?: string; threadId?: string }
     messageId?: string
     to: string
     images?: readonly string[]
   },
   acting: ActingSender,
   receiving: ReceivingBot
-): Promise<{ receipt: BotStatusNoteReceipt; nudge: () => void } | null> {
+): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const { bot, sessionId } = acting
   if (!bot || !sessionId || !isRecordedStatus(mail, sessionId)) {
@@ -111,6 +113,15 @@ export async function statusNoteInstead(
     : botNotFound(receiving.bot.name, runtime.bots.list())
   if (refusal || !target) {
     return refuse(refusal ?? botNotFound(receiving.bot.name, runtime.bots.list()))
+  }
+  // An answer to what the other bot is waiting on wakes it, as a reply.
+  const db = runtime.getOrchestrationDb()
+  const waiting = waitingRequest(db, target.id, bot.id, sessionId, mail.params.threadId)
+  if (waiting) {
+    const body = mail.params.body?.trim()
+      ? `${mail.params.subject}\n\n${mail.params.body}`
+      : mail.params.subject
+    return { receipt: await replyToWaiting(context, waiting, target.name, body), nudge: () => {} }
   }
   const receipt = await recordBotStatusNote(runtime, { ...acting, bot, sessionId }, target, {
     ...mail.params,
@@ -141,7 +152,7 @@ async function recordBotStatusNote(
     recorded: { item: item.number, bot: owner },
     messages: [],
     recipients: 0,
-    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff.`
+    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff; to answer a question or handoff of theirs, reply to it with \`orca orchestration reply --id <msg>\`.`
   }
 }
 
@@ -215,12 +226,12 @@ function pickOne(open: OpenItems): BotItemRecord {
   if (items.length === 0) {
     throw new OrchestrationError(
       'invalid_argument',
-      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; otherwise there is nothing to send, so tell your owner that, and don't make an item to hold it or offer to send it as a message."
+      "No open item to record this status on, so nothing was sent. If the other bot needs to act, use --type question or --type handoff; if it is waiting on your answer, reply to its message with `orca orchestration reply --id <msg>`; otherwise there is nothing to send, so tell your owner that, and don't make an item to hold it or offer to send it as a message."
     )
   }
   throw new OrchestrationError(
     'invalid_argument',
-    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. Send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it or offer to send it as a message.`
+    `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. To answer a bot waiting on you, reply to its message (\`orca orchestration reply --id <msg>\`). Otherwise send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it or offer to send it as a message.`
   )
 }
 

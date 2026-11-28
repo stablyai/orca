@@ -54,7 +54,8 @@ type SendParamsInput = Pick<
 
 /** Mail that reaches a bot, by any address, is held to who the sending turn is for; null for other mail. */
 export async function sendToBot(
-  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller' | 'recordMutationReceipt'>,
+  /** The send's own context: a status that answers a waiting bot is sent as a reply with it. */
+  context: RpcContext,
   mail: ActingMail & {
     params: SendParamsInput
     from: string
