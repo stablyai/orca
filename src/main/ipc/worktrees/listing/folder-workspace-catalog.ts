@@ -54,11 +54,15 @@ export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const writeMeta = folderMetaWriter(store, repo)
   const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
-  const ids = Object.keys(allMeta).filter((worktreeId) =>
-    isFolderWorkspaceIdForRepo(repo, worktreeId)
-  )
-  if (!ids.includes(rootId)) {
-    ids.unshift(rootId)
+  const ids: string[] = [rootId]
+  for (const worktreeId in allMeta) {
+    if (
+      worktreeId !== rootId &&
+      Object.hasOwn(allMeta, worktreeId) &&
+      isFolderWorkspaceIdForRepo(repo, worktreeId)
+    ) {
+      ids.push(worktreeId)
+    }
   }
 
   return ids

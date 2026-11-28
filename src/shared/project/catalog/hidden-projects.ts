@@ -51,6 +51,17 @@ export function indexHiddenProjects(
   if (cached?.defaultHostId === defaultHostId) {
     return cached.hidden
   }
+  let anyHidden = false
+  for (let i = 0; i < repos.length; i += 1) {
+    if (isRepoHidden(repos[i])) {
+      anyHidden = true
+      break
+    }
+  }
+  if (!anyHidden) {
+    cache.set(repos, { defaultHostId, hidden: NO_HIDDEN_PROJECTS })
+    return NO_HIDDEN_PROJECTS
+  }
   const hiddenKeys = new Set<string>()
   const hostsByRepoId = new Map<string, ExecutionHostId[]>()
   const listedRepoIds = new Set<string>()

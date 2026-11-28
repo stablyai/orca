@@ -6,8 +6,14 @@ import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findCopyRows } from './worktree-diff-comments-selector'
 import { diffCommentOwnerKey, findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
 import type { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
-import { readDiffCommentsFromHost, writeDiffCommentsToHost } from './diff-comment-host-write'
+import { writeDiffCommentsToHost } from './diff-comment-host-write'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { latestReconciled, recordReconciledSwap } from './diff-comment-reconciled-arrays'
+import {
+  clearDiffCommentFailureOwner,
+  recordDiffCommentFailureOwner,
+  resolveDiffCommentsBaseAfterFailure
+} from './diff-comment-failure-owners'
 
 export function normalizeDiffComment(comment: DiffComment): DiffComment {
   const rawSource = (comment as { source?: unknown }).source
@@ -59,10 +65,6 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 // Why: bumped on every re-seed, so an in-flight write can tell whether the floor it captured is still the current one.
 const floorSeedEpochByQueue = new Map<string, number>()
 
-// Why: a failed write may still have landed, so until a write succeeds this copy can't name what the host holds.
-// The ids are every note this copy listed or tried to write since: only those are its to change on the host.
-const ownNoteIdsAfterFailure = new Map<string, Set<string>>()
-
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
   owner: DiffCommentOwner
@@ -84,6 +86,55 @@ function persistQueueKey(
   return folderExecutionHostId ? `${folderExecutionHostId}\0${worktreeId}` : worktreeId
 }
 
+function enqueueDiffCommentWrite(queueKey: string, run: () => Promise<void>): Promise<void> {
+  const prior = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
+  const next = prior.then(run, run)
+  persistQueueByWorktree.set(queueKey, next)
+  const cleanup = (): void => {
+    if (persistQueueByWorktree.get(queueKey) === next) {
+      persistQueueByWorktree.delete(queueKey)
+      for (const key of floorKeysByQueue.get(queueKey) ?? []) {
+        lastPersistedByQueue.delete(key)
+        lastMutationNextByQueue.delete(key)
+        floorSeedEpochByQueue.delete(key)
+      }
+      floorKeysByQueue.delete(queueKey)
+    }
+  }
+  next.then(cleanup, cleanup)
+  return next
+}
+
+export function enqueueDiffCommentHostWrite(
+  owner: DiffCommentOwner,
+  run: () => Promise<void>
+): Promise<void> {
+  return enqueueDiffCommentWrite(
+    persistQueueKey(owner.worktreeId, folderExecutionHostIdOf(owner)),
+    run
+  )
+}
+
+export function reconcileDiffCommentQueueFloor(
+  set: Parameters<StateCreator<AppState>>[0],
+  owner: DiffCommentOwner,
+  reconcile: (notes: DiffComment[]) => DiffComment[] | null
+): void {
+  // A queued optimistic write must diff against the same receipt result as the visible list.
+  const floorKey = diffCommentOwnerKey(owner)
+  const floor = lastPersistedByQueue.get(floorKey)
+  if (floor) {
+    lastPersistedByQueue.set(floorKey, reconcile(floor) ?? floor)
+  }
+  const mutation = mutateDiffComments(set, owner, reconcile)
+  if (mutation?.previous) {
+    recordReconciledSwap(mutation.previous, mutation.next)
+  }
+  if (mutation && lastMutationNextByQueue.get(floorKey) === mutation.previous) {
+    lastMutationNextByQueue.set(floorKey, mutation.next)
+  }
+}
+
 // Why: chain each write onto the prior promise so writes land in call order; both then handlers keep the chain alive past a failure.
 // Why: queued work reads the latest list at dequeue time, and the returned promise settles for THIS write.
 // Why: this promise rejects only after this write's rollback has been applied — callers must not roll back themselves.
@@ -98,7 +149,6 @@ export function enqueueDiffCommentPersist(
   // Copies sharing an id share one queue; each keeps its own floor, so a floor never restores another copy.
   const floorKey = diffCommentOwnerKey(mutation.owner)
   floorKeysByQueue.set(queueKey, (floorKeysByQueue.get(queueKey) ?? new Set()).add(floorKey))
-  const prior = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
   // Why: an idle queue means disk still holds the pre-mutation list, so that list is this burst's rollback floor.
   // If previous differs from last mutation’s next, hydration/refresh/push broke the chain; reseed floor before enqueue makes has true.
   const chainBroken = lastMutationNextByQueue.get(floorKey) !== mutation.previous
@@ -122,32 +172,7 @@ export function enqueueDiffCommentPersist(
         : mutation.previous) ?? []
     ).map(normalizeDiffComment)
     let sent: DiffComment[] = []
-    // What this copy last saw on disk; the host merges only the edits since then.
-    // Why not always a promise: a write with nothing to re-read leaves in the turn it was dequeued in.
-    const baseFor = (
-      requested: DiffComment[]
-    ): DiffComment[] | undefined | Promise<DiffComment[]> => {
-      sent = requested
-      const own = ownNoteIdsAfterFailure.get(floorKey)
-      const owner = mutation.owner
-      if (!own) {
-        return floor
-      }
-      // Why no base: there is no folder re-read helper, and a failed write may still have landed,
-      // so the floor may not be what the host holds; the host replaces the list instead.
-      return owner.kind === 'worktree' ? rereadBase(owner, own, requested) : undefined
-    }
-    const rereadBase = async (
-      owner: Extract<DiffCommentOwner, { kind: 'worktree' }>,
-      own: ReadonlySet<string>,
-      requested: DiffComment[]
-    ): Promise<DiffComment[]> => {
-      // After a failed write the host is asked what it holds: its notes this copy never listed are
-      // another device's and stay; the rest become what this copy shows.
-      const held = await readDiffCommentsFromHost(owner)
-      const mine = new Set([...own, ...[...floor, ...requested].map((note) => note.id)])
-      return held.filter((note) => mine.has(note.id)).map(normalizeDiffComment)
-    }
+    let writeAttempted = false
     try {
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder' && mutation.owner.kind === 'folder') {
@@ -156,13 +181,6 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = folderWorkspace.diffComments
-        const requested = (stateList ?? []).map(normalizeDiffComment)
-        const base = baseFor(requested)
-        await writeDiffCommentsToHost(
-          mutation.owner,
-          requested,
-          base instanceof Promise ? await base : base
-        )
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
         // Why: the copy these notes were made on is gone; never send another's list.
@@ -170,14 +188,23 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = rows.at(-1)?.diffComments
-        const requested = (stateList ?? []).map(normalizeDiffComment)
-        const base = baseFor(requested)
-        await writeDiffCommentsToHost(
-          mutation.owner,
-          requested,
-          base instanceof Promise ? await base : base
-        )
+      } else {
+        return
       }
+      const requested = (stateList ?? []).map(normalizeDiffComment)
+      sent = requested
+      const base = resolveDiffCommentsBaseAfterFailure({
+        floorKey,
+        owner: mutation.owner,
+        floor,
+        requested,
+        normalize: normalizeDiffComment
+      })
+      writeAttempted = true
+      await writeDiffCommentsToHost(mutation.owner, {
+        diffComments: requested,
+        diffCommentsBase: base instanceof Promise ? await base : base
+      })
     } catch (err) {
       // Why: converge to what actually landed; rollback's identity guard no-ops when a later mutation owns the array.
       // Why: `has()`, not `get() ?? …` — an absent entry and a legitimately-`undefined` floor are different things.
@@ -185,37 +212,23 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
       rollback(set, worktreeId, rollbackFloor, mutation)
-      const own = ownNoteIdsAfterFailure.get(floorKey) ?? new Set<string>()
-      for (const note of [...floor, ...sent]) {
-        own.add(note.id)
-      }
-      ownNoteIdsAfterFailure.set(floorKey, own)
+      recordDiffCommentFailureOwner({
+        state: get(),
+        floorKey,
+        owner: mutation.owner,
+        writeAttempted,
+        floor,
+        sent
+      })
       throw err
     }
-    ownNoteIdsAfterFailure.delete(floorKey)
+    clearDiffCommentFailureOwner(floorKey)
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)
     }
   }
-  const next = prior.then(run, run)
-  persistQueueByWorktree.set(queueKey, next)
-  // Why: clear the queue entry only if still the tail, so later enqueues chain onto the real in-flight promise.
-  // Why: then(cleanup, cleanup) not finally, so a rejection is consumed here rather than re-thrown as unhandledRejection.
-  const cleanup = (): void => {
-    if (persistQueueByWorktree.get(queueKey) === next) {
-      persistQueueByWorktree.delete(queueKey)
-      // Why: tail-guarded only; a mid-burst delete would strand the remaining writes of the burst without a floor.
-      for (const key of floorKeysByQueue.get(queueKey) ?? []) {
-        lastPersistedByQueue.delete(key)
-        lastMutationNextByQueue.delete(key)
-        floorSeedEpochByQueue.delete(key)
-      }
-      floorKeysByQueue.delete(queueKey)
-    }
-  }
-  next.then(cleanup, cleanup)
-  return next
+  return enqueueDiffCommentWrite(queueKey, run)
 }
 
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
@@ -280,8 +293,9 @@ function rollback(
   set: Parameters<StateCreator<AppState>>[0],
   worktreeId: string,
   previous: DiffComment[] | undefined,
-  { next: expectedCurrent, owner }: DiffCommentMutation
+  { next, owner }: DiffCommentMutation
 ): void {
+  const expectedCurrent = latestReconciled(next)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   set((s) => {
     const scope = parseWorkspaceKey(worktreeId)

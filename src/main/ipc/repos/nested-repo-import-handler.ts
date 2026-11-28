@@ -9,7 +9,7 @@ import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/
 import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
-import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
+import { inspectGitRepoAccessAsync } from '../../git/repositories/discovery/repo-detection'
 import { getRepoName } from '../../git/repositories/repository-name'
 import {
   createNestedProjectGroupResolver,
@@ -36,9 +36,10 @@ function sanitizeNestedRepoImportError(context: string, error: unknown): string 
 export function registerNestedRepoImportHandler(
   mainWindow: BrowserWindow,
   store: Store,
-  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata'],
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle(
+  ipc.handle(
     'projectGroups:importNested',
     async (_event, rawArgs: unknown): Promise<ProjectGroupImportResult> => {
       const args = parseProjectGroupIpcArgs(
@@ -93,7 +94,12 @@ export function registerNestedRepoImportHandler(
             continue
           }
           await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-          if (!(await isGitRepoAsync(repoPath))) {
+          const gitAccess = await inspectGitRepoAccessAsync(repoPath)
+          if (gitAccess.ownershipError) {
+            results.push({ path: repoPath, status: 'failed', error: gitAccess.ownershipError })
+            continue
+          }
+          if (!gitAccess.isRepo) {
             results.push({
               path: repoPath,
               status: 'failed',

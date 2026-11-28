@@ -48,7 +48,9 @@ export type HostAccountSignInStatus = {
 // One English table for sign-in failures Orca names itself; the login's own errors stay uncoded.
 export const HOST_ACCOUNT_SIGN_IN_FAILURE_COPY = {
   ownerSilent: 'The device that started this sign-in stopped answering.',
-  superseded: 'An account change on this host stopped the sign-in. Start it again.'
+  superseded: 'An account change on this host stopped the sign-in. Start it again.',
+  noPrompt:
+    "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again."
 } as const
 
 export type HostAccountSignInFailureCode = keyof typeof HOST_ACCOUNT_SIGN_IN_FAILURE_COPY

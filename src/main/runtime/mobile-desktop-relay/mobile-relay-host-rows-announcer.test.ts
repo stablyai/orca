@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type { DescribedRelayHost } from './mobile-relay-host-descriptions'
-import { RelayHostRowsAnnouncer } from './mobile-relay-host-rows-announcer'
+import {
+  RelayHostRowsAnnouncer,
+  UNACKNOWLEDGED_NOTICE_RELEASE_MS
+} from './mobile-relay-host-rows-announcer'
 
 type WatchCallbacks = Parameters<MobileDesktopRelayHosts['watchChanges']>[2]
 
@@ -188,6 +191,70 @@ describe('RelayHostRowsAnnouncer', () => {
     second.releases[0]?.()
     expect(watches[1]?.close).not.toHaveBeenCalled()
     first.releases[0]?.()
+    expect(watches[1]?.close).toHaveBeenCalledTimes(1)
+  })
+
+  it('checks only the named host on keyed status events instead of scanning every held stream', async () => {
+    const currentChecks: string[] = []
+    const status: { listener: StatusListener | null } = { listener: null }
+    const announcer = new RelayHostRowsAnnouncer(
+      {
+        watchChanges: (target, _expected, _callbacks) => ({
+          close: vi.fn(),
+          current: () => {
+            currentChecks.push(target.environmentId)
+            return true
+          }
+        }),
+        onStatusChanged: (listener) => {
+          status.listener = listener
+          return () => {
+            status.listener = null
+          }
+        },
+        describe: async () => []
+      },
+      vi.fn()
+    )
+    const phone = reader('phone-1').reader
+    announcer.hold(host, phone)
+    announcer.hold({ ...host, hostId: 'runtime:env-2', environmentId: 'env-2' }, phone)
+    announcer.hold({ ...host, hostId: 'runtime:env-3', environmentId: 'env-3' }, phone)
+    await vi.runAllTimersAsync()
+    currentChecks.length = 0
+
+    // Offline keyed notice is an immediate O(1) no-op.
+    status.listener?.({ environmentId: 'env-2', inContact: false })
+    expect(currentChecks).toEqual([])
+
+    // Online keyed notice checks only the named host.
+    status.listener?.({ environmentId: 'env-2', inContact: true })
+    expect(currentChecks).toEqual(['env-2'])
+  })
+
+  it('releases watches immediately on explicit phone release and after an unacknowledged notice', async () => {
+    const { hosts, watches } = fakeHosts()
+    const changed = vi.fn()
+    const announcer = new RelayHostRowsAnnouncer(hosts, changed)
+    const phone = reader('phone-1').reader
+    announcer.hold(host, phone)
+    await vi.runAllTimersAsync()
+    expect(watches).toHaveLength(1)
+
+    announcer.release('phone-1')
+    expect(watches[0]?.close).toHaveBeenCalledTimes(1)
+
+    // Re-holding opens a fresh watch; if an announcement goes unread, it releases automatically.
+    announcer.hold(host, phone)
+    await vi.runAllTimersAsync()
+    expect(watches).toHaveLength(2)
+
+    watches[1]?.callbacks.onRowsChanged?.()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(changed).toHaveBeenCalledTimes(1)
+    expect(watches[1]?.close).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(UNACKNOWLEDGED_NOTICE_RELEASE_MS)
     expect(watches[1]?.close).toHaveBeenCalledTimes(1)
   })
 })

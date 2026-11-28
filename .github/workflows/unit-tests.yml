@@ -11,7 +11,7 @@ on:
       runner:
         description: Hosted runner for the unit shards.
         required: false
-        default: blacksmith-4vcpu-ubuntu-2404
+        default: ubuntu-24.04-arm
         type: string
 
       shards:
@@ -76,11 +76,6 @@ jobs:
 
       - name: Install Electron package binary for tests
         run: node config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs
-
-      - name: Verify Blacksmith unit runner environment
-        if: runner.os == 'Linux' && startsWith(inputs.runner, 'blacksmith-')
-        run: |
-          ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
 
       - name: Find installed Bun
         id: installed-bun
@@ -152,7 +147,7 @@ jobs:
           export ORCA_SHARD_SOURCE_SHA
           node config/scripts/test-runtime/execution-policy/run-vitest.mjs run --config config/vitest.config.ts \
             --shard=${{ matrix.shard.index }}/${{ matrix.shard.count }} \
-            ${{ inputs.runner == 'blacksmith-8vcpu-ubuntu-2404' && '--maxWorkers=8' || (runner.arch == 'ARM64' || inputs.runner == 'blacksmith-4vcpu-ubuntu-2404' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
+            ${{ (runner.arch == 'ARM64' || inputs.runner == 'ubuntu-24.04') && '--maxWorkers=4' || '' }}
 
       - name: Seal unit module cache
         id: module-cache-seal

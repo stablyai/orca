@@ -1,13 +1,12 @@
 import { Text, View } from 'react-native'
 import type { MobileComposerSource } from '../../source-selection/use-mobile-composer-source'
-import { colors, spacing } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import { LIST_ROW_PADDING, ListGroup, ListRow } from '../../../components/list/ListGroup'
-import { newWorktreeFormStyles } from './new-worktree-form-styles'
+import { newWorktreeFormStylesSheet } from './new-worktree-form-styles'
 
 type Props = {
   composer: MobileComposerSource
@@ -16,7 +15,8 @@ type Props = {
 
 // Show editable Name after source pill; branch override/reuse follow desktop’s advanced composer fields.
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
-  useMobileColorScheme()
+  const newWorktreeFormStyles = useThemedStyles(newWorktreeFormStylesSheet)
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')
@@ -108,7 +108,7 @@ export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Pr
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   hint: {
     fontSize: 13,
     color: colors.textSecondary,

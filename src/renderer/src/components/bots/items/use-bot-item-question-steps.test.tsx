@@ -32,11 +32,15 @@ afterEach(cleanup)
 const NOW = 1_800_000_000_000
 const HOSTS = 'Use these hostnames?'
 const GO = 'Go ahead without a separate OK?'
+const PLAN = 'Post the plan first?'
 const ask = {
-  questions: [HOSTS, GO].map((prompt) => ({ prompt, options: [{ label: 'Yes' }, { label: 'No' }] }))
+  questions: [HOSTS, GO, PLAN].map((prompt) => ({
+    prompt,
+    options: [{ label: 'Yes' }, { label: 'No' }]
+  }))
 }
 
-// An item asking two questions, with its ask's comment as the host stores and reads it.
+// An item asking three questions, with its ask's comment as the host stores and reads it.
 const asking: BotItemEvent = {
   id: 'e2',
   kind: 'commented',
@@ -123,32 +127,129 @@ function steps(uid: string, own = asking, shown = item) {
   return { hook, posted }
 }
 
-it('posts nothing on a pick, the last one too; Send posts every pick as one comment', () => {
-  const { hook, posted } = steps('picks')
+it.each(['pick', 'box'] as const)(
+  'holds answers until the last open line has one, then posts them all as one comment (%s)',
+  (last) => {
+    const { hook, posted } = steps(`picks-${last}`)
+    act(() => hook.result.current.steps!.pick(2, 'Yes'))
+    act(() => hook.result.current.steps!.pick(0, 'Yes'))
+    expect(posted).toEqual([])
+    const answer = {
+      pick: () => hook.result.current.steps!.pick(1, 'No'),
+      box: () => void hook.result.current.fromBox('No', [], hook.result.current.waitingLine!.id)
+    }[last]
+    act(answer)
+    expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes`])
+    expect(posted[0]!.intent?.answers).toEqual(['Yes', 'No', 'Yes'])
+    expect(posted[0]!.skipped).toBeUndefined()
+  }
+)
+
+it.each(['folded', 'remounted'] as const)(
+  "waits for a reopened line's new answer before posting on the last open line (%s)",
+  (how) => {
+    const uid = `reopen-then-last-${how}`
+    const words = 'only the internal ones'
+    let run = reopenedDraft(uid, words)
+    if (how === 'remounted') {
+      run.hook.unmount()
+      run = steps(uid)
+    } else {
+      // Another line reopened and folded by its own pick: the draft keeps its line.
+      act(() => run.hook.result.current.steps!.reopen(1))
+      act(() => run.hook.result.current.steps!.pick(1, 'No'))
+    }
+    act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
+    expect(run.posted).toEqual([])
+    enter(run.hook, words)
+    expect(run.posted.map(({ text }) => text)).toEqual([
+      `${HOSTS} → ${words}\n${GO} → No\n${PLAN} → Yes`
+    ])
+  }
+)
+
+it("keeps a reopened line waiting when the box's Enter answers another line", () => {
+  const uid = 'reopen-enter-other'
+  const { hook, posted } = steps(uid)
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
-  act(() => hook.result.current.steps!.pick(1, 'No'))
+  const words = 'Wait for the dry run'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  act(() => hook.result.current.steps!.reopen(0))
+  enter(hook, words)
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: '' }, 'immediate')
+  )
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
   expect(posted).toEqual([])
-  let outcome = ''
-  act(() => {
-    outcome = hook.result.current.steps!.send()
-  })
-  expect(outcome).toBe('sent')
-  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No`])
-  expect(posted[0]!.intent?.answers).toEqual(['Yes', 'No'])
+  expect(hook.result.current.steps!.reopened).toBe(0)
 })
 
-it('swaps a pick for another, and clears it when picked again', () => {
-  const { hook } = steps('swap')
+it("holds the set while the box's unsent words name the line a chip picks", () => {
+  const uid = 'draft-then-chip'
+  const words = 'Actually use private hosts'
+  const { hook, posted } = reopenedDraft(uid, words)
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  expect(posted).toEqual([])
+  expect(readNativeChatComposerDraft(botItemCommentDraftScope(bot, uid)).text).toBe(words)
+})
+
+it('posts the set once a reopened line is folded back by its own pick', () => {
+  const { hook, posted } = steps('reopen-confirm-last')
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  act(() => hook.result.current.steps!.reopen(0))
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
+  expect(posted).toEqual([])
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes`])
+})
+
+it('swaps a pick for another, and keeps it when picked again', () => {
+  const { hook, posted } = steps('swap')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual(['No', null])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    null,
+    null
+  ])
+  act(() => hook.result.current.steps!.reopen(0))
   act(() => hook.result.current.steps!.pick(0, 'No'))
-  expect(hook.result.current.steps!.picks).toEqual([null, null])
-  let outcome = ''
-  act(() => {
-    outcome = hook.result.current.steps!.send()
-  })
-  expect(outcome).toBe('empty')
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    null,
+    null
+  ])
+  expect(hook.result.current.steps!.reopened).toBeNull()
+  act(() => hook.result.current.steps!.send())
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → No`])
+})
+
+it('answers a reopened line from the box: Enter replaces its pick, and Send posts once', () => {
+  const uid = 'reopen-typed'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  const words = 'only the internal ones'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine!.id))
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
+  expect(hook.result.current.steps!.reopened).toBeNull()
+  act(() => hook.result.current.steps!.send())
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${words}\n${GO} → No`])
 })
 
 it("holds a typed answer as its line's pick, and names the next open line", () => {
@@ -159,12 +260,132 @@ it("holds a typed answer as its line's pick, and names the next open line", () =
   expect(posted).toEqual([])
   expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
     'the internal ones',
+    null,
     null
   ])
   expect(hook.result.current.waitingLine?.line).toBe(GO)
   act(() => hook.result.current.steps!.send())
   expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → the internal ones`])
-  expect(posted[0]?.skipped).toEqual([1])
+  expect(posted[0]?.skipped).toEqual([1, 2])
+})
+
+it('keeps a started draft on its own line when another line reopens', () => {
+  const uid = 'reopen-keeps-draft'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  const words = 'Wait for the dry run'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.waitingLine?.line).toBe(GO)
+  act(() => hook.result.current.steps!.pick(0, 'No'))
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    'No',
+    words,
+    null
+  ])
+})
+
+it('shows "Replying to" again on a reopened line whose × was closed', () => {
+  const uid = 'reopen-shows-reply'
+  const { hook, posted } = steps(uid)
+  act(() => hook.result.current.steps!.pick(1, 'No'))
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  act(() => hook.result.current.replyMark.hide())
+  act(() => hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => hook.result.current.steps!.reopen(0))
+  expect(hook.result.current.replyMark.hidden).toBe(false)
+  const words = 'only the internal ones'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
+})
+
+// Both picked, line 0 reopened, and its replacement started in the box.
+function reopenedDraft(uid: string, words: string) {
+  const run = steps(uid)
+  act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => run.hook.result.current.steps!.pick(1, 'No'))
+  act(() => run.hook.result.current.steps!.reopen(0))
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  return run
+}
+
+function enter(hook: ReturnType<typeof steps>['hook'], words: string): void {
+  const { replyMark, waitingLine } = hook.result.current
+  act(() =>
+    hook.result.current.fromBox(words, [], replyMark.hidden ? null : (waitingLine?.id ?? null))
+  )
+}
+
+it("keeps a reopened line's draft on it when another line's pick changes", () => {
+  const words = 'only the internal ones'
+  const { hook, posted } = reopenedDraft('reopen-other-pick', words)
+  act(() => hook.result.current.steps!.pick(1, 'Yes'))
+  expect(hook.result.current.steps!.reopened).toBe(0)
+  enter(hook, words)
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'Yes',
+    null
+  ])
+})
+
+it("keeps a reopened line's draft on it across a restart", () => {
+  const uid = 'reopen-restart'
+  const words = 'only the internal ones'
+  reopenedDraft(uid, words).hook.unmount()
+  const { hook, posted } = steps(uid)
+  expect(hook.result.current.waitingLine?.line).toBe(HOSTS)
+  enter(hook, words)
+  expect(posted).toEqual([])
+  expect(hook.result.current.steps!.picks.map((pick) => pick?.words ?? null)).toEqual([
+    words,
+    'No',
+    null
+  ])
+})
+
+it('posts a plain comment typed after a restart drops a reopened line, the picks along', () => {
+  const uid = 'reopen-folded-restart'
+  let run = steps(uid)
+  // Every line picked posts at once; with no send on its way (as after a refusal), the picks stay held.
+  act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => run.hook.result.current.steps!.pick(1, 'No'))
+  act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
+  run.posted.length = 0
+  act(() => run.hook.result.current.steps!.reopen(0))
+  run.hook.unmount()
+  run = steps(uid)
+  const words = 'Thanks, looks good'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(run.hook.result.current.waitingLine).toBeNull()
+  enter(run.hook, words)
+  expect(run.posted.map(({ text }) => text)).toEqual([
+    `${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes\n${words}`
+  ])
 })
 
 it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
@@ -180,11 +401,12 @@ it('holds an answer with images, files and skills like a pick; Send posts them a
       [skill]
     )
   )
-  // Held, both: nothing posts until Send.
+  // Held, both, with a line still open: nothing posts until Send.
   expect(posted).toEqual([])
   expect(hook.result.current.steps!.picks.map((pick) => pick?.images)).toEqual([
     ['/tmp/a.png'],
-    ['/tmp/b.png', '/tmp/c.png']
+    ['/tmp/b.png', '/tmp/c.png'],
+    undefined
   ])
   act(() => hook.result.current.steps!.send())
   expect(posted).toHaveLength(1)
@@ -196,16 +418,16 @@ it('holds an answer with images, files and skills like a pick; Send posts them a
   expect(posted[0]!.skills).toEqual([skill])
 })
 
-it('replaces an image answer whose words match a quick reply with the reply alone, never clearing it', () => {
+it('replaces an image answer whose words match a quick reply with the reply alone', () => {
   const { hook } = steps('replace-image')
   act(() => hook.result.current.fromBox('Yes [Image #1]', ['/tmp/a.png'], `e2:0`))
   act(() => hook.result.current.fromBox('Yes', ['/tmp/b.png'], `e2:1`))
   // Line 1 holds "Yes" with an image: picking the Yes reply replaces it, as for typed words.
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
   expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
-  // The reply alone, picked again, clears.
+  // The reply alone, picked again, stays.
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
-  expect(hook.result.current.steps!.picks[1]).toBeNull()
+  expect(hook.result.current.steps!.picks[1]).toEqual(botItemHeldAnswer('Yes'))
 })
 
 it('keeps in the box an answer whose images the held ones would take past one comment', () => {
@@ -229,7 +451,7 @@ it('posts words with no line named at once, the picks along, never answering a l
   act(() => hook.result.current.steps!.pick(1, 'Yes'))
   act(() => hook.result.current.fromBox(`${HOSTS} → old answer`, [], null))
   expect(posted.map(({ text }) => text)).toEqual([`${GO} → Yes\n> ${HOSTS} → old answer`])
-  expect(posted[0]!.intent?.answers).toEqual([null, 'Yes'])
+  expect(posted[0]!.intent?.answers).toEqual([null, 'Yes', null])
 })
 
 it('keeps a line named by its own Type your answer in an empty box', () => {
@@ -262,7 +484,7 @@ it('binds a new draft to the displayed question after another client answers its
     updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
   )
   act(() => hook.result.current.fromBox(words, [], hook.result.current.waitingLine?.id ?? null))
-  expect(hook.result.current.steps!.picks).toEqual([null, botItemHeldAnswer(words)])
+  expect(hook.result.current.steps!.picks).toEqual([null, botItemHeldAnswer(words), null])
   expect(posted).toEqual([])
 })
 
@@ -270,7 +492,7 @@ it('locks the lines of a send on its way, and Send then posts nothing', () => {
   const { hook, posted } = steps('pending')
   act(() => hook.result.current.steps!.pick(0, 'Yes'))
   act(() => hook.result.current.steps!.pick(1, 'No'))
-  act(() => hook.result.current.steps!.send())
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
   const intent = posted[0]!.intent!
   const entry: BotItemPendingComment = {
     event: {
@@ -291,7 +513,7 @@ it('locks the lines of a send on its way, and Send then posts nothing', () => {
   }
   hook.rerender({ pending: [entry] })
   expect(hook.result.current.steps!.lines).toEqual([])
-  expect(hook.result.current.sent.get(intent.askId)).toEqual(['Yes', 'No'])
+  expect(hook.result.current.sent.get(intent.askId)).toEqual(['Yes', 'No', 'Yes'])
   let outcome = ''
   act(() => {
     outcome = hook.result.current.steps!.send()

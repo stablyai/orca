@@ -8,7 +8,6 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { NativeChatLinkPeekProvider } from '@/components/native-chat/links/previews/native-chat-link-peek-context'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
 import {
@@ -75,68 +74,61 @@ function LinkChips({
     return null
   }
   const rest = total - shown
-  // A GitHub chip's hover card finds its repo from the bot's folder on the bot's own host, as a chat's
-  // links find theirs from its worktree.
   return (
-    <NativeChatLinkPeekProvider
-      fileLinkContext={fileContext?.fileLinkContext ?? null}
-      hostId={bot.hostId}
-    >
-      <div className="flex min-w-0 items-end gap-1">
-        {/* Two lines tall, one in a short window; a chip past the last line is clipped, out of Tab and
+    <div className="flex min-w-0 items-end gap-1">
+      {/* Two lines tall, one in a short window; a chip past the last line is clipped, out of Tab and
           the accessibility tree, and "+N" lists it. Only a resize or a chip's own change measures again, never a scroll. */}
-        <ul
-          ref={list}
-          aria-label={t('bots.items.view.links', 'Links')}
-          className="relative flex max-h-[52px] min-w-0 flex-1 flex-wrap gap-1 overflow-hidden [@media(max-height:620px)]:max-h-6"
-        >
-          {rows.map((row, index) => (
-            <li
-              key={row.key}
-              inert={index >= shown}
-              aria-hidden={index >= shown || undefined}
-              className="flex min-w-0 max-w-full"
+      <ul
+        ref={list}
+        aria-label={t('bots.items.view.links', 'Links')}
+        className="relative flex max-h-[52px] min-w-0 flex-1 flex-wrap gap-1 overflow-hidden [@media(max-height:620px)]:max-h-6"
+      >
+        {rows.map((row, index) => (
+          <li
+            key={row.key}
+            inert={index >= shown}
+            aria-hidden={index >= shown || undefined}
+            className="flex min-w-0 max-w-full"
+          >
+            <Chip bot={bot} chat={chat} row={row} fileContext={fileContext} />
+          </li>
+        ))}
+      </ul>
+      {rest > 0 ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="xs"
+              aria-label={t('bots.items.view.moreLinks', '{{count}} more links', {
+                count: rest
+              })}
             >
-              <Chip bot={bot} chat={chat} row={row} fileContext={fileContext} />
-            </li>
-          ))}
-        </ul>
-        {rest > 0 ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                size="xs"
-                aria-label={t('bots.items.view.moreLinks', '{{count}} more links', {
-                  count: rest
-                })}
-              >
-                <span className="tabular-nums">+{rest}</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              align="end"
-              className="w-80"
-              wheelScroll
-              // The list takes focus, not its first row: a focused worker row opens its hover card over
-              // the header. Tab goes on to the rows from here.
-              onOpenAutoFocus={(event) => {
-                event.preventDefault()
-                overflow.current?.focus()
-              }}
+              <span className="tabular-nums">+{rest}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-80"
+            wheelScroll
+            // The list takes focus, not its first row: a focused worker row opens its hover card over
+            // the header. Tab goes on to the rows from here.
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+              overflow.current?.focus()
+            }}
+          >
+            <div
+              ref={overflow}
+              tabIndex={-1}
+              className="scrollbar-sleek max-h-60 overflow-y-auto p-1 outline-none"
             >
-              <div
-                ref={overflow}
-                tabIndex={-1}
-                className="scrollbar-sleek max-h-60 overflow-y-auto p-1 outline-none"
-              >
-                <BotItemLinkRowList bot={bot} links={links} chat={chat} />
-              </div>
-            </PopoverContent>
-          </Popover>
-        ) : null}
-      </div>
-    </NativeChatLinkPeekProvider>
+              <BotItemLinkRowList bot={bot} links={links} chat={chat} />
+            </div>
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
   )
 }
 

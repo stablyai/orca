@@ -35,14 +35,15 @@ import {
   changeBotToolServers,
   type BotToolNewCredential
 } from './bot-tools-file'
-import { resolveBotToolInput } from './bot-tool-details'
+import { resolveBotToolInput, withSavedBotToolHeaders } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
 import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
 import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
-import { botToolCredentialsReader, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { botToolCredentialsReader } from './bot-tool-credentials'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 
 export type BotToolsFolder = {
   /** The relay grant's owner: the bot, or the host list's reserved owner. */
@@ -75,7 +76,7 @@ export type BotToolsHome =
 export const hasBotToolsCli = (home: BotToolsHome): home is BotToolsCli =>
   home.agent === 'claude' || home.agent === 'codex'
 
-const StartedThread = z.object({ thread: z.object({ id: z.string() }) })
+const StartedThread = lazyZodSchema(() => z.object({ thread: z.object({ id: z.string() }) }))
 
 const CLI_TIMEOUT_MS = 60_000
 
@@ -200,15 +201,17 @@ export async function claudeSignInFolder(
   return folder
 }
 
+type ProblemsScope = { remote?: boolean; only?: ReadonlySet<string>; signal?: AbortSignal }
+
 /**
  * Only the bot's own tools that need something; a working one isn't listed. `remote` checks only
- * the URL servers, so no command is started; `signal` stops the check and closes its session.
+ * the URL servers (no command starts), `only` just those it names; `signal` stops the check.
  */
 export async function botToolProblems(
   cli: BotToolsHome,
-  { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
+  { remote = false, only, signal }: ProblemsScope = {}
 ): Promise<Record<string, BotToolProblem>> {
-  const own = await readBotToolServers(cli.folder)
+  const own = (await readBotToolServers(cli.folder)).filter((tool) => only?.has(tool.name) ?? true)
   // Its chats start without them, so each row says why instead of looking ready.
   const off = acpLaunchSpecFor(cli.agent)?.botToolsOff
   if (off) {

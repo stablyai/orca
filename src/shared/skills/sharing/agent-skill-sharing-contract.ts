@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { SkillCloudOperation, SkillCloudPublishResult } from './skill-cloud-contract'
 import { SkillDiscoveryTargetSchema } from '../discovery/skills'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 export const AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE =
   'agent_skill_sharing_unsupported_environment'
@@ -10,14 +11,16 @@ export const AGENT_SKILL_SHARING_BUSY_CODE = 'agent_skill_sharing_busy'
 export const AGENT_SKILL_NOT_SHAREABLE_CODE = 'agent_skill_not_shareable'
 export const AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE = 'agent_skill_bundle_name_taken'
 
-export const AgentSkillShareRequestSchema = z
-  .object({
-    skillSelectors: z.array(z.string().trim().min(1).max(4_096)).min(1).max(512),
-    bundleName: z.string().regex(/^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$/),
-    releaseNotes: z.string().max(10_000).default(''),
-    target: SkillDiscoveryTargetSchema.optional()
-  })
-  .strict()
+export const AgentSkillShareRequestSchema = lazyZodSchema(() =>
+  z
+    .object({
+      skillSelectors: z.array(z.string().trim().min(1).max(4_096)).min(1).max(512),
+      bundleName: z.string().regex(/^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$/),
+      releaseNotes: z.string().max(10_000).default(''),
+      target: SkillDiscoveryTargetSchema.optional()
+    })
+    .strict()
+)
 
 export type AgentSkillShareRequest = z.infer<typeof AgentSkillShareRequestSchema>
 

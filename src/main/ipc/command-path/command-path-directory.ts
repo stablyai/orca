@@ -1,5 +1,4 @@
-import type { Dir } from 'node:fs'
-import { opendir } from 'node:fs/promises'
+import { openDirectory, type DirectoryHandle } from '../../../shared/open-directory'
 
 const MAX_DETECTION_DIRECTORY_ENTRIES = 128
 
@@ -8,9 +7,9 @@ export function directoryNameKey(name: string): string {
 }
 
 export async function readDetectionDirectory(dir: string): Promise<Map<string, string> | null> {
-  let directory: Dir
+  let directory: DirectoryHandle
   try {
-    directory = await opendir(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
+    directory = await openDirectory(dir, { bufferSize: MAX_DETECTION_DIRECTORY_ENTRIES + 1 })
   } catch (error) {
     if (
       error &&

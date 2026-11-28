@@ -1,20 +1,25 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { AcpAgentError, AcpInvalidResponseError } from './acp-errors'
 
-const idSchema = z.union([z.string(), z.number(), z.null()])
-const errorSchema = z.object({
-  code: z.number().int(),
-  message: z.string(),
-  data: z.unknown().optional()
-})
-export const acpRpcEnvelopeSchema = z.looseObject({
-  jsonrpc: z.literal('2.0'),
-  id: idSchema.optional(),
-  method: z.string().optional(),
-  params: z.unknown().optional(),
-  result: z.unknown().optional(),
-  error: z.unknown().optional()
-})
+const idSchema = lazyZodSchema(() => z.union([z.string(), z.number(), z.null()]))
+const errorSchema = lazyZodSchema(() =>
+  z.object({
+    code: z.number().int(),
+    message: z.string(),
+    data: z.unknown().optional()
+  })
+)
+export const acpRpcEnvelopeSchema = lazyZodSchema(() =>
+  z.looseObject({
+    jsonrpc: z.literal('2.0'),
+    id: idSchema.optional(),
+    method: z.string().optional(),
+    params: z.unknown().optional(),
+    result: z.unknown().optional(),
+    error: z.unknown().optional()
+  })
+)
 export type AcpJsonRpcMessage = z.infer<typeof acpRpcEnvelopeSchema>
 
 export function invalidAcpResponseEnvelope(raw: unknown): () => Error {

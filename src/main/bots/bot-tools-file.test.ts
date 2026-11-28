@@ -2,6 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { botToolAppsOf } from '../../shared/bots/bot-connector-entries'
 import { botToolDraftInput, draftFromServer } from '../../shared/bots/bot-tool-draft'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
@@ -17,6 +18,7 @@ import { readBotToolDetails } from './bot-tool-details'
 import { addBotTool, updateBotTool, type BotToolsHome } from './bot-tools-host'
 import { sessionMcpLaunchTools } from '../mcp-servers/session-mcp-launch'
 import {
+  botOwnTools,
   botToolsPath,
   changeBotToolServers,
   currentBotToolsRevision,
@@ -68,6 +70,18 @@ describe("a bot's tools file", () => {
     )
     expect(tools.servers).toEqual([notion])
     expect(tools.env).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'bot-token' })
+  })
+
+  it('lists every URL server as an app, one with headers too, and no command', async () => {
+    const folder = tempDir('bot-tools-file-')
+    await writeBotToolServers(folder, [
+      { ...notion, headers: { authorization: SECRET } },
+      { name: 'linear', url: 'https://mcp.linear.app/mcp' },
+      { name: 'sentry', command: 'npx', args: ['-y', '@sentry/mcp-server'] },
+      { name: 'composio', url: 'https://backend.composio.dev/tool_router/abc-123/mcp' }
+    ])
+    const own = botOwnTools(await readBotToolServers(folder), folder)
+    expect(botToolAppsOf(own, {}).map((app) => app.tool.name)).toEqual(['notion', 'linear'])
   })
 
   it('keeps header values out of the file, sealed in the host store bound to the address', async () => {

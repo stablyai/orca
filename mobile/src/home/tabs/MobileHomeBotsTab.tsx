@@ -4,15 +4,16 @@ import { ActivityIndicator, ScrollView, View } from 'react-native'
 import { MobileBotsListEnd } from '../../bots/MobileBotsSectionHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import type { HomeBotRow, HomeBots, HomeBotsUnavailable } from '../bots/home-bot-rows'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { homeBotRowsByComputer, MobileHomeBotRows } from '../bots/MobileHomeBotRow'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 /** Every bot on every paired computer and the servers they relay, needs-you first. */
 export function MobileHomeBotsTab(props: {
@@ -22,6 +23,8 @@ export function MobileHomeBotsTab(props: {
   onNewBot?: () => void
   onOpenBot: (row: HomeBotRow) => void
 }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const { data } = props
@@ -39,7 +42,7 @@ export function MobileHomeBotsTab(props: {
       }
     />
   )
-  const notice = useMemo(() => homeBotsNotice(data.bots), [data.bots])
+  const notice = useMemo(() => homeBotsNotice(data.bots, t), [data.bots, t])
   const computers = useMemo(() => homeBotRowsByComputer(data.bots.rows), [data.bots.rows])
   if (!data.hostCatalogLoaded) {
     return header
@@ -51,7 +54,7 @@ export function MobileHomeBotsTab(props: {
         <MobileHomeTabEmpty
           icon={Bot}
           title={t('home.bots.noBotsTitle', 'No bots yet')}
-          message={t('home.bots.pairDesktop', 'Pair a desktop to see its bots here.')}
+          message={t('home.bots.pairComputer', 'Pair a computer to see its bots here.')}
         />
       </>
     )
@@ -106,7 +109,8 @@ type HomeBotsNotice =
 /** What the tab says beside its rows: a wait for a first answer, one empty state when every computer
  *  is too old or switched off, else a quiet line per computer it can't list. */
 export function homeBotsNotice(
-  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>
+  bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>,
+  t: Translate
 ): HomeBotsNotice {
   if (bots.rows.length === 0 && bots.awaiting) {
     return { kind: 'waiting' }
@@ -119,40 +123,37 @@ export function homeBotsNotice(
     (only === 'update' || only === 'off') &&
     reasons.every((entry) => entry.reason === only)
   ) {
-    return emptyNotice(only, reasons)
+    return emptyNotice(only, reasons, t)
   }
   const lines = [
     ...(bots.rows.length === 0
-      ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
+      ? [{ key: 'no-bots', text: t('bots.list.noBotsYet', 'No bots yet.') }]
       : []),
-    ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry) }))
+    ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry, t) }))
   ]
   return { kind: 'lines', lines }
 }
 
-function endLine(entry: HomeBotsUnavailable): string {
+function endLine(entry: HomeBotsUnavailable, t: Translate): string {
   const host = entry.label
   switch (entry.reason) {
     case 'update':
-      return translate('bots.list.updateToSee', 'Update Orca on {{host}} to see its bots.', {
+      return t('bots.list.updateToSee', 'Update Orca on {{host}} to see its bots.', {
         host
       })
     case 'off':
-      return translate('bots.list.offEnd', 'Bots are off on {{host}}.', { host })
+      return t('bots.list.offEnd', 'Bots are off on {{host}}.', { host })
     case 'unreachable':
-      return translate(
-        'bots.list.cantReach',
-        'Can’t reach {{host}}. Its bots show when it’s back.',
-        {
-          host
-        }
-      )
+      return t('bots.list.cantReach', 'Can’t reach {{host}}. Its bots show when it’s back.', {
+        host
+      })
   }
 }
 
 function emptyNotice(
   reason: 'update' | 'off',
-  entries: readonly HomeBotsUnavailable[]
+  entries: readonly HomeBotsUnavailable[],
+  t: Translate
 ): HomeBotsNotice {
   // Two computers that share a name are still two.
   const one = new Set(entries.map((entry) => entry.key)).size === 1 ? entries[0] : undefined
@@ -160,18 +161,18 @@ function emptyNotice(
     return one
       ? {
           kind: 'empty',
-          title: translate('bots.list.updateOrcaOn', 'Update Orca on {{host}}', {
+          title: t('bots.list.updateOrcaOn', 'Update Orca on {{host}}', {
             host: one.label
           }),
-          message: translate(
+          message: t(
             'home.bots.updateOneBody',
             'Its version of Orca can’t show bots on your phone yet.'
           )
         }
       : {
           kind: 'empty',
-          title: translate('home.bots.updateManyTitle', 'Update Orca on your computers'),
-          message: translate(
+          title: t('home.bots.updateManyTitle', 'Update Orca on your computers'),
+          message: t(
             'home.bots.updateManyBody',
             'Their version of Orca can’t show bots on your phone yet.'
           )
@@ -180,8 +181,8 @@ function emptyNotice(
   if (!one) {
     return {
       kind: 'empty',
-      title: translate('home.bots.offManyTitle', 'Bots are off on your computers'),
-      message: translate(
+      title: t('home.bots.offManyTitle', 'Bots are off on your computers'),
+      message: t(
         'home.bots.offManyBody',
         'To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots.'
       )
@@ -189,15 +190,15 @@ function emptyNotice(
   }
   return {
     kind: 'empty',
-    title: translate('bots.new.botsOffOn', 'Bots are off on {{host}}', { host: one.label }),
+    title: t('bots.new.botsOffOn', 'Bots are off on {{host}}', { host: one.label }),
     // A server's switch is in its paired computer's Settings › Bots.
     message: one.desktopLabel
-      ? translate(
+      ? t(
           'home.bots.offServerBody',
           'To turn them on, open Orca on {{desktop}} and go to Settings › Bots › Enable bots on {{host}}.',
           { desktop: one.desktopLabel, host: one.label }
         )
-      : translate(
+      : t(
           'home.bots.offOneBody',
           'To turn them on, open Orca on {{host}} and go to Settings › Bots › Enable bots.',
           { host: one.label }
@@ -205,7 +206,7 @@ function emptyNotice(
   }
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   // Headings start where the rows' pictures do: the heading's own 4 pt inset plus this.
   computer: { paddingHorizontal: spacing.md },
   connecting: { alignItems: 'center', paddingVertical: spacing.xl, marginTop: 32 }

@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const diffStyles = themedStyleSheet(() => ({
+export const diffStylesSheet = themedStyleSheet((colors) => ({
   state: {
     flex: 1,
     alignItems: 'center',

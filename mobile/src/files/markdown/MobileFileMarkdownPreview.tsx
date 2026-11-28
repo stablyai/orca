@@ -8,8 +8,8 @@ import {
   MobileFilePreviewTruncatedNote
 } from '../preview/MobileFilePreviewSourceText'
 import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
-import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { filePreviewStylesSheet } from '../preview/mobile-file-preview-styles'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Props = {
   mode: MarkdownPreviewMode
@@ -34,7 +34,7 @@ export function MobileFileMarkdownPreview({
   worktreeId,
   onOpenFile
 }: Props) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(filePreviewStylesSheet)
   return mode === 'preview' ? (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
       {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}

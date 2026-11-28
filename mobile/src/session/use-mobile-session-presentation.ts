@@ -3,7 +3,7 @@ import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
 import { useRelayRecoveryStatus } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
-import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
+import { mobileSessionStatusLabel } from '../transport/connection/mobile-session-connection-copy'
 import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
 import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
@@ -73,14 +73,17 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
 
   // Offer explicit retry after reconnect backoff reaches 90s so recovery need not wait for the next attempt.
   const relayRecovery = useRelayRecoveryStatus(hostId)
-  const connectionVerdict = sessionConnectionVerdict({
-    state: connState,
-    reconnectAttempts,
-    lastConnectedAt,
-    endpoint: hostEndpoint,
-    hostName,
-    ...relayRecovery
-  })
+  const connectionVerdict = sessionConnectionVerdict(
+    {
+      state: connState,
+      reconnectAttempts,
+      lastConnectedAt,
+      endpoint: hostEndpoint,
+      hostName,
+      ...relayRecovery
+    },
+    t
+  )
   // Errors, refused pairings included, keep the title block visible beside side-rail tabs.
   const connectionEscalated = isSessionErrorVerdict(connectionVerdict)
   const showConnectionRetry = sessionRetryAvailable(connectionVerdict, forceReconnectHost !== null)
@@ -93,7 +96,8 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     verdict: connectionVerdict,
     presentedConnState,
     pendingPath: relayRecovery.pendingPath,
-    retryShown: showConnectionRetry
+    retryShown: showConnectionRetry,
+    t
   })
   const statusDot = sessionStatusDot({ verdict: connectionVerdict, connState, presentedConnState })
   const terminalSummary =
@@ -102,7 +106,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? t('session.presentation.loadingTabs', 'Loading tabs')
         : // The tab count lives in the tab bar, so the header names the branch, or the project when the branch repeats the title.
           (sessionPlaceLabel(scope.worktreeName, scope.worktreeBranch, scope.worktreeRepo) ??
-          MOBILE_SESSION_STATUS_LABELS.connected)
+          mobileSessionStatusLabel('connected', t))
       : statusLine.withRetrySuffix
         ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
             status: statusLine.label

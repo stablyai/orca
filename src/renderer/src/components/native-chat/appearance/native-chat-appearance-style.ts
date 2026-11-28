@@ -25,7 +25,8 @@ export function nativeChatTranscriptOuterClass(railVisible: boolean, inSheet = f
   if (inSheet) {
     return 'px-4 py-3'
   }
-  return `native-chat-transcript-inset pt-10 pb-5 ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
+  // The end keeps room for the worker chip floating over it (0 without one).
+  return `native-chat-transcript-inset pt-10 pb-[calc(var(--spacing)*5+var(--native-chat-worker-chip-room,0px))] ${railVisible ? 'px-9' : 'px-3 sm:px-4'}`
 }
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'

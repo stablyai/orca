@@ -11,6 +11,7 @@ import {
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import { installOpenDraftAddReviewNoteGuard } from '../../commands/editor-shortcuts'
 import { NotesSendMenu } from '../../review-note-delivery/NotesSendMenu'
+import { runWithFinally } from '@/lib/run-with-finally'
 
 export function MarkdownPreviewSingleNoteSendMenu({
   owner,
@@ -89,19 +90,22 @@ export function MarkdownPreviewAnnotationComposer({
       return
     }
     setSubmitting(true)
-    try {
-      const ok = await onSubmit(trimmed)
-      if (!mountedRef.current) {
-        return
+    await runWithFinally(
+      async () => {
+        const ok = await onSubmit(trimmed)
+        if (!mountedRef.current) {
+          return
+        }
+        if (ok) {
+          setBody('')
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setSubmitting(false)
+        }
       }
-      if (ok) {
-        setBody('')
-      }
-    } finally {
-      if (mountedRef.current) {
-        setSubmitting(false)
-      }
-    }
+    )
   }
 
   return (

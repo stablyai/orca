@@ -20,8 +20,20 @@ export function TerminalPaneFileDropOwners({
   controller
 }: {
   controller: TerminalPaneController
-}): React.JSX.Element {
-  const { managedPanes, tabId, worktreeId, cwd, managerRef, paneTransportsRef } = controller
+}): React.JSX.Element | null {
+  const {
+    isActive,
+    isVisible,
+    managedPanes,
+    tabId,
+    worktreeId,
+    cwd,
+    managerRef,
+    paneTransportsRef
+  } = controller
+  if (!isActive && !isVisible) {
+    return null
+  }
   return (
     <>
       {managedPanes.map((pane) => (

@@ -26,6 +26,7 @@ import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { deployOrcad } from '../install/orcad-remote-deploy'
+import { holdWslForSshUpgrade } from '../../wsl/execution/wsl-ssh-upgrade-hold'
 import {
   adoptRunningOrcadVersion,
   type OrcadRunningAdoption
@@ -175,6 +176,21 @@ export async function createManagedOrcadEnvironment(
 type DeployedOrcad = OrcadRunningAdoption & { created?: true }
 
 async function deployOwnOrcad(
+  context: OrcadRemoteContext<SshTarget>,
+  slot: ReturnType<typeof managedOrcadSlot>,
+  localOrcadDir: string,
+  args: { force?: boolean; signal?: AbortSignal }
+): Promise<DeployedOrcad | OrcadManagedDeferral> {
+  // Windows can idle out a loopback WSL distro mid-upload; keep it running for this deploy.
+  const hold = await holdWslForSshUpgrade(context, args.signal)
+  try {
+    return await deployHeldOrcad(context, slot, localOrcadDir, args)
+  } finally {
+    hold?.release()
+  }
+}
+
+async function deployHeldOrcad(
   context: OrcadRemoteContext<SshTarget>,
   slot: ReturnType<typeof managedOrcadSlot>,
   localOrcadDir: string,

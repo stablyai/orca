@@ -51,6 +51,17 @@ describe('chat open failure toast', () => {
     expect(screen.queryByText("Couldn't open chat")).toBeNull()
   })
 
+  it('shows a plain reason as its body line, with no details to open', () => {
+    act(() =>
+      showChatOpenUnavailable({ message: "Bot's Home didn't load.", retry: () => undefined })
+    )
+    act(() => vi.advanceTimersByTime(0))
+
+    expect(screen.getByText("Bot's Home didn't load.")).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Show details' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+  })
+
   it('retries and clears the card', () => {
     const retry = vi.fn()
     act(() => showChatOpenUnavailable({ detail: DETAIL, retry }))

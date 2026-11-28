@@ -9,6 +9,10 @@ import {
   opencodeMessages,
   OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
 } from './transcript-opencode-part-blocks'
+import {
+  readOpenCode2SessionPartSignal,
+  withOpenCode2SessionParts
+} from './opencode2-session-parts'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
 import type {
   OpenCodeTranscriptPage,
@@ -50,15 +54,16 @@ export function readOpenCode2TranscriptSignal(
   ) {
     throw new Error('OpenCode transcript signal is invalid')
   }
+  const parts = readOpenCode2SessionPartSignal(db, sessionId)
   const source = columnExists(db, 'session_v2', 'directory')
     ? asRecord(db.prepare('SELECT directory FROM session_v2 WHERE id = ?').get(sessionId))
     : null
   return {
     cwd: extractString(source?.directory),
     messageCount: row.count,
-    partCount: 0,
+    partCount: parts.count,
     maxMessageRowId: row.latest,
-    maxPartTimeUpdated: row.updated
+    maxPartTimeUpdated: Math.max(row.updated, parts.updated)
   }
 }
 
@@ -74,6 +79,10 @@ function messageItems(
     typeof row.time_updated !== 'number'
   ) {
     throw new Error('OpenCode transcript message is invalid')
+  }
+  // System rows are model-facing updates (instructions, tool catalog) the live chat never shows.
+  if (row.type !== 'user' && row.type !== 'assistant' && row.type !== 'idle') {
+    return []
   }
   const messageCursor = row.cursor
   const updatedAt = row.time_updated
@@ -157,14 +166,6 @@ function messageItems(
   if (row.type === 'idle' && record.outcome === 'interrupted') {
     blocks.push({ type: 'text', text: 'Conversation interrupted' })
   }
-  if (
-    row.type !== 'user' &&
-    row.type !== 'assistant' &&
-    row.type !== 'system' &&
-    row.type !== 'idle'
-  ) {
-    return []
-  }
   const messages = opencodeMessages(
     {
       id: `opencode:${row.id}`,
@@ -205,7 +206,12 @@ export function readOpenCode2TranscriptPage(
   let pageBytes = 0
   let hasMore = false
   while (items.length < limit) {
-    const rows = statement.all(args.sessionId, cursor, Math.min(limit + 1, 8))
+    const rows = withOpenCode2SessionParts(
+      db,
+      args.sessionId,
+      statement.all(args.sessionId, cursor, Math.min(limit + 1, 8)).map(asRecord),
+      OPENCODE_TRANSCRIPT_MAX_ROW_BYTES
+    )
     hasMore = rows.length === Math.min(limit + 1, 8)
     if (rows.length === 0) {
       break

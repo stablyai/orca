@@ -49,6 +49,7 @@ import {
   type Delivery
 } from './external-conversation-types'
 
+import { fetchAskerImages } from './connector-asker-images'
 import { recordAdmittedTurn, recordLastTurn } from './external-conversation-last-turn'
 export type { ExternalConversationSeamDeps } from './external-conversation-host'
 
@@ -306,13 +307,8 @@ export class ExternalConversationSeam {
     signal: AbortSignal
   ): Promise<Delivery> {
     this.linked.set(conversationId(key), { key, worktreeId: chat.worktreeId })
-    // A bot's request may list images; they go with its words, so the agent sees them at once.
-    const images =
-      chat.bot && message.asker && this.deps.askerImages
-        ? await this.deps
-            .askerImages({ botId: chat.bot.botId, conversation: key, asker: message.asker, signal })
-            .catch(() => [])
-        : []
+    // A bot's request (and any carried follow-ups) may list images; they go with its words.
+    const images = await fetchAskerImages(this.deps.askerImages, chat, key, message, signal)
     const delivered = await this.chatDeliveries.deliver(host.chat, key, chat, {
       ...message,
       signal,

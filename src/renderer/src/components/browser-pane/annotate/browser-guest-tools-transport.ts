@@ -3,6 +3,8 @@ import type { BrowserApi } from '../../../../../preload/api/browser/browser-api'
 /** Where a page's guest tools run: this window's main process, or the runtime that hosts the page. */
 export type BrowserGuestToolsTransport = Pick<
   BrowserApi,
+  | 'grabPickedElementPresent'
+  | 'onGrabPolicyRetired'
   | 'setGrabMode'
   | 'awaitGrabSelection'
   | 'cancelGrab'
@@ -14,6 +16,9 @@ export type BrowserGuestToolsTransport = Pick<
 >
 
 export const ipcBrowserGuestToolsTransport: BrowserGuestToolsTransport = {
+  grabPickedElementPresent: (args) => window.api.browser.grabPickedElementPresent(args),
+  onGrabPolicyRetired: (callback) =>
+    window.api.browser.onGrabPolicyRetired?.(callback) ?? (() => {}),
   setGrabMode: (args) => window.api.browser.setGrabMode(args),
   awaitGrabSelection: (args) => window.api.browser.awaitGrabSelection(args),
   cancelGrab: (args) => window.api.browser.cancelGrab(args),

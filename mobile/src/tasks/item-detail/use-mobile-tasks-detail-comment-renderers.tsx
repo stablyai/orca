@@ -8,7 +8,6 @@ import type { DetailCommentGroup } from '../mobile-tasks-view-state-types'
 import { SHOW_MOBILE_COMMENT_THREAD_TOOLS } from '../task-list/mobile-tasks-options'
 import {
   commentAuthor,
-  commentDate,
   commentSourceLabel,
   detailCommentGroupCount,
   detailCommentGroupId,
@@ -16,11 +15,14 @@ import {
   isResolvedDetailCommentGroup,
   renderCommentReactions
 } from './mobile-tasks-item-comments'
-import { styles } from '../mobile-tasks-legacy-styles'
+import { stylesSheet } from '../mobile-tasks-legacy-styles'
+import { formatUpdatedAt } from './mobile-tasks-item-mapping'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { pressedStyle } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     actionItem,
@@ -63,15 +65,20 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
         comment.isResolved && styles.commentResolvedBlock
       ]}
     >
-      <Text style={styles.commentSource} numberOfLines={1}>
-        {commentSourceLabel(comment)}
-      </Text>
+      {comment.path ? (
+        // Only a review comment says where it sits; a plain comment needs no label.
+        <Text style={styles.commentSource} numberOfLines={1}>
+          {commentSourceLabel(comment)}
+        </Text>
+      ) : null}
       <Text style={styles.commentMeta}>
-        {commentAuthor(comment)}
-        {commentDate(comment.createdAt) ? ` · ${commentDate(comment.createdAt)}` : ''}
+        <Text style={styles.commentAuthor}>{commentAuthor(comment)}</Text>
+        {formatUpdatedAt(comment.createdAt ?? '')
+          ? ` · ${formatUpdatedAt(comment.createdAt ?? '')}`
+          : ''}
       </Text>
       <MobileMarkdown content={comment.body} />
-      {renderCommentReactions(comment)}
+      {renderCommentReactions(styles, comment)}
       {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
       actionItem?.provider === 'github' &&
       detailPayload?.provider === 'github' ? (
@@ -172,11 +179,12 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
       </View>
     )
   }
-  return Object.assign(model, {
+  return {
+    ...model,
     renderCommentComposer,
     renderDetailComment,
     renderDetailCommentGroup
-  })
+  }
 }
 
 export type DetailCommentRenderersModel = ReturnType<typeof useMobileTasksDetailCommentRenderers>

@@ -33,12 +33,12 @@ vi.mock('../../../wsl/filesystem/wsl-unc-access-gate', () => ({
 
 import { syncWslCodexConfigInDistro } from './wsl-codex-config-sync'
 
-const request = (distro: string, home: string) =>
+const request = (distro: string, home: string, forLaunch = true) =>
   syncWslCodexConfigInDistro({
     distro,
     linuxSystemHome: '/home/u/.codex',
     homes: [{ runtimeHomePath: `\\\\wsl.localhost\\${distro}${home}`, linuxRuntimeHome: home }],
-    forLaunch: true
+    forLaunch
   })
 
 // Drains every held helper run, including ones a release lets start.
@@ -66,4 +66,16 @@ describe('WSL Codex settings sync requests', () => {
       expect(helperRuns.count).toBe(3)
     }
   )
+
+  it('a launch that takes over a queued background pass runs once for both', async () => {
+    helperRuns.count = 0
+    const passes = [
+      request('Promote', '/home/u/busy/home'),
+      request('Promote', '/home/u/acct/home', false),
+      request('Promote', '/home/u/acct/home')
+    ]
+    await releaseAll()
+    await Promise.all(passes)
+    expect(helperRuns.count).toBe(2)
+  })
 })

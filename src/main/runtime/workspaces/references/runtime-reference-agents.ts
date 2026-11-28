@@ -9,10 +9,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { FleetAgentStatusEvidence } from '../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -84,8 +81,7 @@ export function createReferenceAgentIndex(
     ) {
       continue
     }
-    const tabId = structuredAgentSessionTabId(record.sessionId)
-    const paneKey = structuredAgentSessionPaneKey(tabId, record.sessionId)
+    const paneKey = chatPaneKey(record.sessionId)
     nativePanes.add(
       JSON.stringify([record.location.executionHostId, record.location.workspaceId, paneKey])
     )

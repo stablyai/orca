@@ -4,100 +4,45 @@ import { closeDesktopNotification } from '../../notifications/desktop-notificati
 import type { Store } from '../../persistence/loading-store/store'
 import type {
   NotificationAttentionAcknowledgement,
-  NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
-  NotificationPermissionStatusResult,
   StructuredNotificationRead
 } from '../../../shared/notifications/notification-settings-types'
 import { isNotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../../tray/system-tray'
 import { isMainWindowVisible } from '../../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
-import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
-import { sessionRepliesInSlack } from '../../external-conversations/external-conversation-links'
-import { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
+import type { createNotificationDeliveryService } from '../../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
 } from '../../notifications/announced-notification-registry'
-import { registerNotificationSoundHandlers } from './notification-sound-ipc'
-import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { registerLazyIpcHandleGroup } from '../lazy-ipc-handle-group'
 import { isStructuredAttentionRead } from '../../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  getLastObservedDeliveryOutcome,
-  hasTriggeredPermissionDialogThisSession,
-  probeNotificationDelivery,
-  recordNotificationDeliveryOutcome,
-  resetNotificationPermissionEvidence
-} from './notification-permission-probe'
+
+const NOTIFICATION_PERMISSION_IPC_CHANNELS = [
+  'notifications:openSystemSettings',
+  'notifications:getPermissionStatus',
+  'notifications:probeDelivery'
+] as const
 
 let stopRuntimeAttentionEvents: (() => void) | undefined
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
   ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
-  resetNotificationPermissionEvidence()
 
-  ipcMain.removeHandler('notifications:openSystemSettings')
-  ipcMain.removeHandler('notifications:getPermissionStatus')
-  ipcMain.removeHandler('notifications:probeDelivery')
-  ipcMain.handle('notifications:openSystemSettings', (): void => {
-    openNotificationSystemSettings()
+  for (const channel of NOTIFICATION_PERMISSION_IPC_CHANNELS) {
+    ipcMain.removeHandler(channel)
+  }
+  registerLazyIpcHandleGroup(NOTIFICATION_PERMISSION_IPC_CHANNELS, async (ipc) => {
+    const { registerNotificationPermissionHandlers } = await import('./notification-permission-ipc')
+    registerNotificationPermissionHandlers(store, ipc)
   })
-
-  // Keep the legacy status surface observational; native authorization is read by onboarding below.
-  const getPermissionStatus = (): NotificationPermissionStatusResult => ({
-    supported: Notification.isSupported(),
-    platform: process.platform,
-    requested: store.getUI().notificationPermissionRequested === true
-  })
-
-  ipcMain.handle('notifications:getPermissionStatus', getPermissionStatus)
-  ipcMain.handle(
-    'notifications:probeDelivery',
-    async (_event, args?: { force?: boolean }): Promise<NotificationDeliveryProbeResult> => {
-      // First-use permission onboarding is macOS-only.
-      if (process.platform !== 'darwin' || !Notification.isSupported()) {
-        return { state: 'unsupported', authoritative: false }
-      }
-      // Record prompting intent so startup registration cannot trigger a second prompt.
-      if (store.getUI().notificationPermissionRequested !== true) {
-        store.updateUI({ notificationPermissionRequested: true })
-      }
-      // Prefer silent native reads so System Settings changes are visible without probe banners.
-      const authorization = await readNotificationAuthorizationStatus()
-      if (authorization === 'authorized') {
-        recordNotificationDeliveryOutcome('delivered')
-        return { state: 'delivered', authoritative: true }
-      }
-      if (authorization === 'denied') {
-        recordNotificationDeliveryOutcome('failed')
-        return { state: 'blocked', authoritative: true }
-      }
-      if (authorization === 'not-determined') {
-        // Trigger the first-use presenter once, then report awaiting-decision.
-        if (!hasTriggeredPermissionDialogThisSession()) {
-          void probeNotificationDelivery()
-        }
-        return { state: 'awaiting-decision', authoritative: true }
-      }
-      // Without native evidence, cache scheduling probes within the session to avoid repeat banners.
-      const lastObservedDeliveryOutcome = getLastObservedDeliveryOutcome()
-      if (!args?.force && lastObservedDeliveryOutcome !== null) {
-        return {
-          state: lastObservedDeliveryOutcome === 'delivered' ? 'delivered' : 'blocked',
-          authoritative: false
-        }
-      }
-      return probeNotificationDelivery()
-    }
-  )
 
   const announced = createAnnouncedNotificationRegistry()
 
@@ -223,59 +168,81 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
   )
 
-  const deliveryService = createNotificationDeliveryService({
-    readNotificationSettings: () => store.getSettings().notifications,
-    findActiveWindow: () =>
-      BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
-    isWindowVisible: isMainWindowVisible,
-    setTrayAttention,
-    isNotificationSupported: () => Notification.isSupported(),
-    dispatchMobileNotification: runtime
-      ? (payload) => runtime.dispatchMobileNotification(payload)
-      : null,
-    readAuthorizationStatus: readNotificationAuthorizationStatus,
-    recordDeliveryOutcome: recordNotificationDeliveryOutcome,
-    deliverNative: deliverNativeNotification,
-    platform: process.platform,
-    now: () => Date.now(),
-    wasRead: announced.wasRead,
-    repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
-    reserveNative: (request) => {
-      if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
-        return undefined
-      }
-      const reservation = announced.reserveNative(
-        request.paneKey ?? `worktree:${request.worktreeId}`,
-        request.notificationId,
-        request.structuredOrigin,
-        request
-      )
-      discardEvictedAnnouncements(reservation.evicted)
-      return reservation
-    },
-    recordAnnounced: (request) => {
-      if (request.notificationId && (request.paneKey || request.worktreeId)) {
-        if (announced.wasRead(request)) {
-          retireAnnouncements([
-            {
-              id: request.notificationId,
-              origin: request.structuredOrigin,
-              paneKey: request.paneKey
+  let deliveryServicePromise: Promise<ReturnType<typeof createNotificationDeliveryService>> | null =
+    null
+  const getDeliveryService = (): Promise<ReturnType<typeof createNotificationDeliveryService>> => {
+    if (!deliveryServicePromise) {
+      deliveryServicePromise = Promise.all([
+        import('../../notifications/notification-delivery-service'),
+        import('./notification-authorization-status'),
+        import('./notification-permission-probe'),
+        import('./native-notification-delivery'),
+        import('../../external-conversations/external-conversation-links')
+      ]).then(
+        ([
+          { createNotificationDeliveryService: createService },
+          { readNotificationAuthorizationStatus },
+          { recordNotificationDeliveryOutcome },
+          { deliverNativeNotification },
+          { sessionRepliesInSlack }
+        ]) =>
+          createService({
+            readNotificationSettings: () => store.getSettings().notifications,
+            findActiveWindow: () =>
+              BrowserWindow.getAllWindows().find((window) => !window.isDestroyed()) ?? null,
+            isWindowVisible: isMainWindowVisible,
+            setTrayAttention,
+            isNotificationSupported: () => Notification.isSupported(),
+            dispatchMobileNotification: runtime
+              ? (payload) => runtime.dispatchMobileNotification(payload)
+              : null,
+            readAuthorizationStatus: readNotificationAuthorizationStatus,
+            recordDeliveryOutcome: recordNotificationDeliveryOutcome,
+            deliverNative: deliverNativeNotification,
+            platform: process.platform,
+            now: () => Date.now(),
+            wasRead: announced.wasRead,
+            repliesInSlack: (sessionId) => sessionRepliesInSlack(store, sessionId),
+            reserveNative: (request) => {
+              if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
+                return undefined
+              }
+              const reservation = announced.reserveNative(
+                request.paneKey ?? `worktree:${request.worktreeId}`,
+                request.notificationId,
+                request.structuredOrigin,
+                request
+              )
+              discardEvictedAnnouncements(reservation.evicted)
+              return reservation
+            },
+            recordAnnounced: (request) => {
+              if (request.notificationId && (request.paneKey || request.worktreeId)) {
+                if (announced.wasRead(request)) {
+                  retireAnnouncements([
+                    {
+                      id: request.notificationId,
+                      origin: request.structuredOrigin,
+                      paneKey: request.paneKey
+                    }
+                  ])
+                  return
+                }
+                discardEvictedAnnouncements(
+                  announced.record(
+                    request.paneKey ?? `worktree:${request.worktreeId}`,
+                    request.notificationId,
+                    request.structuredOrigin,
+                    request
+                  )
+                )
+              }
             }
-          ])
-          return
-        }
-        discardEvictedAnnouncements(
-          announced.record(
-            request.paneKey ?? `worktree:${request.worktreeId}`,
-            request.notificationId,
-            request.structuredOrigin,
-            request
-          )
-        )
-      }
+          })
+      )
     }
-  })
+    return deliveryServicePromise
+  }
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')
@@ -301,12 +268,19 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
-    (
-      _event,
-      args: NotificationDispatchRequest
-    ): NotificationDispatchResult | Promise<NotificationDispatchResult> =>
-      deliveryService.dispatch(args)
+    async (_event, args: NotificationDispatchRequest): Promise<NotificationDispatchResult> => {
+      const deliveryService = await getDeliveryService()
+      return deliveryService.dispatch(args)
+    }
   )
 
-  registerNotificationSoundHandlers(store)
+  ipcMain.removeHandler('notifications:resolveSoundPath')
+  ipcMain.removeHandler('notifications:loadSound')
+  registerLazyIpcHandleGroup(
+    ['notifications:resolveSoundPath', 'notifications:loadSound'],
+    async (ipc) => {
+      const { registerNotificationSoundHandlers } = await import('./notification-sound-ipc')
+      registerNotificationSoundHandlers(store, ipc)
+    }
+  )
 }

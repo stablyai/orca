@@ -5,13 +5,13 @@ import { publishBots } from '@/lib/bot-catalog-snapshot'
 import { publishBotGroups } from '@/lib/bot-group-catalog-snapshot'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Bot } from '../../../../shared/bot-types'
 import { mascotAvatar, type BotMascotId } from '../../../../shared/bot-avatar'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from './SidebarBotsSection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { setRendererUiLanguage } from '@/i18n/i18n'
 import type { SupportedUiLocale } from '../../../../shared/i18n/ui-locale'
 
@@ -55,7 +55,7 @@ const BOTS = [
 
 function chat(owner: Bot, state: AgentStatusEntry['state']): AgentStatusEntry {
   return {
-    paneKey: structuredAgentSessionStatusPaneKey(`chat-${owner.id}`),
+    paneKey: chatPaneKey(`chat-${owner.id}`),
     worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
     agentType: 'claude',
     prompt: '',
@@ -227,6 +227,54 @@ export const plusMenu = defineFixture({
       new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
     )
     await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
+
+/** The folded Bots header with a bot avatar's right-click context menu open. */
+export const foldedHeaderContextMenu = defineFixture({
+  ...foldedHeader,
+  width: 320,
+  interact: async (frame) => {
+    const face = frame.querySelector<HTMLButtonElement>('[data-bot-preview] button')
+    if (!face) {
+      return
+    }
+    const rect = face.getBoundingClientRect()
+    face.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+})
+
+/** The expanded Bots list with a bot row's right-click context menu open. */
+export const expandedRowContextMenu = defineFixture({
+  ...foldedHeader,
+  width: 320,
+  store: {
+    ...foldedHeader.store,
+    collapsedGroups: new Set()
+  },
+  interact: async (frame) => {
+    const row = frame.querySelector<HTMLElement>('[data-worktree-card-surface="true"]')
+    if (!row) {
+      return
+    }
+    const rect = row.getBoundingClientRect()
+    row.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 250))
   }
 })
 

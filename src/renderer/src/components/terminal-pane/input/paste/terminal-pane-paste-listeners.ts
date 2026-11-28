@@ -13,6 +13,7 @@ import { assertClipboardTextWithinLimitWithYield } from '../../../../../../share
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import {
   clipboardEventCarriesFiles,
+  consumeUnreadWindowsClipboardNativePaste,
   requestNativePasteForUnreadWindowsClipboard
 } from './terminal-unread-clipboard-native-paste'
 import { clipboardEventCopiedFilePaths } from '@/components/native-chat/paste/native-chat-clipboard-payload'
@@ -154,18 +155,33 @@ export function registerTerminalPanePasteListeners({
     if (!pane) {
       return
     }
-    const eventCopiedFilePaths = clipboardEventCopiedFilePaths(event)
+    const isUnreadWindowsClipboardFallback = consumeUnreadWindowsClipboardNativePaste(pane)
+    // Reading clipboardData.files encodes bitmaps synchronously in Chromium; only read it on the armed Windows fallback.
+    const eventCopiedFilePaths = isUnreadWindowsClipboardFallback
+      ? clipboardEventCopiedFilePaths(event)
+      : []
     const eventCarriedFiles = clipboardEventCarriesFiles(event)
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
       pasteFromClipboard(pane, 'paste-event', {
-        readClipboardText: (options) => assertClipboardTextWithinLimitWithYield(eventText, options),
+        // Web-only: browsers expose copied files only to the paste event itself.
+        readClipboardContent: async (options) => ({
+          text: await assertClipboardTextWithinLimitWithYield(eventText, options),
+          filePaths: [],
+          linkHtml: '',
+          hasImage: null
+        }),
         eventCopiedFilePaths,
-        eventCarriedFiles
+        eventCarriedFiles,
+        isUnreadWindowsClipboardFallback
       })
       return
     }
-    pasteFromClipboard(pane, 'paste-event', { eventCopiedFilePaths, eventCarriedFiles })
+    pasteFromClipboard(pane, 'paste-event', {
+      eventCopiedFilePaths,
+      eventCarriedFiles,
+      isUnreadWindowsClipboardFallback
+    })
   }
 
   const onAppMenuPaste = (event: Event): void => {
@@ -199,7 +215,7 @@ export function registerTerminalPanePasteListeners({
       paneTransportsRef.current.get(pane.id)
     )
     void pasteTerminalClipboard({
-      readClipboardText: window.api.ui.readClipboardText,
+      readClipboardContent: window.api.ui.readClipboardPasteContent,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,

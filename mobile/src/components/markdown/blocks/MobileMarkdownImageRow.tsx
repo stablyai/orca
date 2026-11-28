@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import { View } from 'react-native'
-import { styles } from '../mobile-markdown-styles'
+import { StyleSheet, View } from 'react-native'
+import { spacing } from '../../../theme/mobile-theme'
 
 export const MarkdownImageLayout = createContext<'blocks' | 'document' | 'row'>('blocks')
 
@@ -14,3 +14,13 @@ export function MobileMarkdownImageRow({ children }: { children: ReactNode }) {
     </MarkdownImageLayout.Provider>
   )
 }
+
+const styles = StyleSheet.create({
+  imageRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: spacing.xs
+  }
+})

@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { View, type HostInstance } from 'react-native'
 import { translate } from '../../i18n/mobile-i18n'
-import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -24,7 +23,6 @@ function describeTerminalDocumentStartupError(error: unknown): string {
 // react-native-webview has no rendered web implementation; mount the same document factory with the native controller contract.
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
-    useMobileTranslation()
     const hostRef = useRef<HostInstance>(null)
     const documentRef = useRef<TerminalWebDocument | null>(null)
     // Readiness fires inside mount before a handle exists; buffer its synchronous controller flush until the handle returns.

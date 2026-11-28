@@ -4,25 +4,29 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../../network/http-client'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
 import { isMuslHost } from '../../node-runtime/linux-libc-probe'
+import { claudeManagedSettingsFile } from '../configuration/claude-managed-settings-file'
 
 const RELEASES = 'https://downloads.claude.ai/claude-code-releases'
 
-const manifestSchema = z.object({
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
-  platforms: z.record(
-    z.string(),
-    z.object({
-      binary: z.string().regex(/^claude(\.exe)?$/),
-      checksum: z.string().regex(/^[a-f0-9]{64}$/),
-      size: z.number().int().positive()
-    })
-  )
-})
+const manifestSchema = lazyZodSchema(() =>
+  z.object({
+    version: z.string().regex(/^\d+\.\d+\.\d+$/),
+    platforms: z.record(
+      z.string(),
+      z.object({
+        binary: z.string().regex(/^claude(\.exe)?$/),
+        checksum: z.string().regex(/^[a-f0-9]{64}$/),
+        size: z.number().int().positive()
+      })
+    )
+  })
+)
 
 /** The release folder name this host downloads; null where Claude ships no native build. */
 export function claudeManagedPlatform(
@@ -39,9 +43,11 @@ export function claudeManagedPlatform(
   return platform === 'linux' ? `linux-${arch}${musl ? '-musl' : ''}` : null
 }
 
-const channelSettingsSchema = z.object({
-  autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
-})
+const channelSettingsSchema = lazyZodSchema(() =>
+  z.object({
+    autoUpdatesChannel: z.enum(['latest', 'stable']).optional()
+  })
+)
 
 /** Claude's own `autoUpdatesChannel`; managed settings win over the user's, and Claude defaults to latest. */
 export async function claudeUpdateChannel(
@@ -49,14 +55,9 @@ export async function claudeUpdateChannel(
   platform: NodeJS.Platform = process.platform
 ): Promise<'latest' | 'stable'> {
   const configDir = env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')
-  const managed =
-    platform === 'darwin'
-      ? '/Library/Application Support/ClaudeCode'
-      : platform === 'win32'
-        ? join(env.PROGRAMFILES || 'C:\\Program Files', 'ClaudeCode')
-        : '/etc/claude-code'
+  const files = [join(configDir, 'settings.json'), claudeManagedSettingsFile(env, platform)]
   const channels = await Promise.all(
-    [join(configDir, 'settings.json'), join(managed, 'managed-settings.json')].map(async (path) => {
+    files.map(async (path) => {
       try {
         return channelSettingsSchema.safeParse(JSON.parse(await readFile(path, 'utf8'))).data
           ?.autoUpdatesChannel

@@ -199,7 +199,8 @@ export function UsageRow({
         </span>
         {!hasUsage ? (
           <>
-            <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+            {/* Why wrap: the chip shows only an alert, so this row is where the message is read. */}
+            <span className="min-w-0 text-[11px] break-words text-muted-foreground">
               {state.statusLabel}
             </span>
             {showSignInAction ? (
@@ -219,12 +220,14 @@ export function UsageRow({
         )}
       </div>
       {state.detail ? (
-        <span className="pl-[30px] text-[11px] text-muted-foreground">{state.detail}</span>
+        <span className="pl-[30px] text-[11px] break-words text-muted-foreground">
+          {state.detail}
+        </span>
       ) : null}
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
           {sections.map((section) => {
-            const label = shortUsageLabel(p, section, false, t)
+            const label = shortUsageLabel(p, section, false)
             return (
               <DetailMetric
                 key={section.label}

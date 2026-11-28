@@ -1,9 +1,9 @@
 import { MarkdownImageLayout } from '../../components/markdown/blocks/MobileMarkdownImageRow'
 import { useContext, useEffect, useState } from 'react'
 import { ActivityIndicator, Dimensions, Image, Pressable, Text, View } from 'react-native'
-import { colors, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing, typography, pressedStyle } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileLoadErrorState } from '../../components/feedback/MobileStateView'
 import { MobileImageViewer } from '../media/presentation/MobileImageViewer'
 import { MobileImageViewerActions } from '../../session/native-chat/visual/MobileImageViewerActions'
@@ -29,7 +29,8 @@ export function MobileMarkdownPreviewImage({
   alt,
   width
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const inRow = useContext(MarkdownImageLayout) === 'row'
   const [load, setLoad] = useState<{ uri?: string; error?: string }>({})
@@ -124,7 +125,7 @@ export function MobileMarkdownPreviewImage({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   frame: { gap: spacing.xs },
   caption: { color: colors.textSecondary, fontSize: typography.metaSize }
 }))

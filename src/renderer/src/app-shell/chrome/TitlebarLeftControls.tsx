@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, MoreHorizontal } from 'lucide-react'
 import { SidebarToggleIcon } from '@/components/icons/SidebarToggleIcon'
 import logo from '../../../../../resources/logo.svg'
@@ -26,6 +26,7 @@ import {
   registerTitlebarSidebarToggle,
   unregisterTitlebarSidebarToggle
 } from './titlebar-sidebar-toggle-ref'
+import { useLatchedOpen } from '../root-surfaces/use-latched-open'
 
 type TitlebarControlRole = 'menu' | 'toggle' | 'back' | 'forward'
 type TitlebarControls = Record<TitlebarControlRole, HTMLButtonElement | null>
@@ -94,6 +95,8 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
   const historyForwardShortcutLabel = useShortcutLabel('worktree.history.forward')
+  const [appNameMenuOpen, setAppNameMenuOpen] = useState(false)
+  const hasOpenedAppNameMenu = useLatchedOpen(appNameMenuOpen)
   // Owned reference for focus fallbacks (the app rail), instead of a shared CSS-class query.
   const registeredToggleRef = useRef<HTMLButtonElement | null>(null)
   const controlsRef = useRef<TitlebarControls>({
@@ -122,17 +125,25 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
     }
   }, [])
   useTitlebarControlFocusHandoff(controlsRef)
+  const {
+    titlebarLeftControlsRef,
+    leftTitlebarChromeLayout,
+    isFullScreen,
+    showSidebar,
+    showTitlebarAppName,
+    activeView
+  } = layout
 
   return (
     // Measure the whole row for tab-strip spacing. w-max prevents the collapsed w-0 wrapper shrinking Windows text to one glyph.
     <div
-      ref={layout.titlebarLeftControlsRef}
+      ref={titlebarLeftControlsRef}
       className={`flex h-full shrink-0 items-center${
-        layout.leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
+        leftTitlebarChromeLayout.isFloating ? ' w-max' : ' w-full'
       }`}
     >
       <div className="flex h-full items-center">
-        {hasMacTrafficLights && !layout.isFullScreen ? (
+        {hasMacTrafficLights && !isFullScreen ? (
           <div className="titlebar-traffic-light-pad" />
         ) : hasCustomTitleBar ? (
           /* Replace native Windows/Linux chrome with logo and application-menu access. */
@@ -158,25 +169,27 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         ) : (
           <div className="pl-2" />
         )}
-        {layout.showSidebar && !hasCustomTitleBar && layout.showTitlebarAppName && (
-          <ContextMenu>
+        {showSidebar && !hasCustomTitleBar && showTitlebarAppName && (
+          <ContextMenu onOpenChange={setAppNameMenuOpen}>
             <ContextMenuTrigger asChild>
               <div className="titlebar-app-name" aria-label={t('auto.App.5096cbbc86', 'Orca')}>
                 <span className="titlebar-app-name-main">{t('auto.App.5096cbbc86', 'Orca')}</span>
               </div>
             </ContextMenuTrigger>
-            <ContextMenuContent>
-              <ContextMenuItem
-                onSelect={() => {
-                  void updateSettings({ showTitlebarAppName: false })
-                }}
-              >
-                {t('auto.App.e81217c1b7', 'Hide App Name')}
-              </ContextMenuItem>
-            </ContextMenuContent>
+            {hasOpenedAppNameMenu ? (
+              <ContextMenuContent>
+                <ContextMenuItem
+                  onSelect={() => {
+                    void updateSettings({ showTitlebarAppName: false })
+                  }}
+                >
+                  {t('auto.App.e81217c1b7', 'Hide App Name')}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            ) : null}
           </ContextMenu>
         )}
-        {layout.showSidebar && (
+        {showSidebar && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -202,7 +215,7 @@ export function TitlebarLeftControls({ layout }: { layout: AppChromeLayout }): R
         )}
       </div>
       {/* Show shared workspace/page history wherever its shortcut is available. */}
-      {shouldShowWorktreeHistoryControls(layout.activeView) && (
+      {shouldShowWorktreeHistoryControls(activeView) && (
         // Collapsed headers shrink-wrap, so ml-auto alone cannot leave a history-button gutter.
         <div className="ml-auto mr-3 flex items-center pl-2">
           <Tooltip>

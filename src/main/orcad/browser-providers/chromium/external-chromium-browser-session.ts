@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { BrowserError } from '../../../browser/browser-error'
 import {
   AGENT_BROWSER_BATCH_ARGS,
@@ -29,29 +30,39 @@ export type ExternalChromiumLaunch = {
   provider: 'electron' | 'chromium'
 }
 
-const AgentBrowserTab = z.object({
-  active: z.boolean(),
-  tabId: z.string(),
-  targetId: z.string().optional(),
-  title: z.string(),
-  url: z.string()
-})
-const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
-const AgentBrowserStep = z.object({
-  success: z.boolean(),
-  result: z.unknown().optional(),
-  error: z.string().nullable().optional()
-})
-const AgentBrowserBatch = z.object({
-  success: z.boolean().optional(),
-  data: z.array(AgentBrowserStep).optional(),
-  error: z.string().nullable().optional()
-})
-const AgentBrowserEnvelope = z.object({
-  success: z.boolean(),
-  data: z.unknown().optional(),
-  error: z.string().nullable().optional()
-})
+const AgentBrowserTab = lazyZodSchema(() =>
+  z.object({
+    active: z.boolean(),
+    tabId: z.string(),
+    targetId: z.string().optional(),
+    title: z.string(),
+    url: z.string()
+  })
+)
+const AgentBrowserTabsResult = lazyZodSchema(() =>
+  z.object({ tabs: z.array(AgentBrowserTab).optional() })
+)
+const AgentBrowserStep = lazyZodSchema(() =>
+  z.object({
+    success: z.boolean(),
+    result: z.unknown().optional(),
+    error: z.string().nullable().optional()
+  })
+)
+const AgentBrowserBatch = lazyZodSchema(() =>
+  z.object({
+    success: z.boolean().optional(),
+    data: z.array(AgentBrowserStep).optional(),
+    error: z.string().nullable().optional()
+  })
+)
+const AgentBrowserEnvelope = lazyZodSchema(() =>
+  z.object({
+    success: z.boolean(),
+    data: z.unknown().optional(),
+    error: z.string().nullable().optional()
+  })
+)
 
 export type AgentBrowserTab = z.infer<typeof AgentBrowserTab>
 export type AgentBrowserStep = z.infer<typeof AgentBrowserStep>

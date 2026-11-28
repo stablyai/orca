@@ -3,9 +3,13 @@ import {
   FileSaveAbort,
   FileSaveBegin,
   FileSaveChunk,
-  FileSaveCommit
+  FileSaveCommit,
+  FileUploadCommit
 } from '../../../../../shared/rpc-contract/filesystem/files-staged-save-params'
-import { STAGED_FILE_SAVE_METHODS } from '../../../../../shared/file-write/staged-file-save'
+import {
+  STAGED_FILE_SAVE_METHODS,
+  STAGED_FILE_UPLOAD_METHODS
+} from '../../../../../shared/file-write/staged-file-save'
 
 // Saves belong to the socket that began them; in-process callers share one owner.
 const owner = (connectionId: string | undefined) => connectionId ?? 'in-process'
@@ -38,6 +42,22 @@ export const FILE_STAGED_SAVE_METHODS = [
     params: FileSaveCommit,
     handler: async (params, { runtime, connectionId }) =>
       runtime.stagedFileSaves.commit(owner(connectionId), params.saveId, params.diskPrecondition)
+  }),
+  defineMethod({
+    name: STAGED_FILE_UPLOAD_METHODS.begin,
+    permission: 'workspace',
+    params: FileSaveBegin,
+    handler: async (params, { runtime, connectionId }) =>
+      runtime.stagedFileSaves.begin(owner(connectionId), params, 'upload')
+  }),
+  defineMethod({
+    name: STAGED_FILE_UPLOAD_METHODS.commit,
+    permission: 'workspace',
+    params: FileUploadCommit,
+    handler: async (params, { runtime, connectionId }) => {
+      await runtime.stagedFileSaves.commitUpload(owner(connectionId), params.saveId)
+      return { ok: true }
+    }
   }),
   defineMethod({
     name: STAGED_FILE_SAVE_METHODS.abort,

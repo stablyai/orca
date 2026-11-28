@@ -19,13 +19,13 @@ export class WslHostAutomationsLeftOffError extends Error {
   }
 }
 
-/** Each one's state on the host, the user's latest choice; one deleted there has no entry. */
+/** Each one's state on the host, the user's latest choice; one deleted there reads `deleted`. */
 export async function readWslHostAutomationStates(
   userDataPath: string,
   environmentId: string,
   automationIds: readonly string[]
-): Promise<Record<string, boolean>> {
-  const states: Record<string, boolean> = {}
+): Promise<Record<string, boolean | 'deleted'>> {
+  const states: Record<string, boolean | 'deleted'> = {}
   if (automationIds.length === 0) {
     return states
   }
@@ -36,7 +36,8 @@ export async function readWslHostAutomationStates(
       if (!shown.error.message.includes(AUTOMATION_NOT_FOUND)) {
         throw new Error(`wsl_move_automation_read_failed:${shown.error.message}`)
       }
-      // Absent, not off: undo then gives the copy here its state from before the move.
+      // Deleted on the host: undo keeps the local copy off, even over an earlier attempt's choice.
+      states[id] = 'deleted'
       continue
     }
     states[id] = ShownAutomationSchema.parse(shown.result).automation.enabled

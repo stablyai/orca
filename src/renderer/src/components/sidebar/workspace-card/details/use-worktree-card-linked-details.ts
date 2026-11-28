@@ -59,12 +59,26 @@ export function useWorktreeCardLinkedDetails({
     ? (linearIssueEntry?.data ?? linearIssueFallbackEntry?.data)
     : null
 
-  const linearReferences = getWorkspaceAttachments(worktree).filter(
-    (item) =>
-      item.provider === 'linear' &&
-      (item.identifier ?? item.linearIdentifier) === worktree.linkedLinearIssue
-  )
-  const linearIssueUrlFallback = linearReferences.length === 1 ? linearReferences[0].url : undefined
+  let linearIssueUrlFallback: string | undefined
+  if (worktree.linkedLinearIssue && !linearIssue) {
+    const attachments = getWorkspaceAttachments(worktree)
+    let matchCount = 0
+    for (let i = 0; i < attachments.length; i += 1) {
+      const item = attachments[i]
+      if (
+        item.provider === 'linear' &&
+        (item.identifier ?? item.linearIdentifier) === worktree.linkedLinearIssue
+      ) {
+        matchCount += 1
+        if (matchCount === 1) {
+          linearIssueUrlFallback = item.url
+        } else {
+          linearIssueUrlFallback = undefined
+          break
+        }
+      }
+    }
+  }
 
   const linearIssueDisplay = worktree.linkedLinearIssue
     ? linearIssue
@@ -106,9 +120,11 @@ export function useWorktreeCardLinkedDetails({
   const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
   const isDeleting = deleteState?.isDeleting ?? false
   const isQueuedForDeletion = deleteState?.phase === 'queued'
-  const deleteLabel = isQueuedForDeletion
-    ? t('auto.components.sidebar.WorktreeCard.ef18787206', 'Queued for deletion')
-    : t('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')
+  const deleteLabel = isDeleting
+    ? isQueuedForDeletion
+      ? t('auto.components.sidebar.WorktreeCard.ef18787206', 'Queued for deletion')
+      : t('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')
+    : ''
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   return {
