@@ -50,6 +50,8 @@ export class WorkerThreadChildProcess extends EventEmitter {
   ownedGroupStopping = false
   ownedGroupTerminated = false
   ownedGroupStopUnverified = false
+  /** Set by a consumer that returns output credit through creditOutput once its own reader has room. */
+  manualOutputCredit = false
   closed = false
   pid: number | undefined = undefined
   exitCode: number | null = null
@@ -89,6 +91,13 @@ export class WorkerThreadChildProcess extends EventEmitter {
     }
   }
 
+  /** Lets the worker read this many more output bytes from the child. */
+  creditOutput(stream: 'stdout' | 'stderr', bytes: number): void {
+    if (bytes > 0) {
+      this.send({ type: 'output-consumed', id: this.id, stream, bytes })
+    }
+  }
+
   stopOwnedGroup(): boolean {
     this.ownedGroupStopping = true
     return this.send({ type: 'stop-owned-group', id: this.id })
@@ -121,7 +130,9 @@ export class WorkerThreadChildProcess extends EventEmitter {
             Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
           )
         } finally {
-          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
+          if (!this.manualOutputCredit) {
+            this.creditOutput(event.type, event.chunk.byteLength)
+          }
         }
         return
       case 'error':
