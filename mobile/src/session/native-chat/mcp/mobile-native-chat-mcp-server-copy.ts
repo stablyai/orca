@@ -4,6 +4,7 @@ import type {
 } from '../../../../../src/shared/agent-session/options/protocol/agent-session-mcp'
 import {
   agentSessionMcpServerDisplayName,
+  agentSessionMcpShownStatus,
   ORCA_MCP_SOURCE
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -30,6 +31,13 @@ export function mobileMcpSourceLabel(source: string, t: Translate): string {
 }
 
 export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Translate): string {
+  // The chat keeps its launch copy of a server Orca changed until the next message restarts it.
+  if (server.orcaChange === 'removed') {
+    return t('chat.mcp.status.orcaRemoved', 'Removed: restarts on next message')
+  }
+  if (server.orcaChange === 'changed' && server.status !== 'connected') {
+    return t('chat.mcp.status.orcaChanged', 'Changed: restarts on next message')
+  }
   switch (server.status) {
     case 'connected':
       // The dot already says connected.
@@ -46,6 +54,14 @@ export function mobileMcpServerStatusLine(server: AgentSessionMcpServer, t: Tran
         ? t('chat.mcp.status.needsAuth', 'Needs sign-in')
         : t('chat.mcp.status.needsAuthAfterSend', 'Needs sign-in. Send a message to sign in here.')
     case 'failed':
+      // Orca's own check found it before the agent started, with the reason desktop gives.
+      if (server.orca && !server.error) {
+        return server.orca.url === null
+          ? t('chat.mcp.status.commandNotFound', 'Command not found')
+          : t('chat.mcp.status.unreachable', 'Can’t reach {{host}}', {
+              host: urlHost(server.orca.url)
+            })
+      }
       return server.error
         ? t('chat.mcp.status.failedReason', 'Failed: {{error}}', { error: server.error })
         : t('chat.mcp.status.failed', 'Failed')
@@ -77,7 +93,7 @@ export function mobileMcpTraySummary(
     ]
   }
   const count = (status: AgentSessionMcpServer['status']): number =>
-    servers.filter((server) => server.status === status).length
+    servers.filter((server) => agentSessionMcpShownStatus(server) === status).length
   const connected = count('connected')
   const needsAuth = count('needs-auth')
   const failed = count('failed')
@@ -104,4 +120,12 @@ export function mobileMcpTraySummary(
     })
   }
   return parts
+}
+
+function urlHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
 }

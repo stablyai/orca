@@ -7,12 +7,31 @@ import type {
 } from './parcel-watcher-process-subscription'
 import { RuntimeWatcherProcessPool } from './runtime-pool/runtime-watcher-process-pool'
 
-const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor()
+let sharedDeliveryStallListener: ((stalled: boolean) => void) | null = null
+// Other callers (e.g. git common-dir watches) can start the shared child, and a stall, before the
+// local worktree watchers load and register; remember the state so a late listener starts in sync.
+let sharedDeliveryStalled = false
+const sharedWatcherProcessSupervisor = new WatcherProcessSupervisor({
+  onDeliveryStallChange: (stalled) => {
+    sharedDeliveryStalled = stalled
+    sharedDeliveryStallListener?.(stalled)
+  }
+})
 // Healthy roots share a child; quarantine adds isolation only after faults to limit RSS.
 const runtimeWatcherProcessPool = new RuntimeWatcherProcessPool()
 
 export function createWatcherProcessSupervisor(): WatcherProcessSupervisor {
   return new WatcherProcessSupervisor()
+}
+
+/** Local worktree watchers share one child; its OS event stalls pause auto-reload for all of them. */
+export function setSharedWatcherDeliveryStallListener(
+  listener: ((stalled: boolean) => void) | null
+): void {
+  sharedDeliveryStallListener = listener
+  if (listener && sharedDeliveryStalled) {
+    listener(true)
+  }
 }
 
 export function subscribeViaWatcherProcess(

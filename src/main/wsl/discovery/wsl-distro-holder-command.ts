@@ -3,6 +3,11 @@ import {
   ORCAD_WSL_HOLDER_RELEASE_FILENAME
 } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
+import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
+import { resolveWslExecutablePath } from '../execution/wsl-executable-path'
+import { pinnedWslHostLinuxUser } from '../orcad/wsl-orcad-host-user'
+import type { WslDistroHolderChild } from './wsl-distro-holder-types'
 
 /** `$0` of the holder's shell; the token that identifies our holder in a process command line. */
 export const WSL_DISTRO_HOLDER_MARKER = 'orca-wsl-distro-holder'
@@ -16,6 +21,11 @@ export const WSL_DISTRO_HOLDER_POLL_SECONDS = 15
  * and so do long-lived per-user agents (gpg-agent, keyboxd, ssh-agent, an editor's server).
  */
 export const WSL_DISTRO_HOLDER_IGNORED_PROCESS_NAMES = ['systemd', '(sd-pam)', 'dbus-daemon']
+
+/** Shells a login may start; any other child of `login` (a profile's `exec server`) still counts. */
+const LOGIN_SHELL_NAMES = ['bash', 'zsh', 'sh', 'dash', 'ksh', 'mksh', 'ash', 'fish', 'tcsh', 'csh']
+  .flatMap((name) => [name, `-${name}`])
+  .join('|')
 
 /** At most this many process names go into the blocked note, so a busy distro stays cheap. */
 export const WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX = 5
@@ -35,8 +45,9 @@ export function buildWslDistroHolderScript(
     'rm -f "$f" "$b" "$b".*',
     // Fails toward holding: any live process of this user outside the holder itself counts, so a
     // distro whose default user is root never releases; so does a /proc it cannot read, or a
-    // status file it cannot parse. One exception: with /proc mounted hidepid, another user's
-    // container shim is invisible and does not hold. Leaves the first names it found in $why.
+    // status file it cannot parse. Exceptions: WSL's parked login shell (below), and with /proc
+    // mounted hidepid another user's container shim is invisible and does not hold. Leaves the
+    // first names it found in $why.
     'user_busy() {',
     'why=; c=0',
     `[ -r "${procRoot}/$$/status" ] || { why=proc-unreadable; return 0; }`,
@@ -52,7 +63,10 @@ export function buildWslDistroHolderScript(
     'case $n in containerd-shim*) ;; *)',
     '[ "$u" = "$me" ] && [ "$pp" != "$$" ] || continue',
     'case $s in Z*) continue ;; esac',
-    `case $n in ${ignored}) continue ;; esac ;;`,
+    `case $n in ${ignored}) continue ;; esac`,
+    // WSL's systemd mode parks a login shell under root's `/bin/login -f`: plumbing, not work.
+    `pn= pu=; case $n in ${LOGIN_SHELL_NAMES}) { while read -r k v r; do case $k in Name:) pn=$v ;; Uid:) pu=$v; break ;; esac; done < "${procRoot}/$pp/status"; } 2>/dev/null ;; esac`,
+    '[ "$pn" = login ] && [ "$pu" = 0 ] && continue ;;',
     'esac',
     `why="$why $n"; c=$((c + 1)); [ "$c" -lt ${WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX} ] || return 0`,
     'done; [ -n "$why" ]; }',
@@ -74,13 +88,12 @@ export function buildWslDistroHolderScript(
 
 /** `wsl.exe` argv for a holder. WSL keeps a distro up while a Windows-side client or anything started
  * through one still runs (orcad, its terminals); the holder covers the gaps when nothing does. */
-export function buildWslDistroHolderArgs(distro: string): string[] {
-  return buildWslExecArgs(distro, [
-    '/bin/sh',
-    '-c',
-    buildWslDistroHolderScript(),
-    WSL_DISTRO_HOLDER_MARKER
-  ])
+export function buildWslDistroHolderArgs(distro: string, user?: string): string[] {
+  return buildWslExecArgs(
+    distro,
+    ['/bin/sh', '-c', buildWslDistroHolderScript(), WSL_DISTRO_HOLDER_MARKER],
+    { user }
+  )
 }
 
 function escapeRegExp(value: string): string {
@@ -94,4 +107,25 @@ export function isWslDistroHolderCommandLine(commandLine: string, distro: string
   }
   const distroArg = new RegExp(`(^|\\s)-d\\s+("?)${escapeRegExp(distro)}\\2(\\s|$)`, 'i')
   return distroArg.test(commandLine)
+}
+
+/** Whether a holder's command line runs as `user` (`-u <user>`), or as the default user when undefined. */
+export function isWslDistroHolderForUser(commandLine: string, user: string | undefined): boolean {
+  const named = /(^|\s)-u\s+("?)([^\s"]+)\2(\s|$)/.exec(commandLine)?.[3]
+  return named === user
+}
+
+/** Spawns a holder for `distro`; the production `spawnHolder`. */
+export function spawnDetachedHolder(distro: string): WslDistroHolderChild {
+  // Detached and broken away from Orca's jobs where they allow it, so a holder outlives a crash of
+  // Orca even inside a kill-on-close job (an OpenSSH session's); taskkill /T still reaches it.
+  // Inheriting none of Orca's handles keeps a launcher's pipe or a DevTools socket from outliving Orca.
+  return spawnDetachedWithoutInheritance({
+    program: resolveWslExecutablePath(),
+    // As the host's pinned account: it watches that account's release file and processes.
+    args: buildWslDistroHolderArgs(distro, pinnedWslHostLinuxUser(distro)),
+    // A host-wide holder must never pin a worktree as its Windows cwd.
+    cwd: resolveWslInteropSpawnCwd(),
+    env: { ...process.env, WSL_UTF8: '1' }
+  })
 }

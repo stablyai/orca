@@ -60,7 +60,7 @@ export function useWorktreeDocumentDrop(args: {
             worktreeIds: session.reorderDraggedIds,
             status: target.status,
             dropIndex: statusDrop.dropIndex,
-            groups: ctx.worktreeDragGroups
+            groups: ctx.getWorktreeDragGroups()
           })
           clearWorktreeDrag()
           return
@@ -76,11 +76,11 @@ export function useWorktreeDocumentDrop(args: {
         ctx.captureFolderRetention?.(rawDropPoint, session.pickedCopies, session.sourceGroupKey) ??
         rawDropPoint
       ctx.onReorderWorktrees({
-        groups: ctx.worktreeDragGroups,
+        groups: ctx.getWorktreeDragGroups(),
         sourceGroupKey: session.sourceGroupKey,
         draggedKeys: session.reorderDraggedKeys,
         dropIndex: getFullDropIndexForWorktreeDragUnit({
-          groups: ctx.worktreeDragUnitGroups,
+          groups: ctx.getWorktreeDragUnitGroups(),
           sourceGroupKey: session.sourceGroupKey,
           dropIndex: drop.dropIndex
         })

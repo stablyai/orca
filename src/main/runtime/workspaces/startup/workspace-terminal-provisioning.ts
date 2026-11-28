@@ -4,9 +4,6 @@ import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/r
 import { OrcaRuntimeWithActivateManagedWorktree } from './workspace-activation'
 import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
 import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
-import { prefetchWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base-prefetch'
-import { prepareWorktreeCreateForRepo } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -172,6 +169,15 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const store = this.requireStore()
+    const [
+      { prefetchWorktreeCreateBase },
+      { prepareWorktreeCreateForRepo },
+      { getWorktreeCreatePrefetchGitOptions }
+    ] = await Promise.all([
+      import('../../../workspaces/creation/worktree-create-base-prefetch'),
+      import('../../../workspaces/creation/preparation/worktree-create-preparation'),
+      import('../../../workspaces/execution-host/project-runtime-git-options')
+    ])
     await prefetchWorktreeCreateBase({
       repo,
       baseBranch: args.baseBranch,

@@ -2,11 +2,6 @@ import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { FolderWorkspacePathStatusRequest } from '../../../shared/folder-workspaces/folder-workspace-path-status'
-import {
-  assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus,
-  getFolderWorkspacePathStatusForPath
-} from '../../project-groups/folder-workspace-path-status'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
@@ -35,6 +30,8 @@ export function registerFolderWorkspaceHandlers(
       rawArgs,
       'invalid_folder_workspace_path_status_args'
     ) as FolderWorkspacePathStatusRequest
+    const { getFolderWorkspacePathStatus } =
+      await import('../../project-groups/folder-workspace-path-status')
     return getFolderWorkspacePathStatus(store, args)
   })
 
@@ -77,6 +74,8 @@ export function registerFolderWorkspaceHandlers(
           return null
         }
         const projectGroups = store.getProjectGroups()
+        const { assertFolderWorkspacePathUsable, getFolderWorkspacePathStatusForPath } =
+          await import('../../project-groups/folder-workspace-path-status')
         const status = await getFolderWorkspacePathStatusForPath({
           folderPath: args.updates.folderPath,
           projectGroupId: workspace.projectGroupId,

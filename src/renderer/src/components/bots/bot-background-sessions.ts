@@ -13,11 +13,15 @@ import type { AgentSessionStatusSnapshot } from '../../../../shared/agent-sessio
 import type { Bot } from '../../../../shared/bot-types'
 import { isBotGroupMemberSession, type BotGroup } from '../../../../shared/bots/bot-group'
 import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import {
+  chatPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getStructuredAgentSessionTabs,
+  structuredTabsShowingConversation,
   type StructuredTab
 } from '../native-chat/session/status/structured-agent-session-tabs'
 
@@ -75,7 +79,11 @@ function botSessionStandIn(
       tabbed = new Set((unifiedTabsByWorktree[workspaceId] ?? []).map((tab) => tab.entityId))
       opened.set(workspaceId, tabbed)
     }
-    if (tabbed.has(sessionId)) {
+    // A tab in any workspace shows it, so that tab, not a stand-in, carries its status.
+    if (
+      tabbed.has(sessionId) ||
+      !structuredTabsShowingConversation(unifiedTabsByWorktree, chatPaneKey(sessionId)).next().done
+    ) {
       return null
     }
     return isBotGroupMemberSession(sessionId)

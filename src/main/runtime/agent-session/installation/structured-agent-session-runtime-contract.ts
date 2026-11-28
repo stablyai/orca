@@ -22,7 +22,10 @@ import type { LinkedSkills } from '../../../native-chat/native-chat-skill-roots'
 export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportOverrides & {
   /** Host state root. The record store and the journal database both hang off it. */
   stateDirectory: string
-  owedItemAttachmentUploads?: (stateDirectory: string, root: string) => Promise<ReadonlySet<string>>
+  owedItemAttachmentUploads?: (
+    stateDirectory: string,
+    root: string
+  ) => Promise<ReadonlySet<string> | null>
   legacySessionTabIds?: readonly string[]
   /** Execution host this runtime *is*. A record pinned elsewhere is not ours to
    *  probe and not ours to spawn for. */
@@ -141,4 +144,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     record: AgentSessionRecord,
     launchDirectory: string
   ) => Promise<AgentSessionAccountHome | null>
-} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'onIdleProviderDeath' | 'statusSink'>
+} & Pick<
+    StructuredAgentSessionHostDeps,
+    'onRequestFailure' | 'onIdleProviderDeath' | 'onUserClosedProvider' | 'statusSink'
+  >

@@ -12,7 +12,6 @@ import {
 import { skillDirectoryMaxDepth } from '../../shared/skills/discovery/skill-discovery-depth'
 import { declaredSkillMetadata } from '../../shared/skills/discovery/skill-metadata'
 import { findSkillFiles } from '../skills/discovery/skill-root-file-walk'
-import { clearSkillDiscoveryCaches } from '../skills/discovery/skill-discovery-target'
 import type {
   LinkedProjectSkill,
   LinkedSkillListing,
@@ -253,7 +252,9 @@ export function relinkBotSkills(
         console.warn("[bots] the bot's linked project skills could not be relinked", bot.id, error)
       }
     )
-    .finally(() => {
+    .finally(async () => {
+      const { clearSkillDiscoveryCaches } =
+        await import('../skills/discovery/skill-discovery-target')
       clearSkillDiscoveryCaches()
       retireAtRestCommandContext(folderWorkspaceKey(bot.folderWorkspaceId))
     })

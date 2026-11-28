@@ -1,8 +1,9 @@
 /**
- * A text save too large for one remote request: the client sends it in chunks to a temp in this
- * host's private staging folder, and the commit hands the whole text to the same guarded write a
- * one-request save uses, so the result on disk is identical. Bounded per save, per connection and
- * per host; idle saves and a closed socket's saves are dropped, and host start empties the folder.
+ * Bytes too large for one remote request: the client sends them in chunks to a temp in this host's
+ * private staging folder, so nothing lands in the user's folder before the commit. A text save
+ * commits through the same guarded write a one-request save uses; an upload creates a new file and
+ * never replaces one. Bounded per save, per connection and per host; idle saves and a closed
+ * socket's saves are dropped, and host start empties the folder.
  */
 import { randomUUID } from 'node:crypto'
 import { appendFile, chmod, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -14,11 +15,17 @@ import type {
 import { restrictWindowsDirectory } from '../../../shared/secure-storage/secure-path-windows-acl'
 import { STAGED_FILE_SAVE_LIMITS } from '../../../shared/file-write/staged-file-save'
 import { writeLocalTextFileWithDiskPrecondition } from '../../filesystem/local-file-io/local-disk-write-precondition'
+import { createLocalFileFromSource } from '../../filesystem/local-file-io/filesystem-create-path'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { inspectProcessLiveness } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import type { ProcessLivenessVerdict } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 
+/** 'save' writes over an existing text file; 'upload' creates a new file from the bytes. */
+export type StagedSaveKind = 'save' | 'upload'
+
 type StagedSave = {
   owner: string
+  kind: StagedSaveKind
   /** The target as the client named it, authorized again at commit. */
   requestedPath: string
   /** Its authorized real path at begin. */
@@ -26,6 +33,7 @@ type StagedSave = {
   tempPath: string
   totalBytes: number
   written: number
+  appending: boolean
   committing: boolean
   aborting: boolean
   // Every op on a save waits for the one before, so a temp is never removed or read mid-append.
@@ -59,7 +67,8 @@ export class StagedFileSaves {
   async begin(
     owner: string,
     target: { requestedPath: string; realPath: string },
-    totalBytes: number
+    totalBytes: number,
+    kind: StagedSaveKind = 'save'
   ): Promise<{ saveId: string }> {
     const dir = this.processDir()
     if (!dir) {
@@ -80,11 +89,13 @@ export class StagedFileSaves {
     const tempPath = join(dir, `${saveId}.tmp`)
     const save: StagedSave = {
       owner,
+      kind,
       requestedPath: target.requestedPath,
       targetPath: target.realPath,
       tempPath,
       totalBytes,
       written: 0,
+      appending: false,
       committing: false,
       aborting: false,
       pending: Promise.resolve(),
@@ -120,6 +131,12 @@ export class StagedFileSaves {
     if (save.committing) {
       throw new Error('staged_save_commit_in_progress')
     }
+    // Clients send a chunk after the last one lands; one still in flight means this one is out of
+    // order, and queuing it would hold its bytes in memory with no bound.
+    if (save.appending) {
+      throw new Error('staged_save_out_of_order')
+    }
+    save.appending = true
     this.touch(owner, saveId, save)
     return this.queue(save, async () => {
       // In order only: a retried or reordered chunk can't land twice or leave a gap.
@@ -128,17 +145,51 @@ export class StagedFileSaves {
       }
       await appendFile(save.tempPath, bytes)
       save.written += bytes.length
+    }).finally(() => {
+      save.appending = false
     })
   }
 
   /** The target is authorized again now; a different real path (a swapped link) refuses the save. */
-  async commit(
+  commit(
     owner: string,
     saveId: string,
     precondition: FileWriteDiskPrecondition | undefined,
     authorize: (requestedPath: string) => Promise<string>
   ): Promise<FileWriteResult> {
+    return this.finish(owner, saveId, 'save', authorize, async (save) => {
+      const content = (await readFile(save.tempPath)).toString('utf8')
+      // The same write a one-request save makes: same locks, compare, and file kept in place.
+      return writeLocalTextFileWithDiskPrecondition(save.targetPath, content, precondition)
+    })
+  }
+
+  /**
+   * Creates the target from the staged bytes; a name taken since begin refuses the upload. Once
+   * committing, a closed socket lets the copy finish.
+   */
+  async commitUpload(
+    owner: string,
+    saveId: string,
+    authorize: (requestedPath: string) => Promise<string>
+  ): Promise<void> {
+    await this.finish(owner, saveId, 'upload', authorize, (save) =>
+      createLocalFileFromSource(save.tempPath, windowsFsPath(save.targetPath))
+    )
+  }
+
+  private async finish<TResult>(
+    owner: string,
+    saveId: string,
+    kind: StagedSaveKind,
+    authorize: (requestedPath: string) => Promise<string>,
+    write: (save: StagedSave) => Promise<TResult>
+  ): Promise<TResult> {
     const save = this.require(owner, saveId)
+    // A text save must never commit as a create, nor an upload overwrite as a text save.
+    if (save.kind !== kind) {
+      throw new Error('staged_save_unknown')
+    }
     if (save.committing) {
       throw new Error('staged_save_commit_in_progress')
     }
@@ -156,9 +207,7 @@ export class StagedFileSaves {
         if ((await authorize(save.requestedPath)) !== save.targetPath) {
           throw new Error('staged_save_target_moved')
         }
-        const content = (await readFile(save.tempPath)).toString('utf8')
-        // The same write a one-request save makes: same locks, compare, and file kept in place.
-        return await writeLocalTextFileWithDiskPrecondition(save.targetPath, content, precondition)
+        return await write(save)
       } finally {
         try {
           await rm(save.tempPath, { force: true })

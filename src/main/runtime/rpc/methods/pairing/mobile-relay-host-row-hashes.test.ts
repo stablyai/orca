@@ -147,7 +147,7 @@ describe('mobileRelay.hosts.worktrees row hashing', () => {
     const first = await read(null)
     rowHashes.count = 0
     expect(await read(first.snapshotId)).toEqual({ unchanged: true, snapshotId: first.snapshotId })
-    expect(rowHashes.count).toBe(1)
+    expect(rowHashes.count).toBe(0)
 
     // Row 3 carries the other-client stamp, so its object is rebuilt for the desktop's view.
     changeOneRow(3)

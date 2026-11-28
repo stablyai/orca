@@ -31,14 +31,39 @@ export type WorkspaceReviewChecksSummary = Omit<ProviderCheckSummary, 'state'> &
   stale: number
 }
 
+const EMPTY_REVIEW_CHECKS_SUMMARY: WorkspaceReviewChecksSummary = Object.freeze({
+  state: 'none',
+  total: 0,
+  known: 0,
+  unknown: 0,
+  stale: 0,
+  passed: 0,
+  failed: 0,
+  cancelled: 0,
+  pending: 0,
+  neutral: 0
+})
+
 export function summarizeWorkspaceReviewChecks(
   attachments: readonly WorkspaceAttachment[],
   details: Readonly<Record<string, WorkspaceReviewCheckDetails | undefined>>
 ): WorkspaceReviewChecksSummary {
-  const reviews = normalizeWorkspaceAttachments(attachments).filter((item) => item.type !== 'issue')
+  if (attachments.length === 0) {
+    return EMPTY_REVIEW_CHECKS_SUMMARY
+  }
+  const normalized = normalizeWorkspaceAttachments(attachments)
+  let reviewCount = 0
+  for (const item of normalized) {
+    if (item.type !== 'issue') {
+      reviewCount += 1
+    }
+  }
+  if (reviewCount === 0) {
+    return EMPTY_REVIEW_CHECKS_SUMMARY
+  }
   const summary: WorkspaceReviewChecksSummary = {
     state: 'none',
-    total: reviews.length,
+    total: reviewCount,
     known: 0,
     unknown: 0,
     stale: 0,
@@ -49,7 +74,10 @@ export function summarizeWorkspaceReviewChecks(
     neutral: 0
   }
   const reviewStates = new Set<HostedReviewState | undefined>()
-  for (const item of reviews) {
+  for (const item of normalized) {
+    if (item.type === 'issue') {
+      continue
+    }
     const detail = details[getWorkspaceAttachmentKey(item)]
     const review = detail?.review
     const matches =

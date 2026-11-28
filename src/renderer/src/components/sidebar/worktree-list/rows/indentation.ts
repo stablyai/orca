@@ -33,17 +33,25 @@ export function getProjectGroupHeaderPaddingLeft(depth: number): number {
   )
 }
 
+export function getWorktreeCardContentIndentDirect(
+  isGrouped: boolean,
+  groupDepth: number,
+  lineageDepth: number
+): number {
+  const lineageIndent = clampDepth(lineageDepth) * SIDEBAR_TREE_INDENT
+  return isGrouped
+    ? getProjectGroupHeaderPaddingLeft(groupDepth) +
+        GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
+        lineageIndent
+    : lineageIndent
+}
+
 export function getWorktreeCardContentIndent(args: {
   isGrouped: boolean
   groupDepth: number
   lineageDepth: number
 }): number {
-  const lineageIndent = clampDepth(args.lineageDepth) * SIDEBAR_TREE_INDENT
-  return args.isGrouped
-    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) +
-        GROUPED_CARD_TITLE_HEADER_LABEL_OFFSET +
-        lineageIndent
-    : lineageIndent
+  return getWorktreeCardContentIndentDirect(args.isGrouped, args.groupDepth, args.lineageDepth)
 }
 
 export function getFolderWorkspaceCardContentIndent(args: { groupDepth: number }): number {
@@ -120,14 +128,18 @@ export function getFolderWorkspaceRowGeometry(args: {
   }
 }
 
+export function getWorktreeCardSurfaceInsetDirect(isGrouped: boolean, groupDepth: number): number {
+  // Why: steps with group headers so each card edge keeps the same offset from its header icon.
+  return isGrouped
+    ? getProjectGroupHeaderPaddingLeft(groupDepth) - PROJECT_GROUP_HEADER_BASE_PADDING
+    : 0
+}
+
 export function getWorktreeCardSurfaceInset(args: {
   isGrouped: boolean
   groupDepth: number
 }): number {
-  // Why: steps with group headers so each card edge keeps the same offset from its header icon.
-  return args.isGrouped
-    ? getProjectGroupHeaderPaddingLeft(args.groupDepth) - PROJECT_GROUP_HEADER_BASE_PADDING
-    : 0
+  return getWorktreeCardSurfaceInsetDirect(args.isGrouped, args.groupDepth)
 }
 
 export function getFlushWorktreeCardPaddingLeft(

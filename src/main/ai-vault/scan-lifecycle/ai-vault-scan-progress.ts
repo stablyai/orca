@@ -98,6 +98,13 @@ export function noteAiVaultScanReading(signal: AbortSignal | undefined): void {
   reporter?.workChanged()
 }
 
+/** Transcript bytes read from disk, by parses and scope cwd probes. */
+export function noteAiVaultScanContentRead(signal: AbortSignal | undefined, bytes: number): void {
+  const reporter = signal && bytes > 0 ? reporters.get(signal) : undefined
+  reporter?.tally.noteContentRead(bytes)
+  reporter?.workChanged()
+}
+
 export function aiVaultScanWorkload(signal: AbortSignal | undefined) {
   return tallyFor(signal)?.workload
 }

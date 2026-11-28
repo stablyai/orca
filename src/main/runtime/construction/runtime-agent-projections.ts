@@ -23,6 +23,7 @@ export function createRuntimeAgentProjections(
 ) {
   let historyChecked = false
   let peerKey: () => string | null = () => null
+  let fingerprint: { key: string; value: string } | undefined
   // Pairings change only by registry writes; resolving reads several files, so not per Dispatch change.
   const principals = new Map<string, AgentSenderPrincipal | undefined>()
   let pairing = environmentStoreWriteCount()
@@ -42,9 +43,16 @@ export function createRuntimeAgentProjections(
         return null
       }
     },
+    // Every sender refresh reads it; hash only when the key changes.
     peerFingerprint: () => {
       const key = peerKey()
-      return key ? fingerprintOrchestrationPeer(key) : undefined
+      if (!key) {
+        return undefined
+      }
+      if (fingerprint?.key !== key) {
+        fingerprint = { key, value: fingerprintOrchestrationPeer(key) }
+      }
+      return fingerprint.value
     },
     pairingGeneration: environmentStoreWriteCount,
     principal: async (environmentId) => {

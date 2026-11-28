@@ -36,9 +36,10 @@ function sanitizeNestedRepoImportError(context: string, error: unknown): string 
 export function registerNestedRepoImportHandler(
   mainWindow: BrowserWindow,
   store: Store,
-  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata']
+  enqueueMetadata: RepositoryMetadataOwner['enqueueRepositoryMetadata'],
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
-  ipcMain.handle(
+  ipc.handle(
     'projectGroups:importNested',
     async (_event, rawArgs: unknown): Promise<ProjectGroupImportResult> => {
       const args = parseProjectGroupIpcArgs(

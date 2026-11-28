@@ -8,6 +8,7 @@ import {
   botItemLineHeads,
   botItemQuestionLine,
   botItemQuickReplyText,
+  type BotItemDecision,
   type BotItemQuestionShape
 } from './bot-item-ask'
 import { botItemCommentImages } from './bot-items'
@@ -48,6 +49,10 @@ export function botItemNamedAnswers(shape: BotItemQuestionShape, text: string): 
   return botItemNamedAnswerLines(shape, text).map((line) => line?.words || null)
 }
 
+function normalizeAnswerLine(words: string): string {
+  return words.replace(/\s+/g, ' ').trim()
+}
+
 function answerLines(
   shape: BotItemQuestionShape,
   answers: readonly (string | null)[],
@@ -56,7 +61,7 @@ function answerLines(
   return shape.decisions
     .flatMap((decision, index) => {
       const head = `${botItemQuestionLine(decision.question)} →`
-      const words = answers[index]?.replace(/\s+/g, ' ').trim()
+      const words = normalizeAnswerLine(answers[index] ?? '')
       if (!words) {
         return keepsPlace(index) ? [head] : []
       }
@@ -94,28 +99,61 @@ export function botItemAnswersText(
 }
 
 /** What an owner's comment answered on one question line, for its "Question → answer" look: the quick
- *  replies it picked, its words for that line, or all its words; null for a recorded answer's words. */
-export function botItemAnswerWords(
+ *  replies it picked (`picked`), its words for that line, or all its words; null for a recorded
+ *  answer's words. */
+export function botItemAnswer(
   shape: BotItemQuestionShape,
   index: number,
   reply: Record<string, unknown>
-): string | null {
+): { words: string; picked: boolean } | null {
   const text = typeof reply.text === 'string' ? reply.text.trim() : ''
   const recorded = Array.isArray(reply.decisions)
   const line = recorded ? null : botItemNamedAnswerLines(shape, text)[index]
   const ownReply = line ? { ...reply, text: `${line.head} ${line.words}`.trim() } : reply
   const picks = botItemPickedReplies(shape, ownReply)[index] ?? []
   if (picks.length > 0) {
-    return picks.map((pick) => pick.label).join(', ')
+    return { words: picks.map((pick) => pick.label).join(', '), picked: true }
   }
   if (recorded) {
     return null
   }
   const words = line?.words || text
+  if (!words) {
+    return null
+  }
+  if (line?.words && picksNormalizedReplies(shape.decisions[index], line.words)) {
+    return { words: line.words, picked: true }
+  }
   // Its images show on its own card, so the [Image #N] its send wrote go; an image alone keeps its mark.
-  return words
-    ? stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words
-    : null
+  return {
+    words: stripSentImagePromptMarkers(words, botItemCommentImages(reply).length).trim() || words,
+    picked: false
+  }
+}
+
+/** Whether a line's words pick the decision's quick replies once their labels collapse spaces, as a
+ *  sent answer line writes them. */
+function picksNormalizedReplies(decision: BotItemDecision | undefined, words: string): boolean {
+  if (!decision?.replies.some(({ label }) => normalizeAnswerLine(label) !== label)) {
+    return false
+  }
+  const replies = decision.replies.map((option) => ({
+    ...option,
+    label: normalizeAnswerLine(option.label)
+  }))
+  const [picks] = botItemPickedReplies(
+    { body: '', decisions: [{ ...decision, replies }] },
+    { text: words }
+  )
+  return (picks?.length ?? 0) > 0
+}
+
+export function botItemAnswerWords(
+  shape: BotItemQuestionShape,
+  index: number,
+  reply: Record<string, unknown>
+): string | null {
+  return botItemAnswer(shape, index, reply)?.words ?? null
 }
 
 /** Answers held for an earlier ask, less the lines a comment answered meanwhile: what recovering them

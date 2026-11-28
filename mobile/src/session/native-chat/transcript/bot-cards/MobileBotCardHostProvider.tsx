@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../../src/shared/execution-host/execution-host'
-import { structuredAgentSessionPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { botHomeWorktreeId, hostBotsKey } from '../../../../bots/host-bots-read'
 import { useOpenBotHome } from '../../../../bots/use-open-bot-home'
 import { openMobileStructuredSession } from '../../agent-session/open-mobile-structured-session'
@@ -64,7 +64,7 @@ export function MobileBotCardHostProvider({
             hostId: pairedHostId,
             ...(executionHost ? { executionHost } : {}),
             worktreeId: opened.worktreeId,
-            paneKey: structuredAgentSessionPaneKey(opened.tabId, chatId),
+            paneKey: chatPaneKey(chatId),
             name: bot.name
           }),
         // Every bot a card names runs on this chat's computer, so its Home opens here, not through link lookup.

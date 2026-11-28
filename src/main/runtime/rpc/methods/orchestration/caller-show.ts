@@ -111,7 +111,8 @@ export const ORCHESTRATION_CALLER_METHODS = [
   }),
   defineOrchestrationMethod({
     name: 'orchestration.partyLocation',
-    access: { kind: 'reads', targets: { address: 'party', messageIds: 'message' } },
+    // Answered from this Orca's records, as partyOpen is: a paired server's answer is in its own terms.
+    access: { kind: 'localOnly', targets: { address: 'party', messageIds: 'message' } },
     permission: 'workspace',
     params: PartyLocationParams,
     // Resolve the chat sender's live /clear successor on its owning host.

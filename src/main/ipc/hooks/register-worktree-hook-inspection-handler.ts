@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import {
   getRepoDialableSshTargetId,
   type ExecutionHostId
@@ -13,10 +14,13 @@ import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-contain
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
 
-export function registerWorktreeHookInspectionHandler(context: WorktreeIpcContext): void {
+export function registerWorktreeHookInspectionHandler(
+  context: WorktreeIpcContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
 
-  ipcMain.handle(
+  ipc.handle(
     'hooks:inspectSetupScriptImports',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)

@@ -52,7 +52,7 @@ const buttonVariants = cva(
         'ghost-inset': `hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 transition-colors ${insetFocusRingClasses}`,
         // Keep icon states visible on muted fields, which share accent's light-theme fill.
         'muted-field-icon':
-          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground',
+          'text-muted-foreground hover:bg-foreground/[0.08] hover:text-foreground focus-visible:bg-foreground/[0.08] focus-visible:text-foreground aria-expanded:bg-foreground/[0.08] aria-expanded:text-foreground data-[state=open]:bg-foreground/[0.08] data-[state=open]:text-foreground aria-pressed:bg-foreground/15 aria-pressed:text-foreground data-[active=true]:bg-foreground/15 data-[active=true]:text-foreground',
         // The head queued card's Steer: ghost, filled as the primary while the composer previews Steer queued.
         'queued-head-steer':
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:bg-primary [[data-native-chat-root]:has([data-native-chat-steer-preview=steer-queued])_&]:text-primary-foreground',
@@ -108,6 +108,9 @@ const buttonVariants = cva(
         'responsive-sm':
           'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
         pill: "h-7 gap-1.5 rounded-full px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
+        // The shared "Send N notes" button; send-notes-sm is for rows shorter than 36px.
+        'send-notes': 'h-7 gap-1.5 rounded-md px-2.5 text-xs font-medium has-[>svg]:px-2.5',
+        'send-notes-sm': 'h-6 gap-1.5 rounded-md px-2.5 text-xs font-medium has-[>svg]:px-2.5',
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
         'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',

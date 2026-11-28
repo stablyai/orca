@@ -1,6 +1,7 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import { OptionalGhAccountExpectation } from '../../../shared/rpc-contract/github/github-repo-target-params'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { GitHubPRFile } from '../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubCreateIssueFields } from '../../../shared/work-items/issue-mutation-types'
@@ -26,8 +27,11 @@ import { broadcastGitHubWorkItemMutation } from './github-work-item-mutation-eve
 // A sidebar card's issue retry is a background read too, so the refusal can't promise one.
 const NO_WAKING_RETRY = { retryStartsIt: false }
 
-export function registerGitHubWorkItemHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerGitHubWorkItemHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'gh:issue',
     (
       _event,
@@ -57,7 +61,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
+  ipc.handle('gh:listIssues', (_event, args: { repoPath: string; limit?: number }) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     return listIssues(
       repo.path,
@@ -68,7 +72,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     ).then((result) => result.items)
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:createIssue',
     (
       _event,
@@ -91,7 +95,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:listWorkItems',
     (
       _event,
@@ -127,7 +131,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:countWorkItems',
     (_event, args: { repoPath: string; query?: string; wakeWslDistro?: boolean }) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -147,12 +151,12 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('gh:workItem', (_event, args: WorkItemArgs) => {
+  ipc.handle('gh:workItem', (_event, args: WorkItemArgs) => {
     const repo = assertRegisteredGitHubRepo(args, store)
     return dispatchWorkItem(args, repo, getWorkItem, getGitHubLocalGitOptionArgs(store, repo)[0])
   })
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:workItemByOwnerRepo',
     (
       _event,
@@ -179,7 +183,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:workItemDetails',
     (
       _event,
@@ -210,7 +214,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:notifyWorkItemMutated',
     (event, args: { repoPath: string; repoId?: string; type: 'issue' | 'pr'; number: number }) => {
       const repo = args.repoId
@@ -235,7 +239,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  ipc.handle(
     'gh:prFileContents',
     (
       _event,
