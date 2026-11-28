@@ -29196,6 +29196,7 @@
       },
       "homeChat": "Home Chat",
       "row": {
+        "cancel": "Annuler",
         "done": "Marquer comme terminé",
         "more": "Plus",
         "select": "Sélectionner {{title}}"
@@ -29261,8 +29262,6 @@
         "automationEnded": "Terminée"
       },
       "menu": {
-        "cancel": "Annuler",
-        "done": "Marquer comme terminé",
         "waiting": "En attente…"
       },
       "pill": {
