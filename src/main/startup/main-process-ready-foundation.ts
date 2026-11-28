@@ -25,7 +25,6 @@ import { createProfileStateStoreForStartup } from '../persistence/profile-state/
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
-import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guard'
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
@@ -33,10 +32,6 @@ import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runn
 import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
-import {
-  shouldSuppressDevEducation,
-  suppressDevEducationForStore
-} from './profile-startup/dev-education-suppression'
 import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
 import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
 import { registerLazyDocPreviewGrantHandlers } from '../ipc/register-lazy-doc-preview-grant-handlers'
@@ -51,12 +46,10 @@ import { mainProcessState as state } from './main-process-state'
 import { createStoreNativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { followNativeSettingChanges } from './native-setting-subscriptions'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
-import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
 import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
-import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
@@ -112,6 +105,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   updateGpuAccelerationAboutPanel()
   if (state.isServeMode) {
     // Profile loading can decrypt and hang; fence unreachable keychains first.
+    const { withholdUnreachableKeychainForServe } = await import('../host/serve-keychain-guard')
     await withholdUnreachableKeychainForServe({
       usesMockKeychain: app.commandLine.hasSwitch('use-mock-keychain')
     })
@@ -137,6 +131,8 @@ export async function initializeReadyFoundation(): Promise<void> {
             error instanceof Error ? error.message : String(error)
           )
         })
+    const { createWslCliReconciliationStartupBarrier } =
+      await import('./wsl-startup/wsl-cli-reconciliation-startup-barrier')
     state.managedWslCliStartupBarrierReady = createWslCliReconciliationStartupBarrier(
       state.managedWslCliReconciliationReady
     )
@@ -190,7 +186,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   hangWatchdog?.setMenuBarIconSetting(nativeSettings.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
-    preloadSsh2()
+    void import('../ssh/authentication/ssh2-module-load').then(({ preloadSsh2 }) => preloadSsh2())
   }
   setNodeDistMirrorSettingReader(() => store.getSettings().nodeDistMirrorUrl)
   // Main-process-ready waits on interrupted moves being reset or finished, bounded.
@@ -290,8 +286,12 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   })
   applyAppIcon(nativeSettings.getSettings().appIcon)
-  if (shouldSuppressDevEducation({ isDev: !app.isPackaged })) {
-    suppressDevEducationForStore(store)
+  if (!app.isPackaged) {
+    const { shouldSuppressDevEducation, suppressDevEducationForStore } =
+      await import('./profile-startup/dev-education-suppression')
+    if (shouldSuppressDevEducation({ isDev: true })) {
+      suppressDevEducationForStore(store)
+    }
   }
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => nativeSettings.getSettings())
