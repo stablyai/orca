@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { getMainHttpClient } from '../../network/http-client'
+import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
 import { requireRuntimeAnswersVersion } from '../../node-runtime/managed-runtime-version-check'
@@ -69,17 +70,25 @@ export async function claudeUpdateChannel(
   return channels.findLast((channel) => channel !== undefined) ?? 'latest'
 }
 
+export async function fetchClaudeChannelVersion(
+  channel: 'latest' | 'stable',
+  signal?: AbortSignal
+): Promise<string> {
+  const response = await getMainHttpClient().fetch(`${RELEASES}/${channel}`, { signal })
+  if (!response.ok) {
+    await cancelUnreadResponseBody(response)
+    throw new Error(`Claude release lookup failed (${response.status})`)
+  }
+  return (await response.text()).trim()
+}
+
 async function fetchLatestPin(signal?: AbortSignal): Promise<ManagedRuntimePin | null> {
   const platform = claudeManagedPlatform()
   if (!platform) {
     return null
   }
   const { fetch } = getMainHttpClient()
-  const versionResponse = await fetch(`${RELEASES}/${await claudeUpdateChannel()}`, { signal })
-  if (!versionResponse.ok) {
-    throw new Error(`Claude release lookup failed (${versionResponse.status})`)
-  }
-  const version = (await versionResponse.text()).trim()
+  const version = await fetchClaudeChannelVersion(await claudeUpdateChannel(), signal)
   const manifestResponse = await fetch(`${RELEASES}/${encodeURIComponent(version)}/manifest.json`, {
     signal
   })

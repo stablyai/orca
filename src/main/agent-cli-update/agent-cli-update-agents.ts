@@ -18,7 +18,7 @@ type AgentCliUpdateDefinition = {
   parseVersion?: typeof parseCliVersion
   /** Its launcher runs a newer copy from elsewhere, so an unchanged file doesn't mean an unchanged version. */
   updatesOutsideLauncher?: true
-  latest: (installed: string) => AgentCliReleaseSource
+  latest: (installed: string, realPath: string) => AgentCliReleaseSource
   plan: (installed: string, realPath: string) => AgentCliUpdatePlan
 }
 
@@ -47,12 +47,12 @@ function homebrewUpgradeCommand(keg: string, realPath: string): string | null {
 const packageManagerPlan = (command: string | null): AgentCliUpdatePlan | null =>
   command ? { runnable: false, command } : null
 
-// The `claude-code` cask follows Claude's stable channel rather than the one Orca compares
-// against, so it keeps `claude update`, which names the brew command or the `@latest` cask.
+// `claude update` only names the brew or winget command for these installs.
 function claudeUpdatePlan(_installed: string, realPath: string): AgentCliUpdatePlan {
   const command = /Microsoft[/\\]WinGet[/\\]Packages[/\\]Anthropic\.ClaudeCode_/i.test(realPath)
     ? 'winget upgrade Anthropic.ClaudeCode'
-    : homebrewUpgradeCommand('claude-code@latest', realPath)
+    : (homebrewUpgradeCommand('claude-code@latest', realPath) ??
+      homebrewUpgradeCommand('claude-code', realPath))
   return packageManagerPlan(command) ?? { runnable: true, args: ['update'] }
 }
 
@@ -71,7 +71,14 @@ function manualCodexUpdateCommand(realPath: string): string {
 // Other self-updates follow how the CLI was installed (native, npm, bun, Homebrew), and a
 // package manager behind the release is caught by the version read after it.
 const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDefinition> = {
-  claude: { latest: () => ({ kind: 'claude' }), plan: claudeUpdatePlan },
+  claude: {
+    // The `claude-code` cask ships Claude's stable channel, which `claude update` checks it against too.
+    latest: (_installed, realPath) =>
+      homebrewUpgradeCommand('claude-code', realPath)
+        ? { kind: 'claude', channel: 'stable' }
+        : { kind: 'claude' },
+    plan: claudeUpdatePlan
+  },
   codex: {
     parseVersion: parseCodexCliVersion,
     // Codex's npm, Homebrew and standalone builds all publish from this release.
