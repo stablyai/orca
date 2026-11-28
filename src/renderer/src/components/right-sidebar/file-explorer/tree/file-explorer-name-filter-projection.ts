@@ -3,7 +3,10 @@ import {
   normalizeRelativePath,
   splitPathSegments
 } from '../../../../../../shared/file-access/cross-platform-path'
-import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
+import {
+  compareDirEntriesForSortMode,
+  type FileExplorerSortMode
+} from '../../../../../../shared/file-listing/file-name-sort'
 import {
   FILE_NAME_FILTER_QUERY_MAX_BYTES,
   isFileNameFilterQueryTooLarge,
@@ -118,6 +121,7 @@ export function createNameFilteredFileExplorerProjection({
   nameFilter,
   showDotfiles,
   showGitIgnoredFiles,
+  sortMode,
   worktreePath,
   displayRootPath = worktreePath
 }: {
@@ -126,6 +130,7 @@ export function createNameFilteredFileExplorerProjection({
   nameFilter: FileExplorerNameFilterProjectionSource
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
+  sortMode: FileExplorerSortMode
   worktreePath: string
   displayRootPath?: string
 }): FileExplorerRowProjection {
@@ -192,28 +197,33 @@ export function createNameFilteredFileExplorerProjection({
     }
     displayChildren = entry.children
   }
-  appendNameFilteredEntries(displayChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+  appendNameFilteredEntries(
+    displayChildren.values(),
+    sortMode,
+    visibleFlatRows,
+    rowsByPath,
+    collapsedPaths
+  )
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
 function appendNameFilteredEntries(
   entries: Iterable<SyntheticTreeEntry>,
+  sortMode: FileExplorerSortMode,
   visibleFlatRows: TreeNode[],
   rowsByPath: Map<string, TreeNode>,
   collapsedPaths?: ReadonlySet<string>
 ): void {
-  const sortedEntries = Array.from(entries).sort((a, b) => {
-    if (a.node.isDirectory !== b.node.isDirectory) {
-      return a.node.isDirectory ? -1 : 1
-    }
-    return compareFileNames(a.node.name, b.node.name)
-  })
+  const sortedEntries = Array.from(entries).sort((a, b) =>
+    compareDirEntriesForSortMode(a.node, b.node, sortMode)
+  )
   for (const entry of sortedEntries) {
     visibleFlatRows.push(entry.node)
     rowsByPath.set(entry.node.path, entry.node)
     if (entry.children.size > 0 && !collapsedPaths?.has(entry.node.path)) {
       appendNameFilteredEntries(
         entry.children.values(),
+        sortMode,
         visibleFlatRows,
         rowsByPath,
         collapsedPaths
