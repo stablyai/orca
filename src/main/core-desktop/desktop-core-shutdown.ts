@@ -174,6 +174,8 @@ export function beginDesktopCoreShutdown(
   wslHookRelayManager.disposeAll()
   // A closed WSL-host channel still in its EOF grace must not outlive the app.
   killWslChannelsInCloseGrace()
+  core.unsubscribePullRequestStats?.()
+  core.unsubscribePullRequestStats = null
   const statsFlush = core.stats?.flushAsync() ?? Promise.resolve()
   // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
   const connectorTurnEndsFlush = ConnectorTurnEvents.settled()

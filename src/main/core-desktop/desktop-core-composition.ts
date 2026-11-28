@@ -50,6 +50,7 @@ import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-c
 import { StatsCollector } from '../stats/collector'
 import { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
+import { feedPullRequestStats } from '../stats/pull-request-stats-feed'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 
 export type DesktopCorePaths = {
@@ -128,6 +129,7 @@ function startCoreObservers(core: DesktopCore, store: Store, deps: DesktopCoreCo
   initOnboardingCohortClassifier(store)
   core.stats = new StatsCollector()
   feedAgentSessionStats(core.stats, agentHookServer)
+  core.unsubscribePullRequestStats = feedPullRequestStats(core.stats, () => store.getRepos())
   const usageWorktrees = new UsageWorktreeHistory(
     store,
     join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')

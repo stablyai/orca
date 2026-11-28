@@ -1,5 +1,4 @@
 import { ipcMain } from 'electron'
-import { resolve } from 'node:path'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
@@ -54,14 +53,6 @@ export function registerGitHubPRRefreshHandlers(
     }
   }
 
-  addPRRefreshOutcomeObserver((candidate, outcome) => {
-    const repo =
-      store.getRepos().find((entry) => entry.id === candidate.repoId) ??
-      store.getRepos().find((entry) => resolve(entry.path) === resolve(candidate.repoPath))
-    if (repo) {
-      recordPRIfNeeded(repo, outcome)
-    }
-  })
   // Only the desktop drives the coordinator; serve and orcad have no publisher, so phones keep polling there.
   addPRRefreshOutcomeObserver(
     pullRequestChangeObserver((change) => runtime.notifyPullRequestChangedForRemoteClients(change))

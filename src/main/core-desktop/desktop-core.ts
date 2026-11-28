@@ -32,6 +32,7 @@ import { beginProfileShutdownCheckpoint } from '../persistence/profile-shutdown-
 /** The desktop application core's services; composition fills the slots, shutdown retires them. */
 export class DesktopCore {
   stats: StatsCollector | null = null
+  unsubscribePullRequestStats: (() => void) | null = null
   usageWorktreeHistory: UsageWorktreeHistory | null = null
   claudeUsage: AutomationUsageClient | null = null
   codexUsage: AutomationUsageClient | null = null

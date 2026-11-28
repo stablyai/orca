@@ -122,7 +122,9 @@ export async function activateBackendRuntime(
   )
   // Subscribe before hooks start so early turns are counted.
   const { startOrcadStats } = await import('../orcad/host-runtime/orcad-stats')
-  const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup)
+  const stats = startOrcadStats(runtimeUserDataPath, agentHookServer, registerCleanup, () =>
+    profileStore.getRepos()
+  )
   await startOrcadAgentHookServer(agentHookServer, {
     env: 'production',
     userDataPath: runtimeUserDataPath,
