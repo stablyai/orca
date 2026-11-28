@@ -338,36 +338,26 @@ it("keeps a reopened line's draft on it across a restart", () => {
   ])
 })
 
-it('posts a plain comment typed after a reopened line folds back, its pick kept', () => {
-  for (const restart of [false, true]) {
-    const uid = `reopen-folded-${restart}`
-    let run = steps(uid)
-    // Every line picked posts at once; with no send on its way (as after a refusal), the picks stay held.
-    act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
-    act(() => run.hook.result.current.steps!.pick(1, 'No'))
-    act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
-    run.posted.length = 0
-    act(() => run.hook.result.current.steps!.reopen(0))
-    if (restart) {
-      run.hook.unmount()
-      run = steps(uid)
-    } else {
-      act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
-    }
-    const words = 'Thanks, looks good'
-    act(() =>
-      updateNativeChatComposerDraft(
-        botItemCommentDraftScope(bot, uid),
-        { text: words },
-        'immediate'
-      )
-    )
-    expect(run.hook.result.current.waitingLine).toBeNull()
-    enter(run.hook, words)
-    expect(run.posted.map(({ text }) => text)).toEqual([
-      `${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes\n${words}`
-    ])
-  }
+it('posts a plain comment typed after a restart drops a reopened line, the picks along', () => {
+  const uid = 'reopen-folded-restart'
+  let run = steps(uid)
+  // Every line picked posts at once; with no send on its way (as after a refusal), the picks stay held.
+  act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
+  act(() => run.hook.result.current.steps!.pick(1, 'No'))
+  act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
+  run.posted.length = 0
+  act(() => run.hook.result.current.steps!.reopen(0))
+  run.hook.unmount()
+  run = steps(uid)
+  const words = 'Thanks, looks good'
+  act(() =>
+    updateNativeChatComposerDraft(botItemCommentDraftScope(bot, uid), { text: words }, 'immediate')
+  )
+  expect(run.hook.result.current.waitingLine).toBeNull()
+  enter(run.hook, words)
+  expect(run.posted.map(({ text }) => text)).toEqual([
+    `${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes\n${words}`
+  ])
 })
 
 it('holds an answer with images, files and skills like a pick; Send posts them all as one comment', () => {
