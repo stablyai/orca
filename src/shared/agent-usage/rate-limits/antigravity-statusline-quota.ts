@@ -55,11 +55,13 @@ function toBucket(
   return window ? [{ ...window, name }] : []
 }
 
+export type AntigravityStatusLineReading = { email: string | null; limits: ProviderRateLimits }
+
 /** Null means the payload carries no usable quota window; the email only attributes the reading. */
 export function readAntigravityStatusLineQuota(
   payloadJson: string,
   receivedAt: number
-): { email: string | null; limits: ProviderRateLimits } | null {
+): AntigravityStatusLineReading | null {
   let payload: unknown
   try {
     payload = JSON.parse(payloadJson)
