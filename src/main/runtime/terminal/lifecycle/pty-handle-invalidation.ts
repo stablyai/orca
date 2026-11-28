@@ -6,6 +6,7 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { noteQuestionEdge } from '../../orchestration/db/messages/question-edges'
 
 export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
@@ -164,6 +165,8 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
       if (incarnationId) {
         this.retirePredecessorPtyExitEvidence(existingPty)
       }
+      // The predecessor's late exit is dropped as stale, so its end is told here.
+      noteQuestionEdge({ kind: 'exit', ptyId })
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.stopRequestedPtyIds.delete(ptyId)

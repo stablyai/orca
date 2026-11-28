@@ -16,6 +16,7 @@ import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
+import { noteQuestionEdge } from '../../orchestration/db/messages/question-edges'
 
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 
@@ -307,6 +308,8 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
         paneKey: closedPane?.paneKey ?? this.paneOfPty(pty).paneKey
       })
     }
+    // An agent-less reader holding a question has no agent phase to end, so its exit tells instead.
+    noteQuestionEdge({ kind: 'exit', ptyId })
     for (const surface of preservesAbnormalSshSurface ? [] : exitedSurfaces) {
       this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCause, lastOutput, {
         paneRespawning: options.paneRespawning === true && pty?.connectionId == null

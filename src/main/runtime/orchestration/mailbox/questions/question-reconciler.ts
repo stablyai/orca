@@ -42,6 +42,9 @@ export class QuestionReconciler {
   private readonly seenSinceUnverified = new Set<string>()
   /** What changed while each running decision read its facts (`party:`, `mailbox:`, `dispatch:`). */
   private readonly changing = new Set<Set<string>>()
+  /** Terminal takers that took with no agent in them (a script or a person at the shell), to the
+   *  pty they took from: no agent phase can show they stopped, so their pty's life does. */
+  private readonly agentless = new Map<string, string>()
   private readonly chains = new Map<string, Promise<void>>()
 
   constructor(
@@ -77,7 +80,11 @@ export class QuestionReconciler {
     }
   }
 
-  terminalChanged(party: string | null, working: boolean): void {
+  /** `agent`: an agent phase shows there now, so its phase, not the pty, shows when it stops. */
+  terminalChanged(party: string | null, working: boolean, agent = working): void {
+    if (party && agent) {
+      this.holdAgentless(party, undefined)
+    }
     if (party && this.watching()) {
       this.partyChanged(party, working)
     }
@@ -114,7 +121,13 @@ export class QuestionReconciler {
 
   /** Whether any question waits on an edge; false skips every lookup. */
   watching(): boolean {
-    return this.awaiting.size > 0 || this.linked.size > 0 || this.changing.size > 0
+    // An agent-less take is held before its first decision records it: an agent seen there meanwhile must clear it.
+    return (
+      this.awaiting.size > 0 ||
+      this.linked.size > 0 ||
+      this.changing.size > 0 ||
+      this.agentless.size > 0
+    )
   }
 
   private changed(key: string): void {
@@ -124,15 +137,29 @@ export class QuestionReconciler {
   private onEdge(edge: QuestionEdge): void {
     switch (edge.kind) {
       case 'take':
+        this.noteTake(edge.taker)
         this.request(edge.taker)
+        return
+      case 'exit':
+        // Its reader is gone, by whichever handle it took under, even if the pane starts again
+        // in place under the same pty id.
+        for (const [party, ptyId] of this.agentless) {
+          if (ptyId === edge.ptyId) {
+            this.holdAgentless(party, undefined)
+            this.terminalChanged(party, false)
+          }
+        }
         return
       case 'dispatch':
         this.changed(`dispatch:${edge.id}`)
         if (this.awaiting.size > 0) {
           takersLinkedTo(this.db, edge.id).forEach((taker) => this.request(taker))
         }
-        return
+        return this.redecideAgentless()
       case 'mailbox':
+        if (/^(run|dispatch):/.test(edge.mailbox)) {
+          this.redecideAgentless()
+        }
         return this.mailboxChanged(edge.mailbox)
       case 'pane':
         return this.terminalChanged(this.deps.terminalParty(edge.ptyId), false)
@@ -145,6 +172,52 @@ export class QuestionReconciler {
         if (this.watched.size > 0 || this.changing.size > 0) {
           this.mailboxesOf(edge.ids).forEach((mailbox) => this.mailboxChanged(mailbox))
         }
+    }
+  }
+
+  /** Read as the take commits, while the reader's own `check` still runs: an agent reading then
+   *  shows working (or takes input), a script or a person at the shell shows neither. */
+  private noteTake(taker: string): void {
+    if (!taker.startsWith('terminal:')) {
+      return
+    }
+    const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
+    this.holdAgentless(
+      taker,
+      terminal && !terminal.working && !terminal.takesInput ? terminal.ptyId : undefined
+    )
+  }
+
+  /** Every change to an agent-less hold goes here: a decision reading this party read it before. */
+  private holdAgentless(party: string, ptyId: string | undefined): void {
+    if (this.agentless.get(party) === ptyId) {
+      return
+    }
+    if (ptyId === undefined) {
+      this.agentless.delete(party)
+    } else {
+      this.agentless.set(party, ptyId)
+    }
+    this.changed(`party:${party}`)
+  }
+
+  /** A Run or Dispatch changed readers or state: an agent-less reader holds only while it still
+   *  coordinates or works one, and a decision reading it now read its binding before the change. */
+  private redecideAgentless(): void {
+    this.agentless.forEach((_, party) => {
+      this.changed(`party:${party}`)
+      this.request(party)
+    })
+  }
+
+  /** An agent that took input there since (even one never seen working) now shows its stop. */
+  private forgetAgentlessWithAgent(taker: string): void {
+    if (!this.agentless.has(taker)) {
+      return
+    }
+    const terminal = this.deps.reads.terminal(taker.slice('terminal:'.length))
+    if (terminal?.working || terminal?.takesInput) {
+      this.holdAgentless(taker, undefined)
     }
   }
 
@@ -190,8 +263,10 @@ export class QuestionReconciler {
     if (questions.length === 0) {
       this.forget(taker)
       this.unverified.delete(taker)
+      this.holdAgentless(taker, undefined)
       return
     }
+    this.forgetAgentlessWithAgent(taker)
     const dispatches = questions.flatMap((id) => linkedDispatches(this.db, id))
     const workers = dispatches.flatMap((id) => dispatchParty(this.db, id) ?? [])
     const parties = [taker, ...workers]
@@ -201,7 +276,9 @@ export class QuestionReconciler {
     this.changing.add(changes)
     let facts: QuestionPartyFacts
     try {
-      facts = await readQuestionPartyFacts(this.db, this.deps.reads, parties)
+      facts = await readQuestionPartyFacts(this.db, this.deps.reads, parties, (party) =>
+        this.agentless.get(party)
+      )
     } finally {
       this.changing.delete(changes)
     }

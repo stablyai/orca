@@ -70,7 +70,7 @@ export function installQuestionReconciler(
     const phase = change.kind === 'moved' ? change.to : change.phase
     if (reconciler.watching()) {
       const party = terminalParty(install.terminalOfPane(change.paneKey))
-      reconciler.terminalChanged(party, phase === 'working')
+      reconciler.terminalChanged(party, phase === 'working', phase !== 'rest')
     }
   })
   // A chat taker is decided once a chat host can read it; until then it would read as stopped.
