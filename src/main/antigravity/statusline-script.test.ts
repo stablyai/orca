@@ -1,13 +1,12 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getAntigravityStatusLineScript } from './statusline-script'
 
-type Post = { token: string | undefined; body: string }
+type Post = { token: string | string[] | undefined; body: string }
 
 const TOKEN = 'test-token'
 const PANE = 'tab-1:11111111-2222-3333-4444-555555555555'
@@ -16,6 +15,7 @@ const MODEL = { id: 'm', display_name: 'Gemini 4 Neon (High)', effort: 'high' }
 
 let dir: string
 let server: Server
+let port: number
 let posts: Post[]
 let responseDelayMs: number
 
@@ -27,11 +27,16 @@ beforeEach(async () => {
     let body = ''
     req.on('data', (chunk) => (body += chunk))
     req.on('end', () => {
-      posts.push({ token: req.headers['x-orca-agent-hook-token'] as string | undefined, body })
+      posts.push({ token: req.headers['x-orca-agent-hook-token'], body })
       setTimeout(() => res.writeHead(204).end(), responseDelayMs)
     })
   })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  if (address === null || typeof address === 'string') {
+    throw new Error('test server has no TCP port')
+  }
+  port = address.port
 })
 
 afterEach(async () => {
@@ -53,14 +58,18 @@ function run(
   env: Record<string, string> = {}
 ): Promise<{ stdout: string; code: number | null; ms: number }> {
   return new Promise((resolve) => {
-    const started = Date.now()
+    const started = performance.now()
     const child = spawn('/bin/sh', [script], {
       env: { PATH: process.env.PATH ?? '', TMPDIR: dir, ...env }
     })
     const chunks: Buffer[] = []
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
     child.on('close', (code) =>
-      resolve({ stdout: Buffer.concat(chunks).toString('utf8'), code, ms: Date.now() - started })
+      resolve({
+        stdout: Buffer.concat(chunks).toString('utf8'),
+        code,
+        ms: performance.now() - started
+      })
     )
     child.stdin.end(stdin)
   })
@@ -68,13 +77,15 @@ function run(
 
 function orcaEnv(pane = PANE): Record<string, string> {
   return {
-    ORCA_AGENT_HOOK_PORT: String((server.address() as AddressInfo).port),
+    ORCA_AGENT_HOOK_PORT: String(port),
     ORCA_AGENT_HOOK_TOKEN: TOKEN,
     ORCA_PANE_KEY: pane
   }
 }
 
+// Proving no POST happens needs a quiet period; a detached curl has nothing to await.
 async function settle(ms = 700): Promise<void> {
+  // ast-grep-ignore: test-no-real-time-wait -- absence of a background POST can only be shown by waiting past a localhost round trip
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
@@ -106,8 +117,7 @@ describe('Antigravity status-line script', () => {
     const script = writeScript(null)
     const withQuota = JSON.stringify({ quota: QUOTA, cycle_mode: 'auto', model: MODEL })
     await run(script, withQuota, orcaEnv())
-    await settle()
-    expect(posts).toHaveLength(1)
+    await expect.poll(() => posts.length).toBe(1)
     expect(posts[0].token).toBe(TOKEN)
     expect(decodeURIComponent(posts[0].body.replace(/\+/g, ' '))).toContain(`payload=${withQuota}`)
     expect(posts[0].body).toContain('paneKey=tab-1%3A11111111')
@@ -122,8 +132,7 @@ describe('Antigravity status-line script', () => {
     expect(posts).toHaveLength(1)
 
     await run(script, withQuota, orcaEnv(otherPane))
-    await settle()
-    expect(posts).toHaveLength(2)
+    await expect.poll(() => posts.length).toBe(2)
   })
 
   it('posts nothing but still prints outside Orca', async () => {
@@ -141,7 +150,6 @@ describe('Antigravity status-line script', () => {
     const result = await run(writeScript("printf 'x'"), JSON.stringify({ quota: QUOTA }), orcaEnv())
     expect(result.ms).toBeLessThan(200)
     expect(result.stdout).toBe('x')
-    await settle()
-    expect(posts).toHaveLength(1)
+    await expect.poll(() => posts.length).toBe(1)
   })
 })

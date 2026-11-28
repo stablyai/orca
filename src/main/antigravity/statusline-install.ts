@@ -8,7 +8,8 @@ import { getAntigravityStatusLineScript } from './statusline-script'
 import {
   insertStatusLineMember,
   removeStatusLineMember,
-  replaceStatusLineCommand
+  replaceStatusLineCommand,
+  type StatusLineEntry
 } from './statusline-settings-edit'
 
 const SCRIPT_FILE_NAME = 'antigravity-statusline.sh'
@@ -76,7 +77,7 @@ async function readSettings(path: string): Promise<Settings> {
   try {
     text = await readFile(path, 'utf8')
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return { kind: 'absent' }
     }
     return { kind: 'error', detail: 'Could not read Antigravity settings.json' }
@@ -168,7 +169,7 @@ export async function installAntigravityStatusLine(
     return status(paths, 'error', 'Antigravity statusLine is not a command; left unchanged')
   }
   const alreadyManaged = slot.kind === 'command' && slot.command === paths.installedCommand
-  const entry = { type: 'command', command: paths.installedCommand }
+  const entry: StatusLineEntry = { type: 'command', command: paths.installedCommand }
   let nextSettings = `${JSON.stringify({ statusLine: entry }, null, 2)}\n`
   let record: InstallRecord = {
     originalCommand: slot.kind === 'command' ? slot.command : null,

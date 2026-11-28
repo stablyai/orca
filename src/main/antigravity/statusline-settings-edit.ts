@@ -1,5 +1,7 @@
 import { parseTree, type Node } from 'jsonc-parser'
 
+export type StatusLineEntry = { type: 'command'; command: string }
+
 // Text splices keep every byte outside the statusLine key, so remove restores the original file.
 
 function rootMembers(text: string): { root: Node; members: Node[] } | null {
@@ -37,7 +39,7 @@ export function replaceStatusLineCommand(
 }
 
 /** Appends a statusLine member in the file's own indentation, or null when the root is not an object. */
-export function insertStatusLineMember(text: string, entry: object): string | null {
+export function insertStatusLineMember(text: string, entry: StatusLineEntry): string | null {
   const parsed = rootMembers(text)
   if (!parsed) {
     return null

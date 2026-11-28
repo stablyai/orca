@@ -3,14 +3,13 @@ import { readAntigravityStatusLineQuota } from './antigravity-statusline-quota'
 
 const NOW = Date.parse('2026-11-28T10:00:00Z')
 
-function payload(quota: unknown, extra: object = {}): string {
+function payload(quota: unknown): string {
   return JSON.stringify({
     cwd: '/tmp/work',
     model: { id: 'm', display_name: 'Gemini 4 Neon (High)', effort: 'high' },
     cycle_mode: 'auto',
     email: ' user@example.com ',
-    quota,
-    ...extra
+    quota
   })
 }
 

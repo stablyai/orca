@@ -8,6 +8,17 @@ const WEEKLY_MINUTES = 10080
 
 type ParsedWindow = Pick<RateLimitWindow, 'usedPercent' | 'resetsAt'>
 
+type QuotaPayload = {
+  'gemini-5h'?: unknown
+  'gemini-weekly'?: unknown
+  '3p-5h'?: unknown
+  '3p-weekly'?: unknown
+}
+
+function isQuotaPayload(value: unknown): value is QuotaPayload {
+  return typeof value === 'object' && value !== null
+}
+
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -58,17 +69,15 @@ export function readAntigravityStatusLineQuota(
   if (typeof payload !== 'object' || payload === null || !('quota' in payload)) {
     return null
   }
-  const quota = payload.quota
-  if (typeof quota !== 'object' || quota === null) {
+  const { quota } = payload
+  if (!isQuotaPayload(quota)) {
     return null
   }
-  const read = (key: string): ParsedWindow | null =>
-    parseWindow(key in quota ? (quota as Record<string, unknown>)[key] : undefined, receivedAt)
-  const session = toWindow(read('gemini-5h'), FIVE_HOUR_MINUTES)
-  const weekly = toWindow(read('gemini-weekly'), WEEKLY_MINUTES)
+  const session = toWindow(parseWindow(quota['gemini-5h'], receivedAt), FIVE_HOUR_MINUTES)
+  const weekly = toWindow(parseWindow(quota['gemini-weekly'], receivedAt), WEEKLY_MINUTES)
   const buckets = [
-    ...toBucket(read('3p-5h'), 'Claude · GPT 5h', FIVE_HOUR_MINUTES),
-    ...toBucket(read('3p-weekly'), 'Claude · GPT weekly', WEEKLY_MINUTES)
+    ...toBucket(parseWindow(quota['3p-5h'], receivedAt), 'Claude · GPT 5h', FIVE_HOUR_MINUTES),
+    ...toBucket(parseWindow(quota['3p-weekly'], receivedAt), 'Claude · GPT weekly', WEEKLY_MINUTES)
   ]
   if (!session && !weekly && buckets.length === 0) {
     return null
