@@ -22,7 +22,7 @@ import { BotAvatarColorSchema } from '../bots/bot-avatar-color'
 import { BotStoredOutfitSchema } from '../bots/bot-avatar-outfit'
 import { HANDED_WORKSPACES_MAX, HandedWorkspaceSchema } from '../bots/bot-made-for-workspaces'
 import { BotProposalSchema, BotProposalSeedSchema } from '../bots/bot-proposal'
-import { BotLookAroundSchema } from '../bots/bot-look-around'
+import { BotLookAroundPatchSchema } from '../bots/bot-look-around'
 import { BotLaunchSchema } from '../bots/bot-launch'
 import { BOT_OFFER_ALREADY_ANSWERED, BotOfferAnswerUpdateSchema } from '../bots/bot-offer-answers'
 import { OptionalBoolean, requiredString } from './rpc-param-primitives'
@@ -160,7 +160,7 @@ export const BotUpdate = lazyZodSchema(() =>
         github: BotGitHubSchema.nullable().optional(),
         skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
         // Only the changed fields; the host merges them into the saved setting.
-        lookAround: BotLookAroundSchema.omit({ since: true }).partial().optional(),
+        lookAround: BotLookAroundPatchSchema.optional(),
         // Only the changed fields, like Look around.
         tidyUp: z
           .object({ on: z.boolean().optional(), every: z.enum(TIDY_UP_EVERY_CHOICES).optional() })

@@ -164,7 +164,7 @@ export const CLIENT_UI_METHODS = [
       if (mutation.type === 'apply-picks' && mutation.picks.length === 0) {
         return { ok: true as const }
       }
-      if (!(await keepSessionPicksOnBot(runtime.bots, mutation))) {
+      if (!(await keepSessionPicksOnBot(runtime.bots, mutation, undefined, runtime.lookAround))) {
         runtime.updateClientNativeChatSessionOptions(mutation)
       }
       return { ok: true as const }

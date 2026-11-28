@@ -3,11 +3,12 @@ import { botLaunchWithPicks } from '../../shared/bots/bot-launch'
 import type { NativeChatSessionOptionSettingsMutation } from '../../shared/native-chat/input/native-chat-session-options'
 import type { BotController } from './bot-controller'
 import { botOfSession } from './bot-session-tabs'
+import type { BotLookAroundStore } from './bot-look-around-store'
 
 type SessionLookup = Parameters<typeof botOfSession>[2]
 
 /**
- * Keeps picks made in a bot's conversation (its Chat, a look-around, an automation run) as that
+ * Keeps picks made in a bot's conversation (its Chat, an automation run) as that
  * bot's model and options, so they never become the owner's default for every new chat. True when
  * the picks belonged to a bot, whether or not its launch changed; false leaves them to the owner's
  * chat defaults.
@@ -15,10 +16,14 @@ type SessionLookup = Parameters<typeof botOfSession>[2]
 export async function keepSessionPicksOnBot(
   bots: Pick<BotController, 'enabled' | 'list' | 'update'>,
   mutation: NativeChatSessionOptionSettingsMutation,
-  host?: SessionLookup
+  host?: SessionLookup,
+  lookAround?: Pick<BotLookAroundStore, 'botOfLook'>
 ): Promise<boolean> {
   if (mutation.type !== 'apply-picks' || !mutation.sessionId || !bots.enabled()) {
     return false
+  }
+  if (lookAround && lookAround.botOfLook(mutation.sessionId) !== null) {
+    return true
   }
   const bot = botOfSession(bots, mutation.sessionId, host)
   if (!bot) {
