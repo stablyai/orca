@@ -1,12 +1,12 @@
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
-import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
-import { getProvider } from '../provider/registry'
+import { getProviderForSpawn, mintLocalProviderSessionId } from '../provider/registry'
+import { preferRexFreshLaunch } from '../provider/rex-fresh-selection'
 import { resolvePtySpawnStartupTarget } from '../host-env/spawn-startup-target'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
@@ -15,12 +15,17 @@ import { getConnectionExecutionHostId } from '../../../../shared/execution-host/
 export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
   // Establish local daemon identity before yielding so early output can be hidden; SSH execution is rejected here.
-  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
+  ctx.provider = getProviderForSpawn(
+    getConnectionExecutionHostId(args.connectionId),
+    args.sessionId,
+    preferRexFreshLaunch(args)
+  )
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.ownsNewIncarnation = args.sessionId === undefined && ctx.isDaemonHostSpawn
   ctx.effectiveSessionId =
-    args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+    args.sessionId ??
+    (ctx.isDaemonHostSpawn ? mintLocalProviderSessionId(ctx.provider, args.worktreeId) : undefined)
   ctx.effectiveSessionAppId = ctx.effectiveSessionId
   ctx.initiallyHidden = args.initiallyHidden === true
   ctx.preSpawnHiddenMarkId =
@@ -67,7 +72,10 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
     ctx.ownsNewIncarnation = args.sessionId === undefined && ctx.isDaemonHostSpawn
     ctx.effectiveSessionId =
-      args.sessionId ?? (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+      args.sessionId ??
+      (ctx.isDaemonHostSpawn
+        ? mintLocalProviderSessionId(ctx.provider, args.worktreeId)
+        : undefined)
     ctx.effectiveSessionAppId = ctx.effectiveSessionId
     ctx.preSpawnHiddenMarkId =
       ctx.initiallyHidden && ctx.isDaemonHostSpawn && ctx.effectiveSessionAppId !== undefined

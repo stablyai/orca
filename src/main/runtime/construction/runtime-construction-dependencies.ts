@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host/execution-host'
-import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../providers/pty/local-lifecycle-provider'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,
@@ -32,7 +32,7 @@ export type RuntimeConstructionDependencies = {
   /** A host that opened the saved-chat store before construction passes the ids it used. */
   legacyStructuredSessionTabIds?: readonly string[]
   getSetupTerminalTitle?: () => string
-  getLocalProvider?: () => IPtyProvider
+  getLocalProvider?: () => LocalPtyLifecycleProvider
   prepareClaudeAuth?: PrepareClaudeAuth
   onPtyStopped?: (ptyId: string) => void
   onTerminalAgentStatus?: (event: RuntimeTerminalAgentStatusEvent) => void

@@ -15,7 +15,7 @@ import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/scope/
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { translateMain } from '../../i18n/main-i18n'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
+import { getLocalPtyLifecycleProvider } from '../../ipc/pty/provider/registry'
 import { clearProviderPtyState } from '../../ipc/pty/provider/state-cleanup'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { toAgentStatusIpcPayload } from '../../agent-hooks/server/server-status-identity'
@@ -79,7 +79,7 @@ export function initializeMainProcessRuntime(
       getProfileUserDataPath()
     ),
     // Resolve provider lazily or later daemon adoption leaves a frozen pre-daemon reference (design §4.3).
-    getLocalProvider: () => getLocalPtyProvider(),
+    getLocalProvider: () => getLocalPtyLifecycleProvider(),
     onPtyStopped: clearProviderPtyState,
     // Serve can activate in place; wire now, but enable desktop scanners only for a ready renderer.
     onTerminalSideEffects: deps.sendTerminalSideEffects,

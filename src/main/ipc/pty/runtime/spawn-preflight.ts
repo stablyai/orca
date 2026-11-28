@@ -3,16 +3,14 @@ import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { getProvider } from '../provider/registry'
+import { getProviderForSpawn, mintLocalProviderSessionId } from '../provider/registry'
+import { preferRexFreshLaunch } from '../provider/rex-fresh-selection'
 import {
   isClaudeLaunchCommand,
   recoverFreshSpawnProviderRouting,
   routesFreshSpawnsToLocalProvider
 } from '../host-env/fresh-spawn-routing'
-import {
-  mintPtySessionId,
-  ptySessionIdForAgentCreateOperation
-} from '../../../daemon/sessions/pty-session-id'
+import { ptySessionIdForAgentCreateOperation } from '../../../daemon/sessions/pty-session-id'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
 import { isRuntimeWslBackgroundStart, type RuntimePtySpawnState } from './spawn-state'
 import { localPtySpawnCwd } from '../host-env/spawn-cwd'
@@ -43,7 +41,11 @@ export async function prepareRuntimePtySpawn(
     }
   }
   // SSH execution is rejected here; remaining preparation belongs to this machine.
-  ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
+  ctx.provider = getProviderForSpawn(
+    getConnectionExecutionHostId(args.connectionId),
+    args.sessionId,
+    preferRexFreshLaunch(args)
+  )
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)
@@ -61,7 +63,7 @@ export async function prepareRuntimePtySpawn(
       : undefined)
   ctx.sessionId =
     ctx.requestedSessionId ??
-    (ctx.isDaemonHostSpawn ? mintPtySessionId(args.worktreeId) : undefined)
+    (ctx.isDaemonHostSpawn ? mintLocalProviderSessionId(ctx.provider, args.worktreeId) : undefined)
   ctx.effectiveSessionAppId = ctx.sessionId
   ctx.ownsNewIncarnation =
     !ctx.preAdoptedStablePane &&

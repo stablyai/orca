@@ -1,3 +1,4 @@
+import { registerRexLocalProvider } from './provider/rex-local-registration'
 import { createLocalPtyStartupPromises } from './provider/local-startup-promises'
 
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -155,6 +156,7 @@ export function registerPtyHandlers(
     getSelectedCodexHomePath,
     trustedTerminalHandleEnv: session.trustedTerminalHandleEnv
   })
+  registerRexLocalProvider(mainWindow ? getSettings : undefined)
   bindProviderListeners(session)
   setRebindProviderListeners(() => bindProviderListeners(session))
   installPtySerializeBufferIpc(session)

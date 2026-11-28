@@ -7,7 +7,10 @@ import {
   type TerminalProcessInspection as PtyProcessInspection
 } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-type CompletionSensitivePtyProvider = IPtyProvider & {
+export type PtyProcessInspectionProvider = Pick<
+  IPtyProvider,
+  'hasPty' | 'getForegroundProcess' | 'hasChildProcesses'
+> & {
   inspectProcess?: (
     id: string,
     options?: PtyProcessInspectionOptions
@@ -40,7 +43,7 @@ export function steadyPollJudgesByJobMembership(
 }
 
 export async function inspectPtyProviderProcess(
-  provider: IPtyProvider,
+  provider: PtyProcessInspectionProvider,
   ptyId: string,
   options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {
@@ -48,7 +51,7 @@ export async function inspectPtyProviderProcess(
   if (options?.includeUnattached !== true && provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
   }
-  const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess
+  const inspectProcess = provider.inspectProcess
   if (inspectProcess) {
     return options
       ? inspectProcess.call(provider, ptyId, options)
@@ -60,7 +63,7 @@ export async function inspectPtyProviderProcess(
 }
 
 export async function inspectPtyProviderProcessForRenderer(
-  provider: IPtyProvider,
+  provider: PtyProcessInspectionProvider,
   ptyId: string,
   options?: PtyProcessInspectionOptions
 ): Promise<PtyProcessInspection> {

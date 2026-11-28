@@ -9,7 +9,7 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
+import { registeredAgentClaimProviders, tryGetProviderForPty } from '../provider/registry'
 
 // Coordinate claims across provider boundaries, including shared namespaces reached through different relays.
 export const agentSessionOwners = new ClaimedAgentPtyOwnerRegistry()
@@ -84,7 +84,7 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
   const reconciliation = (async () => {
     const deadlineMs = Date.now() + OWNER_LISTING_DEADLINE_MS
     const listings = await Promise.all(
-      registeredPtyProviders().map(async ({ provider, hostId }) => ({
+      registeredAgentClaimProviders().map(async ({ provider, hostId }) => ({
         hostId,
         sessions: await provider.listProcesses({ deadlineMs }).catch(() => {
           throw new Error('agent_session_ownership_unknown')

@@ -5,6 +5,7 @@ import type { AgentAwakeService } from '../../power/agent-awake-service'
 import { sanitizeRendererSettingsUpdate } from './renderer-settings-update'
 import { sanitizeFloatingWorkspaceDirectorySetting } from '../worktrees/floating-workspace-directory'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
+import { normalizeRexBackendPreference } from './rex-backend-preference'
 import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
 import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
@@ -59,6 +60,7 @@ export async function handleSettingsSet(
     )
   }
   sanitizeNetworkSettings(args, sanitizedArgs)
+  normalizeRexBackendPreference(args, sanitizedArgs)
   if ('appIcon' in args) {
     sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
   }

@@ -856,6 +856,12 @@
       "fontSize": {
         "decrease": "減小字型大小",
         "increase": "增大字型大小"
+      },
+      "rexBackend": {
+        "title": "終端機後端（實驗性）",
+        "description": "Rex 需要執行中的本機 Rex Server 與核准的 Ghostty WASM 成品。只有支援的新建本機終端機使用 Rex；現有工作階段保留原本的後端。",
+        "default": "預設",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25212,7 +25218,8 @@
       "decline": "不用了",
       "failed": "無法開啟 Claude Code 主題同步",
       "failedDescription": "請在「設定」中開啟。"
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex 尚未支援重設終端機。"
   },
   "fileExplorer": {
     "root": {

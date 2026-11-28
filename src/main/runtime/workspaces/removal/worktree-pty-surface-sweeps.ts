@@ -1,6 +1,6 @@
 /** Sweep provider sessions and local registry independently of the teardown entrypoint to avoid a dependency cycle. */
 
-import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../../providers/pty/local-lifecycle-provider'
 import { listRegisteredPtys } from '../../../memory/pty-registry'
 import { worktreePtyOwnership } from '../../../providers/pty/worktree-ownership'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
@@ -11,7 +11,7 @@ const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export async function sweepProviderByPrefix(
   worktreeId: string,
-  provider: IPtyProvider,
+  provider: LocalPtyLifecycleProvider,
   deadline: number,
   stopPty: (
     ptyId: string,
@@ -56,7 +56,7 @@ export async function sweepProviderByPrefix(
 
 export async function sweepRegistryForWorktree(
   worktreeId: string,
-  localProvider: IPtyProvider,
+  localProvider: LocalPtyLifecycleProvider,
   deadline: number,
   stopPty: (
     ptyId: string,

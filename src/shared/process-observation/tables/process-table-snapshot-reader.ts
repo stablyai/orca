@@ -301,8 +301,8 @@ export async function getFreshProcessTableSnapshot(): Promise<ProcessTableRow[]>
   return (await processTableReader.getFreshSnapshot()).lenient()
 }
 
-export async function getStrictProcessTableSnapshot(): Promise<ProcessTableRow[]> {
-  return (await processTableReader.getSnapshot()).strict()
+export async function getStrictProcessTableSnapshot(fresh = false): Promise<ProcessTableRow[]> {
+  return (await processTableReader[fresh ? 'getFreshSnapshot' : 'getSnapshot']()).strict()
 }
 
 /** Evidence needs current observations, unlike identity probes that wait up to 15s. Idle command= costs ~1.15s/1,948 processes;

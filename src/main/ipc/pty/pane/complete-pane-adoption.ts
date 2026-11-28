@@ -102,6 +102,9 @@ export async function completePaneAdoption(
       markNativeWindowsConptyPty(result.id)
     }
     seedHeadlessTerminalFromSpawnResult(runtime, result, paneKey)
+    if (result.isReattach && result.snapshot !== undefined) {
+      args.provider.activateRestored?.(result.id)
+    }
     seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
     try {
       await persistAdmittedStablePaneBinding({

@@ -279,6 +279,9 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'stt-worker.js' },
   // Reads a Drive PDF's text off the event loop for `orca drive read`.
   { filename: 'google-pdf-text-worker-entry.js' },
+  // Rex execution stays on the owning host. No separately installed Rex binary or WASM is bundled.
+  { filename: 'rex-launch-worker-entry.js' },
+  { filename: 'rex-snapshot-worker-entry.js' },
   // The forked computer sidecar finds platform runtimes beside itself (#31777).
   { filename: ORCAD_COMPUTER_SIDECAR_ENTRY },
   ...ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS.map((filename) => ({ filename })),

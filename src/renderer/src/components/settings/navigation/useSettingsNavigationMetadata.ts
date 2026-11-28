@@ -108,7 +108,8 @@ export function buildSettingsNavigationMetadata(
     {
       isWindows,
       isWindowsTerminalHost,
-      isMac
+      isMac,
+      isRexTerminalHost: !isWebClient && !isWindows && !isWindowsTerminalHost
     },
     t
   )

@@ -886,6 +886,12 @@
       "fontSize": {
         "decrease": "Decrease font size",
         "increase": "Increase font size"
+      },
+      "rexBackend": {
+        "title": "Terminal backend (experimental)",
+        "description": "Rex requires a running local Rex Server and the approved Ghostty WASM artifact. Only supported new local terminals use Rex; existing sessions keep their backend.",
+        "default": "Default",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25588,7 +25594,8 @@
       "decline": "No thanks",
       "failed": "Could not turn on Claude Code theme sync",
       "failedDescription": "Turn it on in Settings."
-    }
+    },
+    "rexInputModeResetUnavailable": "Terminal reset is not supported by Rex yet."
   },
   "fileExplorer": {
     "root": {

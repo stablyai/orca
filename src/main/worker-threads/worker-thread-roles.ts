@@ -3,6 +3,8 @@ export type WorkerThreadRole =
   | 'orca-agent-identity'
   | 'orca-bots-db'
   | 'orca-child-process-spawner'
+  | 'orca-rex-launch'
+  | 'orca-rex-snapshot'
   | 'orca-claude-profile-setup'
   | 'orca-claude-rewind-transcript'
   | 'orca-codex-history-disk-usage'

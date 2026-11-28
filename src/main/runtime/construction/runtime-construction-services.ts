@@ -2,7 +2,7 @@ import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-cont
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 
-import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../providers/pty/local-lifecycle-provider'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeHeadlessTerminal,
@@ -85,7 +85,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean
   abstract forgetStructuredSessionMail(sessionId: string): void
   abstract sleptAgentHandleForPane(paneKey: string | null | undefined): string | null
-  abstract getLocalProvider(): IPtyProvider | null
+  abstract getLocalProvider(): LocalPtyLifecycleProvider | null
   abstract removeWorktreeMetadataAndHistory(
     ...args: Calls.RemoveWorktreeMetadataAndHistoryArgs
   ): Calls.RemoveWorktreeMetadataAndHistoryResult

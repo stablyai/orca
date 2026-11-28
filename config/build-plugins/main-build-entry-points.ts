@@ -23,6 +23,8 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   ),
   'stt-worker': resolve('src/main/speech/stt-worker.ts'),
   'warp-theme-parser-worker': resolve('src/main/warp-themes/warp-theme-parser-worker.ts'),
+  'rex-launch-worker-entry': resolve('src/main/providers/rex-pty/rex-launch-worker-entry.ts'),
+  'rex-snapshot-worker-entry': resolve('src/main/providers/rex-pty/rex-snapshot-worker-entry.ts'),
   'session-search-worker-entry': resolve(
     'src/main/ai-vault-search/worker/session-search-worker-entry.ts'
   ),

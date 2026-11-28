@@ -1,5 +1,5 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
-import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../../providers/pty/local-lifecycle-provider'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
@@ -9,8 +9,9 @@ const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 
 // Share one snapshot across known-missing workspaces to avoid O(N²) inventory traffic.
 // Best-effort only: requirePhysicalStop needs fresh post-shutdown evidence and must never reuse this cache.
-function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
-  let snapshot: Promise<Awaited<ReturnType<IPtyProvider['listProcesses']>>> | null = null
+function withSharedProcessSnapshot(provider: LocalPtyLifecycleProvider): LocalPtyLifecycleProvider {
+  let snapshot: Promise<Awaited<ReturnType<LocalPtyLifecycleProvider['listProcesses']>>> | null =
+    null
   return new Proxy(provider, {
     get(target, property) {
       if (property !== 'listProcesses') {
@@ -19,7 +20,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         const member: unknown = Reflect.get(target, property)
         return typeof member === 'function' ? member.bind(target) : member
       }
-      return async (opts?: Parameters<IPtyProvider['listProcesses']>[0]) => {
+      return async (opts?: Parameters<LocalPtyLifecycleProvider['listProcesses']>[0]) => {
         const pending = (snapshot ??= target.listProcesses({
           ...opts,
           worktreeId: undefined,
@@ -53,7 +54,7 @@ function hostFence(
 
 type MissingWorktreeTerminalReconciliationDeps = {
   runtime: WorktreeTeardownRuntime
-  getLocalProvider: () => IPtyProvider | null
+  getLocalProvider: () => LocalPtyLifecycleProvider | null
   onPtyStopped?: (ptyId: string) => void
 }
 

@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { getLocalPtyProvider } from '../../pty/provider/registry'
+import { getLocalPtyLifecycleProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -34,7 +34,7 @@ export async function stopPtysForDestructiveWorktreeRemoval(
     runtime,
     // Path-derived IDs repeat across hosts; exact ownership prevents ambiguous selectors or cross-host sweeps.
     resolvedWorktreeId: worktreeId,
-    localProvider: getLocalPtyProvider(),
+    localProvider: getLocalPtyLifecycleProvider(),
     onPtyStopped: clearProviderPtyState,
     requirePhysicalStop: true,
     // Only explicit Force Delete may waive PTY-stop proof; ordinary force confirmation must remain strict.

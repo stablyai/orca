@@ -884,6 +884,12 @@
       "fontSize": {
         "decrease": "Yazı boyutunu küçült",
         "increase": "Yazı boyutunu büyüt"
+      },
+      "rexBackend": {
+        "title": "Terminal arka ucu (deneysel)",
+        "description": "Rex için çalışan bir yerel Rex Server ve onaylı Ghostty WASM yapıtı gerekir. Yalnızca desteklenen yeni yerel terminaller Rex kullanır; mevcut oturumlar arka uçlarını korur.",
+        "default": "Varsayılan",
+        "rex": "Rex"
       }
     },
     "appearance": {
@@ -25563,7 +25569,8 @@
       "decline": "Hayır, teşekkürler",
       "failed": "Claude Code tema eşitlemesi açılamadı",
       "failedDescription": "Bu özelliği Ayarlar’dan açın."
-    }
+    },
+    "rexInputModeResetUnavailable": "Rex henüz terminal sıfırlamayı desteklemiyor."
   },
   "fileExplorer": {
     "root": {

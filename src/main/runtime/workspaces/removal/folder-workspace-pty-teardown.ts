@@ -1,10 +1,10 @@
 import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
-import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { LocalPtyLifecycleProvider } from '../../../providers/pty/local-lifecycle-provider'
 import { teardownStops } from './owned-session-teardown-policy'
 
 export type FolderWorkspacePtyTeardownDeps = {
   runtime: WorktreeTeardownRuntime
-  getLocalProvider: () => IPtyProvider | null
+  getLocalProvider: () => LocalPtyLifecycleProvider | null
   onPtyStopped: ((ptyId: string) => void) | null
 }
 

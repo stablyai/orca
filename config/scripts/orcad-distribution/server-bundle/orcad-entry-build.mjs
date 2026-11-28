@@ -49,7 +49,9 @@ export const ORCAD_CHILD_ENTRY_POINTS = {
   usageScanWorker: 'src/main/usage/scan-worker/usage-scan-worker-entry.ts',
   sttWorker: 'src/main/speech/stt-worker.ts',
   computerSidecar: 'src/main/computer/computer-sidecar.ts',
-  googlePdfText: 'src/main/google/google-pdf-text-worker-entry.ts'
+  googlePdfText: 'src/main/google/google-pdf-text-worker-entry.ts',
+  rexLaunch: 'src/main/providers/rex-pty/rex-launch-worker-entry.ts',
+  rexSnapshot: 'src/main/providers/rex-pty/rex-snapshot-worker-entry.ts'
 }
 
 /** Each child ships flat beside orcad.js under its source basename; the runtime resolvers look there. */

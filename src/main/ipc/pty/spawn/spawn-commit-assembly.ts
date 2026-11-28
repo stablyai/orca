@@ -128,6 +128,9 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
   }
   // Seed before the first disk await so live output appends to the restored history.
   seedHeadlessTerminalFromSpawnResult(runtime, result, input.seedPaneKey)
+  if (result.isReattach && result.snapshot !== undefined) {
+    state.provider.activateRestored?.(result.id)
+  }
   seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(result)
   if (input.adoptedAgentSession) {

@@ -121,6 +121,10 @@ export type PtySpawnOptions = {
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  /** The native owner already answers terminal queries. */
+  readonly ownsTerminalQueryReplies?: true
+  /** Release live tail only after the host has seeded the returned snapshot. */
+  activateRestored?: (id: string) => void
   /** SSH providers only: the relay session generation that registered them. */
   readonly providerGeneration?: number
   requestHostRpc?: (

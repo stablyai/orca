@@ -1,3 +1,4 @@
+import { shouldSuppressProviderQueryReply } from '../provider/backend-query-authority'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
@@ -55,6 +56,9 @@ export function writePtyFromRuntimeController(
     provider = getProviderForPty(ptyId)
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
+  }
+  if (shouldSuppressProviderQueryReply(provider, inputKind, data)) {
+    return options?.waitForSettlement ? writeRefused('provider_refused_write') : false
   }
   if (options?.waitForSettlement) {
     // Refuse unsupported settlement before effects; fire-and-forget acceptance cannot clear durable mailbox reservations.
@@ -129,7 +133,10 @@ export async function attachPtyFromRuntimeController(
   } catch {
     return false
   }
-  if (provider !== localProvider || provider instanceof LocalPtyProvider) {
+  if (
+    provider instanceof LocalPtyProvider ||
+    (provider !== localProvider && !provider.activateRestored)
+  ) {
     return false
   }
   // A pane's own hidden claim stays its own; a reveal or exit clears main's.
@@ -149,6 +156,9 @@ export async function attachPtyFromRuntimeController(
     }
     if (attachResult) {
       seedAttachedRuntimeTerminal(deps.runtime, attachResult, sizeBeforeAttach)
+      if (attachResult.isReattach && attachResult.snapshot !== undefined) {
+        provider.activateRestored?.(ptyId)
+      }
     }
     deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true
@@ -230,20 +240,7 @@ export async function clearBufferFromRuntimeController(
   }
 }
 
-export async function resetInputModesFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string
-): Promise<void> {
-  // Remote reset must also ground this host window's pane.
-  if (deps.mainWindow && !deps.mainWindow.isDestroyed()) {
-    deps.mainWindow.webContents.send('pty:resetInputModes:request', { ptyId })
-  }
-  try {
-    await getProviderForPty(ptyId).resetInputModes(ptyId)
-  } catch {
-    /* best effort: an older daemon or relay rejects the request */
-  }
-}
+export { resetInputModesFromRuntimeController } from './reset-input-modes'
 
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
