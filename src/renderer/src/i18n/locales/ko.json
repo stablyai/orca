@@ -29280,8 +29280,6 @@
         "automationEnded": "종료됨"
       },
       "menu": {
-        "cancel": "취소",
-        "done": "완료",
         "waiting": "대기 중…"
       },
       "pill": {
@@ -29290,6 +29288,7 @@
         "moveTo": "이동"
       },
       "row": {
+        "cancel": "취소",
         "done": "완료",
         "more": "더 보기",
         "select": "{{title}} 선택"
