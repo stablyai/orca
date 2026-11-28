@@ -21,7 +21,7 @@ import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab, useBotHomeWorkspaces, useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { readBotWaits, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
-import { openBotGroup } from '@/lib/bot-group-catalog'
+import { openBotGroup, roomTab } from '@/lib/bot-group-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
 import { useAppStore } from '@/store'
@@ -48,8 +48,7 @@ import {
   activeTabOf,
   readListedBot,
   readListedGroup,
-  requestOpenedChatFocus,
-  roomTabOf
+  requestOpenedChatFocus
 } from './bot-palette-open-focus'
 import { useBotHostLabels } from './use-bot-host-label'
 import { PaletteHostBadgeChip } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
@@ -314,10 +313,10 @@ function groupRow(
     ),
     onSelect: () => {
       const generation = currentBotPaletteGeneration()
-      // The room's open resolves with nothing: fulfilled means opened, a rejection means it didn't.
+      // The open resolves with the room it showed, main or thread; a rejection means it didn't open.
       openBotGroup(group).then(
-        () => {
-          const tabId = roomTabOf(group)
+        (roomId) => {
+          const tabId = roomTab(useAppStore.getState(), group, roomId)?.id ?? null
           if (generation !== currentBotPaletteGeneration() || !tabId) {
             return
           }

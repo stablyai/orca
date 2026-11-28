@@ -1,4 +1,4 @@
-import type { BotGroup } from '../../../shared/bots/bot-group'
+import { findBotGroupRoom, type BotGroup } from '../../../shared/bots/bot-group'
 import { botGroupRoomLabel } from './bot-group-room-label'
 import { refreshBotHostGroups } from './bot-group-list'
 import { botTarget, callBotRpc } from './bot-hosts'
@@ -13,10 +13,17 @@ import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/int
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { activateAndRevealFolderWorkspaceWithOutcome } from './workspace/activation/worktree-activation'
 import type { AppState } from '../store/types'
-import { selectFrontTab } from '../store/slices/tabs/active-tab-selection'
+import {
+  selectActiveTabForWorktree,
+  selectFrontTab
+} from '../store/slices/tabs/active-tab-selection'
 
 /** The tab of one room in the group: the original room's, or a thread's. */
-function roomTab(state: AppState, group: Pick<BotGroup, 'folderWorkspaceId'>, roomId: string) {
+export function roomTab(
+  state: AppState,
+  group: Pick<BotGroup, 'folderWorkspaceId'>,
+  roomId: string
+) {
   return state.unifiedTabsByWorktree[folderWorkspaceKey(group.folderWorkspaceId)]?.find(
     (tab) => tab.contentType === 'room' && tab.entityId === roomId
   )
@@ -32,9 +39,19 @@ function showRoomTab(workspace: string, tabId: string): void {
   state.setActiveTabType('agent-session', workspace)
 }
 
-/** Opens the group's home and focuses its room tab there, adding the tab the first time. */
-export function openBotGroup(group: BotGroup): Promise<void> {
-  return openBotGroupRoom(group, group.id, group.name)
+/** Opens the group's home and focuses its main room, adding the tab the first time; coming back
+ *  from elsewhere returns to the thread left in front there. Resolves with the room it opened. */
+export async function openBotGroup(group: BotGroup): Promise<string> {
+  const state = useAppStore.getState()
+  // Read before activation moves the window here. Already in front, the group goes to its main room.
+  const front = selectActiveTabForWorktree(state, folderWorkspaceKey(group.folderWorkspaceId))
+  const threadId =
+    front?.contentType === 'room' && front !== selectFrontTab(state)
+      ? findBotGroupRoom([group], front.entityId)?.threadId
+      : undefined
+  const roomId = threadId ?? group.id
+  await openBotGroupRoom(group, roomId, botGroupRoomLabel(group, threadId))
+  return roomId
 }
 
 /** A new thread in the group, opened in its own room tab beside the others. */
