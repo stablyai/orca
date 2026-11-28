@@ -4,9 +4,11 @@ import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
 import type {
+  MOBILE_PUSH_PROMPT_CATEGORY,
   MobilePushAgentState,
   MobilePushApnsEnvironment,
   MobilePushPlatform,
+  MobilePushPrompt,
   MobilePushSource
 } from '../../../shared/notifications/mobile-push-contract'
 import {
@@ -53,6 +55,8 @@ export type PushSendNotification = {
   worktreeId?: string
   paneKey?: string
   executionHost?: `runtime:${string}`
+  category?: typeof MOBILE_PUSH_PROMPT_CATEGORY
+  prompt?: MobilePushPrompt
 }
 
 type PushGatewayClientOptions = {
@@ -120,6 +124,30 @@ export class PushGatewayClient {
     await cancelUnreadResponseBody(response.response)
     // A gateway that no longer knows the registration is as deleted as it gets.
     return response.response.ok || response.response.status === 404
+  }
+
+  /** Unauthenticated. A 404 or any error is "this gateway does not advertise prompt categories". */
+  async readPromptCategory(): Promise<boolean> {
+    try {
+      const response = await this.fetchImpl(`${this.origin}/v1/capabilities`, {
+        method: 'GET',
+        redirect: 'error',
+        signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS)
+      })
+      const text = await response.text()
+      if (!response.ok) {
+        return false
+      }
+      const body: unknown = JSON.parse(text)
+      return (
+        typeof body === 'object' &&
+        body !== null &&
+        'promptCategory' in body &&
+        body.promptCategory === true
+      )
+    } catch {
+      return false
+    }
   }
 
   async send(input: {

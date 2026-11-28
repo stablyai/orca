@@ -11,6 +11,8 @@ import {
   type ExecutionHostPushCoverage
 } from './push-burst-slots'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
+import type { DesktopPushPrompt } from './desktop-push-prompt'
+import { notificationWithAgentPrompt } from './push-dispatcher-prompt'
 import { PushOutcomeCounters } from './push-outcome-counters'
 import {
   NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
@@ -33,6 +35,8 @@ type PushDispatcherOptions = {
   deliveryMode?: MobilePushDeliveryMode
   /** Test seam: lets a suite drive the single retry without real time. */
   scheduleRetry?: (run: () => void, delayMs: number) => void
+  /** Absent keeps today's notification bytes. */
+  prompt?: DesktopPushPrompt
   coverage?: ExecutionHostPushCoverage
 }
 
@@ -56,12 +60,14 @@ export class PushDispatcher {
   private readonly registry: PushDispatcherRegistry
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
+  private readonly prompt: DesktopPushPrompt | undefined
   private readonly coverage: ExecutionHostPushCoverage | undefined
 
   constructor(options: PushDispatcherOptions) {
     this.coverage = options.coverage
     this.client = options.client
     this.registry = options.registry
+    this.prompt = options.prompt
     this.deliveryMode = options.deliveryMode ?? 'full'
     this.scheduleRetry =
       options.scheduleRetry ??
@@ -73,6 +79,7 @@ export class PushDispatcher {
 
   start(): void {
     this.stopped = false
+    this.prompt?.gate.refresh()
   }
 
   stop(): void {
@@ -211,16 +218,17 @@ export class PushDispatcher {
     if (targets.length === 0) {
       return null
     }
+    const notification: PushSendNotification = {
+      expiresAt: Date.now() + 300_000,
+      ...(event.notificationId ? { notificationId: event.notificationId } : {}),
+      ...content,
+      ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+      ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+      ...(event.executionHost ? { executionHost: event.executionHost } : {})
+    }
     return {
       targets,
-      notification: {
-        expiresAt: Date.now() + 300_000,
-        ...(event.notificationId ? { notificationId: event.notificationId } : {}),
-        ...content,
-        ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
-        ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-        ...(event.executionHost ? { executionHost: event.executionHost } : {})
-      }
+      notification: notificationWithAgentPrompt(notification, event, this.prompt)
     }
   }
 

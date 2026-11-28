@@ -41,7 +41,8 @@ export function apnsBody(delivery: PushDelivery): string {
             alert: { title: delivery.title, body: delivery.body },
             ...(delivery.badge === undefined ? {} : { badge: delivery.badge }),
             ...(delivery.sound === false ? {} : { sound: 'default' }),
-            'thread-id': delivery.hostFingerprint
+            'thread-id': delivery.hostFingerprint,
+            ...(delivery.orca.category ? { category: delivery.orca.category } : {})
           },
     orca: delivery.orca
   })
@@ -62,6 +63,11 @@ export class ApnsClient {
   ): Promise<PushProviderOutcome> {
     const expiration = Math.floor(delivery.expiresAt / 1000)
     if (expiration * 1000 <= this.now()) return { status: 'error', reason: 'expired' }
+    // APNs rejects the request at 4096 bytes, so stop before opening the connection.
+    const body = apnsBody(delivery)
+    if (Buffer.byteLength(body) > 4096) {
+      return { status: 'error', reason: 'PayloadTooLarge', retryable: false }
+    }
     let response
     try {
       response = await this.options.transport({
@@ -78,7 +84,7 @@ export class ApnsClient {
             ? { 'apns-collapse-id': delivery.collapseId }
             : {})
         },
-        body: apnsBody(delivery)
+        body
       })
     } catch (error) {
       return {
