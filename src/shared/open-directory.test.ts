@@ -1,7 +1,7 @@
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import { readdirSync, readFileSync } from 'node:fs'
-import { mkdir, mkdtemp, opendir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,7 +63,8 @@ afterEach(async () => {
 
 describe('openDirectory on Windows', () => {
   it('lists what opendir lists and rejects missing or non-folder paths', async () => {
-    const expected = await listNames(await opendir(root))
+    const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+    const expected = await listNames(await actual.opendir(root))
     setPlatform('win32')
 
     expect(await listNames(await openDirectory(root))).toEqual(expected)
