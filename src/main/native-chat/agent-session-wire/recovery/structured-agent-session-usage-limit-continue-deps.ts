@@ -14,6 +14,7 @@ export type UsageLimitContinueDeps = UsageLimitCutReads & {
       | 'listBackgroundSessionIds'
       | 'isSessionInBackground'
       | 'cancelUsageLimitContinue'
+      | 'onRecordsChanged'
     >
   }
   serialize: <T>(id: string, run: () => Promise<T>) => Promise<T>

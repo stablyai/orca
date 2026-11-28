@@ -13,8 +13,22 @@ const HELD_CHILD: AgentSessionOwnerProbe = {
   matchedOn: ['held-child']
 }
 
+function renewable(record: AgentSessionRecord | null): record is AgentSessionRecord {
+  return (
+    record !== null &&
+    !record.lease.unreconciled &&
+    record.lease.claimStatus === 'live' &&
+    record.lease.ownerProcess !== null &&
+    // Recovery has no owned transport; renewing would make an orphan PID appear healthy.
+    record.lease.handoffStage !== 'recovering'
+  )
+}
+
 export class StructuredAgentSessionLeaseRenewer {
   private timer: ReturnType<typeof setInterval> | null = null
+  private witness: string | undefined
+  private unsubscribe: (() => void) | undefined
+  private disposed = false
   private running = false
   /** Never rejects: timer failures are logged and must not also fail teardown. */
   private inFlight: Promise<void> = Promise.resolve()
@@ -34,24 +48,61 @@ export class StructuredAgentSessionLeaseRenewer {
   ) {}
 
   start(): void {
-    if (this.timer) {
+    if (this.unsubscribe || this.disposed) {
       return
     }
-    this.timer = setInterval(() => void this.renewNow(), this.input.intervalMs ?? RENEW_INTERVAL_MS)
-    this.timer.unref?.()
+    this.unsubscribe = this.input.store.onRecordsChanged((ids) => {
+      if (!this.witness) {
+        this.setWitness(ids.find((id) => renewable(this.input.store.getRecord(id))))
+      } else if (ids.includes(this.witness) && !this.keepsWitness()) {
+        this.findWitness()
+      }
+    })
+    this.findWitness()
+  }
+
+  private keepsWitness(): boolean {
+    return this.witness !== undefined && renewable(this.input.store.getRecord(this.witness))
+  }
+
+  private findWitness(): void {
+    this.setWitness(this.input.store.listLeaseHolders().find(renewable)?.sessionId)
+  }
+
+  private setWitness(witness: string | undefined): void {
+    this.witness = witness
+    if (!witness) {
+      if (this.timer) {
+        clearInterval(this.timer)
+        this.timer = null
+      }
+    } else if (!this.timer) {
+      this.timer = setInterval(() => {
+        if (this.disposed) {
+          return
+        }
+        if (!this.keepsWitness()) {
+          this.findWitness()
+        }
+        if (this.witness) {
+          void this.renewNow()
+        }
+      }, this.input.intervalMs ?? RENEW_INTERVAL_MS)
+      this.timer.unref?.()
+    }
   }
 
   /** Join in-flight commits; clearing the timer alone lets writes outlive host teardown. */
   stop(): Promise<void> {
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
+    this.disposed = true
+    this.unsubscribe?.()
+    this.unsubscribe = undefined
+    this.setWitness(undefined)
     return this.inFlight
   }
 
   renewNow(): Promise<void> {
-    if (this.running) {
+    if (this.running || this.disposed) {
       return this.inFlight
     }
     this.running = true
@@ -66,14 +117,7 @@ export class StructuredAgentSessionLeaseRenewer {
   }
 
   private async renewOnce(): Promise<void> {
-    const records = this.input.store.listLeaseHolders().filter(
-      (record) =>
-        !record.lease.unreconciled &&
-        record.lease.claimStatus === 'live' &&
-        record.lease.ownerProcess !== null &&
-        // Recovery has no owned transport; renewing would make an orphan PID appear healthy.
-        record.lease.handoffStage !== 'recovering'
-    )
+    const records = this.input.store.listLeaseHolders().filter(renewable)
     if (records.length === 0) {
       return
     }
@@ -84,6 +128,9 @@ export class StructuredAgentSessionLeaseRenewer {
     const unheld = records.filter((record) => !held.has(record))
     const probes =
       unheld.length > 0 ? await this.probe(unheld) : new Map<string, AgentSessionOwnerProbe>()
+    if (this.disposed) {
+      return
+    }
     for (const record of held) {
       // Exit during probes invalidates held-child proof.
       if (holds(record)) {
@@ -118,6 +165,9 @@ export class StructuredAgentSessionLeaseRenewer {
       const renewed = await this.input.store.renewLeases(renewals)
       results = renewed.map((record) => ({ status: 'fulfilled', value: record }) as const)
     } catch {
+      if (this.disposed) {
+        return
+      }
       results = await Promise.allSettled(
         renewals.map((renewal) => this.input.store.renewLease(renewal))
       )

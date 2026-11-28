@@ -72,10 +72,21 @@ export function structuredAgentSessionChildHasOpenWork(
 export class StructuredAgentSessionIdleSweep {
   private timer: ReturnType<typeof setInterval> | null = null
   private running = false
+  private disposed = false
 
   constructor(private readonly deps: StructuredAgentSessionIdleSweepDeps) {}
 
-  start(): void {
+  syncLoadedHandles(): void {
+    if (this.disposed || this.deps.isDisposed()) {
+      return
+    }
+    if (this.deps.sessions.size === 0) {
+      this.clearTimer()
+      return
+    }
+    if (this.timer) {
+      return
+    }
     this.timer = setInterval(
       () => void this.tick(),
       this.deps.intervalMs ?? STRUCTURED_AGENT_SESSION_IDLE_SWEEP_INTERVAL_MS
@@ -84,6 +95,11 @@ export class StructuredAgentSessionIdleSweep {
   }
 
   dispose(): void {
+    this.disposed = true
+    this.clearTimer()
+  }
+
+  private clearTimer(): void {
     if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
@@ -92,7 +108,7 @@ export class StructuredAgentSessionIdleSweep {
 
   /** Run sessions concurrently; skip overlapping ticks so one locked start cannot delay others. */
   async tick(): Promise<void> {
-    if (this.running || this.deps.isDisposed()) {
+    if (this.running || this.disposed || this.deps.isDisposed() || !this.deps.sessions.size) {
       return
     }
     this.running = true
@@ -118,7 +134,7 @@ export class StructuredAgentSessionIdleSweep {
    *  it. `anyway` also stops a viewed or Never chat's idle agent, e.g. after an account switch. */
   async release(sessionId: string, anyway = false): Promise<void> {
     const window = (): 0 | null => (anyway ? 0 : this.releaseWindow(sessionId))
-    if (!this.deps.isDisposed() && window() === 0) {
+    if (!this.disposed && !this.deps.isDisposed() && window() === 0) {
       await this.sweepSession(sessionId, 0, window)
     }
   }
@@ -140,11 +156,11 @@ export class StructuredAgentSessionIdleSweep {
     const unconfirmed = await this.deps.serialize(sessionId, () =>
       this.tickUnderSerialize(sessionId, release ? release() : agentIdleMs, null, !!release)
     )
-    if (!unconfirmed) {
+    if (!unconfirmed || this.disposed || this.deps.isDisposed()) {
       return
     }
     const answer = (await this.deps.confirmIdle(sessionId)) ?? 'idle'
-    if (answer === 'unknown') {
+    if (answer === 'unknown' || this.disposed || this.deps.isDisposed()) {
       return
     }
     await this.deps.serialize(sessionId, async () => {
@@ -170,7 +186,7 @@ export class StructuredAgentSessionIdleSweep {
     releasing = false
   ): Promise<RunningChild | null> {
     const session = this.deps.sessions.get(sessionId)
-    if (!session || this.deps.isDisposed()) {
+    if (!session || this.disposed || this.deps.isDisposed()) {
       return null
     }
     // Wall-clock idle counts sleep, so it never ends a start its own deadline still times.
@@ -178,13 +194,19 @@ export class StructuredAgentSessionIdleSweep {
       return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
-    if (
-      session.child &&
-      session.child.phase !== 'starting' &&
-      (await this.owesWork(sessionId, session))
-    ) {
-      this.deps.sessions.touch(sessionId)
-      return null
+    const child = session.child
+    if (child && child.phase !== 'starting') {
+      const owes = await this.owesWork(sessionId, session)
+      if (
+        this.disposed || this.deps.isDisposed() ||
+        this.deps.sessions.get(sessionId) !== session || session.child !== child
+      ) {
+        return null
+      }
+      if (owes) {
+        this.deps.sessions.touch(sessionId)
+        return null
+      }
     }
     // Never only keeps agents running; a handle with no agent still retires on the default window.
     const idleMs = agentIdleMs ?? (session.child ? null : STRUCTURED_AGENT_SESSION_IDLE_MS)
@@ -209,7 +231,9 @@ export class StructuredAgentSessionIdleSweep {
       }
       await this.deps.stopAgent(sessionId)
     }
-    await this.deps.closeConversation(sessionId)
+    if (!this.disposed && !this.deps.isDisposed() && this.deps.sessions.get(sessionId) === session) {
+      await this.deps.closeConversation(sessionId)
+    }
     return null
   }
 
