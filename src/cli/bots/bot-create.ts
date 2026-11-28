@@ -2,9 +2,8 @@
 // they press Create bot. Without --offer, creates the bot directly when the local host opts in
 // (desktop Settings › Bots or `orca serve --allow-cli-bot-create`).
 import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { mascotAvatar } from '../../shared/bot-avatar'
-import { BOT_AGENTS, isBotAgent } from '../../shared/bot-types'
-import { proposalSeed } from '../../shared/bots/bot-proposal'
+import { BOT_AGENTS, isBotAgent, type BotAgent } from '../../shared/bot-types'
+import { proposalCreateParams, type BotProposal } from '../../shared/bots/bot-proposal'
 import { BOT_TEMPLATES, botTemplate, type BotTemplate } from '../../shared/bots/bot-templates'
 import type { HandedWorkspace } from '../../shared/bots/bot-made-for-workspaces'
 import type {
@@ -142,36 +141,36 @@ async function offer({ flags, client, json }: Parameters<CommandHandler>[0]): Pr
  *  (desktop Settings › Bots or `orca serve --allow-cli-bot-create`) accepts it, and only from its
  *  own machine's CLI; anywhere else `bots.create` refuses with the propose-one message. */
 async function create({ flags, client, json }: Parameters<CommandHandler>[0]): Promise<void> {
-  const agent = getOptionalStringFlag(flags, 'agent')
-  if (agent !== undefined && !isBotAgent(agent)) {
+  if (client.isRemote) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      "Direct `orca bot create` only runs against this machine's local Orca; a paired CLI cannot create bots directly. Use `--environment local` on that machine or propose one with `--offer`."
+    )
+  }
+  const explicitAgent = getOptionalStringFlag(flags, 'agent')
+  if (explicitAgent !== undefined && !isBotAgent(explicitAgent)) {
     throw new RuntimeClientError('invalid_argument', `--agent is one of: ${BOT_AGENTS.join(', ')}`)
   }
   const { name, purpose, watches, does, reports, template } = resolveBotSpec(flags, {
     offer: false
   })
   const worktrees = await worktreesOf(client, getRepeatedStringFlag(flags, 'worktree'))
-  const seed = proposalSeed({
+  const agent: BotAgent =
+    explicitAgent ??
+    (await callBots<{ defaultAgent: BotAgent }>(client, 'bots.agentChoices')).result.defaultAgent
+  const proposal: BotProposal = {
+    name,
     purpose,
     ...(watches ? { watches } : {}),
     ...(does ? { does } : {}),
     ...(reports ? { reports } : {}),
-    ...(template ? { templateId: template.id } : {})
-  })
+    ...(template ? { templateId: template.id, mascot: template.mascot } : {}),
+    ...(worktrees.length ? { worktrees } : {})
+  }
   const result = await callBots<{ bot: { id: string; name: string; folder: string } }>(
     client,
     'bots.create',
-    {
-      name,
-      ...(agent ? { agent } : {}),
-      seed,
-      ...(template
-        ? {
-            avatar: mascotAvatar(template.mascot),
-            fromTemplate: { id: template.id, skills: [...template.skills] }
-          }
-        : {}),
-      ...(worktrees.length ? { handOff: worktrees } : {})
-    }
+    proposalCreateParams(proposal, agent, { templatePackages: true })
   )
   printResult(result, json, ({ bot }) => `Created ${bot.name} (${bot.id}) in ${bot.folder}`)
 }

@@ -17,6 +17,13 @@ const offer = { fromOffer: { botId: 'b', offerId: 'o' } }
 const share = {
   fromShare: { reviewId: '00000000-0000-4000-8000-000000000000', toolIds: [] }
 }
+const plainAndTemplate = {
+  name: 'Triage',
+  agent: 'codex',
+  seed: { purpose: 'Triage bugs.', templateId: 'pr-review' },
+  fromTemplate: { id: 'pr-review', skills: ['pr-review-checklist'] },
+  handOff: [{ id: 'w1', name: 'orca' }]
+}
 
 describe('bots.create caller gate', () => {
   afterEach(() => setCliBotCreateAllowed(false))
@@ -28,30 +35,49 @@ describe('bots.create caller gate', () => {
     expect(() => botCreateCaller(localCli, {}, false)).toThrow(/bot create --offer/)
   })
 
-  it('lets the local CLI create a plain bot when the serve flag or desktop setting is on', () => {
+  it('lets the local CLI create a plain or template bot when the serve flag or desktop setting is on', () => {
     setCliBotCreateAllowed(true)
     expect(isCliBotCreateAllowed({ allowCliBotCreate: false })).toBe(true)
-    expect(() => botCreateCaller(localCli, {})).not.toThrow()
+    expect(() => botCreateCaller(localCli, plainAndTemplate)).not.toThrow()
 
     setCliBotCreateAllowed(false)
     const desktopAllowed = isCliBotCreateAllowed({ allowCliBotCreate: true })
     expect(desktopAllowed).toBe(true)
-    expect(() => botCreateCaller(localCli, {}, desktopAllowed)).not.toThrow()
+    expect(() => botCreateCaller(localCli, plainAndTemplate, desktopAllowed)).not.toThrow()
   })
 
-  it('never lets a CLI accept a card or a share link, even when allowed', () => {
+  it('never lets a CLI accept a card, share link, or owner-only override even when allowed', () => {
     expect(() => botCreateCaller(localCli, offer, true)).toThrow(/bot create --offer/)
     expect(() => botCreateCaller(localCli, share, true)).toThrow(/bot create --offer/)
+    expect(() =>
+      botCreateCaller(localCli, { name: 'Triage', permissionMode: 'bypassPermissions' }, true)
+    ).toThrow(/bot create --offer/)
+    expect(() =>
+      botCreateCaller(localCli, { name: 'Triage', launch: { model: 'gpt-5' } }, true)
+    ).toThrow(/bot create --offer/)
+    expect(() => botCreateCaller(localCli, { name: 'Triage', takingOver: true }, true)).toThrow(
+      /bot create --offer/
+    )
+    expect(() =>
+      botCreateCaller(
+        localCli,
+        { name: 'Triage', importFrom: { app: 'openclaw', name: 'A' } },
+        true
+      )
+    ).toThrow(/bot create --offer/)
   })
 
   it('never lets a paired CLI create, even when allowed', () => {
-    expect(() => botCreateCaller(pairedCli, {}, true)).toThrow(/bot create --offer/)
+    expect(() => botCreateCaller(pairedCli, plainAndTemplate, true)).toThrow(/bot create --offer/)
   })
 
   it("leaves the owner's window and phone as they were", () => {
     for (const context of [desktop, phone]) {
       expect(() => botCreateCaller(context, {}, false)).not.toThrow()
       expect(() => botCreateCaller(context, offer, false)).not.toThrow()
+      expect(() =>
+        botCreateCaller(context, { name: 'Triage', permissionMode: 'bypassPermissions' }, false)
+      ).not.toThrow()
     }
   })
 

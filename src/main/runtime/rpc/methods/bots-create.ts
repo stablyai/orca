@@ -15,19 +15,13 @@ export const BOT_CREATE_METHOD = defineMethod({
   name: 'bots.create',
   permission: 'workspace',
   params: BotCreate,
-  handler: async (
-    { handOff, takingOver, fromOffer, fromShare, fromTemplate, ...params },
-    context
-  ) => {
+  handler: async (input, context) => {
     const { runtime } = context
     runtime.bots.assertEnabled()
     // A bot proposes new bots (`bot create --offer`); only its owner creates one, in Orca, unless the
     // host allows local CLI creation (Settings › Bots or `orca serve --allow-cli-bot-create`).
-    botCreateCaller(
-      context,
-      { fromOffer, fromShare },
-      isCliBotCreateAllowed(runtime.requireStore().getSettings())
-    )
+    botCreateCaller(context, input, isCliBotCreateAllowed(runtime.requireStore().getSettings()))
+    const { handOff, takingOver, fromOffer, fromShare, fromTemplate, ...params } = input
     let bot
     if (fromShare) {
       bot = await createBotFromShare(botShareCreateDeps(runtime), { ...params, fromShare })
