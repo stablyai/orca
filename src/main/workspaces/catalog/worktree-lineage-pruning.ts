@@ -40,19 +40,36 @@ function hasStoredRepoLineage(
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>,
   crossStoreChildKeys: readonly string[]
 ): boolean {
-  return (
-    crossStoreChildKeys.some((childKey) => workspaceKeyBelongsToRepo(childKey, repoPrefix)) ||
-    Object.entries(worktreeLineage).some(
-      ([childId, lineage]) =>
-        worktreeIdBelongsToRepo(childId, repoPrefix) ||
-        worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix)
-    ) ||
-    Object.values(workspaceLineage).some(
-      (lineage) =>
-        workspaceKeyBelongsToRepo(lineage.childWorkspaceKey, repoPrefix) ||
-        workspaceKeyBelongsToRepo(lineage.parentWorkspaceKey, repoPrefix)
-    )
-  )
+  for (const childKey of crossStoreChildKeys) {
+    if (workspaceKeyBelongsToRepo(childKey, repoPrefix)) {
+      return true
+    }
+  }
+  for (const childId in worktreeLineage) {
+    if (!Object.hasOwn(worktreeLineage, childId)) {
+      continue
+    }
+    if (
+      worktreeIdBelongsToRepo(childId, repoPrefix) ||
+      worktreeIdBelongsToRepo(worktreeLineage[childId].parentWorktreeId, repoPrefix)
+    ) {
+      return true
+    }
+  }
+  for (const key in workspaceLineage) {
+    if (!Object.hasOwn(workspaceLineage, key)) {
+      continue
+    }
+    const lineage = workspaceLineage[key]
+    if (
+      workspaceKeyBelongsToRepo(key, repoPrefix) ||
+      workspaceKeyBelongsToRepo(lineage.childWorkspaceKey, repoPrefix) ||
+      workspaceKeyBelongsToRepo(lineage.parentWorkspaceKey, repoPrefix)
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 export function pruneLineageForMissingRepoWorktrees(
@@ -81,19 +98,18 @@ export function pruneLineageForMissingRepoWorktrees(
   const workspaceLineage = store.getAllWorkspaceLineage?.() ?? {}
   const crossStoreChildKeys = Object.keys(store.getAllCrossStoreWorkspaceLineage?.() ?? {})
   const repoPrefix = `${repo.id}::`
-  // One empty scan cannot prove every stored lineage edge disappeared.
+  // Skip live-path indexing when this repo has no stored lineage, or when an empty scan cannot prove deletion.
   if (
-    gitWorktrees.length === 0 &&
-    hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage, crossStoreChildKeys)
+    gitWorktrees.length === 0 ||
+    !hasStoredRepoLineage(repoPrefix, worktreeLineage, workspaceLineage, crossStoreChildKeys)
   ) {
     return
   }
-  const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
-  const livePathKeys = new Set(
-    [repo.path, ...gitWorktrees.map(({ path }) => path)].map((pathValue) =>
-      worktreeRetentionPathComparisonKey(pathValue, platform)
-    )
-  )
+  const liveIds = new Set<string>()
+  for (const worktree of gitWorktrees) {
+    liveIds.add(`${repo.id}::${worktree.path}`)
+  }
+  let livePathKeys: Set<string> | undefined
   const isLive = (worktreeId: string): boolean => {
     if (
       liveIds.has(worktreeId) ||
@@ -106,10 +122,13 @@ export function pruneLineageForMissingRepoWorktrees(
     if (!worktreePath) {
       return false
     }
-    if (livePathKeys.has(worktreeRetentionPathComparisonKey(worktreePath, platform))) {
-      return true
+    if (!livePathKeys) {
+      livePathKeys = new Set<string>([worktreeRetentionPathComparisonKey(repo.path, platform)])
+      for (const worktree of gitWorktrees) {
+        livePathKeys.add(worktreeRetentionPathComparisonKey(worktree.path, platform))
+      }
     }
-    return false
+    return livePathKeys.has(worktreeRetentionPathComparisonKey(worktreePath, platform))
   }
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)

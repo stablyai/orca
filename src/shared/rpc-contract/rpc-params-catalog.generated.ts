@@ -844,7 +844,10 @@ import {
 } from './projects/repo-params'
 import { ReferenceFind, ReferenceList } from './references/reference-params'
 import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
-import { SessionTabsUnsubscribeAllParams } from './session-tabs/session-tabs-params'
+import {
+  SessionTabsSubscribeAllParams,
+  SessionTabsUnsubscribeAllParams
+} from './session-tabs/session-tabs-params'
 import {
   ActivateTab,
   BotLinkActivateTab,
@@ -865,6 +868,7 @@ import {
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
 } from './skills/skills-params'
+import { BitbucketConnectParams } from './source-control/bitbucket-params'
 import {
   GitBlame,
   GitBranchCompare,
@@ -1160,6 +1164,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatSignInStart': AntigravityChatSignInStartParams,
   'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
+  'accounts.antigravityReadCurrent': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,
   'accounts.beginClaudeSignIn': BeginClaudeSignInParams,
@@ -1291,6 +1296,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'bitbucket.connect': BitbucketConnectParams,
+  'bitbucket.disconnect': null,
+  'bitbucket.status': null,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,
@@ -2176,7 +2184,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.movePaneToNewTab': MovePaneToNewTab,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': WorktreeTabSelector,
-  'session.tabs.subscribeAll': null,
+  'session.tabs.subscribeAll': SessionTabsSubscribeAllParams,
   'session.tabs.terminalShellChoices': WorktreeTabSelector,
   'session.tabs.unsubscribe': SessionTabsUnsubscribe,
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,

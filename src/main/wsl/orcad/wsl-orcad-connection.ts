@@ -13,7 +13,6 @@ import type { WslHostUpdateIntent } from '../../../shared/remote-runtime/wsl-hos
 import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import {
   wslConnectFailedStatus,
@@ -23,7 +22,6 @@ import {
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import { defaultWslOrcadEnvironmentId, deployAndLaunchWslOrcad } from './wsl-orcad-deploy'
 import type { WslOrcadDeployOptions, WslOrcadLaunch } from './wsl-orcad-launch-contract'
-import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import { createWslOrcadHostTransport } from './wsl-orcad-host-transport'
 import { resolveWslOrcadPairing } from './wsl-orcad-pairing-identity'
 import { trackWslOrcadHostEnvironment } from './wsl-orcad-host-environments'
@@ -193,7 +191,8 @@ export class WslOrcadConnectionManager {
     const environmentId = options.environmentId ?? defaultWslOrcadEnvironmentId(distro)
     const label = options.label ?? distro
     const target = { kind: 'wsl', id: environmentId, distro, label } as const
-    const transport = (this.dependencies.createTransport ?? defaultTransport)(target)
+    const transport =
+      this.dependencies.createTransport?.(target) ?? createWslOrcadHostTransport({ target })
     const spawns = wslConnectDeploySpawns(distro, transport, this.dependencies, options)
     // Relaunch stopped orcad on each connect so distro restarts recover.
     const launch = await (this.dependencies.deployAndLaunch ?? deployAndLaunchWslOrcad)(distro, {
@@ -296,6 +295,8 @@ export class WslOrcadConnectionManager {
           remotePort: launch.port,
           fullVersion: launch.fullVersion,
           pid: launch.pid,
+          linuxUser: launch.linuxUser,
+          defaultLinuxUser: launch.defaultLinuxUser,
           pairingOffer,
           deferredUpdate: launch.deferredUpdate ?? null,
           close: () => this.closeEntry(key, entry)
@@ -342,8 +343,4 @@ export class WslOrcadConnectionManager {
       await this.close(key)
     }
   }
-}
-
-function defaultTransport(target: WslOrcadHostTarget): OrcadHostTransport {
-  return createWslOrcadHostTransport({ target })
 }

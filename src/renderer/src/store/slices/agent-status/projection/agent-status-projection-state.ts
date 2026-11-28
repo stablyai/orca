@@ -33,7 +33,7 @@ export class AgentStatusProjectionState {
   activeAgentCount = 0
   readonly transitionListeners = new Set<AgentStatusChangeListener>()
   readonly transitionBatches: (readonly AgentStatusChange[])[] = []
-  activeDashboardOwners = new Set<string>()
+  activeDashboardOwners: Set<string> | null = new Set<string>()
   readonly countedRows = new Map<string, CountedRow>()
   readonly countsByWorktree = new Map<string, DashboardCounts>()
   dashboardTotals: DashboardCounts = EMPTY_COUNTS

@@ -3,10 +3,15 @@ import { structuredAgentSessionHostKey } from '../../../runtime/native-chat/host
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewState
+} from '../pane/ownership/native-chat-view-memory'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
+  nativeChatAnswerOperationEvidence,
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
   formatAskAnswer
@@ -54,7 +59,13 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
-  const [operation, setOperation] = useState<PromptAnswerOperation | null>(null)
+  // Kept with the chat tab: a chat released mid-send returns still holding its answer. Each rewind starts a
+  // new scope, so only the newest few settled ones are kept, and one is dropped once its delivery shows.
+  const [operation, setOperation] = useNativeChatViewState<PromptAnswerOperation | null>(
+    `async-answer:${sourceScope}`,
+    null,
+    KEPT_PROMPT_VIEWS
+  )
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,
@@ -72,6 +83,19 @@ export function NativeChatStructuredAsyncQuestion({
     () => nativeChatAnswerOperationPending(operation, structure, submissions),
     [operation, structure, submissions]
   )
+  // Dropped only on proof the answer landed (a queue handoff can still bring a pending submission), or when the
+  // send never created a message to wait on.
+  const settled =
+    operation !== null &&
+    !operation.inFlight &&
+    (operation.clientMessageId === undefined ||
+      nativeChatAnswerOperationEvidence(operation.clientMessageId, structure, submissions) ===
+        false)
+  useEffect(() => {
+    if (settled) {
+      setOperation(null)
+    }
+  }, [settled, setOperation])
   if (!prompt) {
     return null
   }
@@ -80,6 +104,7 @@ export function NativeChatStructuredAsyncQuestion({
     <NativeChatQuestionCard
       key={promptKey}
       prompt={prompt}
+      memoryKey={`async-question:${promptKey}`}
       isSubmitting={answerPending || (operation?.promptKey === promptKey && operationPending)}
       onAnswer={(selections) => {
         const current: PromptAnswerOperation = { promptKey, inFlight: true }

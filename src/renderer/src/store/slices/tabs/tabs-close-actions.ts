@@ -6,6 +6,7 @@ import {
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
 import { retireNativeChatTab } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
+import { releaseRemovedChatTabsLater } from '@/components/native-chat/session/native-chat-removed-tab-releaser'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { anotherChatTabInWorktree, closedChatPaneTabIds } from './closed-chat-pane-ownership'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
@@ -149,6 +150,7 @@ export function createTabsCloseActions(
             })
             if (closed?.contentType === 'agent-session') {
               retireNativeChatTab(closed, anotherChatTabInWorktree(current, closed, worktreeId))
+              releaseRemovedChatTabsLater([closed])
             }
             // Bulk closes bypass terminals.closeTab, so clear entity-keyed unread markers here too.
             const nextUnreadTerminalTabs = terminalEntityId

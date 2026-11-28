@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { useMemo } from 'react'
-import { fingerprintStringList } from '../../../../../../shared/text/string-fingerprint'
+import { createStringListFingerprinter } from '../../../../../../shared/text/string-fingerprint'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
 import {
@@ -12,8 +12,8 @@ import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getFolderWorkspaceRowGeometry,
-  getWorktreeCardContentIndent,
-  getWorktreeCardSurfaceInset,
+  getWorktreeCardContentIndentDirect,
+  getWorktreeCardSurfaceInsetDirect,
   FLUSH_CARD_CONTENT_PULLBACK,
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
@@ -63,12 +63,12 @@ export function buildLineageRowProjection(
   statusLane = newCardStyle
 ) {
   const rowIndexByKey = new Map<string, number>()
-  const rowKeys: string[] = []
+  const restoreFingerprinter = createStringListFingerprinter()
   const frames: LineageRowFrame[] = []
-  const occurrencesByIdentity = new Map<string, number[]>()
   const stack: number[] = []
   const isGrouped = groupBy !== 'none'
   let hasNestedLineage = false
+  let hasCollapsedLineage = false
   const close = (next: number) => {
     const index = stack.pop()!
     frames[index].end = next - 1
@@ -76,7 +76,7 @@ export function buildLineageRowProjection(
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
     const key = getRenderRowKey(row)
-    rowKeys.push(key)
+    restoreFingerprinter.push(key)
     rowIndexByKey.set(key, index)
     const isWorkspace = row.type === 'item' || row.type === 'folder-workspace'
     while (stack.length > 0) {
@@ -116,18 +116,14 @@ export function buildLineageRowProjection(
         frame.left = geometry.surfaceInset
         frame.contentIndent = Math.max(0, geometry.cardContentIndent)
       } else {
-        const surfaceInset = getWorktreeCardSurfaceInset({
-          isGrouped,
-          groupDepth: row.groupDepth
-        })
+        const surfaceInset = getWorktreeCardSurfaceInsetDirect(isGrouped, row.groupDepth)
         const contentIndent =
-          getWorktreeCardContentIndent({
-            isGrouped,
-            groupDepth: row.groupDepth,
-            lineageDepth: row.depth
-          }) - surfaceInset
+          getWorktreeCardContentIndentDirect(isGrouped, row.groupDepth, row.depth) - surfaceInset
         frame.left = surfaceInset
         frame.contentIndent = Math.max(0, contentIndent)
+      }
+      if (row.lineageCollapsed === true) {
+        hasCollapsedLineage = true
       }
       if (parent !== null) {
         hasNestedLineage = true
@@ -147,16 +143,6 @@ export function buildLineageRowProjection(
         frame.right = ancestor.right + 7
         frame.contentIndent = 0
         frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
-      }
-      const identity =
-        row.type === 'item'
-          ? getWorktreeHostIdentity(row.worktree)
-          : getFolderWorkspaceHostIdentity(row.folderWorkspace)
-      const occurrences = occurrencesByIdentity.get(identity)
-      if (occurrences) {
-        occurrences.push(index)
-      } else {
-        occurrencesByIdentity.set(identity, [index])
       }
     }
     frames.push(frame)
@@ -209,26 +195,63 @@ export function buildLineageRowProjection(
       }
     }
   }
+  let cachedOccurrencesByIdentity: Map<string, number[]> | null = null
+  const hasAnyLineageFamily = hasNestedLineage || hasCollapsedLineage
   return {
     frames,
-    occurrencesByIdentity,
+    hasAnyLineageFamily,
+    get occurrencesByIdentity(): Map<string, number[]> {
+      if (!cachedOccurrencesByIdentity) {
+        cachedOccurrencesByIdentity = buildOccurrencesByIdentity(rows)
+      }
+      return cachedOccurrencesByIdentity
+    },
     rowIndexByKey,
-    restoreSignal: fingerprintStringList(rowKeys)
+    restoreSignal: restoreFingerprinter.digest()
   }
 }
+
+function buildOccurrencesByIdentity(rows: readonly RenderRow[]): Map<string, number[]> {
+  const occurrencesByIdentity = new Map<string, number[]>()
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index]
+    if (row.type !== 'item' && row.type !== 'folder-workspace') {
+      continue
+    }
+    const identity =
+      row.type === 'item'
+        ? getWorktreeHostIdentity(row.worktree)
+        : getFolderWorkspaceHostIdentity(row.folderWorkspace)
+    const occurrences = occurrencesByIdentity.get(identity)
+    if (occurrences) {
+      occurrences.push(index)
+    } else {
+      occurrencesByIdentity.set(identity, [index])
+    }
+  }
+  return occurrencesByIdentity
+}
+
+const EMPTY_SUBTREE_RANGES: readonly { start: number; end: number }[] = []
+const EMPTY_ACTIVE_FAMILY_ROOTS: ReadonlySet<number> = new Set()
 
 export function useDraggedSubtreeRanges(
   projection: LineageRowProjection,
   identity: string | null
 ): readonly { start: number; end: number }[] {
-  return useMemo(
-    () =>
-      (identity ? (projection.occurrencesByIdentity.get(identity) ?? []) : []).map((start) => ({
-        start,
-        end: projection.frames[start].end
-      })),
-    [projection, identity]
-  )
+  return useMemo(() => {
+    if (!identity) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    const occurrences = projection.occurrencesByIdentity.get(identity)
+    if (!occurrences || occurrences.length === 0) {
+      return EMPTY_SUBTREE_RANGES
+    }
+    return occurrences.map((start) => ({
+      start,
+      end: projection.frames[start].end
+    }))
+  }, [projection, identity])
 }
 
 function hasHiddenLineageChildren(row: RenderRow): boolean {
@@ -240,11 +263,11 @@ export function getActiveFamilyRoots(
   projection: LineageRowProjection,
   activeWorktreeId: string | null,
   activeWorkspaceExecutionHostId: ExecutionHostId | null
-): Set<number> {
-  const roots = new Set<number>()
-  if (!activeWorktreeId) {
-    return roots
+): ReadonlySet<number> {
+  if (!activeWorktreeId || !projection.hasAnyLineageFamily) {
+    return EMPTY_ACTIVE_FAMILY_ROOTS
   }
+  const roots = new Set<number>()
   const addRoots = (occurrences: readonly number[]) => {
     for (const index of occurrences) {
       const root = projection.frames[index].root
