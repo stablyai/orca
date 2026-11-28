@@ -53,6 +53,11 @@ on:
         required: false
         type: string
         default: ''
+      layout_owner:
+        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        required: false
+        type: string
+        default: ''
   schedule:
     # One complete daily reference run; targeted PR coverage remains unchanged.
     - cron: '0 17 * * *'
