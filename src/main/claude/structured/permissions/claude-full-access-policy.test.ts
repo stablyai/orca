@@ -6,7 +6,14 @@ const status = (mode: string): string =>
 const request = (id: string): string =>
   `${JSON.stringify({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } })}\n`
 
-const EVENTS = ['pick-ask', 'pick-full', 'report-ask', 'report-full', 'request'] as const
+const EVENTS = [
+  'pick-ask',
+  'pick-full',
+  'report-ask',
+  'report-full',
+  'report-plan',
+  'request'
+] as const
 type Event = (typeof EVENTS)[number]
 
 function* interleavings(length: number): Generator<Event[]> {
@@ -41,6 +48,9 @@ describe('live Full access policy', () => {
           } else if (event === 'request') {
             stamped.set(`r${index}`, pickedFull && claudeFull)
             policy.observe(request(`r${index}`))
+          } else if (event === 'report-plan') {
+            // Claude keeps the mode Plan was entered from: bypass stays bypass.
+            policy.observe(status('plan'))
           } else {
             claudeFull = event === 'report-full'
             policy.observe(status(claudeFull ? 'bypassPermissions' : 'default'))
