@@ -14,6 +14,8 @@ import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobil
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import type { TabListRef } from '../../../bots/team-share/teammate-rules'
+import { structuredAgentSessionIdOfTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
@@ -126,28 +128,60 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(list.workspaceId)
   }
 
-  /** The list a hook-reported terminal is in, from its PTY's stamp; a pane with no PTY record here is
-   *  the host's (only a PTY carries a teammate's stamp). */
-  getTerminalTabList(identity: {
+  private unplacedStatusLogged = false
+
+  /** The list a hook-reported status row is in, by the stamp on the record any of its keys name: a
+   *  chat's (whom it acts for), a terminal's PTY (by handle, host pane, or the teammate surface holding
+   *  it), else a host layout pane. Null when none does: an unknown holder is never the host's. */
+  getStatusTabList(identity: {
     paneKey: string
     worktreeId?: string
     terminalHandle?: string
   }): TabListRef | null {
-    const ptyId = identity.terminalHandle
+    const pane = parsePaneKey(identity.paneKey)
+    const sessionId = pane ? structuredAgentSessionIdOfTab(pane.tabId) : null
+    const conversation = sessionId
+      ? getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)
+      : undefined
+    if (sessionId && conversation) {
+      const person = this.chatTabPerson(sessionId)
+      return {
+        workspaceId: conversation.location.workspaceId,
+        holder: person === 'owner' ? undefined : person
+      }
+    }
+    const handlePtyId = identity.terminalHandle
       ? this.getTerminalPtyIdForHandle(identity.terminalHandle)
       : null
+    const held = pane
+      ? this.personSessionTabs.holderOfSurface(
+          (surface) =>
+            surface.kind === 'terminal' &&
+            surface.parentTabId === pane.tabId &&
+            surface.leafId === pane.leafId
+        )
+      : null
     const pty =
-      (ptyId ? this.ptysById.get(ptyId) : undefined) ??
+      (handlePtyId ? this.ptysById.get(handlePtyId) : undefined) ??
       this.getPtyRecordForPaneKey(identity.paneKey) ??
       undefined
-    const workspaceId =
-      identity.worktreeId ??
-      pty?.worktreeId ??
-      (identity.terminalHandle
-        ? this.getTerminalWorktreeIdForHandle(identity.terminalHandle)
-        : null) ??
-      this.getTerminalWorktreeIdForPaneKey(identity.paneKey)
-    return workspaceId ? { workspaceId, holder: pty?.holder } : null
+    if (held && !pty?.holder) {
+      return { workspaceId: held.worktreeId, holder: held.person }
+    }
+    if (pty) {
+      return { workspaceId: pty.worktreeId, holder: pty.holder }
+    }
+    const hostPane = sessionId ? null : this.getTerminalWorktreeIdForPaneKey(identity.paneKey)
+    if (hostPane) {
+      return { workspaceId: hostPane, holder: undefined }
+    }
+    if (!this.unplacedStatusLogged) {
+      this.unplacedStatusLogged = true
+      console.warn(
+        '[session-tabs] a status row names no chat, terminal or pane here; no list hears it'
+      )
+    }
+    return null
   }
 
   protected mobileSessionSnapshotHasSurface(

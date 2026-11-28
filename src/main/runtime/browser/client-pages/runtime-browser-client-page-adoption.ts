@@ -192,7 +192,9 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       if (
         (expected &&
           (!restored || !sameRuntimeBrowserPlacement(restored.placement, expected.placement))) ||
-        (!expected && restored !== undefined)
+        (!expected && restored !== undefined) ||
+        // Closed from their list while adoption waited on their computer.
+        (!expected && options.lease.teammate && options.pages.heldBy(browserPageId) === null)
       ) {
         options.authority.retireUnpublishedClientPage(options.lease, {
           browserPageId,

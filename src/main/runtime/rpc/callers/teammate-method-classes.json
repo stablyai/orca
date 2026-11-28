@@ -1763,6 +1763,7 @@
       "session.tabs.movePaneToNewTab",
       "session.tabs.setTabProps",
       "session.tabs.updatePaneLayout",
+      "terminal.adoptOrphans",
       "terminal.closeAll",
       "terminal.create",
       "terminal.createAgentSession",

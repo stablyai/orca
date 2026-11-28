@@ -21,6 +21,10 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       pty.pty.manualTitle = customTitle
       const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
+      if (pty.pty.holder) {
+        // A teammate's own terminal: their list re-reads its name; no host window or layout has it.
+        return { handle, tabId: pty.record.tabId, title }
+      }
       const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
       if (tabIdForTitle) {
         this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabIdForTitle, customTitle)

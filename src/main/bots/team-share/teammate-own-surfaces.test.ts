@@ -23,6 +23,10 @@ import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/brows
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { installHookStatusSessionTabsRepublish } from '../../agent-hooks/runtime/hook-status-session-tabs-republish'
 import type { AgentHookStatusRowMutation } from '../../agent-hooks/server/server-types'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 afterEach(async () => {
   setRuntimeBrowserCommandsFactory(null)
@@ -313,12 +317,11 @@ it('never brings back a teammate’s page closed while their computer was away',
   expect(tabIds(await r.list('mate-phone'))).toEqual([])
 })
 
-it('keeps a hook status from a teammate’s terminal out of the owner’s list', async () => {
-  const r = await rig()
-  startTerminalsOnTheHost(r)
-  await openTerminal(r, 'owner-desk')
-  const matesTerminal = await openTerminal(r, 'mate-desk')
-  await chatTabCommandsSettled()
+/** The hook server's status rows, as the runtime's republisher hears them. */
+function hookStatusRows(r: Rig): {
+  report: (identity: AgentHookStatusRowMutation['after']) => void
+  uninstall: () => void
+} {
   let mutate: ((mutation: AgentHookStatusRowMutation) => void) | undefined
   const uninstall = installHookStatusSessionTabsRepublish(
     {
@@ -330,26 +333,100 @@ it('keeps a hook status from a teammate’s terminal out of the owner’s list',
     },
     () => r.runtime
   )
+  return { report: (after) => mutate?.({ before: null, after }), uninstall }
+}
+
+it('keeps a hook status from a teammate’s terminal or chat out of the owner’s list', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  const matesChat = await r.create('mate-desk')
+  await chatTabCommandsSettled()
+  const hooks = hookStatusRows(r)
+  const ownersFrames = await r.subscribe('owner-phone')
+  // The owner's first read settles their own pick into their list's group.
+  await ownersSide(r)
+  const before = await ownersSide(r)
+  const framesBefore = ownersFrames.length
+  const matesFrames = await r.subscribe('mate-phone')
+
+  // An agent in Mate's terminal reports as a hook script does: its pane and workspace, no handle.
+  const [tabId, leafId] = matesTerminal.id.split('::')
+  let matesBefore = matesFrames.length
+  hooks.report({ paneKey: makePaneKey(tabId!, leafId!), worktreeId: r.workspace })
+  await vi.waitFor(() => expect(matesFrames.length).toBeGreaterThan(matesBefore))
+  // Mate's chat runs a turn.
+  matesBefore = matesFrames.length
+  hooks.report({
+    paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(matesChat), matesChat),
+    worktreeId: r.workspace
+  })
+  await vi.waitFor(() => expect(matesFrames.length).toBeGreaterThan(matesBefore))
+  // A row no chat, terminal or pane here names (its terminal long gone) reaches no list.
+  hooks.report({ paneKey: makePaneKey(randomUUID(), randomUUID()), worktreeId: r.workspace })
+  await chatTabCommandsSettled()
+  hooks.uninstall()
+  expect(ownersFrames.length).toBe(framesBefore)
+  expect(await ownersSide(r)).toBe(before)
+})
+
+it('redraws a teammate’s list alone when their terminal’s title changes', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
   const ownersFrames = await r.subscribe('owner-phone')
   const before = await ownersSide(r)
   const framesBefore = ownersFrames.length
   const matesFrames = await r.subscribe('mate-phone')
-  const matesBefore = matesFrames.length
 
-  // An agent in Mate's terminal reports, as its hook names the terminal it runs in.
-  const [tabId, leafId] = matesTerminal.id.split('::')
-  mutate?.({
-    before: null,
-    after: {
-      paneKey: makePaneKey(tabId!, leafId!),
-      worktreeId: r.workspace,
-      terminalHandle: matesTerminal.terminal
-    }
-  })
+  r.runtime.onPtyData(matesTerminal.ptyId, '\x1b]0;Mate build\x07', Date.now())
+  await vi.waitFor(() =>
+    expect(matesFrames.at(-1)?.tabs.find((tab) => tab.id === matesTerminal.id)).toMatchObject({
+      title: 'Mate build'
+    })
+  )
   await chatTabCommandsSettled()
-  uninstall()
-  await vi.waitFor(() => expect(matesFrames.length).toBeGreaterThan(matesBefore))
   expect(ownersFrames.length).toBe(framesBefore)
+  expect(await ownersSide(r)).toBe(before)
+})
+
+it('never adopts a teammate’s terminal into the host’s saved layout', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r)
+  // The host's live terminals, as its controller lists them.
+  r.runtime['ptyController'] = { ...r.runtime['ptyController']!, listProcesses: async () => [] }
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  const before = await ownersSide(r)
+  const savedBefore = JSON.stringify(r.runtime['getWorkspaceSessionForWorktree'](r.workspace))
+  const pty = r.runtime['ptysById'].get(matesTerminal.ptyId)!
+  const [tabId, leafId] = matesTerminal.id.split('::')
+  const adopt = {
+    worktree: `id:${r.workspace}`,
+    expectedTopologyRevision: r.runtime['getTerminalTopologyRevision'](r.workspace),
+    claims: [
+      {
+        terminal: matesTerminal.terminal,
+        ptyId: matesTerminal.ptyId,
+        incarnationId: pty.incarnationId ?? 'unknown',
+        tabId: tabId!,
+        leafId: leafId!
+      }
+    ]
+  }
+  // Mate's computer may not write the host's layout; an older owner window may not take Mate's terminal.
+  expect(await r.send('mate-desk', 'terminal.adoptOrphans', adopt)).toMatchObject({
+    ok: false,
+    error: { code: 'not_found' }
+  })
+  expect(await r.send('owner-desk', 'terminal.adoptOrphans', adopt)).toMatchObject({
+    ok: false,
+    error: { message: 'terminal_orphan_owner_mismatch' }
+  })
+  expect(JSON.stringify(r.runtime['getWorkspaceSessionForWorktree'](r.workspace))).toBe(savedBefore)
   expect(await ownersSide(r)).toBe(before)
 })
 
