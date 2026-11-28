@@ -234,12 +234,13 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'ask'],
     summary: 'Ask the coordinator a question; Orca wakes you with the answer',
     usage:
-      'orca orchestration ask (--question <text> | --resume <message_id>) [--to <run:id>] [--run <run_id>] [--options <csv>] [--wait] [--timeout-ms <n>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration ask (--question <text> | --question-file <path|-> | --resume <message_id>) [--to <run:id>] [--run <run_id>] [--options <csv>] [--wait] [--timeout-ms <n>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
       'run',
       'question',
+      'question-file',
       'resume',
       'dispatch-capability',
       'options',
@@ -250,6 +251,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
+      'Use --question-file <path> for Markdown or multiline questions, or --question-file - to read stdin. --question and --question-file are mutually exclusive.',
       'From a worker, a new question goes to its coordinator and ask returns at once: end your turn, and Orca wakes you with the answer as mail. A worker that already finished waits for the answer instead. --wait and --resume block until the answer instead; --timeout-ms accepts 1 to 1800000 ms per wait (default 600000 = 10 minutes, max 30 minutes), and a timeout leaves the question pending.'
     ]
   },

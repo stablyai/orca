@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { getOptionalStringFlag } from '../../arguments/flags'
+import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { printResult } from '../../output/command-result-output'
 import { renderCommand } from '../recovery/orchestration-mutation-recovery'
 import { RuntimeClientError } from '../../runtime/connection/types'
@@ -41,12 +42,12 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     }
     const timeoutMs = clampOrchestrationAskTimeoutMs(parsedTimeoutMs)
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const question = getOptionalStringFlag(flags, 'question')
+    const question = await readTextOrFileFlag(flags, cwd, 'question', false)
     const resume = getOptionalStringFlag(flags, 'resume')
     if ((question ? 1 : 0) + (resume ? 1 : 0) !== 1) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Choose exactly one of --question or --resume.'
+        'Choose exactly one of --question, --question-file, or --resume.'
       )
     }
     if (resume && flags.has('options')) {
