@@ -7,6 +7,7 @@ import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-prefli
 import { useAppStore } from '@/store'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type {
   JiraConnectionStatus,
   JiraIssue,
@@ -178,6 +179,28 @@ const jiraIssuesFixture: JiraIssue[] = [
   )
 ]
 
+const githubItemsFixture: GitHubWorkItem[] = [
+  'Create worktree GitHub PRs and issues dropdown is too short',
+  'fix(composer): keep workspace source popover scrollable',
+  'feat(sidebar): show active branch status badge',
+  'Terminal scrollback resets when switching split panes',
+  'refactor(runtime): simplify remote host reconnect handshake',
+  'Support custom base ref when creating worktree from PR',
+  'chore(deps): bump radix-ui popover primitives',
+  'Keyboard navigation skips disabled items in command list'
+].map((title, i) => ({
+  id: `gh-${48768 - i}`,
+  repoId: repo.id,
+  type: i % 2 === 0 ? 'issue' : 'pr',
+  number: 48768 - i,
+  title,
+  state: 'open',
+  url: `https://github.com/stablyai/orca/issues/${48768 - i}`,
+  labels: [],
+  updatedAt: '2026-11-12T00:00:00.000Z',
+  author: 'dev'
+}))
+
 function seedSourceProviders(): void {
   window.api = {
     ...window.api,
@@ -221,7 +244,7 @@ function seedSourceProviders(): void {
     refreshPreflightStatus: async () => {},
     fetchWorkItems: async () => {},
     fetchWorkItemsAcrossRepos: async () => {},
-    getCachedWorkItems: () => [],
+    getCachedWorkItems: () => githubItemsFixture,
     readJiraStatus: async () => jiraStatusFixture,
     searchJiraIssues: async () => jiraIssuesFixture
   })
@@ -317,6 +340,13 @@ function openScopeDropdown(ariaLabel: string): void {
   }
   pressControl(trigger)
 }
+
+export const github = defineFixture({
+  width: 480,
+  setup: seedSourceProviders,
+  render: () => <ComposerSurfacePreview />,
+  interact: (frame) => selectMode(frame, 'github')
+})
 
 export const gitlab = defineFixture({
   width: 480,
