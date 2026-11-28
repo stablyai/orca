@@ -119,10 +119,12 @@ function restoreTurnItems(
   }
 }
 
-/** Preserve the turn's status even when its optional timestamps are absent. */
+/** Preserve the turn's status even when its optional timestamps are absent. `live`: the server
+ *  still runs, so a turn Codex reports in progress stays running (its end arrives live). */
 export function historicalTurnLifecycle(
   threadId: string,
-  turn: Record<string, unknown>
+  turn: Record<string, unknown>,
+  live = false
 ): AgentJournalTurnLifecycle | null {
   const turnId = readCodexJournalString(turn, 'id')
   if (!turnId) {
@@ -135,7 +137,7 @@ export function historicalTurnLifecycle(
   const outcome = codexTurnOutcome(status)
   return {
     turnId,
-    state: codexTurnLifecycleState(status),
+    state: live && status === 'inProgress' ? 'running' : codexTurnLifecycleState(status),
     ...(outcome ? { outcome } : {}),
     userItemId: codexTurnUserItemId(threadId, turnId),
     ...(startedAt !== null ? { startedAt } : {}),

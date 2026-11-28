@@ -153,6 +153,7 @@ export async function openCodexStructuredSession(
           sink,
           returnedTurns,
           paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
+          liveTurns: rebuilt,
           subagentExecutions: start.subagentExecutions,
           onReceipt: (clientMessageId, providerIdentity) =>
             deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity }),

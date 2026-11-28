@@ -27,6 +27,8 @@ export async function catchUpCodexThread(input: {
   threadId: string
   returnedTurns?: readonly unknown[]
   paginate?: boolean
+  /** The server kept running since the chat last saw it: its running turns are still running. */
+  liveTurns?: boolean
   subagentExecutions?: CodexSubagentExecutions
   sessionId: string
   sink: StructuredAgentSessionEventSink
@@ -149,6 +151,7 @@ export async function catchUpCodexThread(input: {
         nativePromptKeys: view.nativePromptKeys,
         subagentExecutions: input.subagentExecutions,
         outsideNotice: view.hasRows ? continuedOutsideNotice(missing.rewound) : undefined,
+        liveTurns: input.liveTurns === true,
         check
       })
       discardHelpers = staging.discardHelpers

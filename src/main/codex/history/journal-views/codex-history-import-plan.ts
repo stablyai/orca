@@ -44,6 +44,8 @@ export function createCodexHistoryImportPlan(input: {
   subagentExecutions?: CodexSubagentExecutions
   nativePromptKeys: Pick<ReadonlySet<string>, 'has'>
   outsideNotice?: AgentJournalItemBody
+  /** The server kept running: a turn still in progress stays running. */
+  liveTurns?: boolean
   check: () => void
 }) {
   const batch = createHistoryCatchUpBatch()
@@ -68,7 +70,7 @@ export function createCodexHistoryImportPlan(input: {
     }
     const identity = codexTurnLifecycleIdentity(input.sessionId, turn.id)
     const scope: AgentJournalTurnScope = { kind: 'turn', turnItemId: turn.key }
-    const lifecycle = historicalTurnLifecycle(input.threadId, turn.source)
+    const lifecycle = historicalTurnLifecycle(input.threadId, turn.source, input.liveTurns)
     if (!lifecycle) {
       observations.release()
       return
