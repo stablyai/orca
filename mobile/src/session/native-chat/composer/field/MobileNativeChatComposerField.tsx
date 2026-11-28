@@ -16,10 +16,12 @@ export function MobileNativeChatComposerField({
   ref,
   onKeyboardSubmit: _onKeyboardSubmit,
   onWebPaste: _onWebPaste,
+  maxHeight,
   ...props
 }: MobileNativeChatComposerFieldProps) {
   const styles = useThemedStyles(mobileNativeChatComposerSkillStylesSheet)
   const composerInputStyles = useThemedStyles(composerInputStylesSheet)
+  const cap = maxHeight === undefined ? null : { maxHeight }
   const [fieldHeight, setFieldHeight] = useState(0)
   // Keep one tree so a skill or dictation coming and going cannot remount the field and drop focus.
   return (
@@ -30,7 +32,7 @@ export function MobileNativeChatComposerField({
       {skillToken && !dictationPreview ? (
         <TextInput
           ref={ref}
-          style={composerInputStyles.messageText}
+          style={[composerInputStyles.messageText, cap]}
           placeholder={placeholder}
           {...props}
         >
@@ -42,11 +44,7 @@ export function MobileNativeChatComposerField({
         <TextInput
           ref={ref}
           value={value}
-          style={
-            dictationPreview
-              ? [composerInputStyles.messageText, frameStyles.hiddenText]
-              : composerInputStyles.messageText
-          }
+          style={[composerInputStyles.messageText, cap, dictationPreview && frameStyles.hiddenText]}
           placeholder={dictationPreview ? undefined : placeholder}
           {...props}
         />

@@ -16,8 +16,9 @@ import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-ite
 import { MobileNativeChatMarkdown } from '../../session/native-chat/transcript/message-content/MobileNativeChatMarkdown'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
-import { pressedStyle, spacing } from '../../theme/mobile-theme'
+import { pressedStyle, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useBotItemProseScale } from './bot-item-prose-scale'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 
@@ -52,6 +53,7 @@ export function MobileBotItemQuestionLines({
 }) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
+  const proseScale = useBotItemProseScale()
   const several = shape.decisions.length > 1
   const posted = sent?.askId === askId ? sent.answers : null
   const answered = shape.decisions.map((_, index) => {
@@ -82,6 +84,7 @@ export function MobileBotItemQuestionLines({
             content={decision.question}
             tone={waiting && !answers[index] ? 'strong' : 'muted'}
             rangeSelectable={INLINE_TEXT_SELECTION}
+            textScale={proseScale}
           />
         )
       })}
@@ -113,6 +116,6 @@ const stylesSheet = themedStyleSheet((colors) => ({
   several: { gap: spacing.xs },
   ended: { fontSize: 12, lineHeight: 16, color: colors.textMuted },
   endedRow: { alignSelf: 'flex-start' },
-  answerLine: { fontSize: 13, lineHeight: 19, color: colors.textMuted },
+  answerLine: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textMuted },
   answerWords: { color: colors.textSecondary }
 }))

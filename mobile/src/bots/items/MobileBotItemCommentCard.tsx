@@ -1,9 +1,9 @@
-// One comment in an item's Activity, as a chat-style row on the Activity's grid: a glyph, who, Quote and
-// when, the reply it quotes, its words with its images and files, a question's lines, and for a comment sent
-// from the box that didn't reach the host, Not sent · Retry · Discard.
+// One comment in an item's Activity, as a chat-style row: who and when with a labeled Quote, the reply it
+// quotes, its words at chat's prose size with its images and files, a question's lines, and for a comment
+// sent from the box that didn't reach the host, Not sent · Retry · Discard.
 import { useEffect, useRef, type Ref } from 'react'
 import { Animated, Pressable, Text, View, type HostInstance } from 'react-native'
-import { CircleAlert, MessageSquare, Quote } from 'lucide-react-native'
+import { CircleAlert, Quote } from 'lucide-react-native'
 import type { BotItemActivityEntry } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
@@ -21,10 +21,13 @@ import {
 } from './MobileBotItemCommentAttachments'
 import { MobileBotItemQuestionLines } from './MobileBotItemQuestionLines'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
+import { useBotItemProseScale } from './bot-item-prose-scale'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 
 const ICON = 13
+// Quote's 28 pt pill grown to a 44 pt touch target.
+const QUOTE_HIT_SLOP = { top: 8, bottom: 8, left: 4, right: 4 }
 
 export function MobileBotItemCommentCard({
   item,
@@ -69,6 +72,7 @@ export function MobileBotItemCommentCard({
   const t = useMobileTranslation()
   const { event, replyTo, waiting } = entry
   const time = useMobileMessageTime()
+  const proseScale = useBotItemProseScale()
   const shape = botItemQuestionShape(event.data)
   const text = mobileBotItemCommentWords({ ...event.data, text: entry.beside ?? shape.body })
   // A question's lines too, as the agent wrote them.
@@ -80,39 +84,37 @@ export function MobileBotItemCommentCard({
   return (
     <View ref={ref} style={styles.row}>
       {flash ? <CommentFlash key={flash.at} still={flash.still} end={flash.end} /> : null}
-      <View style={styles.icon}>
-        {failed ? (
-          <CircleAlert size={ICON} color={colors.statusRed} />
-        ) : (
-          <MessageSquare size={ICON} color={colors.textMuted} />
-        )}
-      </View>
       <View style={styles.body}>
         <View style={styles.head}>
           <Text style={styles.author} numberOfLines={1}>
             {botItemActorName(event, item, t)}
           </Text>
+          <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
+            {time.label(event.at)}
+          </Text>
           {onQuote && quoted ? (
             <Pressable
               style={({ pressed }) => [styles.quote, pressed && styles.pressed]}
-              hitSlop={10}
+              hitSlop={QUOTE_HIT_SLOP}
               accessibilityRole="button"
               accessibilityLabel={t('chat.selectionQuote.action', 'Quote')}
               onPress={() => onQuote(quoted)}
             >
-              <Quote size={14} color={colors.textMuted} />
+              <Quote size={14} color={colors.textSecondary} />
+              <Text style={styles.quoteLabel}>{t('chat.selectionQuote.action', 'Quote')}</Text>
             </Pressable>
           ) : null}
-          <Text style={styles.meta} accessibilityLabel={time.full(event.at)}>
-            {time.label(event.at)}
-          </Text>
         </View>
         {replyTo ? (
           <MobileBotItemReplyQuote text={replyTo.text} onShowQuestion={onShowQuestion ?? null} />
         ) : null}
         <MobileBotItemCommentAttachments data={event.data} {...attachments}>
           {text.trim() ? (
-            <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+            <MobileNativeChatMarkdown
+              content={text}
+              rangeSelectable={INLINE_TEXT_SELECTION}
+              textScale={proseScale}
+            />
           ) : null}
         </MobileBotItemCommentAttachments>
         {shape.decisions.length > 0 ? (
@@ -130,6 +132,7 @@ export function MobileBotItemCommentCard({
         ) : null}
         {failed ? (
           <View style={styles.failed}>
+            <CircleAlert size={ICON} color={colors.statusRed} />
             <Text style={[styles.line, styles.notSent]}>
               {failed.retry
                 ? t('bots.items.activity.notSent', 'Not sent.')
@@ -178,7 +181,7 @@ function CommentFlash({ still, end }: { still: boolean; end: () => void }) {
   return <Animated.View pointerEvents="none" style={[styles.flash, { opacity }]} />
 }
 
-// The Activity event line's grid (MobileBotItemActivity): its glyph column, gap and time.
+// Comments span the row; the Activity's event lines keep their glyph column (MobileBotItemActivity).
 const stylesSheet = themedStyleSheet((colors) => ({
   flash: {
     position: 'absolute',
@@ -190,28 +193,32 @@ const stylesSheet = themedStyleSheet((colors) => ({
     backgroundColor: colors.translucentFill
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingVertical: 6,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs
   },
-  icon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
-  body: { flex: 1, minWidth: 0, gap: spacing.xxs },
+  body: { flex: 1, minWidth: 0, gap: spacing.xs },
   head: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  // Chat's 24 pt message action box around its 14 pt glyph, pulled back so the 18 pt line keeps its height
-  // and the glyph sits the line's gap from the name and the time.
+  // A labeled pill at the row's end, pulled back so the 20 pt line keeps its height and its label meets the text edge.
   quote: {
-    width: 24,
-    height: 24,
-    marginVertical: -3,
-    marginHorizontal: -5,
+    marginLeft: 'auto',
+    marginVertical: -4,
+    marginRight: -spacing.sm,
+    height: 28,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.control
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.pill
   },
-  pressed: { backgroundColor: colors.bgRaised },
-  author: { flex: 1, fontSize: 13, lineHeight: 18, fontWeight: '600', color: colors.textPrimary },
+  quoteLabel: { fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+  pressed: { backgroundColor: colors.translucentFill },
+  author: {
+    flexShrink: 1,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '600',
+    color: colors.textPrimary
+  },
   failed: {
     flexDirection: 'row',
     alignItems: 'center',

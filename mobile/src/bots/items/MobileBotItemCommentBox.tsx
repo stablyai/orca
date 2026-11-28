@@ -3,7 +3,8 @@
 // panel keeps each item's draft, photos too, for the session. Offline, Comment waits. While the agent's
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
-// attach with the chat's + and thumbnails, each named [Image #N] in the words.
+// attach with the chat's + and thumbnails, each named [Image #N] in the words. Idle it is one line between
+// + and Send; in use the field takes the box's width above them (MobileBotItemCommentBoxRow).
 import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
@@ -24,7 +25,7 @@ import { useRouteCapability } from '../../worktree/execution-hosts/use-route-cap
 import { ComposerSendButton } from '../../components/composer-input/ComposerSendButton'
 import { MobileNativeChatComposerAttachButton } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachButton'
 import { MobileNativeChatComposerAttachments } from '../../session/native-chat/composer/attachments/MobileNativeChatComposerAttachments'
-import { COMPOSER_COMPACT_CONTROL_SIZE } from '../../components/composer-input/composer-input-styles'
+import { MESSAGE_MAX_HEIGHT } from '../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerField } from '../../session/native-chat/composer/field/MobileNativeChatComposerField'
 import { MobileNativeChatComposerMic } from '../../session/native-chat/composer/dictation/MobileNativeChatComposerMic'
@@ -40,6 +41,10 @@ import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { BotItemCommentMicContext } from './bot-item-comment-mic'
 import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
+import {
+  MobileBotItemCommentBoxRow,
+  MobileBotItemCommentBoxSlot
+} from './MobileBotItemCommentBoxRow'
 import { useBotDraftImages } from '../use-bot-draft-images'
 import {
   botItemCommentDraftKey,
@@ -184,6 +189,15 @@ export function MobileBotItemCommentBox({
     showToast
   })
   const micActive = mic?.micActive ?? false
+  const [focused, setFocused] = useState(false)
+  // As chat's composer: idle and empty it is one line; focus, words, photos or dictation open it out.
+  const open =
+    focused ||
+    text !== '' ||
+    photos.images.length > 0 ||
+    micActive ||
+    mic?.micStarting === true ||
+    mic?.micProcessing === true
   // Send waits for every photo's upload, as on the desktop.
   const canSend =
     online &&
@@ -269,26 +283,21 @@ export function MobileBotItemCommentBox({
           </Pressable>
         </View>
       ) : null}
-      <View style={styles.row}>
-        {attachTo ? (
-          <View style={styles.micSlot}>
-            <MobileNativeChatComposerAttachButton
-              onAttachImage={() => void photos.attach()}
-              onAttachFiles={undefined}
-              structured={false}
-              isAttaching={false}
-              disabled={!online}
-            />
-          </View>
-        ) : null}
-        <View style={styles.field}>
+      <MobileBotItemCommentBoxRow
+        open={open}
+        field={
           <MobileNativeChatComposerField
             ref={input}
             value={menu.display.text}
             skillToken={menu.skillToken}
             dictationPreview={shownDictationPreview(dictation.preview)}
+            maxHeight={MESSAGE_MAX_HEIGHT}
             onChangeText={menu.onFieldChange}
-            onFocus={() => focusMobileNativeChatTextDestination(scope)}
+            onFocus={() => {
+              setFocused(true)
+              focusMobileNativeChatTextDestination(scope)
+            }}
+            onBlur={() => setFocused(false)}
             // Controlled only transiently right after an autocomplete insert.
             selection={menu.pendingSelection ?? undefined}
             onSelectionChange={(event) => {
@@ -315,27 +324,43 @@ export function MobileBotItemCommentBox({
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.textPrimary}
           />
-        </View>
-        {mic?.onMicPress ? (
-          // Centred on the compact send button's row, so the two sit level.
-          <View style={styles.micSlot}>
-            <MobileNativeChatComposerMic
-              {...mic}
-              onMicPress={target(mic.onMicPress)}
-              onMicPressIn={target(mic.onMicPressIn)}
-              cancelRef={cancelRef}
-              disabled={!online}
+        }
+        lead={
+          attachTo ? (
+            <MobileBotItemCommentBoxSlot>
+              <MobileNativeChatComposerAttachButton
+                onAttachImage={() => void photos.attach()}
+                onAttachFiles={undefined}
+                structured={false}
+                isAttaching={false}
+                disabled={!online}
+              />
+            </MobileBotItemCommentBoxSlot>
+          ) : null
+        }
+        trail={
+          <>
+            {mic?.onMicPress ? (
+              <MobileBotItemCommentBoxSlot>
+                <MobileNativeChatComposerMic
+                  {...mic}
+                  onMicPress={target(mic.onMicPress)}
+                  onMicPressIn={target(mic.onMicPressIn)}
+                  cancelRef={cancelRef}
+                  disabled={!online}
+                />
+              </MobileBotItemCommentBoxSlot>
+            ) : null}
+            <ComposerSendButton
+              size="compact"
+              onPress={send}
+              canSend={canSend}
+              sending={false}
+              label={t('bots.items.comment.submit', 'Comment')}
             />
-          </View>
-        ) : null}
-        <ComposerSendButton
-          size="compact"
-          onPress={send}
-          canSend={canSend}
-          sending={false}
-          label={t('bots.items.comment.submit', 'Comment')}
-        />
-      </View>
+          </>
+        }
+      />
       {mic ? (
         <View style={styles.dictation}>
           <MobileNativeChatDictationLeading
@@ -371,11 +396,8 @@ const stylesSheet = themedStyleSheet((colors) => ({
     borderColor: colors.borderSubtle,
     backgroundColor: colors.sheetGroup
   },
-  row: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
   quote: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   quoteText: { flex: 1, minWidth: 0 },
-  field: { flex: 1 },
-  micSlot: { height: COMPOSER_COMPACT_CONTROL_SIZE, justifyContent: 'center' },
   dictation: { flexDirection: 'row', alignItems: 'center' },
   notice: {
     flexDirection: 'row',

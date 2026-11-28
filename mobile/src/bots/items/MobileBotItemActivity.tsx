@@ -51,7 +51,7 @@ import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
-const ICON = 13
+const ICON = 14
 
 /** "changed done means ⌄": the before and after open on tap, as on the desktop. */
 function FieldChange({ by, field, change }: { by: string; field: string; change: unknown }) {
@@ -385,12 +385,12 @@ const stylesSheet = themedStyleSheet((colors) => ({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingVertical: 6,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs
   },
-  eventIcon: { width: 16, height: 18, alignItems: 'center', justifyContent: 'center' },
+  eventIcon: { width: 16, height: 20, alignItems: 'center', justifyContent: 'center' },
   eventBody: { flex: 1, minWidth: 0 },
-  line: { fontSize: 13, lineHeight: 18, color: colors.textMuted },
+  line: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textMuted },
   none: { paddingHorizontal: spacing.xs, paddingTop: spacing.xs },
   actor: { fontWeight: '500', color: colors.textSecondary },
   inline: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
@@ -403,11 +403,11 @@ const stylesSheet = themedStyleSheet((colors) => ({
     gap: 2
   },
   removed: {
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: typography.bodySize,
+    lineHeight: 20,
     color: colors.textMuted,
     textDecorationLine: 'line-through'
   },
-  added: { fontSize: 13, lineHeight: 18, color: colors.textPrimary },
+  added: { fontSize: typography.bodySize, lineHeight: 20, color: colors.textPrimary },
   meta: { fontSize: typography.metaSize, color: colors.textMuted, fontVariant: ['tabular-nums'] }
 }))
