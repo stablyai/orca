@@ -64,10 +64,13 @@ function isVerifiedLogin(value: unknown): value is VerifiedAntigravityLogin {
 }
 
 function requireProtection(): void {
-  // Sealing is the bar, not a gap-free backend: a headless server seals with a key kept beside its
-  // credential directory and always reports that gap, which is what writeEncryptedCredential accepts
-  // for every integration already (#50266).
-  if (!getSecretStore().isEncryptionAvailable()) {
+  const secrets = getSecretStore()
+  // A gap alone is not a refusal: a headless server seals with a key kept beside its credential
+  // directory and always reports that gap, which is what the other credential writers accept (#50266).
+  // Kind `none` is the Electron `basic_text` backend, whose built-in key leaves the file readable —
+  // and a store that cannot describe its seal is treated as unsealed, per the SecretStore contract.
+  const sealing = secrets.describeSealing?.()
+  if (!secrets.isEncryptionAvailable() || sealing?.kind === 'none' || !sealing) {
     throw new Error(
       'Protected secret storage is unavailable; Antigravity accounts were not changed.'
     )

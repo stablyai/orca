@@ -5,7 +5,8 @@ import { join } from 'node:path'
 import {
   _resetSecretStoreForTests,
   getSecretStore,
-  setSecretStore
+  setSecretStore,
+  type SecretStore
 } from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
@@ -26,6 +27,7 @@ beforeEach(() => {
   setSecretStore({
     isEncryptionAvailable: () => true,
     describeProtectionGap: () => null,
+    describeSealing: () => ({ kind: 'os-keychain' }),
     encryptString: (value) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
     decryptString: (value) => {
       if (!value.toString().startsWith('sealed:')) {
@@ -247,6 +249,10 @@ describe('protected Antigravity account snapshots', () => {
     setSecretStore({
       isEncryptionAvailable: () => true,
       describeProtectionGap: () => 'sealed with a key kept beside the vault',
+      describeSealing: () => ({
+        kind: 'host-key',
+        warning: 'sealed with a key kept beside the vault'
+      }),
       encryptString: (value) => Buffer.from(`sealed:${Buffer.from(value).toString('base64')}`),
       decryptString: (value) => {
         if (!value.toString().startsWith('sealed:')) {
@@ -263,6 +269,47 @@ describe('protected Antigravity account snapshots', () => {
     const saved = readFileSync(path).toString()
     expect(saved).not.toContain(vault.accounts[0].credentials)
     expect(await createEncryptedAntigravityAccountStore(path).read()).toEqual(vault)
+  })
+
+  it.each<[string, SecretStore]>([
+    [
+      'the Linux basic_text built-in key',
+      {
+        isEncryptionAvailable: () => true,
+        describeProtectionGap: () => 'Secrets are obfuscated with a built-in key',
+        describeSealing: () => ({ kind: 'none', reason: 'built-in key' }),
+        encryptString: () => {
+          throw new Error('must not encrypt')
+        },
+        decryptString: () => {
+          throw new Error('must not decrypt')
+        }
+      }
+    ],
+    [
+      'a store that cannot describe its seal',
+      {
+        isEncryptionAvailable: () => true,
+        describeProtectionGap: () => null,
+        encryptString: () => {
+          throw new Error('must not encrypt')
+        },
+        decryptString: () => {
+          throw new Error('must not decrypt')
+        }
+      }
+    ]
+  ])('still refuses %s, leaving saved bytes unchanged', async (_label, weakStore) => {
+    const h = harness()
+    await h.service.addCurrentAccount()
+    const path = join(dir, 'vault')
+    await createEncryptedAntigravityAccountStore(path).write(h.getVault())
+    const before = readFileSync(path)
+    setSecretStore(weakStore)
+    await expect(
+      createEncryptedAntigravityAccountStore(path).write({ accounts: [], selectedAccountId: null })
+    ).rejects.toThrow('Protected secret storage')
+    expect(readFileSync(path).equals(before)).toBe(true)
   })
 
   it('keeps the selected account launchable across refreshes and a verified grant rotation', async () => {
