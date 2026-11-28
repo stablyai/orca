@@ -217,7 +217,8 @@ function createFeed(client: RpcClient): RelayHostsFeed {
     getSnapshot: () => listed,
     getAllSnapshot: () => snapshot,
     read,
-    readAll: () => read().then(() => snapshot)
+    // A failed read answers null, never the previous list.
+    readAll: () => read().then((hosts) => (hosts === null ? null : snapshot))
   }
 }
 

@@ -136,7 +136,11 @@ export function useHostWorktreeCatalog(args: {
   const announcesHosts = hostCapabilities.includes(
     MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY
   )
-  useRelayHosts(subscribed && relays && announcesHosts ? client : null, hostCapabilities)
+  // Its listing also re-applies server rows when only the servers this phone pairs with change.
+  const listedRelayHosts = useRelayHosts(
+    subscribed && relays && announcesHosts ? client : null,
+    hostCapabilities
+  )
   const servers = useHostQuery(
     hostServerWorkspacesQuery,
     host,
@@ -241,7 +245,7 @@ export function useHostWorktreeCatalog(args: {
       setServerWorkspaces(NO_SERVER_WORKSPACES)
     }
     // An unchanged reply keeps its reference, but still confirms which slept rows woke.
-  }, [client, relays, relaysRuledOut, servers.data, servers.dataUpdatedAt])
+  }, [client, listedRelayHosts, relays, relaysRuledOut, servers.data, servers.dataUpdatedAt])
 
   const fetchWorktrees = useCallback(
     async (options: { allowDuringModal?: boolean } = {}) => {
