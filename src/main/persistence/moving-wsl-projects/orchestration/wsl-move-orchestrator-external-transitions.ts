@@ -73,10 +73,17 @@ export function applyWslMoveReleasedByUser(
   return withWslMoveOrchestratorState(record, { kind: 'parked', reason: 'declined', cause }, now)
 }
 
-/** A decline or Not now is never pruned: dropping it would let a later wake undo the user's choice. */
+/**
+ * A decline or Not now is never pruned: dropping it would let a later wake undo the user's choice.
+ * A `stateLost` hold is Orca's guess, not a choice: prune may drop it once the distro is unused.
+ */
 export function recordsUserChoice(record: WslMoveOrchestratorRecord): boolean {
   const { state } = record
-  return state.kind === 'parked' && (state.reason === 'declined' || state.reason === 'not-now')
+  return (
+    state.kind === 'parked' &&
+    state.stateLost !== true &&
+    (state.reason === 'declined' || state.reason === 'not-now')
+  )
 }
 
 /** R38 Restore, step one; a throwing port reads as a failed release, never an unhandled one. */
