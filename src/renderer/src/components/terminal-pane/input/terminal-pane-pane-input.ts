@@ -110,6 +110,9 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     )
     const imeKeyboardOptions = {
       compositionActive: imeCompositionTracker.isActive(),
+      // Why: CJK script in the preedit is the platform-neutral candidate-window signal.
+      // Vietnamese Telex/VNI preedit stays Latin, so the IME-owned-key swallow must not fire for it (#6494).
+      isCjkCompositionActive: imeCompositionTracker.hasCjkCompositionText(),
       candidateKeyGuardActive:
         imeCompositionTracker.isCandidateKeyGuardActive() || pendingCandidateReleaseGuardActive,
       pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,

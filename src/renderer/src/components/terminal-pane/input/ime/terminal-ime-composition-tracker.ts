@@ -2,8 +2,20 @@ import type { IDisposable } from '@xterm/xterm'
 
 export type TerminalImeCompositionTracker = IDisposable & {
   isActive: () => boolean
+  /** True while a live composition's preedit text contains CJK script — the platform-neutral
+   *  candidate-window signal (macOS source bridge was removed; Vietnamese Telex/VNI stays Latin). */
+  hasCjkCompositionText: () => boolean
   /** Candidate-key ownership spans live composition and a brief trailing release window. */
   isCandidateKeyGuardActive: () => boolean
+}
+
+// Han, Kana, Bopomofo, Hangul/Jamo and CJK symbols/fullwidth forms: text an inline Latin IME
+// (Vietnamese Telex/VNI, Pinyin preedit) never produces.
+const CJK_COMPOSITION_TEXT_PATTERN =
+  /[\u1100-\u11ff\u2e80-\u30ff\u3100-\u318f\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff\uff00-\uffef]/
+
+export function hasCjkCompositionText(text: string | null | undefined): boolean {
+  return text !== null && text !== undefined && CJK_COMPOSITION_TEXT_PATTERN.test(text)
 }
 
 // Suppressed keys produce no input event to unstick a missed compositionend; expire ownership to avoid permanently dead Space/digits.
@@ -17,6 +29,7 @@ export function installTerminalImeCompositionTracker(
 ): TerminalImeCompositionTracker {
   const now = options?.now ?? ((): number => Date.now())
   let active = false
+  let cjkCompositionText = false
   let lastCompositionEventAt: number | null = null
   let compositionEndedAt: number | null = null
   let sawEmptyCompositionUpdate = false
@@ -40,6 +53,7 @@ export function installTerminalImeCompositionTracker(
   if (!terminalElement) {
     return {
       isActive: () => active,
+      hasCjkCompositionText: () => false,
       isCandidateKeyGuardActive,
       dispose: () => undefined
     }
@@ -47,6 +61,7 @@ export function installTerminalImeCompositionTracker(
 
   const markActive = (): void => {
     active = true
+    cjkCompositionText = false
     lastCompositionEventAt = now()
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
@@ -62,24 +77,29 @@ export function installTerminalImeCompositionTracker(
       return
     }
     active = true
+    cjkCompositionText = hasCjkCompositionText(event.data)
   }
   const handleCompositionEnd = (): void => {
     active = false
+    cjkCompositionText = false
     // Only empty Sogou/fcitx updates justify the trailing guard; a broader rule swallows real typing.
     compositionEndedAt = sawEmptyCompositionUpdate ? now() : null
     sawEmptyCompositionUpdate = false
   }
   const handleInput = (event: Event): void => {
     if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
+      cjkCompositionText = hasCjkCompositionText(event.data)
       return
     }
     active = false
+    cjkCompositionText = false
     // Non-composition input proves ordinary typing resumed; release trailing key ownership.
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
   }
   const markInactive = (): void => {
     active = false
+    cjkCompositionText = false
     lastCompositionEventAt = null
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
@@ -93,6 +113,7 @@ export function installTerminalImeCompositionTracker(
 
   return {
     isActive: () => isActiveAt(now()),
+    hasCjkCompositionText: () => isActiveAt(now()) && cjkCompositionText,
     isCandidateKeyGuardActive,
     dispose: () => {
       terminalElement.removeEventListener('compositionstart', markActive, true)
