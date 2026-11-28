@@ -1440,7 +1440,11 @@ final class Provider {
             try requireBackgroundInputReachable(snapshot, input: "paste")
         }
         let insertion = TextInput.Insertion(into: focused, text: text)
-        try Input.withPasteboardText(text) {
+        // Why: refuse before the clipboard is replaced, as above; checked after the insertion's and the clipboard
+        // backup's reads so typing that starts during them is caught before the clipboard holds the text.
+        try Input.withPasteboardText(text, beforeReplacing: {
+            try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
+        }) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }
         return actionMetadata(
@@ -2040,6 +2044,7 @@ private func clickPointer(
     element: AXUIElement? = nil
 ) throws -> UnfocusedTargetClick? {
     if foreground {
+        try requireUncontendedInput(snapshot, foreground: true, sendsKeys: false)
         return try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
     }
     guard let hitElement = element ?? elementAtPoint(point, pid: snapshot.app.pid) else {
@@ -2050,6 +2055,8 @@ private func clickPointer(
     if element == nil {
         try requireNoForegroundEffect(clickEffect(button: button, modifiers: modifiers, on: hitElement))
     }
+    // Why: checked after the hit-test reads so typing that starts during them still refuses the click.
+    try requireUncontendedInput(snapshot, foreground: false, sendsKeys: false)
     try withTransportErrors {
         try BackgroundInputTransport.click(
             backgroundTarget(snapshot),
@@ -2125,14 +2132,38 @@ private func scrollPointer(at point: CGPoint, direction: String, pages: Double, 
 private func deliverKeys(_ events: [CGEvent], snapshot: Snapshot, params: [String: JSONValue]) throws {
     if isForegroundRequest(params) {
         try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
+        try requireUncontendedInput(snapshot, foreground: true, sendsKeys: true)
+        defer { KeyboardContention.OwnInputClock.shared.recordInput() }
         for event in events {
             event.post(tap: .cghidEventTap)
         }
         return
     }
     try requireBackgroundInputReachable(snapshot, input: "key input")
+    try requireUncontendedInput(snapshot, foreground: false, sendsKeys: true)
     try withTransportErrors {
         try BackgroundInputTransport.sendKeys(events, to: backgroundTarget(snapshot))
+    }
+}
+
+/// Refuses, before anything is sent, input that would mix with the user's own typing or type into a secure field.
+private func requireUncontendedInput(_ snapshot: Snapshot, foreground: Bool, sendsKeys: Bool) throws {
+    let target = NSRunningApplication(processIdentifier: snapshot.app.pid)
+    guard let refusal = KeyboardContention.refusal(
+        targetPID: snapshot.app.pid,
+        sharesUserKeyboard: foreground || target?.isActive == true,
+        sendsKeys: sendsKeys,
+        conditions: KeyboardContention.currentConditions()
+    ) else {
+        return
+    }
+    switch refusal {
+    case let .secureInputActive(ownerPID):
+        let owner = ownerPID.flatMap { NSRunningApplication(processIdentifier: $0)?.localizedName }.map { " (held by \($0))" } ?? ""
+        throw ProviderError.coded("secure_input_active", "a password or other secure text field has keyboard focus\(owner), so these keys could be typed into it; nothing was sent. Ask the user to finish or close that field, or to enter the secret themselves.")
+    case let .userTyping(secondsAgo):
+        let input = sendsKeys ? "these keys would mix with the user's typing" : "this click could move the user's typing to another field"
+        throw ProviderError.coded("user_actively_typing", String(format: "the user pressed a key %.1f s ago in the app this input goes to, so %@; nothing was sent. Wait until they pause, then retry.", secondsAgo, input))
     }
 }
 
@@ -3734,7 +3765,11 @@ private enum Input {
         }
     }
 
-    static func withPasteboardText(_ text: String, _ body: () throws -> Void) throws {
+    static func withPasteboardText(
+        _ text: String,
+        beforeReplacing: () throws -> Void = {},
+        _ body: () throws -> Void
+    ) throws {
         let pasteboard = NSPasteboard.general
         let previousItems: [NSPasteboardItem] = pasteboard.pasteboardItems?.map { item in
             let copy = NSPasteboardItem()
@@ -3745,6 +3780,7 @@ private enum Input {
             }
             return copy
         } ?? []
+        try beforeReplacing()
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
         let changeCount = pasteboard.changeCount
