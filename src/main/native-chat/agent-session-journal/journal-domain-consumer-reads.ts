@@ -6,7 +6,10 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { firstStructuredChatNamingPrompt } from '../../../shared/native-chat/transcript/structured-chat-naming-eligibility'
-import { firstStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-first-prompt'
+import {
+  joinStructuredChatNamingPrompts,
+  structuredAgentSessionUserPrompts
+} from '../../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainSubmission, journalDomainInputForItem } from './journal-domain-status-inputs'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
@@ -229,6 +232,7 @@ export function readJournalDomainConsumer(
 
 function namingPrompt(scope: JournalSqlScope, floor: number, hostStartedAt?: number): string {
   let after = [floor, -1, -1]
+  const prompts: string[] = []
   for (;;) {
     const rows = scope.db
       .prepare(`SELECT payload_json,sequence,sequence_index,ordinal FROM journal_items
@@ -268,9 +272,9 @@ function namingPrompt(scope: JournalSqlScope, floor: number, hostStartedAt?: num
         hostStartedAt
       )
     }
-    const prompt = firstStructuredAgentSessionPrompt(items)
-    if (prompt || rows.length < 128) {
-      return prompt
+    prompts.push(...structuredAgentSessionUserPrompts(items))
+    if (prompts.length >= 128 || rows.length < 128) {
+      return joinStructuredChatNamingPrompts(prompts.slice(0, 128))
     }
     const last = rows.at(-1)!
     after = [Number(last.sequence), Number(last.sequence_index), Number(last.ordinal)]

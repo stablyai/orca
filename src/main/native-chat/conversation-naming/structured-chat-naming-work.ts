@@ -35,12 +35,16 @@ export function createStructuredChatNamingWork(deps: {
       const { sessionId } = record
       const job: NamingJob = jobs.get(sessionId) ?? { preparing: false }
       const pending = job.desired ?? job.executing
+      // Person-asked naming replaces an automatic run. An automatic run never replaces it.
+      if (automatic && pending && !pending.automatic) {
+        return
+      }
       if (
+        automatic &&
         pending &&
         deps.applicable(pending) &&
         pending.record.providerContextBoundary?.operationId ===
-          record.providerContextBoundary?.operationId &&
-        !(automatic && !pending.automatic && pending.firstPrompt === undefined)
+          record.providerContextBoundary?.operationId
       ) {
         return
       }

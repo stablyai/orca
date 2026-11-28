@@ -1,11 +1,12 @@
 import { normalizeAgentSessionConversationName } from '../../../agent-session/conversation-naming/agent-session-conversation-name'
+import { STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT } from '../../../agent-session/requests/structured-agent-session-first-prompt'
 import { cleanGeneratedCommitMessage } from './commit-message-agent-output'
 import { sliceAtCodeUnitLimit } from '../../../text/surrogate-safe-text-slice'
 import { renderSourceControlActionCommandTemplate } from '../recipes/source-control-ai-actions'
 
 export type ConversationNameContext = { firstPrompt: string }
 
-const MAX_FIRST_PROMPT_LENGTH = 4000
+const MAX_FIRST_PROMPT_LENGTH = STRUCTURED_CHAT_REGENERATE_NAME_PROMPT_LIMIT
 const MAX_GENERATED_NAME_LENGTH = 48
 
 export function clampConversationNameFirstPrompt(firstPrompt: string): string {

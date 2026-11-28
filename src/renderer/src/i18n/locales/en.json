@@ -23228,7 +23228,9 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue in terminal",
           "switchToChatView": "Continue in chat",
-          "allowAutoClose": "Allow Auto-Close"
+          "allowAutoClose": "Allow Auto-Close",
+          "aiRenaming": "Renaming…",
+          "aiRename": "AI Rename"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

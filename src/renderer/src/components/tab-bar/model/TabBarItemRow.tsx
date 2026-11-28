@@ -174,7 +174,11 @@ function TabBarItemRow({
     )
   }
   if (item.type === 'agent-session') {
-    const nativeChat = { sessionId: item.data.entityId, agent: item.data.agentSessionAgent }
+    const nativeChat = {
+      sessionId: item.data.entityId,
+      agent: item.data.agentSessionAgent,
+      executionHostId: item.data.executionHostId
+    }
     const chatTab = item.data
     const forkSourceId = chatNaming.forkSourceId
     const fork = forkSourceId
