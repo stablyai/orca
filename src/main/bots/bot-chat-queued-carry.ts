@@ -48,14 +48,15 @@ function carriedOptions(
 /** Each card moves inside the old Chat's queue lane, so no edit, Send or delete there lands between
  *  reading it and withdrawing it, and a card someone is editing stays. It is queued in the new Chat
  *  under the same id, with its hold, before it leaves the old one: a crash between leaves a copy in
- *  the old Chat, whose close paused its queue, so nothing runs twice on its own and nothing is lost. */
+ *  the old Chat, whose close paused its queue, so nothing runs twice on its own and nothing is lost.
+ *  Resolves false when a card that moves stayed behind: one being edited, or a move that failed. */
 export async function carryQueuedMessages(
   host: QueuedCarryHost,
   from: string | null,
   to: string
-): Promise<void> {
+): Promise<boolean> {
   if (!from || !host.deps.store.getConversation(from)) {
-    return
+    return true
   }
   try {
     const source = (await host.conversation(from)).journal.queuedMessages
@@ -85,7 +86,9 @@ export async function carryQueuedMessages(
         await source.withdraw([messageId])
       })
     }
+    return !(await source.list()).some(carried)
   } catch (error) {
     console.warn('[bots] could not move queued messages to the new Chat', error)
+    return false
   }
 }

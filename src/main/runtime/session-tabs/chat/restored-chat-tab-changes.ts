@@ -6,6 +6,7 @@ import { retireStructuredAgentSessionTabFrom } from './structured-agent-session-
 import { chatTabChangesMatchingIndex } from './structured-agent-session-tab-index-seed'
 import { chatTabId, type ChatTabChange } from './agent-session-tab-layout'
 import { structuredSessionTabRetired } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-custody'
+import { snapshotShowsTab } from './structured-session-tab-in-front'
 
 type ChatTabOpen = Extract<ChatTabChange, { open: unknown }>['open']
 
@@ -90,6 +91,17 @@ export abstract class OrcaRuntimeWithStructuredSessionTabProjection extends Orca
     } catch {
       return false
     }
+  }
+
+  /** Whether the chat's tab is the one its workspace, or one of its split groups, shows. Null when
+   *  no window published that workspace's tabs, or they do not list the chat. */
+  structuredSessionTabInFront(sessionId: string): boolean | null {
+    const at = this.currentLocalStructuredSessionPresentation(sessionId)
+    const snapshot = at && this.mobileSessionTabsByWorktree.get(at.worktreeId)
+    if (!at || !snapshot) {
+      return null
+    }
+    return snapshotShowsTab(snapshot, at.tabId)
   }
 
   currentLocalStructuredSessionPresentation(

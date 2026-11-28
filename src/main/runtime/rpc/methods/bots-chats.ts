@@ -104,6 +104,15 @@ export async function botChatTakingMail(
   return botChatTakingMailNow(runtime, bot, id)
 }
 
+/** The bot's Home Chat as `botChatTakingMail` reads one of its chats; null while it has none. */
+export async function botHomeChatTakingMail(
+  runtime: Parameters<typeof botChatTakingMail>[0],
+  bot: Parameters<typeof botChatTakingMail>[1]
+): Promise<{ title: string | null; sessionId: string } | null> {
+  const home = (await readBotChats(runtime, bot, null)).find((chat) => chat.home)
+  return home ? botChatTakingMailNow(runtime, bot, home.id) : null
+}
+
 /** Recheck the named chat after an awaited attachment claim, before committing its mail. */
 export function botChatTakingMailNow(
   runtime: Pick<OrcaRuntimeService, 'getOrchestrationDb' | 'lookAround'>,

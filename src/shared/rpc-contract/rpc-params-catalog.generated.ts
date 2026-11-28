@@ -239,6 +239,7 @@ import {
   BotSessionStart,
   BotTakeOverParams
 } from './bots-params'
+import { BotRunChats } from './bots-run-chats-params'
 import {
   BotSharePartView,
   BotSharePrepare,
@@ -1398,6 +1399,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.offer.answer': BotOfferAnswerParams,
   'bots.request.outcome': BotRequestOutcomeParams,
   'bots.roster': BotRoster,
+  'bots.runChats': BotRunChats,
   'bots.sendRunAgain': BotRunSendAgainParams,
   'bots.session.start': BotSessionStart,
   'bots.share.prepare': BotSharePrepare,

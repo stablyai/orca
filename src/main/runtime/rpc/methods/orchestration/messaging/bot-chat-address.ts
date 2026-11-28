@@ -13,9 +13,14 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { Bot } from '../../../../../../shared/bot-types'
 import { resolveItem } from '../../bots-items-write-support'
+import { botChatTakingMail } from '../../bots-chats'
 import { refuse } from './bot-recipient'
 import { mayReachBot, sendToBot } from './bot-request-send'
-import { itemMailFilesBody, withItemMailFiles } from './bot-item-mail-files'
+import {
+  claimItemMailFilesForHome,
+  itemMailFilesBody,
+  withItemMailFiles
+} from './bot-item-mail-files'
 
 /** `--chat new`: the receiving bot starts a new chat for a handoff or question. */
 export const BOT_NEW_CHAT = 'new'
@@ -49,6 +54,15 @@ export async function routeBotMail(
     assertNewChatAddress(to, mail.params.type)
   } else if (chat) {
     to = await botChatAddress(context.runtime, to, chat)
+    // The item's chat may close while its files are read; its mail, files claimed again, goes to
+    // the Home Chat then.
+    if (
+      input.params.item !== undefined &&
+      !(await itemChatTakingMail(context.runtime, mail.to, chat))
+    ) {
+      to = mail.to
+      await claimItemMailFilesForHome(context.runtime, input, mail)
+    }
   }
   // Checked first so other mail keeps sending without a pause before it is stored.
   const toBot =
@@ -61,7 +75,8 @@ export async function routeBotMail(
   return mail.images === input.images ? { to } : { to, body: itemMailFilesBody(mail) }
 }
 
-/** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone. */
+/** `--item <n>` names the chat that owns item n, or the Home Chat once that chat is gone or closed,
+ *  as the item's own change mail goes. */
 async function chatForItem(
   runtime: OrcaRuntimeService,
   to: string,
@@ -85,7 +100,11 @@ async function chatForItem(
     )
   }
   const owning = runtime.botItems.owningChat(record)
-  return owning.gone ? undefined : owning.id
+  return owning.gone || !(await itemChatTakingMail(runtime, to, owning.id)) ? undefined : owning.id
+}
+
+async function itemChatTakingMail(runtime: OrcaRuntimeService, to: string, chatId: string) {
+  return (await botChatTakingMail(runtime, addressedBot(runtime, to, '--item'), chatId)) !== null
 }
 
 function addressedBot(runtime: OrcaRuntimeService, to: string, flag: string): Bot {

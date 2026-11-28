@@ -95,27 +95,42 @@ export async function admitBotItemCommentAttachments(
   if (uploadIds.size === 0) {
     return { text, images }
   }
+  const sessionId = await claimBodyForChat(deps, body)
+  return { text, images, claimed: { sessionId, uploadIds } }
+}
+
+/** Claims each upload an admitted comment names for `deps.chat`'s session; naming none, touches
+ *  nothing. Mail admitted for an item's chat that goes on to the Home Chat is claimed again here. */
+export async function claimBotItemCommentAttachments(
+  deps: Pick<BotItemCommentAttachmentDeps, 'store' | 'claim' | 'chat'>,
+  text: string,
+  images: readonly Pick<BotItemCommentImage, 'path'>[]
+): Promise<void> {
+  const body = botItemCommentAttachmentBody(text, images)
+  if (!deps.store || agentSessionAttachmentReferences(deps.store.rootDir, body).size === 0) {
+    return
+  }
+  await claimBodyForChat(deps, body)
+}
+
+/** Claims `body`'s uploads for `deps.chat`'s live session, and returns that session. */
+async function claimBodyForChat(
+  deps: Pick<BotItemCommentAttachmentDeps, 'claim' | 'chat'>,
+  body: AgentJournalMessageItem
+): Promise<string> {
   const chat = await deps.chat()
   if (!chat) {
     throw refused(botFailure('commentChatDeleted'))
   }
-  await claimBotItemCommentAttachments(deps.claim, chat.sessionId, body)
-  return { text, images, claimed: { sessionId: chat.sessionId, uploadIds } }
-}
-
-async function claimBotItemCommentAttachments(
-  claim: AgentSessionAttachmentClaimer | null,
-  sessionId: string,
-  body: AgentJournalMessageItem
-): Promise<void> {
-  if (!claim) {
+  if (!deps.claim) {
     throw refused(botFailure('commentAttachFailed'))
   }
-  await claimAttachmentBody(claim, [sessionId], body, {
+  await claimAttachmentBody(deps.claim, [chat.sessionId], body, {
     logPrefix: '[bots] items: claiming comment attachments failed',
     retry: botFailure('commentAttachFailed'),
     refused
   })
+  return chat.sessionId
 }
 
 function refused(failure: BotFailure): BotItemError {
