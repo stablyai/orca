@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { resolveGitCommonDirectory } from '../../../../shared/git/metadata/git-common-directory'
@@ -129,9 +130,16 @@ export async function readRepoWorktreeAdminFingerprint(repoPath: string): Promis
       LINKED_WORKTREE_PROBE_CONCURRENCY,
       async (name) => await readLinkedWorktreeStamp(commonDir, adminDir, name, reftable !== MISSING)
     )
-    return [mainHead, mainExists, packedRefs, reftable, String(names.length), ...linked].join(
-      FIELD_SEPARATOR
-    )
+    const hash = createHash('sha256')
+    hash.update(mainHead).update(FIELD_SEPARATOR)
+    hash.update(mainExists).update(FIELD_SEPARATOR)
+    hash.update(packedRefs).update(FIELD_SEPARATOR)
+    hash.update(reftable).update(FIELD_SEPARATOR)
+    hash.update(String(names.length))
+    for (const stamp of linked) {
+      hash.update(FIELD_SEPARATOR).update(stamp)
+    }
+    return hash.digest('base64')
   } catch {
     return null
   }
