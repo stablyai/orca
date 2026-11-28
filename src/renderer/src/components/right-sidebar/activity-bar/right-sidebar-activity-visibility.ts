@@ -13,6 +13,8 @@ type RightSidebarActivityVisibilityState = {
   hasChatWorkers?: boolean
 }
 
+/** The right sidebar's tabs for a workspace: a group's home keeps Home and plugin panels, a bot's
+ *  home leads with its own tabs, and other workspaces drop the tabs their kind can't use. */
 export function getVisibleRightSidebarActivityItems(
   items: ActivityBarItem[],
   {
@@ -25,8 +27,7 @@ export function getVisibleRightSidebarActivityItems(
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
   if (isGroupHome) {
-    // A group's page keeps its Items; its folder panels are always empty.
-    return items.filter((item) => item.botOnly)
+    return items.filter((item) => item.botOnly || item.pluginKey !== undefined)
   }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
