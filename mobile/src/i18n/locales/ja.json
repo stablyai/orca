@@ -5092,7 +5092,7 @@
       "started": "開始済み",
       "trigger": "トリガー",
       "output": "出力",
-      "noOutput": "表示できる出力なし。",
+      "noOutput": "表示できる出力はありません。",
       "loadingRuns": "実行を読み込み中…",
       "loading": "読み込み中…",
       "hourly": "毎時",
