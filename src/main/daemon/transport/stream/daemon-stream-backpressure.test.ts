@@ -147,9 +147,7 @@ describe('DaemonStreamBackpressure', () => {
       },
       () => false,
       undefined,
-      undefined,
-      undefined,
-      () => incarnation
+      { incarnationOf: () => incarnation }
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
     producer().release({ resume: false, reason: 'exited' })
@@ -174,9 +172,7 @@ describe('DaemonStreamBackpressure', () => {
       },
       () => false,
       undefined,
-      undefined,
-      undefined,
-      () => incarnation
+      { incarnationOf: () => incarnation }
     )
     backpressure.setQueued('client', new Map([['tui', 200 * 1024]]))
     backpressure.setQueued('client', new Map([['tui', 201 * 1024]]))

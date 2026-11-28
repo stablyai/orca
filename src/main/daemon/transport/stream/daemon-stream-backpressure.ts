@@ -1,6 +1,7 @@
 import type { Socket } from 'node:net'
 import { STREAM_ENTRY_OVERHEAD_BYTES } from './daemon-stream-entry-accounting'
 import { PausedSessionDeliveries } from './daemon-stream-paused-deliveries'
+import type { DaemonStreamDataBatcherOptions } from './daemon-stream-data-batcher-options'
 import { LongPauseLogLimiter } from '../../../../shared/terminal/pty/flow-control/long-pause-log-limiter'
 
 // Each session pauses on its own backlog so a flooding sibling cannot queue ahead of an interactive one.
@@ -20,6 +21,11 @@ type ClientBacklog = {
   queuedMetadataBytes: Map<string, number>
   pendingWriteBytes: Map<string, number>
 }
+
+type DaemonStreamBackpressureOptions = Pick<
+  DaemonStreamDataBatcherOptions,
+  'isSessionAttachedToClient' | 'onLongProducerPause' | 'incarnationOf'
+>
 
 /** Counts held strings and socket writes together, including small writes that bypass the hold. */
 export class DaemonStreamBackpressure {
@@ -45,12 +51,18 @@ export class DaemonStreamBackpressure {
       onStallTimeout?: (reason: StallReason) => void
     ) => boolean | 'exited' | void,
     private readonly isDroppable: (sessionId: string) => boolean,
-    private readonly ownsSession: (clientId: string, sessionId: string) => boolean = () => true,
     // Stall release must reconcile cached droppability for already-queued data.
     private readonly onDroppabilityChanged: (sessionId: string) => void = () => {},
-    private readonly reportLongPause: (details: Record<string, unknown>) => void = () => {},
-    private readonly incarnationOf: (sessionId: string) => string | undefined = () => undefined
-  ) {}
+    options: DaemonStreamBackpressureOptions = {}
+  ) {
+    this.ownsSession = options.isSessionAttachedToClient ?? (() => true)
+    this.reportLongPause = options.onLongProducerPause ?? (() => {})
+    this.incarnationOf = options.incarnationOf ?? (() => undefined)
+  }
+
+  private readonly ownsSession: (clientId: string, sessionId: string) => boolean
+  private readonly reportLongPause: (details: Record<string, unknown>) => void
+  private readonly incarnationOf: (sessionId: string) => string | undefined
 
   setQueued(
     clientId: string,
