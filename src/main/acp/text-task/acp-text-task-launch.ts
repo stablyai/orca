@@ -1,12 +1,12 @@
 // A text task runs on the chat's own home, or, for an agent that keeps every session, on a home of
 // its own that is removed with everything the agent kept there (`AcpLaunchSpec.textTaskHome`).
 
+import { randomUUID } from 'node:crypto'
+import { mkdir, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
-import { acpRunFolder, wipeRootOnce } from '../launch/acp-private-temp'
 import { prepareAcpLaunch } from '../launch/acp-structured-launch-preparation'
 import {
   resolveAcpLaunchInvocation,
@@ -20,17 +20,40 @@ const TEXT_TASK_HOMES_FOLDER = 'acp-text-task-homes'
 const homesRoot = (dataDirectory: string, agent: string): string =>
   join(dataDirectory, TEXT_TASK_HOMES_FOLDER, agent)
 
-/** At launch, whatever the naming settings: a run a crash cut short left its home, which may hold
- *  a copy of the agent's login. */
-export function sweepAcpTextTaskHomes(
+// Run homes in use; anything else under a root is a leftover. Added before the folder exists, so a
+// sweep never removes a home a run is creating.
+const activeHomes = new Set<string>()
+
+/** Removes a home; one a scanner holds open stays on disk and the next sweep tries again. */
+async function removeHome(path: string): Promise<void> {
+  try {
+    await rm(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+  } catch (error) {
+    console.warn('[acp-text-task] A text task home is left for the next sweep:', error)
+  }
+}
+
+/** Removes every home under `root` no run is using: a crash's, or one whose removal failed. */
+async function sweepRoot(root: string): Promise<void> {
+  const names = await readdir(root).catch(() => [])
+  await Promise.all(
+    names
+      .map((name) => join(root, name))
+      .flatMap((path) => (activeHomes.has(path) ? [] : [removeHome(path)]))
+  )
+}
+
+/** At every host start, whatever the naming settings, and before each run: a home left behind may
+ *  hold a copy of the agent's login. */
+export async function sweepAcpTextTaskHomes(
   dataDirectory: string,
   specs: readonly Pick<AcpLaunchSpec, 'agent' | 'textTaskHome'>[]
-): void {
-  for (const spec of specs) {
-    if (spec.textTaskHome) {
-      void wipeRootOnce(homesRoot(dataDirectory, spec.agent))
-    }
-  }
+): Promise<void> {
+  await Promise.all(
+    specs.flatMap((spec) =>
+      spec.textTaskHome ? [sweepRoot(homesRoot(dataDirectory, spec.agent))] : []
+    )
+  )
 }
 
 export type AcpTextTaskLaunch = {
@@ -48,7 +71,7 @@ export type AcpTextTaskLaunch = {
 export async function acpTextTaskLaunch(
   spec: AcpLaunchSpec,
   chatHome: AgentSessionAccountHome,
-  deps: { dataDirectory: string; logger?: StructuredAgentSessionLogger }
+  deps: { dataDirectory: string }
 ): Promise<AcpTextTaskLaunch | null> {
   if (!acpLaunchSpecForAccount(spec, chatHome).keepsEverySession) {
     return {
@@ -63,13 +86,25 @@ export async function acpTextTaskLaunch(
   if (!spec.textTaskHome) {
     return null
   }
-  const folder = await acpRunFolder(homesRoot(deps.dataDirectory, spec.agent), deps.logger)
-  const task = spec.textTaskHome(chatHome, folder.path)
+  const root = homesRoot(deps.dataDirectory, spec.agent)
+  await sweepRoot(root)
+  const home = join(root, `run-${randomUUID()}`)
+  activeHomes.add(home)
+  let preparation: Promise<unknown> = Promise.resolve()
+  const release = (): void => {
+    void preparation.then(() => removeHome(home)).finally(() => activeHomes.delete(home))
+  }
+  try {
+    await mkdir(home, { recursive: true, mode: 0o700 })
+  } catch (error) {
+    release()
+    throw error
+  }
+  const task = spec.textTaskHome(chatHome, home)
   if (!task) {
-    await folder.remove()
+    release()
     return null
   }
-  let preparation: Promise<unknown> = Promise.resolve()
   return {
     prepare: (invocation, closedBeforeSpawn) => {
       let declined = false
@@ -89,6 +124,6 @@ export async function acpTextTaskLaunch(
         throw error
       })
     },
-    release: () => void preparation.then(() => folder.remove())
+    release
   }
 }

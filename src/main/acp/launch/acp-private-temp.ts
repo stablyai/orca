@@ -20,8 +20,7 @@ function removeFolder(path: string, logger?: StructuredAgentSessionLogger): Prom
   )
 }
 
-/** Removes `root` once per process; every later run folder under it waits for that removal. */
-export function wipeRootOnce(root: string, logger?: StructuredAgentSessionLogger): Promise<void> {
+function wipeRootOnce(root: string, logger?: StructuredAgentSessionLogger): Promise<void> {
   let wipe = wipes.get(root)
   if (!wipe) {
     wipe = removeFolder(root, logger)

@@ -1,10 +1,11 @@
-import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ACP_PROTOCOL_VERSION } from '../acp/generated/acp-protocol.generated'
 import { FakeAcpChild } from '../acp/process/testing/acp-scripted-connection.test-fixture'
 import { AcpTextTasks } from '../acp/text-task/acp-text-task'
+import { sweepAcpTextTaskHomes } from '../acp/text-task/acp-text-task-launch'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { agyCredentialPresence } from './agy-credential-presence'
 import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
@@ -19,7 +20,12 @@ afterEach(async () => {
 
 const SESSION = '0f0e0d0c-0b0a-4909-8807-060504030201'
 
-async function nameChat(presence: 'present' | 'locked', agySettings?: unknown) {
+async function nameChat(
+  presence: 'present' | 'locked',
+  agySettings?: unknown,
+  /** A folder in the home no one can delete from, as one a scanner holds open. */
+  heldFolder?: string
+) {
   vi.mocked(agyCredentialPresence).mockResolvedValue(presence)
   const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-agy-naming-data-'))
   const user = await mkdtemp(join(tmpdir(), 'orca-agy-naming-user-'))
@@ -56,6 +62,11 @@ async function nameChat(presence: 'present' | 'locked', agySettings?: unknown) {
         await mkdir(join(appData, 'conversations'), { recursive: true })
         await writeFile(join(appData, 'conversations', `${SESSION}.db`), 'session')
         await writeFile(join(appData, 'conversation_summaries.db'), 'index')
+        if (heldFolder) {
+          await mkdir(join(home, heldFolder))
+          await writeFile(join(home, heldFolder, 'token'), 'login')
+          await chmod(join(home, heldFolder), 0o500)
+        }
         agent.notify('session/update', {
           sessionId: SESSION,
           update: {
@@ -75,7 +86,7 @@ async function nameChat(presence: 'present' | 'locked', agySettings?: unknown) {
     prompt: 'Name this chat: the login button does nothing'
   })
   const homes = join(dataDirectory, 'acp-text-task-homes', 'antigravity')
-  return { title, children, homes, user }
+  return { title, children, homes, user, dataDirectory }
 }
 
 describe('Antigravity chat naming', () => {
@@ -99,6 +110,33 @@ describe('Antigravity chat naming', () => {
     expect(children).toHaveLength(0)
     await vi.waitFor(async () => expect(await readdir(homes)).toEqual([]))
   })
+
+  // Permission bits don't stop Windows or root from deleting.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    "keeps a home it couldn't remove for the next sweep, which removes it",
+    async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const { children, homes, dataDirectory } = await nameChat('present', undefined, 'held')
+      const args = children[0]!.launch.args
+      const home = args[args.indexOf('--gemini-dir') + 1]!
+      try {
+        await vi.waitFor(() =>
+          expect(warn).toHaveBeenCalledWith(
+            '[acp-text-task] A text task home is left for the next sweep:',
+            expect.anything()
+          )
+        )
+        expect(await readdir(homes)).toHaveLength(1)
+      } finally {
+        await chmod(join(home, 'held'), 0o700)
+        warn.mockRestore()
+      }
+
+      // As at the next host start, or before the next naming run.
+      await sweepAcpTextTaskHomes(dataDirectory, [ANTIGRAVITY_LAUNCH_SPEC])
+      expect(await readdir(homes)).toEqual([])
+    }
+  )
 
   it("starts no agy for a chat on agy's home that agy's own settings sign in differently", async () => {
     const { title, children } = await nameChat('present', { auth: { type: 'oauth-business' } })
