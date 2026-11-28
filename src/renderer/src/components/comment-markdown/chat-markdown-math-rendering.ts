@@ -108,7 +108,8 @@ function rehypeChatMath(
                     'min-w-0',
                     'max-w-full',
                     'overflow-x-auto',
-                    'overflow-y-hidden'
+                    'overflow-y-clip',
+                    'py-px'
                   ]
                 })
         },
