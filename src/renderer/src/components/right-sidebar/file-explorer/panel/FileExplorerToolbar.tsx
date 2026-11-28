@@ -15,9 +15,10 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { cn } from '@/lib/class-names'
+import type { FileExplorerTitle } from './file-explorer-title'
 
 type FileExplorerToolbarProps = {
-  repoName: string
+  title: FileExplorerTitle
   worktreePath: string
   connectionId?: string | null
   runtimeEnvironmentId?: string | null
@@ -49,7 +50,7 @@ function formatOpenInAppLabel(appName: string): string {
 }
 
 export function FileExplorerToolbar({
-  repoName,
+  title,
   worktreePath,
   connectionId,
   runtimeEnvironmentId,
@@ -69,12 +70,29 @@ export function FileExplorerToolbar({
   const toggleDotfilesShortcut = useOptionalShortcutLabel('fileExplorer.toggleDotfiles')
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
-      <span
-        className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
-        title={repoName}
+      <div
+        className="flex min-w-0 flex-1 items-center text-xs font-medium"
+        title={title.worktreeName ? `${title.repoName} / ${title.worktreeName}` : title.repoName}
+        data-file-explorer-title=""
       >
-        {repoName}
-      </span>
+        {/* The worktree is what changes between checkouts, so the project truncates first; the worktree's cap keeps the project visible. */}
+        <span
+          className={cn(
+            'min-w-0 truncate',
+            title.worktreeName ? 'text-muted-foreground' : 'text-foreground'
+          )}
+        >
+          {title.repoName}
+        </span>
+        {title.worktreeName ? (
+          <>
+            <span className="shrink-0 px-1 text-muted-foreground">/</span>
+            <span className="max-w-[70%] shrink-0 truncate text-foreground">
+              {title.worktreeName}
+            </span>
+          </>
+        ) : null}
+      </div>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
