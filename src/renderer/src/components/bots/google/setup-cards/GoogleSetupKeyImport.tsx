@@ -34,7 +34,8 @@ export function GoogleSetupKeyImport({ bot }: { bot: BotRef }): React.JSX.Elemen
   }
   // A bot on another host: its browser's download is there, so that host looks first.
   const file = useGoogleClientFile((text) => saveGoogleSetupKey(bot, text), {
-    tryHost: () => fromHost()
+    tryHost: () => fromHost(),
+    memoryKey: `key-import:${bot.id}`
   })
   return (
     <div className="mt-2 text-xs text-muted-foreground">

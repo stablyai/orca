@@ -109,5 +109,25 @@ it('an unmount checks a bounded number of workspaces however many layers are sho
   expect(has.mock.calls.length + get.mock.calls.length).toBeLessThan(100)
   has.mockRestore()
   get.mockRestore()
+  // Closed before their layers go, so each unmount releases its own and leaves nothing tracked.
+  useAppStore.setState({ unifiedTabsByWorktree: {} })
   shown.forEach((id) => forgetChatLayer(`layer-${id}`, id))
+})
+
+it('workspaces that never had a chat tab leave no entry to crowd out the next sweep', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  const tab = (id: string): Tab => ({ id }) as Tab
+  const empty = Array.from({ length: 20 }, (_, index) => `wt-room-${index}`)
+  const closed = { tabId: 'tab-z', worktreeId: 'wt-z' }
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-z': [tab('tab-z')] } })
+  reportChatLayerTabs('layer-z', 'wt-z', new Set(['tab-z']))
+  writeNativeChatViewMemory(closed, 'kept', 1)
+  empty.forEach((id) => reportChatLayerTabs(`layer-${id}`, id, new Set()))
+  empty.forEach((id) => forgetChatLayer(`layer-${id}`, id))
+  forgetChatLayer('layer-z', 'wt-z')
+  // tab-z closes while no layer shows its workspace; one unmount elsewhere finds it.
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-z': [] } })
+  reportChatLayerTabs('layer-other', 'wt-other', new Set())
+  forgetChatLayer('layer-other', 'wt-other')
+  expect(readNativeChatViewMemory(closed, 'kept')).toBeUndefined()
 })

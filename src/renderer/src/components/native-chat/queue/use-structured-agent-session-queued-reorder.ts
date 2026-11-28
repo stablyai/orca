@@ -1,9 +1,6 @@
 import { runWithFinally } from '@/lib/run-with-finally'
-import { useCallback } from 'react'
-import {
-  KEPT_TRANSCRIPTS_PER_TAB,
-  useNativeChatViewGuard
-} from '../pane/ownership/native-chat-view-memory'
+import { useCallback, useEffect } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AgentSessionQueuedMessageMoveResult } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -43,6 +40,10 @@ function movedQueue(
   return list.map((card) => (movableSet.has(card) ? (remaining[nextMovable++] ?? card) : card))
 }
 
+function sameOrder(a: readonly QueuedMessageCard[], b: readonly QueuedMessageCard[]): boolean {
+  return a.length === b.length && a.every((card, index) => card.messageId === b[index]?.messageId)
+}
+
 /** `cards` are the ones the person drags; `held` is every card the host holds, mail drawn in the
  *  transcript included, previewed with the same move so the queue's head stays right meanwhile. */
 export function useStructuredAgentSessionQueuedReorder(
@@ -60,7 +61,7 @@ export function useStructuredAgentSessionQueuedReorder(
     cards: QueuedMessageCard[]
     heldBase: QueuedMessageCard[]
     held: QueuedMessageCard[]
-  } | null>(`queued-reorder-preview:${scope}`, null, KEPT_TRANSCRIPTS_PER_TAB)
+  } | null>(`queued-reorder-preview:${scope}`, null)
   const move = useCallback(
     async (messageId: string, anchor: QueuedMessageMoveAnchor) => {
       if (busy() || !transport.reorderCapable) {
@@ -109,8 +110,17 @@ export function useStructuredAgentSessionQueuedReorder(
     },
     [cards, held, capturePresentation, scope, transport, busy, setPending, setPreview]
   )
-  // Any publication supersedes the preview, including another client's concurrent move.
-  const previewing = preview?.scope === scope && preview.base === cards && preview.heldBase === held
+  // Any publication supersedes the preview, including another client's concurrent move. Compared by order, not
+  // identity: a chat remounted mid-move rebuilds equal cards and still shows the move.
+  const previewing =
+    preview?.scope === scope && sameOrder(preview.base, cards) && sameOrder(preview.heldBase, held)
+  // A superseded preview is dropped once no move waits on it, so a settled one keeps no old queue.
+  const stale = preview !== null && !previewing && !pending
+  useEffect(() => {
+    if (stale) {
+      setPreview(null)
+    }
+  }, [stale, setPreview])
   return {
     cards: previewing ? preview.cards : cards,
     held: previewing ? preview.held : held,

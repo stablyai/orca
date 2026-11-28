@@ -53,8 +53,8 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   const target = useMemo(() => structuredAgentSessionTargetForHost(owner), [owner])
   const effectsConnected = isActive || preparingHandoff
   const viewTab = useMemo(
-    () => ({ tabId: tab.id, worktreeId: tab.worktreeId }),
-    [tab.id, tab.worktreeId]
+    () => ({ tabId: tab.id, worktreeId: tab.worktreeId, conversation: `${owner}:${tab.entityId}` }),
+    [tab.id, tab.worktreeId, owner, tab.entityId]
   )
   const backdropActive = useWindowBackdropActive()
   if (!target) {
@@ -72,7 +72,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
       <NativeChatViewTabContext value={viewTab}>
         <NativeChatPaneLifetime key={`${owner}:${tab.entityId}`} isVisible={effectsConnected}>
           <NativeChatHostOutageOwner target={target}>
-            <NativeChatComposerEditorOwner viewTab={viewTab}>
+            <NativeChatComposerEditorOwner>
               <ActivityPortalContainer visible={isActive}>
                 <Activity mode={effectsConnected ? 'visible' : 'hidden'}>
                   <Suspense fallback={null}>

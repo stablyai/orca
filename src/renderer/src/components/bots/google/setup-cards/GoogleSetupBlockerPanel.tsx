@@ -53,11 +53,14 @@ export function GoogleSetupBlockerPanel({
   const client = host.status === 'ready' ? host.google.client : null
   const accounts = host.status === 'ready' ? host.google.accounts : []
   const answer = (values: string[]): Promise<void> => answerGoogleSetup(bot, 'step', values)
-  const file = useGoogleClientFile(async (text) => {
-    await importGoogleApp(botTarget(bot), text)
-    const client = run.steps.client?.status
-    await answer(client === 'done' || client === 'skipped' ? ['resume'] : ['done', 'client'])
-  })
+  const file = useGoogleClientFile(
+    async (text) => {
+      await importGoogleApp(botTarget(bot), text)
+      const client = run.steps.client?.status
+      await answer(client === 'done' || client === 'skipped' ? ['resume'] : ['done', 'client'])
+    },
+    { memoryKey: `blocker:${run.id}` }
+  )
   // A new sign-in fixes it on this computer; the bot hears so it runs done again.
   const signInThen = async (
     services: GoogleSetupRun['services'],

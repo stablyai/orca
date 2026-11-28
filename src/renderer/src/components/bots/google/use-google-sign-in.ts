@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
+import {
+  useNativeChatViewRef,
+  useNativeChatViewState
+} from '../../native-chat/pane/ownership/native-chat-view-memory'
 import type {
   GoogleAccountView,
   GoogleSignInAsk,
@@ -15,12 +19,16 @@ export type GoogleSignInState =
   | { kind: 'waiting'; prompt: GoogleSignInPrompt | null; way?: GoogleSignInWay }
   | { kind: 'failed'; error: string }
 
+const IDLE: GoogleSignInState = { kind: 'idle' }
+
 /** One Connect Google at a time from this surface: its state, and a cancel that stops it on the host
  *  (only while it's waiting) and clears it. */
 export function useGoogleSignIn(
   target: RuntimeClientTarget,
   /** The bot it signs in for, so a server's page opens in that bot's workspace. */
-  bot?: BotRef
+  bot?: BotRef,
+  /** A card in a chat: a sign-in still waiting stays shown, and cancellable, through the chat's release. */
+  memoryKey?: string
 ): {
   state: GoogleSignInState
   connect: (
@@ -30,31 +38,30 @@ export function useGoogleSignIn(
   ) => Promise<GoogleAccountView | null>
   cancel: () => void
 } {
-  const [state, setState] = useState<GoogleSignInState>({ kind: 'idle' })
-  const mounted = useRef(true)
-  useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-    }
-  }, [])
-  // Whether the module's running sign-in is this hook's, so cancel never stops another surface's.
-  const waiting = useRef(false)
-  const show = (next: GoogleSignInState): void => {
-    waiting.current = next.kind === 'waiting'
-    if (mounted.current) {
+  const [state, setState] = useNativeChatViewState<GoogleSignInState>(
+    memoryKey === undefined ? undefined : `google-sign-in:${memoryKey}`,
+    IDLE
+  )
+  // Whether the module's running sign-in is this hook's, so cancel never stops another surface's; and the run
+  // count, so a cancelled run's rejection isn't shown. Kept with the chat tab like the state.
+  const own = useNativeChatViewRef(
+    memoryKey === undefined ? undefined : `google-sign-in-run:${memoryKey}`,
+    { waiting: false, runs: 0 }
+  )
+  const show = useCallback(
+    (next: GoogleSignInState): void => {
+      own.current.waiting = next.kind === 'waiting'
       setState(next)
-    }
-  }
-  // A cancelled run's rejection is what the person asked for, not a failure to show.
-  const runs = useRef(0)
+    },
+    [own, setState]
+  )
   const connect = useCallback(
     async (
       services: readonly GoogleServiceChoice[],
       account?: string,
       options?: Pick<GoogleSignInAsk, 'currentApp'>
     ) => {
-      const run = ++runs.current
+      const run = ++own.current.runs
       show({ kind: 'waiting', prompt: null })
       try {
         const connected = await connectGoogle(
@@ -70,20 +77,20 @@ export function useGoogleSignIn(
         show({ kind: 'idle' })
         return connected
       } catch (error) {
-        if (runs.current === run) {
+        if (own.current.runs === run) {
           show({ kind: 'failed', error: error instanceof Error ? error.message : String(error) })
         }
         return null
       }
     },
-    [target, bot]
+    [target, bot, own, show]
   )
   const cancel = useCallback(() => {
-    runs.current += 1
-    if (waiting.current) {
+    own.current.runs += 1
+    if (own.current.waiting) {
       void cancelGoogleSignIn()
     }
-    show({ kind: 'idle' })
-  }, [])
+    show(IDLE)
+  }, [own, show])
   return { state, connect, cancel }
 }

@@ -45,11 +45,8 @@ function useAnswer(bot: BotRef, card: GoogleSetupCard, runId: string) {
     false,
     KEPT_SETUP_CHOICES
   )
-  const [busy, setBusy] = useNativeChatViewState(
-    `google-setup:${runId}:${card}:busy`,
-    false,
-    KEPT_SETUP_CHOICES
-  )
+  // Not in the newest-few group: an answer in flight is never dropped, and settling deletes it.
+  const [busy, setBusy] = useNativeChatViewState(`google-setup-busy:${runId}:${card}`, false)
   const answer = async (values: string[]): Promise<void> => {
     setBusy(true)
     try {
@@ -80,10 +77,13 @@ export function GoogleSetupPathCard({
   const answered = run.answers.path?.values[0]
   const chosen = GOOGLE_SETUP_MODES.find((mode) => mode === answered)
   const locked = googleSetupChoiceLocked(run, answered !== undefined, reopened)
-  const file = useGoogleClientFile(async (text) => {
-    await importGoogleApp(botTarget(bot), text)
-    await answer(['import'])
-  })
+  const file = useGoogleClientFile(
+    async (text) => {
+      await importGoogleApp(botTarget(bot), text)
+      await answer(['import'])
+    },
+    { memoryKey: `choice:${run.id}` }
+  )
   const receipt = (): string => {
     if (answered === 'not-now') {
       return t('bots.googleSetup.receipt.dismissed', '✓ Dismissed')

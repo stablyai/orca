@@ -39,17 +39,16 @@ it('a chat released mid-move returns still moving: its preview stays and a secon
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the move never settles, so its result type is never read.
     write: write as unknown as QueuedEditTransport['write']
   }
-  const view = () =>
+  // A remount rebuilds the cards: equal ones, in new arrays.
+  const view = (cards: QueuedMessageCard[]) =>
     renderHook(
-      () => useStructuredAgentSessionQueuedReorder(CARDS, CARDS, transport, () => () => true),
-      {
-        wrapper: inTab
-      }
+      () => useStructuredAgentSessionQueuedReorder(cards, cards, transport, () => () => true),
+      { wrapper: inTab }
     )
-  const first = view()
+  const first = view(CARDS)
   act(() => void first.result.current.reorder!.move('b', { beforeMessageId: 'a' }))
   first.unmount()
-  const again = view()
+  const again = view([card('a'), card('b')])
   expect(again.result.current.reorder!.pending).toBe(true)
   expect(again.result.current.cards.map((each) => each.messageId)).toEqual(['b', 'a'])
   act(() => void again.result.current.reorder!.move('a', { beforeMessageId: 'b' }))

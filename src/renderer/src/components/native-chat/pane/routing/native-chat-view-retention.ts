@@ -1,18 +1,18 @@
 import { useCallback, useSyncExternalStore } from 'react'
 
-// Why: a hidden chat view holds its transcript DOM, fibers and editor; keeping every visited one grows memory with use.
-export const RETAINED_HIDDEN_CHAT_VIEWS = 3
+// Why: a hidden chat view holds its transcript DOM, fibers and editor; keeping visited ones grows memory with use.
+// A hidden chat's view state is kept per tab instead, so it remounts as the reader left it.
+export const RETAINED_HIDDEN_CHAT_VIEWS = 0
 
 const EMPTY: ReadonlySet<string> = new Set()
 
 /**
- * Which chat views stay mounted across the window: every shown chat, every chat holding unsaved view state,
- * and the few most recently shown hidden ones. Each change notifies only the tabs whose membership changed.
+ * Which chat views stay mounted across the window: every shown chat, and the most recently shown hidden ones
+ * within the allowance. Each change notifies only the tabs whose membership changed.
  */
 class ChatViewRetention {
   private order: readonly string[] = []
   private shownByLayer = new Map<string, readonly string[]>()
-  private holds = new Map<string, number>()
   private retained: ReadonlySet<string> = EMPTY
   private listenersByTab = new Map<string, Set<() => void>>()
 
@@ -34,20 +34,6 @@ class ChatViewRetention {
     this.recompute()
   }
 
-  hold(tabId: string): () => void {
-    this.holds.set(tabId, (this.holds.get(tabId) ?? 0) + 1)
-    this.recompute()
-    return () => {
-      const count = (this.holds.get(tabId) ?? 1) - 1
-      if (count > 0) {
-        this.holds.set(tabId, count)
-      } else {
-        this.holds.delete(tabId)
-      }
-      this.recompute()
-    }
-  }
-
   private recompute(): void {
     const shown = new Set([...this.shownByLayer.values()].flat())
     const hidden = this.order.filter((id) => !shown.has(id)).slice(0, RETAINED_HIDDEN_CHAT_VIEWS)
@@ -55,9 +41,7 @@ class ChatViewRetention {
     // keeps its place for when it hides.
     const kept = new Set(hidden)
     this.order = this.order.filter((id) => shown.has(id) || kept.has(id))
-    // Every open queued-message edit keeps its chat: releasing one would end its delivery hold unsaved.
-    const held = this.holds.keys()
-    const next = new Set([...shown, ...hidden, ...held])
+    const next = new Set([...shown, ...hidden])
     const previous = this.retained
     this.retained = next
     const notify = new Set<() => void>()

@@ -12,6 +12,7 @@ import {
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
+  nativeChatAnswerOperationEvidence,
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
   formatAskAnswer
@@ -59,7 +60,7 @@ export function NativeChatStructuredAsyncQuestion({
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
   // Kept with the chat tab: a chat released mid-send returns still holding its answer. Each rewind starts a
-  // new scope, so only the newest few are kept, and a settled answer is dropped once its delivery shows.
+  // new scope, so only the newest few settled ones are kept, and one is dropped once its delivery shows.
   const [operation, setOperation] = useNativeChatViewState<PromptAnswerOperation | null>(
     `async-answer:${sourceScope}`,
     null,
@@ -82,7 +83,14 @@ export function NativeChatStructuredAsyncQuestion({
     () => nativeChatAnswerOperationPending(operation, structure, submissions),
     [operation, structure, submissions]
   )
-  const settled = operation !== null && !operation.inFlight && !operationPending
+  // Dropped only on proof the answer landed (a queue handoff can still bring a pending submission), or when the
+  // send never created a message to wait on.
+  const settled =
+    operation !== null &&
+    !operation.inFlight &&
+    (operation.clientMessageId === undefined ||
+      nativeChatAnswerOperationEvidence(operation.clientMessageId, structure, submissions) ===
+        false)
   useEffect(() => {
     if (settled) {
       setOperation(null)

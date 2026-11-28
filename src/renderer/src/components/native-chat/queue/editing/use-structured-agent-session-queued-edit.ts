@@ -2,7 +2,7 @@ import type { QueuedEditLeaseLoss } from '../../../../../../shared/native-chat/i
 import { queuedEditPublicationKey } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-publication'
 // Edit inside the card while prompts own the composer; host owns durable content, this pane owns typing, a delivery hold lease and compare-and-set Save.
 
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { AgentSessionQueuedMessageUpdateResult } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
@@ -27,8 +27,8 @@ import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
-import { useNativeChatQueuedEditViewHold } from './use-native-chat-queued-edit-view-hold'
 import {
+  useKeptNativeChatQueuedEdit,
   useNativeChatQueuedEditLifetime,
   nativeChatQueuedEditSaving,
   nativeChatQueuedEditEditor,
@@ -41,26 +41,22 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
   const { target, sessionId, capable, write } = transport
   const imagesCapable = transport.imagesCapable === true
   const scope = `${structuredAgentSessionHostKey(target)}:${sessionId}:${composerScopeKey ?? ''}`
-  const active = useRef<Edit | null>(null)
-  const [shown, setShown] = useState<Edit | null>(null)
-  /** Save answered `changed`: the editor reopens on the newer text once this pane shows it. */
-  const reopen = useRef<{ scope: string; messageId: string; stale: string } | null>(null)
+  const { active, shown, setShown, reopen } = useKeptNativeChatQueuedEdit()
   const latest = useRef({ messages, cards, submissions, promptOpen })
   useEffect(() => {
     latest.current = { messages, cards, submissions, promptOpen }
-    if (active.current?.scope === scope) {
-      active.current.view = latest.current
+    const edit = active.current
+    if (edit?.scope === scope) {
+      edit.view = latest.current
     }
-  }, [messages, cards, submissions, promptOpen, scope])
+  }, [active, messages, cards, submissions, promptOpen, scope])
 
-  const holdView = useNativeChatQueuedEditViewHold()
   const render = useCallback(
     (edit: Edit | null) => {
       active.current = edit
-      holdView(edit !== null)
       setShown(edit ? { ...edit } : null)
     },
-    [holdView]
+    [active, setShown]
   )
   const close = useCallback(
     (edit = active.current) => {
@@ -74,7 +70,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       edit.lease.end()
       discardNativeChatQueuedEdit(edit)
     },
-    [render]
+    [active, render]
   )
   /** Return dirty text to its conversation’s composer after existing draft content when the card leaves the queue. */
   const gone = useCallback(
@@ -168,7 +164,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
         render(edit)
       }
     },
-    [close, gone, reacquire, render]
+    [active, close, gone, reacquire, render, reopen]
   )
 
   useNativeChatQueuedEditLifetime({
@@ -224,7 +220,19 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       edit.acquiring = false
       render(edit)
     },
-    [capable, composerScopeKey, messages, render, scope, sessionId, target, receiveLoss, settle]
+    [
+      active,
+      capable,
+      composerScopeKey,
+      messages,
+      render,
+      reopen,
+      scope,
+      sessionId,
+      target,
+      receiveLoss,
+      settle
+    ]
   )
 
   const save = useCallback(async () => {
@@ -258,7 +266,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       { messageId: edit.messageId, expectedBodyFingerprint: attempt.expected, ...input }
     )
     settle(edit, attempt, result)
-  }, [close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
+  }, [active, close, imagesCapable, render, sessionId, settle, write, transport.skillsCapable])
 
   const publication = useMemo(
     () => queuedEditPublicationKey({ messages, cards, submissions }, sessionId, shown?.messageId),
@@ -289,7 +297,7 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
     } else if (agentSessionSendBodyFingerprint(sessionId, listed.body) !== pending.stale) {
       reopenLatest(pending.messageId)
     }
-  }, [cards, messages, scope, sessionId, submissions])
+  }, [active, cards, messages, reopen, scope, sessionId, submissions])
 
   const editor = nativeChatQueuedEditEditor(
     shown,

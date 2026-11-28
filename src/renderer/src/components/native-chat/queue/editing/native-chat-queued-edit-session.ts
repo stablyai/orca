@@ -18,7 +18,13 @@ import {
 import type { NativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-storage'
 import { promptMarkersToImageReferences } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import { nativeChatImageRowIds } from '../../composer/editor/native-chat-composer-image-references'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useContext, useEffect } from 'react'
+import {
+  NativeChatViewTabContext,
+  onNativeChatViewTabRelease,
+  useNativeChatViewRef,
+  useNativeChatViewState
+} from '../../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { queuedEditReturnedNotice } from './queued-message-edit-notices'
 import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
@@ -89,6 +95,42 @@ export type NativeChatQueuedEditSession = NativeChatQueuedEditDraft & {
   lease: QueuedEditLease
 }
 
+/**
+ * The open edit, what its editor shows, and a pending reopen, kept with the chat tab: a view released mid-edit
+ * returns with the edit still open and its lease still held, as the open edit's own state would in a store.
+ */
+export function useKeptNativeChatQueuedEdit() {
+  const active = useNativeChatViewRef<NativeChatQueuedEditSession | null>('queued-edit', null)
+  const [shown, setShown] = useNativeChatViewState<NativeChatQueuedEditSession | null>(
+    'queued-edit-shown',
+    null
+  )
+  /** Save answered `changed`: the editor reopens on the newer text once this pane shows it. */
+  const reopen = useNativeChatViewRef<{ scope: string; messageId: string; stale: string } | null>(
+    'queued-edit-reopen',
+    null
+  )
+  return { active, shown, setShown, reopen }
+}
+
+// The tab-close hand-back of an edit whose view was released, by the kept edit ref it belongs to.
+const keptQueuedEditRelease = new WeakMap<object, () => void>()
+
+/** Ends an edit, handing unsaved typing back to its chat; a Save in flight closes it once it settles. */
+function windUpQueuedEdit(
+  edit: NativeChatQueuedEditSession,
+  close: (edit?: NativeChatQueuedEditSession | null) => void
+): void {
+  if (nativeChatQueuedEditSaving(edit)) {
+    edit.pendingClose = true
+    return
+  }
+  if (handBackNativeChatQueuedEdit(edit, edit.uncertain)) {
+    toast.error(queuedEditReturnedNotice())
+  }
+  close(edit)
+}
+
 export function useNativeChatQueuedEditLifetime({
   scope,
   shownScope,
@@ -104,7 +146,9 @@ export function useNativeChatQueuedEditLifetime({
   close: (edit?: NativeChatQueuedEditSession | null) => void
   render: (edit: NativeChatQueuedEditSession | null) => void
 }) {
-  // On chat/host/composer changes, unmount or reload, hand unsaved typing back to its original chat.
+  const viewTab = useContext(NativeChatViewTabContext)
+  // On chat/host/composer changes, closing the tab or reload, hand unsaved typing back to its original chat. A view
+  // released while its tab stays open leaves the edit open, kept with the tab, for the view that replaces it.
   useNativeChatPaneLifetimeEffect(
     useCallback(() => {
       const handOff = (): void => {
@@ -114,24 +158,29 @@ export function useNativeChatQueuedEditLifetime({
         }
         active.current = null
         reopen.current = null
-        if (!edit) {
-          return
+        if (edit) {
+          windUpQueuedEdit(edit, close)
         }
-        if (nativeChatQueuedEditSaving(edit)) {
-          edit.pendingClose = true
-          return
-        }
-        if (handBackNativeChatQueuedEdit(edit, edit.uncertain)) {
-          toast.error(queuedEditReturnedNotice())
-        }
-        close(edit)
+      }
+      // A remount takes back an edit its released view left; one from another chat is handed back now.
+      keptQueuedEditRelease.get(active)?.()
+      keptQueuedEditRelease.delete(active)
+      const kept = active.current
+      if (kept && kept.scope !== scope) {
+        active.current = null
+        reopen.current = null
+        windUpQueuedEdit(kept, close)
       }
       window.addEventListener('pagehide', handOff)
       return () => {
         window.removeEventListener('pagehide', handOff)
-        handOff()
+        if (viewTab && active.current) {
+          keptQueuedEditRelease.set(active, onNativeChatViewTabRelease(viewTab, handOff))
+        } else {
+          handOff()
+        }
       }
-    }, [scope, close, active, reopen])
+    }, [scope, close, active, reopen, viewTab])
   )
 
   useEffect(() => {

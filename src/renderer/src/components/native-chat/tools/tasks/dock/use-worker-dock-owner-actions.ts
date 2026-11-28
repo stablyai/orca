@@ -59,7 +59,11 @@ export function useWorkerDockOwnerActions(
             )
           )
           .finally(() =>
-            setPending((current) => new Set([...current].filter((id) => !ids.has(id))))
+            setPending((current) => {
+              const left = new Set([...current].filter((id) => !ids.has(id)))
+              // Back at the empty default, the kept entry is deleted.
+              return left.size === 0 ? NO_PENDING : left
+            })
           )
       }
       attempt()

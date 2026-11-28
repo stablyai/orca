@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -136,15 +137,17 @@ function useManagedClaudeSignIn(
   failure: unknown,
   failureRows: number
 ): NativeChatSignIn | null {
-  const [signingIn, setSigningIn] = useState(false)
-  // Why a ref: the notice and a transcript row both sign in, and state lags a double press.
-  const signingInRef = useRef(false)
+  // Kept with the chat tab, read synchronously: the notice and a transcript row both sign in, and a second
+  // press, even from a view that replaced a released one, would cancel the first login.
+  const [signingIn, setSigningIn, readSigningIn] = useNativeChatViewGuard(
+    `claude-sign-in:${accountId ?? ''}`,
+    false
+  )
   const [signedInFor, setSignedInFor] = useState<{ failure: unknown; rows: number } | null>(null)
   const signIn = useCallback(() => {
-    if (!accountId || signingInRef.current) {
+    if (!accountId || readSigningIn()) {
       return
     }
-    signingInRef.current = true
     setSigningIn(true)
     void signInToClaudeAccount(accountId)
       .then((signedIn) => {
@@ -152,11 +155,8 @@ function useManagedClaudeSignIn(
           setSignedInFor({ failure, rows: failureRows })
         }
       })
-      .finally(() => {
-        signingInRef.current = false
-        setSigningIn(false)
-      })
-  }, [accountId, failure, failureRows])
+      .finally(() => setSigningIn(false))
+  }, [accountId, failure, failureRows, readSigningIn, setSigningIn])
   const signedInSinceFailure =
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.

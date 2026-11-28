@@ -1,6 +1,7 @@
 // The setup's last two cards: the owner's own sign-in with the new app (a bot can't sign in for
 // them), which ends on the accounts the bot may use, then what the bot can use.
 import React, { useState } from 'react'
+import { useNativeChatViewState } from '../../../native-chat/pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { botErrorMessage } from '../../bot-presentation'
 import { Button } from '@/components/ui/button'
@@ -42,10 +43,14 @@ export function GoogleSetupConnectCard({
   newest: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const signIn = useGoogleSignIn(botTarget(bot), bot, `setup-connect:${run.id}`)
   const host = useBotHostLabel(bot.hostId)
-  // The account just signed in: the card then lists the accounts the bot may use, that one ticked.
-  const [signedIn, setSignedIn] = useState<string | null>(null)
+  // The account just signed in: the card then lists the accounts the bot may use, that one ticked. Kept with the
+  // chat tab, so a sign-in that finishes while the chat is released still leads to the account step.
+  const [signedIn, setSignedIn] = useNativeChatViewState<string | null>(
+    `google-setup-signed-in:${run.id}`,
+    null
+  )
   const done = run.steps.connect?.status === 'done'
   const open = googleSetupConnectOpen(run)
   const picking = newest && signedIn !== null && open
@@ -192,7 +197,7 @@ export function GoogleSetupConnectedCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const host = useGoogleHost(botTarget(bot))
-  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const signIn = useGoogleSignIn(botTarget(bot), bot, `setup-ready:${run.id}`)
   const google = host.status === 'ready' ? host.google : null
   const account =
     google?.accounts.find((entry) => entry.email === run.account) ?? google?.accounts[0] ?? null

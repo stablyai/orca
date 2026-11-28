@@ -25,26 +25,29 @@ export function NativeChatAutoReviewDenialRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const owner = useNativeChatVisualOwner()
-  // Kept with the chat tab: a row released mid-approval returns still approving, or approved.
-  const [state, setState] = useNativeChatViewGuard<ApprovalState>(
+  // Kept with the chat tab: a row released mid-approval returns still approving, or with its answer. Only
+  // answers count toward the newest few kept; an approval in flight is never dropped.
+  const [pending, setPending] = useNativeChatViewGuard(`auto-review-pending:${itemId ?? ''}`, false)
+  const [answer, setAnswer] = useNativeChatViewGuard<Exclude<ApprovalState, 'pending'>>(
     `auto-review:${itemId ?? ''}`,
     'idle',
     KEPT_PROMPT_VIEWS
   )
+  const state: ApprovalState = pending ? 'pending' : answer
   // The host accepts an approval only from its own window, never over a pairing an agent could hold.
   const approvable = denial.event !== null && owner?.target.kind === 'local' && itemId !== undefined
   const approve = async (): Promise<void> => {
     if (!owner || !itemId) {
       return
     }
-    setState('pending')
+    setPending(true)
     try {
       const result = await callRuntimeRpc<AgentSessionAutoReviewApprovalResult>(
         owner.target,
         'agentSession.approveAutoReviewDenial',
         { sessionId: owner.sessionId, itemId }
       )
-      setState(
+      setAnswer(
         result.status === 'approved'
           ? 'approved'
           : result.status === 'unavailable'
@@ -52,7 +55,9 @@ export function NativeChatAutoReviewDenialRow({
             : 'failed'
       )
     } catch {
-      setState('failed')
+      setAnswer('failed')
+    } finally {
+      setPending(false)
     }
   }
   return (

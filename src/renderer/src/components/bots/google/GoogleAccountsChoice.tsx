@@ -84,29 +84,32 @@ export function useGoogleAccountChoice(
     const next = googleAccountChoiceSave(chosen)
     setSaving(true)
     // The askers the picker showed: the host keeps Google off if Who can ask changed meanwhile.
-    const saved = await setBotGoogle(
-      bot,
-      next.on,
-      next.on
-        ? {
-            accounts: next.accounts,
-            confirmedAskers: botAskerKeys(bot),
-            basedOn: picked?.basedOn ?? googleBotRead(listed),
-            shownAccounts: [...(picked?.shown ?? []), ...shownNow]
+    try {
+      return await setBotGoogle(
+        bot,
+        next.on,
+        next.on
+          ? {
+              accounts: next.accounts,
+              confirmedAskers: botAskerKeys(bot),
+              basedOn: picked?.basedOn ?? googleBotRead(listed),
+              shownAccounts: [...(picked?.shown ?? []), ...shownNow]
+            }
+          : {}
+      ).then(
+        () => true,
+        async (error: unknown) => {
+          toast.error(botErrorMessage(error))
+          if (botFailureOf(error)?.code === 'googleAccountsChanged') {
+            await reload()
           }
-        : {}
-    ).then(
-      () => true,
-      async (error: unknown) => {
-        toast.error(botErrorMessage(error))
-        if (botFailureOf(error)?.code === 'googleAccountsChanged') {
-          await reload()
+          return false
         }
-        return false
-      }
-    )
-    setSaving(false)
-    return saved
+      )
+    } finally {
+      // A failed re-read still ends the save; the kept guard would otherwise outlast the view.
+      setSaving(false)
+    }
   }
   return { chosen, setChosen, ready: view.status === 'ready', saving, save }
 }

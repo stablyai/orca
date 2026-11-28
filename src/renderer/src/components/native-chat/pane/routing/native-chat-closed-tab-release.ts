@@ -1,13 +1,11 @@
 import { useAppStore } from '@/store'
-import { releaseNativeChatComposerEditors } from '../../composer/editor/native-chat-composer-editor-owner'
 import { releaseNativeChatViewTabs } from '../ownership/native-chat-view-memory'
 import { chatViewRetention } from './native-chat-view-retention'
 import { forgetNativeChatAsyncSkipsForTabs } from '../../prompts/use-native-chat-async-questions'
 
-/** A closed chat tab's place, kept editor, view state and kept skips end with it. */
+/** A closed chat tab's place, view state and kept skips end with it. */
 export function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
   chatViewRetention.forget(closed)
-  releaseNativeChatComposerEditors(closed)
   releaseNativeChatViewTabs(closed)
   forgetNativeChatAsyncSkipsForTabs(closed)
 }
@@ -49,6 +47,15 @@ export function reportChatLayerTabs(
   releaseGone(worktreeId, tracked, gone, {
     byWorktree: useAppStore.getState().unifiedTabsByWorktree
   })
+  retireIfEmpty(worktreeId, tracked)
+}
+
+/** A workspace with no chat tabs left to watch leaves the registry, so empty ones never pile up. */
+function retireIfEmpty(worktreeId: string, tracked: Set<string>): void {
+  if (tracked.size === 0 && trackedByWorktree.get(worktreeId) === tracked) {
+    trackedByWorktree.delete(worktreeId)
+    unshown.delete(worktreeId)
+  }
 }
 
 function leaveWorktree(worktreeId: string): void {
@@ -151,6 +158,7 @@ function sweepWorktree(worktreeId: string, pass: ReleasePass): void {
     [...tracked].filter((id) => !live.has(id)),
     pass
   )
+  retireIfEmpty(worktreeId, tracked)
 }
 
 /** Only tabs open in no workspace are released; a tab moved by a rename or drag is tracked where it now lives. */
@@ -181,10 +189,7 @@ function releaseGone(
       }
     }
   }
-  if (tracked.size === 0 && trackedByWorktree.get(worktreeId) === tracked) {
-    trackedByWorktree.delete(worktreeId)
-    unshown.delete(worktreeId)
-  }
+  retireIfEmpty(worktreeId, tracked)
   if (closed.size > 0) {
     releaseClosedChatTabs(closed)
   }

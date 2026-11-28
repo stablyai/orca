@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -8,6 +8,7 @@ import {
   NativeChatViewTabContext,
   readNativeChatViewMemory,
   releaseNativeChatViewTabs,
+  useNativeChatViewState,
   writeNativeChatViewMemory
 } from './native-chat-view-memory'
 import { useNativeChatConversationKey } from '../../conversation/projection/use-native-chat-conversation-key'
@@ -105,4 +106,27 @@ it('a restore that never reads history keeps its bookmark through the next hide'
   view.rerender({ isVisible: true, positionKey: 'u' })
   expect(readNativeChatViewMemory(TAB, 'reading-position:u')).toBeUndefined()
   vi.unstubAllGlobals()
+})
+
+it('a request from a closed tab never touches the same tab id opened again', () => {
+  const first = renderHook(() => useNativeChatViewState('busy', false), { wrapper: inTab })
+  act(() => first.result.current[1](true))
+  const lateSettle = first.result.current[1]
+  first.unmount()
+  releaseNativeChatViewTabs([TAB.tabId])
+  // The id opens again, as a restored launch slot can, and starts its own request.
+  const again = renderHook(() => useNativeChatViewState('busy', false), { wrapper: inTab })
+  act(() => again.result.current[1](true))
+  act(() => lateSettle(false))
+  expect(again.result.current[0]).toBe(true)
+})
+
+it('the newest-few cap drops settled entries, never one still in flight', () => {
+  writeNativeChatViewMemory(TAB, 'answer:0', { inFlight: true }, 2)
+  for (let index = 1; index <= 4; index++) {
+    writeNativeChatViewMemory(TAB, `answer:${index}`, { inFlight: false }, 2)
+  }
+  expect(readNativeChatViewMemory(TAB, 'answer:0')).toEqual({ inFlight: true })
+  expect(readNativeChatViewMemory(TAB, 'answer:1')).toBeUndefined()
+  expect(readNativeChatViewMemory(TAB, 'answer:4')).toEqual({ inFlight: false })
 })
