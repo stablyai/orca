@@ -37,5 +37,18 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.restart', 'restart'),
       ...translateSearchKeyword('accounts.claude.switchSessions.keyword.running', 'running')
     ]
+  },
+  {
+    title: translate('accounts.claude.autoSwitch.title', 'Automatically switch account at limit'),
+    description: translate(
+      'accounts.claude.autoSwitch.description',
+      'When the selected Claude account reaches the threshold, Orca selects the signed-in account with the most usage left.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('accounts.claude.autoSwitch.keyword.limit', 'limit'),
+      ...translateSearchKeyword('accounts.claude.autoSwitch.keyword.automatic', 'automatic')
+    ]
   }
 ])

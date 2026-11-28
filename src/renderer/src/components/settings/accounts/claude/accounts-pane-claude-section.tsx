@@ -15,6 +15,7 @@ import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { ClaudeLimitAutoSwitchSetting } from './claude-limit-auto-switch-setting'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
   canOfferClaudeSignInLink,
@@ -288,6 +289,9 @@ export function renderClaudeAccountsSection(
         )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+        )}
+        {isRemoteAccountScope ? null : (
+          <ClaudeLimitAutoSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}
       </SettingsGroup>
     </div>
