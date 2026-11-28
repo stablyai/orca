@@ -13195,8 +13195,11 @@
           "restarting": "Wird neu gestartet…",
           "updated": "Aktualisiert",
           "failed": "Aktualisierung fehlgeschlagen",
-          "serviceManagerHelp": "Orca auf dem Server-Host aktualisieren – bei einer Installation aus einer .deb- oder .rpm-Datei über den Paketmanager des Systems, andernfalls über die Dienstverwaltung, die Orca startet.",
-          "unpackedHelp": "Entwicklungs-Builds müssen über ihren Quellcode-Checkout aktualisiert werden.",
+          "nodeServerHelp": "Remote-Updates sind aus: Dieser Server führt den Node-Server von Orca (orcad) aus, der keinen eingebauten Updater hat. Installiere die neuere Orca-Version auf dem Server und starte dann `orca serve` neu.",
+          "updaterNotStartedHelp": "Remote-Updates sind aus: Orca auf diesem Server hat seinen Updater nicht gestartet. Starte Orca dort neu und prüfe erneut, oder aktualisiere es auf dem Server.",
+          "headlessServeHelp": "Remote-Updates sind aus: Dieser Server führt `orca serve` ohne Update-Supervisor aus und kann sich daher nicht selbst in einer neuen Version neu starten. Aktualisiere Orca auf dem Server und starte dann den Dienst neu.",
+          "systemPackageHelp": "Remote-Updates sind aus: Orca wurde auf diesem Server aus einem Systempaket (.deb oder .rpm) installiert, das nur sein Paketmanager aktualisieren darf. Aktualisiere es dort, zum Beispiel mit apt oder dnf.",
+          "devBuildHelp": "Remote-Updates sind aus: Dieser Server führt einen Entwicklungs-Build aus. Aktualisiere ihn über seinen Quellcode-Checkout.",
           "legacyHelp": "Remote-Updates sind für diesen Server nicht verfügbar. Orca auf dem Server-Host aktualisieren.",
           "managedOverSshHelp": "Dieser Desktop aktualisiert diesen Server über SSH. In dessen Zeile unter „Entfernte Orca-Server“ auf „Aktualisieren“ klicken."
         },
@@ -25342,6 +25345,7 @@
       "errors": {
         "ownerSilent": "Das Gerät, auf dem diese Anmeldung gestartet wurde, antwortet nicht mehr.",
         "superseded": "Eine Kontoänderung auf diesem Host hat die Anmeldung abgebrochen. Die Anmeldung erneut starten.",
+        "noPrompt": "Der Anmeldebefehl auf dem Server hat innerhalb einer Minute keinen Anmeldelink angezeigt. Aktualisiere Orca auf dem Server und versuche es dann erneut.",
         "failed": "Anmeldung fehlgeschlagen. Erneut versuchen."
       }
     },

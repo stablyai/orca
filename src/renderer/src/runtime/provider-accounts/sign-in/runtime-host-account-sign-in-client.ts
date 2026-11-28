@@ -27,6 +27,8 @@ const WAIT_TIMEOUT_MS = 35_000
 // Why: the host ends a flow nobody asked about for 90s, so retrying a lost answer longer is moot.
 export const HOST_SIGN_IN_RETRY_WINDOW_MS = 80_000
 const RETRY_DELAY_MS = 2_000
+// Why above the host's own 60s: a current host names its failure first; this ends hosts that predate it.
+const PROMPT_DEADLINE_MS = 90_000
 const NOT_ACTIVE = 'This sign-in is no longer active in this client.'
 const CANCELLED_MESSAGE: Record<HostAccountSignInProvider, string> = {
   claude: 'Claude sign-in was cancelled.',
@@ -154,10 +156,16 @@ async function follow(attempt: Attempt): Promise<HostAccountSignInStatus> {
     )
   )
   attempt.stage = 'following'
+  const promptDeadline = Date.now() + PROMPT_DEADLINE_MS
   for (;;) {
     const status = attempt.status
     if (!status || HOST_ACCOUNT_SIGN_IN_SETTLED_PHASES.has(status.phase)) {
       return settle(attempt)
+    }
+    if (status.phase === 'starting' && !attempt.cancelRequested && Date.now() >= promptDeadline) {
+      // Best effort: the host also ends a flow nobody asks about.
+      await call(attempt, 'accounts.hostSignInCancel', { flowId: status.flowId }).catch(() => {})
+      throw new Error(hostAccountSignInFailureText({ ...status, errorCode: 'noPrompt' }))
     }
     if (attempt.cancelRequested && !attempt.cancelDelivered) {
       // Why not fatal: an undelivered cancel is asked again after the next answer.

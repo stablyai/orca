@@ -7,7 +7,8 @@ import {
 
 const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
   ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
-  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
+  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded),
+  noPrompt: () => translate('accounts.hostSignIn.errors.noPrompt', FAILURE_EN.noPrompt)
 }
 
 function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {

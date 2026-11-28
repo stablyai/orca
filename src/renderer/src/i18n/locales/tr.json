@@ -13532,8 +13532,11 @@
           "restarting": "Yeniden başlatılıyor…",
           "updated": "Güncellendi",
           "failed": "Güncelleme başarısız oldu",
-          "serviceManagerHelp": "Orca'yı sunucu host'unda güncelleyin; .deb veya .rpm'den yüklendiyse sistem paket yöneticisi üzerinden, aksi halde onu başlatan servis yöneticisi üzerinden.",
-          "unpackedHelp": "Geliştirme derlemeleri kaynak kopyalarından güncellenmelidir.",
+          "nodeServerHelp": "Uzaktan güncellemeler kapalı: Bu sunucu, yerleşik güncelleyicisi olmayan Orca'nın Node sunucusunu (orcad) çalıştırıyor. Sunucuya yeni Orca sürümünü kurun, ardından `orca serve` komutunu yeniden başlatın.",
+          "updaterNotStartedHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca güncelleyicisini başlatmadı. Orca'yı orada yeniden başlatıp tekrar kontrol edin ya da sunucuda güncelleyin.",
+          "headlessServeHelp": "Uzaktan güncellemeler kapalı: Bu sunucu `orca serve` komutunu bir güncelleme denetleyicisi olmadan çalıştırıyor, bu yüzden kendini yeni bir sürümle yeniden başlatamıyor. Orca'yı sunucuda güncelleyin, ardından hizmetini yeniden başlatın.",
+          "systemPackageHelp": "Uzaktan güncellemeler kapalı: Bu sunucudaki Orca bir sistem paketinden (.deb veya .rpm) kuruldu ve yalnızca paket yöneticisi tarafından güncellenebilir. Orada güncelleyin, örneğin apt veya dnf ile.",
+          "devBuildHelp": "Uzaktan güncellemeler kapalı: Bu sunucu bir geliştirme derlemesi çalıştırıyor. Kaynak kodu kopyasından güncelleyin.",
           "legacyHelp": "Bu sunucu uzaktan güncellenemiyor. Sunucunun ana makinesinde Orca'yı güncelleyin.",
           "managedOverSshHelp": "Bu masaüstü uygulaması bu sunucuyu SSH üzerinden günceller. Uzak Orca sunucuları bölümünde sunucunun satırındaki Güncelle seçeneğini kullanın."
         },
@@ -25758,6 +25761,7 @@
       "errors": {
         "ownerSilent": "Bu oturum açma işlemini başlatan cihaz yanıt vermeyi bıraktı.",
         "superseded": "Bu sunucudaki bir hesap değişikliği oturum açma işlemini durdurdu. Yeniden başlatın.",
+        "noPrompt": "Sunucudaki oturum açma komutu bir dakika içinde oturum açma bağlantısı göstermedi. Sunucudaki Orca'yı güncelleyin, ardından tekrar deneyin.",
         "failed": "Oturum açılamadı. Yeniden deneyin."
       }
     },

@@ -98,16 +98,36 @@ export function getRemoteServerManualUpdateHelp(
       'This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers.'
     )
   }
-  if (entry.support?.reason === 'manual-service-update-required') {
-    return t(
-      'auto.components.settings.RemoteServerUpdateStatus.serviceManagerHelp',
-      'Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.'
-    )
+  // Name why remote updates are off, then what to do instead.
+  const support = entry.support
+  const headless = support?.installMode === 'unsupported-headless-serve'
+  if (support?.reason === 'updater-unavailable') {
+    // Only orcad, Orca's Node server, reports a headless server with no updater at all.
+    return headless
+      ? t(
+          'auto.components.settings.RemoteServerUpdateStatus.nodeServerHelp',
+          'Remote updates are off: this server runs Orca’s Node server (orcad), which has no built-in updater. Install the newer Orca release on the server, then restart `orca serve`.'
+        )
+      : t(
+          'auto.components.settings.RemoteServerUpdateStatus.updaterNotStartedHelp',
+          'Remote updates are off: Orca on this server has not started its updater. Restart Orca there and check again, or update it on the server.'
+        )
   }
-  if (entry.support?.reason === 'unpackaged-build') {
+  if (support?.reason === 'manual-service-update-required') {
+    return headless
+      ? t(
+          'auto.components.settings.RemoteServerUpdateStatus.headlessServeHelp',
+          'Remote updates are off: this server runs `orca serve` without an update supervisor, so it cannot restart itself into a new version. Update Orca on the server, then restart its service.'
+        )
+      : t(
+          'auto.components.settings.RemoteServerUpdateStatus.systemPackageHelp',
+          'Remote updates are off: Orca on this server was installed from a system package (.deb or .rpm), which only its package manager may update. Update it there, for example with apt or dnf.'
+        )
+  }
+  if (support?.reason === 'unpackaged-build') {
     return t(
-      'auto.components.settings.RemoteServerUpdateStatus.unpackedHelp',
-      'Development builds must be updated from their source checkout.'
+      'auto.components.settings.RemoteServerUpdateStatus.devBuildHelp',
+      'Remote updates are off: this server runs a development build. Update it from its source checkout.'
     )
   }
   return t(

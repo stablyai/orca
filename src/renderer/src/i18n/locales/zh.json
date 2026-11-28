@@ -12675,8 +12675,11 @@
           "restarting": "正在重启…",
           "updated": "已更新",
           "failed": "更新失败",
-          "serviceManagerHelp": "通过启动此服务器的服务管理器更新 Orca",
-          "unpackedHelp": "开发版本必须在其源码目录中更新",
+          "nodeServerHelp": "远程更新已关闭：此服务器运行的是 Orca 的 Node 服务器（orcad），它没有内置更新程序。请在服务器上安装较新的 Orca 版本，然后重启 `orca serve`。",
+          "updaterNotStartedHelp": "远程更新已关闭：此服务器上的 Orca 尚未启动更新程序。请在服务器上重启 Orca 后再检查一次，或直接在服务器上更新。",
+          "headlessServeHelp": "远程更新已关闭：此服务器运行 `orca serve` 时没有更新监督程序，因此无法自行以新版本重启。请在服务器上更新 Orca，然后重启其服务。",
+          "systemPackageHelp": "远程更新已关闭：此服务器上的 Orca 是通过系统软件包（.deb 或 .rpm）安装的，只能由软件包管理器更新。请在服务器上更新，例如使用 apt 或 dnf。",
+          "devBuildHelp": "远程更新已关闭：此服务器运行的是开发版本。请从其源码目录更新。",
           "legacyHelp": "此服务器无法远程更新，请在服务器主机上更新 Orca",
           "managedOverSshHelp": "此桌面通过 SSH 更新此服务器。请在远程 Orca 服务器中该服务器所在行使用“更新”"
         },
@@ -25210,6 +25213,7 @@
       "errors": {
         "ownerSilent": "发起此次登录的设备已停止响应",
         "superseded": "此主机上的账户变更中断了登录。请重新开始",
+        "noPrompt": "服务器上的登录命令在一分钟内没有显示登录链接。请更新服务器上的 Orca，然后重试。",
         "failed": "登录失败。请重试"
       }
     },

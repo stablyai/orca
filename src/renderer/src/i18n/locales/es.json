@@ -12700,8 +12700,11 @@
           "restarting": "Restarting…",
           "updated": "Updated",
           "failed": "Update failed",
-          "serviceManagerHelp": "Update Orca through the service manager that starts this server.",
-          "unpackedHelp": "Las compilaciones de desarrollo deben actualizarse desde su copia del código fuente.",
+          "nodeServerHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta el servidor Node de Orca (orcad), que no tiene actualizador integrado. Instala la versión más reciente de Orca en el servidor y luego reinicia `orca serve`.",
+          "updaterNotStartedHelp": "Las actualizaciones remotas están desactivadas: Orca en este servidor no ha iniciado su actualizador. Reinicia Orca allí y vuelve a comprobarlo, o actualízalo en el servidor.",
+          "headlessServeHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta `orca serve` sin un supervisor de actualizaciones, así que no puede reiniciarse en una versión nueva. Actualiza Orca en el servidor y luego reinicia su servicio.",
+          "systemPackageHelp": "Las actualizaciones remotas están desactivadas: Orca se instaló en este servidor desde un paquete del sistema (.deb o .rpm), que solo su gestor de paquetes puede actualizar. Actualízalo allí, por ejemplo con apt o dnf.",
+          "devBuildHelp": "Las actualizaciones remotas están desactivadas: este servidor ejecuta una compilación de desarrollo. Actualízala desde su copia del código fuente.",
           "legacyHelp": "Las actualizaciones remotas no están disponibles para este servidor. Actualiza Orca en el servidor.",
           "managedOverSshHelp": "Este escritorio actualiza este servidor por SSH. Usa Actualizar en su fila de Servidores remotos de Orca."
         },
@@ -24815,6 +24818,7 @@
       "errors": {
         "ownerSilent": "El dispositivo desde el que se intentó iniciar sesión dejó de responder.",
         "superseded": "Un cambio de cuenta en este host detuvo el inicio de sesión. Vuelve a iniciarlo.",
+        "noPrompt": "El comando de inicio de sesión del servidor no mostró un enlace de inicio de sesión en un minuto. Actualiza Orca en el servidor y vuelve a intentarlo.",
         "failed": "No se pudo iniciar sesión. Vuelve a intentarlo."
       }
     },
