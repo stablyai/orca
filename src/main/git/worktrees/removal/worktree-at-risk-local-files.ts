@@ -1,4 +1,4 @@
-import { lstat, opendir, readFile, realpath, stat } from 'node:fs/promises'
+import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
@@ -8,6 +8,7 @@ import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environmen
 import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { gitStreamStdout } from '../../command-runner/git-stream-stdout'
 import { createAbortError } from '../../command-runner/process-capture/abort-error'
+import { openDirectory } from '../../../../shared/open-directory'
 
 // --directory collapses wholly ignored directories (node_modules/) into one row.
 const LIST_IGNORED_ARGS = [
@@ -242,7 +243,7 @@ async function readDirectoryVerdict(
 ): Promise<EntryVerdict> {
   try {
     // Streamed so a huge directory costs at most the entry budget, never a full listing.
-    for await (const child of await opendir(worktreeDirectory)) {
+    for await (const child of await openDirectory(worktreeDirectory)) {
       if (isRegenerableEntry(child.name, child.isDirectory())) {
         if (!spendBudgetEntry(budget)) {
           return 'unknown'
