@@ -24,8 +24,10 @@ export function HostWorkspaceListStates(
     onClearSearch: () => void
     onReconnect: (() => void) | null
     onRetryPairing: (() => void) | null
-    /** Starts a workspace; absent while one can't start here. */
+    /** Starts a workspace, or Add a project when the host can. Absent while one can't start here. */
     onNewWorkspace: (() => void) | null
+    /** The empty action reads as Add a project instead of New workspace. */
+    addsProject?: boolean
     onClearFilters: () => void
     onRetryLoad: () => void
     onRepair: () => void
@@ -131,7 +133,9 @@ export function HostWorkspaceListStates(
               }
             : props.onNewWorkspace
               ? {
-                  label: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
+                  label: props.addsProject
+                    ? t('worktree.hostWorkspaceListStates.addProject', 'Add a project')
+                    : t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
                   onPress: props.onNewWorkspace
                 }
               : null

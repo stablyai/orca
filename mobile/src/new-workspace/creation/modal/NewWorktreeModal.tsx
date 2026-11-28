@@ -72,6 +72,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     client: desktopClient,
     serverClients,
     hostId,
+    initialRepoId,
     hostLabelById,
     existingWorktreePaths,
     existingWorktrees,
@@ -88,9 +89,14 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       visible,
       ...(folderLaunch
         ? {
-            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+            initialRepo: {
+              id: folderLaunch.repoId,
+              executionHostId: folderLaunch.executionHostId
+            }
           }
-        : {})
+        : initialRepoId
+          ? { preferredDesktopRepoId: initialRepoId }
+          : {})
     })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined

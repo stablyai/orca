@@ -1,4 +1,5 @@
-import { useMemo, useReducer, useState } from 'react'
+import { useCallback, useMemo, useReducer, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -25,6 +26,13 @@ import { useHostListSections } from './workspace-list/use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './sidebar-feed/use-host-sidebar-feed'
 import { useHostProjectSections } from './catalog/use-host-project-sections'
 import { useHostRepoMetadata } from './catalog/use-host-repo-metadata'
+import {
+  HOST_LIST_TARGET,
+  NO_HOST_LIST_INPUT,
+  hostRepoCatalogQuery
+} from './catalog/host-list-queries'
+import { hostQueryKey } from '../query/host-query-key'
+import { refetchHostQueryAfterInFlight } from '../query/host-event-router'
 import { peekStoredHost, useHostScreenIdentity } from './identity/use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './view-settings/use-host-view-settings'
@@ -132,6 +140,26 @@ export function useHostScreenController({
     state
   })
 
+  const queryClient = useQueryClient()
+  // A new project changes the repo catalog as well as the rows, so force both past their throttles.
+  const refreshAfterProjectAdded = useCallback(() => {
+    if (hostId) {
+      const query = queryClient.getQueryCache().find({
+        queryKey: hostQueryKey(
+          hostId,
+          hostRepoCatalogQuery.family,
+          HOST_LIST_TARGET,
+          NO_HOST_LIST_INPUT
+        ),
+        exact: true
+      })
+      if (query) {
+        refetchHostQueryAfterInFlight(queryClient, query)
+      }
+    }
+    void catalog.fetchWorktrees({ allowDuringModal: true })
+  }, [catalog, hostId, queryClient])
+
   const hostPlatform = useResolvedHostPlatform(state, hostId)
   const { worktrees: displayWorktrees, hostContextOf } = useHostDisplayWorktrees(
     connState,
@@ -217,6 +245,7 @@ export function useHostScreenController({
     onHideSidebar,
     reconnect,
     reconnectAttempts,
+    refreshAfterProjectAdded,
     relayRecovery,
     routeNotice,
     router,

@@ -27,6 +27,8 @@ export function useNewWorkspaceRepositories(args: {
   visible: boolean
   /** Picked once it is listed, in place of the last visited repo. */
   initialRepo?: { id: string; executionHostId: ExecutionHostId }
+  /** A just-added project on the focused host, matched by id on desktop repos only. */
+  preferredDesktopRepoId?: string | null
 }): {
   repos: MobileWorkspaceRepo[]
   allRepos: MobileWorkspaceRepo[]
@@ -37,7 +39,14 @@ export function useNewWorkspaceRepositories(args: {
   loadError: string | null
   retryLoad: () => void
 } {
-  const { client, serverClients = NO_SERVER_CLIENTS, hostId, visible, initialRepo } = args
+  const {
+    client,
+    serverClients = NO_SERVER_CLIENTS,
+    hostId,
+    visible,
+    initialRepo,
+    preferredDesktopRepoId = null
+  } = args
   const queryClient = useQueryClient()
   // The host list's repos, so the form opens with them while repo.list answers.
   const [initialRepos] = useState(() => cachedHostRepos<MobileWorkspaceRepo>(queryClient, hostId))
@@ -48,6 +57,9 @@ export function useNewWorkspaceRepositories(args: {
   // Null until a read fails; an empty string is a refusal with no reason to show.
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadAttempt, setLoadAttempt] = useState(0)
+  // The cached list predates a just-added project, so that pick waits for a fresh one.
+  const [listedFresh, setListedFresh] = useState(false)
+
   const lastVisitedRepo = useLastVisitedWorktreeRepoId(hostId, visible)
   // Why: trust checks count same-id rows on every host, as desktop does; only the picker filters.
   const allRepos = useMemo(
@@ -87,9 +99,25 @@ export function useNewWorkspaceRepositories(args: {
   }, [initialRepoHost, initialRepoId, repos, selectedRepo, visible])
 
   useEffect(() => {
+    if (!visible || selectedRepo || initialRepoId || !preferredDesktopRepoId) {
+      return
+    }
+    // Repo ids are unique per host; the just-added project lives on the focused host.
+    const preferred = desktopRepos.find((repo) => repo.id === preferredDesktopRepoId)
+    if (preferred) {
+      setSelectedRepo(preferred)
+    }
+  }, [desktopRepos, initialRepoId, preferredDesktopRepoId, selectedRepo, visible])
+
+  useEffect(() => {
+    // Hold last-visited while the added project is pending, or once it is listed.
+    const holdForAddedProject =
+      !!preferredDesktopRepoId &&
+      (!listedFresh || desktopRepos.some((repo) => repo.id === preferredDesktopRepoId))
     if (
       !visible ||
       initialRepoId ||
+      holdForAddedProject ||
       !lastVisitedRepo.loaded ||
       selectedRepo ||
       repos.length === 0
@@ -104,7 +132,17 @@ export function useNewWorkspaceRepositories(args: {
     if (preferredRepo) {
       setSelectedRepo(preferredRepo)
     }
-  }, [initialRepoId, lastVisitedRepo.loaded, lastVisitedRepo.repoId, repos, selectedRepo, visible])
+  }, [
+    desktopRepos,
+    initialRepoId,
+    lastVisitedRepo.loaded,
+    lastVisitedRepo.repoId,
+    listedFresh,
+    preferredDesktopRepoId,
+    repos,
+    selectedRepo,
+    visible
+  ])
 
   useEffect(() => {
     if (!visible || !client) {
@@ -123,6 +161,8 @@ export function useNewWorkspaceRepositories(args: {
           return
         }
         setDesktopRepos(listed)
+        // A failed listing keeps a just-added project's pick pending instead of preselecting another repo.
+        setListedFresh(true)
       })
       .catch((err: unknown) => {
         if (!stale) {

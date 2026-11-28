@@ -25,6 +25,7 @@ import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-s
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
+import { useHostAddProjectActions } from './use-host-add-project-actions'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
 import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
@@ -63,7 +64,6 @@ export function useHostWorktreeActions(args: {
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     serverWorkspaces,
-    setNewWorktreeVisible,
     setServerNotice,
     setServerWorkspaces,
     setSleptIds,
@@ -85,14 +85,12 @@ export function useHostWorktreeActions(args: {
     }
   }, [router])
 
-  const openNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(true),
-    [setNewWorktreeVisible]
-  )
-  const closeNewWorktreeModal = useCallback(
-    () => setNewWorktreeVisible(false),
-    [setNewWorktreeVisible]
-  )
+  const addProject = useHostAddProjectActions({
+    hostCapabilities,
+    setNewWorktreeInitialRepoId: state.setNewWorktreeInitialRepoId,
+    setNewWorktreeVisible: state.setNewWorktreeVisible,
+    setShowAddProject: state.setShowAddProject
+  })
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
@@ -317,8 +315,7 @@ export function useHostWorktreeActions(args: {
     leaveHost,
     navigateFromHostList,
     openFloatingWorkspace,
-    openNewWorktreeModal,
-    closeNewWorktreeModal,
+    ...addProject,
     openWorktreeSession,
     putWorktreeToSleep,
     renameWorktree,

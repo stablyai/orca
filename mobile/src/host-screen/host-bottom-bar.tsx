@@ -45,13 +45,15 @@ export function HostBottomBar({
         onPress: () => state.setShowWorkspaceOptions(true),
         badge: activeFilterCount
       }}
-      // Hidden until it can work, rather than shown greyed.
+      // Hidden until it can work, rather than shown greyed. Create opens Add a project when the host can.
       primary={
         connState === 'connected'
           ? {
               icon: Plus,
-              accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
-              onPress: actions.openNewWorktreeModal
+              accessibilityLabel: actions.addProjectSupported
+                ? t('hostScreen.hostBottomBar.create', 'Create')
+                : t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
+              onPress: actions.openCreateMenu
             }
           : undefined
       }

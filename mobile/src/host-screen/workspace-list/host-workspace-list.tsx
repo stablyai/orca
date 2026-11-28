@@ -137,7 +137,7 @@ export function HostWorkspaceList({
   const { groupBy, agentActivityDisplayMode } = state.view
   const { toggleCollapsed, toggleWorktreeLineage } = settings
   const { setActionTarget } = state
-  const { openWorktreeSession, openNewWorktreeModal, setWorktreeUnread, togglePin } = actions
+  const { openWorktreeSession, setWorktreeUnread, togglePin } = actions
   const canCreate = connState === 'connected' && !isReadOnly
   const { pinnedIds } = state
   // The writes change identity with every catalog read; rows keep one callback so a poll that
@@ -266,7 +266,8 @@ export function HostWorkspaceList({
         onReconnect={controller.reconnect}
         // A refusal's Retry rebuilds the client; a page's nudge can't clear one.
         onRetryPairing={hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null}
-        onNewWorkspace={canCreate ? () => openNewWorktreeModal() : null}
+        onNewWorkspace={canCreate ? actions.openCreateMenu : null}
+        addsProject={actions.addProjectSupported}
         onClearFilters={settings.clearFilters}
         onRetryLoad={() => void catalog.onRefresh()}
         onRepair={() => router.push('/pair-scan')}
