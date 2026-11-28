@@ -190,21 +190,23 @@ function ReferencePeekRow({
   const detail = details[getWorkspaceAttachmentKey(item)]
   const status = referenceStatus(item, detail, t)
   return (
-    // Why: rows too narrow for one line move the title under the key instead of hiding it.
-    <li className="flex min-w-0 items-center gap-x-2 py-0.5 whitespace-nowrap @max-[8rem]:flex-wrap">
+    // Why: rows too narrow for one line move the title to a second grid row instead of hiding it.
+    <li className="flex min-w-0 items-center gap-x-2 py-0.5 whitespace-nowrap @max-[8rem]:grid @max-[8rem]:grid-cols-[0.875rem_minmax(0,max-content)_minmax(0,max-content)]">
       <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-3.5">
         <ReferenceGlyph item={item} details={details} />
       </span>
       {/* Why: caps the key at the row minus the title's 25% and the icon and gaps. */}
-      <span className="max-w-[calc(75%-2.375rem)] shrink-0 truncate font-medium tabular-nums @max-[8rem]:max-w-[calc(100%-1.375rem)] @max-[8rem]:shrink">
+      <span className="max-w-[calc(75%-2.375rem)] shrink-0 truncate font-medium tabular-nums @max-[8rem]:max-w-none">
         {workspaceAttachmentReferenceLabel(item, PEEK_LABELS)}
       </span>
-      <span className="min-w-[25%] flex-1 truncate text-muted-foreground @max-[8rem]:order-last @max-[8rem]:basis-full @max-[8rem]:pl-[1.375rem]">
+      <span className="min-w-[25%] flex-1 truncate text-muted-foreground @max-[8rem]:col-span-2 @max-[8rem]:col-start-2 @max-[8rem]:row-start-2 @max-[8rem]:min-w-0">
         {detail?.title}
       </span>
       {status ? (
         // Why: long keys or custom issue states must not squeeze the title away in a narrow peek.
-        <span className="max-w-[40%] min-w-0 truncate text-muted-foreground">{status}</span>
+        <span className="max-w-[40%] min-w-0 truncate text-muted-foreground @max-[8rem]:col-start-3 @max-[8rem]:row-start-1 @max-[8rem]:max-w-none">
+          {status}
+        </span>
       ) : null}
     </li>
   )
