@@ -1,8 +1,4 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import {
-  appendNativeChatQuote,
-  formatNativeChatQuote
-} from '../../../../src/shared/native-chat/input/quotes/native-chat-quote-selection'
 
 // Each item's unsent comment text on the phone, for this app session, and the open box showing it.
 export const botItemCommentDrafts = new Map<string, string>()
@@ -62,12 +58,4 @@ export function returnBotItemCommentDraft(key: string, text: string): void {
   if (text.trim() && !`\n${draft}\n`.includes(`\n${text}\n`)) {
     setBotItemCommentDraft(key, draft.trim() ? `${draft}\n${text}` : text)
   }
-}
-
-/** Puts a comment's words after the item's draft as a quote, in chat's quote format. */
-export function quoteIntoBotItemCommentDraft(key: string, text: string): void {
-  setBotItemCommentDraft(
-    key,
-    appendNativeChatQuote(botItemCommentDrafts.get(key) ?? '', formatNativeChatQuote(text))
-  )
 }

@@ -48,11 +48,7 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import {
-  botItemCommentDraftKey,
-  quoteIntoBotItemCommentDraft,
-  useBotItemCommentDraftEmpty
-} from './bot-item-comment-drafts'
+import { botItemCommentDraftKey, useBotItemCommentDraftEmpty } from './bot-item-comment-drafts'
 import { useMobileNativeChatDraftInputs } from '../../session/native-chat/composer/drafts/mobile-native-chat-draft-inputs'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
@@ -153,15 +149,6 @@ export function MobileBotItemPage({
     send: quick
   })
   const commentField = useRef<TextInputInstance>(null)
-  // Quoting starts a comment, so the answer card folds to its strip and the box shows.
-  const quoteComment = (text: string): void => {
-    if (askShown) {
-      ask.fold()
-    }
-    quoteIntoBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
-    // In the tap itself: iOS opens the keyboard only for a focus the gesture made.
-    commentField.current?.focus()
-  }
   const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
   if (!item) {
@@ -328,7 +315,6 @@ export function MobileBotItemPage({
                 onReveal={jump.center}
                 sent={sent}
                 asking={askOpen}
-                onQuote={quoteComment}
               />
             </ScrollView>
             {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}

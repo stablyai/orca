@@ -250,8 +250,7 @@ export function MobileBotItemActivity({
   pending,
   onReveal,
   sent,
-  asking,
-  onQuote
+  asking
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
@@ -264,8 +263,6 @@ export function MobileBotItemActivity({
   sent: BotItemSentAnswers | null
   /** The docked answer card asks the waiting question now, so its comment doesn't repeat it. */
   asking: boolean
-  /** Quotes a comment's words into the comment box. */
-  onQuote: (text: string) => void
 }) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
@@ -325,7 +322,6 @@ export function MobileBotItemActivity({
               }
               sent={sent}
               asking={asking}
-              onQuote={onQuote}
               {...(flash?.id === entry.key
                 ? { flash: { at: flash.at, still, end: endFlash } }
                 : {})}
@@ -368,7 +364,6 @@ export function MobileBotItemActivity({
                   }
                 : undefined
             }
-            onQuote={failed ? undefined : onQuote}
           />
         )
       })}
