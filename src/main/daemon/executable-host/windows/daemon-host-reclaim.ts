@@ -1,5 +1,5 @@
 import { readdirSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
+import { removeDaemonHostTree } from './daemon-host-tree-walk'
 import { join } from 'node:path'
 import type { ProcessLivenessVerdict } from '../../endpoint/identity/daemon-incarnation-evidence-types'
 import { inspectProcessLiveness } from '../../endpoint/identity/daemon-process-inspection'
@@ -22,7 +22,7 @@ function stagingWriterVerdict(name: string): ProcessLivenessVerdict {
 }
 
 // Only positive exit evidence permits deletion; unknown verdicts must preserve the directory.
-// Async so deleting a ~1.8k-file runtime never blocks Electron main.
+// Async and bounded so deleting a ~1.8k-file runtime neither blocks main nor floods libuv's pool.
 export async function reclaimUnownedDaemonHostDir(
   verdict: ProcessLivenessVerdict,
   hostDir: string
@@ -30,7 +30,7 @@ export async function reclaimUnownedDaemonHostDir(
   if (verdict.status !== 'exited') {
     return
   }
-  await rm(hostDir, { recursive: true, force: true }).catch(() => {
+  await removeDaemonHostTree(hostDir).catch(() => {
     // Still locked or already gone — retry on a future launch.
   })
 }

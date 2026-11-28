@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
-import { listDaemonHostTree } from './daemon-host-tree-walk'
+import { DAEMON_HOST_FS_CONCURRENCY, listDaemonHostTree } from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -188,9 +188,6 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
-// Parallel copies hide per-file Defender scan latency without flooding the libuv threadpool.
-const COPY_CONCURRENCY = 16
-
 // Verify the bytes written; rereading a just-written file waits on Defender's scan of it.
 async function copyVerifiedFile(sourcePath: string, dest: string, sha256: string): Promise<void> {
   const bytes = await readFile(sourcePath)
@@ -209,12 +206,10 @@ export async function executeManifest(
   stagingRoot: string,
   expectedHashes: ReadonlyMap<string, string> = new Map()
 ): Promise<void> {
-  const exists = await Promise.all(
-    ops.map((op) =>
-      access(op.sourcePath).then(
-        () => true,
-        () => false
-      )
+  const exists = await mapWithConcurrencyUntilFailure(ops, DAEMON_HOST_FS_CONCURRENCY, (op) =>
+    access(op.sourcePath).then(
+      () => true,
+      () => false
     )
   )
   const present = ops.filter((_, index) => exists[index])
@@ -222,7 +217,7 @@ export async function executeManifest(
   if (missing) {
     throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
   }
-  const { files, dirs } = await listDaemonHostTree(present, COPY_CONCURRENCY)
+  const { files, dirs } = await listDaemonHostTree(present, DAEMON_HOST_FS_CONCURRENCY)
   const listedRels = new Set(files.map((file) => file.destRel))
   const unlisted = [...expectedHashes.keys()].find((destRel) => !listedRels.has(destRel))
   if (unlisted) {
@@ -237,7 +232,7 @@ export async function executeManifest(
     await mkdir(dir, { recursive: true })
   }
   // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
-  await mapWithConcurrencyUntilFailure(files, COPY_CONCURRENCY, (file) => {
+  await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, (file) => {
     const dest = destPath(stagingRoot, file.destRel)
     const sha256 = expectedHashes.get(file.destRel)
     return sha256

@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  symlinkSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -36,6 +37,7 @@ function installHostApp(): void {
 import { createHash } from 'node:crypto'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import { executeManifest } from '../daemon-host-manifest'
+import { removeDaemonHostTree } from '../daemon-host-tree-walk'
 import { collectPinnedDaemonVersions } from '../daemon-host-pinned-versions'
 import {
   getDaemonHostRootDir,
@@ -172,6 +174,27 @@ describe('executeManifest', () => {
     await expect(
       executeManifest([op], join(tempDir, 'staging-2'), new Map([['entry.js', fingerprinted]]))
     ).rejects.toThrow('code changed while copying')
+  })
+})
+
+describe('removeDaemonHostTree', () => {
+  it('removes a copy without following links out of it', async () => {
+    const outside = join(tempDir, 'install-file.txt')
+    writeFileSync(outside, 'keep')
+    const outsideDir = join(tempDir, 'install-dir')
+    mkdirSync(outsideDir)
+    writeFileSync(join(outsideDir, 'inner.txt'), 'keep')
+    const host = join(tempDir, 'host')
+    mkdirSync(join(host, 'nested', 'empty'), { recursive: true })
+    writeFileSync(join(host, 'nested', 'file.txt'), 'copy')
+    symlinkSync(outside, join(host, 'file-link'))
+    symlinkSync(outsideDir, join(host, 'nested', 'dir-link'), 'junction')
+
+    await removeDaemonHostTree(host)
+
+    expect(existsSync(host)).toBe(false)
+    expect(readFileSync(outside, 'utf8')).toBe('keep')
+    expect(readFileSync(join(outsideDir, 'inner.txt'), 'utf8')).toBe('keep')
   })
 })
 

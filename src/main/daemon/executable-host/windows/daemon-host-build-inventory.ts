@@ -4,7 +4,7 @@ import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 import { hashDaemonHostFile, hashDaemonHostFileAsync } from './daemon-host-file-hash-cache'
-import { listDaemonHostTree } from './daemon-host-tree-walk'
+import { DAEMON_HOST_FS_CONCURRENCY, listDaemonHostTree } from './daemon-host-tree-walk'
 import {
   inventoryRoots,
   inventoryRootsAsync,
@@ -46,9 +46,6 @@ function runtimeVersion(): string {
 function fingerprintInventory(inventory: Omit<DaemonHostBuildInventory, 'fingerprint'>): string {
   return createHash('sha256').update(JSON.stringify(inventory)).digest('hex')
 }
-
-// Bound open handles; Defender scans each opened file.
-const HASH_CONCURRENCY = 8
 
 function listCodeFiles(sourcePath: string, destRel: string): CodeFileSource[] {
   if (statSync(sourcePath).isFile()) {
@@ -100,11 +97,15 @@ export async function collectDaemonHostBuildInventoryAsync(
     if (!roots) {
       return null
     }
-    const { files: listed } = await listDaemonHostTree(roots, HASH_CONCURRENCY)
-    const files = await mapWithConcurrencyUntilFailure(listed, HASH_CONCURRENCY, async (file) => ({
-      path: file.destRel,
-      sha256: await hashDaemonHostFileAsync(file.sourcePath)
-    }))
+    const { files: listed } = await listDaemonHostTree(roots, DAEMON_HOST_FS_CONCURRENCY)
+    const files = await mapWithConcurrencyUntilFailure(
+      listed,
+      DAEMON_HOST_FS_CONCURRENCY,
+      async (file) => ({
+        path: file.destRel,
+        sha256: await hashDaemonHostFileAsync(file.sourcePath)
+      })
+    )
     return inventoryFromFiles(sources, files)
   } catch {
     return null
@@ -176,11 +177,15 @@ export async function daemonHostBuildInventoryMatchesAsync(
 ): Promise<boolean> {
   try {
     // A mismatch stops admitting files, as the sync verifier's every() does.
-    await mapWithConcurrencyUntilFailure(inventory.files, HASH_CONCURRENCY, async (file) => {
-      if ((await hashDaemonHostFileAsync(destPath(root, file.path))) !== file.sha256) {
-        throw new Error('daemon-host relocation: copied code does not match its marker')
+    await mapWithConcurrencyUntilFailure(
+      inventory.files,
+      DAEMON_HOST_FS_CONCURRENCY,
+      async (file) => {
+        if ((await hashDaemonHostFileAsync(destPath(root, file.path))) !== file.sha256) {
+          throw new Error('daemon-host relocation: copied code does not match its marker')
+        }
       }
-    })
+    )
     return true
   } catch {
     return false

@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, readdirSync } from 'node:fs'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join, win32 as winPath } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { renameWithWindowsRetry } from '../../../filesystem/windows-rename-retry'
 import { currentBuildFingerprint, observedEntrySourcePath } from './daemon-host-observed-builds'
+import { removeDaemonHostTree } from './daemon-host-tree-walk'
 import {
   buildDaemonHostManifest,
   daemonHostFitsPathBudget,
@@ -273,7 +274,7 @@ async function materializeOnce(): Promise<RelocatedDaemonHost | null> {
     // Publish a new immutable build (a live daemon may use an older one); retry Defender's brief holds.
     await renameWithWindowsRetry(staging, dest)
   } catch {
-    await rm(staging, { recursive: true, force: true }).catch(() => {
+    await removeDaemonHostTree(staging).catch(() => {
       // Best-effort staging cleanup; a later launch reclaims it once this pid exits.
     })
     return null

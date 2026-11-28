@@ -10,6 +10,8 @@ import {
   toPosixRelative,
   type DaemonHostSources
 } from './daemon-host-manifest'
+import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
+import { DAEMON_HOST_FS_CONCURRENCY } from './daemon-host-tree-walk'
 
 export type CodeFileSource = { sourcePath: string; destRel: string }
 
@@ -113,7 +115,9 @@ function pathExists(path: string): Promise<boolean> {
 }
 
 async function allExist(paths: readonly string[]): Promise<boolean> {
-  return (await Promise.all(paths.map(pathExists))).every(Boolean)
+  return (
+    await mapWithConcurrencyUntilFailure(paths, DAEMON_HOST_FS_CONCURRENCY, pathExists)
+  ).every(Boolean)
 }
 
 export async function inventoryRootsAsync(
@@ -130,6 +134,10 @@ export async function inventoryRootsAsync(
   if (!exportPaths || !(await allExist(exportPaths))) {
     return null
   }
-  const present = await Promise.all(plan.optional.map((root) => pathExists(root.sourcePath)))
+  const present = await mapWithConcurrencyUntilFailure(
+    plan.optional,
+    DAEMON_HOST_FS_CONCURRENCY,
+    (root) => pathExists(root.sourcePath)
+  )
   return [...plan.roots, ...plan.optional.filter((_, index) => present[index])]
 }
