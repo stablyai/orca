@@ -133,7 +133,8 @@ export async function inventoryRootsAsync(
   sources: DaemonHostSources
 ): Promise<CodeFileSource[] | null> {
   const plan = inventoryPlan(sources)
-  if (!(await allExist(plan.required))) {
+  // Every fingerprint root (e.g. the registry addon) must exist, or a cold copy would publish an unusable build.
+  if (!(await allExist([...plan.required, ...plan.roots.map((root) => root.sourcePath)]))) {
     return null
   }
   if (!(await processHostExportsPresentAsync(plan.processHostDir))) {

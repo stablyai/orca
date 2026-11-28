@@ -176,6 +176,24 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(existsSync(getDaemonHostRootDir())).toBe(false)
   })
 
+  it('refuses a cold copy when the install lost the registry addon', async () => {
+    rmSync(
+      join(
+        installDir,
+        'resources',
+        'node_modules',
+        '@orca',
+        'windows-registry',
+        'build',
+        'Release',
+        'orca_windows_registry.node'
+      )
+    )
+
+    expect(await materializeRelocatedDaemonHost()).toBeNull()
+    expect(existsSync(getDaemonHostRootDir())).toBe(false)
+  })
+
   it('fails open on a missing required input, leaving no dest or staging dir', async () => {
     rmSync(join(installDir, 'resources', 'node_modules', 'node-pty'), {
       recursive: true,
