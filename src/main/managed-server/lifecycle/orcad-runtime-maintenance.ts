@@ -88,11 +88,9 @@ export async function runManagedOrcadUpdate(
     admitRecord?: OrcadDeployOptions['admitRecord']
   }
 ): Promise<OrcadManagedDeployResult> {
-  const hold = await holdWslForSshUpgrade(context, args.signal)
-  const signal =
-    hold && args.signal
-      ? AbortSignal.any([hold.signal, args.signal])
-      : (hold?.signal ?? args.signal)
+  const { signal } = args
+  // Windows can idle out a loopback WSL distro mid-upload; keep it running for this update.
+  const hold = await holdWslForSshUpgrade(context, signal)
   try {
     signal?.throwIfAborted()
     const { countFirst, ...recount } = updateTerminalCounts((options) =>

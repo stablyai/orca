@@ -1,7 +1,7 @@
 import { once } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
-import { describe, expect, it } from 'vitest'
-import { waitForWslSshUpgradeHold } from './wsl-ssh-upgrade-hold'
+import { describe, expect, it, vi } from 'vitest'
+import { isLoopbackSshHost, waitForWslSshUpgradeHold } from './wsl-ssh-upgrade-hold'
 
 function startHoldingChild() {
   return spawnProcess({
@@ -25,28 +25,34 @@ describe('WSL SSH upgrade hold', () => {
       expect(child.exitCode).toBeNull()
       hold?.release()
       expect(await closed).toEqual([0, null])
-      expect(hold?.signal.aborted).toBe(false)
     } finally {
       child.kill()
     }
   })
 
-  it('aborts the update signal when the acknowledged process exits before release', async () => {
+  it('logs, without failing the update, when the acknowledged process exits before release', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const child = startHoldingChild()
     try {
       const hold = await waitForWslSshUpgradeHold(child)
-      if (!hold) {
-        throw new Error('The child did not acknowledge the hold')
-      }
-      const aborted = once(hold.signal, 'abort')
+      expect(hold).not.toBeNull()
+      const closed = once(child, 'close')
       child.stdin.write('exit\n')
-      await aborted
-      expect(child.exitCode).toBe(23)
-      expect(hold.signal.reason.message).toBe(
-        'WSL stopped responding during the Orca server update.'
-      )
+      expect(await closed).toEqual([23, null])
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('exited early'))
+      expect(() => hold?.release()).not.toThrow()
     } finally {
       child.kill()
+      warn.mockRestore()
+    }
+  })
+
+  it('treats only loopback hosts as local WSL candidates', () => {
+    for (const host of ['localhost', ' LocalHost ', '127.0.0.1', '127.0.1.1', '::1', '[::1]']) {
+      expect(isLoopbackSshHost(host)).toBe(true)
+    }
+    for (const host of ['172.20.0.2', 'wsl', '127.example.com', '10.0.0.1', '']) {
+      expect(isLoopbackSshHost(host)).toBe(false)
     }
   })
 })

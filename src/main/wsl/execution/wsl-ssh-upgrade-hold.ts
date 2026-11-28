@@ -1,6 +1,7 @@
 import { addAbortListener } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
@@ -9,9 +10,10 @@ import {
   listConfirmedRunningWslDistros,
   readWslDistroRunningState
 } from '../discovery/wsl-background-distro-gate'
-import { WSL_PROBE_TIMEOUT_MS, wslExeProcessSpec } from './wsl-exe-process'
+import { WSL_PROBE_TIMEOUT_MS } from './wsl-exe-process'
+import { resolveWslInteropSpawnCwdAsync } from './wsl-interop-spawn-directory'
 
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
+const LOOPBACK_HOSTS = new Set(['localhost', '::1', '[::1]'])
 const HOLD_READY = 'ORCA_WSL_SSH_UPGRADE_READY'
 const HOLD_SCRIPT = [
   '[ "$(cat /proc/sys/kernel/random/boot_id)" = "$1" ] || exit 1',
@@ -20,7 +22,13 @@ const HOLD_SCRIPT = [
   'IFS= read -r unused || :'
 ].join('\n')
 
-type WslSshUpgradeHold = { signal: AbortSignal; release(): void }
+type WslSshUpgradeHold = { release(): void }
+
+/** ssh-config imports store the resolved HostName in `host`, so aliases to loopback match too. */
+export function isLoopbackSshHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase()
+  return LOOPBACK_HOSTS.has(normalized) || /^127(?:\.\d{1,3}){3}$/u.test(normalized)
+}
 
 export async function holdWslForSshUpgrade(
   { target, connection, host }: OrcadRemoteContext,
@@ -29,7 +37,7 @@ export async function holdWslForSshUpgrade(
   if (
     process.platform !== 'win32' ||
     host.os !== 'linux' ||
-    !LOOPBACK_HOSTS.has(target.host.trim().toLowerCase()) ||
+    !isLoopbackSshHost(target.host) ||
     target.jumpHost ||
     target.proxyCommand
   ) {
@@ -74,7 +82,7 @@ export async function holdWslForSshUpgrade(
   return null
 }
 
-export function startWslSshUpgradeHold(
+export async function startWslSshUpgradeHold(
   distro: string,
   { boot, namespace }: { boot: string; namespace: string },
   signal?: AbortSignal
@@ -88,13 +96,17 @@ export function startWslSshUpgradeHold(
     boot,
     namespace
   ])
-  return waitForWslSshUpgradeHold(
-    spawnProcess({
-      ...wslExeProcessSpec(args, WSL_PROBE_TIMEOUT_MS, { ...process.env, WSL_UTF8: '1' }),
-      stdio: 'pipe'
-    }),
-    signal
-  )
+  const cwd = await resolveWslInteropSpawnCwdAsync()
+  signal?.throwIfAborted()
+  // No spawn timeoutMs: this child must outlive the probe; waitForWslSshUpgradeHold bounds startup.
+  const child = spawnProcess({
+    program: windowsSystem32Binary('wsl.exe'),
+    args,
+    env: { ...process.env, WSL_UTF8: '1' },
+    cwd,
+    stdio: 'pipe'
+  })
+  return await waitForWslSshUpgradeHold(child, signal)
 }
 
 export function waitForWslSshUpgradeHold(
@@ -102,7 +114,6 @@ export function waitForWslSshUpgradeHold(
   signal?: AbortSignal
 ): Promise<WslSshUpgradeHold | null> {
   const ready = Promise.withResolvers<WslSshUpgradeHold | null>()
-  const lost = new AbortController()
   let acknowledged = false
   let released = false
   let closed = false
@@ -127,7 +138,10 @@ export function waitForWslSshUpgradeHold(
 
   function unavailable(): void {
     if (acknowledged && !released) {
-      lost.abort(new Error('WSL stopped responding during the Orca server update.'))
+      // The SSH update may still be healthy; only the caller's signal (user cancel) aborts it.
+      console.warn(
+        '[wsl] keep-alive for the Orca server update exited early; continuing without it'
+      )
     }
     release()
     ready.resolve(null)
@@ -154,7 +168,7 @@ export function waitForWslSshUpgradeHold(
       acknowledged = true
       clearTimeout(startupTimer)
       abortListener?.[Symbol.dispose]()
-      ready.resolve({ signal: lost.signal, release })
+      ready.resolve({ release })
     }
   })
   abortListener = signal ? addAbortListener(signal, unavailable) : undefined
