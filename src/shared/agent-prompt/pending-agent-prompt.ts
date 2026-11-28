@@ -34,14 +34,14 @@ export function clipAgentPromptDetail(value: string): string | undefined {
 }
 
 export function agentPromptOptionRole(optionId: string, label: string): AgentPromptOptionRole {
+  if (DENY_IDS.has(optionId)) {
+    return 'deny'
+  }
   if (ALWAYS_IDS.has(optionId) || /always/i.test(label)) {
     return 'approve-always'
   }
   if (APPROVE_IDS.has(optionId)) {
     return 'approve'
-  }
-  if (DENY_IDS.has(optionId)) {
-    return 'deny'
   }
   return 'other'
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { PendingPrompt } from '../agent-status/contracts/agent-pending-prompt'
 import {
+  agentPromptOptionRole,
   mapChatPrompt,
   mapTerminalPrompt,
   parseChatPromptId,
@@ -29,6 +30,11 @@ const approval = {
 } as ChatPromptSourceItem
 
 describe('pending agent prompts', () => {
+  it('keeps a known denial even when its label says always', () => {
+    expect(agentPromptOptionRole('deny', 'Always deny')).toBe('deny')
+    expect(agentPromptOptionRole('allow_always', 'Always')).toBe('approve-always')
+  })
+
   it('maps a chat approval whose item id contains a colon', () => {
     expect(
       mapChatPrompt({

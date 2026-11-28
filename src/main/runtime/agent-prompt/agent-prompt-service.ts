@@ -24,7 +24,7 @@ type LedgerEntry = {
 
 const unavailable: AgentPromptRespondResult = { ok: false, reason: 'unavailable' }
 
-/** One answer per clientOperationId. A repeat with a different prompt or option is rejected. */
+/** One answer per caller and clientOperationId. A repeat with a different prompt or option is rejected. */
 export class AgentPromptService {
   private readonly ledger = new Map<string, Promise<LedgerEntry>>()
 
@@ -40,7 +40,8 @@ export class AgentPromptService {
     clientOperationId: string
     callerKey: string
   }): Promise<AgentPromptRespondResult> {
-    const existing = this.ledger.get(input.clientOperationId)
+    const key = `${input.callerKey}\0${input.clientOperationId}`
+    const existing = this.ledger.get(key)
     if (existing) {
       const entry = await existing
       return entry.promptId === input.promptId && entry.optionId === input.optionId
@@ -48,7 +49,7 @@ export class AgentPromptService {
         : { ok: false, reason: 'rejected' }
     }
     const pending = this.settle(input)
-    this.ledger.set(input.clientOperationId, pending)
+    this.ledger.set(key, pending)
     return (await pending).result
   }
 

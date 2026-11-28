@@ -52,7 +52,18 @@ describe('AgentPromptService', () => {
     expect(calls).toBe(1)
   })
 
-  it('shares one in-flight apply across two callers', async () => {
+  it('applies the same operation id again for a different caller', async () => {
+    let calls = 0
+    const { service } = directory(async () => {
+      calls += 1
+      return { ok: true }
+    })
+    expect(await service.respond(input)).toEqual({ ok: true })
+    expect(await service.respond({ ...input, callerKey: 'phone-2' })).toEqual({ ok: true })
+    expect(calls).toBe(2)
+  })
+
+  it('shares one in-flight apply for the same caller', async () => {
     let calls = 0
     let release: (() => void) | undefined
     const gate = new Promise<void>((resolve) => {

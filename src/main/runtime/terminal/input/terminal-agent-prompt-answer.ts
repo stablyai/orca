@@ -130,7 +130,8 @@ export class TerminalAgentPromptAnswers {
   ): PanePrompt | null {
     const handle = runtime.getTerminalHandleForPaneKey(target.paneKey)
     const row = handle ? this.readHookRow(target.paneKey) : null
-    if (!handle || !row) {
+    // Hydration restamps this flag. That row is not a prompt the current process showed.
+    if (!handle || !row || row.restoredUnconfirmed === true) {
       return null
     }
     let binding: AgentPromptExpectedBinding

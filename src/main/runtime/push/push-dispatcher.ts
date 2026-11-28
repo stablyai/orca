@@ -12,7 +12,11 @@ import {
 } from './push-burst-slots'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import type { DesktopPushPrompt } from './desktop-push-prompt'
-import { notificationWithAgentPrompt } from './push-dispatcher-prompt'
+import {
+  capturePushPrompt,
+  notificationForSound,
+  notificationWithAgentPrompt
+} from './push-dispatcher-prompt'
 import { PushOutcomeCounters } from './push-outcome-counters'
 import {
   NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
@@ -91,6 +95,8 @@ export class PushDispatcher {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
+    // Before the coverage wait, so a newer prompt in this pane cannot replace the one that raised the alert.
+    capturePushPrompt(event, this.prompt)
     const executionHost = event.type === 'notification' ? event.executionHost : undefined
     const tokenDigests = this.registry
       .listDevices()
@@ -143,11 +149,7 @@ export class PushDispatcher {
         )
         for (let start = 0; start < targets.length; start += MAX_REGISTRATIONS_PER_SEND) {
           const batch = targets.slice(start, start + MAX_REGISTRATIONS_PER_SEND)
-          const queued = this.deliver(
-            batch,
-            { ...plan.notification, ...(!sound ? { sound: false } : {}) },
-            0
-          )
+          const queued = this.deliver(batch, notificationForSound(plan.notification, sound), 0)
           for (const { slot, registration } of batch) {
             if (slot) {
               this.slots.recordDelivery(
