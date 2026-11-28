@@ -180,7 +180,7 @@
   --color-tab-active-foreground: var(--tab-active-foreground, var(--foreground));
   --color-tab-unfocused-active-foreground: var(
     --tab-unfocused-active-foreground,
-    var(--tab-active-foreground, var(--foreground))
+    color-mix(in srgb, var(--tab-active-foreground, var(--foreground)) 70%, var(--tab-active) 30%)
   );
   --color-tab-active-indicator: var(
     --tab-active-indicator,
