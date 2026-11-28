@@ -9,6 +9,14 @@ import { GhExecutableAbsenceBatch } from '../../git/command-runner/hosted-cli/gh
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { detectGitLabProjectAvatar } from '../../repository-icons/gitlab-project-avatar'
+
+function needsGitLabAvatar(repo: Repo): boolean {
+  return (
+    repo.repoIcon === undefined ||
+    (repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'gitlab')
+  )
+}
 
 type MetadataJob = {
   store: RuntimeStore
@@ -44,7 +52,9 @@ export class RuntimeRepositoryForkBackfill {
 
   run(): Promise<void> {
     return this.enqueue(
-      (this.getStore()?.getRepos() ?? []).filter((repo) => repo.upstream === undefined)
+      (this.getStore()?.getRepos() ?? []).filter(
+        (repo) => repo.upstream === undefined || needsGitLabAvatar(repo)
+      )
     )
   }
 
@@ -125,7 +135,7 @@ export class RuntimeRepositoryForkBackfill {
   private admit(repo: Repo): MetadataJob | undefined {
     const store = this.getStore()
     const current = this.current(store, repo)
-    if (!store || !current || (current.upstream !== undefined && current.repoIcon !== undefined)) {
+    if (!store || !current || (current.upstream !== undefined && !needsGitLabAvatar(current))) {
       return undefined
     }
     let jobs = this.jobs.get(store)
@@ -216,6 +226,10 @@ export class RuntimeRepositoryForkBackfill {
       return false
     }
     const result = await probeRepoUpstream(repo.path, null, {}, current.upstream === undefined)
+    const gitlabIcon =
+      !result.origin && !result.upstream && needsGitLabAvatar(current)
+        ? await detectGitLabProjectAvatar(repo.path, { admissionTier: 'background' })
+        : null
     current = this.current(store, repo)
     if (!current) {
       return false
@@ -223,6 +237,14 @@ export class RuntimeRepositoryForkBackfill {
     const updates: Partial<Repo> = {}
     if (current.upstream === undefined && result.upstream !== undefined) {
       updates.upstream = result.upstream
+    }
+    if (
+      gitlabIcon &&
+      needsGitLabAvatar(current) &&
+      JSON.stringify(current.repoIcon) === JSON.stringify(repo.repoIcon) &&
+      JSON.stringify(gitlabIcon) !== JSON.stringify(current.repoIcon)
+    ) {
+      updates.repoIcon = gitlabIcon
     }
     if (
       current.repoIcon === undefined ||
