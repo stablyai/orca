@@ -2794,7 +2794,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "HTTP Streamable · localhost significa o computador deste bot.",
           "headers": "Cabeçalhos",
-          "authHint": "Se o servidor precisa de login no navegador, Conectar aparece após sua verificação nativa.",
+          "authHint": "Se o servidor precisa de login no navegador, o botão “Entrar” aparece após sua verificação nativa.",
           "executable": "Executável",
           "commandPlaceholder": "npx",
           "args": "Argumentos",

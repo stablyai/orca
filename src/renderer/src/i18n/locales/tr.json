@@ -1978,7 +1978,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Akış destekli HTTP · localhost bu botun çalıştığı bilgisayarı ifade eder.",
           "headers": "Üstbilgiler",
-          "authHint": "Sunucu tarayıcıda oturum açmanızı gerektiriyorsa, yerel kontrolün ardından Bağlan düğmesi görünür.",
+          "authHint": "Sunucu tarayıcıda oturum açmanızı gerektiriyorsa, yerel kontrolün ardından “Oturum aç” düğmesi görünür.",
           "executable": "Çalıştırılabilir dosya",
           "commandPlaceholder": "npx",
           "args": "Bağımsız değişkenler",

@@ -1747,7 +1747,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost means this bot’s computer.",
           "headers": "Headers",
-          "authHint": "If the server needs browser sign-in, Connect appears after its native check.",
+          "authHint": "If the server needs browser sign-in, Sign in appears after its native check.",
           "executable": "Executable",
           "commandPlaceholder": "npx",
           "args": "Arguments",
