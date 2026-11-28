@@ -46,6 +46,8 @@ export function resolveHostAgentStartupShell(args: {
   tabShellOverride?: string | null
   /** The executing host's setting: this client's for a local host, the reported one for a remote host. */
   hostTerminalWindowsShell?: string | null
+  /** The executing host's Git Bash probe; omit when unknown. */
+  gitBashAvailable?: boolean
 }): AgentStartupShell | undefined {
   if (args.platform !== 'win32') {
     return undefined
@@ -54,19 +56,27 @@ export function resolveHostAgentStartupShell(args: {
   if (!shell) {
     return args.isRemote ? undefined : resolveWindowsShellStartupFamily(undefined)
   }
-  return resolveWindowsShellStartupFamily(canonicalizeWindowsShellOverride(shell) ?? shell)
+  const canonical = canonicalizeWindowsShellOverride(shell) ?? shell
+  // Why: the PTY spawns Windows PowerShell when a configured Git Bash is missing (#22664).
+  if (args.gitBashAvailable === false && canonical === WINDOWS_GIT_BASH_SHELL) {
+    return 'powershell'
+  }
+  return resolveWindowsShellStartupFamily(canonical)
 }
 
 export function resolveLocalWindowsAgentStartupShell(args: {
   platform: NodeJS.Platform | null | undefined
   isRemote: boolean
   terminalWindowsShell?: string | null
+  /** This host's Git Bash probe; omit when unknown. */
+  gitBashAvailable?: boolean
 }): AgentStartupShell | undefined {
   // Local shell settings cannot describe SSH or paired hosts.
   return resolveHostAgentStartupShell({
     platform: args.platform,
     isRemote: args.isRemote,
-    hostTerminalWindowsShell: args.isRemote ? undefined : args.terminalWindowsShell
+    hostTerminalWindowsShell: args.isRemote ? undefined : args.terminalWindowsShell,
+    gitBashAvailable: args.isRemote ? undefined : args.gitBashAvailable
   })
 }
 

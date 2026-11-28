@@ -9,6 +9,7 @@ import type {
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import { getProbedLocalGitBashAvailability } from '../capabilities/windows-terminal-capabilities'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   getConnectionIdForWorktreeCopy,
@@ -331,7 +332,9 @@ export function resolveExecutionHostAgentStartupShell(
         platform: fact.platform,
         isRemote: fact.hostKind !== 'local',
         hostTerminalWindowsShell:
-          fact.hostKind === 'local' ? terminalWindowsShell : fact.terminalWindowsShell
+          fact.hostKind === 'local' ? terminalWindowsShell : fact.terminalWindowsShell,
+        gitBashAvailable:
+          fact.hostKind === 'local' ? getProbedLocalGitBashAvailability() : undefined
       })
     : undefined
 }

@@ -13,8 +13,10 @@ import { useComposerAsyncState } from './async-composer-state'
 import { useComposerProviderRuntimeSync } from './workspace-setup/provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './workspace-target/draft-target-sync'
-import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
 import { resolveComposerAgentRows } from './card-projection/composer-agent-rows-target'
+import { needsVisibleRunTargetHost } from '@/lib/workspace/creation/run-target-host-visibility'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useLocalWindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -61,6 +63,12 @@ export function useComposerTargetState(
     workspaceHostScope: composerTargetStore.workspaceHostScope,
     worktreesByRepo: composerTargetStore.worktreesByRepo
   })
+  useLocalWindowsTerminalCapabilities(
+    !isWebClientLocation() &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.kind === 'known' &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.hostKind === 'local' &&
+      runtimeTargetSelection.selectedRepoAgentLaunchFact.platform === 'win32'
+  )
   const initialTargetState = {
     ...initialTargetSeedState,
     repoId: runtimeTargetSelection.resolvedRepoId

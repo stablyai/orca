@@ -4,6 +4,7 @@ import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui
 import { CODEX_EXECUTABLE } from '../../../shared/agent-launch/startup/codex-startup-image-command'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/shell/launch/windows-terminal-shell'
 import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
+import { isConfiguredGitBashAvailable } from './git-bash'
 import { CODEX_NO_DAEMON_SKIP_ARGS } from '../../../shared/shell/launch/agents/codex-shell-function'
 
 const NO_DAEMON_SKIP_ARGS: ReadonlySet<string> = new Set(CODEX_NO_DAEMON_SKIP_ARGS)
@@ -34,7 +35,8 @@ export function planCodexNoDaemonLaunch(launch: LocalCodexLaunch): Promise<strin
     resolveLocalWindowsAgentStartupShell({
       platform: process.platform,
       isRemote: false,
-      terminalWindowsShell: launch.shellOverride
+      terminalWindowsShell: launch.shellOverride,
+      gitBashAvailable: isConfiguredGitBashAvailable(launch.shellOverride)
     }) ?? 'posix'
   const parsed = tokenizeStartupCommand(command, shell)
   const executableSpan = parsed.ok ? parsed.spans[0] : undefined
