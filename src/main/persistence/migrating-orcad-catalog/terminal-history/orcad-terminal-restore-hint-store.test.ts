@@ -61,17 +61,22 @@ describe('orcad terminal restore hint store', () => {
 
   // chmod cannot deny the owner a read on Windows or as root.
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'replaces a lasting permission-denied store instead of blocking installs',
+    'keeps a permission-denied store and reads it again once access returns',
     () => {
       new OrcadTerminalRestoreHintStore(root).install(migration('a'), [hint(paneA)], 1000)
       chmodSync(storePath, 0o000)
 
       const store = new OrcadTerminalRestoreHintStore(root)
       expect(store.peek(paneA, worktreeId, 2000)).toBeNull()
-      store.install(migration('b'), [hint(paneB)], 2000)
-      expect(new OrcadTerminalRestoreHintStore(root).peek(paneB, worktreeId, 2001)).toBe(
-        '/home/user/project'
+      expect(() => store.install(migration('b'), [hint(paneB)], 2000)).toThrow(
+        expect.objectContaining({ code: 'EACCES' })
       )
+      chmodSync(storePath, 0o600)
+
+      store.install(migration('b'), [hint(paneB)], 2000)
+      const reloaded = new OrcadTerminalRestoreHintStore(root)
+      expect(reloaded.peek(paneA, worktreeId, 2001)).toBe('/home/user/project')
+      expect(reloaded.peek(paneB, worktreeId, 2001)).toBe('/home/user/project')
     }
   )
 

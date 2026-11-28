@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
-import { isPermissionError } from '../../../filesystem/permission-errors'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
   isOrcadMigrationTerminalRestoreHintCwd,
@@ -213,12 +212,8 @@ function readStoreDocument(path: string): TerminalRestoreHintStoreDocument | 'ne
     if (isDefinitiveAbsence(error)) {
       return emptyDocument()
     }
-    // Rethrow transient failures uncached so no write replaces hints this read never saw.
-    // Windows sharing locks surface as EPERM/EACCES, so they are transient there too.
-    if (process.platform === 'win32' || !isPermissionError(error)) {
-      throw error
-    }
-    return unreadableStore()
+    // Rethrow failures uncached, so no write replaces hints this read never saw.
+    throw error
   }
   let value: unknown
   try {
