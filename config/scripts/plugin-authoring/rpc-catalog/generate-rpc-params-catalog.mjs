@@ -97,8 +97,10 @@ function loadRegistryAndSchemas(modules) {
       logLevel: 'error',
       packages: 'external',
       // Why: the catalog types every method a build can register, every dark switch's included.
-      define: { ORCA_LAYOUT_OWNER: '"main"', ORCA_SIDEBAR_INPUTS: '"main"' }
+      define: { ORCA_SIDEBAR_INPUTS: '"main"' }
     })
+    // The layout owner is a startup setting: the switch module reads it when the bundle loads.
+    process.env.ORCA_LAYOUT_OWNER_RESOLVED = 'main'
     const loaded = createRequire(import.meta.url)(outfile)
     return { methods: loaded.ALL_RPC_METHODS, schemaModules: loaded.SCHEMA_MODULES }
   } finally {

@@ -4,11 +4,11 @@
  * workspace (H5d): the tab, its file and its unsaved draft stay, and the server's own layout lists
  * the tab under the desktop's id.
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-desktop-server-editor-handover.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
-import { existsSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -26,10 +26,8 @@ import {
   readServerLayout
 } from './helpers/paired-desktop-server-layout'
 import { waitForWorktree } from './helpers/paired-desktop-server-terminal-tab'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 const FILE_NAME = 'handover-note.md'
 const DRAFT = 'unsaved desktop draft'
 
@@ -102,7 +100,7 @@ async function openWhileMirrorDrawn(
 }
 
 test.describe('paired desktop hands its editor tabs to a switch-on server', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('a tab opened while mirror-drawn survives the server’s frames and is the server’s', async ({
     testRepoPath

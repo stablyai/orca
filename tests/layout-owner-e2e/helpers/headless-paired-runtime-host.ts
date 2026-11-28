@@ -8,6 +8,7 @@ import { _electron as electron, type ElectronApplication } from '@stablyai/playw
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { expectServerTookLayoutOwner } from './layout-owner-build'
 import {
   cleanupE2EDaemons,
   closeElectronAppForE2E,
@@ -152,7 +153,11 @@ export async function launchHeadlessPairedRuntimeHost(
       readPairingOffer(launchedApp),
       retryTransientMainEvaluate(() =>
         launchedApp.evaluate(({ app: electronApp }) => electronApp.getPath('home'))
-      ).then((home) => assertElectronResolvedIsolatedHome(home, isolation))
+      ).then((home) => assertElectronResolvedIsolatedHome(home, isolation)),
+      // Only an executable this checkout built reads the server setting.
+      options.executablePath
+        ? undefined
+        : expectServerTookLayoutOwner(launchedApp, isolation.env.ORCA_SERVER_LAYOUT_OWNER)
     ])
     let serveProcess = launchedApp
     // Do not re-close an app after failed relaunch or disposal can replace the launch error.

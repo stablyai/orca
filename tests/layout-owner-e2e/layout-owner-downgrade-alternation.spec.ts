@@ -18,7 +18,7 @@ import {
   waitForPaneCount
 } from './helpers/terminal'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -58,7 +58,7 @@ async function releaseShape(page: Page, expectedTitles: string[]): Promise<Shape
 
 test('a switch-on profile opens in the last release, and survives alternating builds', async (// oxlint-disable-next-line no-empty-pattern -- owns every launch
 {}, testInfo) => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
   test.skip(
     packagedExecutableMissing,
     'ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE must point at a released Orca'

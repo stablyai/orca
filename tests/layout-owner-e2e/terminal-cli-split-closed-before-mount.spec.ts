@@ -10,12 +10,10 @@ import { waitForActiveTerminalManager } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy } from './helpers/terminal-hidden-parking'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 const execFileAsync = promisify(execFile)
 const PARKING_DELAY_MS = 500
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
 
 test.use({
   orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS) }
@@ -129,7 +127,7 @@ test('a CLI split runs its command while the window is stalled, and the window s
   if (process.platform === 'darwin') {
     knownSwitchOnFailure('A3')
   }
-  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'layout-owner path only')
   test.setTimeout(180_000)
   await waitForSessionReady(orcaPage)
   const worktreeId = await waitForActiveWorktree(orcaPage)

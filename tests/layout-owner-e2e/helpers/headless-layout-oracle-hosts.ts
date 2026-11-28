@@ -82,10 +82,14 @@ function parseOrcadReadiness(stdout: string): { pairingUrl: string; daemon: stri
 
 type StartedHost = Omit<HeadlessOracleHost, 'cleanups'>
 
-async function startOrcadHost(scratch: string, node: string): Promise<StartedHost> {
+async function startOrcadHost(
+  scratch: string,
+  node: string,
+  extraEnv: Record<string, string>
+): Promise<StartedHost> {
   const profile = cliServeProfile(scratch)
   const port = await reserveLoopbackPort()
-  const env = { ...profile.env, ORCA_USER_DATA: profile.userDataDir }
+  const env = { ...profile.env, ...extraEnv, ORCA_USER_DATA: profile.userDataDir }
   const launch = (): Promise<ReadyProcess<{ pairingUrl: string; daemon: string }>> =>
     spawnUntilReady({
       label: 'orcad serve',
@@ -132,8 +136,12 @@ async function startOrcadHost(scratch: string, node: string): Promise<StartedHos
   }
 }
 
-async function startElectronHost(scratch: string): Promise<StartedHost> {
+async function startElectronHost(
+  scratch: string,
+  extraEnv: Record<string, string>
+): Promise<StartedHost> {
   const host = await launchHeadlessPairedRuntimeHost({
+    extraEnv,
     pinnedServePort: true,
     userDataParent: scratch
   })
@@ -169,14 +177,19 @@ function profileParent(): string {
   return parent
 }
 
-export async function startHeadlessOracleHost(kind: HeadlessHostKind): Promise<HeadlessOracleHost> {
+export async function startHeadlessOracleHost(
+  kind: HeadlessHostKind,
+  extraEnv: Record<string, string> = {}
+): Promise<HeadlessOracleHost> {
   const scratch = mkdtempSync(path.join(profileParent(), 'lo-'))
   try {
     const node = kind === 'orcad' ? orcadNodeExecutable() : null
     if (kind === 'orcad' && !node) {
       throw new Error('out/orcad or its pinned Node is missing (pnpm build:orcad)')
     }
-    const started = node ? await startOrcadHost(scratch, node) : await startElectronHost(scratch)
+    const started = node
+      ? await startOrcadHost(scratch, node, extraEnv)
+      : await startElectronHost(scratch, extraEnv)
     const cleanups: (() => void)[] = []
     return {
       ...started,
