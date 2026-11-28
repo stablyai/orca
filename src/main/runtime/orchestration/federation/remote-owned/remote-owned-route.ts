@@ -65,7 +65,9 @@ export async function routeRemoteOwnedCall(
   ctx: RpcContext
 ): Promise<Routed> {
   const access = method.orchestrationAccess
-  if (!access || access.kind === 'localOnly' || ctx.orchestrationCaller?.kind === 'peer') {
+  // A party lookup answers from this Orca's record, as partyOpen does: the server's is in its own terms.
+  const local = access?.kind === 'localOnly' || request.method === 'orchestration.partyLocation'
+  if (!access || local || ctx.orchestrationCaller?.kind === 'peer') {
     return LOCAL
   }
   const values: Values = params && typeof params === 'object' ? { ...params } : {}

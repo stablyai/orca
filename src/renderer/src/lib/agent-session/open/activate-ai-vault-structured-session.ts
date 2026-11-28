@@ -110,7 +110,7 @@ type DesktopStructuredSessionOpenOptions = {
   retry?: 'open' | (() => Promise<unknown>)
 }
 
-export function openDesktopStructuredSession(
+export async function openDesktopStructuredSession(
   source: StructuredSessionOpenSource,
   options: DesktopStructuredSessionOpenOptions = {}
 ): Promise<StructuredSessionOpenResult> {
@@ -121,19 +121,44 @@ export function openDesktopStructuredSession(
   // Read when the open starts: the selection may move before it settles.
   const pairedHostId = openingPairedHostId(source, target)
   const retryOpen = retry === 'open' ? () => openDesktopStructuredSession(source, options) : retry
-  return openDesktopStructuredSessionInteraction(source, {
+  let pairedServer: string | undefined
+  const result = await openDesktopStructuredSessionInteraction(source, {
     target,
     deps,
     locate,
-    present: (result, owner) =>
-      presentDesktopStructuredSession(
-        result,
-        source,
-        feedback ?? deps ?? structuredSessionOpenFeedback,
-        pairedHostId,
-        { owner, retry: retryOpen }
-      )
+    present: (answer, owner) => {
+      pairedServer = pairedServerToAsk(answer, owner)
+      if (!pairedServer) {
+        presentDesktopStructuredSession(
+          answer,
+          source,
+          feedback ?? deps ?? structuredSessionOpenFeedback,
+          pairedHostId,
+          { owner, retry: retryOpen }
+        )
+      }
+    }
   })
+  if (!pairedServer) {
+    return result
+  }
+  // This computer started it on a paired server, which alone knows where it runs: ask there, as
+  // `worker-show --environment` does. Its terminal is that server's.
+  const opened = await openDesktopStructuredSession(source, {
+    ...options,
+    target: { kind: 'environment', environmentId: pairedServer }
+  })
+  return opened.kind === 'terminal' ? { ...opened, environmentId: pairedServer } : opened
+}
+
+/** The paired server this computer's host says runs the party; a paired host's answer names its own pairings. */
+function pairedServerToAsk(
+  result: StructuredSessionOpenResult,
+  owner: RuntimeClientTarget
+): string | undefined {
+  return owner.kind === 'local' && result.kind === 'failed' && result.failure.reason === 'unknown'
+    ? result.failure.pairedServer
+    : undefined
 }
 
 /** The chat an open is for, when the source names one before the host answers. */
