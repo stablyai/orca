@@ -71,4 +71,3 @@ it("switching transcripts in one view keeps each transcript's own place", () => 
     subagentMissed
   )
 })
-

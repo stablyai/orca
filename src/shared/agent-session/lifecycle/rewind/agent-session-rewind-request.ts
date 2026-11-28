@@ -177,10 +177,9 @@ export function createAgentSessionRewindHook(
     }, [resetSeen, setAwaiting])
     // Hidden views stop reading; missing reset evidence while hidden is not a failure.
     const hiddenWhileAwaiting = useRef(false)
-    const visible = input.isVisible !== false
     useLayoutEffect(() => {
-      hiddenWhileAwaiting.current ||= !visible
-    }, [visible])
+      hiddenWhileAwaiting.current ||= input.isVisible === false
+    }, [input.isVisible])
     useEffect(() => {
       if (!awaitingReset) {
         return

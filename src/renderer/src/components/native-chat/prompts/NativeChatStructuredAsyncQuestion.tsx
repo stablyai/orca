@@ -27,12 +27,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 
 const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
 
-export type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
-
-/** The answer still being sent, kept with the chat tab: a chat released mid-send returns still holding it. */
-export function useAsyncQuestionAnswerOperation(sourceScope: string) {
-  return useNativeChatViewState<PromptAnswerOperation | null>(`async-answer:${sourceScope}`, null)
-}
+type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
 
 /** Async questions leave the composer usable; the next ordinary send answers them, and Skip hides
  *  them on every device where the host saves it, else on this screen only. */
@@ -60,7 +55,11 @@ export function NativeChatStructuredAsyncQuestion({
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
   submissions?: readonly AgentJournalSubmission[]
 }): React.JSX.Element | null {
-  const [operation, setOperation] = useAsyncQuestionAnswerOperation(sourceScope)
+  // Kept with the chat tab: a chat released mid-send returns still holding its answer.
+  const [operation, setOperation] = useNativeChatViewState<PromptAnswerOperation | null>(
+    `async-answer:${sourceScope}`,
+    null
+  )
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const { prompt, dismiss, ownerKey, answerPending } = useNativeChatAsyncQuestions({
     paneKey,

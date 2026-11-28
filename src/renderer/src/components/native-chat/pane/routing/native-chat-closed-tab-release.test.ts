@@ -10,38 +10,24 @@ import { forgetChatLayer, reportChatLayerTabs } from './native-chat-closed-tab-r
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
 
-afterEach(() => releaseNativeChatViewTabs([TAB.tabId]))
+afterEach(() => releaseNativeChatViewTabs([TAB.tabId, 'tab-r', 'tab-m']))
 
-it('releases closed chat tabs by workspace, never walking other workspaces', () => {
+it('releases a tab closed in a shown workspace and keeps the open ones', () => {
   const two = { tabId: 'tab-2', worktreeId: TAB.worktreeId }
-  const elsewhere = { tabId: 'tab-3', worktreeId: 'wt-2' }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
   const tab = (id: string): Tab => ({ id }) as Tab
   useAppStore.setState({
-    unifiedTabsByWorktree: {
-      [TAB.worktreeId]: [tab(TAB.tabId), tab(two.tabId)],
-      'wt-2': [tab('tab-3')]
-    }
+    unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId), tab(two.tabId)] }
   })
   reportChatLayerTabs('layer-a', TAB.worktreeId, new Set([TAB.tabId, two.tabId]))
-  reportChatLayerTabs('layer-b', 'wt-2', new Set(['tab-3']))
-  for (const each of [TAB, two, elsewhere]) {
-    writeNativeChatViewMemory(each, 'kept', 1)
-  }
-  forgetChatLayer('layer-b', 'wt-2')
-  // tab-3 closes while its workspace has no layer; tab-2 closes in a shown workspace.
-  useAppStore.setState({
-    unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId)], 'wt-2': [] }
-  })
+  writeNativeChatViewMemory(TAB, 'kept', 1)
+  writeNativeChatViewMemory(two, 'kept', 1)
+  useAppStore.setState({ unifiedTabsByWorktree: { [TAB.worktreeId]: [tab(TAB.tabId)] } })
   reportChatLayerTabs('layer-a', TAB.worktreeId, new Set([TAB.tabId]))
-  forgetChatLayer('layer-a', TAB.worktreeId)
   expect(readNativeChatViewMemory(two, 'kept')).toBeUndefined()
-  expect(readNativeChatViewMemory(elsewhere, 'kept')).toBe(1)
   expect(readNativeChatViewMemory(TAB, 'kept')).toBe(1)
-  // Its workspace shown again: the tab that closed meanwhile is released.
-  reportChatLayerTabs('layer-b2', 'wt-2', new Set())
-  expect(readNativeChatViewMemory(elsewhere, 'kept')).toBeUndefined()
-  forgetChatLayer('layer-b2', 'wt-2')
+  forgetChatLayer('layer-a', TAB.worktreeId)
+  expect(readNativeChatViewMemory(TAB, 'kept')).toBe(1)
 })
 
 it('a workspace removed while no layer showed it is released by a later unmount elsewhere', () => {
@@ -56,4 +42,33 @@ it('a workspace removed while no layer showed it is released by a later unmount 
   reportChatLayerTabs('layer-1', 'wt-1', new Set())
   forgetChatLayer('layer-1', 'wt-1')
   expect(readNativeChatViewMemory(gone, 'kept')).toBeUndefined()
+})
+
+it('a renamed workspace or a tab moved to another keeps its open chats, and releases them once closed', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these checks read only a tab's id.
+  const tab = (id: string): Tab => ({ id }) as Tab
+  const renamed = { tabId: 'tab-r', worktreeId: 'wt-old' }
+  const moved = { tabId: 'tab-m', worktreeId: 'wt-m' }
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-old': [tab('tab-r')], 'wt-m': [tab('tab-m')] }
+  })
+  reportChatLayerTabs('layer-old', 'wt-old', new Set(['tab-r']))
+  reportChatLayerTabs('layer-m', 'wt-m', new Set(['tab-m']))
+  writeNativeChatViewMemory(renamed, 'kept', 1)
+  writeNativeChatViewMemory(moved, 'kept', 1)
+  // The rename moves the tab to the new id; a drag moves tab-m out of its workspace.
+  useAppStore.setState({
+    unifiedTabsByWorktree: { 'wt-new': [tab('tab-r'), tab('tab-m')], 'wt-m': [] }
+  })
+  reportChatLayerTabs('layer-m', 'wt-m', new Set())
+  forgetChatLayer('layer-old', 'wt-old')
+  forgetChatLayer('layer-m', 'wt-m')
+  expect(readNativeChatViewMemory(renamed, 'kept')).toBe(1)
+  expect(readNativeChatViewMemory(moved, 'kept')).toBe(1)
+  // Both close later in their new workspace, with no layer showing it: still released.
+  useAppStore.setState({ unifiedTabsByWorktree: { 'wt-new': [], 'wt-1': [] } })
+  reportChatLayerTabs('layer-1', 'wt-1', new Set())
+  forgetChatLayer('layer-1', 'wt-1')
+  expect(readNativeChatViewMemory(renamed, 'kept')).toBeUndefined()
+  expect(readNativeChatViewMemory(moved, 'kept')).toBeUndefined()
 })
