@@ -18,8 +18,41 @@ import {
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
 import { RESULT_LIMIT, type RowEntry } from '../name-field/smart-workspace-name-field-model'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
+import { useSmartWorkspaceBranchIntentArm } from './use-smart-workspace-branch-intent-arm'
 
-type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
+type FullFoundation = ReturnType<typeof useWorkItemSourceFoundation>
+
+type Foundation = Pick<
+  FullFoundation,
+  | 'branches'
+  | 'mode'
+  | 'branchResultsSource'
+  | 'value'
+  | 'githubItems'
+  | 'debouncedQuery'
+  | 'gitlabSourceAvailable'
+  | 'gitlabItems'
+  | 'jiraIssues'
+  | 'linearAvailable'
+  | 'linearStatusChecked'
+  | 'linearIssues'
+  | 'commandValue'
+  | 'setCommandValue'
+  | 'githubLoading'
+  | 'gitlabLoading'
+  | 'branchesLoading'
+  | 'linearLoading'
+  | 'jiraLoading'
+  | 'linearUrlLoadingFeedbackQuery'
+  | 'settledLinearUrlQuery'
+  | 'typedTextEnabled'
+> & {
+  jiraSource: Pick<
+    FullFoundation['jiraSource'],
+    'intent' | 'loading' | 'issue' | 'accountChoices' | 'selectAccount' | 'boundSourceContext'
+  >
+  selectedRepo?: { id: string } | null
+}
 
 function isTypedTextSourceRow(row: RowEntry): boolean {
   return row.kind === 'use-name' || row.kind === 'create-branch'
@@ -219,11 +252,17 @@ export function useWorkItemSourcePresentation(
     githubLoading,
     gitlabLoading
   })
+  const branchIntentValue = useSmartWorkspaceBranchIntentArm(foundation, {
+    isQueryStale,
+    rows,
+    trimmedValue
+  })
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
     rows,
     isQueryStale,
-    sourceIntent
+    sourceIntent,
+    branchIntentValue
   })
   // Why: ignored stale cmdk changes must not reappear after the query settles.
   useEffect(() => {
