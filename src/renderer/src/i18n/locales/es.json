@@ -19272,7 +19272,10 @@
           "succeeded": "Correcta",
           "neverRan": "Nunca se ejecutó",
           "clear": "Limpiar filtros",
-          "removeFilter": "Eliminar filtro de {{value0}}"
+          "removeFilter": "Eliminar filtro de {{value0}}",
+          "removeBotFilterNamed": "Eliminar filtro de Bot: {{name}}",
+          "botFilterRow": "Bot: {{name}}",
+          "botFilterRowRemove": "{{label}}, eliminar filtro"
         },
         "createDestination": {
           "label": "Host",

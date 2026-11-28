@@ -19751,7 +19751,10 @@
           "clear": "Filtreleri temizle",
           "agent": "Ajan",
           "bot": "Bot",
-          "lastRun": "Son çalıştırma"
+          "lastRun": "Son çalıştırma",
+          "removeBotFilterNamed": "Bot filtresini kaldır: {{name}}",
+          "botFilterRow": "Bot: {{name}}",
+          "botFilterRowRemove": "{{label}}, filtreyi kaldır"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, artan sırada",
