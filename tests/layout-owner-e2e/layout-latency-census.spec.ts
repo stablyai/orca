@@ -3,6 +3,7 @@
 // turn (ORCA_LAYOUT_LATENCY_CENSUS=1); the lane runs layout-latency-budget.spec.ts instead.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { loadavg } from 'node:os'
+import type * as PerfHooksModule from 'node:perf_hooks'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
@@ -12,6 +13,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { LAYOUT_OWNER_BUILD } from './helpers/layout-owner-build'
 import { timeLayoutAction as timed } from './helpers/layout-action-latency'
 
+type PerfHooks = typeof PerfHooksModule
 const env = process.env
 const OUT = env.ORCA_LAYOUT_LATENCY_OUT ?? path.resolve('layout-latency-census')
 const SAMPLES = Number(env.ORCA_LAYOUT_LATENCY_SAMPLES ?? 13)
@@ -157,9 +159,11 @@ test('layout latency per action', async (// oxlint-disable-next-line no-empty-pa
     }
     // Main-process event-loop delay over the timed actions.
     await launched.app.evaluate(() => {
-      const g = globalThis as unknown as { __censusLoop?: unknown; process: NodeJS.Process }
-      const req = (g.process as unknown as { mainModule?: NodeRequire }).mainModule?.require
-      const perf = req ? req('node:perf_hooks') : null
+      const g = globalThis as unknown as {
+        __censusLoop?: unknown
+        process: { mainModule?: { require: (id: string) => PerfHooks } }
+      }
+      const perf = g.process.mainModule?.require('node:perf_hooks')
       if (perf) {
         const h = perf.monitorEventLoopDelay({ resolution: 5 })
         h.enable()

@@ -58,7 +58,7 @@ export async function timeLayoutAction(
         }
       }
       const tabs = () => (st().tabsByWorktree[wt] ?? []) as { id: string }[]
-      const panes = () => window.__paneManagers?.get(st().activeTabId)?.getPanes().length ?? 0
+      const panes = () => window.__paneManagers?.get(st().activeTabId ?? '')?.getPanes().length ?? 0
       const xterms = () => document.querySelectorAll('.xterm').length
       const text = (s: string) => document.body.innerText.includes(s)
       let t0 = 0
@@ -146,7 +146,7 @@ export async function timeLayoutAction(
               return false
             }
             const tabId = st().activeTabId
-            const el = window.__paneManagers?.get(tabId)?.getPanes()[0]?.container as
+            const el = window.__paneManagers?.get(tabId ?? '')?.getPanes()[0]?.container as
               | HTMLElement
               | undefined
             return !!el && el.offsetParent !== null
@@ -175,7 +175,7 @@ export async function timeLayoutAction(
         case 'rename': {
           const title = `r-${Math.random().toString(36).slice(2, 8)}`
           t0 = performance.now()
-          st().setTabCustomTitle(st().activeTabId, title)
+          st().setTabCustomTitle(st().activeTabId ?? '', title)
           await until(() => text(title))
           break
         }
