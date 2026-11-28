@@ -579,6 +579,71 @@ describe('the transitional recheck timer', () => {
     expect(decide).toHaveBeenCalledTimes(1)
   })
 
+  it('lets the router a restart builds hear the exits a carried generation still owes', async () => {
+    const quiet = { onData: () => () => {}, onExit: () => () => {} }
+    let emitOwedExit!: (payload: { id: string; code: number }) => void
+    const watched = { value: true }
+    const disconnectOnly = vi.fn(async () => {})
+    const retiring = asAdapter({
+      protocolVersion: LEGACY - 1,
+      onData: () => () => {},
+      onExit: (listener: typeof emitOwedExit) => {
+        emitOwedExit = listener
+        return () => {}
+      },
+      hasWatchedSessions: () => watched.value,
+      hasRetiredForIdle: () => true,
+      disconnectOnly
+    })
+    const router = new DaemonPtyRouter({
+      current: asAdapter({ ...quiet, protocolVersion: PROTOCOL_VERSION }),
+      legacy: [],
+      retiring: [retiring]
+    })
+    const heard: unknown[] = []
+    router.onExit((payload) => heard.push(payload))
+    await Promise.resolve()
+    expect(router.getRetiringAdapters()).toEqual([retiring])
+
+    watched.value = false
+    emitOwedExit({ id: 'wsl-pane', code: 1 })
+    expect(heard).toEqual([{ id: 'wsl-pane', code: 1 }])
+    await vi.waitFor(() => expect(disconnectOnly).toHaveBeenCalledTimes(1))
+    expect(router.getRetiringAdapters()).toEqual([])
+    router.disposeRouterOnly()
+  })
+
+  it('asks a fenced generation again behind a check already running', async () => {
+    vi.useFakeTimers()
+    const { current, preRpc, state } = stubs()
+    const { retirement } = track(preRpc, current)
+    retirement.noteAll()
+    await vi.advanceTimersByTimeAsync(1_000)
+    state.admissionClosed = true
+    let answerInventory!: () => void
+    vi.mocked(preRpc.listSessionsAndRelays).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerInventory = () => resolve({ sessions: [], liveRelays: 1 })
+        })
+    )
+    const decide = vi.mocked(preRpc.requestIdleRetirement)
+    decide.mockImplementation(async () => {
+      state.admissionClosed = false
+      return { state: 'busy', liveSessions: 1 }
+    })
+    // An exit starts a check that is still reading the inventory when a spawn is refused.
+    retirement.noteActivity(preRpc)
+    await vi.advanceTimersByTimeAsync(300)
+    const refused = new Error('Terminal daemon is decommissioning')
+    const settled = retirement.settleHeldRetirements(refused, 1, preRpc)
+    await vi.advanceTimersByTimeAsync(100)
+    answerInventory()
+    await vi.advanceTimersByTimeAsync(0)
+    await expect(settled).resolves.toBe(true)
+    expect(decide).toHaveBeenCalledTimes(1)
+  })
+
   it('stops rechecking a fenced generation after the cap, and asks it again when it refuses a spawn', async () => {
     vi.useFakeTimers()
     const { current, preRpc, state } = stubs()
