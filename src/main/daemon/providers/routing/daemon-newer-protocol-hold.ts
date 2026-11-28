@@ -31,6 +31,11 @@ export function isHoldingForNewerProtocolDaemon(): boolean {
   return heldProtocols.length > 0
 }
 
+/** Newer daemon generations still held: none stopped by a reopen, none proven exited at launch. */
+export function heldNewerDaemonProtocols(): readonly number[] {
+  return heldProtocols
+}
+
 /** Read the held session's saved screen without spawning. */
 export async function readNewerDaemonHeldScreen(
   sessionId: string,

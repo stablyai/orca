@@ -6,6 +6,7 @@ import {
 } from '../../../memory/local-daemon-pid'
 import { DegradedDaemonPtyProvider } from '../routing/degraded-daemon-pty-provider'
 import { DaemonPtyRouter } from '../routing/daemon-pty-router'
+import { newerDaemonRelayClients } from '../routing/daemon-newer-protocol-relay-clients'
 import { getDaemonRuntimeDir as getRuntimeDir } from '../../launch/daemon-launch-paths'
 import { readDaemonPidRecord as readDaemonPidRecordAt } from '../../endpoint/identity/daemon-endpoint-incarnation'
 import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
@@ -231,14 +232,17 @@ export function getProviderRelayHostClient(): DaemonClient | null {
     : null
 }
 
-/** Every daemon generation's relay-capable client, current first. */
+/** Every daemon generation's relay-capable client, current first, then newer ones (relays only). */
 export function getProviderRelayHostClients(): DaemonClient[] {
   if (!adapter) {
     return []
   }
-  return getAllDaemonAdapters(adapter)
-    .map((each) => each.getProviderRelayClient())
-    .filter((client): client is DaemonClient => client !== null)
+  return [
+    ...getAllDaemonAdapters(adapter)
+      .map((each) => each.getProviderRelayClient())
+      .filter((client): client is DaemonClient => client !== null),
+    ...newerDaemonRelayClients()
+  ]
 }
 
 export function getProviderProcessHostClient() {
