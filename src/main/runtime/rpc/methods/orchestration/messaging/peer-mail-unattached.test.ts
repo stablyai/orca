@@ -20,17 +20,22 @@ describe('files a failed send left on the server', () => {
     expect(withUnattachedUploads(error, server, { copied: 0 })).toBe(error)
   })
 
-  it('says files a chat still holds stay with that chat', () => {
+  it('says files a chat may still hold may stay with it, never that they do', () => {
     const error = new OrchestrationError(
-      'peer_mail_files_kept',
+      'peer_mail_files_may_be_kept',
       'Docs is paused. Nothing was sent.',
-      { cause: 'bot_paused', effectsApplied: false, filesKept: true }
+      { cause: 'bot_paused', effectsApplied: false, filesMaybeKept: true }
     )
     expect(withUnattachedUploads(error, server, { copied: 2 })).toMatchObject({
       code: 'peer_mail_not_sent',
       message:
-        "Docs is paused. The message wasn't sent. 2 files already copied to devB for it are still held there by a chat; Orca on devB removes them with that chat.",
-      data: { cause: 'bot_paused', effectsApplied: true, unattachedUploads: 2, filesKept: true }
+        "Docs is paused. The message wasn't sent. 2 files already copied to devB for it may still be kept there with a chat; if not, Orca on devB clears them as unused uploads later.",
+      data: {
+        cause: 'bot_paused',
+        effectsApplied: true,
+        unattachedUploads: 2,
+        filesMaybeKept: true
+      }
     })
   })
 

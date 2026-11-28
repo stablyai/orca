@@ -68,7 +68,7 @@ export async function sendToBot(
     holdNudge?: boolean
   } & Pick<
       SendBotRequestArgs,
-      'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'claimFiles'
+      'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'claimFiles' | 'peerFiles'
     >
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
@@ -281,7 +281,8 @@ async function admitBotRequestMail(
   ) =>
     admitWithClaimedFiles(
       await claimMailFilesFor(runtime, target, chatId, args.claimFiles, home),
-      store
+      store,
+      args.peerFiles
     )
   /** `--chat new`: the request opens a chat the bot starts for it, shown in its tab bar. */
   const inNewChat = () => {

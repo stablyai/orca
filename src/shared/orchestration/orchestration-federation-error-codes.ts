@@ -15,8 +15,8 @@ export const ORCHESTRATION_FEDERATION_ERROR_CODES = [
   'delivery_in_progress',
   // Mail with files to a bot chat that moved on while they were claimed; nothing was stored.
   'bot_chat_changed',
-  // A refused bot mail whose file claims couldn't be given back, so a chat still holds its files.
-  'peer_mail_files_kept',
+  // A refused bot mail whose file claims couldn't be shown given back: a chat may still hold its files.
+  'peer_mail_files_may_be_kept',
   // A send --on that stored no mail after its files reached the server; data counts them.
   'peer_mail_not_sent',
   // Bot mail with files that was stored, then a later step failed: it was delivered.

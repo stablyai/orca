@@ -3,15 +3,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { admitWithClaimedFiles, type ClaimedMailFiles } from './bot-mail-files-claim'
 
 function claimed(released = true): ClaimedMailFiles & { release: ReturnType<typeof vi.fn> } {
-  let stored = false
-  return {
-    current: vi.fn(),
-    stored: () => {
-      stored = true
-    },
-    isStored: () => stored,
-    release: vi.fn(async () => released)
-  }
+  return { current: vi.fn(), stored: vi.fn(), release: vi.fn(async () => released) }
 }
 
 describe('storing mail whose files were claimed', () => {
@@ -38,14 +30,15 @@ describe('storing mail whose files were claimed', () => {
     })
     await expect(
       admitWithClaimedFiles(files, (passed) => {
-        expect(passed).toBe(files)
+        passed?.current()
+        expect(files.current).toHaveBeenCalledOnce()
         throw refusal
       })
     ).rejects.toBe(refusal)
     expect(files.release).toHaveBeenCalledOnce()
   })
 
-  it('says the files are kept when their claims could not be given back', async () => {
+  it('says the files may be kept when their claims could not be shown given back', async () => {
     const files = claimed(false)
     await expect(
       admitWithClaimedFiles(files, () => {
@@ -54,9 +47,9 @@ describe('storing mail whose files were claimed', () => {
         })
       })
     ).rejects.toMatchObject({
-      code: 'peer_mail_files_kept',
+      code: 'peer_mail_files_may_be_kept',
       message: 'Docs is paused. Nothing was sent.',
-      data: { cause: 'bot_paused', effectsApplied: false, filesKept: true }
+      data: { cause: 'bot_paused', effectsApplied: false, filesMaybeKept: true }
     })
   })
   it('keeps the claims of mail already stored when a later step fails', async () => {
@@ -74,15 +67,27 @@ describe('storing mail whose files were claimed', () => {
     expect(files.release).not.toHaveBeenCalled()
   })
 
-  it('says files are kept for a plain error whose claims could not be given back', async () => {
+  it('says files may be kept for a plain error whose claims could not be given back', async () => {
     await expect(
       admitWithClaimedFiles(claimed(false), () => {
         throw new Error('database is locked')
       })
     ).rejects.toMatchObject({
-      code: 'peer_mail_files_kept',
+      code: 'peer_mail_files_may_be_kept',
       message: 'database is locked',
-      data: { effectsApplied: false, filesKept: true }
+      data: { effectsApplied: false, filesMaybeKept: true }
     })
+  })
+  it('says mail about an item was delivered when a step after storing it fails', async () => {
+    await expect(
+      admitWithClaimedFiles(
+        undefined,
+        (passed) => {
+          passed?.stored()
+          throw new Error('wake failed')
+        },
+        true
+      )
+    ).rejects.toMatchObject({ code: 'peer_mail_stored', data: { effectsApplied: true } })
   })
 })

@@ -36,4 +36,6 @@ export type SendBotRequestArgs = {
   onAdmitted?: () => void
   /** A paired Orca's files with no item: claimed for the chat it is stored in, as it is stored. */
   claimFiles?: MailFilesClaim
+  /** A paired Orca's files ride with it: a failure after it is stored says it was delivered. */
+  peerFiles?: boolean
 }

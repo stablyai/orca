@@ -6,6 +6,7 @@ import { routeBotMail } from '../messaging/bot-chat-address'
 import { botAddressReach } from '../messaging/bot-recipient'
 import { pairedLabelComputer } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { readPeerMailAskers } from './peer-mail-askers'
+import { peerMailStored } from '../messaging/bot-mail-files-claim'
 import { agentMessageSenderName } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 
 // Deliveries being admitted on this Orca, by message id.
@@ -104,7 +105,12 @@ export async function deliverPeerMailToBot(
     if (!('receipt' in routed)) {
       return routed
     }
-    link()
+    try {
+      link()
+    } catch (error) {
+      // Stored already: mail with files says it was delivered, so its sender doesn't send it again.
+      throw params.attachments?.length ? peerMailStored(error) : error
+    }
     return 'delivered'
   } finally {
     admitting.delete(params.messageId)

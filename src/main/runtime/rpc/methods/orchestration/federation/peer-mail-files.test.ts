@@ -251,6 +251,9 @@ describe('files sent with mail to a bot on a paired server', () => {
   }
 
   const methods = () => calls.map(({ method }) => method)
+  /** Questions A still waits on an answer for. */
+  const questionsOut = () =>
+    (a.db.db.prepare('SELECT COUNT(*) AS n FROM peer_questions_out').get() as { n: number }).n
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-peer-mail-files-'))
@@ -463,6 +466,8 @@ describe('files sent with mail to a bot on a paired server', () => {
     // The claim it took was given back, so the sweep treats the file as unused.
     expect(claimedFor).toEqual([B_OTHER])
     expect(claimsOn(committed[0]!)).toEqual([])
+    // Surely refused there, so A no longer waits for its answer.
+    expect(questionsOut()).toBe(0)
   })
 
   it('refuses a file that cannot be read before uploading any', async () => {
@@ -559,7 +564,7 @@ describe('files sent with mail to a bot on a paired server', () => {
     })
     expect(methods()).not.toContain('orchestration.peerMailDeliver')
   })
-  it('says a chat still holds the files when a refused send cannot give its claims back', async () => {
+  it('says a chat may still hold the files when a refused send cannot give its claims back', async () => {
     releaseFails = true
     duringClaim = () => {
       chatClosed = true
@@ -570,25 +575,38 @@ describe('files sent with mail to a bot on a paired server', () => {
     ).rejects.toMatchObject({
       code: 'peer_mail_not_sent',
       message:
-        "Docs's chat moved on to a new session while uploading. The message wasn't sent. A file already copied to devB for it is still held there by a chat; Orca on devB removes it with that chat. Send it again.",
-      data: { cause: 'bot_chat_changed', filesKept: true, unattachedUploads: 1 }
+        "Docs's chat moved on to a new session while uploading. The message wasn't sent. A file already copied to devB for it may still be kept there with a chat; if not, Orca on devB clears it as an unused upload later. Send it again.",
+      data: { cause: 'bot_chat_changed', filesMaybeKept: true, unattachedUploads: 1 }
     })
     expect(claimsOn(committed[0]!)).toEqual([B_OTHER])
     expect(b.db.getInbox(10)).toEqual([])
   })
-  it('keeps the claims of mail it stored when a later step there fails, and says it was delivered', async () => {
-    vi.mocked(b.runtime.notifyMessageArrived).mockImplementation(() => {
-      throw new Error('wake failed')
-    })
+  it.each([
+    ['with no item', {}],
+    ['about an item', { item: '7' }]
+  ])(
+    'keeps the claims of mail stored %s when a later step there fails, and says it was delivered',
+    async (_name, item) => {
+      vi.mocked(b.runtime.notifyMessageArrived).mockImplementation(() => {
+        throw new Error('wake failed')
+      })
+      const relay = vi
+        .spyOn(a.runtime, 'ensureOrchestrationPeerMailRelay')
+        .mockImplementation(() => {})
 
-    await expect(send({ to: 'bot:Docs', files: [file] })).rejects.toMatchObject({
-      code: 'peer_mail_stored',
-      message: 'The message was delivered with its files, then this failed: wake failed',
-      data: { effectsApplied: true }
-    })
-    expect(b.db.getUnreadMessages(CHAT_ON_B)).toHaveLength(1)
-    expect(claimsOn(committed[0]!)).toEqual([B_SESSION])
-  })
+      await expect(send({ to: 'bot:Docs', ...item, files: [file] })).rejects.toMatchObject({
+        code: 'peer_mail_stored',
+        message: 'The message was delivered with its files, then this failed: wake failed',
+        data: { effectsApplied: true }
+      })
+      expect(b.db.getUnreadMessages(CHAT_ON_B)).toHaveLength(1)
+      expect(claimsOn(committed[0]!)).toEqual([B_SESSION])
+      // The question is stored there, so A keeps waiting for its answer, or tells the asker on unpair,
+      // and pulls that answer.
+      expect(questionsOut()).toBe(1)
+      expect(relay).toHaveBeenCalledWith('env_b')
+    }
+  )
 
   it('gives back only the claim its own send took, not one taken anew since', async () => {
     const path = await bStore.storeFile('shared.txt', Buffer.from('x'))

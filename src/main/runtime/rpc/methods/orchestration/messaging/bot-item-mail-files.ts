@@ -32,7 +32,7 @@ export async function withItemMailFiles<T extends ItemMail>(
   mail: T,
   /** `--chat new`: no chat yet that its files could go to. */
   newChat = false
-): Promise<T & { claimFiles?: MailFilesClaim }> {
+): Promise<T & { claimFiles?: MailFilesClaim; peerFiles?: boolean }> {
   const local = mail.params.files ?? []
   const uploaded = mail.attachments ?? []
   if (local.length === 0 && uploaded.length === 0) {
@@ -80,6 +80,7 @@ export async function withItemMailFiles<T extends ItemMail>(
       ...mail,
       params: { ...mail.params, body: text },
       images: images.map(({ path }) => path),
+      ...(uploaded.length > 0 ? { peerFiles: true } : {}),
       ...(claimFor
         ? { claimFiles: (sessionId: string) => notSentOnRefusal(claimFor(sessionId)) }
         : {})

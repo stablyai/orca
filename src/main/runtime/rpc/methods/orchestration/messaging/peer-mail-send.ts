@@ -124,7 +124,17 @@ export async function sendPeerMail(args: {
     })
     warnings.push(...held)
   } catch (error) {
-    if (recorded) {
+    // Kept unless the server surely stored nothing: mail it may hold can still be answered.
+    const storedNothing = !delivering || peerMailStoredNothing(error)
+    if (!storedNothing) {
+      // The server may hold the mail: pull its reply as a delivered send would.
+      try {
+        runtime.ensureOrchestrationPeerMailRelay(server.environmentId)
+      } catch (relay) {
+        console.warn('[orchestration] arming the peer mail relay failed', relay)
+      }
+    }
+    if (recorded && storedNothing) {
       // A cleanup that fails too mustn't hide why the send failed, or the files it left there.
       try {
         forgetPeerQuestionOut(db, id)
@@ -133,7 +143,7 @@ export async function sendPeerMail(args: {
       }
     }
     // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
-    throw !delivering || peerMailStoredNothing(error)
+    throw storedNothing
       ? withUnattachedUploads(error, server, {
           copied: attachments?.length ?? 0,
           // Only the server's refusal can follow its eager claim for the item's chat.

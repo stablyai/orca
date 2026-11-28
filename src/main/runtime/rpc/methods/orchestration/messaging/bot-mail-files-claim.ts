@@ -28,8 +28,8 @@ export type AdmitFiles = {
 
 /** Files claimed for the chat a mail is about to be stored in. */
 export type ClaimedMailFiles = AdmitFiles & {
-  isStored: () => boolean
-  /** Gives back the claims this send took; false when they may still be held. */
+  /** Gives back the claims this send took; false when that isn't shown (the claimer didn't say
+   *  what it took, or the release failed): they may still be held, or may be gone already. */
   release: () => Promise<boolean>
 }
 
@@ -60,12 +60,8 @@ export async function claimMailFilesFor(
     )
   }
   const claimed = await claim(live)
-  let stored = false
   return {
-    stored: () => {
-      stored = true
-    },
-    isStored: () => stored,
+    stored: () => {},
     current: () => {
       if ((botChatTakingMailNow(runtime, bot, root)?.sessionId ?? fallback) !== live) {
         throw new OrchestrationError(
@@ -95,38 +91,56 @@ export async function claimMailFilesFor(
 }
 
 /** Stores the mail with `admit`, given the files' checks. A refusal or a duplicate gives back the
- *  claims this send took; one that couldn't give them back is `peer_mail_files_kept`. A failure
+ *  claims this send took; one that couldn't show them given back is `peer_mail_files_may_be_kept`. A failure
  *  after the mail is stored keeps them, since the stored mail reads them: `peer_mail_stored`. */
 export async function admitWithClaimedFiles(
   claimed: ClaimedMailFiles | undefined,
-  admit: (files?: AdmitFiles) => { sent: boolean; receipt: unknown }
+  admit: (files?: AdmitFiles) => { sent: boolean; receipt: unknown },
+  /** A paired Orca's files ride with it (claimed already, for an item's chat): only the stored guard. */
+  peerFiles = false
 ): Promise<unknown> {
-  if (!claimed) {
+  if (!claimed && !peerFiles) {
     return admit().receipt
+  }
+  let stored = false
+  const files: AdmitFiles = {
+    current: () => claimed?.current(),
+    stored: () => {
+      stored = true
+      claimed?.stored()
+    }
   }
   let admitted: { sent: boolean; receipt: unknown }
   try {
-    admitted = admit(claimed)
+    admitted = admit(files)
   } catch (error) {
     // Codes of their own, so the sender hears them across the pairing: others reach it bare.
-    if (claimed.isStored()) {
-      throw relabeled(
-        error,
-        'peer_mail_stored',
-        { effectsApplied: true },
-        (reason) => `The message was delivered with its files, then this failed: ${reason}`
-      )
+    if (stored) {
+      throw peerMailStored(error)
     }
-    if (await claimed.release()) {
+    if (!claimed || (await claimed.release())) {
       throw error
     }
-    throw relabeled(error, 'peer_mail_files_kept', { effectsApplied: false, filesKept: true })
+    throw relabeled(error, 'peer_mail_files_may_be_kept', {
+      effectsApplied: false,
+      filesMaybeKept: true
+    })
   }
   // No paired mail is a duplicate today (its request carries no turn to match): kept for local use.
-  if (!admitted.sent && !(await claimed.release())) {
+  if (claimed && !admitted.sent && !(await claimed.release())) {
     console.warn('[bots] mail files: a duplicate request keeps the files its send claimed')
   }
   return admitted.receipt
+}
+
+/** A failure after mail with a paired Orca's files was stored: it was delivered, files and all. */
+export function peerMailStored(error: unknown): OrchestrationError {
+  return relabeled(
+    error,
+    'peer_mail_stored',
+    { effectsApplied: true },
+    (reason) => `The message was delivered with its files, then this failed: ${reason}`
+  )
 }
 
 function relabeled(

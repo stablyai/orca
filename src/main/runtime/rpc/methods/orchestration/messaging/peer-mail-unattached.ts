@@ -51,9 +51,11 @@ export function withUnattachedUploads(
   const known = error instanceof OrchestrationError
   const data: object =
     known && typeof error.data === 'object' && error.data !== null ? error.data : {}
-  const kept =
-    (known && error.code === 'peer_mail_files_kept') ||
-    ('filesKept' in data && data.filesKept === true)
+  // Neither side can show a chat still holds them, only that one may.
+  const mayBeKept =
+    forItem ||
+    (known && error.code === 'peer_mail_files_may_be_kept') ||
+    ('filesMaybeKept' in data && data.filesMaybeKept === true)
   // The cause, then what happened, then what to do: a retry hint moves to the end.
   const text = error instanceof Error ? error.message : String(error)
   const again = / ?Send it again\.$/.test(text) ? ' Send it again.' : ''
@@ -66,11 +68,11 @@ export function withUnattachedUploads(
   // One code the CLI hears across this Orca's own RPC, with the refusal's own code as its cause.
   return new OrchestrationError(
     'peer_mail_not_sent',
-    `${reason} The message wasn't sent. ${note(server.name, copied, maybeOneMore, kept, forItem)}${again}`,
+    `${reason} The message wasn't sent. ${note(server.name, copied, maybeOneMore, mayBeKept ? (forItem ? "the item's chat" : 'a chat') : null)}${again}`,
     {
       ...rest,
-      ...(known && error.code !== 'peer_mail_files_kept' ? { cause: error.code } : {}),
-      ...(kept ? { filesKept: true } : forItem ? { filesMaybeKept: true } : {}),
+      ...(known && error.code !== 'peer_mail_files_may_be_kept' ? { cause: error.code } : {}),
+      ...(mayBeKept ? { filesMaybeKept: true } : {}),
       // Copied files are an effect; one that only may have been leaves it unknown.
       ...(copied > 0 ? { effectsApplied: true } : {}),
       unattachedUploads: copied,
@@ -83,8 +85,8 @@ function note(
   server: string,
   copied: number,
   maybeOneMore: boolean,
-  kept: boolean,
-  forItem: boolean
+  /** A chat there that may still hold them: then they go with it, else as unused uploads. */
+  holder: string | null
 ): string {
   const files = copied === 1 ? 'A file' : `${copied} files`
   if (copied === 0) {
@@ -92,10 +94,7 @@ function note(
   }
   const more = maybeOneMore ? ', and maybe one more,' : ''
   const plural = copied > 1 || maybeOneMore
-  if (forItem && !kept) {
-    return `${files} already copied to ${server} for it${more} may still be kept there with the item's chat; if not, Orca on ${server} clears ${plural ? 'them as unused uploads' : 'it as an unused upload'} later.`
-  }
-  return kept
-    ? `${files} already copied to ${server} for it${more} ${plural ? 'are' : 'is'} still held there by a chat; Orca on ${server} removes ${plural ? 'them' : 'it'} with that chat.`
+  return holder
+    ? `${files} already copied to ${server} for it${more} may still be kept there with ${holder}; if not, Orca on ${server} clears ${plural ? 'them as unused uploads' : 'it as an unused upload'} later.`
     : `${files} already copied to ${server} for it${more} ${plural ? 'are' : 'is'} attached to nothing there; Orca on ${server} clears unused uploads later.`
 }
