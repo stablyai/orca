@@ -50,7 +50,10 @@ export default function ProjectGroupHeader({
       style={bandWidth == null ? undefined : { width: bandWidth }}
     >
       <span
-        className={cn('flex items-center gap-2', bandWidth == null ? 'min-w-0' : 'sticky left-3')}
+        className={cn(
+          'flex items-center gap-2',
+          bandWidth == null ? 'min-w-0 whitespace-nowrap' : 'sticky left-3'
+        )}
       >
         {expanded ? (
           <ChevronDown className={cn('size-3.5', fixedPartClass)} />
