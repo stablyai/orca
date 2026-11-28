@@ -20,4 +20,20 @@ describe('keepChatsHostCannotRead', () => {
     expect(keepChatsHostCannotRead(frame([], true), [terminal])).toEqual([])
     expect(keepChatsHostCannotRead(frame([terminal]), [chat, terminal])).toEqual([terminal])
   })
+
+  it('keeps only the saved chat named in a worktree’s partial hold', () => {
+    const opaque = { ...chat, sessionId: 'opaque-chat' }
+    const closed = { ...chat, id: 'agent-session:b', sessionId: 'closed-chat' }
+    const partial = {
+      ...frame([], true),
+      tabs: [] as (typeof opaque)[],
+      unverifiableAgentSessionIds: ['opaque-chat', 'unlisted-chat']
+    }
+    expect(keepChatsHostCannotRead(partial, [opaque, closed])).toEqual([
+      { ...opaque, isActive: false }
+    ])
+    expect(
+      keepChatsHostCannotRead({ ...partial, agentSessionsUnverifiable: undefined }, [opaque])
+    ).toEqual([])
+  })
 })

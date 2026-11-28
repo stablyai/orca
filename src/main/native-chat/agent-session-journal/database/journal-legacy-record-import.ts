@@ -3,7 +3,10 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
+import {
+  decodePersistedAgentSessionRecord,
+  encodeAgentSessionRecord
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
   AGENT_SESSION_TABS_RECORDED,
@@ -11,12 +14,14 @@ import {
 } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { isReadableAgentSessionStoreRecord } from '../../../runtime/agent-session/records/agent-session-store-row-rules'
 import type Database from '../../../sqlite/sync-database'
+import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { DeletedChats } from '../../chat-deletion/deleted-chats'
 import { readDeletedChats } from '../journal-deleted-chats'
 import { FORGOTTEN_CHAT_KEY } from '../journal-forgotten-chats'
 import { JournalDamageError } from '../replay/journal-open-failure'
 import { runJournalTransaction } from './journal-database'
 import type { JournalLegacyRecordSnapshot } from './journal-legacy-record-file'
+import { assignLegacyVisibleTabs } from './journal-legacy-record-tabs'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
@@ -85,28 +90,80 @@ function readLegacyDeletionAuthority(db: Database.Database) {
   }
 }
 
+type LoadedRecordSnapshot = NonNullable<JournalLegacyRecordSnapshot['loaded']>
+
+const RECORD_JOINS = `LEFT JOIN legacy_rows p ON p.generation=?1 AND p.section='records' AND p.key=ids.id
+  LEFT JOIN legacy_rows u ON u.generation=?1 AND u.section='unusableRecords' AND u.key=ids.id
+  LEFT JOIN legacy_rows b ON ?2 AND b.generation='backup' AND b.section='records' AND b.key=ids.id
+    AND b.readable=1 AND COALESCE(p.readable,0)=0`
+const RECORD_COLUMNS = 'ids.id, p.body, p.readable, u.body AS quarantined, b.body AS recovered'
+
+function decodeStagedRecord(row: SqliteRow): AgentSessionRecord | undefined {
+  const json = row.readable === 1 ? row.body : row.recovered
+  const value: unknown = typeof json === 'string' ? JSON.parse(json) : undefined
+  return isReadableAgentSessionStoreRecord(String(row.id), value)
+    ? decodePersistedAgentSessionRecord(value).record
+    : undefined
+}
+
+function stagedQuarantine(row: SqliteRow): { raw: unknown } | undefined {
+  if (typeof row.quarantined === 'string') {
+    const wrapper: unknown = JSON.parse(row.quarantined)
+    return { raw: wrapper && typeof wrapper === 'object' && 'raw' in wrapper ? wrapper.raw : null }
+  }
+  if (row.readable === 0 && typeof row.body === 'string') {
+    return { raw: JSON.parse(row.body) }
+  }
+  return undefined
+}
+
 function mergeLegacyRecordRows(
   db: Database.Database,
-  { state, fromBackup }: NonNullable<JournalLegacyRecordSnapshot['loaded']>
+  stage: Database.Database,
+  { generation, salvage, tabs }: LoadedRecordSnapshot
 ): void {
   const wasDeleted = readLegacyDeletionAuthority(db)
   const sqlRecord = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
-  const tabs = !fromBackup && state.sessionTabs ? state.sessionTabs.entries() : null
   if (tabs === null) {
     db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(AGENT_SESSION_TABS_RECORDED)
   } else {
-    const sqlTabs = new Set(
-      db
+    stage.exec('CREATE TABLE sql_tab_sessions (id TEXT PRIMARY KEY)')
+    const copySqlTab = stage.prepare(
+      'INSERT INTO sql_tab_sessions VALUES(?) ON CONFLICT(id) DO NOTHING'
+    )
+    runJournalTransaction(stage, () => {
+      for (const { session_id } of db
         .prepare('SELECT session_id FROM agent_session_tabs')
-        .all()
-        .map(({ session_id }) => session_id)
+        .iterate()) {
+        copySqlTab.run(session_id)
+      }
+    })
+    const tabQuery =
+      tabs === 'sessionTabs'
+        ? 'SELECT session_id,tab_id FROM validated_tabs WHERE generation=? ORDER BY position'
+        : 'SELECT session_id,tab_id FROM visible_tabs WHERE ? IS NOT NULL ORDER BY position'
+    const tabCount =
+      tabs === 'sessionTabs'
+        ? stage
+            .prepare('SELECT count(*) AS total FROM validated_tabs WHERE generation=?')
+            .get(generation)
+        : stage.prepare('SELECT count(*) AS total FROM visible_tabs').get()
+    const sqlTab = stage.prepare('SELECT 1 FROM sql_tab_sessions WHERE id=?')
+    const record = stage.prepare(
+      `SELECT ${RECORD_COLUMNS} FROM (SELECT ?3 AS id) ids ${RECORD_JOINS}`
     )
     const insert = db.prepare(`INSERT INTO agent_session_tabs(tab_id,session_id,position)
       VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
-    for (const [position, [tabId, id]] of tabs.entries()) {
-      if (!sqlTabs.has(id) && !sqlRecord.get(id) && !wasDeleted(id, state.records.get(id))) {
-        insert.run(tabId, id, position - tabs.length)
+    let position = -Number(tabCount?.total)
+    for (const { session_id, tab_id } of stage.prepare(tabQuery).iterate(generation)) {
+      const id = String(session_id)
+      if (!sqlTab.get(id) && !sqlRecord.get(id)) {
+        const saved = record.get(generation, Number(salvage), id)
+        if (!wasDeleted(id, saved && decodeStagedRecord(saved))) {
+          insert.run(tab_id, id, position)
+        }
       }
+      position += 1
     }
     db.prepare(`INSERT INTO agent_session_store_meta(key,value) VALUES(?,'1')
       ON CONFLICT(key) DO NOTHING`).run(AGENT_SESSION_TABS_RECORDED)
@@ -114,14 +171,24 @@ function mergeLegacyRecordRows(
 
   const insertRecord = db.prepare(`INSERT INTO agent_session_records(session_id,record_json)
     VALUES(?,?) ON CONFLICT(session_id) DO NOTHING`)
-  for (const [id, loaded] of state.records) {
+  const records = stage.prepare(`WITH ids(id) AS (
+    SELECT key FROM legacy_rows WHERE generation=?1 AND section='records'
+    UNION ALL SELECT u.key FROM legacy_rows u WHERE u.generation=?1 AND u.section='unusableRecords'
+      AND NOT EXISTS(SELECT 1 FROM legacy_rows r WHERE r.generation=?1 AND r.section='records' AND r.key=u.key)
+  ) SELECT ${RECORD_COLUMNS} FROM ids ${RECORD_JOINS}`)
+  for (const row of records.iterate(generation, Number(salvage))) {
+    const id = String(row.id)
+    const loaded = decodeStagedRecord(row)
     if (sqlRecord.get(id) || wasDeleted(id, loaded)) {
       continue
     }
-    let record = fromBackup ? withBackupFence(loaded) : loaded
-    if (state.unreadableRecords.has(id)) {
-      record = withBackupFence(record, { raw: state.unreadableRecords.get(id) })
+    const setAside = stagedQuarantine(row)
+    if (!loaded) {
+      insertRecord.run(id, JSON.stringify(setAside?.raw ?? null))
+      continue
     }
+    let record = generation === 'backup' ? withBackupFence(loaded) : loaded
+    record = setAside ? withBackupFence(record, setAside) : record
     const encoded = encodeAgentSessionRecord({
       ...record,
       lease: withoutRetiredLeaseLatches(record.lease)
@@ -136,20 +203,19 @@ function mergeLegacyRecordRows(
       insertRecord.run(id, JSON.stringify(encoded))
     }
   }
-  for (const [id, raw] of state.unreadableRecords) {
-    if (!state.records.has(id) && !sqlRecord.get(id) && !wasDeleted(id, undefined)) {
-      insertRecord.run(id, JSON.stringify(raw ?? null))
-    }
-  }
   const insertOperation = db.prepare(`INSERT INTO agent_session_operations(operation_key,row_json)
     VALUES(?,?) ON CONFLICT(operation_key) DO NOTHING`)
-  for (const [key, operation] of state.operations) {
-    insertOperation.run(key, JSON.stringify(operation))
+  const section = stage.prepare(
+    'SELECT key,body FROM legacy_rows WHERE generation=? AND section=? ORDER BY rowid'
+  )
+  for (const { key, body } of section.iterate(generation, 'operations')) {
+    insertOperation.run(key, body)
   }
   const insertRetiredKey =
     db.prepare(`INSERT INTO agent_session_retired_claim_keys(key_id,retired_at)
     VALUES(?,?) ON CONFLICT(key_id) DO NOTHING`)
-  for (const { keyId, retiredAt } of state.retiredClaimKeys) {
+  for (const { body } of section.iterate(generation, 'retiredClaimKeys')) {
+    const { keyId, retiredAt } = JSON.parse(String(body))
     insertRetiredKey.run(keyId, retiredAt)
   }
 }
@@ -157,23 +223,27 @@ function mergeLegacyRecordRows(
 export function importJournalLegacyRecordSnapshot(
   source: Database.Database,
   db: Database.Database,
+  stage: Database.Database,
   { loaded }: JournalLegacyRecordSnapshot,
   hostId: string
 ): void {
-  if (loaded && loaded.state.hostId !== hostId) {
+  if (loaded && loaded.hostId !== hostId) {
     console.warn('[agent-session-journal] host-mismatch importing original chat records', {
-      fileHostId: loaded.state.hostId,
+      fileHostId: loaded.hostId,
       hostId
     })
   }
+  if (loaded?.tabs === 'visibleSessionIds') {
+    assignLegacyVisibleTabs(stage, loaded.generation)
+  }
   runJournalTransaction(db, () => {
     if (loaded) {
-      mergeLegacyRecordRows(db, loaded)
+      mergeLegacyRecordRows(db, stage, loaded)
     }
     for (const { session_id } of db
       .prepare(`SELECT r.session_id FROM agent_session_records r
       WHERE NOT EXISTS(SELECT 1 FROM agent_session_store_meta WHERE key=?||r.session_id)`)
-      .all(journalLegacyChatRevisionKey(''))) {
+      .iterate(journalLegacyChatRevisionKey(''))) {
       const id = String(session_id)
       recordJournalLegacyChatRevision(db, id, journalLegacyChatRevision(source, id) ?? 'null')
     }

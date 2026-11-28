@@ -1,6 +1,7 @@
 import { ensurePRWatchTables } from '../../../github/pr-watch/pr-watch-tables'
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
+import { setImmediate as yieldToWorker } from 'node:timers/promises'
 import Database from '../../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../../sqlite/harden-database-files'
 import {
@@ -34,18 +35,19 @@ import {
 import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import {
   assertJournalLegacyRecordFilesStable,
+  createJournalLegacyRecordStage,
   readJournalLegacyRecordSnapshot,
   type JournalLegacyRecordSnapshot
 } from './journal-legacy-record-file'
 import { importJournalLegacyRecordSnapshot } from './journal-legacy-record-import'
 
-const LEGACY_RECORD_FILE_MAX_BYTES = 24 * 1024 * 1024
-
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(
   stateDirectory: string,
-  hostId: string = LOCAL_EXECUTION_HOST_ID
+  hostId: string = LOCAL_EXECUTION_HOST_ID,
+  signal?: AbortSignal
 ): Promise<string> {
+  signal?.throwIfAborted()
   const destination = journalDomainDatabasePath(stateDirectory)
   mkdirSync(stateDirectory, { recursive: true })
   try {
@@ -82,13 +84,20 @@ export async function initializeJournalDomainDatabase(
         try {
           importJournalDomainProfile(source, db, { restoreRecordFile: recordFileSource })
           if (recordFileSource) {
-            const recordSnapshot = await readJournalLegacyRecordSnapshot(
-              stateDirectory,
-              LEGACY_RECORD_FILE_MAX_BYTES
-            )
-            recordFiles = recordSnapshot.files
-            assertStable()
-            importJournalLegacyRecordSnapshot(source, db, recordSnapshot, hostId)
+            const stage = new Database(join(temporary, 'records-stage.db'))
+            try {
+              createJournalLegacyRecordStage(stage)
+              const recordSnapshot = await readJournalLegacyRecordSnapshot(
+                stateDirectory,
+                stage,
+                signal
+              )
+              recordFiles = recordSnapshot.files
+              assertStable()
+              importJournalLegacyRecordSnapshot(source, db, stage, recordSnapshot, hostId)
+            } finally {
+              stage.close()
+            }
           }
         } finally {
           source.close()
@@ -108,6 +117,11 @@ export async function initializeJournalDomainDatabase(
       }
     } finally {
       db.close()
+    }
+    if (recordFiles && signal) {
+      // Let a close received during the synchronous merge cancel before publication.
+      await yieldToWorker()
+      signal.throwIfAborted()
     }
     try {
       // Publish complete metadata without replacing another initializer's result.

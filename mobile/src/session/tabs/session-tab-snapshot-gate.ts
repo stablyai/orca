@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import {
-  hostSnapshotAffirmsAgentSessions,
+  unverifiableAgentSessionIds,
   hostSnapshotAffirmsWorktreeContents
 } from '../../../../src/shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { SESSION_TABS_PLACEHOLDER_SETTLES_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
@@ -54,21 +54,22 @@ export function confirmsMirroredTabSelection(publicationEpoch?: string): boolean
 
 /** A host that can't read its chat store lists no chats, which proves none closed: keep the chats already
  *  shown in place, inactive so the host's selection still decides which tab is open. */
-export function keepChatsHostCannotRead<T extends { id: string; type: string; isActive: boolean }>(
+export function keepChatsHostCannotRead<
+  T extends { id: string; type: string; isActive: boolean; sessionId?: string }
+>(
   incoming: {
     tabs: T[]
     publicationEpoch?: string
     snapshotVersion: number
     agentSessionsUnverifiable?: true
+    unverifiableAgentSessionIds?: readonly string[]
   },
   current: readonly T[]
 ): T[] {
-  if (
-    hostSnapshotAffirmsAgentSessions(incoming) ||
-    !hostSnapshotAffirmsWorktreeContents(incoming)
-  ) {
+  if (!incoming.agentSessionsUnverifiable || !hostSnapshotAffirmsWorktreeContents(incoming)) {
     return incoming.tabs
   }
+  const unverifiableSessions = unverifiableAgentSessionIds(incoming)
   const listedAt = new Map(incoming.tabs.map((tab, index) => [tab.id, index]))
   const tabs: T[] = []
   let next = 0
@@ -79,7 +80,10 @@ export function keepChatsHostCannotRead<T extends { id: string; type: string; is
         tabs.push(...incoming.tabs.slice(next, at + 1))
         next = at + 1
       }
-    } else if (tab.type === 'agent-session') {
+    } else if (
+      tab.type === 'agent-session' &&
+      (unverifiableSessions === null || (tab.sessionId && unverifiableSessions.has(tab.sessionId)))
+    ) {
       tabs.push(tab.isActive ? { ...tab, isActive: false } : tab)
     }
   }

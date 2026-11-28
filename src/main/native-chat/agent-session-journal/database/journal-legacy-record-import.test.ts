@@ -5,11 +5,12 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  truncateSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
@@ -34,10 +35,35 @@ import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
 
 const directories: string[] = []
 afterEach(() => {
+  vi.restoreAllMocks()
   for (const path of directories.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
 })
+
+function interruptStage(afterFirstInsert: () => void): void {
+  const prepare = Database.prototype.prepare
+  vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (
+    this: Database.Database,
+    sql
+  ) {
+    const statement = prepare.call(this, sql)
+    if (sql.startsWith('INSERT INTO legacy_rows')) {
+      const run = statement.run.bind(statement)
+      vi.spyOn(statement, 'run').mockImplementationOnce((...parameters) => {
+        const result = run(...parameters)
+        afterFirstInsert()
+        return result
+      })
+    }
+    return statement
+  })
+}
+
+function expectUnpublished(root: string): void {
+  expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
+  expect(readdirSync(root).filter((name) => name.startsWith('.journal-domain-import-'))).toEqual([])
+}
 
 function profile(version = 3, setup = '') {
   const root = mkdtempSync(join(tmpdir(), 'orca-original-chat-records-'))
@@ -269,6 +295,133 @@ it('does not read newer profiles’ abandoned record files even when a v4 record
       /agent_session_records/
     )
     expect(existsSync(journalDomainDatabasePath(damaged.root))).toBe(false)
+  } finally {
+    db.close()
+  }
+})
+
+it('folds duplicate JSON properties before merge and validates the optional backup to EOF', async () => {
+  const { root, primary, backup } = profile()
+  const opaque = { schemaVersion: 999, payload: { ['__proto__']: 'opaque' } }
+  const readable = stored('primary-chat')
+  writeFileSync(
+    primary,
+    `{
+    "schemaVersion":3,"schemaVersion":2,"hostId":"local",
+    "records":{"bad-section":${JSON.stringify(stored('bad-section'))}},
+    "records":{
+      "primary-chat":${JSON.stringify(stored('primary-chat', 'old duplicate'))},
+      "primary-chat":${JSON.stringify(readable)},
+      "opaque-chat":${JSON.stringify(opaque)}
+    },
+    "unusableRecords":{"dropped-chat":null},"unusableRecords":{},
+    "operations":{"bad-key":null},"operations":{},
+    "retiredClaimKeys":[null],"retiredClaimKeys":[],
+    "sessionTabs":[{"tabId":"historical-tab","sessionId":"primary-chat"}],"sessionTabs":[],
+    "unknown":{"large":"${'中'.repeat(96000)}"}
+  }`
+  )
+  // A valid row in an invalid generation cannot be salvaged.
+  writeFileSync(
+    backup,
+    `{"schemaVersion":2,"hostId":"local","records":{
+    "opaque-chat":${JSON.stringify(stored('opaque-chat'))}},"operations":{},"retiredClaimKeys":[],
+    "unusableRecords":{},"unfinished":[`
+  )
+  const db = new Database(await initializeJournalDomainDatabase(root))
+  try {
+    const state = loadAgentSessionStoreRows(db)
+    expect([...state.records.keys()]).toEqual(['primary-chat'])
+    expect(state.records.get('primary-chat')?.conversationName).toBe('Saved chat')
+    expect(state.unreadableRecords.get('opaque-chat')?.raw).toEqual(opaque)
+    expect(state.sessionTabs?.entries()).toEqual([])
+  } finally {
+    db.close()
+  }
+})
+
+it.each(['truncate', 'abort', 'write-full', 'sql-changed'] as const)(
+  'discards a staged partial generation on %s and keeps publication retryable',
+  async (fault) => {
+    const { root, journal, primary, backup } = profile()
+    saveRecords(
+      primary,
+      { 'primary-chat': stored('primary-chat') },
+      { unknown: 'x'.repeat(150000) }
+    )
+    saveRecords(backup, { 'backup-chat': stored('backup-chat') })
+    const controller = new AbortController()
+    interruptStage(() => {
+      switch (fault) {
+        case 'truncate':
+          truncateSync(primary, 0)
+          return
+        case 'abort':
+          controller.abort()
+          return
+        case 'write-full':
+          throw Object.assign(new Error('staging file full'), { code: 'ENOSPC' })
+        case 'sql-changed': {
+          const source = new Database(journal)
+          try {
+            source.exec("INSERT INTO journal_sessions VALUES('late-chat','workspace-1','epoch')")
+          } finally {
+            source.close()
+          }
+        }
+      }
+    })
+    const attempt = initializeJournalDomainDatabase(root, 'local', controller.signal)
+    await expect(attempt.catch(journalOpenRefusal)).resolves.toMatchObject({
+      code: 'agent_session_journal_unreadable',
+      details: { reason: fault === 'write-full' ? 'journalStorageFull' : 'journalUnavailable' }
+    })
+    expectUnpublished(root)
+    vi.restoreAllMocks()
+    saveRecords(primary, { 'primary-chat': stored('primary-chat') })
+    const db = new Database(await initializeJournalDomainDatabase(root))
+    try {
+      expect([...loadAgentSessionStoreRows(db).records.keys()]).toEqual(['primary-chat'])
+    } finally {
+      db.close()
+    }
+  }
+)
+
+it('keeps the clear chain’s original tab id across competing bootstrap snapshots', async () => {
+  const { root, primary } = profile()
+  const clear = (replacementSessionId: string) => ({
+    command: 'clear',
+    phase: 'committed',
+    operationId: 'clear-op',
+    callerKey: 'clear-caller',
+    replacementSessionId
+  })
+  saveRecords(
+    primary,
+    {
+      'original-chat': {
+        ...stored('original-chat'),
+        conversationCommand: clear('middle-chat'),
+        surfaceTabId: 'original-custom-tab'
+      },
+      'middle-chat': { ...stored('middle-chat'), conversationCommand: clear('current-chat') },
+      'current-chat': stored('current-chat')
+    },
+    { visibleSessionIds: ['original-chat', 'current-chat', 'current-chat'] }
+  )
+  const [winner, other] = await Promise.all([
+    initializeJournalDomainDatabase(root),
+    initializeJournalDomainDatabase(root)
+  ])
+  expect(winner).toBe(other)
+  expect(readdirSync(root).some((name) => name.startsWith('.journal-domain-import-'))).toBe(false)
+  const db = new Database(winner)
+  try {
+    expect(loadAgentSessionStoreRows(db).sessionTabs?.entries()).toEqual([
+      ['structured-agent-session-original-chat', 'original-chat'],
+      ['original-custom-tab', 'current-chat']
+    ])
   } finally {
     db.close()
   }

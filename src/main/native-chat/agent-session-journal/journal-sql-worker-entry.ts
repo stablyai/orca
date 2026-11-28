@@ -62,6 +62,8 @@ let destinationMain: string | undefined
 let readOnly = true
 let fault: unknown
 let closing = false
+const openingAbort = new AbortController()
+let openingCloseRequest: number | undefined
 let scheduled = false
 const queue = new JournalSqlWriterQueue()
 let parking: JournalSqlWalParking | undefined
@@ -74,7 +76,8 @@ async function open(): Promise<void> {
     if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
       await initializeJournalDomainDatabase(
         stateDirectory,
-        typeof workerData.hostId === 'string' ? workerData.hostId : undefined
+        typeof workerData.hostId === 'string' ? workerData.hostId : undefined,
+        openingAbort.signal
       )
     }
     const opened = openJournalDomainDatabase(workerData.filename)
@@ -101,6 +104,9 @@ async function open(): Promise<void> {
     reply({ type: 'ready', readOnly })
   } catch (error) {
     fault = error
+    if (openingCloseRequest !== undefined) {
+      reply({ type: 'done', id: openingCloseRequest })
+    }
     reply({
       type: 'failed',
       outcome: 'not-dispatched',
@@ -118,6 +124,12 @@ port.on('message', (request: JournalSqlRequest) => {
     if (queue.promote(request.command.sessionId)) {
       parking?.interrupt()
     }
+    return
+  }
+  if (!db && !closing && request.command.type === 'close') {
+    closing = true
+    openingCloseRequest = request.id
+    openingAbort.abort(new Error('journal SQL owner closed during initialization'))
     return
   }
   if (closing || !db) {

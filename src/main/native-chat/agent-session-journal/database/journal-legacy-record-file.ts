@@ -1,153 +1,298 @@
-import { lstatSync, statSync, type Stats } from 'node:fs'
-import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
-import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
-import type { AgentSessionTabTable } from '../../../runtime/agent-session/records/agent-session-tab-table'
-import type { RetiredAgentSessionClaimKey } from '../../../runtime/agent-session/records/agent-session-store-state'
+import { constants, lstatSync, statSync, type BigIntStats } from 'node:fs'
+import { open } from 'node:fs/promises'
+import { StringDecoder } from 'node:string_decoder'
+import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
+import { createJsonTokenReader } from '../../../../shared/json-stream/json-token-reader'
+import type Database from '../../../sqlite/sync-database'
+import { runJournalTransaction } from './journal-database'
+import { JournalDamageError } from '../replay/journal-open-failure'
+import { AgentSessionJournalError } from '../writing/journal-write-guards'
+import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
+import { validateLegacyAgentSessionTabs } from './journal-legacy-record-tabs'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableRetiredAgentSessionClaimKey
 } from '../../../runtime/agent-session/records/agent-session-store-row-rules'
-import { JournalDamageError } from '../replay/journal-open-failure'
-import { AgentSessionJournalError } from '../writing/journal-write-guards'
-import { journalLegacyRecordPaths } from './journal-legacy-record-paths'
-import { parseLegacyAgentSessionTabTable } from './journal-legacy-record-tabs'
 
-type RecordFile = {
-  path: string
-  identity: string | null
-}
+type RecordFile = { path: string; identity: string | null }
+type Generation = 'primary' | 'backup'
+const CHUNK_BYTES = 64 * 1024
+const OBJECT_SECTIONS = ['records', 'operations', 'unusableRecords'] as const
+const ARRAY_SECTIONS = ['retiredClaimKeys', 'sessionTabs', 'visibleSessionIds'] as const
+type Section = (typeof OBJECT_SECTIONS)[number] | (typeof ARRAY_SECTIONS)[number]
 
-type LegacyRecordState = {
+type StagedGeneration = {
+  generation: Generation
   hostId: string
-  records: Map<string, AgentSessionRecord>
-  unreadableRecords: Map<string, unknown>
-  operations: Map<string, AgentSessionOperationRow>
-  retiredClaimKeys: RetiredAgentSessionClaimKey[]
-  sessionTabs: AgentSessionTabTable | null
+  tabs: 'sessionTabs' | 'visibleSessionIds' | null
 }
 
 export type JournalLegacyRecordSnapshot = {
   files: readonly [RecordFile, RecordFile]
-  loaded: { state: LegacyRecordState; fromBackup: boolean } | null
+  loaded: (StagedGeneration & { salvage: boolean }) | null
 }
 
-function recordFileIdentity(stats: Stats): string {
-  return JSON.stringify([stats.dev, stats.ino, stats.size, stats.mtimeMs, stats.ctimeMs])
+export function createJournalLegacyRecordStage(db: Database.Database): void {
+  db.pragma('journal_mode = WAL')
+  db.pragma('synchronous = NORMAL')
+  db.pragma('temp_store = FILE')
+  db.exec(`
+    CREATE TABLE legacy_rows (
+      generation TEXT NOT NULL,
+      section TEXT NOT NULL,
+      key TEXT NOT NULL,
+      body TEXT NOT NULL,
+      readable INTEGER NOT NULL,
+      PRIMARY KEY (generation, section, key)
+    );
+  `)
+}
+
+function recordFileIdentity(stats: BigIntStats): string {
+  return [stats.dev, stats.ino, stats.size, stats.mtimeNs, stats.ctimeNs].join(':')
 }
 
 function captureRecordFile(path: string): string | null {
-  // A dangling link is present and cannot certify absence of the old file.
-  if (!lstatSync(path, { throwIfNoEntry: false })) {
-    return null
-  }
-  return recordFileIdentity(statSync(path))
+  // A dangling link is present and cannot certify absence.
+  return lstatSync(path, { throwIfNoEntry: false })
+    ? recordFileIdentity(statSync(path, { bigint: true }))
+    : null
+}
+
+function changedRecordFile(): Error {
+  return new Error('the original chat records changed during initialization')
 }
 
 export function assertJournalLegacyRecordFilesStable(files: readonly RecordFile[]): void {
   for (const { path, identity } of files) {
     if (captureRecordFile(path) !== identity) {
-      throw new Error('the original chat records changed during initialization')
+      throw changedRecordFile()
     }
   }
 }
 
-async function readRecordFile(
+/** Reads only the opened file's initial extent and rechecks the handle and name before fallback. */
+async function readStableRecordFile(
   file: RecordFile,
-  maxBytes: number
-): Promise<LegacyRecordState | null> {
-  const { buffer, stats } = await readNodeFileWithinLimit(file.path, maxBytes, {
-    regularFileOnly: true
-  })
-  if (
-    recordFileIdentity(stats) !== file.identity ||
-    buffer.byteLength !== stats.size ||
-    captureRecordFile(file.path) !== file.identity
-  ) {
-    throw new Error('the original chat records changed during initialization')
+  consume: (bytes: Buffer) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  signal?.throwIfAborted()
+  if (!statSync(file.path).isFile()) {
+    throw new Error('expected a regular original chat records file')
   }
-  return parseRecordFile(buffer.toString('utf8'))
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function parseRecordFile(raw: string): LegacyRecordState | null {
-  let file: unknown
+  const flags = constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NONBLOCK)
+  const handle = await open(file.path, flags)
   try {
-    file = JSON.parse(raw)
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      return null
+    const stats = await handle.stat({ bigint: true })
+    if (!stats.isFile() || recordFileIdentity(stats) !== file.identity) {
+      throw changedRecordFile()
     }
-    throw error
+    const buffer = Buffer.allocUnsafe(CHUNK_BYTES)
+    let offset = 0n
+    while (offset < stats.size) {
+      signal?.throwIfAborted()
+      const remaining = stats.size - offset
+      const length = remaining < CHUNK_BYTES ? Number(remaining) : CHUNK_BYTES
+      const { bytesRead } = await handle.read(buffer, 0, length, null)
+      signal?.throwIfAborted()
+      if (bytesRead === 0) {
+        throw changedRecordFile()
+      }
+      offset += BigInt(bytesRead)
+      consume(buffer.subarray(0, bytesRead))
+    }
+    const after = await handle.stat({ bigint: true })
+    if (recordFileIdentity(after) !== file.identity) {
+      throw changedRecordFile()
+    }
+    assertJournalLegacyRecordFilesStable([file])
+  } finally {
+    await handle.close()
   }
-  if (!isObject(file)) {
+}
+
+function isQuarantinedRecord(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    'reason' in value &&
+    typeof value.reason === 'string' &&
+    value.reason.length > 0
+  )
+}
+
+function isReadableSectionEntry(section: Section, key: string, value: unknown): boolean {
+  switch (section) {
+    case 'records':
+      return isReadableAgentSessionStoreRecord(key, value)
+    case 'operations':
+      return isReadableAgentSessionStoreOperation(key, value)
+    case 'unusableRecords':
+      return isQuarantinedRecord(value)
+    case 'retiredClaimKeys':
+      return isReadableRetiredAgentSessionClaimKey(value)
+    default:
+      return true
+  }
+}
+
+type StageWrite = { section: Section; entry?: { key: string; body: string; readable: boolean } }
+
+async function stageRecordFile(
+  db: Database.Database,
+  file: RecordFile,
+  generation: Generation,
+  signal?: AbortSignal
+): Promise<StagedGeneration | null> {
+  const pending: StageWrite[] = []
+  const envelope = new Map<string, unknown>()
+  const stagedSection = Symbol('staged section')
+  let activeSection: Section | undefined
+  let arrayIndex = 0
+  let malformed = false
+  const clear = db.prepare('DELETE FROM legacy_rows WHERE generation=? AND section=?')
+  const insert = db.prepare(`INSERT INTO legacy_rows VALUES(?,?,?,?,?)
+    ON CONFLICT(generation,section,key) DO UPDATE SET body=excluded.body,readable=excluded.readable`)
+  const begin = (section: Section): null => {
+    activeSection = section
+    pending.push({ section })
+    arrayIndex = 0
     return null
   }
-  if (typeof file.schemaVersion === 'number' && file.schemaVersion > 2) {
+  const end = (): typeof stagedSection => {
+    activeSection = undefined
+    return stagedSection
+  }
+  const add = (section: Section, key: string, value: unknown): void => {
+    pending.push({
+      section,
+      entry: {
+        key,
+        body: JSON.stringify(value),
+        readable: isReadableSectionEntry(section, key, value)
+      }
+    })
+  }
+  const discard = { filter: () => activeSection === undefined, create: () => null, add: () => {} }
+  const assembler = new FlexAssembler({
+    maxDepth: Infinity,
+    objectRules: [
+      objectRule<Map<string, unknown>>({
+        filter: (path) => path.length === 0,
+        create: () => envelope,
+        add: (fields, key, value) => {
+          if (
+            key === 'schemaVersion' ||
+            key === 'hostId' ||
+            OBJECT_SECTIONS.some((field) => key === field) ||
+            ARRAY_SECTIONS.some((field) => key === field)
+          ) {
+            fields.set(key, value)
+          }
+        }
+      }),
+      ...OBJECT_SECTIONS.map((section) =>
+        objectRule<null>({
+          filter: (path) => path.length === 1 && path[0] === section,
+          create: () => begin(section),
+          add: (_, key, value) => add(section, key, value),
+          finalize: end
+        })
+      ),
+      discard
+    ],
+    arrayRules: [
+      ...ARRAY_SECTIONS.map((section) =>
+        arrayRule<null>({
+          filter: (path) => path.length === 1 && path[0] === section,
+          create: () => begin(section),
+          add: (_, value) => add(section, String(arrayIndex++), value),
+          finalize: end
+        })
+      ),
+      discard
+    ]
+  })
+  const parser = createJsonTokenReader(
+    (token) => assembler.consume(token),
+    CHUNK_BYTES,
+    () =>
+      activeSection !== undefined ||
+      (assembler.depth === 1 && (assembler.key === 'schemaVersion' || assembler.key === 'hostId'))
+  )
+  const decoder = new StringDecoder('utf8')
+  const parse = (consume: () => void): void => {
+    if (malformed) {
+      return
+    }
+    try {
+      consume()
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) {
+        throw error
+      }
+      malformed = true
+      return
+    }
+    if (pending.length > 0) {
+      runJournalTransaction(db, () => {
+        for (const { section, entry } of pending) {
+          if (entry) {
+            insert.run(generation, section, entry.key, entry.body, Number(entry.readable))
+          } else {
+            clear.run(generation, section)
+          }
+        }
+      })
+      pending.length = 0
+    }
+  }
+  await readStableRecordFile(
+    file,
+    (bytes) => parse(() => parser.write(decoder.write(bytes))),
+    signal
+  )
+  parse(() => {
+    parser.write(decoder.end())
+    parser.end()
+  })
+  const schema = envelope.get('schemaVersion')
+  if (!malformed && assembler.current === envelope && typeof schema === 'number' && schema > 2) {
     throw new AgentSessionJournalError('journal_read_only', 'the original chat records are newer')
   }
+  const hostId = envelope.get('hostId')
+  const tabs = envelope.has('sessionTabs')
+    ? 'sessionTabs'
+    : envelope.has('visibleSessionIds')
+      ? 'visibleSessionIds'
+      : null
   if (
-    file.schemaVersion !== 2 ||
-    typeof file.hostId !== 'string' ||
-    !isObject(file.records) ||
-    !isObject(file.operations) ||
-    !isObject(file.unusableRecords) ||
-    !Array.isArray(file.retiredClaimKeys)
+    malformed ||
+    assembler.current !== envelope ||
+    schema !== 2 ||
+    typeof hostId !== 'string' ||
+    [...OBJECT_SECTIONS, 'retiredClaimKeys'].some((key) => envelope.get(key) !== stagedSection) ||
+    (tabs !== null && envelope.get(tabs) !== stagedSection) ||
+    db
+      .prepare(`SELECT 1 FROM legacy_rows WHERE generation=? AND
+        section IN ('operations','unusableRecords','retiredClaimKeys') AND readable=0 LIMIT 1`)
+      .get(generation) ||
+    (tabs === 'sessionTabs' && !validateLegacyAgentSessionTabs(db, generation))
   ) {
+    db.prepare('DELETE FROM legacy_rows WHERE generation=?').run(generation)
     return null
   }
-  const records = new Map<string, AgentSessionRecord>()
-  const unreadableRecords = new Map<string, unknown>()
-  for (const [id, value] of Object.entries(file.records)) {
-    if (isReadableAgentSessionStoreRecord(id, value)) {
-      records.set(id, decodePersistedAgentSessionRecord(value).record)
-    } else {
-      unreadableRecords.set(id, value)
-    }
-  }
-  for (const [id, value] of Object.entries(file.unusableRecords)) {
-    if (!isObject(value) || typeof value.reason !== 'string' || !value.reason) {
-      return null
-    }
-    unreadableRecords.set(id, value.raw)
-  }
-  const operations = new Map<string, AgentSessionOperationRow>()
-  for (const [key, value] of Object.entries(file.operations)) {
-    if (!isReadableAgentSessionStoreOperation(key, value)) {
-      return null
-    }
-    operations.set(key, value)
-  }
-  const retiredClaimKeys: RetiredAgentSessionClaimKey[] = []
-  for (const value of file.retiredClaimKeys) {
-    if (!isReadableRetiredAgentSessionClaimKey(value)) {
-      return null
-    }
-    retiredClaimKeys.push(value)
-  }
-  const sessionTabs = parseLegacyAgentSessionTabTable(file, records)
-  if (sessionTabs === undefined) {
-    return null
-  }
-  return {
-    hostId: file.hostId,
-    records,
-    unreadableRecords,
-    operations,
-    retiredClaimKeys,
-    sessionTabs
-  }
+  return { generation, hostId, tabs }
 }
 
-/** Only proven absence or malformed content permits recovery from an older copy. */
+/** Only absence or malformed content permits recovery from an older copy. */
 export async function readJournalLegacyRecordSnapshot(
   stateDirectory: string,
-  maxBytes: number
+  stage: Database.Database,
+  signal?: AbortSignal
 ): Promise<JournalLegacyRecordSnapshot> {
   const [primaryPath, backupPath] = journalLegacyRecordPaths(stateDirectory)
   const files = [
@@ -158,26 +303,27 @@ export async function readJournalLegacyRecordSnapshot(
   if (primary.identity === null && backup.identity === null) {
     return { files, loaded: null }
   }
-  const state = primary.identity === null ? null : await readRecordFile(primary, maxBytes)
-  const missing = state
-    ? [...state.unreadableRecords.keys()].filter((id) => !state.records.has(id))
-    : []
+  const latest =
+    primary.identity === null ? null : await stageRecordFile(stage, primary, 'primary', signal)
+  const needsSalvage =
+    latest &&
+    stage
+      .prepare(`SELECT 1 FROM legacy_rows p
+    WHERE p.generation='primary' AND (p.section='unusableRecords' OR (p.section='records' AND p.readable=0))
+    AND NOT EXISTS (SELECT 1 FROM legacy_rows r WHERE r.generation='primary' AND r.section='records' AND r.key=p.key AND r.readable=1)
+    LIMIT 1`)
+      .get()
   const recovered =
-    backup.identity !== null && (!state || missing.length > 0)
-      ? await readRecordFile(backup, maxBytes)
+    backup.identity !== null && (!latest || needsSalvage)
+      ? await stageRecordFile(stage, backup, 'backup', signal)
       : null
   assertJournalLegacyRecordFilesStable(files)
-  if (state) {
-    for (const id of missing) {
-      const record = recovered?.records.get(id)
-      if (record) {
-        state.records.set(id, record)
-      }
-    }
-    return { files, loaded: { state, fromBackup: false } }
+  signal?.throwIfAborted()
+  if (latest) {
+    return { files, loaded: { ...latest, salvage: recovered !== null } }
   }
   if (recovered) {
-    return { files, loaded: { state: recovered, fromBackup: true } }
+    return { files, loaded: { ...recovered, salvage: false, tabs: null } }
   }
   throw new JournalDamageError('the original chat records and their backup could not be read')
 }

@@ -172,7 +172,10 @@ export function effectiveAgentSessionTabs(
   }
   const tabs = state.unrecordedSessionTabs?.clone() ?? new AgentSessionTabTable()
   for (const id of legacyIds) {
-    if (id !== ownShow && hasAgentSessionConversation(state, id)) {
+    if (
+      id !== ownShow &&
+      (hasAgentSessionConversation(state, id) || state.unreadableRecords.has(id))
+    ) {
       const tabId = structuredAgentSessionTabId(id)
       if (state.unrecordedSessionTabs?.sessionIdFor(tabId) === undefined) {
         tabs.show(id, tabId)

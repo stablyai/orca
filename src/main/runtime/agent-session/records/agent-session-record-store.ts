@@ -62,6 +62,9 @@ import type {
   CompareAndSetConversationName
 } from './agent-session-record-conversation-name'
 import { JournalSqlConnectorReplies } from '../../../native-chat/agent-session-journal/connector-replies/journal-sql-connector-replies'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { savedSessionId } from '../lifecycle/saved-structured-agent-session-restoration'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
 
@@ -71,6 +74,13 @@ export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
 export class AgentSessionRecordStore extends AgentSessionRecordForgets {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
   private clearedFrom: { lineage: object; predecessors: Map<string, string[]> } | undefined
+  private readonly unreadableSavedTabs = new WeakMap<
+    readonly Tab[],
+    {
+      index: AgentSessionStoreState['sessionTabs']
+      ids: readonly string[]
+    }
+  >()
 
   private constructor(
     transactions: AgentSessionStoreTransactions,
@@ -230,6 +240,36 @@ export class AgentSessionRecordStore extends AgentSessionRecordForgets {
 
   /** Unreadable records still count as present and can never grant writers. */
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)
+
+  hasUnreadableRecords = (): boolean => this.state.unreadableRecords.size > 0
+
+  /** Only existing saved tabs whose records cannot supply a publishable conversation. */
+  unverifiableSavedSessionIds(tabs: readonly Tab[]): readonly string[] {
+    const { state } = this
+    const index = state.sessionTabs ?? state.unrecordedSessionTabs ?? null
+    const cached = this.unreadableSavedTabs.get(tabs)
+    if (cached && cached.index === index) {
+      return cached.ids
+    }
+    const ids = new Set<string>()
+    for (const tab of tabs) {
+      const id = savedSessionId(tab)
+      const unreadable = id ? state.unreadableRecords.get(id) : undefined
+      if (!id || !unreadable || unreadable.conversation) {
+        continue
+      }
+      const tabId = index?.tabIdFor(id)
+      if (
+        tabId !== undefined ||
+        (!state.sessionTabs && index?.sessionIdFor(structuredAgentSessionTabId(id)) === undefined)
+      ) {
+        ids.add(id)
+      }
+    }
+    const result = [...ids]
+    this.unreadableSavedTabs.set(tabs, { index, ids: result })
+    return result
+  }
 
   listOperationRows = (): AgentSessionOperationRow[] => [...this.state.operations.values()]
 

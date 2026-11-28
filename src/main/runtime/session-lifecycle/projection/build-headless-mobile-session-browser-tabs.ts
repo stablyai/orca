@@ -32,6 +32,8 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/iden
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
   protected abstract terminalCloseLeafIds(
@@ -297,7 +299,16 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
 
   protected withSessionTabsHolds(result: RuntimeMobileSessionTabsResult, navigationId?: string) {
     const held = this.clientHostedPageReconciliation.holdFor(result, navigationId, Date.now())
-    return holdAgentSessionInventory(held, this.structuredAgentSessionInventoryUnverifiable)
+    const hasUnknownInventory = this.structuredAgentSessionInventoryUnverifiable
+    const records = hasUnknownInventory ? undefined : getStructuredAgentSessionHost()?.deps?.store
+    const saved = records?.hasUnreadableRecords?.()
+      ? this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)?.unifiedTabs?.[result.worktree]
+      : undefined
+    return holdAgentSessionInventory(
+      held,
+      hasUnknownInventory,
+      saved ? records?.unverifiableSavedSessionIds(saved) : undefined
+    )
   }
 
   protected async refreshMobileSessionPtyRecords(
