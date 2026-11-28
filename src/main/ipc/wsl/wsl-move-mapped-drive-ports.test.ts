@@ -20,12 +20,16 @@ function storeWith(...paths: string[]) {
 }
 
 // The real in-use check over the real last-known reader, fresh per test (SystemDrive is read once).
-async function inUse(store: ReturnType<typeof storeWith>, distro = 'Debian'): Promise<boolean> {
+async function inUse(
+  store: ReturnType<typeof storeWith>,
+  droppingLostHold = false,
+  distro = 'Debian'
+): Promise<boolean> {
   const { isDistroInUse } =
     await import('../../persistence/moving-wsl-projects/quiescence/wsl-move-distro-in-use')
   const { wslMoveDistroMappedDrivesLastKnown } = await import('./wsl-move-mapped-drive-ports')
   return isDistroInUse(store, '/unused', distro, () =>
-    wslMoveDistroMappedDrivesLastKnown(store, distro)
+    wslMoveDistroMappedDrivesLastKnown(store, distro, { droppingLostHold })
   )
 }
 
@@ -62,14 +66,35 @@ describe('isDistroInUse over last-known mapped drives', () => {
     expect(await inUse(storeWith('C:\\src\\app', 'W:\\proj'))).toBe(true)
   })
 
-  it('keeps a W: whose only answer is a saved null unverifiable: it may be a failed lookup', async () => {
-    ;(await lastKnown()).seedWslMappedDriveAnswers([{ letter: 'W', share: null, at: 1 }])
+  it('trusts a D: a lookup in an earlier launch found local, so no hold at startup', async () => {
+    ;(await lastKnown()).seedWslMappedDriveAnswers([
+      { letter: 'D', share: null, at: 1, lookup: 'read' }
+    ])
+    expect(await inUse(storeWith('D:\\src'))).toBe(false)
+    expect(await inUse(storeWith('D:\\src'), true)).toBe(false)
+  })
+
+  it('keeps a D: whose saved null came from a failed lookup unverifiable, so the hold stays', async () => {
+    ;(await lastKnown()).seedWslMappedDriveAnswers([
+      { letter: 'D', share: null, at: 1, lookup: 'failed' }
+    ])
+    expect(await inUse(storeWith('D:\\src'))).toBe(true)
+  })
+
+  it('keeps a W: whose lookup failed this launch unverifiable', async () => {
+    ;(await lastKnown()).rememberWslMappedDriveFailure('W', 1)
     expect(await inUse(storeWith('W:\\proj'))).toBe(true)
+  })
+
+  it('trusts a null saved without provenance, except to drop a stateLost hold', async () => {
+    ;(await lastKnown()).seedWslMappedDriveAnswers([{ letter: 'W', share: null, at: 1 }])
+    expect(await inUse(storeWith('W:\\proj'))).toBe(false)
+    expect(await inUse(storeWith('W:\\proj'), true)).toBe(true)
   })
 
   it('trusts a W: this launch read outside WSL', async () => {
     ;(await lastKnown()).rememberWslMappedDriveRead('W', 'W:\\', 1)
-    expect(await inUse(storeWith('W:\\proj'))).toBe(false)
+    expect(await inUse(storeWith('W:\\proj'), true)).toBe(false)
   })
 
   it('still sees a project on a W: known to map into the distro', async () => {

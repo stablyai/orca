@@ -18,6 +18,7 @@ import { listWslMoveCutoverChain } from '../../persistence/moving-wsl-projects/c
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
 import { previewWslMove } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-preview'
 import { wslMoveDistroMappedDrivesLastKnown } from './wsl-move-mapped-drive-ports'
+import { onNextWslMappedDriveAnswer } from '../../wsl/filesystem/wsl-mapped-drive-last-known'
 import { wslMovedDistroVerdict } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-moved-distro-check'
 import { WslMoveOrchestrator } from '../../persistence/moving-wsl-projects/wsl-move-orchestrator'
 import type {
@@ -141,9 +142,9 @@ function createOrchestrator(
       process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0' && wslHostsOptedIn(store.getSettings()),
     autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects,
     prepareHost: (distro, stillWanted) => prepareHost(userDataPath, distro, stillWanted),
-    isDistroInUse: async (distro) =>
+    isDistroInUse: async (distro, check) =>
       await isDistroInUse(store, userDataPath, distro, () =>
-        wslMoveDistroMappedDrivesLastKnown(store, distro)
+        wslMoveDistroMappedDrivesLastKnown(store, distro, check)
       ),
     hostRemovalPending: async (distro) => await wslHostRemovalPending(userDataPath, distro),
     hasHost: async (distro) =>
@@ -280,6 +281,14 @@ export function registerWslMoveOrchestrator(
           ? await created.releasedByUser(distro, 'removed')
           : created.hostAddedByUser(distro)
       )
+      // Once per launch: the first drive answer settled may show a held distro to be unused.
+      onNextWslMappedDriveAnswer(() => {
+        void created
+          .prune()
+          .catch((error: unknown) =>
+            console.warn('[wsl-move] Could not prune inactive moves', error)
+          )
+      })
     }
   )
 }

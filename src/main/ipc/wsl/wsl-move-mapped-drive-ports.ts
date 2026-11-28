@@ -9,10 +9,8 @@ import {
   readWslMappedDriveShareNow,
   wslMappedDriveMatches
 } from '../../wsl/filesystem/wsl-mapped-drive-share'
-import {
-  isWslMappedDriveReadNowhereThisRun,
-  wslMappedDriveLastKnownShare
-} from '../../wsl/filesystem/wsl-mapped-drive-last-known'
+import { wslMappedDriveLastKnownShare } from '../../wsl/filesystem/wsl-mapped-drive-last-known'
+import type { WslMoveInUseCheck } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-ports'
 
 export function wslMoveMappedDrivePorts(): Pick<
   WslMoveDriverDeps,
@@ -44,10 +42,13 @@ function windowsSystemDriveLetter(): string | null {
  * For the orchestrator's hold and prune checks, which run in the background: last-known answers
  * only, so it never reads a drive (a mapped share's read can boot its stopped distro). Unknown is
  * in use. The system drive is local (`net use` can't remap a local device), so it is never a share.
+ * A failed lookup's null proves nothing; one saved before lookups were recorded is trusted, except
+ * to drop a `stateLost` hold, which may guard a decline the set-aside file lost.
  */
 export function wslMoveDistroMappedDrivesLastKnown(
   store: Pick<Store, 'getRepos' | 'getFolderWorkspaces'>,
-  distro: string
+  distro: string,
+  check: WslMoveInUseCheck = {}
 ): readonly WslMappedDrive[] | 'unverifiable' {
   if (process.platform !== 'win32') {
     return []
@@ -68,8 +69,7 @@ export function wslMoveDistroMappedDrivesLastKnown(
       }
       continue
     }
-    // A saved null may be a failed lookup of a mapped share; prune would drop the hold guarding it.
-    if (!isWslMappedDriveReadNowhereThisRun(letter)) {
+    if (!known || known.lookup === 'failed' || (!known.lookup && check.droppingLostHold)) {
       return 'unverifiable'
     }
   }

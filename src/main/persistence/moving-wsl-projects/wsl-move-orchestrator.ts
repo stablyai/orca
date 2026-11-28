@@ -172,13 +172,15 @@ export class WslMoveOrchestrator {
     }
     const listing: Promise<void> = held
       .then(async (listed) => {
-        if (listed) {
-          this.saveAndPublish()
-          // The constructor's prune ran before these holds existed; unused ones clear this launch.
-          await this.prune()
+        if (!listed) {
+          return
         }
+        this.saveAndPublish()
+        // The constructor's prune ran before these holds existed; unused ones clear this launch.
+        await this.prune().catch((error: unknown) =>
+          console.warn('[wsl-move] Could not prune inactive moves', error)
+        )
       })
-      .catch((error: unknown) => console.warn('[wsl-move] Could not prune inactive moves', error))
       .finally(() => this.inFlight.delete(listing))
     this.inFlight.add(listing)
   }
@@ -220,7 +222,7 @@ export class WslMoveOrchestrator {
       records: this.records,
       isBusy: (key) => this.busy.has(key),
       isDisposed: () => this.disposed,
-      isDistroInUse: (distro) => this.ports.isDistroInUse(distro),
+      isDistroInUse: (distro, check) => this.ports.isDistroInUse(distro, check),
       drop: (key) => {
         this.records.delete(key)
         this.timers.get(key)?.()
