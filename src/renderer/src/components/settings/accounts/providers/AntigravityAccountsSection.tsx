@@ -97,7 +97,8 @@ export function AntigravityAccountsSection({
         }
       },
       (cause: unknown) => {
-        if (!cancelled) {
+        // A newer read already showed the accounts; this older failure describes nothing on screen.
+        if (!cancelled && read > reads.current.applied) {
           setError({
             message:
               cause instanceof Error ? cause.message : 'Antigravity accounts could not be loaded.',

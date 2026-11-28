@@ -270,6 +270,12 @@ export function readAntigravityChatSignIn(owner: RuntimeClientTarget): Antigravi
   }
   const known = stateFor(owner)
   const flow = known?.flow ?? null
+  // A dismissal covers only the flow it hid: once the host shows another, it lapses, so a later
+  // failure reads again even when its words match.
+  const local = locals.get(hostKey(owner))
+  if (local?.notes.dismissedFlow && endedFlowKey(flow) !== local.notes.dismissedFlow) {
+    local.notes = { ...local.notes, dismissedFlow: null }
+  }
   const view = {
     status: known ? ('known' as const) : snapshot.kind,
     flow: notes.dismissedFlow && endedFlowKey(flow) === notes.dismissedFlow ? null : flow,
