@@ -33,8 +33,22 @@ const INERT_PREFIX_BY_STATE_PREFIX: Record<string, string> = {
   '\x1b[': '\x1b[0<' // the same marker enters CSI_IGNORE until the final byte
 }
 const INERT_STRING_PREFIXES = new Set([INERT_OSC_PREFIX, INERT_DCS_PREFIX])
-// oxlint-disable-next-line no-control-regex -- the C0 bytes that can end an open OSC/DCS string.
-const STRING_END_BYTE = /[\x07\x18\x1a\x1b]/
+// oxlint-disable-next-line no-control-regex -- C0/C1 bytes (including 8-bit ST 0x9c) that can end an open OSC/DCS string.
+const STRING_END_BYTE = /[\x07\x18\x1a\x1b\u0080-\u009f]/
+
+/** VT500 C1 control dispatch inside an open sequence; 0x9c (ST) and other C1 executes return to ground. */
+function stateAfterC1Byte(code: number): ScanState {
+  if (code === 0x9b) {
+    return 'csi'
+  }
+  if (code === 0x9d) {
+    return 'osc'
+  }
+  if (code === 0x90 || code === 0x98 || code === 0x9e || code === 0x9f) {
+    return 'string'
+  }
+  return 'ground'
+}
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
 function stateAfterEscByte(code: number): ScanState {
@@ -94,6 +108,14 @@ function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
       continue
     }
     const code = stream.charCodeAt(i)
+    if (code >= 0x80 && code <= 0x9f) {
+      // 8-bit C1 controls (including ST 0x9c) abort any open sequence; openers start a fresh one.
+      state = stateAfterC1Byte(code)
+      if (state !== 'ground') {
+        start = i
+      }
+      continue
+    }
     if (
       code === ESC &&
       state !== 'osc' &&
@@ -190,6 +212,9 @@ export function openEscapeContinuationLength(statePrefix: string, chunk: string)
     const code = chunk.charCodeAt(i)
     if (code === CAN || code === SUB) {
       return i + 1
+    }
+    if (code >= 0x80 && code <= 0x9f) {
+      return stateAfterC1Byte(code) === 'ground' ? i + 1 : i
     }
     switch (state) {
       case 'esc':

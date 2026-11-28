@@ -229,4 +229,70 @@ describe('session parse cache persistence', () => {
     expect(await parseAgentSessionFileCached(candidate, process.platform, stats)).toEqual(session)
     expect(stats).toMatchObject({ reused: 1, fullParses: 0 })
   })
+
+  it('refreshes Droid model and token counts on sidecar-only settings updates without reparsing', async () => {
+    const root = await makeTempDir()
+    const transcript = join(root, 'droid-session.jsonl')
+    const settings = join(root, 'droid-session.settings.json')
+    await writeFile(
+      transcript,
+      `${JSON.stringify({ type: 'session_start', id: 'droid-1', title: 'Test', cwd: '/repo', timestamp: '2026-01-01T00:00:00.000Z' })}\n${JSON.stringify({ type: 'message', role: 'user', text: 'hello', timestamp: '2026-01-01T00:00:01.000Z' })}\n`
+    )
+    await writeFile(
+      settings,
+      JSON.stringify({
+        model: 'claude-sonnet-4',
+        tokenUsage: { inputTokens: 10, outputTokens: 20 }
+      })
+    )
+    const buildDroidCandidate = async (): Promise<SessionFileCandidate> => {
+      const [fileStat, sidecarStat] = await Promise.all([stat(transcript), stat(settings)])
+      return {
+        agent: 'droid',
+        codexHome: null,
+        file: {
+          path: transcript,
+          mtimeMs: fileStat.mtimeMs,
+          modifiedAt: fileStat.mtime.toISOString(),
+          sizeBytes: fileStat.size,
+          sidecar: {
+            path: settings,
+            mtimeMs: sidecarStat.mtimeMs,
+            sizeBytes: sidecarStat.size
+          }
+        }
+      }
+    }
+
+    const firstStats = createSessionParseStats()
+    const first = await parseAgentSessionFileCached(
+      await buildDroidCandidate(),
+      process.platform,
+      firstStats
+    )
+    expect(first).toMatchObject({ model: 'claude-sonnet-4', totalTokens: 30 })
+    expect(firstStats).toMatchObject({ fullParses: 1, reused: 0 })
+
+    // Rewrite only the settings sidecar with a new model and token usage; transcript stays untouched.
+    await writeFile(
+      settings,
+      JSON.stringify({
+        model: 'claude-opus-4-6',
+        tokenUsage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          cacheCreationTokens: 25,
+          cacheReadTokens: 10
+        }
+      })
+    )
+    const updatedStats = createSessionParseStats()
+    const updated = await parseAgentSessionFileCached(
+      await buildDroidCandidate(),
+      process.platform,
+      updatedStats
+    )
+    expect(updated).toMatchObject({ model: 'claude-opus-4-6', totalTokens: 185 })
+    expect(updatedStats).toMatchObject({ reused: 1, fullParses: 0, bytesRead: 0 })
+  })
 })
