@@ -1,3 +1,4 @@
+import { mergeDeferredReservedTypes } from '../terminal-pointer/mailbox-pointer-state'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxTerminal } from './mailbox-owner'
 
@@ -13,10 +14,6 @@ type ProbeDeferral = {
   mailboxes: Map<string, ReservedTypes>
   started: boolean
   joinedInFlight: boolean
-}
-
-function unionReserved(a: ReservedTypes, b: ReservedTypes): ReservedTypes {
-  return a && b ? new Set([...a, ...b]) : (a ?? b)
 }
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
@@ -125,9 +122,11 @@ export class OrchestrationMailboxDeliveryTarget {
     if (inFlight) {
       inFlight.mailboxes.set(
         mailboxHandle,
-        inFlight.mailboxes.has(mailboxHandle)
-          ? unionReserved(inFlight.mailboxes.get(mailboxHandle), reservedTypes)
-          : reservedTypes
+        mergeDeferredReservedTypes(
+          inFlight.mailboxes.has(mailboxHandle),
+          inFlight.mailboxes.get(mailboxHandle),
+          reservedTypes
+        )
       )
       // A later edge (the agent back at its prompt) may postdate the reading; one terminal's
       // mailboxes delivered in the same turn don't.
@@ -135,7 +134,9 @@ export class OrchestrationMailboxDeliveryTarget {
       return true
     }
     const deferral: ProbeDeferral = {
-      mailboxes: new Map([[mailboxHandle, reservedTypes]]),
+      mailboxes: new Map([
+        [mailboxHandle, mergeDeferredReservedTypes(false, undefined, reservedTypes)]
+      ]),
       started: false,
       joinedInFlight: false
     }

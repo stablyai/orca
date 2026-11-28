@@ -59,19 +59,26 @@ describe('deferForTerminalProbe', () => {
       ['run:r1', true]
     ])
   })
-  it('hands a deferred delivery its reserved types back', async () => {
+
+  it('hands a deferred delivery its reserved types back, unrestricted once an unreserved one joins', async () => {
     vi.useFakeTimers()
     try {
-      const reservedBack: (ReadonlySet<string> | undefined)[] = []
-      target(async () => false).deferForTerminalProbe(
-        'pty-1',
-        'term_a',
-        false,
-        (_mailbox, _reprobe, reserved) => reservedBack.push(reserved),
-        new Set(['question'])
-      )
+      const delivery = target(async () => false)
+      const reservedBack: string[][] = []
+      const deliver = (mailbox: string, reserved?: ReadonlySet<string>): void => {
+        delivery.deferForTerminalProbe(
+          'pty-1',
+          mailbox,
+          false,
+          (_mailbox, _reprobe, types) => reservedBack.push([...(types ?? [])]),
+          reserved
+        )
+      }
+      deliver('term_a', new Set(['question']))
+      deliver('run:r1', new Set(['question']))
+      deliver('run:r1')
       await vi.runAllTimersAsync()
-      expect(reservedBack.map((reserved) => [...(reserved ?? [])])).toEqual([['question']])
+      expect(reservedBack).toEqual([['question'], []])
     } finally {
       vi.useRealTimers()
     }
