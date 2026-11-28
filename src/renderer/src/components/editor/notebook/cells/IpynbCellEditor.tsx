@@ -15,6 +15,7 @@ import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
 } from './ipynb-code-cell-lines'
+import { installIpynbSelectionScroll } from './ipynb-selection-scroll'
 import type { IpynbCell } from '../document/ipynb-parse'
 import { MarkdownPreviewBody } from '../../markdown-preview/render-tree/MarkdownPreviewBody'
 import { useMonacoColorizedLines } from '../../monaco/MonacoCodeExcerpt'
@@ -246,6 +247,7 @@ function IpynbSourceEditor({
       scrollbar: { alwaysConsumeMouseWheel: false },
       wordWrap: cell.kind === 'code' ? 'off' : 'on'
     })
+    installIpynbSelectionScroll(editorInstance, container)
     editorRef.current = editorInstance
     // Monaco can add the horizontal scrollbar after measuring lines late; reserve it so that height change cannot end a drag.
     let minHeight = press?.previewScrollsX
