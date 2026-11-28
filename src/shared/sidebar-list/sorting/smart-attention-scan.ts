@@ -23,11 +23,9 @@ export type SmartAttentionIndexes = {
   mirroredTabIds: ReadonlySet<string>
 }
 
-export function buildSmartAttentionIndexes(
-  tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
-  agentStatusByPaneKey: AgentStatusRows | undefined,
-  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
-): SmartAttentionIndexes {
+export function buildMirroredTabIds(
+  tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null
+): ReadonlySet<string> {
   const mirroredTabIds = new Set<string>()
   if (tabsByWorktree) {
     for (const worktreeId in tabsByWorktree) {
@@ -40,10 +38,18 @@ export function buildSmartAttentionIndexes(
       }
     }
   }
+  return mirroredTabIds
+}
+
+export function buildSmartAttentionIndexes(
+  tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
+  agentStatusByPaneKey: AgentStatusRows | undefined,
+  migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
+): SmartAttentionIndexes {
   return {
     entriesByTabId: buildExplicitEntriesByTabId(agentStatusByPaneKey, migrationUnsupportedByPtyId),
     entriesByAttributedWorktreeId: buildExplicitEntriesByWorktreeId(agentStatusByPaneKey),
-    mirroredTabIds
+    mirroredTabIds: buildMirroredTabIds(tabsByWorktree)
   }
 }
 
@@ -96,6 +102,56 @@ export function resolveWorktreeAttention(
     }
   }
   return panes ? resolveAttention(panes, now) : IDLE
+}
+
+export const EMPTY_ATTENTION_MAP = new Map<string, WorktreeAttention>()
+
+function isIdleAttention(attention: WorktreeAttention): boolean {
+  return attention === IDLE || (attention.cls === 5 && attention.attentionTimestamp === 0)
+}
+
+/** Sparse attention map omitting IDLE rows (comparators fall back to IDLE on miss). */
+export function buildSparseAttentionByWorktree(
+  worktrees: readonly Pick<Worktree, 'id' | 'lastActivityAt'>[],
+  sources: {
+    tabsByWorktree: Record<string, readonly SmartAttentionTab[]>
+    attentionForWorktree?: (
+      worktree: Pick<Worktree, 'id' | 'lastActivityAt'>,
+      now: number
+    ) => WorktreeAttention
+    agentStatusByPaneKey: AgentStatusRows
+    runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+    ptyIdsByTabId: Record<string, string[]>
+    migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
+    terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  },
+  now: number
+): Map<string, WorktreeAttention> {
+  let map: Map<string, WorktreeAttention> | undefined
+  if (sources.attentionForWorktree) {
+    const readAttention = sources.attentionForWorktree
+    for (let i = 0; i < worktrees.length; i += 1) {
+      const worktree = worktrees[i]
+      const attention = readAttention(worktree, now)
+      if (!isIdleAttention(attention)) {
+        ;(map ??= new Map()).set(worktree.id, attention)
+      }
+    }
+    return map ?? EMPTY_ATTENTION_MAP
+  }
+  const indexes = buildSmartAttentionIndexes(
+    sources.tabsByWorktree,
+    sources.agentStatusByPaneKey,
+    sources.migrationUnsupportedByPtyId
+  )
+  for (let i = 0; i < worktrees.length; i += 1) {
+    const worktree = worktrees[i]
+    const attention = resolveWorktreeAttention(worktree, indexes, sources, now)
+    if (!isIdleAttention(attention)) {
+      ;(map ??= new Map()).set(worktree.id, attention)
+    }
+  }
+  return map ?? EMPTY_ATTENTION_MAP
 }
 
 /** Resolve attention once per workspace with per-pane hook authority and live-PTY-gated title fallbacks. */

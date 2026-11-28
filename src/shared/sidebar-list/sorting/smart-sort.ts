@@ -18,7 +18,7 @@ import {
   type SmartAttentionTab,
   type WorktreeAttention
 } from './smart-attention'
-import { buildAttentionByWorktree } from './smart-attention-scan'
+import { EMPTY_ATTENTION_MAP, buildSparseAttentionByWorktree } from './smart-attention-scan'
 import { smartSortPhase } from './smart-sort-phase'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
 import { compareSmartStamps, recentStamp } from './stamp-order'
@@ -201,6 +201,24 @@ export type WorktreeSortRanking<W extends Worktree> = {
   detectedLiveSmartSignal: boolean
 }
 
+function hasAnyLivePtyInTabs(
+  tabsByWorktree: Record<string, readonly SmartAttentionTab[]>,
+  ptyIdsByTabId: Record<string, string[]>
+): boolean {
+  for (const worktreeId in tabsByWorktree) {
+    if (!Object.hasOwn(tabsByWorktree, worktreeId)) {
+      continue
+    }
+    const tabs = tabsByWorktree[worktreeId]
+    for (let i = 0; i < tabs.length; i += 1) {
+      if (tabHasLivePty(ptyIdsByTabId, tabs[i].id)) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
 /** One frozen order for the active mode; the window and main both sort through here. */
 export function rankWorktreesForSort<W extends Worktree>(args: {
   /** Non-archived rows; sorted in place. */
@@ -222,9 +240,7 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
   // Why cold-start detection: agent-status hydrates async, so the warm comparator would collapse all to Class 4; keep the persisted order until a live signal appears.
   if (smartSortPhase(sortBy, args.latched) === 'cold') {
     // Why tabHasLivePty over tab.ptyId: slept terminals keep tab.ptyId as a wake hint, so it'd falsely keep cold-start ordering off.
-    const hasAnyLivePty = Object.values(sources.tabsByWorktree).some((tabs) =>
-      tabs.some((tab) => tabHasLivePty(sources.ptyIdsByTabId, tab.id))
-    )
+    const hasAnyLivePty = hasAnyLivePtyInTabs(sources.tabsByWorktree, sources.ptyIdsByTabId)
     if (
       hasAnyLivePty ||
       (sources.hasFreshAttributedStatus?.() ??
@@ -251,24 +267,11 @@ export function rankWorktreesForSort<W extends Worktree>(args: {
     }
   }
 
-  // Why precompute: hot sort — build the attention map once so the O(N log N) comparator does O(1) lookups.
+  // Why precompute: hot sort — build the sparse attention map once so the O(N log N) comparator does O(1) lookups; absent entries default to IDLE.
   const attentionByWorktree =
     sortBy === 'smart'
-      ? sources.attentionForWorktree
-        ? new Map(
-            worktrees.map((worktree) => [worktree.id, sources.attentionForWorktree!(worktree, now)])
-          )
-        : buildAttentionByWorktree(
-            worktrees,
-            sources.tabsByWorktree,
-            sources.agentStatusByPaneKey,
-            sources.runtimePaneTitlesByTabId,
-            sources.ptyIdsByTabId,
-            now,
-            sources.migrationUnsupportedByPtyId,
-            sources.terminalLayoutsByTabId
-          )
-      : new Map<string, WorktreeAttention>()
+      ? buildSparseAttentionByWorktree(worktrees, sources, now)
+      : EMPTY_ATTENTION_MAP
   worktrees.sort(buildWorktreeComparator(sortBy, args.repoMap, now, attentionByWorktree, undefined))
   return { sorted: worktrees, detectedLiveSmartSignal }
 }
