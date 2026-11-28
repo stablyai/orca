@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -40,16 +40,17 @@ const paneB = 'tab-b:22222222-2222-4222-8222-222222222222'
 const hint = (paneKey: string) => ({ paneKey, cwd: '/home/user/project', worktreeId })
 
 describe('orcad terminal restore hint store', () => {
-  it('keeps existing hints when a read fails transiently', () => {
+  // EACCES too: a denied read on POSIX must not read as an empty store.
+  it.each(['EIO', 'EACCES'])('keeps existing hints when a read fails with %s', (code) => {
     new OrcadTerminalRestoreHintStore(root).install(migration('a'), [hint(paneA)], 1000)
     const store = new OrcadTerminalRestoreHintStore(root)
-    failNextRead.code = 'EIO'
+    failNextRead.code = code
     expect(store.peek(paneA, worktreeId, 2000)).toBeNull()
-    failNextRead.code = 'EIO'
+    failNextRead.code = code
     expect(() => store.consume(paneA, 2000)).not.toThrow()
-    failNextRead.code = 'EIO'
+    failNextRead.code = code
     expect(() => store.install(migration('b'), [hint(paneB)], 2000)).toThrow(
-      expect.objectContaining({ code: 'EIO' })
+      expect.objectContaining({ code })
     )
 
     store.install(migration('b'), [hint(paneB)], 2000)
@@ -58,27 +59,6 @@ describe('orcad terminal restore hint store', () => {
     expect(reloaded.peek(paneB, worktreeId, 2001)).toBe('/home/user/project')
     expect(reloaded.hasInstalledMigration(migration('a').migrationKey)).toBe(true)
   })
-
-  // chmod cannot deny the owner a read on Windows or as root.
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'keeps a permission-denied store and reads it again once access returns',
-    () => {
-      new OrcadTerminalRestoreHintStore(root).install(migration('a'), [hint(paneA)], 1000)
-      chmodSync(storePath, 0o000)
-
-      const store = new OrcadTerminalRestoreHintStore(root)
-      expect(store.peek(paneA, worktreeId, 2000)).toBeNull()
-      expect(() => store.install(migration('b'), [hint(paneB)], 2000)).toThrow(
-        expect.objectContaining({ code: 'EACCES' })
-      )
-      chmodSync(storePath, 0o600)
-
-      store.install(migration('b'), [hint(paneB)], 2000)
-      const reloaded = new OrcadTerminalRestoreHintStore(root)
-      expect(reloaded.peek(paneA, worktreeId, 2001)).toBe('/home/user/project')
-      expect(reloaded.peek(paneB, worktreeId, 2001)).toBe('/home/user/project')
-    }
-  )
 
   it('never replaces a store written by a newer build', () => {
     mkdirSync(dirname(storePath), { recursive: true })
