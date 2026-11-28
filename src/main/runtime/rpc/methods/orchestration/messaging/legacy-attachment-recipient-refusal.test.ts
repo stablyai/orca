@@ -138,7 +138,7 @@ describe('mail to a terminal working another Orca Task', () => {
   })
 
   /** Attach the worker once routing has resolved the reply's recipient, before the reply is stored. */
-  function attachWhileReplyAwaits(): void {
+  function attachWhileReplyAwaits(alsoDispatchLocally = false): void {
     let resolved = false
     const owners = db.getActiveDispatchMailboxOwners.bind(db)
     vi.spyOn(db, 'getActiveDispatchMailboxOwners').mockImplementation((handle, paneKey) => {
@@ -149,6 +149,9 @@ describe('mail to a terminal working another Orca Task', () => {
     vi.spyOn(db, 'getActiveDispatchForIdentity').mockImplementation((handle, paneKey) => {
       if (resolved && !db.getRemoteDispatchAttachment(DISPATCH)) {
         attachLegacy()
+        if (alsoDispatchLocally) {
+          createRootDispatch(db, db.createTask({ spec: 'local work' }).id, LEGACY, LEGACY_PANE)
+        }
       }
       return identity(handle, paneKey)
     })
@@ -185,6 +188,18 @@ describe('mail to a terminal working another Orca Task', () => {
       data: REFUSED
     })
     expect(mailTo(`run:${former.id}`)).toEqual({ n: 0 })
+    expect(db.getMessageById(question.id)?.read).toBeFalsy()
+  })
+
+  it('refuses a reply still bound for the terminal once a local Dispatch took it during the wait', async () => {
+    setup()
+    const question = db.insertMessage({ from: LEGACY, to: 'term_coord', subject: 'q', body: '?' })
+    attachWhileReplyAwaits(true)
+    await expect(reply(question.id)).rejects.toMatchObject({
+      code: 'capability_unsupported',
+      data: REFUSED
+    })
+    expect(mailTo(LEGACY)).toEqual({ n: 0 })
     expect(db.getMessageById(question.id)?.read).toBeFalsy()
   })
 

@@ -33,7 +33,8 @@ import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifec
 import { replySubject } from '../../../../../../shared/orchestration/mailbox/reply-subject'
 import {
   isLegacyAttachmentRefusal,
-  legacyAttachmentError
+  legacyAttachmentError,
+  refuseLegacyAttachedRecipient
 } from './legacy-attachment-recipient-refusal'
 
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
@@ -184,6 +185,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     )?.id
     // The answer's record and its mail commit together, so a crash between them can't keep one alone.
     const reply = runLifecycleWriteTransaction(db.db, 'reply_with_answer', () => {
+      refuseLegacyAttachedRecipient(runtime, db, recipient.to, 'No reply was sent.')
       refuseNewlyLegacyAttachedSender(runtime, db, original, terminalRecipient)
       const stored = db.insertMessage({
         from: replyFrom,
@@ -215,7 +217,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   }
 })
 
-// The answer turn awaited: a bare sender may have taken another Orca's Task meanwhile, whatever it routed to.
+// The answer turn awaited: a bare sender may have taken another Orca's Task meanwhile, wherever it routed.
 function refuseNewlyLegacyAttachedSender(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
