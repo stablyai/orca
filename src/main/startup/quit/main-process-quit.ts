@@ -1,4 +1,3 @@
-import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { app, type Event } from 'electron'
 import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-bridge-wiring'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
@@ -11,10 +10,7 @@ import {
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { destroySystemTray } from '../../tray/system-tray'
 import { waitForMacMenuBarRetirement } from '../../tray/mac-menu-bar-tray'
-import { shutdownTelemetry } from '../../telemetry/client'
-import { shutdownObservability } from '../../observability/index'
 import { applyTeamPolicyBeforeQuit, isQuittingForUpdate } from '../../updater/updater-service-slot'
-import { swapCompactedOrchestrationDbAtQuit } from '../../runtime/orchestration/db/maintenance/orchestration-db-compaction-quit'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
@@ -173,23 +169,36 @@ function installWillQuitHandler(): void {
           closeBrowserExtensionProfileStateStore()
         ])
       },
-      closeWorkerStores: closeEnvironmentStore,
+      closeWorkerStores: async () => {
+        const { closeEnvironmentStore } =
+          await import('../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client')
+        await closeEnvironmentStore()
+      },
       workerStoreDeadlineMs: quitWorkerStoreDeadlineMs(updateQuitInProgress),
       shutdownDiagnostics: async () => {
+        const [{ shutdownTelemetry }, { shutdownObservability }] = await Promise.all([
+          import('../../telemetry/client'),
+          import('../../observability/index')
+        ])
         await shutdownTelemetry()
         await shutdownObservability()
       }
     })
       // Last: nothing can reach the orchestration database again. Renames only, capped. Desktop quits
       // whose teardowns all fulfilled; not Windows updates, whose exit watchdog leaves no room for it.
-      .then(({ teardownsFulfilled }) =>
-        teardownsFulfilled &&
-        !state.isServeMode &&
-        !isDevParentShutdownRequested() &&
-        !(updateQuitInProgress && process.platform === 'win32')
-          ? swapCompactedOrchestrationDbAtQuit(state.core.runtime)
-          : undefined
-      )
+      .then(async ({ teardownsFulfilled }) => {
+        if (
+          teardownsFulfilled &&
+          !state.isServeMode &&
+          !isDevParentShutdownRequested() &&
+          !(updateQuitInProgress && process.platform === 'win32')
+        ) {
+          const { swapCompactedOrchestrationDbAtQuit } =
+            await import('../../runtime/orchestration/db/maintenance/orchestration-db-compaction-quit')
+          return swapCompactedOrchestrationDbAtQuit(state.core.runtime)
+        }
+        return undefined
+      })
       .then(() => {
         daemonDisconnectDone = true
         app.quit()
