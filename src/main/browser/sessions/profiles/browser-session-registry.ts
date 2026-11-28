@@ -52,8 +52,6 @@ import {
   browserExtensionSourceProfileId as sourceProfileId
 } from '../../extensions/profile-sessions/browser-extension-route-profiles'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
-import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
-import { clearBrowserCookieJar } from '../../cookies/session-restore/browser-session-cookie-clear'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -267,7 +265,9 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
-    trackBrowserSessionCookies(profile)
+    void import('../../cookies/session-restore/browser-session-cookie-restore')
+      .then(({ trackBrowserSessionCookies }) => trackBrowserSessionCookies(profile))
+      .catch(() => {})
     this.onProfilesChanged?.()
     return profile
   }
@@ -326,6 +326,8 @@ class BrowserSessionRegistry {
       })
       this.onProfilesChanged?.()
 
+      const { clearBrowserCookieJar } =
+        await import('../../cookies/session-restore/browser-session-cookie-clear')
       await clearBrowserCookieJar(session.fromPartition(profile.partition))
       return true
     } catch {

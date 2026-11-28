@@ -59,6 +59,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerUnavailable',
   'providerSafetyStopped',
   'providerResponseFailed',
+  'contextFull',
   'pluginInputRequired',
   'modelUnavailable',
   /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */

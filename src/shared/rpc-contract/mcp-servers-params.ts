@@ -47,11 +47,21 @@ export const McpServerUpdate = lazyZodSchema(() =>
 export const McpServerTarget = lazyZodSchema(() => z.object({ id: ServerId }))
 
 // `agent`: which agent's CLI checks them (default Claude Code); `remote`: only URL servers, so no command starts.
+// One request id per asker, so a window's trays and Settings each cancel only their own check.
+const ProblemsRequestId = lazyZodSchema(() => z.string().regex(/^[A-Za-z0-9_-]{1,64}$/))
+
 export const McpServerProblems = lazyZodSchema(() =>
   z.object({
     agent: z.enum(['claude', 'codex']).optional(),
-    scope: z.enum(['all', 'remote']).optional()
+    scope: z.enum(['all', 'remote']).optional(),
+    /** Check only these servers (a chat's own); all of the list's when absent. */
+    ids: z.array(ServerId).max(256).optional(),
+    requestId: ProblemsRequestId.optional()
   })
+)
+
+export const McpServerProblemsCancel = lazyZodSchema(() =>
+  z.object({ requestId: ProblemsRequestId.optional() })
 )
 
 // Orca's own sign-in, run on the host for the calling device. `routed`: the host's listener takes the

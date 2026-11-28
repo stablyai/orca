@@ -2,6 +2,7 @@
 // or an agent with no `/mcp` of its own. Orca knows what its next launch gets from the host list,
 // and the agent's own servers from its config files.
 import type {
+  AgentSessionMcpOrcaServer,
   AgentSessionMcpResult,
   AgentSessionMcpServer,
   AgentSessionMcpServerStatus
@@ -15,7 +16,7 @@ import { agentOwnMcpConfig } from './agent-own-mcp-server-names'
 import type { AgentMcpConfigName } from './agent-configs/agent-mcp-config-read'
 import { isMcpAgentBlocked } from './mcp-agent-problems'
 import { mcpHostListFolder } from './mcp-host-list-folder'
-import { mcpServersForLaunch } from './mcp-host-list-launch'
+import { mcpServerEntriesForLaunch } from './mcp-host-list-launch'
 import { sessionHostMcpDelivered } from './session-host-mcp-delivery'
 
 export type KnownMcpLaunch = {
@@ -112,7 +113,8 @@ async function orcaRows(
   }
   const folder = mcpHostListFolder()
   const key = mcpServerWorkspaceKeyOf(launch.workspaceId)
-  const { servers } = await mcpServersForLaunch(launch.agent, { key }, folder)
+  const { entries } = await mcpServerEntriesForLaunch(launch.agent, { key }, folder)
+  const servers = entries.map(({ server }) => server)
   // A running agent keeps what it launched with until it restarts, whatever the list says now.
   const names = delivered
     ? [...new Set([...delivered, ...bridged])]
@@ -125,13 +127,32 @@ async function orcaRows(
       folder
     ).map(({ name, signIn }) => [name, signIn])
   )
+  // At rest the client checks these and signs in to them through Orca, by id.
+  const atRest = new Map(
+    launch.running
+      ? []
+      : entries.flatMap(({ id, server }): [string, AgentSessionMcpOrcaServer][] =>
+          id
+            ? [
+                [
+                  server.name,
+                  {
+                    id,
+                    url: 'url' in server ? server.url : null,
+                    signsIn: signIns.get(server.name) !== undefined
+                  }
+                ]
+              ]
+            : []
+        )
+  )
   return names.map((name) => {
     const signIn = signIns.get(name)
-    return row(
-      name,
-      ORCA_MCP_SOURCE,
-      signIn && signIn.state !== 'signed-in' ? 'needs-auth' : status
-    )
+    const orca = atRest.get(name)
+    return {
+      ...row(name, ORCA_MCP_SOURCE, signIn && signIn.state !== 'signed-in' ? 'needs-auth' : status),
+      ...(orca ? { orca } : {})
+    }
   })
 }
 

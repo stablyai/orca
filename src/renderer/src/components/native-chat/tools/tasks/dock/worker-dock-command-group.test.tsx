@@ -86,7 +86,8 @@ function chip(): HTMLElement {
 
 describe('worker tray counts only agents as workers', () => {
   it.each([
-    ['agents only', { workers: [worker('a'), worker('b')] }, '2 workers', '2 workers'],
+    // Agents alone read as what runs; with commands, the chip names the two counts apart.
+    ['agents only', { workers: [worker('a'), worker('b')] }, '2 running', '2 running'],
     [
       'commands only',
       { tasks: [command('shell-1')] },
@@ -131,11 +132,12 @@ describe('worker tray counts only agents as workers', () => {
 
 describe('open tray', () => {
   it.each([
-    ['agents only', { workers: [worker('a'), worker('b')] }, 'Workers2', 'Workers'],
+    // The open header reads like the chip.
+    ['agents only', { workers: [worker('a'), worker('b')] }, '2 running', 'Workers'],
     [
       'commands only',
       { tasks: [command('shell-1')] },
-      'Background commands1',
+      '1 background command',
       'Background commands'
     ],
     [
@@ -490,7 +492,7 @@ describe('kinds', () => {
 
   it('keeps naming a held commands-only card by its rows while the live roster empties', () => {
     heldTray({ tasks: [command('shell-1')], expanded: true }).holdThen({ tasks: [] })
-    expect(chip()).toHaveTextContent(/^Background commands1/)
+    expect(chip()).toHaveTextContent(/^1 background command/)
     expect(screen.getByRole('region', { name: 'Background commands' })).toBeInTheDocument()
   })
 

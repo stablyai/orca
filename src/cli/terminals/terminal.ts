@@ -1,4 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { readReachableCliStatus } from '../runtime/status/reachable-cli-status'
 import type {
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
@@ -173,6 +174,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
     const shell = getOptionalStringFlag(flags, 'shell')
+    let preflightRuntimeId: string | null | undefined
     if (shell !== undefined) {
       if (!isSupportedWindowsShellOverride(shell)) {
         throw new RuntimeClientError(
@@ -181,7 +183,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         )
       }
       // Older hosts ignore shell and successfully create the wrong default shell; check support first.
-      const status = await client.getCliStatus()
+      const status = await readReachableCliStatus(client)
+      preflightRuntimeId = status.result.runtime.runtimeId
       // An unreachable host reports no capabilities at all; that is not evidence it lacks --shell.
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
@@ -200,17 +203,21 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         )
       }
     }
-    const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-      worktree: await getBrowserWorktreeSelector(flags, cwd, client),
-      command,
-      ...(shell !== undefined ? { shell } : {}),
-      title: getOptionalStringFlag(flags, 'title'),
-      focus,
-      ...(focus ? { presentation: 'focused' } : {}),
-      ...(flags.has('keep-open') ? { keepOpen: true } : {}),
-      // Compat: hosts before v1.4.211 (#22384) need renderer startup replies; remove once unsupported.
-      ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
-    })
+    const result = await client.call<{ terminal: RuntimeTerminalCreate }>(
+      'terminal.create',
+      {
+        worktree: await getBrowserWorktreeSelector(flags, cwd, client),
+        command,
+        ...(shell !== undefined ? { shell } : {}),
+        title: getOptionalStringFlag(flags, 'title'),
+        focus,
+        ...(focus ? { presentation: 'focused' } : {}),
+        ...(flags.has('keep-open') ? { keepOpen: true } : {}),
+        // Compat: hosts before v1.4.211 (#22384) need renderer startup replies; remove once unsupported.
+        ...(useRendererBackedInteractiveTerminal ? { rendererBacked: true, activate: focus } : {})
+      },
+      { preflightRuntimeId }
+    )
     printResult(result, json, formatTerminalCreate)
   },
   'terminal switch': terminalFocusHandler,
@@ -230,8 +237,10 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       : undefined
     // Why refused rather than sent: an older host strips the unknown param and splits again,
     // starting a second copy of the command the retry exists to avoid.
+    let preflightRuntimeId: string | null | undefined
     if (retrySplit !== undefined) {
-      const status = await client.getCliStatus()
+      const status = await readReachableCliStatus(client)
+      preflightRuntimeId = status.result.runtime.runtimeId
       if (!status.result.runtime.reachable) {
         throw new RuntimeClientError(
           'runtime_unavailable',
@@ -248,13 +257,17 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
         )
       }
     }
-    const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
-      terminal: await getTerminalHandle(flags, cwd, client),
-      direction: directionFlag,
-      command: getOptionalStringFlag(flags, 'command'),
-      ...(retrySplit !== undefined ? { retrySplit } : {}),
-      ...(flags.has('keep-open') ? { keepOpen: true } : {})
-    })
+    const result = await client.call<{ split: RuntimeTerminalSplit }>(
+      'terminal.split',
+      {
+        terminal: await getTerminalHandle(flags, cwd, client),
+        direction: directionFlag,
+        command: getOptionalStringFlag(flags, 'command'),
+        ...(retrySplit !== undefined ? { retrySplit } : {}),
+        ...(flags.has('keep-open') ? { keepOpen: true } : {})
+      },
+      { preflightRuntimeId }
+    )
     printResult(result, json, formatTerminalSplit)
   }
 }

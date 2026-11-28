@@ -8,8 +8,8 @@ import {
 import type {
   RemoteServerUpdateEntry,
   RemoteServerUpdatePhase
-} from '@/runtime/hosts/updates/remote-server-update-coordinator'
-import { getRemoteServerNewerThanClientVersion } from '@/runtime/hosts/updates/remote-server-version-skew'
+} from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
+import { getRemoteServerNewerThanClientVersion } from '../../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'

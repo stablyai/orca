@@ -38,7 +38,7 @@ export function mobileSessionTabStopKind(
 
 /** The confirm for a close that asks first; `ask` opens it, confirming closes every tab named. */
 export function useMobileSessionTabStopConfirm(
-  closeTab: (tab: MobileSessionTab, closingTogether: readonly string[]) => Promise<void>,
+  closeTab: (tab: MobileSessionTab, closingTogether: readonly string[]) => Promise<unknown>,
   rows: readonly MobileSessionTabSummary[],
   activeTabId: string | null
 ) {

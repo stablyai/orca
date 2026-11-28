@@ -28,10 +28,9 @@ import {
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import {
   detachProviderRelayForQuit,
-  hasAttachedProviderRelay,
-  providerRelayHandedOffAtQuit,
-  providerRelayReattached
+  providerRelayHandedOffAtQuit
 } from '../../../provider-relay/app-provider-relays'
+import { quitKeepsStructuredAgent } from './structured-agent-session-quit-keeps-agent'
 
 import {
   recordStopEvent,
@@ -287,17 +286,13 @@ async function detachKeptAgentUnderSerialize(
   sessionId: string
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
-  const child = session?.child
-  // A kept agent still reopening goes back to the daemon too; with its work unknown, never idle-stopped.
-  const reopening = child?.phase === 'starting' && providerRelayReattached(sessionId)
-  if (!session || !child || (child.phase === 'starting' && !reopening) || child.close) {
+  if (!session || !quitKeepsStructuredAgent(sessionId, session.child)) {
     return false
   }
+  // A kept agent still reopening has unknown work, so the daemon never idle-stops it.
+  const reopening = session.child?.phase === 'starting'
   // Already handed back this quit (a close during the quit did it): still nothing ends here.
   const handedOff = providerRelayHandedOffAtQuit(sessionId)
-  if (!handedOff && !hasAttachedProviderRelay(sessionId)) {
-    return false
-  }
   const working = !reopening && (await runningRootTurnItemId(session.journal)) !== null
   const open = reopening ? null : (context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null)
   if (!handedOff && !(await detachProviderRelayForQuit(sessionId, open))) {
