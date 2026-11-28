@@ -9,6 +9,9 @@ function packagedAppUnsupported() {
   )
 }
 
+// Judged on NEW alone, outside the alternating OLD/NEW windows.
+export const NEW_ONLY_SCENARIOS = ['burst', 'chat-memory', 'app-memory-soak']
+
 export function parseArgs(argv) {
   const options = {
     old: null,
@@ -19,6 +22,7 @@ export function parseArgs(argv) {
     windowMs: 30_000,
     idleWindowMs: 60_000,
     chatSettleMs: 120_000,
+    soakHours: 1,
     scenarios: null,
     force: false,
     pathsOnly: false,
@@ -43,6 +47,7 @@ export function parseArgs(argv) {
       '--window-ms': () => (options.windowMs = Number(value())),
       '--idle-window-ms': () => (options.idleWindowMs = Number(value())),
       '--chat-settle-ms': () => (options.chatSettleMs = Number(value())),
+      '--soak-hours': () => (options.soakHours = Number(value())),
       '--scenarios': () => (options.scenarios = value().split(',').filter(Boolean)),
       '--out': () => (options.out = path.resolve(value())),
       '--force': () => (options.force = true),
@@ -66,6 +71,9 @@ export function parseArgs(argv) {
       throw new Error(`${flag} must be between 1000 and 3600000 ms`)
     }
   }
+  if (!Number.isFinite(options.soakHours) || options.soakHours < 0.25 || options.soakHours > 12) {
+    throw new Error('--soak-hours must be between 0.25 and 12')
+  }
   if (!Number.isInteger(options.runs) || options.runs < 2 || options.runs % 2 !== 0) {
     throw new Error('--runs must be an even number of at least 2')
   }
@@ -73,9 +81,9 @@ export function parseArgs(argv) {
     throw new Error('--scenarios names no scenario')
   }
   for (const name of options.scenarios ?? []) {
-    if (!Object.hasOwn(SCENARIOS, name) && name !== 'burst' && name !== 'chat-memory') {
+    if (!Object.hasOwn(SCENARIOS, name) && !NEW_ONLY_SCENARIOS.includes(name)) {
       throw new Error(
-        `unknown scenario ${String(name)}; known: ${[...Object.keys(SCENARIOS), 'burst', 'chat-memory'].join(', ')}`
+        `unknown scenario ${String(name)}; known: ${[...Object.keys(SCENARIOS), ...NEW_ONLY_SCENARIOS].join(', ')}`
       )
     }
   }

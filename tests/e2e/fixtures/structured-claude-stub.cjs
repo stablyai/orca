@@ -35,6 +35,29 @@ const initializeResponse = {
 const TURN_MS = 500
 const SLOW_TURN_MS = 60_000
 let turnTimer = null
+let turnCount = 0
+
+// A prompt containing "long-reply" gets an ~8 KB markdown answer (prose, code blocks, a table), the size of a real turn.
+function longReply() {
+  turnCount += 1
+  const parts = [`## Turn ${String(turnCount)}: what changed\n`]
+  for (let block = 0; block < 4; block += 1) {
+    parts.push(
+      `The handler in step ${String(block + 1)} reads the pending rows, groups them by owner and writes one batch, so a burst of updates costs a single flush instead of one per row. It keeps the last committed fence and drops stale replies.\n`,
+      `\`\`\`ts\nexport function flush${String(turnCount)}x${String(block)}(rows: Row[]): Batch {\n  const byOwner = new Map<string, Row[]>()\n  for (const row of rows) {\n    const list = byOwner.get(row.owner) ?? []\n    list.push(row)\n    byOwner.set(row.owner, list)\n  }\n  return { owners: [...byOwner.keys()], size: rows.length, fence: ${String(turnCount * 10 + block)} }\n}\n\`\`\`\n`
+    )
+  }
+  parts.push('| File | Added | Deleted |\n| --- | ---: | ---: |')
+  for (let row = 0; row < 12; row += 1) {
+    parts.push(
+      `| src/area-${String(row)}/flush-${String(turnCount)}.ts | ${String(row * 7 + 3)} | ${String(row * 2)} |`
+    )
+  }
+  const text = parts.join('\n')
+  return text.length >= 8_000
+    ? text
+    : `${text}\n\n${'Checked each owner batch against the fence. '.repeat(Math.ceil((8_000 - text.length) / 44))}`
+}
 
 function promptText(message) {
   const content = message?.content
@@ -75,6 +98,7 @@ function startTurn(frame) {
   const prompt = JSON.stringify(frame.message ?? '')
   const slow = prompt.includes('slow')
   const pluginUi = prompt.includes('plugin-ui')
+  const replyText = prompt.includes('long-reply') ? longReply() : 'Stub reply.'
   if (prompt.includes('plugin-focus')) {
     write({
       type: 'system',
@@ -116,7 +140,7 @@ function startTurn(frame) {
           id: randomUUID(),
           role: 'assistant',
           model: 'claude-fake',
-          content: [{ type: 'text', text: 'Stub reply.' }]
+          content: [{ type: 'text', text: replyText }]
         }
       })
       write({
@@ -126,7 +150,7 @@ function startTurn(frame) {
         session_id: sessionId,
         is_error: false,
         terminal_reason: 'completed',
-        result: 'Stub reply.'
+        result: replyText
       })
     },
     slow ? SLOW_TURN_MS : TURN_MS

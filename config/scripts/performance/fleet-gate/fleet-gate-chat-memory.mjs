@@ -27,7 +27,7 @@ const IDLE_WAIT_MS = 300_000
 const IDLE_POLL_MS = 10_000
 
 /** Of these chats, how many the host reports idle after a successful turn with their provider running. */
-async function idleLiveChatCount(page, sessionIds) {
+export async function idleLiveChatCount(page, sessionIds) {
   return page.evaluate(
     ({ ids, settleMs }) =>
       new Promise((resolve, reject) => {
@@ -100,7 +100,7 @@ async function idleLiveChatCount(page, sessionIds) {
 }
 
 /** Chat stub processes still running: the reading only counts if every chat it started is alive. */
-function liveChatCount(launchLog) {
+export function liveChatCount(launchLog) {
   const lines = fs.existsSync(launchLog) ? fs.readFileSync(launchLog, 'utf8').split('\n') : []
   let live = 0
   for (const line of lines) {
