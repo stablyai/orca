@@ -10,6 +10,7 @@ import type { AgentSessionStatusSummary } from '../../../../shared/agent-session
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
 import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 import { UsageLimitColdCuts } from './structured-agent-session-usage-limit-cold-cuts'
+import { publishedUsageLimitContinue } from './structured-agent-session-usage-limit-published'
 import { usageLimitContinueMutation } from './structured-agent-session-usage-limit-continue-message'
 import {
   cancelsCut,
@@ -34,6 +35,7 @@ export { readSavedUsageLimitCut } from './structured-agent-session-usage-limit-c
 export class StructuredAgentSessionUsageLimitContinue {
   private timer: ReturnType<typeof setInterval> | undefined
   private stopSettings: (() => void) | undefined
+  private stopAccounts?: () => void
   private running = false
   private disposed = false
   private readonly attempts = new Map<string, Attempt>()
@@ -59,6 +61,8 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.shown = new Set(openUsageLimitChats(this.deps.host.store))
     this.timer = setInterval(() => void this.tick(), 10_000)
     this.timer.unref?.()
+    // A newly selected saved account can free a held chat at once.
+    this.stopAccounts = this.deps.host.usageLimitAutoContinue?.subscribeAccounts?.(this.tick)
     let enabled = this.enabled()
     this.stopSettings = this.deps.host.usageLimitAutoContinue?.subscribe(() => {
       // Other settings writes change nothing published here.
@@ -92,6 +96,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.disposed = true
     clearInterval(this.timer)
     this.stopSettings?.()
+    this.stopAccounts?.()
     this.cold.clear()
     this.attempts.clear()
     this.holds.clear()
@@ -144,15 +149,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     if (hold.awaitingRoom || (hold.unknownReset && state === 'scheduled')) {
       return undefined
     }
-    return {
-      turnItemId: cut.turnItemId,
-      resetsAt: cut.resetsAt,
-      // While the reset is unknown, `hold.resetsAt` is a reading time, not a reset.
-      ...(!hold.unknownReset && hold.resetsAt !== cut.resetsAt
-        ? { continueAt: hold.resetsAt }
-        : {}),
-      state
-    }
+    return publishedUsageLimitContinue(cut, hold, state)
   }
 
   /** See usageLimitCutDisposition; the cut read as the journal stands now. */
@@ -194,7 +191,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       this.deps.publish(input.sessionId)
     })
 
-  async tick(): Promise<void> {
+  tick = async (): Promise<void> => {
     if (this.running || this.disposed) {
       return
     }

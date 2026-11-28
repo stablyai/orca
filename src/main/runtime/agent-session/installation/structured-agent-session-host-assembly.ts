@@ -87,6 +87,9 @@ export async function installOnJournal(
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
+    ...(deps.canSwitchAntigravityAccount
+      ? { canSwitchAntigravityAccount: deps.canSwitchAntigravityAccount }
+      : {}),
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     ...(deps.onIdleProviderDeath ? { onIdleProviderDeath: deps.onIdleProviderDeath } : {}),

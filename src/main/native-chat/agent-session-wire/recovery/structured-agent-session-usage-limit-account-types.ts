@@ -19,4 +19,6 @@ export type UsageLimitAccountVerdict = {
   awaitingRoom: boolean
   /** A room reading, rather than a reset time, made this cut eligible. */
   releasedByRoom: boolean
+  /** The saved account the chat moved to, out of quota until `resetsAt`; '' when it has no name. */
+  limitedAccount?: string
 }

@@ -98,7 +98,8 @@ export function useNativeChatInterruptedContinuation(input: {
   const {
     auto: usageLimitAutoContinue,
     unavailable: usageLimitAutoContinueUnavailable,
-    continueAt: usageLimitContinueAt
+    continueAt: usageLimitContinueAt,
+    limitedAccount: usageLimitLimitedAccount
   } = useNativeChatUsageLimitAutoContinue(target, sessionId, usageLimitCut)
   // Kept with the chat tab: a view released while Continue is being asked returns without offering it again.
   const [attempt, setAttempt] = useNativeChatViewGuard(
@@ -201,6 +202,7 @@ export function useNativeChatInterruptedContinuation(input: {
       usageLimitAutoContinue,
       usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
+      usageLimitLimitedAccount,
       onUsageLimitHandOffStarted:
         usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
@@ -217,6 +219,7 @@ export function useNativeChatInterruptedContinuation(input: {
       usageLimitAutoContinue,
       usageLimitAutoContinueUnavailable,
       usageLimitContinueAt,
+      usageLimitLimitedAccount,
       usageCapability,
       continueUsageLimit
     ]

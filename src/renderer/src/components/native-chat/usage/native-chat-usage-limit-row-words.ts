@@ -23,6 +23,8 @@ export type UsageLimitRowWordsInput = {
   autoTime: string | null
   /** The schedule is exactly when Continue applies. */
   sameTime: boolean
+  /** The account the chat moved to, itself out of quota until `manualTime`. */
+  limitedAccount?: string
 }
 
 export type UsageLimitRowWords = {
@@ -94,6 +96,19 @@ function accessibleStatus(input: UsageLimitRowWordsInput, t: Translate): string 
           { agent }
         )
   }
+  if (input.limitedAccount !== undefined && manualTime) {
+    return input.limitedAccount
+      ? t(
+          'components.native-chat.usageLimitActions.statusAccountOutOfQuota',
+          '{{account}} is out of quota until {{time}}.',
+          { account: input.limitedAccount, time: manualTime }
+        )
+      : t(
+          'components.native-chat.usageLimitActions.statusUnnamedAccountOutOfQuota',
+          'That account is out of quota until {{time}}.',
+          { time: manualTime }
+        )
+  }
   if (autoTime && sameTime) {
     return t(
       'components.native-chat.usageLimitAutoContinue.scheduled',
@@ -132,6 +147,19 @@ function subline(input: UsageLimitRowWordsInput, t: Translate): string | null {
   const autoTime = unbroken(input.autoTime)
   if (phase === 'unknown') {
     return t('components.native-chat.usageLimitActions.resetUnknown', 'Reset time unknown')
+  }
+  if (phase === 'waiting' && input.limitedAccount !== undefined && manualTime) {
+    return input.limitedAccount
+      ? t(
+          'components.native-chat.usageLimitActions.accountOutOfQuota',
+          '{{account}} is out of quota until {{time}}',
+          { account: input.limitedAccount, time: manualTime }
+        )
+      : t(
+          'components.native-chat.usageLimitActions.unnamedAccountOutOfQuota',
+          'That account is out of quota until {{time}}',
+          { time: manualTime }
+        )
   }
   if (phase === 'waiting' && autoTime && sameTime) {
     return t('components.native-chat.usageLimitActions.continuesAt', 'Continues at {{time}}', {

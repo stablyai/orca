@@ -16,6 +16,7 @@ import {
   nativeChatUsageLimitAutoContinueKind,
   nativeChatUsageLimitAutoContinueUnavailable,
   usageLimitContinueAtForCut,
+  usageLimitLimitedAccountForCut,
   usageLimitContinueResetForCut,
   usageLimitContinueStateForCut
 } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-auto-continue'
@@ -34,6 +35,8 @@ export function useNativeChatUsageLimitAutoContinue(
   unavailable: boolean
   /** When the host lets Continue apply: earlier than the cut's reset once the chat moved accounts. */
   continueAt: number | undefined
+  /** The account the chat moved to, out of quota itself until `continueAt`. */
+  limitedAccount: string | undefined
 } {
   const capability = useStructuredAgentSessionHostCapabilityState(
     target,
@@ -70,6 +73,14 @@ export function useNativeChatUsageLimitAutoContinue(
     turnItemId === undefined
       ? undefined
       : usageLimitContinueAtForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, {
+          turnItemId,
+          resetsAt
+        })
+  )
+  const limitedAccount = useSyncExternalStore(subscribe, () =>
+    turnItemId === undefined
+      ? undefined
+      : usageLimitLimitedAccountForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, {
           turnItemId,
           resetsAt
         })
@@ -137,11 +148,15 @@ export function useNativeChatUsageLimitAutoContinue(
     () => ({
       auto,
       unavailable,
+      // A move onto an account itself out of quota waits for that account, even past this reset.
       continueAt:
         resetsAt === undefined || continueAt === undefined
           ? resetsAt
-          : Math.min(resetsAt, continueAt)
+          : limitedAccount !== undefined
+            ? continueAt
+            : Math.min(resetsAt, continueAt),
+      limitedAccount
     }),
-    [auto, unavailable, resetsAt, continueAt]
+    [auto, unavailable, resetsAt, continueAt, limitedAccount]
   )
 }

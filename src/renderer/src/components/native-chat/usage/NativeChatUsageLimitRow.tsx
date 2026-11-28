@@ -237,7 +237,10 @@ function UsageLimitCard({
       auto,
       manualTime: manualAt === undefined ? null : formatUsageLimitResetClock(manualAt),
       autoTime,
-      sameTime
+      sameTime,
+      ...(active && view.usageLimitLimitedAccount !== undefined
+        ? { limitedAccount: view.usageLimitLimitedAccount }
+        : {})
     },
     t
   )

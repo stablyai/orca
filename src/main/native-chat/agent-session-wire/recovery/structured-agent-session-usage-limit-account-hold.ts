@@ -20,6 +20,10 @@ import {
 } from './structured-agent-session-usage-limit-relaunch'
 import { isAccountHoldSchedulable } from './structured-agent-session-usage-limit-account-schedule'
 import {
+  UsageLimitSavedAccountResets,
+  type UsageLimitSavedAccountMove
+} from './structured-agent-session-usage-limit-saved-accounts'
+import {
   accountSwitchReset,
   accountSwitchRoom
 } from './structured-agent-session-usage-limit-account-cache'
@@ -41,6 +45,14 @@ type AttributionHost = Pick<
   'launchAccountHome' | 'usageLimitAutoContinue'
 > & { store: Pick<AgentSessionRecordStore, 'getRecord'> }
 
+type MovedSince = {
+  cut: string
+  to: AgentSessionAccountHome
+  at: number
+  /** The name of the account moved to, when it is out of quota too; '' when it has none. */
+  label?: string
+} & Partial<UsageLimitSavedAccountMove>
+
 const GRACE_MS = 15_000
 const UNKNOWN_RESET_ASK_MS = 10 * 60_000
 
@@ -49,10 +61,8 @@ export class UsageLimitAccountHolds {
   private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
   private readonly bindings = new Map<string, UsageLimitAttributionBinding>()
   private readonly providers = new Map<string, string>()
-  private readonly movedSince = new Map<
-    string,
-    { cut: string; to: AgentSessionAccountHome; at: number }
-  >()
+  private readonly movedSince = new Map<string, MovedSince>()
+  private readonly savedAccounts = new UsageLimitSavedAccountResets()
   private readonly relaunched = new UsageLimitRelaunchedCuts()
   private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
   private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
@@ -84,7 +94,11 @@ export class UsageLimitAccountHolds {
     }
     let scope: UsageLimitAccountScope | undefined
     let movedTo: AgentSessionAccountHome | null = null
+    let savedMove: UsageLimitSavedAccountMove | null = null
     let relaunchedOn: AgentSessionAccountHome | null = null
+    if (record) {
+      this.savedAccounts.note(record.provider, hit.accountId, limited.resetsAt)
+    }
     try {
       // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
       if (record && record.location.wslDistro === null) {
@@ -97,6 +111,17 @@ export class UsageLimitAccountHolds {
         }
         const home = (await launch) ?? record.accountHome
         movedTo = hit.home && !sameAccountHome(home, hit.home) ? home : null
+        // In the same home, the selected saved account may be another than the one the cut hit.
+        savedMove =
+          !movedTo && hit.home
+            ? this.savedAccounts.move(
+                record.provider,
+                hit.accountId,
+                host.usageLimitAutoContinue?.launchAccountId?.(record),
+                now
+              )
+            : null
+        movedTo = savedMove ? home : movedTo
         relaunchedOn = hit?.relaunched ? home : null
         const path = agentSessionAccountHomePath(home)
         if (read && home && path) {
@@ -124,8 +149,24 @@ export class UsageLimitAccountHolds {
     const since = this.movedSince.get(id)
     if (!movedTo) {
       this.movedSince.delete(id)
-    } else if (since?.cut !== hit.cut || !sameAccountHome(since.to, movedTo)) {
-      this.movedSince.set(id, { cut: hit.cut, to: movedTo, at: now })
+    } else if (
+      since?.cut !== hit.cut ||
+      !sameAccountHome(since.to, movedTo) ||
+      since.account !== savedMove?.account ||
+      since.limitedUntil !== savedMove?.limitedUntil
+    ) {
+      // A move onto an account still out of quota frees the chat when that account resets.
+      const label =
+        record && savedMove?.limitedUntil !== undefined
+          ? (host.usageLimitAutoContinue?.accountLabel?.(record.provider, savedMove.account) ?? '')
+          : undefined
+      this.movedSince.set(id, {
+        cut: hit.cut,
+        to: movedTo,
+        at: savedMove?.limitedUntil ?? now,
+        ...savedMove,
+        ...(label !== undefined ? { label } : {})
+      })
     }
     this.relaunched.note(
       id,
@@ -173,6 +214,7 @@ export class UsageLimitAccountHolds {
     this.bindings.clear()
     this.providers.clear()
     this.movedSince.clear()
+    this.savedAccounts.clear()
     this.relaunched.clear()
     this.beginPass()
   }
@@ -193,17 +235,26 @@ export class UsageLimitAccountHolds {
   ): UsageLimitAccountVerdict {
     const moved = this.movedSince.get(id),
       movedCut = moved?.cut === switchFreeIdentity(limited)
-    const cut = movedCut ? { ...limited, resetsAt: Math.min(limited.resetsAt, moved.at) } : limited
+    const limitedAccount = movedCut ? moved.label : undefined
+    const cut = movedCut
+      ? {
+          ...limited,
+          resetsAt: moved.limitedUntil ?? Math.min(limited.resetsAt, moved.at)
+        }
+      : limited
     let [scope, hold] = [this.scopes.get(id), this.holds.get(id)]
     const relaunchedCut = this.relaunched.at(id, switchFreeIdentity(limited)) !== undefined
     const awaitingRoom = limited.resetFromSwitch === true && relaunchedCut
+    const outOfQuota =
+      limitedAccount !== undefined && moved?.limitedUntil !== undefined ? { limitedAccount } : {}
     if (!hold && !scope) {
       return {
         resetsAt: cut.resetsAt,
         unknownReset: false,
         awaitingReading: false,
         awaitingRoom,
-        releasedByRoom: false
+        releasedByRoom: false,
+        ...outOfQuota
       }
     }
     if (
@@ -215,7 +266,7 @@ export class UsageLimitAccountHolds {
       this.holds.set(id, hold)
     }
     hold.account = scope?.account?.key ?? hold.account
-    return accountHoldVerdict({
+    const verdict = accountHoldVerdict({
       cut,
       movedCut,
       awaitingRoom,
@@ -226,6 +277,7 @@ export class UsageLimitAccountHolds {
       roomAt: (account, reading) =>
         this.relaunched.roomAt(id, switchFreeIdentity(limited), account, reading, now)
     })
+    return { ...verdict, ...outOfQuota }
   }
 
   schedulable(

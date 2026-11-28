@@ -21,7 +21,7 @@ export function ProviderAccountChatButton({
   onKeyDown,
   ...buttonProps
 }: ComponentProps<typeof Button> & {
-  provider: 'claude'
+  provider: 'claude' | 'antigravity'
   target: RuntimeClientTarget
   add?: boolean
   disabled: boolean
@@ -81,7 +81,7 @@ export function ProviderAccountChatButton({
 }
 
 export function providerChatAccountControl(
-  provider: 'claude',
+  provider: 'claude' | 'antigravity',
   action: ChatAccountAction | undefined,
   loaded: boolean,
   signedInCount: number,
