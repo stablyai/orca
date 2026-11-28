@@ -20,7 +20,7 @@ import {
   dashboardCardMapWorkspaceMetadata,
   type ActiveDashboardWorkspace
 } from './dashboard-snapshot-workspaces'
-import { boundedLabel } from './dashboard-card-labels'
+import { boundedLabel, rowPaneOrTabChanged } from './dashboard-card-labels'
 import { buildDashboardSnapshotCard } from './dashboard-snapshot-card'
 import { replaceDashboardCards } from './dashboard-card-changes'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
@@ -180,7 +180,7 @@ export function buildDashboardSnapshot(
         prior.row === row &&
         prior.status === status &&
         prior.activationStatus === activationStatus &&
-        !changed?.has(row.paneKey) &&
+        !rowPaneOrTabChanged(changed, row.paneKey, row.tab.id) &&
         !changed?.has(row.activationPaneKey ?? '') &&
         equal(children, prior.card.subagents)
       ) {

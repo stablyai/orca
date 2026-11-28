@@ -36,7 +36,8 @@ export function rowConversationName(
   layout: TerminalLayoutSnapshot | undefined,
   paneTitles: Record<number, string> | undefined,
   names: StructuredChatTabNames,
-  tabs: AppState['unifiedTabsByWorktree'] | undefined
+  tabs: AppState['unifiedTabsByWorktree'] | undefined,
+  agentStatuses: AppState['agentStatusByPaneKey']
 ): string | undefined {
   const parentPaneKey = row.entry.orchestration?.parentPaneKey
   // Why: a child row rendered on its parent's tab does not own that tab's name.
@@ -58,13 +59,36 @@ export function rowConversationName(
     parsePaneKey(row.paneKey)?.leafId,
     row.runtimePaneId
   )
+  const sharesTab =
+    paneLiveTitle !== undefined && agentStatuses.hasOtherKeyInTab(row.tab.id, row.paneKey)
   return (
     getAgentRowConversationName(
       row.tab,
       row.agentType,
       generatedTitlesEnabled,
       paneLiveTitle,
-      row.entry.providerSession?.id
+      row.entry.providerSession?.id,
+      sharesTab ? row.entry : undefined
     ) ?? undefined
   )
+}
+
+/** A sibling joining or leaving can change whether a card's tab is shared, so every card in that tab rebuilds. */
+export function rowPaneOrTabChanged(
+  changed: ReadonlySet<string> | null,
+  paneKey: string,
+  tabId: string
+): boolean {
+  if (!changed) {
+    return false
+  }
+  if (changed.has(paneKey)) {
+    return true
+  }
+  for (const key of changed) {
+    if (key.startsWith(`${tabId}:`)) {
+      return true
+    }
+  }
+  return false
 }

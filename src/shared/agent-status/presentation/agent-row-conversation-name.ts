@@ -8,6 +8,7 @@ import { SYNTHETIC_AGENT_TITLE_PROFILES } from '../title/synthetic-agent-title'
 import type { TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import { resolveTabNameSource } from '../../workspace-layout/tab-groups/tab-title-resolution'
 import { aiVaultTitleOfSession } from '../../ai-vault/contracts/ai-vault-session-title'
+import { statusDerivesGeneratedTitle } from './agent-generated-tab-title-rules'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
@@ -107,17 +108,21 @@ export function getAgentRowConversationName(
   generatedTitlesEnabled: boolean,
   // Tab live title names the focused pane; split callers supply their own title/null. Undefined retains single-pane behavior; tab-owned names still apply.
   paneLiveTitle?: string | null,
-  providerSessionId?: string
+  providerSessionId?: string,
+  // Passed only when another agent shares the tab: the generated title then shows only on the pane whose prompts derive it.
+  paneStatus?: Parameters<typeof statusDerivesGeneratedTitle>[0]
 ): string | null {
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
+  const siblingGeneratedTitle =
+    paneStatus !== undefined && !statusDerivesGeneratedTitle(paneStatus, tab.generatedTitle)
   const named = resolveTabNameSource(
     {
       customTitle: tab.customTitle,
       quickCommandLabel: tab.quickCommandLabel,
       liveTitle,
       sessionTitle: aiVaultTitleOfSession(tab.aiVaultTitle, agentType, providerSessionId),
-      generatedTitle: tab.generatedTitle
+      generatedTitle: siblingGeneratedTitle ? undefined : tab.generatedTitle
     },
     generatedTitlesEnabled
   )

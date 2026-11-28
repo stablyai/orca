@@ -5,6 +5,7 @@ import type {
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { aiVaultTitleOfSession } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
+import { statusDerivesGeneratedTitle } from '../../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getAgentRowPrimaryText,
@@ -93,6 +94,8 @@ export function getActivityThreadTaskTitle(args: {
     'customTitle' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
   >
   generatedTitlesEnabled: boolean
+  /** Another agent shares the tab, so only the agent whose prompts derive the generated title may show it. */
+  sharesTab?: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
   if (customTitle) {
@@ -116,7 +119,11 @@ export function getActivityThreadTaskTitle(args: {
   }
 
   // Respect tabAutoGenerateTitle here too so disabled generated titles cannot resurface.
-  const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
+  const generatedTitle =
+    args.generatedTitlesEnabled &&
+    (!args.sharesTab || statusDerivesGeneratedTitle(args.entry, args.tab.generatedTitle))
+      ? args.tab.generatedTitle?.trim()
+      : ''
   if (generatedTitle) {
     return generatedTitle
   }

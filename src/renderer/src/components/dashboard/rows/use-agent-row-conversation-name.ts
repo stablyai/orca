@@ -70,6 +70,13 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
           agent.runtimePaneId
         )
   )
+  // Split tabs only, so single-pane rows skip the sibling scan on every store write.
+  const sharesTab = useAppStateValue(
+    (s) =>
+      !cannotOwnTabName &&
+      s.terminalLayoutsByTabId?.[agent.tab.id]?.root?.type === 'split' &&
+      s.agentStatusByPaneKey.hasOtherKeyInTab(agent.tab.id, agent.paneKey)
+  )
   // Why: synthetic and same-tab child rows do not own the parent tab's name.
   if (cannotOwnTabName) {
     return { name: null, forked: false }
@@ -86,7 +93,8 @@ export function useAgentRowConversationNaming(agent: DashboardAgentRow): {
     agent.agentType,
     generatedTitlesEnabled,
     paneLiveTitle,
-    agent.entry.providerSession?.id
+    agent.entry.providerSession?.id,
+    sharesTab ? agent.entry : undefined
   )
   return { name, forked: false }
 }
