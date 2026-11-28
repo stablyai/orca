@@ -1,4 +1,13 @@
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { access, copyFile, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { fileStatSignature } from '../../../filesystem/file-stat-signature'
+import { seedDaemonHostFileHash } from './daemon-host-file-hash-cache'
+import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
+import {
+  DAEMON_HOST_FS_CONCURRENCY,
+  listDaemonHostTree,
+  type TreeEntry
+} from './daemon-host-tree-walk'
 import { dirname, join, win32 as winPath } from 'node:path'
 
 /** Preserve signed bytes and basename; path-based NSIS sweeps spare the copy, but taskkill /IM can still kill it. */
@@ -185,47 +194,136 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   return ops
 }
 
-export function executeManifest(ops: CopyOp[], stagingRoot: string): void {
-  for (const op of ops) {
-    if (!existsSync(op.sourcePath)) {
-      if (op.optional) {
-        continue
-      }
-      throw new Error(`daemon-host relocation: missing required input ${op.sourcePath}`)
-    }
-    const dest = destPath(stagingRoot, op.destRel)
-    mkdirSync(dirname(dest), { recursive: true })
-    const { filter } = op
-    if (filter && op.kind === 'dir' && process.platform === 'win32') {
-      copyFilteredTreeSync(op.sourcePath, dest, filter)
-      continue
-    }
-    // Dereference links so the mirror survives removal of the install directory.
-    cpSync(op.sourcePath, dest, {
-      recursive: op.kind === 'dir',
-      dereference: true,
-      force: true,
-      ...(filter ? { filter: (src: string) => filter(src) } : {})
-    })
-  }
+async function sourceSignature(sourcePath: string): Promise<string> {
+  return fileStatSignature(await stat(sourcePath, { bigint: true }))
 }
 
-// cpSync with a filter walks folders with opendirSync, which can crash on Windows when an open
-// fails (#50997). Same filter, dereferenced links and overwrite; #51222 replaces this walk.
-function copyFilteredTreeSync(
-  source: string,
-  destination: string,
-  filter: (sourcePath: string) => boolean
-): void {
-  if (!filter(source)) {
-    return
+// Hash the bytes written; rereading a just-written file waits on Defender's scan of it.
+async function copyHashedFile(
+  sourcePath: string,
+  dest: string,
+  expected: string | undefined
+): Promise<{ sha256: string; signature: string }> {
+  const signature = await sourceSignature(sourcePath)
+  const bytes = await readFile(sourcePath)
+  const sha256 = createHash('sha256').update(bytes).digest('hex')
+  if (expected !== undefined && sha256 !== expected) {
+    throw new Error('daemon-host relocation: code changed while copying')
   }
-  if (!statSync(source).isDirectory()) {
-    copyFileSync(source, destination)
-    return
+  await writeFile(dest, bytes)
+  return { sha256, signature }
+}
+
+// A file added or removed under the code after listing would publish an incomplete build.
+async function assertCodeDirsUnchanged(
+  codeDirs: readonly TreeEntry[],
+  listed: readonly TreeEntry[]
+): Promise<void> {
+  const listedRels = new Set(listed.map((entry) => entry.destRel))
+  await mapWithConcurrencyUntilFailure(codeDirs, DAEMON_HOST_FS_CONCURRENCY, async (dir) => {
+    const names = (await readdir(dir.sourcePath)).filter(
+      (name) => !dir.filter || dir.filter(join(dir.sourcePath, name))
+    )
+    const listedCount = [...listedRels].filter(
+      (rel) => rel.startsWith(`${dir.destRel}/`) && !rel.slice(dir.destRel.length + 1).includes('/')
+    ).length
+    if (
+      names.length !== listedCount ||
+      names.some((name) => !listedRels.has(`${dir.destRel}/${name}`))
+    ) {
+      throw new Error('daemon-host relocation: code changed while copying')
+    }
+  })
+}
+
+export type ManifestCodeHashing = {
+  /** Posix destRels whose copied bytes are hashed and returned. */
+  isCode: (destRel: string) => boolean
+  /** When given, every code file must match; a fresh copy omits it and records what it copied. */
+  expected?: ReadonlyMap<string, string>
+}
+
+/**
+ * Copy through libuv so the ~1.8k-file, ~275 MiB runtime doesn't hold Electron main; only per-file hashing runs there.
+ * Returns the sha256 of every code file, taken from the bytes written.
+ */
+export async function executeManifest(
+  ops: CopyOp[],
+  stagingRoot: string,
+  code: ManifestCodeHashing = { isCode: () => false }
+): Promise<Map<string, string>> {
+  const exists = await mapWithConcurrencyUntilFailure(ops, DAEMON_HOST_FS_CONCURRENCY, (op) =>
+    access(op.sourcePath).then(
+      () => true,
+      () => false
+    )
+  )
+  const present = ops.filter((_, index) => exists[index])
+  const missing = ops.find((op) => !op.optional && !present.includes(op))
+  if (missing) {
+    throw new Error(`daemon-host relocation: missing required input ${missing.sourcePath}`)
   }
-  mkdirSync(destination, { recursive: true })
-  for (const name of readdirSync(source)) {
-    copyFilteredTreeSync(join(source, name), join(destination, name), filter)
+  const { files, dirs } = await listDaemonHostTree(present, DAEMON_HOST_FS_CONCURRENCY)
+  const codeFiles = files.filter((file) => code.isCode(file.destRel))
+  if (code.expected && code.expected.size !== codeFiles.length) {
+    throw new Error('daemon-host relocation: copied code does not match its fingerprint')
   }
+  // Keep accepted empty directories, matching the recursive copy this replaced.
+  const destDirs = new Set([
+    ...dirs.map((dir) => destPath(stagingRoot, dir.destRel)),
+    ...files.map((file) => dirname(destPath(stagingRoot, file.destRel)))
+  ])
+  for (const dir of destDirs) {
+    await mkdir(dir, { recursive: true })
+  }
+  const hashes = new Map<string, string>()
+  const signatures = new Map<string, { signature: string; sha256: string }>()
+  // Settles in-flight copies before failing, so staging cleanup cannot race a copy still writing.
+  await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, async (file) => {
+    const dest = destPath(stagingRoot, file.destRel)
+    if (!code.isCode(file.destRel)) {
+      await copyFile(file.sourcePath, dest)
+      return
+    }
+    const expected = code.expected?.get(file.destRel)
+    if (code.expected && expected === undefined) {
+      throw new Error(`daemon-host relocation: ${file.destRel} is outside the fingerprint`)
+    }
+    const copied = await copyHashedFile(file.sourcePath, dest, expected)
+    hashes.set(file.destRel, copied.sha256)
+    signatures.set(file.sourcePath, { signature: copied.signature, sha256: copied.sha256 })
+  })
+  await assertCodeDirsUnchanged(
+    dirs.filter((dir) => code.isCode(dir.destRel)),
+    [...files, ...dirs]
+  )
+  // An optional code root (chunks) that an update creates mid-copy would leave the copy without it.
+  const absentCode = ops.filter((op, index) => !exists[index] && code.isCode(op.destRel))
+  if (
+    (
+      await mapWithConcurrencyUntilFailure(absentCode, DAEMON_HOST_FS_CONCURRENCY, (op) =>
+        access(op.sourcePath).then(
+          () => true,
+          () => false
+        )
+      )
+    ).some(Boolean)
+  ) {
+    throw new Error('daemon-host relocation: code changed while copying')
+  }
+  // A source replaced after it was read (an update mid-copy) would mix revisions in one build.
+  await mapWithConcurrencyUntilFailure(
+    [...signatures],
+    DAEMON_HOST_FS_CONCURRENCY,
+    async ([path, before]) => {
+      if ((await sourceSignature(path)) !== before.signature) {
+        throw new Error('daemon-host relocation: code changed while copying')
+      }
+    }
+  )
+  // Sources proved unchanged across their read; seed the cache so a later sync lookup doesn't reread them on main.
+  for (const [path, { signature, sha256 }] of signatures) {
+    seedDaemonHostFileHash(path, signature, sha256)
+  }
+  return hashes
 }

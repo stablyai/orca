@@ -36,6 +36,34 @@ export function mapSettledWithConcurrency<T, R>(
   })
 }
 
+/** Stop starting items after the first failure, and settle in-flight ones before rejecting with it. */
+export async function mapWithConcurrencyUntilFailure<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = []
+  const failures: unknown[] = []
+  let nextIndex = 0
+  await Promise.all(
+    Array.from({ length: concurrencyWorkerCount(limit, items.length) }, async () => {
+      while (failures.length === 0 && nextIndex < items.length) {
+        const index = nextIndex
+        nextIndex += 1
+        try {
+          results[index] = await fn(items[index], index)
+        } catch (error) {
+          failures.push(error)
+        }
+      }
+    })
+  )
+  if (failures.length > 0) {
+    throw failures[0]
+  }
+  return results
+}
+
 export function forEachWithConcurrency<T>(
   items: readonly T[],
   limit: number,

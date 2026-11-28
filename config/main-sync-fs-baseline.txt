@@ -181,11 +181,11 @@
 1 src/main/daemon/executable-host/linux/daemon-appimage-launch.ts
 3 src/main/daemon/executable-host/linux/daemon-host-image.ts
 2 src/main/daemon/executable-host/macos/macos-daemon-bundle.ts
-9 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
+3 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
-7 src/main/daemon/executable-host/windows/daemon-host-manifest.ts # +4: Windows filtered staging copy walks with readdirSync/statSync/mkdirSync/copyFileSync instead of a filtered cpSync (same per-file sync work, which used opendirSync); once per daemon-host staging; #51222 replaces it
-2 src/main/daemon/executable-host/windows/daemon-host-reclaim.ts
-12 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
+4 src/main/daemon/executable-host/windows/daemon-host-inventory-roots.ts # moved from daemon-host-build-inventory.ts (row 9 -> 3); sync getRelocatedDaemonHost path only
+2 src/main/daemon/executable-host/windows/daemon-host-pinned-versions.ts # moved unchanged from daemon-host-relocation.ts, whose row shrank by more; once per daemon provider init
+6 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
 4 src/main/daemon/health/daemon-health.ts
 3 src/main/daemon/history/restoration/history-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-checkpoint-reader.ts
