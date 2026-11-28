@@ -386,6 +386,8 @@ export function BotItemBody({
                               events={view.events}
                               pending={pending}
                               quickReplies={quickReplies}
+                              history={deleted ? undefined : view}
+                              scrollRef={scrollRef}
                             />
                           ) : null}
                         </section>
