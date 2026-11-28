@@ -284,7 +284,7 @@ export function NativeChatQuestionCard({
           ref={surfaceRef}
           data-native-chat-dock-clip
           className={cn(
-            'native-chat-question-card-surface scrollbar-sleek relative z-[1] flex min-h-0 flex-col overflow-hidden rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm [[data-native-chat-dock-fit~=card]_&]:overflow-y-auto',
+            'native-chat-question-card-surface scrollbar-sleek relative z-[1] flex min-h-0 flex-col overflow-y-auto rounded-xl border border-primary/28 bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] shadow-sm',
             look?.surfaceClassName
           )}
         >
@@ -313,7 +313,7 @@ export function NativeChatQuestionCard({
           <div
             data-native-chat-dock-unsqueezed
             // Short of room, the whole card scrolls together so its question and actions stay reachable.
-            className="native-chat-question-card-body flex min-h-0 shrink flex-col [[data-native-chat-dock-fit~=card]_&]:shrink-0 [[data-native-chat-dock-fit~=card]_&]:overflow-visible"
+            className="native-chat-question-card-body flex min-h-0 shrink-0 flex-col overflow-visible"
           >
             {q.options.length > 0 ? (
               // Padded so each tile's outside focus outline clears the scroll clip.
@@ -322,7 +322,7 @@ export function NativeChatQuestionCard({
                 data-native-chat-dock-floor-first-item
                 className={cn(
                   'native-chat-question-card-options min-h-[calc(var(--spacing)*12)] shrink-[100] overflow-y-auto px-3.5 pt-2.5 pb-1 scrollbar-sleek',
-                  '[[data-native-chat-dock-fit~=card]_&]:min-h-0 [[data-native-chat-dock-fit~=card]_&]:shrink-0 [[data-native-chat-dock-fit~=card]_&]:overflow-visible'
+                  'min-h-0 shrink-0 overflow-visible'
                 )}
               >
                 <div data-native-chat-dock-content className="flex flex-col gap-1.5">
