@@ -33,6 +33,7 @@ const ICONABLE_AGENT_TYPES: Record<TerminalAgent, true> = {
   cursor: true,
   droid: true,
   kimi: true,
+  bqagent: true,
   'mistral-vibe': true,
   'qwen-code': true,
   rovo: true,

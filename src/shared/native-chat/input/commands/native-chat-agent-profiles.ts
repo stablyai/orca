@@ -104,6 +104,7 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
+  bqagent: null,
   // Kiro loads `.kiro/skills` only (never `.agents/skills`) and reports skills once a session starts.
   kiro: {
     skillPrefix: '/',

@@ -22,6 +22,7 @@ describe('standing instructions on every start', () => {
       claude: false,
       codex: false,
       pi: true,
+      bqagent: false,
       grok: false,
       opencode: true,
       opencode2: true,

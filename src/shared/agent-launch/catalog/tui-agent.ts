@@ -28,6 +28,7 @@ export type TuiAgent =
   | 'cursor'
   | 'droid' // Factory Droid
   | 'kimi'
+  | 'bqagent'
   | 'mistral-vibe'
   | 'qwen-code'
   | 'rovo' // Rovo Dev

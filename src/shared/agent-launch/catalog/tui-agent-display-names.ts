@@ -38,6 +38,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   cursor: 'Cursor',
   droid: 'Droid',
   kimi: 'Kimi',
+  bqagent: 'bqagent',
   'mistral-vibe': 'Mistral Vibe',
   'qwen-code': 'Qwen Code',
   rovo: 'Rovo Dev',

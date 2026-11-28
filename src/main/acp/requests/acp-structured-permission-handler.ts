@@ -13,7 +13,11 @@ export function acpStructuredPermissionHandler(
 ): AcpPermissionHandler {
   return (request, context) => {
     const child = session()
-    if (!childState.isAcpReadySession(child) || !child.turns?.acceptsRequests) {
+    if (
+      spec.autonomousTools ||
+      !childState.isAcpReadySession(child) ||
+      !child.turns?.acceptsRequests
+    ) {
       // Nobody can answer during Stop, a steer or teardown.
       return { outcome: { outcome: 'cancelled' } }
     }
