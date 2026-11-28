@@ -15,6 +15,11 @@ import {
 import type { NativeChatBlock } from './native-chat/native-chat-types'
 import { fenceQuotedText } from './quoted-text-fence'
 import { slackMarkupShownText } from './connectors/slack-message-markup'
+import {
+  connectorFileDownloadHint,
+  connectorFileDownloadHints,
+  connectorPartNotShown
+} from './connectors/connector-file-download-hints'
 
 const PLACE_KINDS: Record<ConnectorAsker['place']['kind'], string> = {
   direct_message: 'direct message',
@@ -154,23 +159,7 @@ function contextPart(
 
 // What may go on an Orca line from a bare mention's request: anything else is left out, never escaped.
 const SLACK_MESSAGE_REF = /^slack:[A-Z0-9]+:[A-Z0-9]+:\d+\.\d+:\d+\.\d+$/
-const FILE_ID = /^[A-Za-z0-9_-]{1,64}$/
-const FILE_TYPE = /^[a-z0-9.+-]{1,64}\/[a-z0-9.+-]{1,64}$/i
-
-// A part of the request Orca doesn't carry: the bot asks for it rather than guessing.
-const notShown = (what: string) =>
-  `[Orca: part of their request isn't shown here (${what}); ask them for it before acting on that part]`
-
-type EarlierOwnFile = NonNullable<ConnectorEarlierOwn['messages'][number]['files']>[number]
-
-function earlierOwnFile(file: EarlierOwnFile, ref: string | null): string {
-  if (ref === null || !FILE_ID.test(file.id)) {
-    return notShown('a file in it')
-  }
-  const name = shownName(file.name) ?? 'a file'
-  const type = file.type && FILE_TYPE.test(file.type) ? `, ${file.type}` : ''
-  return `[Orca: file ${file.id}: ${name}${type}; \`orca slack read ${ref} --download ${file.id}\` saves it]`
-}
+const notShown = connectorPartNotShown
 
 // A bare mention's request: the asker's own messages before it, each fenced under its own Orca line.
 function earlierOwnParts(earlier: ConnectorEarlierOwn): string[] {
@@ -184,7 +173,9 @@ function earlierOwnParts(earlier: ConnectorEarlierOwn): string[] {
       return [
         `[Orca: their own earlier message in this thread, ${new Date(message.at).toISOString()}, part of their request]`,
         fenceQuotedText(message.text),
-        ...(message.files ?? []).map((file) => earlierOwnFile(file, ref)),
+        ...(message.files ?? []).map((file) =>
+          connectorFileDownloadHint(file.id, file.name, file.type ?? '', ref ?? undefined)
+        ),
         ...(message.filesMore ? [notShown('more files in it')] : []),
         ...(message.shared ? [notShown('a message they shared in it')] : []),
         ...(message.cut ? [notShown('the rest of this message')] : [])
@@ -279,9 +270,12 @@ export function connectorAskerPrompt(
   const later = timing.later ?? []
   const together = later.length > 0
   const message = (from: ConnectorAsker, sent: ConnectorMessageTiming | undefined) =>
-    [connectorSentLine(sent, together), MESSAGE_LABEL, fenceQuotedText(from.text)].filter(
-      (part): part is string => part !== null
-    )
+    [
+      connectorSentLine(sent, together),
+      MESSAGE_LABEL,
+      fenceQuotedText(from.text),
+      ...connectorFileDownloadHints(source, from.text, from.messageRef)
+    ].filter((part): part is string => part !== null)
   const prompt = [
     connectorAskerHeader(source, asker),
     NOTE,
