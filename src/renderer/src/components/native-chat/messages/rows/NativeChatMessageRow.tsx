@@ -2,6 +2,7 @@ import { memo, useRef } from 'react'
 import type { AgentSessionAccountKind } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import type { NativeChatForkRowAction } from '../actions/use-native-chat-fork'
+import type { NativeChatHandOffRowAction } from '../actions/native-chat-hand-off-context'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatAssistantMessageRow } from './NativeChatAssistantMessageRow'
@@ -97,6 +98,8 @@ export type MessageRowProps = {
   rewind?: NativeChatRewindSurface
   /** On a finished response of the chat's own agent: forks the chat through its turn. */
   fork?: NativeChatForkRowAction
+  /** Fallback on finished responses without native Fork: hands off context through this response. */
+  handOff?: NativeChatHandOffRowAction
   /** All messages in this work run, message first; preserve row identity when a message becomes a run. */
   workRun?: readonly NativeChatMessage[]
 }

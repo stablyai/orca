@@ -15,6 +15,8 @@ export type AgentSessionContinuationSource = {
   transcriptPath?: string | null
   lastPrompt?: string | null
   lastAssistantMessage?: string | null
+  /** True when `capturedText` stops at an earlier selected response rather than the chat's end. */
+  truncatedToResponse?: boolean
 }
 
 export type AgentSessionContinuationRequest = {
@@ -90,9 +92,18 @@ export function buildAgentSessionContinuationPrompt(
       : null
   ].filter((line): line is string => Boolean(line))
 
+  const openingLines = source.truncatedToResponse
+    ? [
+        'Continue work from an earlier point in a prior Orca session using the context below.',
+        'The prior provider session is read-only context; do not resume or modify it. Only messages up to the selected response are included; ignore anything that happened later in the original session.'
+      ]
+    : [
+        'Continue work from the prior Orca session using the context below.',
+        'The prior provider session is read-only context; do not resume or modify it.'
+      ]
+
   return [
-    'Continue work from the prior Orca session using the context below.',
-    'The prior provider session is read-only context; do not resume or modify it.',
+    ...openingLines,
     '',
     ...sourceLines,
     ...(sourceLines.length > 0 ? [''] : []),
@@ -100,7 +111,8 @@ export function buildAgentSessionContinuationPrompt(
       mode,
       transcriptPath,
       capturedTranscript,
-      sourceKind: source.sourceKind
+      sourceKind: source.sourceKind,
+      truncatedToResponse: source.truncatedToResponse
     }),
     ...(statusHints.length > 0 ? ['', 'Latest Orca status hints:', ...statusHints] : []),
     '',
@@ -117,6 +129,7 @@ function buildContextSection(args: {
   sourceKind?: 'chat'
   transcriptPath: string | null
   capturedTranscript: string | null
+  truncatedToResponse?: boolean
 }): string[] {
   if (args.transcriptPath) {
     const fence = markdownFenceFor(args.transcriptPath)
@@ -153,12 +166,10 @@ function buildContextSection(args: {
 
   const transcript = args.capturedTranscript ?? ''
   const fence = markdownFenceFor(transcript)
-  return [
-    args.sourceKind === 'chat'
+  const heading = args.truncatedToResponse
+    ? 'Chat messages up to the selected response (later messages were intentionally omitted):'
+    : args.sourceKind === 'chat'
       ? 'A saved session transcript was unavailable, so use these recent chat messages:'
-      : 'A saved session transcript was unavailable, so use this bounded recent terminal capture:',
-    `${fence}text`,
-    transcript,
-    fence
-  ]
+      : 'A saved session transcript was unavailable, so use this bounded recent terminal capture:'
+  return [heading, `${fence}text`, transcript, fence]
 }
