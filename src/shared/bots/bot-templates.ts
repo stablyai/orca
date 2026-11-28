@@ -28,6 +28,7 @@ export type BotTemplateCategory = (typeof BOT_TEMPLATE_CATEGORIES)[number]
 /** Our own small skills, shared across templates; the host writes each into the new bot's home. */
 export const BOT_TEMPLATE_SKILLS = [
   'pr-review-checklist',
+  'review-with-ocr',
   'bug-reproduction',
   'ci-failure-triage',
   'release-readiness',

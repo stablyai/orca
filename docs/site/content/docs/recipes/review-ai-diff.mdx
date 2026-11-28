@@ -13,3 +13,14 @@ Reviewing an AI diff well is the difference between shipping fast and shipping b
 1. Watch the agent revise. The state dot will go yellow (waiting for more input) or green (working).
 1. When it's idle, re-open the diff. Your comments are pinned; resolve the ones that are fixed and leave follow-ups on the rest.
 1. Repeat until clean, then commit.
+
+## Ask for an OpenCodeReview pass
+
+Create a bot from the **OpenCodeReview** template. Give it the Git workspace and ask “Review my uncommitted changes” or give it a pull request to review. No GitHub connection is needed to review local changes. The bot reports in chat; it doesn't edit the workspace or post review comments.
+
+Install the [OpenCodeReview CLI](https://github.com/alibaba/open-code-review#install) and Git 2.41 or newer **on the host that holds the workspace**. For a paired Orca server, use a server version that includes the template. Then choose who runs the review:
+
+- **OCR's model (default):** OCR sends the review to its configured provider. To set it up, run `ocr config provider` and `ocr config model` in that host's terminal, not in chat.
+- **Current agent:** Ask “Delegate this review to my current agent.” OCR selects files and resolves review rules; the bot's agent reads the diff using its own model and allowance. No OCR provider or key is needed.
+
+If no OCR model is configured, the bot offers setup or delegation rather than switching models on its own. The ordinary **Pull request review** template does not require OCR.

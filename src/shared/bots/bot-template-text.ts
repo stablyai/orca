@@ -128,6 +128,8 @@ function translatedSkillName(skill: BotTemplateSkill, t: Translate): string {
   switch (skill) {
     case 'pr-review-checklist':
       return t('bots.templateSkills.prReviewChecklist', 'pr-review-checklist')
+    case 'review-with-ocr':
+      return t('bots.templateSkills.reviewWithOcr', 'review-with-ocr')
     case 'bug-reproduction':
       return t('bots.templateSkills.bugReproduction', 'bug-reproduction')
     case 'ci-failure-triage':
