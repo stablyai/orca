@@ -28682,8 +28682,9 @@
       },
       "loading": "Öğeler yükleniyor…",
       "row": {
-        "more": "Daha fazla",
+        "cancel": "İptal et",
         "done": "Tamam",
+        "more": "Daha fazla",
         "select": "{{title}} öğesini seç"
       },
       "snooze": {
@@ -28751,8 +28752,6 @@
         "automationEnded": "Sona erdi"
       },
       "menu": {
-        "cancel": "İptal et",
-        "done": "Tamam",
         "waiting": "Bekleniyor…"
       },
       "pill": {
