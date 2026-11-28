@@ -8,6 +8,8 @@ import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 export type WslMappedDriveAnswer = { letter: string; share: string | null; at: number }
 
 const lastKnown = new Map<string, { share: string | null; at: number }>()
+// Letters a read in this launch found outside WSL; a saved or failed null can't vouch for that.
+const readNowhereThisRun = new Set<string>()
 // Told every changed answer, so a restart knows a drive without reading it.
 let answerSink: ((answers: WslMappedDriveAnswer[]) => void) | null = null
 
@@ -23,6 +25,11 @@ function settle(key: string, share: string | null, at: number): void {
 /** A lookup's answer: the drive root's final path, kept as a share only inside WSL. */
 export function rememberWslMappedDriveRead(key: string, real: string, at: number): string | null {
   const share = isWslShare(real) ? real.replace(/[\\/]+$/, '') : null
+  if (share === null) {
+    readNowhereThisRun.add(key)
+  } else {
+    readNowhereThisRun.delete(key)
+  }
   settle(key, share, at)
   return share
 }
@@ -35,6 +42,7 @@ export function rememberWslMappedDriveFailure(key: string, at: number): boolean 
   if (isWslShare(lastKnown.get(key)?.share ?? null)) {
     return true
   }
+  readNowhereThisRun.delete(key)
   settle(key, null, at)
   return false
 }
@@ -77,4 +85,9 @@ export function isWslMappedDriveLastKnownInWsl(letter: string, now: number = Dat
   return isWslShare(
     wslMappedDriveLastKnownShare(letter, Number.POSITIVE_INFINITY, now)?.share ?? null
   )
+}
+
+/** Whether a read in this launch, not a saved or failed answer, found the letter outside WSL. */
+export function isWslMappedDriveReadNowhereThisRun(letter: string): boolean {
+  return readNowhereThisRun.has(letter.toUpperCase())
 }

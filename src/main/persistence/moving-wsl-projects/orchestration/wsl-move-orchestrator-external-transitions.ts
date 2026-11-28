@@ -73,10 +73,7 @@ export function applyWslMoveReleasedByUser(
   return withWslMoveOrchestratorState(record, { kind: 'parked', reason: 'declined', cause }, now)
 }
 
-/**
- * A decline or Not now is never pruned: dropping it would let a later wake undo the user's choice.
- * A `stateLost` hold is Orca's guess, not a choice: prune may drop it once the distro is unused.
- */
+/** A user's decline or Not now is never pruned; a `stateLost` hold is Orca's guess, not theirs. */
 export function recordsUserChoice(record: WslMoveOrchestratorRecord): boolean {
   const { state } = record
   return (

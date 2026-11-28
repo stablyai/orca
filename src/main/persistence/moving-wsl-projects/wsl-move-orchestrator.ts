@@ -171,7 +171,14 @@ export class WslMoveOrchestrator {
       return
     }
     const listing: Promise<void> = held
-      .then((changed) => (changed ? this.saveAndPublish() : undefined))
+      .then(async (listed) => {
+        if (listed) {
+          this.saveAndPublish()
+          // The constructor's prune ran before these holds existed; unused ones clear this launch.
+          await this.prune()
+        }
+      })
+      .catch((error: unknown) => console.warn('[wsl-move] Could not prune inactive moves', error))
       .finally(() => this.inFlight.delete(listing))
     this.inFlight.add(listing)
   }
