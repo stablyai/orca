@@ -79,13 +79,15 @@ export async function sendNotificationReply(
       return
     }
     if (target.type === 'terminal') {
-      const status = decodeHostStatusReply(
-        await sendHostStatusRead(client, {
-          timeoutMs: deadline - Date.now(),
-          budgetSpansConnect: true
-        })
-      )
-      assertNotificationReplyTerminalSupport(status?.status?.capabilities)
+      for (const hop of client === pairedClient ? [client] : [pairedClient, client]) {
+        const status = decodeHostStatusReply(
+          await sendHostStatusRead(hop, {
+            timeoutMs: deadline - Date.now(),
+            budgetSpansConnect: true
+          })
+        )
+        assertNotificationReplyTerminalSupport(status?.status?.capabilities)
+      }
     }
     let fence = 1
     if (target.type === 'chat') {
