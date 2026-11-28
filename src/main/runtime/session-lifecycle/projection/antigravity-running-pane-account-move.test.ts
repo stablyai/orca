@@ -78,7 +78,10 @@ async function runtimeWithAgyTerminal(
       getFolderWorkspaces: () => [workspace],
       getFolderWorkspace: () => workspace,
       getWorkspaceSession: () => session,
-      ...(options.settings ? { getSettings: () => options.settings as GlobalSettings } : {})
+      ...(options.settings
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch reads only its own setting.
+          { getSettings: () => options.settings as GlobalSettings }
+        : {})
     })
   )
   const runtime = new OrcaRuntimeService(store)
@@ -93,15 +96,17 @@ async function runtimeWithAgyTerminal(
     },
     getForegroundProcess: async () => 'agy'
   })
-  vi.spyOn(
-    runtime as unknown as {
-      createRuntimeOwnedMobileSessionTerminal: (...args: unknown[]) => Promise<unknown>
-    },
-    'createRuntimeOwnedMobileSessionTerminal'
-  ).mockImplementation(async (_worktreeId, _active, _origin, launch) => {
-    events.push(`launch ${(launch as { command: string }).command}`)
-    return { tab: { status: 'ready', ptyId: 'pty-agy-next' } }
-  })
+  // The relaunch itself is the terminal service's; this records what it was asked to start.
+  const relaunch: { createRuntimeOwnedMobileSessionTerminal: CreateTerminal } =
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the protected method exists on every runtime; the spy replaces it.
+    runtime as unknown as { createRuntimeOwnedMobileSessionTerminal: CreateTerminal }
+  vi.spyOn(relaunch, 'createRuntimeOwnedMobileSessionTerminal').mockImplementation(
+    async (_worktreeId, _active, _origin, launch) => {
+      events.push(`launch ${launch.command}`)
+      return { tab: { status: 'ready', ptyId: 'pty-agy-next' } }
+    }
+  )
+  const restarts = vi.spyOn(runtime, 'restartAgentPaneInPlace')
   await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   runtime.registerPty(
     AGY,
@@ -110,15 +115,25 @@ async function runtimeWithAgyTerminal(
     { tabId: TAB, leafId: LEAF },
     options.isWsl
   )
-  return { runtime, events }
+  return { runtime, events, restarts }
 }
 
+type CreateTerminal = (
+  worktreeId: string,
+  active: boolean,
+  origin: unknown,
+  launch: { command: string }
+) => Promise<unknown>
+
+/** A queued restart starts within a few microtasks of the reply; none started by then never will. */
 async function settled(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 20))
+  for (let tick = 0; tick < 10; tick += 1) {
+    await Promise.resolve()
+  }
 }
 
 it('restarts agy in place on the new account: stop, wait for exit, relaunch the conversation', async () => {
-  const { runtime, events } = await runtimeWithAgyTerminal({
+  const { runtime, events, restarts } = await runtimeWithAgyTerminal({
     settings: { antigravityAccountSwitchRunningSessions: 'restart' }
   })
   selectHostAccount('next')
@@ -128,28 +143,30 @@ it('restarts agy in place on the new account: stop, wait for exit, relaunch the 
   expect(reply).toEqual({ runningSessions: { restarting: 1, notMoved: 0 } })
   await vi.waitFor(() => expect(events).toHaveLength(3))
   expect(events).toEqual([`stop ${AGY}`, `exited ${AGY}`, "launch agy '--conversation' 'conv'"])
+  expect(restarts).toHaveBeenCalledTimes(1)
 })
 
 it('never restarts under Keep', async () => {
-  const { runtime, events } = await runtimeWithAgyTerminal({
+  const { runtime, events, restarts } = await runtimeWithAgyTerminal({
     settings: { antigravityAccountSwitchRunningSessions: 'keep' }
   })
   selectHostAccount('next')
 
   expect(await runtime.onAntigravityAccountSwitched({ from: 'prev', to: 'next' })).toEqual({})
   await settled()
-  expect(events).toEqual([])
+  expect({ restarts: restarts.mock.calls.length, events }).toEqual({ restarts: 0, events: [] })
 })
 
 it('leaves a windowless host’s terminals under Ask until the switching client answers', async () => {
-  const { runtime, events } = await runtimeWithAgyTerminal()
+  const { runtime, events, restarts } = await runtimeWithAgyTerminal()
   selectHostAccount('next')
 
   const reply = await runtime.onAntigravityAccountSwitched({ from: 'prev', to: 'next' })
   await settled()
-  expect({ reply, events }).toEqual({
+  expect({ reply, events, restarts: restarts.mock.calls.length }).toEqual({
     reply: { runningSessions: { restarting: 0, notMoved: 1, canRestart: 1 } },
-    events: []
+    events: [],
+    restarts: 0
   })
 
   expect(await runtime.answerAntigravityAsk('next')).toEqual({ restarting: 1, notMoved: 0 })
@@ -157,7 +174,7 @@ it('leaves a windowless host’s terminals under Ask until the switching client 
 })
 
 it('lets the switching client’s choice override the host’s setting', async () => {
-  const { runtime, events } = await runtimeWithAgyTerminal({
+  const { runtime, events, restarts } = await runtimeWithAgyTerminal({
     settings: { antigravityAccountSwitchRunningSessions: 'restart' }
   })
   selectHostAccount('next')
@@ -170,21 +187,23 @@ it('lets the switching client’s choice override the host’s setting', async (
     })
   ).toEqual({})
   await settled()
-  expect(events).toEqual([])
+  expect({ restarts: restarts.mock.calls.length, events }).toEqual({ restarts: 0, events: [] })
 })
 
 it('hands a CLI switch on a desktop host to its window, which restarts its own terminals', async () => {
-  const { runtime, events } = await runtimeWithAgyTerminal({
+  const { runtime, events, restarts } = await runtimeWithAgyTerminal({
     settings: { antigravityAccountSwitchRunningSessions: 'restart' }
   })
   runtime.attachWindow(1)
   const accountSelectedElsewhere = vi.fn()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the switch calls only this notice.
   runtime.setNotifier({ accountSelectedElsewhere } as never)
   selectHostAccount('next')
 
   expect(await runtime.onAntigravityAccountSwitched({ from: 'prev', to: 'next' })).toEqual({})
   await settled()
-  expect({ calls: accountSelectedElsewhere.mock.calls, events }).toEqual({
+  const restarted = restarts.mock.calls.length
+  expect({ calls: accountSelectedElsewhere.mock.calls, events, restarted }).toEqual({
     calls: [
       [
         'antigravity',
@@ -196,7 +215,8 @@ it('hands a CLI switch on a desktop host to its window, which restarts its own t
         }
       ]
     ],
-    events: []
+    events: [],
+    restarted: 0
   })
 })
 
