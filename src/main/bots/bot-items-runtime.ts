@@ -1,8 +1,7 @@
 // Bot items as this host serves them: per-profile store, wire views and linked workers; startup sends any owed mail.
 import type { Bot } from '../../shared/bot-types'
-import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
+import type { BotItem, BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
-import { botItemQuestionView } from '../../shared/bots/bot-item-ask'
 import {
   botItemsChangeScope,
   type BotChangeScope,
@@ -11,6 +10,7 @@ import {
 import { access } from 'node:fs/promises'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { retainedItemAttachmentUploads } from './bot-item-attachment-retention'
+import { botItemViewsFromRows, type BotItemViewDeps } from './bot-item-views'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
 import { trackDispatchLinks, type TrackedBotItems } from './bot-item-dispatch-link-refs'
 import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts'
@@ -270,7 +270,7 @@ export class BotItemsHost {
       items.map((item) => item.uid),
       withWaitingAsks
     )
-    return this.viewsFromRows(items, rows, summary)
+    return botItemViewsFromRows(this.viewDeps(), items, rows, summary)
   }
 
   async showView(
@@ -279,58 +279,18 @@ export class BotItemsHost {
     limit: number
   ): Promise<{ item: BotItem; events: BotItemEvent[] }> {
     const { rows, events } = await this.store().showRows(item.uid, afterId, limit)
-    const [view] = await this.viewsFromRows([item], rows, false)
+    const [view] = await botItemViewsFromRows(this.viewDeps(), [item], rows, false)
     return { item: view!, events: events.map(eventViewOf) }
   }
 
-  private async viewsFromRows(
-    items: readonly BotItemRecord[],
-    rows: Awaited<ReturnType<BotItemsRemote['viewRows']>>,
-    summary: boolean
-  ): Promise<BotItem[]> {
-    const refs = Object.values(rows.links)
-      .flat()
-      .flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
-    const workers = await this.join.readLinkedWorkers(refs)
-    const byUid = new Map(rows.items.map((item) => [item.uid, item]))
-    const bots = this.deps.bots()
-    const nameOf = (botId: string) => bots.find((bot) => bot.id === botId)?.name ?? null
-    return items.map((given): BotItem => {
-      const item = byUid.get(given.uid) ?? given
-      const question = rows.questions[item.uid]
-      const wait = rows.waits[item.uid]
-      const waitText = typeof wait?.data.note === 'string' ? wait.data.note : null
-      const { madeBy } = item
-      return {
-        uid: item.uid,
-        number: item.number,
-        owner: { botId: item.ownerBotId, name: nameOf(item.ownerBotId) },
-        title: item.title,
-        description: summary ? null : item.description,
-        doneMeans: summary ? null : item.doneMeans,
-        status: item.status,
-        chat: this.owningChat(item),
-        madeBy: madeBy
-          ? { botId: madeBy.botId, name: nameOf(madeBy.botId), chatId: madeBy.chatId }
-          : null,
-        question: question ? botItemQuestionView(botItemEventId(question.id), question.data) : null,
-        ...(rows.waitingAsks[item.uid] ? { waitingAsk: rows.waitingAsks[item.uid] } : {}),
-        closeNote: summary ? null : item.closeNote,
-        wait: wait && waitText !== null ? { text: waitText, at: wait.createdAt } : null,
-        links: (rows.links[item.uid] ?? []).map((link) =>
-          this.join.linkView(link, workers.get(link.ref))
-        ),
-        version: item.version,
-        lastEventId: botItemEventId(item.lastEventId),
-        othersLastEventId: botItemEventId(rows.othersLast[item.uid] ?? 0),
-        snoozedUntil: item.snoozedUntil,
-        lastActivityAt: item.lastActivityAt,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        closedAt: item.closedAt
-      }
-    })
+  private viewDeps(): BotItemViewDeps {
+    return {
+      join: this.join,
+      bots: () => this.deps.bots(),
+      owningChat: (item) => this.owningChat(item)
+    }
   }
+
   async events(uid: string, afterId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().events(uid, afterId, limit)).map(eventViewOf)
   }

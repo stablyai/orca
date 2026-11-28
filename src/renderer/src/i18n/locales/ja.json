@@ -28650,8 +28650,6 @@
         "automationEnded": "終了"
       },
       "menu": {
-        "cancel": "キャンセル",
-        "done": "完了",
         "waiting": "待機中…"
       },
       "pill": {
@@ -28660,6 +28658,7 @@
         "moveTo": "移動先"
       },
       "row": {
+        "cancel": "キャンセル",
         "done": "完了",
         "more": "その他の操作",
         "select": "{{title}} を選択"
