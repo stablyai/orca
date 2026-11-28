@@ -294,7 +294,8 @@
       "connecting": "Connecting…",
       "backToHome": "Back to home",
       "pairThisComputer": "Pair with this computer?",
-      "onlyYourOwn": "Only pair with a computer you trust."
+      "onlyYourOwn": "Only pair with a computer you trust.",
+      "pairNamedServer": "Pair with {{server}}?"
     },
     "pairScan": {
       "invalidQrCode": "Not a valid Orca QR code",
@@ -990,6 +991,13 @@
     },
     "identity": {
       "hostNotFound": "Host not found"
+    },
+    "serverOwnPairing": {
+      "updateDesktop": "Update Orca on {{desktop}} to keep {{server}} reachable.",
+      "failed": "Could not reach {{server}}. Try again while {{desktop}} is awake.",
+      "thisServer": "this server",
+      "keepReachable": "Keep {{server}} reachable",
+      "evenWhenAsleep": "Even when {{desktop}} sleeps"
     }
   },
   "webShell": {
