@@ -101,6 +101,7 @@ export function readJournalSqlUsageLimitCut(
     chain: readUsageLimitChain(state, latest.item.itemId),
     ...(fence === undefined ? {} : { fence }),
     ...(limit.resetsAt !== undefined ? { resetsAt: limit.resetsAt } : {}),
+    ...(limit.window ? { window: limit.window } : {}),
     turnEndedAt: latest.item.recoveredAt ?? latest.lifecycle.completedAt
   }
 }

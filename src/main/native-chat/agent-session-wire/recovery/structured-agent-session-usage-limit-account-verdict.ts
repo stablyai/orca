@@ -3,8 +3,12 @@ import {
   rateLimitSpentUntil
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
 import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
+import {
+  NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
+  type NativeChatUsageLimitCut
+} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 import type { SwitchReset } from './structured-agent-session-usage-limit-chain'
+import { usageLimitWindowRenewedAt } from './structured-agent-session-usage-limit-renewed-window'
 import type {
   UsageLimitAccountScope,
   UsageLimitAccountVerdict
@@ -34,7 +38,8 @@ export function accountHoldVerdict({
   now,
   roomAt
 }: {
-  cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset
+  cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset &
+    Pick<NativeChatUsageLimitCut, 'window'>
   movedCut: boolean
   awaitingRoom: boolean
   relaunched: boolean
@@ -105,14 +110,22 @@ export function accountHoldVerdict({
     }
   }
   // Room too old to schedule from never replaces the reset; the normal reading wait asks again.
+  const recent = reading && now - reading.updatedAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
   const room =
     movedCut &&
     reading &&
+    recent &&
     fresh(cut.turnEndedAt ?? Number.NEGATIVE_INFINITY) &&
-    now - reading.updatedAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS &&
     rateLimitShowsRoom(reading)
       ? reading.updatedAt
-      : roomAt(account?.key, reading)
+      : (roomAt(account?.key, reading) ??
+        (!movedCut &&
+        account &&
+        reading &&
+        recent &&
+        reading.updatedAt > (hold.spentSeenAt ?? Number.NEGATIVE_INFINITY)
+          ? usageLimitWindowRenewedAt(cut, reading)
+          : undefined))
   // Room read since a relaunch outranks any earlier spending, as it does for a resetless cut.
   if (relaunched && room !== undefined) {
     hold.unknownReset = false

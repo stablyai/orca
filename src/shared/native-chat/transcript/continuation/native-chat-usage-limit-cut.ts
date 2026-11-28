@@ -5,7 +5,10 @@ import { isRootAgentJournalItem } from '../../../agent-session/journal/agent-ses
 import { readAgentSessionFailureFact } from '../../../agent-session/failures/agent-session-failure'
 import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCardSubmission } from '../../../agent-session/requests/agent-session-queued-submission'
-import type { AgentSessionUsageLimit } from '../../../agent-session/failures/agent-session-usage-limit'
+import type {
+  AgentSessionUsageLimit,
+  AgentSessionUsageLimitWindow
+} from '../../../agent-session/failures/agent-session-usage-limit'
 import type { UsageLimitContinueIdentity } from '../../../agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native-chat-orca-stop-cut'
 
@@ -27,6 +30,8 @@ export type NativeChatUsageLimitCut = {
   turnItemId: string
   resetsAt?: number
   turnEndedAt?: number
+  /** The limit the provider named, when it named one. */
+  window?: AgentSessionUsageLimitWindow
 }
 
 /** How long after its reset a cut can still be continued automatically; older cuts stay manual. */

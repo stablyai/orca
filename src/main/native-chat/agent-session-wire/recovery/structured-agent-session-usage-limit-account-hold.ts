@@ -230,7 +230,8 @@ export class UsageLimitAccountHolds {
   ): void => accountSwitchRoom(id, cut, this.providers, this.scopes, this.relaunched, now)
   verdict(
     id: string,
-    limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
+    limited: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset &
+      Pick<NativeChatUsageLimitCut, 'window'>,
     now: number
   ): UsageLimitAccountVerdict {
     const moved = this.movedSince.get(id),
@@ -290,7 +291,8 @@ export class UsageLimitAccountHolds {
 
   ready(
     id: string,
-    cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset,
+    cut: { turnItemId: string; resetsAt: number; turnEndedAt?: number } & SwitchReset &
+      Pick<NativeChatUsageLimitCut, 'window'>,
     now: number,
     notBefore = 0
   ): boolean {
