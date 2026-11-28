@@ -20,7 +20,12 @@ const HostOwnedSettingsSchema = z.object({
   agentDefaultSurface: z.enum(['chat', 'terminal']),
   // Retired with Orca's Antigravity server; still accepted so older clients' updates don't fail.
   antigravityGoogleSignIn: z.enum(['auto', 'agy', 'orca']),
-  antigravityServerAutoUpdateEnabled: z.boolean()
+  antigravityServerAutoUpdateEnabled: z.boolean(),
+  // The host runs the local webhook listener (shared/webhooks/local-webhook-settings.ts).
+  localWebhooksEnabled: z.boolean(),
+  localWebhooksBindAddress: z.string().max(256),
+  localWebhooksPort: z.number().int().min(1).max(65535),
+  localWebhooksPublicUrl: z.string().max(2048)
 } satisfies { [K in keyof GlobalSettings]?: z.ZodType<NonNullable<GlobalSettings[K]>> })
 
 export type HostOwnedSettings = z.output<typeof HostOwnedSettingsSchema>
@@ -41,7 +46,11 @@ const HOST_OWNED_SETTING_FALLBACKS: HostOwnedSettings = {
   nativeChatShellEnvironmentVariables: [],
   agentDefaultSurface: 'terminal',
   antigravityGoogleSignIn: 'auto',
-  antigravityServerAutoUpdateEnabled: true
+  antigravityServerAutoUpdateEnabled: true,
+  localWebhooksEnabled: false,
+  localWebhooksBindAddress: '127.0.0.1',
+  localWebhooksPort: 6790,
+  localWebhooksPublicUrl: ''
 }
 
 export const HOST_OWNED_SETTING_KEYS = HostOwnedSettingsSchema.keyof().options

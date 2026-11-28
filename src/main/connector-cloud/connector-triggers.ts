@@ -39,12 +39,15 @@ export function connectorTriggers(
     Automation,
     'id' | 'enabled' | 'bot' | 'on' | 'missedRunGraceMinutes'
   >[],
-  pausing: (hookId: string) => boolean = () => false
+  pausing: (hookId: string) => boolean = () => false,
+  /** False while local webhooks are on: this host takes its hooks' calls itself. */
+  withWebhooks = true
 ): ConnectorTrigger[] {
   return automations.flatMap(({ id, enabled, bot, on, missedRunGraceMinutes }) =>
     bot
       ? (on ?? [])
           .filter((trigger): trigger is CloudRule => !isGoogleTrigger(trigger))
+          .filter((trigger) => withWebhooks || !isWebhookTrigger(trigger))
           .filter((trigger) => enabled || pausing(hookIdOfRule(trigger.id) ?? ''))
           .map((trigger) => ({
             ...withoutNames(trigger),

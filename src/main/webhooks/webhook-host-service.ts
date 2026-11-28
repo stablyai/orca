@@ -34,6 +34,7 @@ import { WebhookHooks } from './webhook-hooks'
 import { webhookNoticeText } from './webhook-notice-text'
 import { WebhookHostLedger } from './webhook-host-ledger'
 import { orcaCloudNeedsSignIn } from '../../shared/bots/host-orca-sign-in'
+import { switchedWebhookCalls } from './local/local-webhook-routes'
 
 type TriggerDelivery = Extract<ConnectorDelivery, { kind: 'trigger' }>
 
@@ -78,6 +79,8 @@ export type WebhookHostServiceDeps = {
   ) => Promise<AutomationRun | null>
   /** For tests: the routes, instead of the connector's. */
   routes?: WebhookCloudCalls
+  /** This host's own routes while local webhooks are on; then they replace Orca Cloud's. */
+  local?: () => WebhookCloudCalls | null
 }
 
 export class WebhookHostService {
@@ -91,7 +94,8 @@ export class WebhookHostService {
 
   constructor(private readonly deps: WebhookHostServiceDeps) {
     this.ledger = new WebhookHostLedger(deps.userDataPath, deps.account, deps.newerAgentBotIds)
-    this.routes = deps.routes ?? webhookCloudCalls(deps.cloud)
+    const cloud = deps.routes ?? webhookCloudCalls(deps.cloud)
+    this.routes = deps.local ? switchedWebhookCalls(cloud, deps.local) : cloud
     this.hooks = new WebhookHooks({
       ledger: this.ledger,
       cloud: this.routes,
@@ -140,12 +144,25 @@ export class WebhookHostService {
 
   /** Signed out of Orca, so no event or webhook call reaches this host's bots. */
   signedOut(): boolean {
+    if (this.local()) {
+      return false
+    }
     return orcaCloudNeedsSignIn(this.deps.cloud()?.status?.())
   }
 
   /** Whether this host's Orca Cloud takes webhooks; until a hello says, assume it does and let the mint decide. */
   advertised(): boolean {
-    return this.deps.cloud()?.cloudFeatures()?.has(CLOUD_WEBHOOKS_FEATURE) ?? true
+    if (this.local()) {
+      return true
+    }
+    // No connector at all (a build without Orca Cloud): nothing would take a hook's calls.
+    const cloud = this.deps.cloud()
+    return cloud ? (cloud.cloudFeatures()?.has(CLOUD_WEBHOOKS_FEATURE) ?? true) : false
+  }
+
+  /** Local webhooks are on: hooks live on this host, and the hello lists none of their rules. */
+  local(): boolean {
+    return (this.deps.local?.() ?? null) !== null
   }
 
   /** A hello was answered: drop hooks deleted while this host was away. */

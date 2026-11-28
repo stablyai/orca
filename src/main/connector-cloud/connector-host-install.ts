@@ -9,6 +9,10 @@ import { botAccessHost } from '../bots/bot-access-host'
 import { botAccessSeenFile, createBotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import { notifyBotCouldNotFinish, runtimeBotOwnerNotice } from '../bots/bot-could-not-finish'
 import { WebhookHostService } from '../webhooks/webhook-host-service'
+import {
+  LOCAL_WEBHOOKS_ACCOUNT,
+  installLocalWebhooks
+} from '../webhooks/local/local-webhooks-install'
 import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upkeep'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
@@ -61,10 +65,25 @@ export function installConnectorHost({
     // Bot homes live under this host's ~/.orca/bots; a remote path is never written as a local one.
     return folder && !folder.connectionId ? folder.folderPath : null
   }
+  // Settings can turn local webhooks on: then this host takes its hooks' calls on its own port.
+  const localWebhooks = installLocalWebhooks({
+    userDataPath,
+    settings: () => store.getSettings(),
+    onSettingsChanged: (listener) => store.onSettingsChanged(listener),
+    automations: () => store.listAutomations(),
+    bots: () => store.getBots(),
+    modeChanged: () => {
+      runtime.getConnectorCloud()?.helloInputsChanged()
+      webhooks.changed()
+      runtime.notifyBotsChanged({ kinds: ['settings'] })
+    }
+  })
   const webhooks = new WebhookHostService({
     userDataPath,
-    account: () => connectorAccount(userDataPath),
+    account: () =>
+      localWebhooks.routes() ? LOCAL_WEBHOOKS_ACCOUNT : connectorAccount(userDataPath),
     cloud: () => runtime.getConnectorCloud(),
+    local: localWebhooks.routes,
     automations: {
       list: () => store.listAutomations(),
       runs: (automationId) => store.listAutomationRuns(automationId),
@@ -90,6 +109,7 @@ export function installConnectorHost({
     runForEvent: (automationId, event, gate) =>
       runtime.runAutomationForEvent(automationId, event, gate)
   })
+  localWebhooks.attach((delivery, event) => webhooks.receive(delivery, event))
   runtime.setConnectorCloud(
     createConnectorCloud({
       runtime,
@@ -101,35 +121,35 @@ export function installConnectorHost({
       webhooks
     })
   )
-  const stops: (() => void)[] = []
-  // Only a host with Orca Cloud makes webhooks, as it alone hosts the connector.
+  const stops: (() => void)[] = [() => localWebhooks.stop()]
+  // A host with Orca Cloud makes webhooks, as it alone hosts the connector; local webhooks need none.
   const connector = runtime.getConnectorCloud()
+  const composio = connector ? installComposioUpkeep(runtime, webhooks) : null
   if (connector) {
-    runtime.setWebhooks(webhooks)
-    const composio = installComposioUpkeep(runtime, webhooks)
     stops.push(
-      () => webhooks.stop(),
-      () => composio.stop(),
+      () => composio?.stop(),
       onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => {
         connector.helloInputsChanged()
         runtime.notifyBotsChanged({ kinds: ['settings', 'bot'] })
       })
     )
-    runtime.onClientEvent(
-      (event) => {
-        if (event.type === 'automationsChanged' || event.type === 'reposChanged') {
-          webhooks.changed()
-        }
-        // A deleted bot, hook or automation leaves Composio triggers to remove.
-        if (event.type === 'automationsChanged') {
-          composio.soon()
-        }
-      },
-      { consumesTerminalSideEffects: false }
-    )
-    runtime.onBotsWritten(() => webhooks.botsWritten())
-    void webhooks.start()
   }
+  runtime.setWebhooks(webhooks)
+  stops.push(() => webhooks.stop())
+  runtime.onClientEvent(
+    (event) => {
+      if (event.type === 'automationsChanged' || event.type === 'reposChanged') {
+        webhooks.changed()
+      }
+      // A deleted bot, hook or automation leaves Composio triggers to remove.
+      if (event.type === 'automationsChanged') {
+        composio?.soon()
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+  runtime.onBotsWritten(() => webhooks.botsWritten())
+  void webhooks.start()
   // Once the account's orgs are known, people saved before orgs had rows go in each of them.
   gitHubInstallations.onChange(() => {
     const ids = gitHubInstallations.ids()
