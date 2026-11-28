@@ -13,9 +13,9 @@ import { formatPlanLabel } from './usage-roster-formatting'
 import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster-row-state'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import {
+  getCompactRowHeadline,
   getTopScopedSection,
   getUrgentScopedSection,
-  getUsageHeadlineSection,
   providerPrimaryMaxUsed,
   shortUsageLabel,
   usedSections,
@@ -97,7 +97,7 @@ function RowUsageSummary({
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const headline = getUsageHeadlineSection(p, t)
+  const headline = getCompactRowHeadline(p, t)
   if (!headline) {
     // Why: a Fable/MCP-only reading is still a reading; show it where the value goes, at any level.
     const only = getTopScopedSection(p, t)

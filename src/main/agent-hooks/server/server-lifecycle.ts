@@ -7,6 +7,10 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
 import {
+  ANTIGRAVITY_STATUSLINE_PATHNAME,
+  readAntigravityStatusLinePost
+} from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
+import {
   CLAUDE_STATUSLINE_PATHNAME,
   readClaudeStatusLineForm,
   readClaudeStatusLineRateLimits
@@ -141,6 +145,15 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
           res.end()
           return
         }
+        if (pathname === ANTIGRAVITY_STATUSLINE_PATHNAME) {
+          const reading = readAntigravityStatusLinePost(body, Date.now())
+          if (reading) {
+            this.onAntigravityStatusLine?.(reading)
+          }
+          res.writeHead(204)
+          res.end()
+          return
+        }
         const source = resolveHookSource(pathname)
         if (!source) {
           res.writeHead(404)
@@ -249,6 +262,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
     this.env = 'production'
     this.onAgentStatus = null
     this.onClaudeStatusLine = null
+    this.onAntigravityStatusLine = null
     this.clearStartupPromptClaims?.()
     this.clearStartupPromptClaims = null
     this.onStartupPromptClaim = null

@@ -47,6 +47,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
   kimi: 'kimi',
   minimax: 'minimax',
   grok: 'grok',
+  antigravity: 'antigravity',
   cursor: 'cursor',
   zcode: 'zcode',
   muse: 'muse'

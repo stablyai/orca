@@ -19,6 +19,7 @@ import { useAntigravityChatSignInControls } from '../../../provider-accounts/use
 import { ChatUnavailableOnWindowsNote } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { AntigravityStatusLineUsageSetting } from './antigravity-statusline-usage-setting'
 import { useOnLaterChange } from './use-on-later-change'
 import { useAntigravityAccountRun } from './use-antigravity-account-run'
 import { ACCOUNTS_SECTION_IDS } from '../accounts-search'
@@ -218,6 +219,9 @@ export function AntigravityAccountsSection({
           {...(signInControls ? { signIn: signInControls } : {})}
         />
         {runtimeRow}
+        {owner.kind === 'local' && runtime === 'host' ? (
+          <AntigravityStatusLineUsageSetting windows={windowsHost} />
+        ) : null}
       </SettingsGroup>
       {chats &&
       chatRuntime.kind !== 'active' &&

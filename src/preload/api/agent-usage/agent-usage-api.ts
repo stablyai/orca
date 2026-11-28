@@ -1,3 +1,4 @@
+import type { AntigravityStatusLineStatus } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-status'
 import type {
   BackendConnectionListener,
   BackendConnectionPurpose
@@ -81,5 +82,7 @@ export type RateLimitsApi = {
     target: RateLimitRuntimeTarget,
     providers: RuntimeTargetUsageProvider[]
   ) => Promise<RuntimeTargetUsageRead | null>
+  /** Desktop only: whether agy's status line is wired to Orca; absent in the web client. */
+  readAntigravityStatusLineStatus?: () => Promise<AntigravityStatusLineStatus>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

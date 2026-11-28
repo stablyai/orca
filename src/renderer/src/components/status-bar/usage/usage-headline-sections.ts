@@ -9,6 +9,7 @@ import type {
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { antigravityBarProvider } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
 
@@ -90,6 +91,11 @@ export function getTightestUsageSection(
       : current
   )
   return { ...tightest, label: shortUsageLabel(p, tightest, true) }
+}
+
+/** The compact menu row's summary: the window the status bar draws for the same reading. */
+export function getCompactRowHeadline(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+  return getUsageHeadlineSection(antigravityBarProvider(p), t)
 }
 
 export function getUsageHeadlineSection(

@@ -6,6 +6,7 @@ import type {
   RuntimeTargetUsageProvider,
   RuntimeTargetUsageRead
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { AntigravityStatusLineStatus } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-status'
 import type { PreloadApi } from '../../api-types'
 
 export const rateLimitsApi = {
@@ -28,6 +29,8 @@ export const rateLimitsApi = {
     providers: RuntimeTargetUsageProvider[]
   ): Promise<RuntimeTargetUsageRead | null> =>
     ipcRenderer.invoke('rateLimits:readUsageForRuntimeTarget', target, providers),
+  readAntigravityStatusLineStatus: (): Promise<AntigravityStatusLineStatus> =>
+    ipcRenderer.invoke('rateLimits:antigravityStatusLineStatus'),
   onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
     ipcRenderer.on('rateLimits:update', listener)

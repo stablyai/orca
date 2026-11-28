@@ -2,6 +2,8 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
+import { AntigravityLiveUsage } from './service-antigravity-live-usage'
+import type { AntigravityStatusLineReading } from '../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
 import {
   type CodexAccountSelectionTarget,
@@ -28,6 +30,10 @@ import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rat
 import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
 export class RateLimitService extends RateLimitServiceTargetUsageRead {
+  private readonly antigravityLiveUsage = new AntigravityLiveUsage({
+    current: () => this.state.antigravity,
+    publish: (next) => this.updateState({ ...this.state, antigravity: next })
+  })
   private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
 
   refreshOnOwnerReturn(): Promise<void> {
@@ -100,6 +106,19 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
     if (!this.lastClaudeAuthSnapshot) {
       void this.fetchClaudeOnly({ force: true })
     }
+  }
+
+  setAntigravityLiveUsageEnabledResolver(isEnabled: () => boolean): void {
+    this.antigravityLiveUsage.setEnabledResolver(isEnabled)
+  }
+
+  ingestAntigravityStatusLine(reading: AntigravityStatusLineReading): void {
+    this.antigravityLiveUsage.ingest(reading)
+  }
+
+  /** Drops the held reading when the opt-in turns off; agy's next post would not be ingested anyway. */
+  clearAntigravityUsage(): void {
+    this.antigravityLiveUsage.clear()
   }
 
   setMuseUsageEnabledResolver(resolver: MuseUsageEnabledResolver): void {

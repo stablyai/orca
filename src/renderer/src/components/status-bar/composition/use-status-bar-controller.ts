@@ -107,6 +107,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const { claude, codex, opencodeGo, kimi, minimax, grok, cursor, zcode } = rateLimits
   const muse = rateLimits.muse
+  // agy's status line feeds this meter on this host only, and only after the opt-in.
+  const antigravity = rateLimits.antigravity
+  const showAntigravity =
+    !remoteOwned && settings?.antigravityStatusLineUsageEnabled === true && antigravity != null
 
   // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
   const usageSettings = {
@@ -174,10 +178,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ||
     showCursor ||
     showZcode ||
-    showMuse
+    showMuse ||
+    showAntigravity
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
+  const isEmptyUsageState = !showAntigravity && isUsageEmptyState(rateLimits, usageSettings)
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -206,7 +211,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null,
-    showMuse ? visibleMuse : null
+    showMuse ? visibleMuse : null,
+    showAntigravity ? antigravity : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the usage row clips from the end, so placeholders give way first.

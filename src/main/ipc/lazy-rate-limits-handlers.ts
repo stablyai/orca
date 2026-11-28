@@ -13,7 +13,8 @@ const RATE_LIMIT_IPC_CHANNELS = [
   'rateLimits:fetchInactiveClaudeAccounts',
   'rateLimits:fetchInactiveCodexAccounts',
   'rateLimits:refreshGrok',
-  'rateLimits:readUsageForRuntimeTarget'
+  'rateLimits:readUsageForRuntimeTarget',
+  'rateLimits:antigravityStatusLineStatus'
 ] as const
 
 export function registerLazyRateLimitHandlers(

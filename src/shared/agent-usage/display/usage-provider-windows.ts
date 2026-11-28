@@ -27,6 +27,7 @@ const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   kimi: 'Kimi',
   minimax: 'MiniMax',
   grok: 'Grok',
+  antigravity: 'Antigravity',
   zcode: 'ZCode',
   cursor: 'Cursor',
   muse: 'Muse'
@@ -51,6 +52,15 @@ export function hasUsageData(provider: ProviderUsageWindows): boolean {
 
 /** The usage windows a provider shows, in order; session and weekly stay as null placeholders. */
 export function getUsageWindowSections(p: ProviderUsageWindows): UsageWindowSection[] {
+  // Antigravity's pools are independent, so none is a rollup of another and none is dropped.
+  // Without pools (the status bar's view of it) it reads as plain session and weekly windows.
+  if (p.provider === 'antigravity' && p.buckets) {
+    return p.buckets.map((bucket) => ({
+      kind: 'bucket' as const,
+      name: bucket.name,
+      window: bucket
+    }))
+  }
   if (p.buckets?.length) {
     // Drop the rollup only when it repeats a listed weekly pool.
     const { weekly } = p

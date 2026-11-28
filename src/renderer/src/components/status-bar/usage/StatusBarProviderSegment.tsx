@@ -28,6 +28,7 @@ import {
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
+import { antigravityBarProvider } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { formatUsageChipTitle } from './usage-chip-title'
@@ -161,6 +162,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'M'
     case 'grok':
       return 'R'
+    case 'antigravity':
+      return 'A'
     case 'cursor':
       return 'U'
     case 'zcode':
@@ -275,10 +278,12 @@ export function ProviderSegment({
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
-  const tightest = p
+  // Antigravity draws only its Gemini windows here; urgency and the menus see every pool.
+  const drawn = p ? antigravityBarProvider(p) : null
+  const tightest = drawn
     ? mode === 'compact'
-      ? getUsageHeadlineSection(p, t, 'all')
-      : getTightestUsageSection(p, t, 'all')
+      ? getUsageHeadlineSection(drawn, t, 'all')
+      : getTightestUsageSection(drawn, t, 'all')
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
   const showLabels = mode === 'verbose' || !compact
