@@ -157,8 +157,7 @@ function mergeLegacyRecordRows(
   const insertTab = db.prepare(`INSERT INTO agent_session_tabs(tab_id,session_id,position)
     VALUES(?,?,?) ON CONFLICT(tab_id) DO NOTHING`)
   let lastSqlPosition = -1
-  const needsSqlTabs =
-    tabs !== null || (savedTabOwner !== null && legacySessionTabIds.length > 0)
+  const needsSqlTabs = tabs !== null || (savedTabOwner !== null && legacySessionTabIds.length > 0)
   if (needsSqlTabs) {
     stage.exec('CREATE TABLE sql_tab_sessions (id TEXT PRIMARY KEY)')
     const copySqlTab = stage.prepare(

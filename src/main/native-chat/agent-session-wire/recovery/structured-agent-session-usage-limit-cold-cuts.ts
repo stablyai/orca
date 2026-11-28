@@ -34,11 +34,7 @@ export class UsageLimitColdCuts {
   }
 
   /** The cut as the journal stands now, with a switch standing in for an unknown reset. */
-  async read(
-    id: string,
-    cold: boolean,
-    current: () => boolean
-  ): Promise<HostUsageLimitCut | null> {
+  async read(id: string, cold: boolean, current: () => boolean): Promise<HostUsageLimitCut | null> {
     const cut = await this.readJournal(id, cold, current)
     return current() && cut ? this.deps.switchReset(id, cut) : null
   }

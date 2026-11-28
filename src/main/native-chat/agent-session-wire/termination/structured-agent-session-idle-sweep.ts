@@ -198,8 +198,10 @@ export class StructuredAgentSessionIdleSweep {
     if (child && child.phase !== 'starting') {
       const owes = await this.owesWork(sessionId, session)
       if (
-        this.disposed || this.deps.isDisposed() ||
-        this.deps.sessions.get(sessionId) !== session || session.child !== child
+        this.disposed ||
+        this.deps.isDisposed() ||
+        this.deps.sessions.get(sessionId) !== session ||
+        session.child !== child
       ) {
         return null
       }
@@ -231,7 +233,11 @@ export class StructuredAgentSessionIdleSweep {
       }
       await this.deps.stopAgent(sessionId)
     }
-    if (!this.disposed && !this.deps.isDisposed() && this.deps.sessions.get(sessionId) === session) {
+    if (
+      !this.disposed &&
+      !this.deps.isDisposed() &&
+      this.deps.sessions.get(sessionId) === session
+    ) {
       await this.deps.closeConversation(sessionId)
     }
     return null

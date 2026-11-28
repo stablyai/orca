@@ -55,7 +55,11 @@ type RecordStoreSlot = {
 let opening: RecordStoreSlot | null = null
 const pendingDatabaseClose = new Set<JournalSqlDatabase>()
 let malformedRecordFile:
-  | { stateDirectory: string; fingerprint: string; refusal: ReturnType<typeof journalOpenRefusalError> }
+  | {
+      stateDirectory: string
+      fingerprint: string
+      refusal: ReturnType<typeof journalOpenRefusalError>
+    }
   | undefined
 
 function unchangedMalformedRecordFile(stateDirectory: string) {
@@ -64,10 +68,11 @@ function unchangedMalformedRecordFile(stateDirectory: string) {
     try {
       if (
         !existsSync(journalDomainDatabasePath(stateDirectory)) &&
-        previous.fingerprint === journalLegacyRecordFingerprint([
-          ...captureJournalLegacyRecordSource(stateDirectory),
-          ...captureJournalLegacyRecordFiles(stateDirectory)
-        ])
+        previous.fingerprint ===
+          journalLegacyRecordFingerprint([
+            ...captureJournalLegacyRecordSource(stateDirectory),
+            ...captureJournalLegacyRecordFiles(stateDirectory)
+          ])
       ) {
         return previous.refusal
       }

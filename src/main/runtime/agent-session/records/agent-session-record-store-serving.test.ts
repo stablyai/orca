@@ -99,9 +99,7 @@ it('retires the opening record-store worker and leaves its upgrade retryable', a
     })
     expect(await opening).toBeInstanceOf(Error)
     expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
-    expect(readdirSync(root).some((name) => name.startsWith('.journal-domain-import-'))).toBe(
-      false
-    )
+    expect(readdirSync(root).some((name) => name.startsWith('.journal-domain-import-'))).toBe(false)
     await openAgentSessionRecordStoreOnce(location)
     expect(existsSync(journalDomainDatabasePath(root))).toBe(true)
   } finally {

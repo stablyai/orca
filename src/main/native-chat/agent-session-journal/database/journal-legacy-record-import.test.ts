@@ -170,7 +170,9 @@ it.each([
         : {
             sessionTabs: wholeBackup
               ? [{ sessionId: 'stale-chat', tabId: 'stale-backup-tab' }]
-              : primaryIndex === 'empty' ? [] : primaryTabs
+              : primaryIndex === 'empty'
+                ? []
+                : primaryTabs
           }
     )
     if (wholeBackup) {
@@ -181,8 +183,14 @@ it.each([
       ...(primaryIndex === 'empty'
         ? []
         : [
-            [primaryIndex === 'explicit' ? 'original-json-tab' : derivedTab('saved-chat'), 'saved-chat'],
-            [primaryIndex === 'explicit' ? 'opaque-json-tab' : derivedTab('opaque-chat'), 'opaque-chat']
+            [
+              primaryIndex === 'explicit' ? 'original-json-tab' : derivedTab('saved-chat'),
+              'saved-chat'
+            ],
+            [
+              primaryIndex === 'explicit' ? 'opaque-json-tab' : derivedTab('opaque-chat'),
+              'opaque-chat'
+            ]
           ]),
       [derivedTab('conflict-chat'), physical ? 'opened-chat' : 'conflict-chat'],
       ...(sqlRecorded ? [] : [[derivedTab('sql-saved-chat'), 'sql-saved-chat']])

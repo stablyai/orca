@@ -16,9 +16,10 @@ function captureFile(path: string, ignoreEmpty = false): RecordFile {
     : undefined
   return {
     path,
-    identity: stats && !(ignoreEmpty && stats.isFile() && stats.size === 0n)
-      ? recordFileIdentity(stats)
-      : null
+    identity:
+      stats && !(ignoreEmpty && stats.isFile() && stats.size === 0n)
+        ? recordFileIdentity(stats)
+        : null
   }
 }
 

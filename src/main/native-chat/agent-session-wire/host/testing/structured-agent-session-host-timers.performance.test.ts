@@ -164,7 +164,9 @@ it('keeps the existing deadlines only while chats or leases need them', async ()
       expect(vi.getTimerCount()).toBe(index === 1 ? 0 : 1)
       const fence = reserved.record.lease.runtimeFence
       await store.commitProcessIdentity({
-        sessionId, fence, now,
+        sessionId,
+        fence,
+        now,
         process: {
           hostId: 'local',
           pid: 1000 + index,
@@ -173,7 +175,9 @@ it('keeps the existing deadlines only while chats or leases need them', async ()
         }
       })
       await store.proveOwner({
-        sessionId, fence, now,
+        sessionId,
+        fence,
+        now,
         link: {
           linkId: `fixture-link-${index}`,
           handle: claudeProviderHandle(`fixture-provider-${index}`, 'fixture-leaf'),
