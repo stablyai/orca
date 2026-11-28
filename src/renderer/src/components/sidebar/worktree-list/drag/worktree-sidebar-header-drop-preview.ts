@@ -17,8 +17,7 @@ const INDICATOR_GAP_PX = 4
 export function computeWorktreeSidebarHeaderDropPreview<
   TRect extends WorktreeSidebarHeaderDragRect
 >(args: {
-  pointerY: number
-  containerTop: number
+  localY: number
   scrollTop: number
   rects: readonly TRect[]
   headerCount: number
@@ -30,7 +29,7 @@ export function computeWorktreeSidebarHeaderDropPreview<
     return null
   }
 
-  const localY = args.pointerY - args.containerTop + args.scrollTop
+  const { localY } = args
   // Bound every preview branch, including estimated edge slots, by real list content.
   if (args.contentBottom !== undefined && localY > args.contentBottom) {
     return null

@@ -1,3 +1,4 @@
+import { resolveUIZoomLevels } from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import {
   normalizeWorktreeCardProperties,
@@ -74,6 +75,7 @@ export function mergeHostWebUIState(
     manualRepoOrder: local.manualRepoOrder,
     workspaceHostOrder: local.workspaceHostOrder,
     sidebarOpen: local.sidebarOpen,
+    ...resolveUIZoomLevels(local),
     activityBarPosition: local.activityBarPosition,
     activityBarOrder: local.activityBarOrder,
     activityBarBotOrder: local.activityBarBotOrder,
@@ -141,8 +143,8 @@ export function mergeContextualTourSeenIds(
 }
 
 export function mergeOsc52ClipboardNoticePending(
-  current: PersistedUIState,
-  incoming: PersistedUIState
+  current: Pick<PersistedUIState, 'osc52ClipboardDefaultOnNoticePending'>,
+  incoming: Pick<PersistedUIState, 'osc52ClipboardDefaultOnNoticePending'>
 ): boolean {
   return (
     current.osc52ClipboardDefaultOnNoticePending === true ||
@@ -169,6 +171,8 @@ export function readLocalWebUIState<T>(
   const project: ProjectLocalWebUIState = (stored) =>
     mergeWebUIState(base, {
       ...stored,
+      // Legacy web cached the host's UI level, but rendered at 100% regardless of that value.
+      ...resolveUIZoomLevels(stored.sidebarZoomLevel === undefined ? undefined : stored),
       rightSidebarOpen:
         typeof stored.rightSidebarOpen === 'boolean'
           ? stored.rightSidebarOpen

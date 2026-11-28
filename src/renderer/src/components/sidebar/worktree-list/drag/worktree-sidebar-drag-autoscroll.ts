@@ -137,6 +137,7 @@ export function getWorktreeSidebarDragRectsForGroup(
   container: HTMLElement,
   groupKey: string
 ): WorktreeSidebarDragRect[] {
+  const zoom = container.currentCSSZoom || 1
   const containerRect = container.getBoundingClientRect()
   const rects: WorktreeSidebarDragRect[] = []
   container.querySelectorAll<HTMLElement>('[data-worktree-drag-id]').forEach((element) => {
@@ -155,14 +156,14 @@ export function getWorktreeSidebarDragRectsForGroup(
     const virtualRowStart = getWorktreeVirtualRowStart(virtualRow)
     const top =
       virtualRow && virtualRowStart !== null
-        ? virtualRowStart + rect.top - virtualRow.getBoundingClientRect().top
-        : rect.top - containerRect.top + container.scrollTop
+        ? virtualRowStart + (rect.top - virtualRow.getBoundingClientRect().top) / zoom
+        : (rect.top - containerRect.top) / zoom + container.scrollTop
     rects.push({
       worktreeId,
       groupIndex,
       // Hit-test the static virtual slot so preview transforms cannot shift the target.
       top,
-      bottom: top + rect.height
+      bottom: top + rect.height / zoom
     })
   })
   rects.sort((a, b) => a.top - b.top)

@@ -73,6 +73,7 @@ export function useWorktreeNativeDrag(args: {
         reorderDraggedKeys
       )
       const rects = scrollRef.current ? session.getRects(sourceGroupKey) : []
+      const zoom = event.currentTarget.currentCSSZoom || 1
       const sourceRect = event.currentTarget.getBoundingClientRect()
       session.worktreeDragSessionRef.current = {
         draggingWorktreeId: worktreeKey,
@@ -85,8 +86,8 @@ export function useWorktreeNativeDrag(args: {
         reorderUnitDraggedKeys,
         rects,
         grab: getWorktreeSidebarDragGrab({
-          offsetY: event.clientY - sourceRect.top,
-          height: sourceRect.height
+          offsetY: (event.clientY - sourceRect.top) / zoom,
+          height: sourceRect.height / zoom
         }),
         anchor: null
       }

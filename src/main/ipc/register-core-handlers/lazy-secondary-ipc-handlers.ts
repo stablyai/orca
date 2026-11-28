@@ -1,3 +1,4 @@
+import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
@@ -53,7 +54,8 @@ export const MEMORY_IPC_CHANNELS = [
 export function registerLazySecondaryIpcHandlers(
   store: Store,
   stats: StatsCollector,
-  runtime: OrcaRuntimeService
+  runtime: OrcaRuntimeService,
+  keybindings?: KeybindingService
 ): void {
   registerLazyIpcHandleGroup(HOSTED_REVIEW_IPC_CHANNELS, async (ipc) => {
     const { registerHostedReviewHandlers } = await import('../source-control/hosted-review')
@@ -66,7 +68,7 @@ export function registerLazySecondaryIpcHandlers(
   registerLazyIpcHandleGroup(WORKSPACE_SPACE_WINDOW_IPC_CHANNELS, async (ipc) => {
     const { registerWorkspaceSpaceWindowHandlers } =
       await import('../workspace-space/workspace-space-window')
-    registerWorkspaceSpaceWindowHandlers(store, ipc)
+    registerWorkspaceSpaceWindowHandlers(store, keybindings, ipc)
   })
   registerLazyIpcHandleGroup(TERMINAL_PREVIEW_IPC_CHANNELS, async (ipc) => {
     const { registerTerminalPreviewHandlers } = await import('../terminal-views/terminal-preview')

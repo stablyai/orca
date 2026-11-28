@@ -1,3 +1,4 @@
+import { subscribeWebContextualZoom } from './web-contextual-zoom'
 import { subscribeWebWorkspaceSleep } from '../workspaces/web-workspace-sleep-notices'
 import { savePastedTextAsWebAgentSessionAttachment } from '../agents/web-pasted-text-upload'
 import { createWebExplorerRootSync } from '../workspaces/web-explorer-root-sync'
@@ -55,8 +56,10 @@ export function createWebUiApi(): WebUiApi {
   }
   const sendHostUpdatesWithAck = async (updates: UIUpdates): Promise<void> => {
     const { environmentId, hostUpdates } = prepareHostUpdates(updates)
-    await callRuntimeResult('ui.set', hostUpdates, 15_000)
-    explorerRoots.acknowledge(environmentId, hostUpdates)
+    if (Object.keys(hostUpdates).length > 0) {
+      await callRuntimeResult('ui.set', hostUpdates, 15_000)
+      explorerRoots.acknowledge(environmentId, hostUpdates)
+    }
     if (
       updates.explorerDisplayRootByWorktree !== undefined &&
       hostUpdates.explorerDisplayRootByWorktree === undefined
@@ -68,7 +71,6 @@ export function createWebUiApi(): WebUiApi {
   const persistLocalUpdates = (updates: UIUpdates): void => {
     const next = mergeWebUIState(readLocalWebUIState(), updates)
     writeJson(UI_STORAGE_KEY, next)
-    zoomLevel = next.uiZoomLevel
   }
   const persistHostState = (incoming: PairedUiState) => {
     const local = readLocalWebUIState()
@@ -85,7 +87,6 @@ export function createWebUiApi(): WebUiApi {
       )
     }
     writeJson(UI_STORAGE_KEY, next)
-    zoomLevel = next.uiZoomLevel
     return next
   }
   return {
@@ -112,6 +113,9 @@ export function createWebUiApi(): WebUiApi {
       persistLocalUpdates(updates)
       // Older hosts lack stripping; sending browser runtime:web-* keys would overwrite desktop order.
       const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+      if (Object.keys(hostUpdates).length === 0) {
+        return
+      }
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
         explorerRoots.acknowledge(environmentId, hostUpdates)
@@ -125,17 +129,11 @@ export function createWebUiApi(): WebUiApi {
       await sendHostUpdatesWithAck(updates)
     },
     setPersistedUIWithAck: (updates, marks, baseline) => {
-      let nextZoomLevel = zoomLevel
       const persisted = readLocalWebUIState((project) =>
         writeWebChatReadMarkEdits(marks, baseline, {
-          mergeUI: (stored) => {
-            const next = mergeWebUIState(project(stored), updates)
-            nextZoomLevel = next.uiZoomLevel
-            return next
-          }
+          mergeUI: (stored) => mergeWebUIState(project(stored), updates)
         })
       )
-      zoomLevel = nextZoomLevel
       return { marks: persisted, request: sendHostUpdatesWithAck(updates) }
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
@@ -287,7 +285,8 @@ export function createWebUiApi(): WebUiApi {
     replySleepingAgentWake: () => {},
     notifySleepingMailAvailability: () => {},
     requestSleepingMailSnapshot: () => {},
-    onTerminalZoom: () => noopUnsubscribe,
+    onTerminalZoom: subscribeWebContextualZoom,
+    onRegionZoom: () => noopUnsubscribe,
     ...createWebUiNativeWindowApi()
   }
 }

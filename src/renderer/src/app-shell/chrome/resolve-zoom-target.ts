@@ -41,8 +41,11 @@ export function resolveZoomTarget(args: {
   activeView: TopLevelView
   activeTabType: WorkspaceVisibleTabType
   activeElement: unknown
-}): 'terminal' | 'editor' | 'simulator' | 'chat' | 'browser' | 'ui' {
+}): 'terminal' | 'editor' | 'chat' | 'browser' | 'sidebar' | 'panel' {
   const { activeView, activeTabType, activeElement } = args
+  if (closestFocusedElement(activeElement, '[data-sidebar-zoom]')) {
+    return 'sidebar'
+  }
   const terminalInputFocused =
     typeof activeElement === 'object' &&
     activeElement !== null &&
@@ -56,7 +59,7 @@ export function resolveZoomTarget(args: {
   const editorFocused = Boolean(
     closestFocusedElement(
       activeElement,
-      '.monaco-editor, .diff-editor, .markdown-preview, .rich-markdown-editor, .rich-markdown-editor-shell'
+      '[data-editor-panel], .monaco-editor, .diff-editor, .markdown-preview, .rich-markdown-editor, .rich-markdown-editor-shell'
     )
   )
 
@@ -65,24 +68,17 @@ export function resolveZoomTarget(args: {
     return 'browser'
   }
   if (activeView !== 'terminal') {
-    return 'ui'
-  }
-  if (activeTabType === 'simulator') {
-    return 'simulator'
-  }
-  // Why: with focus outside the pane, the chord belongs to Orca's own zoom.
-  if (activeTabType === 'browser') {
-    return 'ui'
+    return 'panel'
   }
   if (chatFocused) {
     return 'chat'
   }
-  if (activeTabType === 'editor' || editorFocused) {
+  if (editorFocused || (activeTabType === 'editor' && activeElement === document.body)) {
     return 'editor'
   }
   // After focus moves to app chrome, app zoom owns the chord even if a terminal remains visible.
   if (terminalInputFocused) {
     return 'terminal'
   }
-  return 'ui'
+  return 'panel'
 }

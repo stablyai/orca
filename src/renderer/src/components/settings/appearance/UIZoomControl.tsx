@@ -1,60 +1,76 @@
-import { useEffect, useState, useCallback } from 'react'
-import { Button } from '../../ui/button'
 import { Minus, Plus, RotateCcw } from 'lucide-react'
-import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
-import {
-  UI_ZOOM_STEP as ZOOM_STEP,
-  UI_ZOOM_MIN as ZOOM_MIN,
-  UI_ZOOM_MAX as ZOOM_MAX,
-  zoomLevelToPercent
-} from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
+import { changeRegionZoom } from '@/app-shell/chrome/region-zoom'
 import { useTranslate } from '@/i18n/use-translate'
+import { useShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
+import { useAppStore } from '@/store/index'
+import {
+  UI_ZOOM_MIN,
+  UI_ZOOM_MAX,
+  zoomLevelToPercent,
+  type UIZoomRegion
+} from '../../../../../shared/app-lifecycle/windows/ui-zoom-level'
+import { Button } from '../../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
+import { ShortcutHintList } from './AppearanceShortcutHintList'
 
-export function UIZoomControl(): React.JSX.Element {
+export function UIZoomControl({
+  region,
+  label
+}: {
+  region: UIZoomRegion
+  label: string
+}): React.JSX.Element {
   const t = useTranslate()
-  const [zoomLevel, setZoomLevel] = useState(() => window.api.ui.getZoomLevel())
-
-  useEffect(() => {
-    return window.api.ui.onTerminalZoom(() => {
-      setZoomLevel(window.api.ui.getZoomLevel())
-    })
-  }, [])
-
-  const applyZoom = useCallback((level: number) => {
-    const clamped = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, level))
-    applyUIZoom(clamped)
-    setZoomLevel(clamped)
-    window.api.ui.set({ uiZoomLevel: clamped })
-  }, [])
-
-  const percent = zoomLevelToPercent(zoomLevel)
+  const level = useAppStore((state) =>
+    region === 'sidebar' ? state.sidebarZoomLevel : state.uiZoomLevel
+  )
+  const zoomOut = t('settings.appearance.uiZoom.zoomOut', 'Zoom out')
+  const zoomIn = t('settings.appearance.uiZoom.zoomIn', 'Zoom in')
+  const outShortcut = useShortcutKeyComboDetails(`zoom.${region}.out`)
+  const inShortcut = useShortcutKeyComboDetails(`zoom.${region}.in`)
 
   return (
-    <div className="flex items-center gap-2">
-      <Button
-        variant="outline"
-        size="icon-sm"
-        onClick={() => applyZoom(zoomLevel - ZOOM_STEP)}
-        disabled={zoomLevel <= ZOOM_MIN}
-        aria-label={t('settings.appearance.uiZoom.zoomOut', 'Zoom out')}
-      >
-        <Minus className="size-3" />
-      </Button>
-      <span className="w-14 text-center text-sm tabular-nums text-foreground">{percent}%</span>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        onClick={() => applyZoom(zoomLevel + ZOOM_STEP)}
-        disabled={zoomLevel >= ZOOM_MAX}
-        aria-label={t('settings.appearance.uiZoom.zoomIn', 'Zoom in')}
-      >
-        <Plus className="size-3" />
-      </Button>
+    <div role="group" aria-label={label} className="flex items-center gap-2">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => changeRegionZoom(region, 'out')}
+            disabled={level <= UI_ZOOM_MIN}
+            aria-label={zoomOut}
+          >
+            <Minus className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {zoomOut} <ShortcutHintList combos={outShortcut} />
+        </TooltipContent>
+      </Tooltip>
+      <span className="w-14 text-center text-sm tabular-nums text-foreground">
+        {zoomLevelToPercent(level)}%
+      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            onClick={() => changeRegionZoom(region, 'in')}
+            disabled={level >= UI_ZOOM_MAX}
+            aria-label={zoomIn}
+          >
+            <Plus className="size-3" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {zoomIn} <ShortcutHintList combos={inShortcut} />
+        </TooltipContent>
+      </Tooltip>
       <Button
         variant="outline"
         size="sm"
-        onClick={() => applyZoom(0)}
-        disabled={zoomLevel === 0}
+        onClick={() => changeRegionZoom(region, 'reset')}
+        disabled={level === 0}
         className="ml-1 gap-1.5"
       >
         <RotateCcw className="size-3" />

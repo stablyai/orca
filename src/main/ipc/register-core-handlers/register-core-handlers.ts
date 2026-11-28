@@ -112,7 +112,7 @@ export async function registerCoreHandlers(
     registerLazyRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerLazyGitLabHandlers(store)
-    registerLazySecondaryIpcHandlers(store, stats, runtime)
+    registerLazySecondaryIpcHandlers(store, stats, runtime, keybindings)
     registerLazyLinearHandlers()
     registerLazyJiraHandlers(store, commitMessageAgentEnv)
     if (crashReports) {

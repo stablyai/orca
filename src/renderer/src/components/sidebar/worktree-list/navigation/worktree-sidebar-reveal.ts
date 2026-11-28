@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import { GROUP_HEADER_ROW_HEIGHT, HOST_STICKY_PINNED_HEIGHT } from '../viewport/virtual-rows'
 import { motionSafeScrollBehavior } from '@/hooks/theme/usePrefersReducedMotion'
 import {
@@ -35,8 +36,8 @@ export function getElementScrollBounds(
   const containerRect = container.getBoundingClientRect()
   const elementRect = element.getBoundingClientRect()
   return {
-    start: elementRect.top - containerRect.top + container.scrollTop,
-    end: elementRect.bottom - containerRect.top + container.scrollTop
+    start: sidebarContentY(container, elementRect.top, containerRect.top),
+    end: sidebarContentY(container, elementRect.bottom, containerRect.top)
   }
 }
 
@@ -128,7 +129,9 @@ export function revealElementInScrollContainer(
         ...Array.from(
           container.querySelectorAll('[data-worktree-sticky-header-active]'),
           (header) =>
-            header.getBoundingClientRect().bottom - containerTop + WORKTREE_REVEAL_TOP_CLEARANCE
+            (header.getBoundingClientRect().bottom - containerTop) /
+              (container.currentCSSZoom || 1) +
+            WORKTREE_REVEAL_TOP_CLEARANCE
         )
       )
   const leadingHeight = Math.max(

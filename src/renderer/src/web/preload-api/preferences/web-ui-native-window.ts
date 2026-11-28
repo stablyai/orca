@@ -5,7 +5,7 @@ export function createWebUiNativeWindowApi() {
   return {
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,
-    syncTrafficLights: () => {},
+    syncPanelZoom: () => {},
     setMarkdownEditorFocused: () => {},
     setRichMarkdownContextMenuTarget: () => {},
     markPlainTextContextMenuTarget: () => {},

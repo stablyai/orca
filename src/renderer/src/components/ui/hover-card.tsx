@@ -1,5 +1,6 @@
 'use client'
 
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import * as HoverCardPrimitive from 'radix-ui/hover-card'
 import { useControllableState } from 'radix-ui/internal'
@@ -118,12 +119,14 @@ function HoverCardContent({
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content> &
   VariantProps<typeof hoverCardContentVariants>) {
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <HoverCardPrimitive.Portal
       data-slot="hover-card-portal"
       container={usePortalContainer() ?? undefined}
     >
       <HoverCardPrimitive.Content
+        data-sidebar-zoom={sidebarZoom}
         data-slot="hover-card-content"
         align={align}
         sideOffset={sideOffset}

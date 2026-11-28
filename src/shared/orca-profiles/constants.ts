@@ -168,6 +168,7 @@ export function getDefaultUIState(): PersistedUIState {
     agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
     collapsedGroups: [],
     uiZoomLevel: 0,
+    sidebarZoomLevel: 0,
     editorFontZoomLevel: 0,
     worktreeCardProperties: [...DEFAULT_WORKTREE_CARD_PROPERTIES],
     _worktreeCardModeDefaulted: true,

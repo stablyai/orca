@@ -1,7 +1,6 @@
 import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
 import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
-import { syncZoomCSSVar } from '@/app-shell/chrome/ui-zoom'
 import { recoverStrandedEditorDrafts } from '@/components/editor/model-lifetime/retention/stranded-editor-draft-recovery'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../../store/index'
@@ -284,7 +283,6 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           }
           // After reconnect publishes PTY IDs, re-offer stale Codex accounts even for tabs that never mount.
           sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
-          syncZoomCSSVar()
           // Unlock writes only after all hydration/dependent steps succeed; never save partially restored state (#1158).
           actions.setHydrationSucceeded(true)
           actions.setTerminalStartupRestorationReady(true)

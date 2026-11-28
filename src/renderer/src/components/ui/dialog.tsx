@@ -1,5 +1,6 @@
 'use client'
 
+import { SidebarZoomContext } from './sidebar-zoom-context'
 import { SECURITY_SURFACE_CLASS } from './security-surface'
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
@@ -23,7 +24,11 @@ import {
 } from './dialog-layout-context'
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  return (
+    <SidebarZoomContext value={false}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} />
+    </SidebarZoomContext>
+  )
 }
 
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
@@ -66,7 +71,7 @@ function DialogOverlay({
 
 /** Media sits straight on the scrim; scaling in would make its edge controls slide. */
 const MEDIA_SURFACE_CLASS =
-  'inset-0 h-dvh w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
+  'inset-0 h-auto w-auto max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none data-[state=closed]:[--tw-exit-scale:1]! data-[state=open]:[--tw-enter-scale:1]! sm:max-w-none dark:shadow-none'
 
 const dialogContentVariants = cva('', {
   variants: {
@@ -127,7 +132,7 @@ const unifiedDialogSizeClass: Record<UnifiedDialogSize, string> = {
   list: 'sm:max-w-[520px]',
   // The review keeps its final bounds while the panes fill and the dialog fades in.
   review:
-    'flex h-[min(28rem,calc(100dvh-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
+    'flex h-[min(28rem,calc(100%-3rem))] flex-col sm:max-w-[680px] data-[state=open]:[--tw-enter-scale:1]! data-[state=closed]:[--tw-exit-scale:1]!'
 }
 
 function DialogContent({
@@ -184,7 +189,7 @@ function DialogContent({
               unifiedDialogSizeClass[size]
             ),
           dialogContentVariants({ density, surface }),
-          scrollable && 'max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek',
+          scrollable && 'max-h-[calc(100%-3rem)] overflow-y-auto scrollbar-sleek',
           phoneSheet &&
             'max-sm:top-auto max-sm:bottom-0 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-b-none',
           className

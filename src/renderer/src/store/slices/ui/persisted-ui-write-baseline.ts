@@ -6,6 +6,8 @@ import { persistedUIValuesEqual } from '../../../../../shared/collections/persis
 export type PersistedUIWriteBaseline = {
   gitGraphFiltersByWorktree?: PersistedUIState['gitGraphFiltersByWorktree']
   sidebarWidth: number
+  uiZoomLevel: number
+  sidebarZoomLevel: number
   sidebarOpen: boolean
   rightSidebarOpen: boolean
   rightSidebarTab: PersistedUIState['rightSidebarTab']
@@ -42,6 +44,8 @@ export type PersistedUIWriteBaseline = {
 const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   gitGraphFiltersByWorktree: true,
   sidebarWidth: true,
+  uiZoomLevel: true,
+  sidebarZoomLevel: true,
   sidebarOpen: true,
   rightSidebarOpen: true,
   rightSidebarTab: true,

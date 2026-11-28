@@ -8,10 +8,8 @@ import {
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
-import {
-  stepUIZoomLevel,
-  type UIZoomDirection
-} from '../../shared/app-lifecycle/windows/ui-zoom-level'
+import { installCompanionWindowZoom } from './companion-window-zoom'
+import type { KeybindingOverrides } from '../../shared/keybindings/types'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 let spaceWindow: BrowserWindow | null = null
@@ -26,18 +24,9 @@ export function isWorkspaceSpaceWindowRenderer(sender: WebContents): boolean {
   return getWorkspaceSpaceWindow()?.webContents === sender
 }
 
-export function zoomWorkspaceSpaceWindowIfFocused(direction: UIZoomDirection): boolean {
-  const window = getWorkspaceSpaceWindow()
-  if (!window || !window.isFocused()) {
-    return false
-  }
-  const contents = window.webContents
-  contents.setZoomLevel(stepUIZoomLevel(contents.getZoomLevel(), direction))
-  return true
-}
-
 export function createOrFocusWorkspaceSpaceWindow(
-  nativeSettings: NativeSettingsProjection
+  nativeSettings: NativeSettingsProjection,
+  getKeybindings?: () => KeybindingOverrides | undefined
 ): BrowserWindow {
   const existing = getWorkspaceSpaceWindow()
   if (existing) {
@@ -73,6 +62,7 @@ export function createOrFocusWorkspaceSpaceWindow(
     }
   })
   spaceWindow = window
+  installCompanionWindowZoom(window, getKeybindings)
   installPrivilegedWindowNavigationPolicy(window.webContents)
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
     callback(false)

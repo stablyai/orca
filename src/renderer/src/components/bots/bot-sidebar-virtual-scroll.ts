@@ -16,6 +16,6 @@ export function seekDistantBotSidebarRow(
   const distant =
     !row ||
     Math.abs(row.getBoundingClientRect().top - list.getBoundingClientRect().top) >
-      list.clientHeight * 2
+      list.clientHeight * (list.currentCSSZoom || 1) * 2
   return distant && seek(target.entryKey)
 }

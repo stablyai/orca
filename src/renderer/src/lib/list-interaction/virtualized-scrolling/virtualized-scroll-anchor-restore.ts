@@ -77,8 +77,8 @@ export function runVirtualizedScrollAnchorRestore<
     }
     const scrollRect = el.getBoundingClientRect()
     const rect = element.getBoundingClientRect()
-    const desiredTop = scrollRect.top - offsetWithinRow(rect.height)
-    const delta = rect.top - desiredTop
+    const zoom = el.currentCSSZoom || 1
+    const delta = (rect.top - scrollRect.top) / zoom + offsetWithinRow(rect.height / zoom)
     if (Math.abs(delta) > 1) {
       // Keep the target anchor until later layout confirms the landing.
       programmaticScrollMarks?.mark(el.scrollTop + delta)

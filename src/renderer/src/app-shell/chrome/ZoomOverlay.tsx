@@ -48,12 +48,12 @@ export function ZoomOverlay(): React.JSX.Element | null {
     return null
   }
 
-  const title =
-    detail.type === 'ui'
-      ? t('auto.components.ZoomOverlay.uiZoom', 'UI Zoom')
-      : detail.type === 'editor'
-        ? t('auto.components.ZoomOverlay.editorZoom', 'Editor Zoom')
-        : t('auto.components.ZoomOverlay.terminalZoom', 'Terminal Zoom')
+  const titles = {
+    sidebar: () => t('settings.appearance.zoom.sidebar', 'Sidebar zoom'),
+    panel: () => t('settings.appearance.zoom.panel', 'Panel zoom'),
+    editor: () => t('auto.components.ZoomOverlay.editorZoom', 'Editor Zoom'),
+    terminal: () => t('auto.components.ZoomOverlay.terminalZoom', 'Terminal Zoom')
+  }
 
   return (
     <div
@@ -68,7 +68,7 @@ export function ZoomOverlay(): React.JSX.Element | null {
       >
         <Search className="size-4 text-muted-foreground" />
         <div className="flex items-baseline gap-2">
-          <span className="text-xs font-medium text-muted-foreground">{title}</span>
+          <span className="text-xs font-medium text-muted-foreground">{titles[detail.type]()}</span>
           <span className="text-sm font-bold tabular-nums">{detail.percent}%</span>
         </div>
       </div>

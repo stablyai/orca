@@ -1,6 +1,5 @@
 import { uiZoomFactorFromLevel } from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
-
-const isMac = navigator.userAgent.includes('Mac')
+import { isPairedWebClientWindow } from './desktop-window-chrome'
 
 /** Mirror UI zoom for fixed-DIP CSS compensation, including main.css traffic-light padding. */
 const UI_ZOOM_FACTOR_CSS_VAR = '--ui-zoom-factor'
@@ -15,20 +14,18 @@ export function windowDipToCssPx(dip: number): number {
   return dip / getUIZoomFactor()
 }
 
-function publishZoomFactor(zoomFactor: number): void {
-  document.documentElement.style.setProperty(UI_ZOOM_FACTOR_CSS_VAR, String(zoomFactor))
-  if (isMac) {
-    window.api.ui.syncTrafficLights(zoomFactor)
+export function applyPanelZoom(level: number): void {
+  const factor = uiZoomFactorFromLevel(level)
+  const root = document.documentElement
+  const isWeb = isPairedWebClientWindow()
+  if (window.api.ui.getZoomLevel() !== level) {
+    window.api.ui.setZoomLevel(level)
   }
-}
-
-/** Update webFrame zoom, compensating CSS and native macOS traffic-light positioning together. */
-export function applyUIZoom(level: number): void {
-  window.api.ui.setZoomLevel(level)
-  publishZoomFactor(uiZoomFactorFromLevel(level))
-}
-
-/** Sync CSS after main restores webFrame zoom at startup. */
-export function syncZoomCSSVar(): void {
-  publishZoomFactor(getUIZoomFactor())
+  root.style.setProperty(UI_ZOOM_FACTOR_CSS_VAR, String(factor))
+  if (isWeb) {
+    root.style.zoom = String(factor)
+    root.style.setProperty('--web-panel-zoom', String(factor))
+  } else {
+    window.api.ui.syncPanelZoom()
+  }
 }

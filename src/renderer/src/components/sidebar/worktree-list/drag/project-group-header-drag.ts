@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
@@ -85,10 +86,8 @@ export function useProjectGroupHeaderDrag({
       if (!session || !container) {
         return null
       }
-      const containerRect = container.getBoundingClientRect()
       return computeProjectGroupHeaderDropPreview({
-        pointerY,
-        containerTop: containerRect.top,
+        localY: sidebarContentY(container, pointerY),
         scrollTop: container.scrollTop,
         rects: session.headerRects,
         sidebarProjectGroupHeaderIds: session.sidebarProjectGroupHeaderIds,

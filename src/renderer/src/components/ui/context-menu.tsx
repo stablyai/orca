@@ -1,3 +1,4 @@
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { ChevronRightIcon, CircleIcon } from 'lucide-react'
@@ -95,11 +96,13 @@ function ContextMenuSubContent({
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
   const subDensity = useMenuDensity(density)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <ContextMenuPrimitive.Portal container={usePortalContainer() ?? undefined}>
       <OverlayFocusScope value={scope}>
         <MenuDensityProvider value={subDensity}>
           <ContextMenuPrimitive.SubContent
+            data-sidebar-zoom={sidebarZoom}
             data-slot="context-menu-sub-content"
             // Level the first submenu row with its trigger (border + padding).
             alignOffset={alignOffset}
@@ -135,11 +138,13 @@ function ContextMenuContent({
   }) {
   const pointerHighlight = useMenuPointerHighlight(props)
   const { ref: focusScopeRef, scope } = useOverlayFocusScope(pointerHighlight.ref)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <ContextMenuPrimitive.Portal container={usePortalContainer() ?? undefined}>
       <OverlayFocusScope value={scope}>
         <MenuDensityProvider value={density}>
           <ContextMenuPrimitive.Content
+            data-sidebar-zoom={sidebarZoom}
             data-slot="context-menu-content"
             className={cn(
               'z-[70] max-h-(--radix-context-menu-content-available-height) min-w-[11rem] origin-(--radix-context-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',

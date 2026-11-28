@@ -1,3 +1,4 @@
+import { useSidebarZoomAttribute } from './sidebar-zoom-context'
 import * as React from 'react'
 import * as TooltipPrimitive from 'radix-ui/tooltip'
 
@@ -79,10 +80,12 @@ function TooltipContent({
     portalContainer?: HTMLElement | null
   }) {
   const container = usePortalContainer(portalContainer)
+  const sidebarZoom = useSidebarZoomAttribute()
   return (
     <PortalContainerContext value={container}>
       <TooltipPrimitive.Portal container={container ?? undefined}>
         <TooltipPrimitive.Content
+          data-sidebar-zoom={sidebarZoom}
           data-slot="tooltip-content"
           sideOffset={sideOffset}
           // Tooltip portals must layer above the menus/popovers that trigger them.

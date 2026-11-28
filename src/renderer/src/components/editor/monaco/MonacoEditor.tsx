@@ -352,6 +352,7 @@ export default function MonacoEditor({
       <MonacoGutterContextMenu
         open={gutterMenuOpen}
         onOpenChange={setGutterMenuOpen}
+        onRestoreFocus={() => editorRef.current?.focus()}
         point={gutterMenuPoint}
         line={gutterMenuLine}
         selection={gutterMenuSelection}

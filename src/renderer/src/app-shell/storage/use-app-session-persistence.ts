@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '../../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { createSessionWriteSubscriber } from '../../lib/workspace/persistence/session-write-subscriber'
-import { buildActiveViewUnloadPatch } from '../startup/active-view-persist'
+import { buildUnloadUIPatch } from '../startup/unload-ui-patch'
 import {
   isIntentionalAppRestartInProgress,
   registerUpdaterBeforeUnloadBypass
@@ -103,7 +103,7 @@ export function useAppSessionPersistence(): void {
         stagedRelays = desktopRelays?.hosts
         return snapshots
       },
-      buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),
+      buildUiPatch: () => buildUnloadUIPatch(useAppStore.getState()),
       hasDirtyOpenFiles: () => useAppStore.getState().openFiles.some((file) => file.isDirty),
       // Allow quit fallback too; SIGKILL to escape a blocked quit loses more state (#15352).
       isDegradableShutdownInProgress: () =>

@@ -43,11 +43,13 @@ function measureSource(source: GroupBodyGeometrySource): void {
   if (body) {
     const containerRect = source.container.getBoundingClientRect()
     const bodyRect = body.getBoundingClientRect()
+    // A CSS-zoomed web client measures viewport pixels but positions the retained pane in local pixels.
+    const zoom = source.container.currentCSSZoom || 1
     next = {
-      top: bodyRect.top - containerRect.top,
-      left: bodyRect.left - containerRect.left,
-      width: bodyRect.width,
-      height: bodyRect.height
+      top: (bodyRect.top - containerRect.top) / zoom,
+      left: (bodyRect.left - containerRect.left) / zoom,
+      width: bodyRect.width / zoom,
+      height: bodyRect.height / zoom
     }
   }
   if (isSameRect(source.rect, next)) {

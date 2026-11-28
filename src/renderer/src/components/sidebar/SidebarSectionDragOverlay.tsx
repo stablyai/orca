@@ -25,6 +25,7 @@ export function SidebarSectionDragOverlay({
         'data-sidebar-section-title',
         'data-contextual-tour-target'
       ])
+      clone.dataset.sidebarDragCopy = ''
       clone.classList.remove('mt-2', 'opacity-0', 'pointer-events-none')
       node.replaceChildren(clone)
     },
@@ -34,7 +35,7 @@ export function SidebarSectionDragOverlay({
   return createPortal(
     <>
       <DragOverlay
-        className="pointer-events-none rounded-md bg-worktree-sidebar shadow-xs ring-1 ring-worktree-sidebar-border"
+        className="sidebar-section-drag-overlay pointer-events-none rounded-md bg-worktree-sidebar shadow-xs ring-1 ring-worktree-sidebar-border"
         style={sidebarStyle}
         dropAnimation={null}
         zIndex={HEADER_PREVIEW_Z_INDEX}
@@ -44,7 +45,7 @@ export function SidebarSectionDragOverlay({
       {swapTarget ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none fixed grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-worktree-sidebar text-worktree-sidebar-foreground ring-1 ring-worktree-sidebar-ring"
+          className="sidebar-section-drag-overlay pointer-events-none fixed grid size-5 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-worktree-sidebar text-worktree-sidebar-foreground ring-1 ring-worktree-sidebar-ring"
           style={{
             ...sidebarStyle,
             left: (swapTarget.left + swapTarget.right) / 2,

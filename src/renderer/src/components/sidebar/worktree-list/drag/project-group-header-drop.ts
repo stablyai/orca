@@ -161,8 +161,7 @@ export function measureProjectGroupHeaderDragRects(
 }
 
 export function computeProjectGroupHeaderDropPreview(args: {
-  pointerY: number
-  containerTop: number
+  localY: number
   scrollTop: number
   rects: readonly ProjectGroupHeaderDragRect[]
   sidebarProjectGroupHeaderIds: readonly string[]
@@ -170,8 +169,7 @@ export function computeProjectGroupHeaderDropPreview(args: {
 }): ProjectGroupHeaderDropPreview | null {
   const { rects, sidebarProjectGroupHeaderIds } = args
   return computeWorktreeSidebarHeaderDropPreview({
-    pointerY: args.pointerY,
-    containerTop: args.containerTop,
+    localY: args.localY,
     scrollTop: args.scrollTop,
     rects,
     headerCount: sidebarProjectGroupHeaderIds.length,

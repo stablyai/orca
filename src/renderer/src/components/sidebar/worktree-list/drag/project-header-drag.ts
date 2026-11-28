@@ -1,3 +1,4 @@
+import { sidebarContentY } from '../viewport/sidebar-scroll-coordinates'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
@@ -93,8 +94,7 @@ export function useRepoHeaderDrag({
         return null
       }
       return computeProjectHeaderDropPreview({
-        pointerY,
-        containerTop: container.getBoundingClientRect().top,
+        localY: sidebarContentY(container, pointerY),
         scrollTop: container.scrollTop,
         rects: session.headerRects,
         sidebarRepoHeaderIds: session.sidebarRepoHeaderIds,

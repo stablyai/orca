@@ -1,3 +1,4 @@
+import { SidebarZoomContext } from '@/components/ui/sidebar-zoom-context'
 import React, { useEffect, useMemo } from 'react'
 import {
   DndContext,
@@ -10,10 +11,9 @@ import {
 } from '@dnd-kit/core'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './chrome/SidebarHeader'
 import SidebarNav from './chrome/SidebarNav'
-import { setSidebarLiveWidth } from './chrome/sidebar-live-width'
+import { useWorkspaceListResize } from './chrome/use-workspace-list-resize'
 import SetupScriptPromptCard from './setup-script-prompts/SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
 import WslMovedProjectsSection from '../wsl-move/WslMovedProjectsSection'
@@ -78,8 +78,6 @@ const AgentDashboardSidebarHost = lazyWithRetry(
   () => import('../dashboard/sidebar/AgentDashboardSidebarHost')
 )
 
-const MIN_WIDTH = 220
-const MAX_WIDTH = 500
 const sidebarSectionDragModifiers: Modifier[] = [
   ({ draggingNodeRect, scrollableAncestorRects: [viewport], transform }) => ({
     ...transform,
@@ -201,15 +199,11 @@ function Sidebar({
     }
   }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
 
-  const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
-    isOpen: sidebarOpen,
-    width: sidebarWidth,
-    minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
-    deltaSign: 1,
-    setWidth: setSidebarWidth,
-    onDraftWidthChange: setSidebarLiveWidth
-  })
+  const { containerRef, onResizeStart, isResizing } = useWorkspaceListResize(
+    sidebarOpen,
+    sidebarWidth,
+    setSidebarWidth
+  )
 
   const drawerCoversSeam =
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
@@ -310,6 +304,7 @@ function Sidebar({
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
           ref={sidebarRef}
+          data-sidebar-zoom=""
           data-sidebar-content-shell=""
           id={WORKSPACE_LIST_REGION_ID}
           className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
@@ -320,7 +315,7 @@ function Sidebar({
           {...dropHandlers}
         >
           {rowsMounted && (
-            <>
+            <SidebarZoomContext value>
               <DndContext
                 sensors={sidebarSectionDragSensors}
                 modifiers={sidebarSectionDragModifiers}
@@ -348,7 +343,7 @@ function Sidebar({
                   onWorkspaceBoardToggle={toggleWorkspaceBoard}
                 />
               </div>
-            </>
+            </SidebarZoomContext>
           )}
 
           {sidebarOpen && affordance.visible ? (

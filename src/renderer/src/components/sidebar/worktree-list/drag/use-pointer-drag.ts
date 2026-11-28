@@ -117,6 +117,7 @@ export function useWorktreePointerDrag(args: {
         pointerY: drag.currentY,
         draggedCount: drag.draggedIds.length
       })
+      const zoom = drag.sourceRow.currentCSSZoom || 1
       drag.active = true
       drag.preview = preview
       drag.previewOffsetX = offsetX
@@ -134,7 +135,7 @@ export function useWorktreePointerDrag(args: {
         reorderUnitDraggedKeys: drag.reorderUnitDraggedKeys,
         rects: drag.rects,
         // Hit-test the floating card’s visual offset rather than the raw pointer.
-        grab: getWorktreeSidebarDragGrab({ offsetY, height }),
+        grab: getWorktreeSidebarDragGrab({ offsetY: offsetY / zoom, height: height / zoom }),
         anchor: null
       }
       setWorktreeDragState({

@@ -1,3 +1,4 @@
+import { installWebTerminalMouseCoordinates } from '@/lib/pane-manager/terminal-input/web-terminal-mouse-coordinates'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import './pane-layout/pane-tree-ops'
 import { safeFit } from './terminal-fit/pane-fit'
@@ -58,6 +59,7 @@ export function openTerminal(
   } = pane
 
   terminal.open(xtermContainer)
+  installWebTerminalMouseCoordinates(terminal)
   // Pane-level tooltips reach the true corner; terminal.element sits inside xterm padding.
   container.appendChild(linkTooltip)
 

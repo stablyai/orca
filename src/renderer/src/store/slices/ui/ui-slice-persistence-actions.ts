@@ -39,7 +39,9 @@ export function createUiPersistenceActions(set: UISliceSet, _get: UISliceGet): P
         }
       }),
     uiZoomLevel: 0,
+    sidebarZoomLevel: 0,
     setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
+    setSidebarZoomLevel: (level) => set({ sidebarZoomLevel: level }),
     editorFontZoomLevel: 0,
     setEditorFontZoomLevel: (level) => set({ editorFontZoomLevel: level })
   }

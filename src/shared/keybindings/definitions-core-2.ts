@@ -1,4 +1,5 @@
 import type { KeybindingDefinition } from './types'
+import { REGION_ZOOM_DEFINITIONS } from './region-zoom-definitions'
 import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
@@ -49,6 +50,7 @@ export const KEYBINDING_DEFINITION_CORE_2: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'zoom', 'reset', 'size', 'actual'],
     defaultBindings: platformBindings(['Mod+0'])
   },
+  ...REGION_ZOOM_DEFINITIONS,
   {
     id: 'worktree.history.back',
     title: 'Worktree History Back',

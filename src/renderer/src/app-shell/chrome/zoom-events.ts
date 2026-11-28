@@ -1,4 +1,6 @@
-export type ZoomTargetType = 'ui' | 'editor' | 'terminal'
+import type { UIZoomRegion } from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
+
+export type ZoomTargetType = UIZoomRegion | 'editor' | 'terminal'
 
 export type ZoomLevelChangedEventDetail = {
   type: ZoomTargetType

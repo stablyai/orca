@@ -186,6 +186,7 @@ export const UiUpdateFields = lazyZodSchema(() =>
       notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
       collapsedGroups: StringArray.optional(),
       uiZoomLevel: z.number().finite().optional(),
+      sidebarZoomLevel: z.number().finite().optional(),
       editorFontZoomLevel: z.number().finite().optional(),
       worktreeCardProperties: WorktreeCardProperties.optional(),
       _worktreeCardModeDefaulted: z.boolean().optional(),

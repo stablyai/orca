@@ -2,6 +2,10 @@ import { BrowserWindow, Menu, app } from 'electron'
 import { formatKeybindingList } from '../../shared/keybindings/formatting'
 import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
 import type { KeybindingActionId, KeybindingOverrides } from '../../shared/keybindings/types'
+import type {
+  UIZoomDirection,
+  UIZoomRegion
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
 import type { UpdateCheckOptions } from '../../shared/updater/update-status-types'
 import { translateMain } from '../i18n/main-i18n'
 import { createAppMenuSelectionItem, resolveNativeEditTarget } from './app-menu-selection-item'
@@ -32,9 +36,11 @@ type RegisterAppMenuOptions = AppMenuQuitHandlers & {
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: UpdateCheckOptions) => void
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
-  onZoomIn: () => void
-  onZoomOut: () => void
-  onZoomReset: () => void
+  onZoom: (
+    direction: UIZoomDirection,
+    region?: UIZoomRegion,
+    window?: Electron.BaseWindow | null
+  ) => void
   onToggleLeftSidebar: () => void
   onToggleRightSidebar: () => void
   onToggleAppearance: (key: AppearanceMenuKey) => void
@@ -54,9 +60,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     onOpenCrashReport,
     onCheckForUpdates,
     onBeforeReload,
-    onZoomIn,
-    onZoomOut,
-    onZoomReset,
+    onZoom,
     onToggleLeftSidebar,
     onToggleRightSidebar,
     onToggleAppearance,
@@ -241,6 +245,18 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  const zoomItems = (region?: UIZoomRegion): Electron.MenuItemConstructorOptions[] => {
+    const directions = [
+      ['in', translateMain('menu.zoomIn', 'Zoom In')],
+      ['out', translateMain('menu.zoomOut', 'Zoom Out')],
+      ['reset', translateMain('menu.resetSize', 'Reset Size')]
+    ] as const
+    return directions.map(([direction, label]) => ({
+      label: `${label}\t${shortcutLabel(region ? `zoom.${region}.${direction}` : `zoom.${direction}`)}`,
+      click: (_item, window) => onZoom(direction, region, window)
+    }))
+  }
+
   const viewMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.view', 'View'),
     submenu: [
@@ -250,17 +266,14 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         toggleFocusedPageDevTools: options.toggleFocusedPageDevTools
       }),
       { type: 'separator' },
+      ...zoomItems(),
       {
-        label: `${translateMain('menu.resetSize', 'Reset Size')}\t${shortcutLabel('zoom.reset')}`,
-        click: () => onZoomReset()
+        label: translateMain('menu.sidebarZoom', 'Sidebar Zoom'),
+        submenu: zoomItems('sidebar')
       },
       {
-        label: `${translateMain('menu.zoomIn', 'Zoom In')}\t${shortcutLabel('zoom.in')}`,
-        click: () => onZoomIn()
-      },
-      {
-        label: `${translateMain('menu.zoomOut', 'Zoom Out')}\t${shortcutLabel('zoom.out')}`,
-        click: () => onZoomOut()
+        label: translateMain('menu.panelZoom', 'Panel Zoom'),
+        submenu: zoomItems('panel')
       },
       { type: 'separator' },
       {

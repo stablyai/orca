@@ -5,6 +5,19 @@ export const UI_ZOOM_STEP = 0.5
 export const UI_ZOOM_MIN = -3
 export const UI_ZOOM_MAX = 5
 
+export type UIZoomRegion = 'sidebar' | 'panel'
+export function resolveUIZoomLevels(ui?: { uiZoomLevel?: number; sidebarZoomLevel?: number }): {
+  uiZoomLevel: number
+  sidebarZoomLevel: number
+} {
+  const clamp = (value: number | undefined, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value)
+      ? Math.max(UI_ZOOM_MIN, Math.min(UI_ZOOM_MAX, value))
+      : fallback
+  const uiZoomLevel = clamp(ui?.uiZoomLevel, 0)
+  return { uiZoomLevel, sidebarZoomLevel: clamp(ui?.sidebarZoomLevel, uiZoomLevel) }
+}
+
 export type UIZoomDirection = 'in' | 'out' | 'reset'
 
 export function stepUIZoomLevel(current: number, direction: UIZoomDirection): number {

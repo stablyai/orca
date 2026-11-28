@@ -51,8 +51,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     setContextWorktrees(
       fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
     )
-    const bounds = event.currentTarget.getBoundingClientRect()
-    setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+    setMenuPoint({ x: event.clientX, y: event.clientY })
     setMenuOpenState(true)
   }
 
