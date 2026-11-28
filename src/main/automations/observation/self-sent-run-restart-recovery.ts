@@ -1,5 +1,6 @@
 // A run that sends its own prompt, after Orca quit inside its dispatch: its chat is found by the
-// prompt's run-derived id, and a prompt that chat kept unsent at the restart is sent then, once.
+// prompt's run-derived id, as a launch receipt finds any other run's, and a prompt that chat kept
+// unsent at the restart is sent then, once.
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
@@ -10,9 +11,22 @@ import {
   AUTOMATION_AGENT_CALLER,
   automationRunOperationId
 } from '../launch/automation-run-operation'
-import type { Automation } from '../../../shared/automations/automation-definition'
-import type { AutomationService } from '../automation-service'
-import { selfSentRunPlacement } from './self-sent-run-placement'
+import type { AutomationRunReceipt } from '../launch/automation-run-receipt'
+
+/** The chat holding a self-sent run's prompt when Orca quit before saving that chat, found by the
+ *  prompt's run-derived id; null when none holds it (the run can't be confirmed, as for any run). */
+export async function selfSentRunReceipt(
+  runtime: OrcaRuntimeService,
+  run: Pick<AutomationRun, 'id' | 'createdAt'>
+): Promise<AutomationRunReceipt | null> {
+  const messageId = automationRunOperationId(run, 'run-message')
+  const records = await runtime.openAgentSessionRecordStore()
+  const [sessionId] = await records.chatsHoldingMessage(messageId)
+  const workspaceId = sessionId && records.getConversation(sessionId)?.location.workspaceId
+  return sessionId && workspaceId
+    ? { kind: 'chat', sessionId, workspaceId, messageId, accepted: true }
+    : null
+}
 
 /** Sends a self-sent run's prompt that its chat kept unsent when Orca restarted. Sending consumes the
  *  kept card, and a consumed card is never sent again. */
@@ -61,42 +75,4 @@ export async function sendRunPromptKeptAtRestart(
     // The card stays in its chat, where the run waits for it like any queued prompt.
     console.warn('[automations] could not send a run prompt kept at restart:', sent.refusal)
   }
-}
-
-/** A self-sent run Orca quit before saving its chat: attached to the chat holding its prompt, or,
- *  when nothing holds it and the run is still claimed, handed to its own launch (`settled: null`),
- *  which settles it. A run that can't be confirmed comes back unchanged. Throws once Orca is
- *  quitting. */
-export async function recoverSelfSentRun(
-  deps: {
-    runtime: OrcaRuntimeService
-    service: Pick<AutomationService, 'resumeUnsentDispatch' | 'markDispatchResult'>
-  },
-  automation: Automation,
-  run: AutomationRun,
-  signal: AbortSignal
-): Promise<{ run: AutomationRun } | { settled: null }> {
-  const placed = await selfSentRunPlacement(deps.runtime, run)
-  signal.throwIfAborted()
-  if (placed.kind === 'chat') {
-    return {
-      run: await deps.service.markDispatchResult({
-        runId: run.id,
-        status: 'dispatched',
-        sessionKind: 'chat',
-        chatSessionId: placed.sessionId,
-        workspaceId: placed.workspaceId,
-        terminalSessionId: null,
-        terminalPaneKey: null,
-        terminalPtyId: null,
-        error: null
-      })
-    }
-  }
-  // Only a run still claimed is handed on: its launch settles nothing else.
-  if (placed.kind === 'unconfirmed' || run.status !== 'dispatching') {
-    return { run }
-  }
-  deps.service.resumeUnsentDispatch(automation, run)
-  return { settled: null }
 }

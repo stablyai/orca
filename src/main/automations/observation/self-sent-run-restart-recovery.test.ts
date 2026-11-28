@@ -13,14 +13,9 @@ import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { agentSessionMessagePayload } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { automationRunOperationId } from '../launch/automation-run-operation'
-import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
-import { sendRunPromptKeptAtRestart } from './self-sent-run-restart-recovery'
-import { selfSentRunPlacement } from './self-sent-run-placement'
+import { selfSentRunReceipt, sendRunPromptKeptAtRestart } from './self-sent-run-restart-recovery'
 
 /** Where the run's prompt went, as recovery reads it. */
-const placementOf = (runtime: OrcaRuntimeService, of: { id: string; createdAt: number }) =>
-  selfSentRunPlacement(runtime, of)
-
 // Orca quit while a self-sent run's prompt waited for its agent to start: after the restart, the run finds
 // its chat by the prompt's id and sends the kept prompt exactly once, however often recovery runs.
 let rig: QueuedMessageTestRig | null = null
@@ -69,13 +64,10 @@ async function quitBeforeTheAgentGotIt(): Promise<QueuedMessageTestRig> {
 }
 
 function runtimeOf(chat: QueuedMessageTestRig): OrcaRuntimeService {
-  const orchestration = new OrchestrationDb(':memory:')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime calls recovery makes
   return {
     ensureStructuredAgentSessionHost: async () => {},
-    openAgentSessionRecordStore: async () => chat.store,
-    getOrchestrationDb: () => orchestration,
-    bots: { list: () => [] }
+    openAgentSessionRecordStore: async () => chat.store
   } as unknown as OrcaRuntimeService
 }
 
@@ -88,8 +80,8 @@ it('sends a run prompt kept at restart once, straight from a cold start', async 
   const chat = await quitBeforeTheAgentGotIt()
   const runtime = runtimeOf(chat)
   // Nothing has opened the chat since the restart: recovery's own reads must find and open it.
-  expect(await placementOf(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
-  expect(await placementOf(runtime, { id: 'run-2', createdAt: NOW })).toEqual({ kind: 'unsent' })
+  expect(await selfSentRunReceipt(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
+  expect(await selfSentRunReceipt(runtime, { id: 'run-2', createdAt: NOW })).toBeNull()
   await Promise.all([
     sendRunPromptKeptAtRestart(runtime, run, live),
     sendRunPromptKeptAtRestart(runtime, run, live)
@@ -108,57 +100,14 @@ it('never sends a kept prompt once Orca is quitting', async () => {
   expect(await sendsOf(chat)).toEqual([])
 })
 
-it('never sends a kept prompt someone withdrew', async () => {
-  const chat = await quitBeforeTheAgentGotIt()
-  expect(await chat.drafts()).toEqual([expect.objectContaining({ messageId, state: 'waiting' })])
-  expect(await chat.deleteQueued(messageId)).toMatchObject({ ok: true })
-  await sendRunPromptKeptAtRestart(runtimeOf(chat), run, live)
-  expect(await sendsOf(chat)).toEqual([])
-})
-
 it('leaves a prompt queued behind a running turn to the queue, and still finds its chat', async () => {
   rig = await createQueuedMessageTestRig({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
   setStructuredAgentSessionHost(rig.host)
   await rig.workingSend()
   await sendRunPrompt(rig)
   const runtime = runtimeOf(rig)
-  expect(await placementOf(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
+  expect(await selfSentRunReceipt(runtime, run)).toMatchObject({ kind: 'chat', sessionId: SESSION })
   await sendRunPromptKeptAtRestart(runtime, run, live)
   expect(await rig.drafts()).toEqual([expect.objectContaining({ messageId, state: 'waiting' })])
   expect(await sendsOf(rig)).toEqual([])
-})
-
-// Builds before run-derived ids sent a run's prompt under a random id; only the run it carries says
-// a chat took it, so the restart must never dispatch it a second time.
-it("never reads an older build's send of the run as unsent", async () => {
-  rig = await createQueuedMessageTestRig({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
-  const automationRun = {
-    runId: 'run-old',
-    automation: {
-      id: 'a1',
-      name: 'Daily report',
-      enabled: true,
-      nextRunAt: 0,
-      updatedAt: 0,
-      rrule: 'FREQ=DAILY',
-      dtstart: 0,
-      workspaceId: null
-    },
-    trigger: 'scheduled' as const,
-    instructionsLength: 0
-  }
-  const oldBody = { ...body, automationRun }
-  const fields = { body: agentSessionMessagePayload(oldBody), delivery: 'queue-if-active' as const }
-  expect(
-    await rig.host.send(QUEUED_RIG_CALLER, {
-      envelope: rig.envelope(fields, 'agentSession.send', `${NOW}-${'0'.repeat(31)}9`),
-      ...fields,
-      body: oldBody,
-      userSend: true
-    })
-  ).toMatchObject({ ok: true })
-  await rig.crashRestartHostFromDisk()
-  expect(await placementOf(runtimeOf(rig), { id: 'run-old', createdAt: NOW })).toEqual({
-    kind: 'unconfirmed'
-  })
 })

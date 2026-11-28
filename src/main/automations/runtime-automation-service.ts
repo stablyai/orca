@@ -74,20 +74,22 @@ export function createRuntimeAutomationService(input: {
       observeCompletion: async (handle, options) => {
         let run = options.run
         if (run && handle.startsWith('automation:')) {
-          const automation = store.listAutomations().find((entry) => entry.id === run?.automationId)
-          const agent = tuiAgentDisplayName(automation?.agentId ?? 'Agent') ?? 'Agent'
-          if (!run.chatSessionId && automation?.bot) {
-            const { recoverSelfSentRun } =
-              await import('./observation/self-sent-run-restart-recovery')
-            const recovered = await recoverSelfSentRun(selfSent, automation, run, options.signal)
-            if ('settled' in recovered) {
-              return recovered.settled
-            }
-            run = recovered.run
-          }
           if (!run.chatSessionId) {
             const records = await runtime.openAgentSessionRecordStore()
-            const receipt = readAutomationRunReceipt(records, run)
+            const bot = store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
+            // A run that sends its own prompt has no launch receipt: its prompt's chat is its receipt.
+            const receipt =
+              readAutomationRunReceipt(records, run) ??
+              (bot
+                ? await (
+                    await import('./observation/self-sent-run-restart-recovery')
+                  ).selfSentRunReceipt(runtime, run)
+                : null)
+            const agent =
+              tuiAgentDisplayName(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.agentId ??
+                  'Agent'
+              ) ?? 'Agent'
             if (!receipt) {
               return {
                 status: 'dispatch_failed',
@@ -126,7 +128,9 @@ export function createRuntimeAutomationService(input: {
           if (run.sessionKind === 'chat') {
             try {
               // A bot automation sends its own prompt; any other chat run is launched with a receipt.
-              const sentByRun = Boolean(automation?.bot)
+              const sentByRun = Boolean(
+                store.listAutomations().find((entry) => entry.id === run?.automationId)?.bot
+              )
               const { observeAutomationChatRun } =
                 await import('./observation/runtime-chat-run-observer')
               if (sentByRun) {
@@ -139,6 +143,11 @@ export function createRuntimeAutomationService(input: {
                 throw error
               }
               console.error('[automations] chat run observation failed:', error)
+              const agent =
+                tuiAgentDisplayName(
+                  store.listAutomations().find((entry) => entry.id === run?.automationId)
+                    ?.agentId ?? 'Agent'
+                ) ?? 'Agent'
               return {
                 status: 'dispatch_failed',
                 error: `${agent} stopped reporting this run's result. Open the chat before running again.`
@@ -147,7 +156,7 @@ export function createRuntimeAutomationService(input: {
           }
         }
         const observation = await observer.observeCompletion(handle, { ...options, run })
-        if (options.run && observation?.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
+        if (options.run && observation.error === AGENT_HOOKS_REVIEW_BLOCKED_ERROR) {
           const markDispatchResult = service.markDispatchResult.bind(service)
           const blockedRun = options.run
           void import('./terminal-retention/hook-review-blocked-run-terminals')
@@ -223,7 +232,6 @@ export function createRuntimeAutomationService(input: {
     },
     runTerminalRetention: (owner) => createRuntimeRunTerminalRetention(owner, store, runtime)
   })
-  const selfSent = { runtime, service }
   service.wakeGate.settled = () => automationSystemSettled()
   runtime.setAutomationService(service)
   bindBotAutomations(service, store, runtime)
