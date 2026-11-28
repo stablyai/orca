@@ -35,6 +35,7 @@ import {
   subscribeAntigravityChatSignIn
 } from '../../../../antigravity/antigravity-chat-sign-in'
 import { forgetAgyLogin } from './agy-login-change'
+import { answerAntigravityTerminalsAsk } from './antigravity-terminals-ask-answer'
 import { AGY_HOST_SELECTION } from '../../../../antigravity/agy-account-selection'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
@@ -181,21 +182,15 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       ctx
     ): Promise<AntigravityAccountSelectResult> => {
       const service = await getAntigravityAccountService(target)
-      // An answer to Ask selects nothing, so it can never undo a later switch.
       if (answersAsk) {
-        const moved =
-          target.runtime === 'host' ? await ctx.runtime.answerAntigravityAsk(accountId) : undefined
-        return {
-          ...(await withAntigravityChatBackend(ctx.runtime, target, await service.listAccounts())),
-          ...(moved ? { runningSessions: moved } : {})
-        }
+        return answerAntigravityTerminalsAsk(ctx.runtime, target, accountId, service)
       }
       // The sign-in writes agy's login itself; a switch now would race it.
       if (target.runtime === 'host' && antigravitySignInHoldsNativeLogin()) {
         throw new Error('Antigravity is signing in. Select an account after it finishes.')
       }
-      // Agy already running in a terminal holds the login it started with.
-      // Undefined until agy's login is written; the selection it replaced, read in the same step.
+      // Undefined until agy's login is written; then the selection it replaced, which agy already
+      // running in a terminal still holds (read in the same serialized step).
       const switched: { previous?: string | null } = {}
       // New chats use the account at once; running ones move at their next send (the selection
       // noted by the host's vault drives that).
