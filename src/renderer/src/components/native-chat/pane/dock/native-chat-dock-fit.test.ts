@@ -9,11 +9,17 @@ afterEach(() => {
 })
 
 // Natural item heights at each fit level, as the CSS for that level would lay them out.
-const QUEUE = [124, 28, 28, 28, 28, 28]
-const CARD = [272, 272, 272, 272, 160, 160]
-const COMPOSER = [150, 150, 60, 60, 60, 60]
-const FLOOR = [80, 80, 80, 0, 0, 0]
-const LEVELS = ['', 'queue', 'queue composer', 'queue composer transcript']
+const QUEUE = [124, 124, 28, 28, 28, 28, 28]
+const CARD = [312, 272, 272, 272, 272, 160, 160]
+const COMPOSER = [150, 150, 150, 60, 60, 60, 60]
+const FLOOR = [80, 80, 80, 80, 0, 0, 0]
+const LEVELS = [
+  '',
+  'question',
+  'question queue',
+  'question queue composer',
+  'question queue composer transcript'
+]
 
 function dockOf(paneHeight: () => number): { root: HTMLElement; dock: HTMLElement } {
   document.body.innerHTML = `<div data-native-chat-root><div data-native-chat-dock>
@@ -62,16 +68,20 @@ it('steps up one fallback at a time and back down when the pane has room again',
   const { root, dock } = dockOf(() => pane)
   expect(runNativeChatDockFit(root, dock)).toBe(0)
   expect(root.hasAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe(false)
+  // A long question takes its 4-line cap before anything else folds.
+  pane = 640
+  expect(runNativeChatDockFit(root, dock)).toBe(1)
+  expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('question')
   // Room for everything once the queue folds to its header.
   pane = 560
-  expect(runNativeChatDockFit(root, dock)).toBe(1)
-  expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('queue')
-  pane = 470
   expect(runNativeChatDockFit(root, dock)).toBe(2)
-  pane = 390
+  expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('question queue')
+  pane = 470
   expect(runNativeChatDockFit(root, dock)).toBe(3)
-  pane = 260
+  pane = 390
   expect(runNativeChatDockFit(root, dock)).toBe(4)
+  pane = 260
+  expect(runNativeChatDockFit(root, dock)).toBe(5)
   pane = 700
   expect(runNativeChatDockFit(root, dock)).toBe(0)
   expect(root.hasAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe(false)
@@ -79,18 +89,18 @@ it('steps up one fallback at a time and back down when the pane has room again',
 
 it('ends at the scrolling dock without measuring it when even the pinned parts cannot fit', () => {
   const { root, dock } = dockOf(() => 120)
-  expect(runNativeChatDockFit(root, dock)).toBe(5)
+  expect(runNativeChatDockFit(root, dock)).toBe(6)
   expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe(
-    'queue composer transcript card dock'
+    'question queue composer transcript card dock'
   )
 })
 
 it('waits while a card animates its height, leaving the level as it was', () => {
   const { root, dock } = dockOf(() => 560)
-  expect(runNativeChatDockFit(root, dock)).toBe(1)
+  expect(runNativeChatDockFit(root, dock)).toBe(2)
   dock.querySelector('#card')!.setAttribute('data-native-chat-dock-animating', '')
   expect(runNativeChatDockFit(root, dock)).toBeNull()
-  expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('queue')
+  expect(root.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)).toBe('question queue')
 })
 
 it('steps up when a floored scroller shows fewer lines than it must', () => {
@@ -103,7 +113,7 @@ it('steps up when a floored scroller shows fewer lines than it must', () => {
   vi.spyOn(request, 'scrollHeight', 'get').mockReturnValue(120)
   vi.spyOn(request, 'clientHeight', 'get').mockImplementation(() => height.client)
   // One line of a long request in view: not enough, so the dock keeps folding.
-  expect(runNativeChatDockFit(root, dock)).toBe(5)
+  expect(runNativeChatDockFit(root, dock)).toBe(6)
   height.client = 40
   expect(runNativeChatDockFit(root, dock)).toBe(0)
 })
@@ -122,7 +132,20 @@ it('steps up when a list scroller cannot show its first item whole', () => {
   vi.spyOn(options.querySelector<HTMLElement>('#first')!, 'getBoundingClientRect').mockReturnValue(
     new DOMRect(0, 100, 100, 48)
   )
-  expect(runNativeChatDockFit(root, dock)).toBe(5)
+  expect(runNativeChatDockFit(root, dock)).toBe(6)
   height.client = 48
+  expect(runNativeChatDockFit(root, dock)).toBe(0)
+})
+
+it('measures a card through the display: contents wrappers that slot it into the dock', () => {
+  const { root, dock } = dockOf(() => 700)
+  const card = dock.querySelector('#card')!
+  const outer = document.createElement('div')
+  const inner = document.createElement('div')
+  outer.style.display = 'contents'
+  inner.style.display = 'contents'
+  card.replaceWith(outer)
+  outer.append(inner)
+  inner.append(card)
   expect(runNativeChatDockFit(root, dock)).toBe(0)
 })
