@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { ComposerUsageDisplayPicker } from '../composer-usage/ComposerUsageDisplayPicker'
 import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 import { ComposerUsagePositionPicker } from '../composer-usage/ComposerUsagePositionPicker'
+import { UsagePaceColorThresholdsPicker } from '../composer-usage/UsagePaceColorThresholdsPicker'
 import { ListRow } from '../components/list/ListGroup'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { MobileSwitch } from '../components/controls/MobileSwitch'
@@ -170,6 +171,7 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
           <ComposerUsageWindowPicker inSettings />
           <ComposerUsageDisplayPicker inSettings />
           <ComposerUsagePositionPicker inSettings />
+          <UsagePaceColorThresholdsPicker inSettings />
         </SettingsSection>
       </SettingsScreen>
     </GestureHandlerRootView>

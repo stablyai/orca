@@ -49,11 +49,10 @@ export function computeUsagePace(window: UsagePaceWindow, now: number): UsagePac
   }
 }
 
-/** Where an even burn puts the bar's fill now (0–100), mirrored when the bar counts what remains. */
-export function usagePaceMarkerPercent(
+/** Where an even burn would be now, 0–100. Null when the window has no pace to compare. */
+export function usageExpectedPercent(
   window: Pick<UsagePaceWindow, 'windowMinutes' | 'resetsAt'>,
-  now: number,
-  display: UsagePercentageDisplay
+  now: number
 ): number | null {
   const windowMs = window.windowMinutes * 60_000
   if (window.resetsAt == null || windowMs <= 0) {
@@ -64,6 +63,18 @@ export function usagePaceMarkerPercent(
   if (remainingMs <= 0 || remainingMs >= windowMs) {
     return null
   }
-  const elapsedPercent = ((windowMs - remainingMs) / windowMs) * 100
+  return ((windowMs - remainingMs) / windowMs) * 100
+}
+
+/** Where an even burn puts the bar's fill now (0–100), mirrored when the bar counts what remains. */
+export function usagePaceMarkerPercent(
+  window: Pick<UsagePaceWindow, 'windowMinutes' | 'resetsAt'>,
+  now: number,
+  display: UsagePercentageDisplay
+): number | null {
+  const elapsedPercent = usageExpectedPercent(window, now)
+  if (elapsedPercent === null) {
+    return null
+  }
   return display === 'remaining' ? 100 - elapsedPercent : elapsedPercent
 }

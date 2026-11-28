@@ -42,10 +42,11 @@ import {
   ComposerUsageWideMeasure,
   ComposerUsageWideMeter
 } from './ComposerUsageWideMeter'
-import { usagePaceColor } from './usage-pace-color'
+import { usageWindowPaceColor } from './usage-pace-color'
+import { useUsagePaceColorThresholds } from './usage-pace-color-preference'
 import { usageResetLabel } from './usage-reset-label'
 import { useResetCountdownNow } from './use-reset-countdown-now'
-import { computeUsagePace, usagePaceMarkerPercent } from './usage-window-pace'
+import { usagePaceMarkerPercent } from './usage-window-pace'
 
 type Props = {
   agent: string | null | undefined
@@ -73,6 +74,7 @@ type Reading = {
 function useComposerUsageReading(agent: string | null | undefined): Reading | null {
   const t = useMobileTranslation()
   const colors = useMobileColors()
+  const thresholds = useUsagePaceColorThresholds()
   const client = useContext(ComposerUsageClientContext)
   // Before a hook status names the agent, the host's own identification of the tab still does.
   const tabAgent = useContext(ComposerUsageTabAgentContext)
@@ -97,7 +99,7 @@ function useComposerUsageReading(agent: string | null | undefined): Reading | nu
     usage,
     snapshot,
     readout,
-    color: usagePaceColor(computeUsagePace(entry.window, now), readout.used, colors),
+    color: usageWindowPaceColor(entry.window, now, thresholds, colors),
     paceMarkerPercent: usagePaceMarkerPercent(entry.window, now, display),
     length,
     resetsIn: usageResetLabel(entry.window, now),

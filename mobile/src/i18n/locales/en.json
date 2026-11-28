@@ -8625,6 +8625,19 @@
       "rowHint": "Show the meter in the controls row",
       "above": "Above text",
       "aboveHint": "Show the meter on its own line above the text"
+    },
+    "paceColors": {
+      "summary": "Green ≤ +{{green}}% · Yellow ≤ +{{yellow}}% · Red > +{{yellow}}% over pace",
+      "summaryNoYellow": "Green ≤ +{{green}}% · Red > +{{green}}% over pace",
+      "label": "Pace colors",
+      "resetHint": "Reset pace color thresholds to defaults",
+      "reset": "Reset",
+      "greenUpTo": "Green up to",
+      "greenDec": "Decrease green pace threshold",
+      "greenInc": "Increase green pace threshold",
+      "yellowUpTo": "Yellow up to",
+      "yellowDec": "Decrease yellow pace threshold",
+      "yellowInc": "Increase yellow pace threshold"
     }
   }
 }

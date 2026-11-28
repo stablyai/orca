@@ -37,7 +37,9 @@ export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   /** The composer meter's window, display and position, so an open chat follows Settings. */
   'orca:composerUsageWindow',
   'orca:composerUsageDisplay',
-  'orca:composerUsagePosition'
+  'orca:composerUsagePosition',
+  /** Green and yellow over-pace cutoffs for the composer meter and usage pop-up. */
+  'orca:usagePaceColorThresholds'
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -63,6 +65,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:composerUsageDisplay',
   /** Whether that meter sits in the controls row or above the text. */
   'orca:composerUsagePosition',
+  /** Green and yellow over-pace cutoffs, so an open chat follows Settings. */
+  'orca:usagePaceColorThresholds',
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
@@ -84,6 +88,7 @@ export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:composerUsageWindow',
   'orca:composerUsageDisplay',
   'orca:composerUsagePosition',
+  'orca:usagePaceColorThresholds',
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',
