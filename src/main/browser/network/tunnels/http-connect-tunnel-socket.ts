@@ -32,22 +32,31 @@ export class HttpConnectTunnelSocket extends ProxyHandshakeSocket {
 
   protected onHandshakeData(bytes: Buffer): void {
     this.head = Buffer.concat([this.head, bytes])
-    const end = this.head.indexOf(HEAD_TERMINATOR)
-    if (end === -1) {
-      if (this.head.byteLength > MAX_RESPONSE_HEAD_BYTES) {
-        this.fail(new Error('http_proxy_response_too_large'))
+    for (;;) {
+      const end = this.head.indexOf(HEAD_TERMINATOR)
+      if (end === -1) {
+        if (this.head.byteLength > MAX_RESPONSE_HEAD_BYTES) {
+          this.fail(new Error('http_proxy_response_too_large'))
+        }
+        return
       }
+      const statusLine = this.head.subarray(0, this.head.indexOf('\r\n')).toString('latin1')
+      const status = /^HTTP\/1\.[01] (\d{3})/.exec(statusLine)?.[1]
+      this.head = this.head.subarray(end + HEAD_TERMINATOR.byteLength)
+      // Informational heads precede the final CONNECT response and carry no tunnel bytes.
+      // Switching Protocols is not a successful CONNECT negotiation.
+      if (status?.startsWith('1') && status !== '101') {
+        continue
+      }
+      if (!status?.startsWith('2')) {
+        this.fail(new Error(`http_proxy_connect_rejected:${status ?? 'malformed'}`))
+        return
+      }
+      const remaining = this.head
+      this.head = Buffer.alloc(0)
+      this.finishHandshake(remaining)
       return
     }
-    const statusLine = this.head.subarray(0, this.head.indexOf('\r\n')).toString('latin1')
-    const status = /^HTTP\/1\.[01] (\d{3})/.exec(statusLine)?.[1]
-    if (!status?.startsWith('2')) {
-      this.fail(new Error(`http_proxy_connect_rejected:${status ?? 'malformed'}`))
-      return
-    }
-    const remaining = this.head.subarray(end + HEAD_TERMINATOR.byteLength)
-    this.head = Buffer.alloc(0)
-    this.finishHandshake(remaining)
   }
 }
 
