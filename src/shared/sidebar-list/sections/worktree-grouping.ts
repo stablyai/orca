@@ -2,10 +2,9 @@ import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
-import {
-  getWorkspaceStatus,
-  getWorkspaceStatusGroupKey
-} from '../../workspace/status/workspace-statuses'
+import { getWorkspaceStatusGroupKey } from '../../workspace/status/workspace-statuses'
+import { getPlacedWorkspaceStatus } from '../../workspace/status/workspace-status-placement'
+import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import {
   compareFolderWorkspacesForDisplay,
   getFolderWorkspaceLaneKey,
@@ -83,10 +82,14 @@ export function buildOrderedGroups(args: {
 
   // Section emitters/clients supply status and PR labels.
   const grouped = new Map<string, WorktreeGroupEntry>()
+  const displayRootOf = (row: Worktree): Worktree | undefined =>
+    displayRootByIdentity?.get(getWorktreeHostIdentity(row))
   for (const w of naturalWorktrees) {
     const key =
       groupBy === 'workspace-status'
-        ? getWorkspaceStatusGroupKey(getWorkspaceStatus(w, workspaceStatuses))
+        ? getWorkspaceStatusGroupKey(
+            getPlacedWorkspaceStatus(w, displayRootOf(w), workspaceStatuses)
+          )
         : getPRLaneKey(prGroupOf(w))
     if (!grouped.has(key)) {
       grouped.set(key, { label: '', items: [], repo: undefined, repoIds: new Set() })
@@ -97,7 +100,14 @@ export function buildOrderedGroups(args: {
   }
   // Folder workspaces bypass the worktree loop; create their lanes even when they are the only occupants (#15362).
   for (const pair of folderWorkspaces) {
-    const key = getFolderWorkspaceLaneKey(pair, groupBy, workspaceStatuses)
+    const key = getFolderWorkspaceLaneKey(
+      pair,
+      groupBy,
+      workspaceStatuses,
+      groupBy === 'workspace-status'
+        ? displayRootOf(getFolderWorkspaceWorktree(pair.folderWorkspace))
+        : undefined
+    )
     if (!grouped.has(key)) {
       grouped.set(key, {
         label: '',

@@ -14,6 +14,8 @@ import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shar
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeDragGroup } from '../../worktree-list/drag/worktree-manual-order'
 import type { useRepoMap } from '@/store/repos/use-repository-catalog'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 
 export function useWorkspaceKanbanBoardProjection(args: {
   activeWorktreeId: string | null
@@ -28,15 +30,25 @@ export function useWorkspaceKanbanBoardProjection(args: {
     allWorktrees: args.allWorktrees,
     repoMap: args.repoMap
   })
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const worktreesByStatus = useMemo(
     () =>
       groupWorkspaceKanbanWorktrees({
         worktrees: args.allWorktrees,
         visibleWorktreeIds,
         workspaceStatuses: args.workspaceStatuses,
-        sortBy: args.sortBy
+        sortBy: args.sortBy,
+        childrenByParentIdentity
       }),
-    [args.allWorktrees, args.sortBy, args.workspaceStatuses, visibleWorktreeIds]
+    [
+      args.allWorktrees,
+      args.sortBy,
+      args.workspaceStatuses,
+      childrenByParentIdentity,
+      visibleWorktreeIds
+    ]
   )
   const worktreeById = useMemo(
     () => buildUnambiguousWorktreeIdIndex(args.allWorktrees),

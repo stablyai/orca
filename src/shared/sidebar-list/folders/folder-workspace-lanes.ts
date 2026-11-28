@@ -2,11 +2,9 @@ import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-t
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import { getFolderWorkspaceHostId } from '../../folder-workspaces/folder-workspace-host-id'
-import type { WorkspaceStatusDefinition } from '../../worktree/types'
-import {
-  getWorkspaceStatus,
-  getWorkspaceStatusGroupKey
-} from '../../workspace/status/workspace-statuses'
+import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
+import { getWorkspaceStatusGroupKey } from '../../workspace/status/workspace-statuses'
+import { getPlacedWorkspaceStatus } from '../../workspace/status/workspace-status-placement'
 import { ALL_GROUP_KEY } from '../sections/group-keys'
 import { getPRLaneKey } from '../../workspace-view/workspace-pr-groups'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
@@ -51,11 +49,14 @@ export function getRenderableFolderWorkspaces(
 export function getFolderWorkspaceLaneKey(
   pair: RenderableFolderWorkspace,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  displayRoot?: Pick<Worktree, 'workspaceStatus'>
 ): string {
   switch (groupBy) {
     case 'workspace-status':
-      return getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      return getWorkspaceStatusGroupKey(
+        getPlacedWorkspaceStatus(pair.folderWorkspace, displayRoot, workspaceStatuses)
+      )
     case 'pr-status':
       // Folders cannot resolve a PR; match worktrees without one in the in-progress lane.
       return getPRLaneKey('in-progress')
