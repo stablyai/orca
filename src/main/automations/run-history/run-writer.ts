@@ -1,8 +1,13 @@
 import type { Store } from '../../persistence/loading-store/store'
+import {
+  automationRecoveryQueue,
+  isPendingAutomationRecovery
+} from '../../../shared/automations/automation-missed-occurrence-recovery'
 import type { PublishAutomationsChanged } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
-import type {
-  AutomationDispatchResult,
-  AutomationRun
+import {
+  isRecoveringAutomationRun,
+  type AutomationDispatchResult,
+  type AutomationRun
 } from '../../../shared/automations/history/automation-run'
 
 type DurableWrite<T extends (...args: never[]) => unknown> = (
@@ -10,6 +15,7 @@ type DurableWrite<T extends (...args: never[]) => unknown> = (
 ) => Promise<ReturnType<T>>
 
 export type AutomationRunWriter = {
+  recoverMissed: DurableWrite<Store['recordMissedAutomationOccurrences']>
   createRun: DurableWrite<Store['createAutomationRun']>
   updateRun: DurableWrite<Store['updateAutomationRun']>
   repeatSkip: DurableWrite<Store['recordRepeatedAutomationSkip']>
@@ -22,6 +28,8 @@ export function createAutomationRunWriter(
   store: Pick<
     Store,
     | 'createAutomationRun'
+    | 'listAutomationRuns'
+    | 'recordMissedAutomationOccurrences'
     | 'updateAutomationRun'
     | 'recordRepeatedAutomationSkip'
     | 'foldAutomationEvent'
@@ -50,6 +58,17 @@ export function createAutomationRunWriter(
     return run
   }
   return {
+    recoverMissed: async (automation, before) => {
+      const recovering =
+        store.listAutomationRuns(automation.id).some(isRecoveringAutomationRun) ||
+        automationRecoveryQueue(automation).some(isPendingAutomationRecovery)
+      const complete = store.recordMissedAutomationOccurrences(automation, before)
+      await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+      if (automation.nextRunAt < before || recovering) {
+        announce(automation.id, 'run')
+      }
+      return complete
+    },
     advanceNextRun: async (id, now) => {
       const automation = store.advanceAutomationNextRun(id, now)
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })

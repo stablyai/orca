@@ -151,6 +151,11 @@ export function updatedAutomationSchedule(
     timezone,
     nextRunAt: changed
       ? nextAutomationOccurrenceAfter(rrule, dtstart, now, zone)
-      : current.nextRunAt
+      : !current.enabled && updates.enabled
+        ? Math.max(
+            current.nextRunAt,
+            latestAutomationOccurrenceAtOrBefore(rrule, dtstart, now, zone) ?? current.nextRunAt
+          )
+        : current.nextRunAt
   }
 }

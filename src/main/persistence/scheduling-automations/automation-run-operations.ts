@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { isFinalAutomationRunStatus } from '../../../shared/automations/history/automation-run'
+import {
+  isFinalAutomationRunStatus,
+  isRecoveringAutomationRun
+} from '../../../shared/automations/history/automation-run'
 import { normalizeSetupSkippedContent } from './automation-setup-skipped-content'
 import { invalidateLocalWorktreeMetadataPruneInputs } from '../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import type { Automation } from '../../../shared/automations/automation-definition'
@@ -21,7 +24,8 @@ import {
 } from '../../../shared/automations/history/automation-run-cursor'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { foldOccurrence, touchAutomation } from './automation-run-occurrence-folding'
+import { touchAutomation } from './automation-run-occurrence-folding'
+import type { AutomationStorageAuthority } from './automation-owner-projection'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -32,6 +36,7 @@ import {
 
 export type AutomationRunOperations = {
   state: PersistedState
+  storageAuthority: AutomationStorageAuthority
   flush: () => void
   recordAutomationRunsMutation?: (runs: readonly AutomationRun[]) => void
   recordManualRun: () => void
@@ -56,6 +61,16 @@ function sortedAutomationRuns(state: PersistedState, automationId?: string): Aut
 
 export function listAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   return sortedAutomationRuns(state, automationId)
+}
+
+export function listRecoveringAutomationIds(state: PersistedState): Set<string> {
+  const ids = new Set<string>()
+  for (const run of state.automationRuns ?? []) {
+    if (isRecoveringAutomationRun(run)) {
+      ids.add(run.automationId)
+    }
+  }
+  return ids
 }
 
 /** Each named automation's runs, newest first, from one pass over the run history. */
@@ -98,7 +113,12 @@ export function createAutomationRun(
       run.automationId === automation.id &&
       (trigger === 'event'
         ? run.trigger === 'event' && event !== undefined && runHasEvent(run, event.key)
-        : run.trigger !== 'event' && run.scheduledFor === scheduledFor)
+        : run.trigger !== 'event' &&
+          (run.scheduledFor === scheduledFor ||
+            (trigger === 'scheduled' &&
+              run.trigger === 'scheduled' &&
+              scheduledFor > run.scheduledFor &&
+              scheduledFor <= (run.lastOccurrenceAt ?? run.scheduledFor))))
   )
   if (existing) {
     return existing
@@ -156,31 +176,6 @@ export function createAutomationRun(
   }
   operations.flush()
   return run
-}
-
-/** With an event, folds only into an event row, which then carries that latest event. */
-export function recordRepeatedAutomationSkip(
-  operations: AutomationRunOperations,
-  automationId: string,
-  error: string,
-  scheduledFor: number,
-  event?: AutomationRunEvent
-): AutomationRun | null {
-  const latest = (operations.state.automationRuns ?? [])
-    .filter((run) => run.automationId === automationId)
-    .reduce<AutomationRun | null>(
-      (newest, run) => (!newest || run.createdAt > newest.createdAt ? run : newest),
-      null
-    )
-  if (
-    !latest ||
-    (latest.status !== 'skipped_unavailable' && latest.status !== 'skipped_missed') ||
-    latest.trigger !== (event ? 'event' : 'scheduled') ||
-    latest.error !== error
-  ) {
-    return null
-  }
-  return foldOccurrence(operations, latest, scheduledFor, event)
 }
 
 /** Rewrites of the same error (e.g. usage writes) keep its code; a different error drops a stale one. */

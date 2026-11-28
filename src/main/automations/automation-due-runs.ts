@@ -1,5 +1,9 @@
 // One scheduler tick: each automation whose time came, a wait at its deadline or expiry included.
 import type { Automation } from '../../shared/automations/automation-definition'
+import {
+  automationRecoveryQueue,
+  isPendingAutomationRecovery
+} from '../../shared/automations/automation-missed-occurrence-recovery'
 import { onceClaimed, onceDueAt, onceRunFinished } from '../../shared/automation-once'
 import { AutomationDispatchCancelledError } from './dispatch/automation-dispatch-cancelled-error'
 import { recordUnevaluableAutomation } from './dispatch/dispatch-refusal'
@@ -14,6 +18,7 @@ export async function runDueAutomations(input: {
   captureTarget: (listed: Automation) => Automation
 }): Promise<void> {
   const { ctx, now } = input
+  let recoveringIds: Set<string> | undefined
   for (const automation of ctx.store.listAutomations()) {
     if (!input.isActive()) {
       break
@@ -21,10 +26,25 @@ export async function runDueAutomations(input: {
     if (automation.once && (await removeFinishedWait(ctx, automation.id))) {
       continue
     }
-    if (!automation.enabled || (onceDueAt(automation) ?? automation.nextRunAt) > now) {
+    if (!automation.enabled) {
       continue
     }
+    const due = (onceDueAt(automation) ?? automation.nextRunAt) <= now
     try {
+      if (!due) {
+        if (
+          !automation.once &&
+          (automationRecoveryQueue(automation).some(isPendingAutomationRecovery) ||
+            (recoveringIds ??= ctx.store.listRecoveringAutomationIds()).has(automation.id))
+        ) {
+          const captured = input.captureTarget(automation)
+          const refusal = await ctx.describeRefusal(ctx.resolveTarget(captured))
+          if (refusal?.errorCode !== 'wslMoveOwnedByHost') {
+            await ctx.runs.recoverMissed(captured, captured.nextRunAt)
+          }
+        }
+        continue
+      }
       await (automation.once
         ? runOnceDue(ctx, automation.id, now)
         : runScheduledOccurrence(ctx, input.captureTarget(automation), now))
@@ -34,7 +54,11 @@ export async function runDueAutomations(input: {
         input.isActive() &&
         ctx.store.listAutomations().some((current) => current.id === automation.id)
       ) {
-        await recordUnevaluableAutomation({ runs: ctx.runs, automation, error })
+        if (due) {
+          await recordUnevaluableAutomation({ runs: ctx.runs, automation, error })
+        } else {
+          console.error('[automations] could not recover missed occurrences:', automation.id, error)
+        }
       }
     }
   }

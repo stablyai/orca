@@ -9,6 +9,7 @@ import type {
 import type { AutomationEventTrigger } from '../automation-event-triggers'
 import type { AutomationBotTarget } from '../automation-bot-target'
 import type { AutomationOnce } from '../automation-once'
+import type { AutomationMissedOccurrenceRecovery } from './automation-missed-occurrence-recovery'
 
 export type {
   AutomationBotResultsTo,
@@ -96,6 +97,8 @@ export type Automation = {
   dtstart: number
   enabled: boolean
   nextRunAt: number
+  /** Historical intervals awaiting their first counted row, independent of schedule edits. */
+  missedOccurrenceRecoveries?: AutomationMissedOccurrenceRecovery[]
   lastRunAt?: number
   missedRunPolicy: AutomationMissedRunPolicy
   missedRunGraceMinutes: number
