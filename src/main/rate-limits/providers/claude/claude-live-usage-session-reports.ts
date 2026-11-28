@@ -24,6 +24,14 @@ export class ClaudeLiveUsageSessionReports {
   // Keyed by account and window kind; each account keeps its reset until that window ends.
   private readonly resetByWindow = new Map<string, ResetWindow>()
 
+  private pruneExpiredResets(now: number): void {
+    for (const [key, reset] of this.resetByWindow) {
+      if (reset.resetsAt <= now) {
+        this.resetByWindow.delete(key)
+      }
+    }
+  }
+
   private lastWindow(
     sessionId: string | null,
     configDir: string | null,
@@ -33,14 +41,14 @@ export class ClaudeLiveUsageSessionReports {
     return last?.configDir === configDir ? last[kind] : null
   }
 
-  hasChanged(
+  isUnchanged(
     sessionId: string | null,
     configDir: string | null,
     kind: ClaudeLiveUsageWindowKind,
     incoming: RateLimitWindow
   ): boolean {
     const previous = this.lastWindow(sessionId, configDir, kind)
-    return Boolean(previous && !isSameClaudeUsageWindow(previous, incoming))
+    return Boolean(previous && isSameClaudeUsageWindow(previous, incoming))
   }
 
   // Usage only grows within a window, so a session's own drop is a redeemed reset.
@@ -49,8 +57,10 @@ export class ClaudeLiveUsageSessionReports {
     sessionId: string | null,
     configDir: string | null,
     kind: ClaudeLiveUsageWindowKind,
-    incoming: RateLimitWindow
+    incoming: RateLimitWindow,
+    now: number = Date.now()
   ): boolean {
+    this.pruneExpiredResets(now)
     const previous = this.lastWindow(sessionId, configDir, kind)
     if (
       sessionId === null ||
@@ -70,17 +80,32 @@ export class ClaudeLiveUsageSessionReports {
       !recorded.adoptedBy.has(sessionId)
     ) {
       recorded.adoptedBy.add(sessionId)
+      for (const oldest of recorded.adoptedBy) {
+        if (recorded.adoptedBy.size <= MAX_TRACKED_CLAUDE_SESSIONS) {
+          break
+        }
+        recorded.adoptedBy.delete(oldest)
+      }
       return false
     }
+    this.resetByWindow.delete(key)
     this.resetByWindow.set(key, { resetsAt: incoming.resetsAt, adoptedBy: new Set([sessionId]) })
+    for (const oldest of this.resetByWindow.keys()) {
+      if (this.resetByWindow.size <= MAX_TRACKED_CLAUDE_SESSIONS) {
+        break
+      }
+      this.resetByWindow.delete(oldest)
+    }
     return true
   }
 
   remember(
     sessionId: string,
     configDir: string | null,
-    report: Pick<SessionReport, ClaudeLiveUsageWindowKind>
+    report: Pick<SessionReport, ClaudeLiveUsageWindowKind>,
+    now: number = Date.now()
   ): void {
+    this.pruneExpiredResets(now)
     const last = this.lastBySession.get(sessionId)
     const kept = last?.configDir === configDir ? last : null
     this.lastBySession.delete(sessionId)
@@ -95,6 +120,9 @@ export class ClaudeLiveUsageSessionReports {
         break
       }
       this.lastBySession.delete(oldest)
+      for (const reset of this.resetByWindow.values()) {
+        reset.adoptedBy.delete(oldest)
+      }
     }
   }
 
@@ -105,9 +133,29 @@ export class ClaudeLiveUsageSessionReports {
     incoming: RateLimitWindow,
     now: number
   ): boolean {
-    const reset = this.resetByWindow.get(resetWindowKey(configDir, kind))
-    return Boolean(
-      reset && reset.resetsAt > now && isSameClaudeUsageReset(reset.resetsAt, incoming.resetsAt)
-    )
+    const key = resetWindowKey(configDir, kind)
+    const reset = this.resetByWindow.get(key)
+    if (!reset) {
+      return false
+    }
+    if (reset.resetsAt <= now) {
+      this.resetByWindow.delete(key)
+      return false
+    }
+    return isSameClaudeUsageReset(reset.resetsAt, incoming.resetsAt)
+  }
+
+  getTrackedCounts(): { sessions: number; resetWindows: number; maxResetAdopters: number } {
+    let maxResetAdopters = 0
+    for (const reset of this.resetByWindow.values()) {
+      if (reset.adoptedBy.size > maxResetAdopters) {
+        maxResetAdopters = reset.adoptedBy.size
+      }
+    }
+    return {
+      sessions: this.lastBySession.size,
+      resetWindows: this.resetByWindow.size,
+      maxResetAdopters
+    }
   }
 }

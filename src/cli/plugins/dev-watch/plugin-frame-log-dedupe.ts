@@ -5,15 +5,29 @@ export type PluginDevWatchLogLine = PluginLogLine & { count?: number; repeat?: t
 
 const FRAME_PREFIX = '[frame] '
 
+export const DEFAULT_MAX_FRAME_LOG_DEDUPE_ENTRIES = 1024
+
 const keyOf = (line: PluginLogLine): string => `${line.level}\u0000${line.line}`
 
 /**
  * Panel console lines repeat per item and per render (a warning inside `items.map`), so within one
  * reload each `[frame]` line prints once with how many arrived together; later copies are counted
- * and reported once when the plugin reloads or the watch ends. Worker lines pass through as is.
+ * and reported once when evicted from the bounded cache, when the plugin reloads, or when the watch
+ * ends. Worker lines pass through as is.
  */
 export class PluginFrameLogDedupe {
+  private readonly maxEntries: number
   private readonly repeats = new Map<string, { more: number; last: PluginLogLine }>()
+
+  constructor(maxEntries = DEFAULT_MAX_FRAME_LOG_DEDUPE_ENTRIES) {
+    this.maxEntries = Number.isFinite(maxEntries)
+      ? Math.max(1, Math.floor(maxEntries))
+      : DEFAULT_MAX_FRAME_LOG_DEDUPE_ENTRIES
+  }
+
+  get size(): number {
+    return this.repeats.size
+  }
 
   take(lines: readonly PluginLogLine[]): PluginDevWatchLogLine[] {
     const batch = new Map<string, number>()
@@ -35,6 +49,9 @@ export class PluginFrameLogDedupe {
       if (seen) {
         seen.more += 1
         seen.last = line
+        // Refresh recency so active repeating keys survive LRU eviction.
+        this.repeats.delete(key)
+        this.repeats.set(key, seen)
         continue
       }
       if (!printed.has(key)) {
@@ -44,6 +61,15 @@ export class PluginFrameLogDedupe {
     }
     // After the loop, so this batch's own copies count in `count`, not as repeats.
     for (const [key, line] of printed) {
+      if (this.repeats.size >= this.maxEntries) {
+        const oldest = this.repeats.entries().next().value
+        if (oldest) {
+          this.repeats.delete(oldest[0])
+          if (oldest[1].more > 0) {
+            out.push({ ...oldest[1].last, count: oldest[1].more, repeat: true })
+          }
+        }
+      }
       this.repeats.set(key, { more: 0, last: line })
     }
     return out

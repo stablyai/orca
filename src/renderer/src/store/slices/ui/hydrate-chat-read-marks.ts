@@ -1,5 +1,6 @@
 import { CHAT_READ_MARK_FIELDS } from '../../../../../shared/agent-session/view/chat-read-mark-move'
 import { capPaneKeyTimestampRecord } from '../../../../../shared/agent-session/view/pane-key-timestamp-record'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   adoptChatReadMarkAliases,
   capWebChatReadMarkRecord,
@@ -13,6 +14,27 @@ import {
 } from '@/web/preload-api/preferences/web-chat-read-mark-storage'
 import type { AppState } from '../../types'
 import type { PersistedUIWriteBaseline } from './persisted-ui-write-baseline'
+
+function livePaneKeysToRetain(state: AppState): Record<string, number> | undefined {
+  let retained: Record<string, number> | undefined
+  if (state.agentStatusByPaneKey) {
+    for (const paneKey of state.agentStatusByPaneKey.keys()) {
+      retained ??= {}
+      retained[paneKey] = 1
+    }
+  }
+  if (state.unifiedTabsByWorktree) {
+    for (const tabs of Object.values(state.unifiedTabsByWorktree)) {
+      for (const tab of tabs) {
+        if (tab.contentType === 'agent-session') {
+          retained ??= {}
+          retained[chatPaneKey(tab.entityId)] = 1
+        }
+      }
+    }
+  }
+  return retained
+}
 
 export function hydrateChatReadMarks(
   state: AppState,
@@ -39,18 +61,24 @@ export function hydrateChatReadMarks(
     adoptChatReadMarkAliases(incoming)
   }
 
+  const liveRetain = livePaneKeysToRetain(state)
   baseline = { ...baseline }
   for (const field of CHAT_READ_MARK_FIELDS) {
+    const retain = field === 'activityClearedAtByPaneKey' ? liveRetain : undefined
     baseline[field] = web
-      ? capWebChatReadMarkRecord(field, baseline[field])
-      : capPaneKeyTimestampRecord(baseline[field])
+      ? capWebChatReadMarkRecord(field, baseline[field], retain)
+      : capPaneKeyTimestampRecord(baseline[field], retain)
   }
 
   if (localMarks) {
     for (const field of WEB_CHAT_READ_MARK_FIELDS) {
       const current = pending[field]
-      localMarks[field] = current
-        ? capWebChatReadMarkRecord(field, localMarks[field], current)
+      const retain =
+        field === 'activityClearedAtByPaneKey' && liveRetain
+          ? { ...liveRetain, ...current }
+          : current
+      localMarks[field] = retain
+        ? capWebChatReadMarkRecord(field, localMarks[field], retain)
         : baseline[field]
     }
   }

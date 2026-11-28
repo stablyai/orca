@@ -25,7 +25,9 @@ export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): bool
   const rootId = getFolderWorkspaceRootId(repo)
   return (
     worktreeId === rootId ||
-    worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)
+    (worktreeId.length > rootId.length &&
+      worktreeId.startsWith(rootId) &&
+      worktreeId.startsWith(FOLDER_WORKSPACE_INSTANCE_SEPARATOR, rootId.length))
   )
 }
 

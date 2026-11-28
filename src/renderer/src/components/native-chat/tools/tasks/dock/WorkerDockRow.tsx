@@ -27,8 +27,7 @@ export type WorkerDockRowView = WorkerDockEntry & {
   question?: string
 }
 
-/** What a row and the pill call the worker: its question while it waits on you, else its title
- *  once (the ticket name stays in the tooltip, so it is never repeated in front of the title). */
+/** What a row and the pill call the worker: its question while it waits on you, else its title. */
 export function workerDockRowTitle(row: WorkerDockRowView): string {
   return (row.state === 'needs-you' && row.question) || row.title || row.name
 }
@@ -68,8 +67,8 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
 }
 
-/** One panel row on one line: status mark, title and age (model and progress in the tooltip); on hover or
- *  focus Stop or Clear cover the row's end.
+/** One panel row on one line: status mark, title and age; on hover or focus Stop or Clear cover
+ *  the row's end.
  *  The open button stretches over the whole row, so a press anywhere but the action opens it. A row
  *  whose details have not arrived yet keeps the same button, so focus on it survives their arrival. */
 export const WorkerDockRow = memo(function WorkerDockRow({
@@ -123,11 +122,6 @@ export const WorkerDockRow = memo(function WorkerDockRow({
   ]
     .filter(Boolean)
     .join(' · ')
-  const tooltip = row
-    ? [row.name, row.model, title === row.title ? '' : row.title, title, state, progress, remote]
-        .filter(Boolean)
-        .join(' · ')
-    : undefined
   return (
     <div
       data-worker-dock-row={rowId}
@@ -139,7 +133,6 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         data-worker-dock-open={rowId}
         aria-label={label}
         aria-disabled={row ? undefined : true}
-        title={tooltip}
         className="flex h-8 min-w-0 flex-1 items-center gap-2 pl-2 text-left text-sm whitespace-nowrap after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
         onClick={(event) => {
           if (row) {
@@ -159,7 +152,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
             <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
           )}
         </span>
-        {/* A command reads as mono; the tooltip carries the whole of it. */}
+        {/* A command reads as mono. */}
         <span
           className={cn('min-w-0 flex-1 truncate', row?.kind === 'command' && 'font-mono text-xs')}
         >

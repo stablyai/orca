@@ -22,11 +22,11 @@ export const BOT_HELD_BACK_AGENTS = [] as const
 export const BOT_AGENTS = [
   'claude',
   'codex',
+  'antigravity',
   'grok',
   'opencode',
   'omp',
   'pi',
-  'antigravity',
   'cursor',
   'hermes',
   'copilot',
@@ -43,6 +43,11 @@ export const BOT_AGENTS = [
   'devin',
   'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+
+/** A new bot's automatic agent, by priority: Antigravity is listed right after Codex for display only. */
+export const BOT_NEW_AGENT_PRIORITY: readonly BotAgent[] = BOT_AGENTS.flatMap((agent) =>
+  agent === 'antigravity' ? [] : agent === 'pi' ? [agent, 'antigravity' as const] : [agent]
+)
 
 /** A bot agent as old records and peers name it: a retired agent reads as its successor. */
 export const BotAgentReadSchema = lazyZodSchema(() =>

@@ -29,7 +29,7 @@ import {
 } from './bot-item-row-picks'
 import {
   focusBotItemBackRow,
-  rowFocusControl,
+  focusBotItemRow,
   groupFocusLeft,
   plainTab,
   rowTabTarget,
@@ -267,7 +267,7 @@ export function BotItemRowsWindow({
   // A row that moved is found at its new place from now on, and one that left is let go, so later
   // updates find each pick at once. A pick set since this render (focus as a row mounts) is kept.
   // The row holding focus leaving (marked Done, say) drops focus to the page: the row now in its place
-  // takes it, without scrolling, so the owner carries on from there. Only focus this commit dropped is
+  // takes it, keeping it in view, so the owner carries on from there. Only focus this commit dropped is
   // handed on; focus the owner had already taken elsewhere stays there.
   const focusedAtRender = typeof document === 'undefined' ? null : document.activeElement
   // A row the panel shows: focus handed to one out of view would act on a row the owner can't see.
@@ -320,7 +320,7 @@ export function BotItemRowsWindow({
   const focusTarget = useCallback(
     (node: HTMLElement | null) => {
       if (node) {
-        rowFocusControl(node, edge, disabled)?.focus({ preventScroll: quiet })
+        focusBotItemRow(node, edge, disabled, quiet)
         setTarget(null)
       }
     },

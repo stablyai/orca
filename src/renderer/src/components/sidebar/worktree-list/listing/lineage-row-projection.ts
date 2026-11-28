@@ -69,10 +69,6 @@ export function buildLineageRowProjection(
   const isGrouped = groupBy !== 'none'
   let hasNestedLineage = false
   let hasCollapsedLineage = false
-  const close = (next: number) => {
-    const index = stack.pop()!
-    frames[index].end = next - 1
-  }
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]
     const key = getRenderRowKey(row)
@@ -80,48 +76,24 @@ export function buildLineageRowProjection(
     rowIndexByKey.set(key, index)
     const isWorkspace = row.type === 'item' || row.type === 'folder-workspace'
     while (stack.length > 0) {
-      const parent = rows[stack.at(-1)!]
+      const top = stack.at(-1)!
+      const parentRow = rows[top]
       if (
         isWorkspace &&
-        (parent.type === 'item' || parent.type === 'folder-workspace') &&
-        parent.depth < row.depth
+        (parentRow.type === 'item' || parentRow.type === 'folder-workspace') &&
+        parentRow.depth < row.depth
       ) {
         break
       }
-      close(index)
+      stack.pop()
+      frames[top].end = index - 1
     }
     const parent = isWorkspace ? (stack.at(-1) ?? null) : null
-    const frame: LineageRowFrame = {
-      parent,
-      root: parent === null ? index : frames[parent].root,
-      end: index,
-      left: 0,
-      right: 0,
-      contentIndent: 0,
-      before: 0,
-      after: 6,
-      closing: 0,
-      guides: null
-    }
+    let left = 0
+    let right = 0
+    let contentIndent = 0
+    let before = 0
     if (isWorkspace) {
-      if (row.type === 'folder-workspace') {
-        const geometry = getFolderWorkspaceRowGeometry({
-          experimentalNewWorktreeCardStyle: newCardStyle,
-          isFolderBackedWorkspaceChild:
-            groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
-          isGrouped,
-          groupDepth: row.groupDepth,
-          lineageDepth: row.depth
-        })
-        frame.left = geometry.surfaceInset
-        frame.contentIndent = Math.max(0, geometry.cardContentIndent)
-      } else {
-        const surfaceInset = getWorktreeCardSurfaceInsetDirect(isGrouped, row.groupDepth)
-        const contentIndent =
-          getWorktreeCardContentIndentDirect(isGrouped, row.groupDepth, row.depth) - surfaceInset
-        frame.left = surfaceInset
-        frame.contentIndent = Math.max(0, contentIndent)
-      }
       if (row.lineageCollapsed === true) {
         hasCollapsedLineage = true
       }
@@ -134,24 +106,53 @@ export function buildLineageRowProjection(
             FLUSH_CARD_CONTENT_PULLBACK -
             (statusLane ? NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK : 0)
         )
-        frame.left =
+        left =
           ancestor.left +
           WORKTREE_CARD_SURFACE_MARGIN +
           1 +
           padding +
           LINEAGE_CHILDREN_INLINE_OFFSET
-        frame.right = ancestor.right + 7
-        frame.contentIndent = 0
-        frame.before = parent === index - 1 ? (newCardStyle ? 6 : 12) : 4
+        right = ancestor.right + 7
+        // Why: the parent card already carries pb-1.5 + 1px border below the children toggle; avoid double-counting.
+        before = parent === index - 1 ? (newCardStyle ? 0 : 6) : 4
+      } else if (row.type === 'folder-workspace') {
+        const geometry = getFolderWorkspaceRowGeometry({
+          experimentalNewWorktreeCardStyle: newCardStyle,
+          isFolderBackedWorkspaceChild:
+            groupBy === 'repo' && row.projectGroup.createdFrom === 'folder-scan',
+          isGrouped,
+          groupDepth: row.groupDepth,
+          lineageDepth: row.depth
+        })
+        left = geometry.surfaceInset
+        contentIndent = Math.max(0, geometry.cardContentIndent)
+      } else {
+        const surfaceInset = getWorktreeCardSurfaceInsetDirect(isGrouped, row.groupDepth)
+        left = surfaceInset
+        contentIndent = Math.max(
+          0,
+          getWorktreeCardContentIndentDirect(isGrouped, row.groupDepth, row.depth) - surfaceInset
+        )
       }
     }
-    frames.push(frame)
+    frames.push({
+      parent,
+      root: parent === null ? index : frames[parent].root,
+      end: index,
+      left,
+      right,
+      contentIndent,
+      before,
+      after: 6,
+      closing: 0,
+      guides: null
+    })
     if (isWorkspace) {
       stack.push(index)
     }
   }
   while (stack.length > 0) {
-    close(rows.length)
+    frames[stack.pop()!].end = rows.length - 1
   }
   if (hasNestedLineage) {
     for (let index = 0; index < frames.length; index += 1) {
@@ -302,7 +303,9 @@ export function useLineageRowProjection(args: {
   activeWorkspaceExecutionHostId: ExecutionHostId | null
 }) {
   const { rows, groupBy, newCardStyle, activeWorktreeId, activeWorkspaceExecutionHostId } = args
-  const statusLane = useAppStore((s) => s.worktreeCardProperties.includes('status')) && newCardStyle
+  const statusLane = useAppStore((s) =>
+    newCardStyle ? s.worktreeCardProperties.includes('status') : false
+  )
   const projection = useMemo(
     () => buildLineageRowProjection(rows, groupBy, newCardStyle, statusLane),
     [rows, groupBy, newCardStyle, statusLane]

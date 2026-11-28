@@ -2,6 +2,7 @@ import { Bot, MessageCircleQuestion, Siren } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { HostNotificationSettings } from '../../../../../shared/notifications/notification-settings-types'
+import { Button } from '../../ui/button'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useServerSettingValue, type HostSettingsReply } from '../host-scope/use-host-setting'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
@@ -35,7 +36,7 @@ export function ServerNotificationsPane({
     (state) => state.runtimeEnvironments.find((entry) => entry.id === environmentId)?.name
   )
   const host = hostName ?? t('components.settings.notifications.server.fallbackHost', 'this server')
-  const { setting, update } = useServerSettingValue({
+  const { setting, update, retry } = useServerSettingValue({
     environmentId,
     read: readHostNotificationSettings,
     updateFailedMessage: t(
@@ -52,6 +53,23 @@ export function ServerNotificationsPane({
   }
   return (
     <SettingsGroup>
+      {setting.state === 'error' && (
+        <div
+          role="alert"
+          className="flex items-center justify-between gap-3 py-2 text-xs text-muted-foreground"
+        >
+          <span>
+            {t(
+              'components.settings.notifications.server.loadFailed',
+              "Couldn't load notifications from {{host}}.",
+              { host }
+            )}
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={retry}>
+            {t('components.settings.notifications.server.retry', 'Try again')}
+          </Button>
+        </div>
+      )}
       <NotificationSettingToggle
         label={t('auto.components.settings.NotificationsPane.9c41a0d367', 'Enable notifications')}
         description={

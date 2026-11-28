@@ -65,7 +65,11 @@ function isValidDnsName(name: string): boolean {
     )
 }
 
-/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function isHttpDefaultLocalHostname(hostname: string): boolean {
+  return hostname.endsWith('.localhost') || hostname.endsWith('.local')
+}
+
+/** Avoids parsing a dotted host and port as a scheme; .localhost and .local default to HTTP. */
 function classifySchemeLessDomainPortAddress(input: string): URL | null {
   const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
   if (!match || !match[1].includes('.')) {
@@ -77,7 +81,7 @@ function classifySchemeLessDomainPortAddress(input: string): URL | null {
     if (!isValidDnsName(hostname)) {
       return null
     }
-    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+    return isHttpDefaultLocalHostname(hostname) ? new URL(`http://${input}`) : url
   } catch {
     return null
   }
@@ -207,10 +211,7 @@ function buildKagiSessionSearchUrl(
   query: string,
   sessionLink: string | null | undefined
 ): string | null {
-  if (!sessionLink) {
-    return null
-  }
-  const normalized = normalizeKagiSessionLink(sessionLink)
+  const normalized = sessionLink ? normalizeKagiSessionLink(sessionLink) : null
   if (!normalized) {
     return null
   }
@@ -237,13 +238,7 @@ export function looksLikeSearchQuery(input: string): boolean {
   if (input.includes(' ')) {
     return true
   }
-  if (LOOKS_LIKE_URL_PATTERN.test(input)) {
-    return false
-  }
-  if (input.includes('.') || input.includes(':')) {
-    return false
-  }
-  return true
+  return !LOOKS_LIKE_URL_PATTERN.test(input) && !input.includes('.') && !input.includes(':')
 }
 
 /** True for input shaped like an absolute filesystem path (POSIX, Windows drive, or UNC). */
@@ -318,7 +313,10 @@ export function normalizeBrowserNavigationUrl(
     try {
       const withScheme = new URL(`https://${trimmed}`)
       if (!searchEnabled || !looksLikeSearchQuery(trimmed)) {
-        return withScheme.toString()
+        const hostname = normalizeCertificateHostname(withScheme.hostname)
+        return isValidDnsName(hostname) && isHttpDefaultLocalHostname(hostname)
+          ? new URL(`http://${trimmed}`).toString()
+          : withScheme.toString()
       }
     } catch {
       // Not a valid URL even with https:// prefix

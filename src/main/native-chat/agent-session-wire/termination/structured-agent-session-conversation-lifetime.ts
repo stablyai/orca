@@ -34,6 +34,7 @@ import '../operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../operations/structured-agent-session-mutation-refusals'
 import { deferredStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
+import { stopClosedChat } from './structured-agent-session-closed-chat-stop'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   stopWorkspaceSleepChat,
@@ -318,7 +319,7 @@ export function createStructuredAgentSessionConversationLifetime(
         if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
           host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
         }
-        await holdStopClose(sessionId, () => stopAgent(sessionId, { cause }))
+        await holdStopClose(sessionId, () => stopClosedChat(host.context(), sessionId, cause))
       })
     }
   }
