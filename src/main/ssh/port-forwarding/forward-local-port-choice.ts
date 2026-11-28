@@ -75,7 +75,7 @@ function heldByForwardHere(port: number): boolean {
 
 type FreeLocalPortForward = {
   remotePort: number
-  /** The local port to try first; the remote port number when absent. */
+  /** The local port to try first; the remote port number when absent; 0 lets the OS pick one. */
   preferredLocalPort?: number
   add: (localPort: number) => Promise<PortForwardEntry>
   remove: (id: string) => Promise<unknown>
@@ -115,6 +115,9 @@ export function addForwardOnFreeLocalPort(
 
 async function startOnFreeLocalPort(forward: FreeLocalPortForward): Promise<PortForwardEntry> {
   const { add, reservedLocalPorts } = forward
+  if (forward.preferredLocalPort === 0) {
+    return addOnFreeOsPort(forward)
+  }
   const firstCandidate = forward.preferredLocalPort ?? forward.remotePort
   const lastCandidate = Math.min(firstCandidate + NEXT_PORT_ATTEMPTS - 1, 65_535)
   for (let candidate = firstCandidate; candidate <= lastCandidate; candidate++) {

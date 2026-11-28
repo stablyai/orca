@@ -143,17 +143,17 @@ export const AccountsUnsubscribeParams = lazyZodSchema(() =>
   })
 )
 
-const ClaudeSignInTarget = {
+const claudeSignInTarget = () => ({
   runtime: z.enum(['host', 'wsl']).optional(),
   wslDistro: z.string().nullish()
-}
+})
 
 export const BeginClaudeSignInParams = lazyZodSchema(() =>
-  z.object({ accountId: z.string().min(1).optional(), ...ClaudeSignInTarget }).strict()
+  z.object({ accountId: z.string().min(1).optional(), ...claudeSignInTarget() }).strict()
 )
 
 export const FinishClaudeSignInParams = lazyZodSchema(() =>
-  z.object({ accountId: z.string().min(1), ...ClaudeSignInTarget }).strict()
+  z.object({ accountId: z.string().min(1), ...claudeSignInTarget() }).strict()
 )
 
 export const HostAccountSignInStartParams = lazyZodSchema(() =>

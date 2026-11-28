@@ -18,7 +18,7 @@ import type { TerminalLinkActionRequest } from '../links/terminal-link-action-re
 import { closeLinkActionRequest as closeTerminalLinkActionRequest } from '@/components/link-actions/link-action-request'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
-import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/terminal-quick-command-dialog-draft'
 import { useDaemonActions } from '@/components/shared/useDaemonActions'
 import { useMobileOverlayTicks } from '../mobile-driver/use-mobile-overlay-ticks'
 import type { TerminalPaneProps } from './terminal-pane-types'

@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 
 const DOT = 8
@@ -9,7 +9,7 @@ const CLOSE_SIZE = 32
 /** Where a row's name starts, so the lines under it line up with the name. */
 const NAME_INSET = spacing.md + RING + spacing.sm
 
-export const mcpPanelStyles = themedStyleSheet(() => ({
+export const mcpPanelStylesSheet = themedStyleSheet((colors) => ({
   header: {
     minHeight: CLOSE_SIZE + spacing.xs,
     flexDirection: 'row',

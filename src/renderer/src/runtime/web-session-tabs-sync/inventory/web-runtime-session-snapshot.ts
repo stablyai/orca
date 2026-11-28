@@ -3,6 +3,7 @@ import { recordBrowserInitializationReceipt } from '../tab-projection/browser-in
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { canMoveWebChatReadMarks } from '@/store/slices/agent-status/structured-sessions/chat-read-mark-aliases'
 import { useAppStore } from '../../../store/index'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
@@ -149,12 +150,22 @@ async function reconcileWebRuntimeSessionTabs(
       })
     }
     // Reserve receipt order before ranking; a list answered before close can arrive after retraction.
+    const allowMarkMoves =
+      canMoveWebChatReadMarks() &&
+      snapshot.worktree === worktreeId &&
+      getRuntimeEnvironmentRevision(environmentId) === expectedEnvironmentPairingRevision &&
+      getRuntimeEnvironmentConnectionGeneration(environmentId) ===
+        expectedEnvironmentConnectionGeneration &&
+      trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId) ===
+        expectedTrackingGeneration &&
+      options.isCurrent?.() !== false
     recordReceivedWebSessionTabsSnapshot(
       environmentId,
       snapshot,
       receivedFrame,
       runtimeId,
-      'bootstrap'
+      'bootstrap',
+      allowMarkMoves
     )
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return false

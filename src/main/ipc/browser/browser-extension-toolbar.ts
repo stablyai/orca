@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { isChromeExtensionId } from '../../../shared/browser/extensions/browser-extension-url'
@@ -36,11 +37,13 @@ const CHANNELS = [
 ] as const
 
 /** The browser toolbar's extension buttons; only the trusted Orca renderer may drive them. */
-export function registerBrowserExtensionToolbarHandlers(): void {
-  for (const channel of CHANNELS) {
-    ipcMain.removeHandler(channel)
+export function registerBrowserExtensionToolbarHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of CHANNELS) {
+      ipcMain.removeHandler(channel)
+    }
   }
-  ipcMain.handle(
+  ipc.handle(
     'browserExtensions:toolbarState',
     (event, args: unknown): Promise<BrowserExtensionToolbarState | null> | null => {
       const parsed = pageArgs.safeParse(args)
@@ -52,7 +55,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
         : null
     }
   )
-  ipcMain.handle('browserExtensions:setPinned', (event, args: unknown) => {
+  ipc.handle('browserExtensions:setPinned', (event, args: unknown) => {
     const parsed = z
       .object({ profileId: z.string().min(1), extensionId, pinned: z.boolean() })
       .safeParse(args)
@@ -70,7 +73,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
     }
     return { ok: true } satisfies BrowserExtensionActionResult
   })
-  ipcMain.handle('browserExtensions:activateAction', (event, args: unknown) => {
+  ipc.handle('browserExtensions:activateAction', (event, args: unknown) => {
     const parsed = pageArgs
       .extend({ extensionId, anchor: anchorSchema, popupOnly: z.boolean().optional() })
       .safeParse(args)
@@ -82,7 +85,7 @@ export function registerBrowserExtensionToolbarHandlers(): void {
       popupOnly: parsed.data.popupOnly === true
     })
   })
-  ipcMain.handle('browserExtensions:pageIcon', (event, args: unknown) => {
+  ipc.handle('browserExtensions:pageIcon', (event, args: unknown) => {
     const parsed = pageArgs.safeParse(args)
     if (!isTrustedBrowserRenderer(event.sender) || !parsed.success) {
       return null

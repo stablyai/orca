@@ -209,14 +209,15 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     },
     [client, tasksSupported]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     connectWorkspaceSshRepo,
     ensureWorkspaceSshReady,
     workspaceAgentSelection,
     resolvedWorkspaceAgent,
     workspaceAgentDetectionPending,
     resolveCreateSetupDecision
-  })
+  }
 }
 
 export type WorkspaceSshStateModel = ReturnType<typeof useMobileTasksWorkspaceSshState>

@@ -10,6 +10,6 @@ export function jsonObject(value: unknown): Record<string, unknown> | null {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return null
   }
-  const object: Record<string, unknown> = {}
-  return Object.assign(object, value)
+  // Spread defines data properties; Object.assign invokes the legacy __proto__ setter.
+  return { ...value }
 }

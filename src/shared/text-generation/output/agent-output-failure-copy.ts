@@ -1,6 +1,10 @@
 // Orca's own sentences for unreadable or failed agent CLI output; part of TEXT_GENERATION_FAILURE_COPY.
 export const AGENT_OUTPUT_FAILURE_COPY = {
   openCodeInvalidEvents: 'OpenCode returned invalid JSON events.',
+  // Hosts from before Antigravity text generation retired still send these codes.
+  antigravityInvalidEvents: 'Antigravity returned invalid JSON events.',
+  antigravityInvalidResult: 'Antigravity returned an invalid result.',
+  antigravityNoFinalResult: 'Antigravity returned no final result.',
   kimiUnreadableOutput: "Kimi returned output Orca couldn't read. Try again.",
   kimiSessionOccupied:
     "Kimi couldn't use this session because it is active in another client. Stop the session there or exit that client, then try again.",

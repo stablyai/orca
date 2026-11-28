@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import type { BrowserExtensionSidePanel } from '../../../shared/browser/extensions/browser-extension-side-panel-types'
 import {
   closeBrowserExtensionSidePanelById,
@@ -9,7 +11,7 @@ import {
 import { prepareBrowserExtensionSidePanelAttach } from '../../browser/extensions/side-panel/browser-extension-side-panel-attach'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
-const panelArgs = z.object({ panelId: z.string().min(1) })
+const panelArgs = lazyZodSchema(() => z.object({ panelId: z.string().min(1) }))
 
 const CHANNELS = [
   'browserExtensions:sidePanels',
@@ -19,26 +21,28 @@ const CHANNELS = [
 ] as const
 
 /** The renderer lays out the panels main opened; only the trusted Orca renderer may ask. */
-export function registerBrowserExtensionSidePanelHandlers(): void {
-  for (const channel of CHANNELS) {
-    ipcMain.removeHandler(channel)
+export function registerBrowserExtensionSidePanelHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    for (const channel of CHANNELS) {
+      ipcMain.removeHandler(channel)
+    }
   }
-  ipcMain.handle('browserExtensions:sidePanels', (event): BrowserExtensionSidePanel[] =>
+  ipc.handle('browserExtensions:sidePanels', (event): BrowserExtensionSidePanel[] =>
     isTrustedBrowserRenderer(event.sender) ? listBrowserExtensionSidePanels() : []
   )
-  ipcMain.handle('browserExtensions:sidePanelAttach', (event, args: unknown): string | null => {
+  ipc.handle('browserExtensions:sidePanelAttach', (event, args: unknown): string | null => {
     const parsed = panelArgs.safeParse(args)
     return isTrustedBrowserRenderer(event.sender) && parsed.success
       ? prepareBrowserExtensionSidePanelAttach(parsed.data.panelId)
       : null
   })
-  ipcMain.handle('browserExtensions:sidePanelShown', (event, args: unknown): void => {
+  ipc.handle('browserExtensions:sidePanelShown', (event, args: unknown): void => {
     const parsed = panelArgs.extend({ browserPageId: z.string().min(1) }).safeParse(args)
     if (isTrustedBrowserRenderer(event.sender) && parsed.success) {
       noteBrowserExtensionSidePanelShown(parsed.data.panelId, parsed.data.browserPageId)
     }
   })
-  ipcMain.handle('browserExtensions:sidePanelClose', (event, args: unknown): void => {
+  ipc.handle('browserExtensions:sidePanelClose', (event, args: unknown): void => {
     const parsed = panelArgs.safeParse(args)
     if (isTrustedBrowserRenderer(event.sender) && parsed.success) {
       closeBrowserExtensionSidePanelById(parsed.data.panelId)

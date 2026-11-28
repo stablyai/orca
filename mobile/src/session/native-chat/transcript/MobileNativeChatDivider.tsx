@@ -1,11 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { spacing, typography } from '../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../theme/themed-styles'
 
 /** A quiet line across the transcript with a label in the middle. */
 export function MobileNativeChatDivider({ label }: { label: string }): React.JSX.Element {
-  useMobileColorScheme()
+  const mobileNativeChatDividerStyles = useThemedStyles(mobileNativeChatDividerStylesSheet)
   return (
     <View
       style={mobileNativeChatDividerStyles.divider}
@@ -19,7 +18,7 @@ export function MobileNativeChatDivider({ label }: { label: string }): React.JSX
   )
 }
 
-export const mobileNativeChatDividerStyles = themedStyleSheet(() => ({
+export const mobileNativeChatDividerStylesSheet = themedStyleSheet((colors) => ({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',

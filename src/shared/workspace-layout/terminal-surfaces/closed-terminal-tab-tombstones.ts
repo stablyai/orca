@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { RuntimeSessionTabCloseReason } from '../../remote-runtime/session-graph/runtime-session-contracts'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 
 const TERMINAL_TAB_CLOSE_REASONS = [
   'user',
@@ -18,12 +19,14 @@ export type ClosedTerminalTabTombstone = {
 export type ClosedTerminalTabTombstonesByTabId = Record<string, ClosedTerminalTabTombstone>
 
 /** Colocate persistence schema with type; omitting it once let zod silently strip tombstones on every relaunch. */
-export const closedTerminalTabTombstoneSchema = z.object({
-  closedAt: z.number().int().nonnegative(),
-  worktreeId: z.string().min(1),
-  // Why catch: a reason a newer build adds must not cost this build the record itself.
-  reason: z.enum(TERMINAL_TAB_CLOSE_REASONS).optional().catch(undefined)
-})
+export const closedTerminalTabTombstoneSchema = lazyZodSchema(() =>
+  z.object({
+    closedAt: z.number().int().nonnegative(),
+    worktreeId: z.string().min(1),
+    // Why catch: a reason a newer build adds must not cost this build the record itself.
+    reason: z.enum(TERMINAL_TAB_CLOSE_REASONS).optional().catch(undefined)
+  })
+)
 
 /** Prune within host partitions so one host’s churn cannot evict another’s records. */
 export const CLOSED_TERMINAL_TAB_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000

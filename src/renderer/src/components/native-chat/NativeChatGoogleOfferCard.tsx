@@ -43,7 +43,7 @@ export function NativeChatGoogleOfferCard({
   const chat = useContext(NativeChatBotKickoffContext)
   const setup = useConnectorSetup(bot)
   const turnOnGoogle = useTurnOnBotGoogle()
-  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const signIn = useGoogleSignIn(botTarget(bot), bot, `offer:${messageId}`)
   const view = useGoogleHost(botTarget(bot))
   const google = view.status === 'ready' ? view.google : null
   const face = google ? googleOfferFace(google, bot.google === true) : { kind: 'connect' as const }

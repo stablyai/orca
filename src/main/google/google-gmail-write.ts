@@ -229,6 +229,7 @@ async function labelIds(
     )
     ids.push(made.id)
     created.push(made.name)
+    existing.push(made)
   }
   return { ids, created }
 }

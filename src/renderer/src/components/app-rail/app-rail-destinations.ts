@@ -7,6 +7,7 @@ import {
   shouldShowSkillsButton
 } from '@/components/sidebar/chrome/SidebarNav'
 import { navigateFromRail } from './app-rail-navigation'
+import { shouldShowPluginsRailPage } from './plugins-rail-page-visibility'
 import { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
 
 export { APP_RAIL_DESTINATION_IDS, type AppRailDestinationId } from './app-rail-layout'
@@ -20,6 +21,7 @@ const DESTINATION_VISIBLE: Record<
   automations: shouldShowAutomationsButton,
   artifacts: shouldShowArtifactsButton,
   skills: shouldShowSkillsButton,
+  plugins: shouldShowPluginsRailPage,
   mobile: shouldShowMobileButton
 }
 
@@ -30,12 +32,14 @@ const DESTINATION_SETTING: Record<
   | 'showAutomationsButton'
   | 'showArtifactsButton'
   | 'showSkillsButton'
+  | 'showPluginsButton'
   | 'showMobileButton'
 > = {
   tasks: 'showTasksButton',
   automations: 'showAutomationsButton',
   artifacts: 'showArtifactsButton',
   skills: 'showSkillsButton',
+  plugins: 'showPluginsButton',
   mobile: 'showMobileButton'
 }
 
@@ -49,6 +53,7 @@ const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> 
   automations: (state) => state.openAutomationsPage(),
   artifacts: (state) => state.openArtifactsPage(),
   skills: (state) => state.openSkillsPage(),
+  plugins: (state) => state.openPluginsPage(),
   mobile: (state) => state.openMobilePage()
 }
 
@@ -57,7 +62,7 @@ function isRailDestinationId(value: string): value is AppRailDestinationId {
 }
 
 /** Shown destinations in rail order, joined into one string so the subscription compares a primitive. */
-export const selectShownRailDestinationsKey = (s: AppState): string =>
+export const selectShownRailDestinationsKey = (s: Pick<AppState, 'settings'>): string =>
   APP_RAIL_DESTINATION_IDS.filter((id) => DESTINATION_VISIBLE[id](s.settings)).join(',')
 
 export function shownRailDestinationsFromKey(key: string): AppRailDestinationId[] {

@@ -105,7 +105,7 @@ export function BotToolDetailsFields({
           <p hidden={!forBot} className="text-xs text-muted-foreground">
             {t(
               'settings.bots.tools.details.authHint',
-              'If the server needs browser sign-in, Connect appears after its native check.'
+              'If the server needs browser sign-in, Sign in appears after its native check.'
             )}
           </p>
         </>

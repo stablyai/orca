@@ -1,22 +1,19 @@
 import { Fragment } from 'react'
 import { Text } from 'react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { mobileForkMark, mobileForkMarkedNameParts } from './mobile-fork-marked-name'
 
 /** Nested in a title's Text: the muted "Fork ·" mark and the name, in the locale's order. */
 export function MobileForkMarkedName({ name }: { name: string }): React.JSX.Element {
-  useMobileColorScheme()
-  // Re-renders with the language; the parts read the current translation.
-  useMobileTranslation()
+  const styles = useThemedStyles(stylesSheet)
+  const t = useMobileTranslation()
   return (
     <>
-      {mobileForkMarkedNameParts().map((part) => (
+      {mobileForkMarkedNameParts(t).map((part) => (
         <Fragment key={part.key}>
           {part.kind === 'mark' ? (
-            <Text style={styles.mark}>{mobileForkMark()}</Text>
+            <Text style={styles.mark}>{mobileForkMark(t)}</Text>
           ) : part.kind === 'name' ? (
             name
           ) : (
@@ -28,6 +25,6 @@ export function MobileForkMarkedName({ name }: { name: string }): React.JSX.Elem
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   mark: { color: colors.textMuted }
 }))

@@ -1,5 +1,4 @@
 import React from 'react'
-import { DetachedHeadBadge } from '@/components/source-control/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
@@ -7,6 +6,7 @@ import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import {
   WorktreeCardDeleteQuickAction,
+  WorktreeCardDetachedHeadBadge,
   WorktreeCardPrimaryBadge,
   WorktreeCardPrimaryStar,
   WorktreeCardRepoChip,
@@ -14,13 +14,28 @@ import {
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardNotificationsMutedBadge } from '../identity/WorktreeCardNotificationsMutedBadge'
-import { AutoNameFailedIndicator } from '../identity/AutoNameFailedIndicator'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+
+const LazyAutoNameFailedIndicator = lazyWithRetry(
+  () =>
+    import('../identity/AutoNameFailedIndicator').then((module) => ({
+      default: module.AutoNameFailedIndicator
+    })),
+  { reloadKey: 'auto-name-failed-indicator' }
+)
+
+const LazyWorktreeCardSshHostControl = lazyWithRetry(
+  () =>
+    import('../host/WorktreeCardSshHostControl').then((module) => ({
+      default: module.WorktreeCardSshHostControl
+    })),
+  { reloadKey: 'worktree-card-ssh-host-control' }
+)
 import {
   WorktreeCardConflictBadge,
   WorktreeCardFolderPath
 } from '../metadata/worktree-card-meta-items'
 import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
-import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import {
@@ -73,15 +88,17 @@ function sshControl(props: Readonly<Record<string, unknown>>, card: Card): React
     return null
   }
   return (
-    <WorktreeCardSshHostControl
-      targetId={repo.connectionId}
-      targetLabel={card.sshTargetLabel || repo.displayName}
-      status={card.sshStatus}
-      targetRemoved={card.sshTargetRemoved}
-      sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
-      iconOnly={props.iconOnly === true}
-      onPointerDown={card.stopQuickActionPointerPropagation}
-    />
+    <React.Suspense fallback={null}>
+      <LazyWorktreeCardSshHostControl
+        targetId={repo.connectionId}
+        targetLabel={card.sshTargetLabel || repo.displayName}
+        status={card.sshStatus}
+        targetRemoved={card.sshTargetRemoved}
+        sshOwnerEnvironmentId={card.sshOwnerEnvironmentId}
+        iconOnly={props.iconOnly === true}
+        onPointerDown={card.stopQuickActionPointerPropagation}
+      />
+    </React.Suspense>
   )
 }
 
@@ -124,11 +141,13 @@ export const CARD_IDENTITY_PARTS = {
   )),
   RenameError: part([], (_props, _children, card) =>
     card.autoNameFailure ? (
-      <AutoNameFailedIndicator
-        card={card}
-        failure={card.autoNameFailure}
-        onPointerDown={card.stopQuickActionPointerPropagation}
-      />
+      <React.Suspense fallback={null}>
+        <LazyAutoNameFailedIndicator
+          card={card}
+          failure={card.autoNameFailure}
+          onPointerDown={card.stopQuickActionPointerPropagation}
+        />
+      </React.Suspense>
     ) : null
   ),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (
@@ -170,13 +189,12 @@ export const CARD_IDENTITY_PARTS = {
   FolderPath: part([], (_props, _children, { worktree }) => (
     <WorktreeCardFolderPath path={worktree.path} />
   )),
-  DetachedHead: part([], (_props, _children, { detachedHeadDisplay }) =>
-    detachedHeadDisplay ? (
-      <DetachedHeadBadge
-        display={detachedHeadDisplay}
-        label="sidebar"
-        side="right"
-        className="h-[16px]"
+  DetachedHead: part(['hasHoverDetails'], (props, _children, card) =>
+    card.detachedHeadDisplay ? (
+      <WorktreeCardDetachedHeadBadge
+        card={card}
+        hasHoverDetails={props.hasHoverDetails === true}
+        display={card.detachedHeadDisplay}
       />
     ) : null
   ),

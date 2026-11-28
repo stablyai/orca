@@ -1,11 +1,17 @@
-import { agentModelCatalogInputStamp } from '../../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
+import {
+  agentModelCatalogInputStamp,
+  MAX_HASHED_CONFIG_BYTES
+} from '../../../native-chat/agent-model-catalog/agent-model-catalog-input-stamp'
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation,
   type StructuredAgentCommandSettings
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
@@ -29,10 +35,12 @@ import { piRpcModelSchema } from './rpc-model-schema'
 
 type PiModelCatalogConnection = PiRpcRequester & { close(): Promise<unknown> }
 
-const discoveryStateSchema = z.object({
-  model: piRpcModelSchema.pick({ provider: true, id: true }).nullish(),
-  thinkingLevel: z.unknown().optional()
-})
+const discoveryStateSchema = lazyZodSchema(() =>
+  z.object({
+    model: piRpcModelSchema.pick({ provider: true, id: true }).nullish(),
+    thinkingLevel: z.unknown().optional()
+  })
+)
 
 export type PiModelCatalogProbeDeps = {
   resolveSavedEnvironment?: () => Promise<NodeJS.ProcessEnv>
@@ -44,6 +52,21 @@ export type PiModelCatalogProbeDeps = {
   probeVersion?: AgentCliVersionReader
   connect?: (launch: ProviderProcessLaunch) => PiModelCatalogConnection
   homePath?: string
+}
+
+// Pi rewrites auth.json on every token refresh, so only the set of signed-in providers counts.
+async function piSignedInProviders(accountDir: string): Promise<string[]> {
+  try {
+    const authPath = join(accountDir, 'auth.json')
+    if ((await stat(authPath)).size > MAX_HASHED_CONFIG_BYTES) {
+      return []
+    }
+    const auth: unknown = JSON.parse((await readFile(authPath, 'utf8')).replace(/^\uFEFF/, ''))
+    return auth && typeof auth === 'object' ? Object.keys(auth).sort() : []
+  } catch {
+    // Missing equals Pi's first-run `{}`, so the probe creating it does not expire its own listing.
+    return []
+  }
 }
 
 function connectPiModelCatalog(launch: ProviderProcessLaunch): PiModelCatalogConnection {
@@ -72,9 +95,10 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const cwd = deps.homePath ?? homedir()
+    const accountDir = requireLegacyAgentSessionAccountHome(accountHome).path
     const { env, command, prefixArgs } = await resolvePiRpcInvocation({
       operation,
-      accountDir: requireLegacyAgentSessionAccountHome(accountHome).path,
+      accountDir,
       resolveEnvironment:
         lookup === 'recover'
           ? deps.resolveEnvironment
@@ -88,7 +112,18 @@ export function createPiModelCatalogProbe(deps: PiModelCatalogProbeDeps): AgentM
     assertStructuredAgentResolutionCurrent(operation)
     return {
       identity: { command, prefixArgs, cwd },
-      inputStamp: await agentModelCatalogInputStamp({ command, prefixArgs, cwd, env }),
+      inputStamp: JSON.stringify(
+        await Promise.all([
+          agentModelCatalogInputStamp({
+            command,
+            prefixArgs,
+            cwd,
+            env,
+            configFiles: [join(accountDir, 'models.json'), join(accountDir, 'settings.json')]
+          }),
+          piSignedInProviders(accountDir)
+        ])
+      ),
       run: async (
         signal?: AbortSignal,
         runOperation = operation,

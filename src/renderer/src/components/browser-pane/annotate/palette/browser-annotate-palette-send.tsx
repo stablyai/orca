@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { preventAgentSendTargetOutsideDismiss } from '../delivery/prevent-agent-send-target-outside-dismiss'
+import { useAnnotatePalettePopupSide } from './annotate-palette-position-store'
 
 /** Annotate's palette actions: the note count, which opens the notes list, and Send with the agent menu. */
 export function BrowserAnnotatePaletteNotes({
@@ -32,6 +33,7 @@ export function BrowserAnnotatePaletteNotes({
   sendMenu: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
+  const popupSide = useAnnotatePalettePopupSide()
   const countLabel =
     count === 1
       ? t('browser.annotatePalette.noteCountOne', '1 note')
@@ -71,6 +73,7 @@ export function BrowserAnnotatePaletteNotes({
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
+          side={popupSide}
           className="min-w-[180px]"
           onInteractOutside={preventAgentSendTargetOutsideDismiss}
           onPointerDownOutside={preventAgentSendTargetOutsideDismiss}

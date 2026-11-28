@@ -1,12 +1,14 @@
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
+import { ScrollView, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
-import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { mobileOnboardingStylesSheet } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
+import { SheetSecondaryButton } from '../components/sheets/SheetSecondaryButton'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { colors } from '../theme/mobile-theme'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -30,8 +32,9 @@ export function MobileOnboardingPage({
   onSessionChoice,
   onNotificationChoice
 }: Props) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(mobileOnboardingStylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -62,25 +65,17 @@ export function MobileOnboardingPage({
         <Text style={styles.body}>
           {isSessionView
             ? t(
-                'onboarding.onboardingPage.sessionViewDescription',
-                'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.'
+                'onboarding.onboardingPage.sessionViewLine',
+                'You can change this any time in Settings → Chat UI.'
               )
             : t(
-                'onboarding.onboardingPage.notificationsDescription',
-                'Get a notification on this phone when an agent finishes or is waiting — even if you aren’t using the app.'
+                'onboarding.onboardingPage.notificationsLine',
+                'Orca’s push service tells this phone when an agent finishes or needs you while your computer is idle.'
               )}
         </Text>
       </View>
 
       <View style={styles.footer}>
-        {!isSessionView ? (
-          <Text style={styles.disclosure}>
-            {t(
-              'onboarding.onboardingPage.notificationsDisclosure',
-              'Delivered through Orca’s push service after your desktop has been idle for 3 minutes. Change this anytime in Settings.'
-            )}
-          </Text>
-        ) : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}
@@ -112,15 +107,13 @@ function SessionViewChoices({
   const t = useMobileTranslation()
   return (
     <>
-      <ChoiceButton
+      <SheetPrimaryButton
         label={t('onboarding.onboardingPage.useChatUi', 'Use Chat UI')}
-        accessibilityLabel={t('onboarding.onboardingPage.openInChatUi', 'Open sessions in Chat UI')}
-        primary
         busy={busyChoice === 'chat'}
         disabled={disabled}
         onPress={() => onChoice('chat')}
       />
-      <ChoiceButton
+      <SheetSecondaryButton
         label={t('onboarding.onboardingPage.keepTerminal', 'Keep terminal')}
         accessibilityLabel={t(
           'onboarding.onboardingPage.openInTerminal',
@@ -146,18 +139,13 @@ function NotificationChoices({
   const t = useMobileTranslation()
   return (
     <>
-      <ChoiceButton
+      <SheetPrimaryButton
         label={t('onboarding.onboardingPage.enableNotifications', 'Enable notifications')}
-        accessibilityLabel={t(
-          'onboarding.onboardingPage.enableAgentNotifications',
-          'Enable agent notifications'
-        )}
-        primary
         busy={busyChoice === 'enable'}
         disabled={disabled}
         onPress={() => onChoice('enable')}
       />
-      <ChoiceButton
+      <SheetSecondaryButton
         label={t('onboarding.onboardingPage.notNow', 'Not now')}
         accessibilityLabel={t(
           'onboarding.onboardingPage.skipNotifications',
@@ -168,42 +156,5 @@ function NotificationChoices({
         onPress={() => onChoice('skip')}
       />
     </>
-  )
-}
-
-function ChoiceButton({
-  label,
-  accessibilityLabel,
-  primary = false,
-  busy,
-  disabled,
-  onPress
-}: {
-  label: string
-  accessibilityLabel?: string
-  primary?: boolean
-  busy: boolean
-  disabled: boolean
-  onPress: () => void
-}) {
-  useMobileColorScheme()
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      disabled={disabled}
-      style={({ pressed }) => [
-        primary ? styles.primaryButton : styles.secondaryButton,
-        pressed && styles.buttonPressed,
-        disabled && styles.buttonDisabled
-      ]}
-      onPress={onPress}
-    >
-      {busy ? (
-        <ActivityIndicator color={primary ? colors.bgBase : colors.textSecondary} />
-      ) : (
-        <Text style={primary ? styles.primaryButtonText : styles.secondaryButtonText}>{label}</Text>
-      )}
-    </Pressable>
   )
 }

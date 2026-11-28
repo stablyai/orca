@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId

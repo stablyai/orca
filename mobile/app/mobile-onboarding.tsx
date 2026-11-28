@@ -12,14 +12,14 @@ import {
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { PUSH_CURVE, PUSH_SLIDE_MS } from '../src/navigation/push-motion'
 import { useReducedMotionEnabled } from '../src/platform/accessibility/use-reduced-motion'
-import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
-import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { mobileOnboardingStylesSheet } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
   type MobileSessionView
 } from '../src/storage/session-view-preferences'
 import { setRemotePushEnabled } from '../src/notifications/push-registration'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
+import { useThemedStyles } from '../src/theme/themed-styles'
 
 export default function MobileOnboardingScreen() {
   const params = useLocalSearchParams<{
@@ -45,7 +45,7 @@ function MobileOnboardingFlow({
   hostId: string | undefined
   rawSteps: string | undefined
 }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(mobileOnboardingStylesSheet)
   const t = useMobileTranslation()
   const router = useRouter()
   const steps = useMemo(() => parseMobileOnboardingSteps(rawSteps), [rawSteps])

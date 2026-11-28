@@ -127,6 +127,11 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     url: job.webUrl || null,
     ...checkRunTimes(job.startedAt, job.finishedAt),
     // Truthiness, not != null: the runtime RPC schema requires a positive int.
-    ...(job.id ? { gitlabJobId: job.id } : {})
+    ...(job.id
+      ? {
+          gitlabJobId: job.id,
+          ...(job.projectRef ? { gitlabJobProjectRef: job.projectRef } : {})
+        }
+      : {})
   }))
 }

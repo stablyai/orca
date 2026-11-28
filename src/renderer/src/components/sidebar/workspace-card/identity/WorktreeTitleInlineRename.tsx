@@ -1,15 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
-import { toast } from 'sonner'
-import { Input } from '@/components/ui/input'
+import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
-import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { cn } from '@/lib/class-names'
-import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
-import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+
+const WorktreeTitleInlineRenameEditor = lazy(() =>
+  import('./WorktreeTitleInlineRenameEditor').then((module) => ({
+    default: module.WorktreeTitleInlineRenameEditor
+  }))
+)
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
 
@@ -66,22 +65,10 @@ export function WorktreeTitleInlineRename({
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const t = useTranslate()
   const editingRef = useRef(false)
-  const savingRef = useRef(false)
-  const mountedRef = useRef(true)
-  const titleElementRef = useRef<HTMLSpanElement | null>(null)
   const titleResizeObserverRef = useRef<ResizeObserver | null>(null)
   const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
-  const inputElementRef = useRef<HTMLInputElement | null>(null)
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(displayName)
-  const [saving, setSaving] = useState(false)
   const [titleTruncated, setTitleTruncated] = useState(false)
-  const emojiInput = useWorkspaceEmojiShortcodeInput({
-    disabled: saving,
-    inputRef: inputElementRef,
-    onValueChange: setValue,
-    value
-  })
 
   const measureTitleTruncated = useCallback((element: HTMLSpanElement | null) => {
     const nextTruncated = element ? isWorktreeTitleTruncated(element) : false
@@ -95,9 +82,6 @@ export function WorktreeTitleInlineRename({
       removeTitleResizeListenerRef.current?.()
       removeTitleResizeListenerRef.current = null
 
-      // Track rendered-root attachment so rename completions cannot update an unmounted title.
-      mountedRef.current = node !== null
-      titleElementRef.current = node
       // Wrapped titles cannot truncate; skip measurements and observers that would only churn unused state.
       if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
@@ -123,13 +107,6 @@ export function WorktreeTitleInlineRename({
 
   // Re-key only the display title for measurement; sharing the key would remount/reselect an active editor on unread changes.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
-  // Inline rows need text-only editing to avoid layout shifts; hovercards can afford the field style.
-  const editingInputClassName =
-    editingPresentation === 'field'
-      ? 'h-6 rounded-sm border border-input bg-input/40 px-1.5 py-0 shadow-xs selection:bg-[Highlight] selection:text-[HighlightText] focus-visible:border-ring focus-visible:ring-[1px] focus-visible:ring-ring/50 dark:bg-input/30'
-      : 'h-[1lh] rounded-none border-0 !border-transparent !bg-transparent p-0 !shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none dark:!bg-transparent'
-  const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
-  const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -148,18 +125,12 @@ export function WorktreeTitleInlineRename({
   )
 
   const openRenameEditor = useCallback(() => {
-    setValue(displayName)
     setEditingMode(true)
-  }, [displayName, setEditingMode])
+  }, [setEditingMode])
 
-  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
-    inputElementRef.current = input
-    if (!input) {
-      return
-    }
-    input.focus()
-    input.select()
-  }, [])
+  const closeRenameEditor = useCallback(() => {
+    setEditingMode(false)
+  }, [setEditingMode])
 
   // Always consume shortcut requests, including disabled/already-editing states, so parent triggers cannot linger.
   useEffect(() => {
@@ -173,10 +144,6 @@ export function WorktreeTitleInlineRename({
     openRenameEditor()
   }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
-  const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
-    event.stopPropagation()
-  }, [])
-
   const startRename = useCallback(
     (event: React.MouseEvent<HTMLElement>) => {
       if (disabled) {
@@ -189,137 +156,36 @@ export function WorktreeTitleInlineRename({
     [disabled, openRenameEditor]
   )
 
-  const cancelRename = useCallback(() => {
-    emojiInput.close()
-    setValue(displayName)
-    setEditingMode(false)
-  }, [displayName, emojiInput, setEditingMode])
-
-  const commitRename = useCallback(async () => {
-    if (savingRef.current) {
-      return
-    }
-
-    const commit = getWorktreeTitleRenameCommit(displayName, value)
-    if (commit.kind === 'cancel') {
-      cancelRename()
-      return
-    }
-
-    savingRef.current = true
-    setSaving(true)
-    try {
-      await onRename(commit.displayName)
-      if (mountedRef.current) {
-        setEditingMode(false)
-      }
-    } catch (err) {
-      // Toast even when unmounted: a save from useBlurSaveOnUnmount has no field left to show the old name.
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate(
-              'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
-              'Failed to rename workspace.'
-            )
-      )
-    }
-    savingRef.current = false
-    if (mountedRef.current) {
-      setSaving(false)
-    }
-  }, [cancelRename, displayName, onRename, setEditingMode, value])
-  useBlurSaveOnUnmount(() => editing && editingRef.current, commitRename)
-
-  const handleKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLInputElement>) => {
-      event.stopPropagation()
-      if (emojiInput.handleKeyDown(event)) {
-        return
-      }
-      // Composition Enter confirms an IME candidate; rename requires a later non-composition Enter.
-      if (isImeCompositionKeyDown(event)) {
-        return
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        void commitRename()
-      } else if (event.key === 'Escape') {
-        event.preventDefault()
-        cancelRename()
-      }
-    },
-    [cancelRename, commitRename, emojiInput]
-  )
-
   if (editing) {
-    return (
-      <>
-        <span
-          ref={handleRootRef}
-          className={cn(
-            'relative grid min-w-0 truncate leading-tight text-foreground',
-            showUnreadEmphasis ? 'font-semibold' : 'font-normal',
-            className,
-            editingClassName
-          )}
-          data-worktree-title-inline-rename="editing"
-        >
-          <span
-            className="invisible col-start-1 row-start-1 min-w-0 truncate whitespace-pre"
-            aria-hidden="true"
-          >
-            {displayName}
-          </span>
-          <Input
-            ref={handleInputRef}
-            value={value}
-            style={{ font: 'inherit' }}
-            disabled={saving}
-            spellCheck={false}
-            aria-label={t(
-              'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
-              'Rename workspace'
-            )}
-            data-worktree-title-rename-input="true"
-            onChange={(event) =>
-              emojiInput.handleValueChange(event.target.value, event.target.selectionStart)
-            }
-            onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
-            onBlur={() => void commitRename()}
-            onClick={stopCardEvent}
-            onDoubleClick={stopCardEvent}
-            onPointerDown={stopCardEvent}
-            onKeyDown={handleKeyDown}
-            className={cn(
-              'col-start-1 row-start-1 min-w-0 select-text truncate text-foreground outline-none',
-              editingInputClassName,
-              saving && savingInputClassName,
-              inputClassName
-            )}
-          />
-          {saving ? (
-            <LoaderCircle
-              className={cn(
-                'pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground',
-                savingSpinnerClassName
-              )}
-            />
-          ) : null}
+    const editingFallback = (
+      <span
+        className={cn(
+          'relative grid min-w-0 truncate leading-tight text-foreground',
+          showUnreadEmphasis ? 'font-semibold' : 'font-normal',
+          className,
+          editingClassName
+        )}
+        data-worktree-title-inline-rename="editing"
+      >
+        <span className="col-start-1 row-start-1 min-w-0 truncate whitespace-pre">
+          {displayName}
         </span>
-        <WorkspaceEmojiSuggestionPopover
-          anchorRef={inputElementRef}
-          open={emojiInput.open}
-          commandValue={emojiInput.commandValue}
-          heading={t('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
-          suggestions={emojiInput.suggestions}
-          onCommandValueChange={emojiInput.onCommandValueChange}
-          onSelect={emojiInput.selectSuggestion}
-          onOpenChange={(open) => !open && emojiInput.close()}
-          side="right"
-          contentClassName="w-56"
+      </span>
+    )
+
+    return (
+      <Suspense fallback={editingFallback}>
+        <WorktreeTitleInlineRenameEditor
+          displayName={displayName}
+          showUnreadEmphasis={showUnreadEmphasis}
+          editingPresentation={editingPresentation}
+          className={className}
+          editingClassName={editingClassName}
+          inputClassName={inputClassName}
+          onRename={onRename}
+          onClose={closeRenameEditor}
         />
-      </>
+      </Suspense>
     )
   }
 

@@ -1,9 +1,9 @@
 import type { AppState } from '@/store/types'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { SenderLocation } from './native-chat-agent-message-sender-source'
 import { findAgentMessageSenderChatTab } from './native-chat-agent-message-sender-label'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 /** Compatibility for hosts that predate sender associations. */
 export function locateLegacyAgentMessageSender(
@@ -16,7 +16,7 @@ export function locateLegacyAgentMessageSender(
     return undefined
   }
   const chatTab = sessionId ? findAgentMessageSenderChatTab(state, sessionId, owner) : undefined
-  let paneKey = chatTab && structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)
+  let paneKey = chatTab && chatPaneKey(chatTab.entityId)
   if (!paneKey && handle) {
     const statuses = state.agentStatusByPaneKey
     const matches = Array.from(statuses.projection.handleKeys(handle)).filter((key) => {

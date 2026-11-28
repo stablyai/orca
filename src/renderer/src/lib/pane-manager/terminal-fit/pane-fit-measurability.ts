@@ -29,16 +29,19 @@ function hasPaneFitPixelBox(pane: ManagedPane): boolean {
   return rect.width >= MIN_PANE_FIT_WIDTH_PX && rect.height >= MIN_PANE_FIT_HEIGHT_PX
 }
 
-export function canMeasurePaneForFit(pane: ManagedPane): boolean {
+export function getMeasurablePaneFitDimensions(
+  pane: ManagedPane
+): { cols: number; rows: number } | null {
   if (!hasPaneFitPixelBox(pane)) {
-    return false
+    return null
   }
   const dims = getProposedPaneDimensions(pane)
-  if (!dims) {
-    return false
-  }
   // Worktree switches can briefly expose near-zero overlays; fitting would pin the PTY near two columns.
-  return dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS
+  return dims && dims.cols >= MIN_PANE_FIT_COLS && dims.rows >= MIN_PANE_FIT_ROWS ? dims : null
+}
+
+export function canMeasurePaneForFit(pane: ManagedPane): boolean {
+  return getMeasurablePaneFitDimensions(pane) !== null
 }
 
 // Gate metrics by pixels only: the 50px divider minimum can stay below the grid-fit floor forever, stranding font updates. Near-zero hidden/transient boxes still defer; the grid floor applies to fitting.

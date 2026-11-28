@@ -47,8 +47,10 @@ import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { EmulatorBridge } from '../../../emulator/emulator-bridge'
 
 export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
+  abstract ensureEmulatorBridge(): Promise<EmulatorBridge | null>
   abstract currentLocalStructuredSessionPresentation(
     ...args: Parameters<ChatPresentation['currentLocalStructuredSessionPresentation']>
   ): ReturnType<ChatPresentation['currentLocalStructuredSessionPresentation']>
@@ -228,6 +230,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     getBrowserCommands: () => this.browserCommands,
     emulatorHost: {
       getEmulatorBridge: () => this.emulatorBridge,
+      ensureEmulatorBridge: () => this.ensureEmulatorBridge(),
       resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector),
       resolveEmulatorCleanupWorkspaceId: (selector) =>
         this.resolveEmulatorCleanupWorkspaceId(selector),

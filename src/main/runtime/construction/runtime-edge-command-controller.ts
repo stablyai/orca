@@ -3,11 +3,16 @@ import type { BrowserScreencastResult } from '../../../shared/browser/runtime/ru
 import { runWithRequestedPageUrl } from '../../browser/cdp/input/browser-expected-page-url'
 import type { RuntimeBrowserCommandHost } from '../browser/commands/browser-command-contracts'
 import type { RuntimeBrowserCommands } from '../browser/commands/browser-commands'
-import { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
-import { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
+import type { RuntimeEmulatorCommands } from '../emulator/runtime-emulator-commands'
+import type { RuntimeBrowserScreencastController } from '../browser/screencast/runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from '../browser/installation/runtime-browser-commands-factory'
-import { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
+import type { RuntimeJiraCommands } from '../integrations/jira/runtime-jira-commands'
 import type { RpcBinarySender } from '../rpc/transports/rpc-binary-sender'
+import {
+  bindLazyAsyncMethods,
+  EMULATOR_COMMAND_NAMES,
+  JIRA_ASYNC_COMMAND_NAMES
+} from './lazy-edge-command-bindings'
 
 type PublicMethods<T> = Pick<T, keyof T>
 type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreencast'> & {
@@ -140,19 +145,6 @@ const BROWSER_COMMAND_NAMES = [
   'browserTabClose'
 ] as const satisfies readonly (keyof RuntimeBrowserCommands)[]
 
-function bindPrefixedMethods<T extends object>(
-  instance: T,
-  prefix: string
-): Partial<PublicMethods<T>> {
-  const bound: Record<string, unknown> = {}
-  for (const name of Object.getOwnPropertyNames(Object.getPrototypeOf(instance))) {
-    if (name.startsWith(prefix)) {
-      bound[name] = (instance[name as keyof T] as (...args: unknown[]) => unknown).bind(instance)
-    }
-  }
-  return bound as Partial<PublicMethods<T>>
-}
-
 function bindBrowserMethods<T extends object>(
   instance: T,
   names: readonly (keyof T)[]
@@ -168,10 +160,16 @@ function bindBrowserMethods<T extends object>(
 }
 
 export class RuntimeEdgeCommandController {
-  private readonly jira: RuntimeJiraCommands
+  private jiraInstance: RuntimeJiraCommands | null = null
+  private jiraPromise: Promise<RuntimeJiraCommands> | null = null
+  private readonly jiraHost: ConstructorParameters<typeof RuntimeJiraCommands>[0]
+  private emulatorInstance: RuntimeEmulatorCommands | null = null
+  private emulatorPromise: Promise<RuntimeEmulatorCommands> | null = null
+  private readonly emulatorHost: EmulatorHost
   private readonly browser: RuntimeBrowserCommands
-  private readonly screencasts: RuntimeBrowserScreencastController
-  private readonly emulator: RuntimeEmulatorCommands
+  private screencasts: RuntimeBrowserScreencastController | null = null
+  private screencastsPromise: Promise<RuntimeBrowserScreencastController> | null = null
+  private readonly screencastDeps: ScreencastDependencies
   readonly surface: RuntimeEdgeCommandSurface
 
   constructor(args: {
@@ -181,32 +179,95 @@ export class RuntimeEdgeCommandController {
     emulatorHost: EmulatorHost
     getBrowserCommands?: () => RuntimeBrowserCommands
   }) {
-    this.jira = new RuntimeJiraCommands(args.jiraHost)
+    this.jiraHost = args.jiraHost
+    this.emulatorHost = args.emulatorHost
     this.browser = createRuntimeBrowserCommands(args.browserHost)
-    this.screencasts = new RuntimeBrowserScreencastController({
+    this.screencastDeps = {
       ...args.screencast,
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
-    })
-    this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bound name lists are checked against the classes above; spreading loses their key types.
     this.surface = {
-      ...bindPrefixedMethods(this.jira, 'jira'),
+      ...bindLazyAsyncMethods(() => this.loadJira(), JIRA_ASYNC_COMMAND_NAMES),
+      jiraCancelGenerateIssueSummary: (cancelArgs, owner) =>
+        this.jiraInstance
+          ? this.jiraInstance.jiraCancelGenerateIssueSummary(cancelArgs, owner)
+          : { ok: true },
       ...bindBrowserMethods(this.browser, BROWSER_COMMAND_NAMES),
-      ...bindPrefixedMethods(this.emulator, 'emulator'),
-      browserScreencast: (params, options) => this.screencasts.start(params, options)
+      ...bindLazyAsyncMethods(() => this.loadEmulator(), EMULATOR_COMMAND_NAMES),
+      browserScreencast: async (params, options) =>
+        (await this.loadScreencasts()).start(params, options)
     } as RuntimeEdgeCommandSurface
   }
 
+  private loadJira(): Promise<RuntimeJiraCommands> {
+    if (this.jiraInstance) {
+      return Promise.resolve(this.jiraInstance)
+    }
+    if (!this.jiraPromise) {
+      this.jiraPromise = import('../integrations/jira/runtime-jira-commands')
+        .then(({ RuntimeJiraCommands }) => {
+          this.jiraInstance = new RuntimeJiraCommands(this.jiraHost)
+          return this.jiraInstance
+        })
+        .catch((error: unknown) => {
+          this.jiraPromise = null
+          throw error
+        })
+    }
+    return this.jiraPromise
+  }
+
+  private loadEmulator(): Promise<RuntimeEmulatorCommands> {
+    if (this.emulatorInstance) {
+      return Promise.resolve(this.emulatorInstance)
+    }
+    if (!this.emulatorPromise) {
+      this.emulatorPromise = Promise.all([
+        import('../emulator/runtime-emulator-commands'),
+        this.emulatorHost.ensureEmulatorBridge?.() ?? Promise.resolve(null)
+      ])
+        .then(([{ RuntimeEmulatorCommands }]) => {
+          this.emulatorInstance = new RuntimeEmulatorCommands(this.emulatorHost)
+          return this.emulatorInstance
+        })
+        .catch((error: unknown) => {
+          this.emulatorPromise = null
+          throw error
+        })
+    }
+    return this.emulatorPromise
+  }
+
+  private loadScreencasts(): Promise<RuntimeBrowserScreencastController> {
+    if (this.screencasts) {
+      return Promise.resolve(this.screencasts)
+    }
+    if (!this.screencastsPromise) {
+      this.screencastsPromise =
+        import('../browser/screencast/runtime-browser-screencast-controller')
+          .then(({ RuntimeBrowserScreencastController }) => {
+            this.screencasts = new RuntimeBrowserScreencastController(this.screencastDeps)
+            return this.screencasts
+          })
+          .catch((error: unknown) => {
+            this.screencastsPromise = null
+            throw error
+          })
+    }
+    return this.screencastsPromise
+  }
+
   cancelScreencast(browserPageId: string): void {
-    this.screencasts.cancelMobilePage(browserPageId, true)
+    this.screencasts?.cancelMobilePage(browserPageId, true)
   }
 
   publishBrowserDriver(browserPageId: string, driver: RuntimeTerminalDriverState): void {
-    this.screencasts.publishDriver(browserPageId, driver)
+    this.screencasts?.publishDriver(browserPageId, driver)
   }
 
   getBrowserRemoteViewerPages(): string[] {
-    return this.screencasts.getRemoteViewerPages()
+    return this.screencasts?.getRemoteViewerPages() ?? []
   }
 
   getBrowserCommands(): RuntimeBrowserCommands {

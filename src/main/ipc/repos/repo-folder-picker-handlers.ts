@@ -26,13 +26,14 @@ function newestLocalProjectParent(store: Pick<Store, 'getRepos'>): string | unde
 
 export function registerRepoFolderPickerHandlers(
   mainWindow: BrowserWindow,
-  store: Pick<Store, 'getRepos'>
+  store: Pick<Store, 'getRepos'>,
+  ipc: Pick<typeof ipcMain, 'handle'> = ipcMain
 ): void {
   const projectPickerOptions = (
     properties: OpenDialogOptions['properties']
   ): OpenDialogOptions => ({ defaultPath: newestLocalProjectParent(store), properties })
 
-  ipcMain.handle('repos:pickFolder', async () => {
+  ipc.handle('repos:pickFolder', async () => {
     const result = await showSingleFlightOpenDialog(
       projectPickerOptions(['openDirectory']),
       mainWindow
@@ -43,7 +44,7 @@ export function registerRepoFolderPickerHandlers(
     return result.filePaths[0]
   })
 
-  ipcMain.handle('repos:pickFolders', async () => {
+  ipc.handle('repos:pickFolders', async () => {
     const result = await showSingleFlightOpenDialog(
       projectPickerOptions(['openDirectory', 'multiSelections']),
       mainWindow
@@ -55,7 +56,7 @@ export function registerRepoFolderPickerHandlers(
   })
 
   // Clone destinations need a generic picker because they may not contain a Git repo.
-  ipcMain.handle('repos:pickDirectory', async () => {
+  ipc.handle('repos:pickDirectory', async () => {
     const result = await showSingleFlightOpenDialog(
       // macOS creates typed partial paths when directory creation is enabled; defer creation to submit.
       projectPickerOptions(['openDirectory']),

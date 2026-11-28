@@ -19,6 +19,7 @@ import { BotAppLogo } from './BotAppRow'
 import type { BotToolApp } from './bot-tool-apps'
 import { botAppLogoSource } from './bot-app-logo-source'
 import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
+import { botToolAppSignsIn } from '../../../../../shared/bots/bot-connector-entries'
 
 /** A tool's or app's tile: its brand or Composio logo when one is known, else the generic tool icon. */
 export function BotToolLogo({
@@ -94,6 +95,7 @@ export function BotToolAppRow({
     disabled: busy
   }
   const owned = tool.signIn
+  const signsIn = botToolAppSignsIn(entry)
   const signInAction = useBotToolSignInAction(bot, tool, problem)
   const { started } = signInAction
   const face: { line: string; fix: BotConnectorFix | null } = signInAction.line
@@ -112,7 +114,7 @@ export function BotToolAppRow({
         ? { line: t('bots.toolApp.unconfirmed', 'Not confirmed'), fix: checkAgain }
         : {
             line:
-              !problem && app?.signIn === 'browser'
+              !problem && signsIn && app?.signIn === 'browser'
                 ? t('bots.toolApp.signedIn', 'Signed in')
                 : line,
             fix: null
@@ -129,8 +131,7 @@ export function BotToolAppRow({
       defaultOpen={defaultOpen === true || started}
       actions={{
         link:
-          (owned ? owned.state !== 'signed-in' : problem?.kind === 'sign-in') ||
-          app?.signIn === 'none'
+          (owned ? owned.state !== 'signed-in' : problem?.kind === 'sign-in') || !signsIn
             ? null
             : {
                 label: t('bots.toolApp.signInAgain', 'Sign in again'),
@@ -156,7 +157,7 @@ export function BotToolAppRow({
               bot: bot.name
             })
           },
-          ...(app?.signIn === 'none'
+          ...(!signsIn
             ? []
             : [
                 {

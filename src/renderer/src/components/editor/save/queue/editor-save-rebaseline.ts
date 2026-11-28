@@ -19,12 +19,16 @@ import {
   noteEditorBaselineWrite,
   waitForEditorBaselineRestamp
 } from './editor-save-disk-precondition'
+import { noteEditorConflictReport } from '../../external-changes/editor-conflict-report-count'
 
 export function setModelExternalMutation(
   state: AppState,
   fileId: string,
   mutation: NonNullable<OpenFile['externalMutation']> | null
 ): void {
+  if (mutation !== null) {
+    noteEditorConflictReport(state.openFiles.find((tab) => tab.id === fileId)?.filePath)
+  }
   state.setExternalMutation(fileId, mutation)
 }
 

@@ -7,10 +7,7 @@ import {
 } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionOwnerInputs
@@ -68,9 +65,7 @@ function rowEntry(state: RowState, tab: StructuredTab, reuse: Map<string, RowEnt
     sessionId: tab.entityId,
     worktreeId: tab.worktreeId,
     actual: previous?.actual ?? structuredTabPaneKey(tab),
-    key:
-      previous?.key ??
-      structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.entityId), tab.entityId),
+    key: previous?.key ?? chatPaneKey(tab.entityId),
     host
   }
 }

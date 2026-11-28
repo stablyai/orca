@@ -1,18 +1,28 @@
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { Translate } from '../i18n/mobile-i18n'
+import { intlLocaleFor } from '../i18n/ui-intl-locale'
+import { useMobileTranslation, useMobileUiLocale } from '../i18n/use-mobile-translation'
 import {
   automationRunEventSourceKey,
   sayAutomationRunEnglish
 } from '../../../src/shared/automations/automation-run-row-words'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Text, View } from 'react-native'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { ScrollView, Text, View, type HostInstance } from 'react-native'
+import { Copy, Ellipsis, SquareTerminal } from 'lucide-react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { getAutomationRunContent } from '../../../src/shared/automations/history/automation-run-content'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { AutomationButton, AutomationMetadata } from './AutomationControls'
+import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { SheetPrimaryButton } from '../components/sheets/SheetPrimaryButton'
+import { TransientToast } from '../components/feedback/TransientToast'
+import { useBackClaim } from '../navigation/use-back-claim'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
+import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
+import type { AutomationHeaderBar } from './AutomationControls'
 import {
   automationDate,
   automationRunErrorText,
@@ -22,7 +32,8 @@ import { canOpenAutomationRunAgent } from './automation-run-agent'
 import type { MobileAutomationRun } from './automation-reply-schema'
 import type { AutomationRunObservation } from './use-automation-runs'
 import { useFullAutomationRun } from './use-full-automation-run'
-import { automationStyles as styles } from './automation-styles'
+import { automationStylesSheet as stylesSheet } from './automation-styles'
+import { useThemedStyles } from '../theme/themed-styles'
 
 export function AutomationRunDetails(props: {
   run: MobileAutomationRun
@@ -31,10 +42,19 @@ export function AutomationRunDetails(props: {
   executionHost?: ExecutionHostId
   connected: boolean
   history: AutomationRunObservation
+  /** The page's offline and failure notes, above the run. */
+  notes: ReactNode
+  /** The menu's Copied toast, drawn above Open agent's bar. */
+  toast: string | null
   onBack: () => void
 }) {
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  useMobileColorScheme()
+  const intlLocale = intlLocaleFor(useMobileUiLocale())
+  useBackClaim(() => {
+    props.onBack()
+    return true
+  })
   const history = props.history
   const full = useFullAutomationRun(
     props.client,
@@ -43,8 +63,9 @@ export function AutomationRunDetails(props: {
     history.scope
   )
   const run = full.run
-  const runError = automationRunErrorText(run)
+  const runError = automationRunErrorText(run, t)
   const [opening, setOpening] = useState(false)
+  const [barHeight, setBarHeight] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const router = useRouteHandoff()
   const mounted = useRef(false)
@@ -133,114 +154,156 @@ export function AutomationRunDetails(props: {
       }
     }
   }
+  const trigger =
+    run.trigger === 'manual'
+      ? t('automations.mobile.runNow', 'Run now')
+      : run.trigger === 'event'
+        ? sayAutomationRunEnglish(automationRunEventSourceKey(run))
+        : t('automations.mobile.schedule', 'Schedule')
+  const workspace = run.workspaceDisplayName ?? run.runContext?.path ?? run.workspaceId
+  const captured = run.outputSnapshot
+    ? run.outputSnapshot.truncated
+      ? t('automations.mobile.capturedTruncated', 'Captured {{date}} · Output truncated by host', {
+          date: automationDate(run.outputSnapshot.capturedAt, t, intlLocale)
+        })
+      : t('automations.mobile.capturedDate', 'Captured {{date}}', {
+          date: automationDate(run.outputSnapshot.capturedAt, t, intlLocale)
+        })
+    : null
+  // A run that failed before any output says why once, under its facts.
+  const output = getAutomationRunContent(
+    { ...run, error: runError },
+    t('automations.mobile.noOutput', 'No output content available.')
+  )
+  // Open agent shows only when the run's pane can open; a gone pane reads as an error on tap.
+  const canOpen = props.connected && Boolean(run.terminalPaneKey) && Boolean(run.workspaceId)
   return (
-    <View style={styles.stack}>
-      <AutomationButton
-        label={t('automations.mobile.allRuns', 'All runs')}
-        onPress={props.onBack}
-      />
-      {history.error ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {history.error}
-        </Text>
-      ) : null}
-      {history.unavailable ? (
-        <Text style={styles.meta}>
-          {t(
-            'automations.mobile.thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow',
-            'This run is no longer in the host’s retained history. Last saved information remains below.'
-          )}
-        </Text>
-      ) : null}
-      <Text style={styles.title}>{run.title}</Text>
-      <Text style={styles.text}>{automationRunStatusLabel(run.status)}</Text>
-      <View style={styles.card}>
-        <AutomationMetadata
-          label={t('automations.mobile.scheduledFor', 'Scheduled for')}
-          value={automationDate(run.scheduledFor)}
-        />
-        <AutomationMetadata
-          label={t('automations.mobile.started', 'Started')}
-          value={automationDate(run.startedAt)}
-        />
-        <AutomationMetadata
-          label={t('automations.mobile.trigger', 'Trigger')}
-          value={
-            run.trigger === 'manual'
-              ? t('automations.mobile.runNow', 'Run now')
-              : run.trigger === 'event'
-                ? sayAutomationRunEnglish(automationRunEventSourceKey(run))
-                : t('automations.mobile.schedule', 'Schedule')
-          }
-        />
-        <AutomationMetadata
-          label={t('automations.mobile.workspace', 'Workspace')}
-          value={
-            run.workspaceDisplayName ??
-            run.runContext?.path ??
-            run.workspaceId ??
-            t('automations.mobile.notCreated', 'Not created')
-          }
-        />
-        <AutomationMetadata
-          label={t('automations.mobile.projectHost', 'Project host')}
-          value={run.runContext?.hostId ?? t('automations.mobile.notRecorded', 'Not recorded')}
-        />
-        <AutomationMetadata label={t('automations.mobile.run', 'Run')} value={run.id} />
-      </View>
-      {runError ? <Text style={styles.error}>{runError}</Text> : null}
-      <Text style={styles.heading}>{t('automations.mobile.output', 'Output')}</Text>
-      {full.failed ? (
-        <>
-          <Text accessibilityRole="alert" style={styles.error}>
-            {t('automations.mobile.fullOutputUnavailable', "Couldn't load the full output.")}
-          </Text>
-          <AutomationButton
-            label={t('automations.mobile.retryFullOutput', 'Retry')}
-            onPress={full.retry}
-            disabled={!props.connected}
+    <>
+      <ScrollView style={styles.screen} contentContainerStyle={styles.grouped}>
+        {props.notes}
+        {history.error ? <SettingsNote error>{history.error}</SettingsNote> : null}
+        {history.unavailable ? (
+          <SettingsNote>
+            {t(
+              'automations.mobile.runNoLongerRetained',
+              'This run is no longer in the host’s history.'
+            )}
+          </SettingsNote>
+        ) : null}
+        <SettingsSection
+          first
+          footer={runError ? <SettingsNote error>{runError}</SettingsNote> : undefined}
+        >
+          <ListRow
+            title={t('automations.mobile.status', 'Status')}
+            value={automationRunStatusLabel(run.status, t)}
           />
-        </>
-      ) : null}
-      <Text selectable style={styles.output}>
-        {getAutomationRunContent(
-          { ...run, error: runError },
-          t('automations.mobile.noOutput', 'No output content available.')
+          <ListRow
+            title={t('automations.mobile.scheduledFor', 'Scheduled for')}
+            value={automationDate(run.scheduledFor, t, intlLocale)}
+          />
+          {run.startedAt !== null ? (
+            <ListRow
+              title={t('automations.mobile.started', 'Started')}
+              value={automationDate(run.startedAt, t, intlLocale)}
+            />
+          ) : null}
+          <ListRow title={t('automations.mobile.trigger', 'Trigger')} value={trigger} />
+          {workspace ? (
+            <ListRow title={t('automations.mobile.workspace', 'Workspace')} value={workspace} />
+          ) : null}
+        </SettingsSection>
+        {output === runError ? null : (
+          <>
+            <SectionHeader title={t('automations.mobile.output', 'Output')} />
+            <ListGroup>
+              <Text selectable style={styles.output}>
+                {output}
+              </Text>
+            </ListGroup>
+          </>
         )}
-      </Text>
-      {run.outputSnapshot ? (
-        <Text style={styles.meta}>
-          {run.outputSnapshot.truncated
-            ? t(
-                'automations.mobile.capturedTruncated',
-                'Captured {{date}} · Output truncated by host',
-                { date: automationDate(run.outputSnapshot.capturedAt) }
-              )
-            : t('automations.mobile.capturedDate', 'Captured {{date}}', {
-                date: automationDate(run.outputSnapshot.capturedAt)
-              })}
-        </Text>
+        {full.failed ? (
+          <>
+            <SettingsNote error>
+              {t('automations.mobile.fullOutputUnavailable', "Couldn't load the full output.")}
+            </SettingsNote>
+            <SettingsSection>
+              <ListRow
+                title={t('automations.mobile.retryFullOutput', 'Retry')}
+                accent
+                disabled={!props.connected}
+                onPress={full.retry}
+              />
+            </SettingsSection>
+          </>
+        ) : captured ? (
+          <SettingsNote>{captured}</SettingsNote>
+        ) : null}
+        {error ? <SettingsNote error>{error}</SettingsNote> : null}
+      </ScrollView>
+      {canOpen ? (
+        <View
+          style={styles.bottomBar}
+          onLayout={(event) => setBarHeight(event.nativeEvent.layout.height)}
+        >
+          <SheetPrimaryButton
+            label={t('automations.mobile.openAgent', 'Open agent')}
+            icon={SquareTerminal}
+            busy={opening}
+            onPress={() => void openAgent()}
+          />
+        </View>
       ) : null}
-      {error ? (
-        <Text accessibilityRole="alert" style={styles.error}>
-          {error}
-        </Text>
-      ) : null}
-      {(!run.terminalPaneKey || !run.workspaceId) &&
-      run.status !== 'pending' &&
-      run.status !== 'dispatching' ? (
-        <Text style={styles.meta}>
-          {t(
-            'automations.mobile.theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere',
-            'The original agent pane is unavailable. Saved output remains here.'
-          )}
-        </Text>
-      ) : null}
-      <AutomationButton
-        label={t('automations.mobile.openAgent', 'Open agent')}
-        onPress={() => void openAgent()}
-        disabled={opening || !props.connected || !run.terminalPaneKey || !run.workspaceId}
+      <TransientToast message={props.toast} bottomInset={canOpen ? barHeight : 0} />
+    </>
+  )
+}
+
+/** The run's bar: its title over its status, and ⋯ with Copy run ID. */
+export function automationRunBar(
+  run: MobileAutomationRun,
+  onBack: () => void,
+  showToast: (message: string) => void,
+  t: Translate
+): AutomationHeaderBar {
+  return {
+    page: { title: run.title, subtitle: automationRunStatusLabel(run.status, t), onBack },
+    trailing: <AutomationRunMenu runId={run.id} showToast={showToast} />
+  }
+}
+
+function AutomationRunMenu(props: { runId: string; showToast: (message: string) => void }) {
+  const t = useMobileTranslation()
+  const clipboard = useClipboardWriter()
+  const [open, setOpen] = useState(false)
+  const anchor = useRef<HostInstance>(null)
+  return (
+    <>
+      <NavBarButton
+        ref={anchor}
+        icon={Ellipsis}
+        accessibilityLabel={t('automations.mobile.moreActions', 'More actions')}
+        onPress={() => setOpen(true)}
       />
-    </View>
+      <PullDownMenu
+        visible={open}
+        anchorRef={anchor}
+        onClose={() => setOpen(false)}
+        groups={[
+          [
+            {
+              label: t('automations.mobile.copyRunId', 'Copy run ID'),
+              icon: Copy,
+              onPress: () =>
+                void clipboard.writeText(props.runId).then(
+                  () => props.showToast(t('common.copied', 'Copied')),
+                  () => props.showToast(t('automations.mobile.copyFailed', 'Couldn’t copy'))
+                )
+            }
+          ]
+        ]}
+      />
+    </>
   )
 }

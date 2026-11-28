@@ -26,6 +26,8 @@ export type AcpStructuredSession = {
   permission: AgentChatPermissionChoice
   /** Full access came from launch arguments, so only a restart can take it away. */
   launchArgsGrantFullAccess: boolean
+  /** A kept agent that had ended when its acquisition finished: it only replays its output. */
+  endedBeforeAcquire?: true
   childStops?: AcpChildStops
   connection: AcpStructuredConnection
   lane: AcpStructuredLane

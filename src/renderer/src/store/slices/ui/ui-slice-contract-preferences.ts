@@ -213,7 +213,10 @@ export type UISlicePersistence = {
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
   setEditorFontZoomLevel: (level: number) => void
-  hydratePersistedUI: (ui: PersistedUIState, source?: 'startup' | 'sync') => void
+  hydratePersistedUI: (
+    ui: PersistedUIState,
+    source?: 'startup' | 'startup-fallback' | 'sync'
+  ) => void
   updateStatus: UpdateStatus
   retainedUpdateTarget: RetainedUpdateTarget | null
   setUpdateStatus: (status: UpdateStatus) => void

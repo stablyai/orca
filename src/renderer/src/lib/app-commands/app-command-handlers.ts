@@ -21,7 +21,7 @@ import { showWorkspaceListThen } from '../../components/app-rail/app-rail-naviga
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
-import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
+import { openPluginsFromShortcut } from '@/components/app-rail/open-plugins-shortcut'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
@@ -273,7 +273,7 @@ export function createAppCommandHandlers(
     [
       'view.plugins',
       createPluginsSettingsShortcutHandler(input?.target, () =>
-        claim('view.plugins', openPluginsSettings)
+        claim('view.plugins', openPluginsFromShortcut)
       )
     ],
     [

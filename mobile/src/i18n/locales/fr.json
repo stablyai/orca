@@ -34,7 +34,10 @@
   "agentHistory": {
     "panel": {
       "all": "Toutes",
-      "emptyScope": "Aucune session d'agent passée dans ce périmètre.",
+      "hideDetails": "Masquer les détails",
+      "showDetails": "Afficher les détails",
+      "loading": "Chargement des sessions d'agent…",
+      "showAllAgents": "Afficher tous les agents",
       "missingResumeId": "Cette session n'a pas d'identifiant de reprise.",
       "noSearchResults": "Aucune session ne correspond à votre recherche.",
       "noSessions": "Aucune session d'agent",
@@ -62,7 +65,6 @@
       "untitledSession": "Session sans titre"
     },
     "sessionHistoryList": {
-      "currentWorktree": "worktree actuel",
       "messages_many": "{{count}} messages",
       "messages_one": "{{count}} message",
       "messages_other": "{{count}} messages",
@@ -77,6 +79,44 @@
     "worktreeNavigationActions": {
       "agentSessionHistory": "Historique des sessions d'agent",
       "sourceControl": "Contrôle de code source"
+    },
+    "resume": {
+      "hostConnectionChanged": "La connexion à l'hôte a changé. Réessayez de reprendre la session."
+    },
+    "interrupted": {
+      "failed": "Impossible de reprendre les chats interrompus.",
+      "count_many": "{{count}} chats ont été interrompus",
+      "count_one": "{{count}} chat a été interrompu",
+      "count_other": "{{count}} chats ont été interrompus",
+      "resumeAll": "Tout reprendre",
+      "failedCount_many": "{{count}} chats n'ont pas pu être repris",
+      "failedCount_one": "{{count}} chat n'a pas pu être repris",
+      "failedCount_other": "{{count}} chats n'ont pas pu être repris"
+    },
+    "viewControls": {
+      "allAgents": "Tous les agents",
+      "lastUpdated": "Dernière mise à jour",
+      "created": "Date de création",
+      "agents": "Agents"
+    },
+    "filterSheet": {
+      "title": "Filtrer et trier",
+      "activeLabel": "Filtrer et trier, filtres actifs : {{count}}",
+      "reset": "Réinitialiser",
+      "done": "Terminé",
+      "sortBy": "Trier par"
+    },
+    "actions": {
+      "resume": "Reprendre"
+    },
+    "handoff": {
+      "title": "Passer à un agent",
+      "context": "Contexte",
+      "latestStatus": "Dernier état",
+      "fullTranscript": "Transcription complète",
+      "noContext": "Aucun contexte de session disponible pour continuer dans une nouvelle session.",
+      "launchFailed": "Impossible de démarrer une nouvelle session.",
+      "promptCopied": "Prompt copié. Ouvrez l'agent pour le coller."
     }
   },
   "app": {
@@ -95,63 +135,36 @@
     },
     "pairConfirm": {
       "backToHome": "Retour à l'accueil",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
-      "description": "Vous avez ouvert un lien d'appairage depuis votre ordinateur. Confirmez pour l'ajouter à vos hôtes.",
       "pairButton": "Appairer",
-      "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
-      "title": "Appairer cet ordinateur ?"
+      "pairingFailed": "Échec de l'appairage : {{error}}"
     },
     "pairScan": {
-      "cameraDisabledDescription": "Activez l'accès à la caméra dans les paramètres, ou collez le code d'appairage.",
-      "cameraDisabledTitle": "Accès à la caméra désactivé",
-      "cameraPermissionDescription": "Scannez le QR code affiché dans Orca sur votre ordinateur, ou collez le code d'appairage.",
-      "connectTimedOut": "Impossible de se connecter en {{seconds}} s — consultez le journal ci-dessous pour identifier le blocage.",
       "connecting": "Connexion…",
       "invalidPairingCode": "Code d'appairage invalide — copiez-le depuis votre ordinateur et collez-le à nouveau.",
       "invalidQrCode": "QR code Orca invalide",
-      "downloadQrCode": "C’est le code de téléchargement. Scannez le code d’association à l’étape 2 sur votre ordinateur.",
-      "openDesktopStep": "Ouvrez Orca sur votre ordinateur",
-      "openMobileSettingsStep": "Allez dans Paramètres → Mobile",
       "openSettings": "Ouvrir les paramètres",
       "pairingFailed": "Échec de l'appairage : {{error}}",
-      "pairingLog": "Journal d'appairage",
       "pasteCodeMessage": "Copiez le code affiché sous le QR code sur votre ordinateur.",
       "pasteCodePlaceholder": "orca://pair?code=... ou collez le code",
       "pasteCodeTitle": "Coller le code d'appairage",
-      "pasteInstead": "Coller plutôt le code",
-      "pastePairingCode": "Coller le code d'appairage",
-      "scanCodeStep": "Scannez le QR code",
-      "title": "Appairer un ordinateur",
-      "tryAgain": "Réessayer",
-      "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau.",
       "runtimeAccessLink": "Ce lien est destiné à une autre app Orca. Scannez le code dans Paramètres → Mobile sur votre ordinateur, ou exécutez orca pair --mobile sur votre serveur."
     },
     "terminalSettings": {
-      "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "leaveAppDescription": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à votre écran. Lorsque vous fermez l'application ou la mettez en arrière-plan, ce paramètre détermine s'il conserve la taille du téléphone (pour éviter que les outils CLI interactifs ne réorganisent leur affichage) ou reprend sa taille sur l'ordinateur. Vous pouvez à tout moment utiliser « Restaurer » dans la bannière sur l'ordinateur pour le redimensionner manuellement.",
-      "leaveAppHeading": "LORSQUE VOUS QUITTEZ L'APPLICATION",
-      "noPairedDesktops": "Aucun ordinateur appairé pour le moment. Appairez-en un pour régler le comportement du terminal.",
+      "leaveAppHeading": "Lorsque vous quittez l'application",
       "restoreAfterMinutes_many": "Après {{count}} minutes",
       "restoreAfterMinutes_one": "Après {{count}} minute",
       "restoreAfterMinutes_other": "Après {{count}} minutes",
       "restoreAfterSeconds_many": "Après {{count}} s",
       "restoreAfterSeconds_one": "Après {{count}} s",
       "restoreAfterSeconds_other": "Après {{count}} s",
-      "restoreHost": "Restaurer {{name}}",
       "previewColumns_many": "{{count}} colonnes",
       "previewColumns_one": "{{count}} colonne",
       "previewColumns_other": "{{count}} colonnes",
       "previewLabel": "Aperçu du terminal",
-      "previewHeading": "APERÇU",
-      "fontHeading": "POLICE",
-      "fontDescription": "Pincez dans un terminal pour modifier la taille ; elle est enregistrée ici. Ne modifie que cet appareil, pas le terminal de l'ordinateur.",
       "font": "Police",
       "size": "Taille",
       "sizePoints": "{{size}} pt",
-      "smaller": "Plus petit",
-      "larger": "Plus grand",
       "lineSpacing": "Interligne",
       "lineSpacingTight": "Serré",
       "lineSpacingNormal": "Normal",
@@ -211,22 +224,15 @@
     },
     "paneView": {
       "forward": "Suivant",
-      "keyboardPlaceholder": "Saisir du texte sur la page…",
       "reload": "Recharger",
-      "sendText": "Envoyer le texte au navigateur",
       "dialogTitleWithOrigin": "{{origin}} indique",
       "dialogTitleNoOrigin": "Cette page indique",
-      "dialogAnswer": "Réponse",
       "stop": "Arrêter",
       "reconnect": "Reconnecter"
     },
-    "pointerModifiers": {
-      "clickModifier": "Modificateur de clic {{key}}"
-    },
     "useBrowserCommands": {
       "deliveryUnconfirmed": "Envoi non confirmé — vérifiez la page avant de réessayer",
-      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page.",
-      "sent": "Envoyé"
+      "dialogAnswerFailed": "Cette réponse n'est pas parvenue à la page."
     },
     "stream": {
       "updateApp": "Mettez à jour l'app Orca pour diffuser ici les onglets du navigateur.",
@@ -235,10 +241,6 @@
       "pageUnavailable": "La page du navigateur n'est pas encore disponible.",
       "timedOut": "Délai de diffusion du navigateur dépassé.",
       "stopped": "Diffusion arrêtée"
-    },
-    "viewModeSwitch": {
-      "mobileView": "Afficher la version mobile du site",
-      "webView": "Afficher la version pour ordinateur du site"
     },
     "loadFailure": {
       "retry": "Réessayer",
@@ -293,9 +295,17 @@
   },
   "chat": {
     "ask": {
+      "send": "Envoyer",
+      "notNow": "Pas maintenant",
       "answerPlaceholder": "Saisissez votre réponse",
+      "optionPreview": "Aperçu de {{option}}",
+      "previewPosition": "{{current}} sur {{total}}",
+      "chosen": "Choisi",
+      "chooseThis": "Choisir",
+      "viewPreview": "Afficher",
       "next": "Suivant",
       "other": "Autre…",
+      "recommended": "Recommandé",
       "skip": "Ignorer",
       "step": "Étape {{step}}"
     },
@@ -309,7 +319,6 @@
       "addToMessage": "Ajouter au message",
       "attachImage": "Joindre une image",
       "cancelEditing": "Annuler la modification",
-      "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "saveEditedMessage": "Enregistrer le message modifié",
       "sendMessage": "Envoyer le message",
       "sendQueue": "Mettre en file d’attente",
@@ -319,21 +328,18 @@
       "sendSteerHint": "S’ajoute à ce que l’agent fait en ce moment"
     },
     "contextUsage": {
-      "label": "Contexte : {{used}} tokens sur {{window}}, {{percent}} % utilisés",
-      "title": "Contexte",
-      "estimated": "Estimation basée sur la dernière réponse.",
-      "deferredNote": "Chargé à la demande. Non compté dans le total utilisé."
+      "title": "Contexte"
     },
     "composerAttachments": {
       "attachedImage": "Image jointe",
       "file": "Fichier",
       "fileMeta": "{{type}} · {{size}}",
       "removeFile": "Retirer {{name}}",
+      "uploadingImage": "Envoi de l'image",
       "removeImage": "Retirer l'image",
       "uploadingFile": "Envoi de {{name}}"
     },
     "composerPlaceholder": {
-      "prompt": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",
       "waitingForTerminal": "En attente du terminal…"
     },
     "diffCard": {
@@ -349,9 +355,7 @@
     },
     "message": {
       "copyMessage": "Copier le message",
-      "forkFromResponse": "Créer une branche à partir de cette réponse",
-      "scrollMessageToTop": "Revenir au début du message",
-      "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
+      "forkFromResponse": "Créer une branche à partir de cette réponse"
     },
     "messageActionsSheet": {
       "clipboardRejected": "Le presse-papiers a refusé le texte.",
@@ -372,7 +376,9 @@
       "saveFailed": "Impossible d'enregistrer l'image",
       "shareFailed": "Impossible de partager l'image",
       "photosAccessDenied": "Autorisez Orca à ajouter des photos dans Réglages",
-      "imageTooLarge": "Cette image est trop volumineuse"
+      "imageTooLarge": "Cette image est trop volumineuse",
+      "previousImage": "Image précédente",
+      "nextImage": "Image suivante"
     },
     "nativeChatProse": {
       "attachedImage": "Image jointe",
@@ -381,10 +387,8 @@
     },
     "nativeChatToolLine": {
       "added": "A ajouté",
-      "copyCommand": "Copier la commande",
       "deleted": "A supprimé",
       "durationHours": "{{hours}} h {{minutes}} min {{seconds}} s",
-      "durationMilliseconds": "{{milliseconds}} ms",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
       "durationSeconds": "{{seconds}} s",
       "edited": "A modifié",
@@ -431,6 +435,7 @@
       "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
       "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
       "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+      "autoReviewDenied": "La revue automatique de {{agent}} a refusé : {{action}}",
       "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
@@ -453,6 +458,12 @@
     "interruptedContinue": {
       "failed": "Impossible de poursuivre cette conversation. Réessayez ou envoyez un message.",
       "explanation": "Continuez, et l'agent vérifiera d'abord si sa dernière étape s'est terminée."
+    },
+    "restartNote": {
+      "continued": "Orca a demandé à cet agent de poursuivre après un redémarrage. Votre propre message n'a pas été renvoyé.",
+      "refused": "Orca n'a pas pu poursuivre ce chat après le redémarrage. Envoyez un message pour le poursuivre.",
+      "unconfirmed": "Orca a demandé à cet agent de poursuivre après le redémarrage, mais n'a pas pu confirmer qu'il l'a fait. Vérifiez sa dernière réponse avant d'envoyer un autre message.",
+      "notConnected": "Orca n'a pas pu reconnecter ce chat après le redémarrage et n'a donc pas demandé à l'agent de poursuivre."
     },
     "sendError": {
       "dismiss": "Ignorer"
@@ -503,10 +514,28 @@
       "unavailable": "Réponse sélectionnée indisponible",
       "thisPhone": "ce téléphone",
       "computer": "l’ordinateur",
-      "otherDevice": "un autre appareil"
+      "otherDevice": "un autre appareil",
+      "questionCancelled": "Question annulée",
+      "youAnswered": "Vous avez répondu : <answer>{{answer}}</answer>",
+      "answeredCount_many": "Vous avez répondu à <answer>{{count}} questions</answer>",
+      "answeredCount_one": "Vous avez répondu à <answer>{{count}} question</answer>",
+      "answeredCount_other": "Vous avez répondu à <answer>{{count}} questions</answer>",
+      "answeredCount": "Vous avez répondu à <answer>{{count}} questions</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "Demande pour <tool>{{tool}}</tool> annulée",
+      "coordinatorAllowed": "Le coordinateur a autorisé <tool>{{tool}}</tool>",
+      "coordinatorDenied": "Le coordinateur a refusé <tool>{{tool}}</tool>",
+      "allowedUnnamed": "<tool>{{tool}}</tool> autorisé",
+      "deniedUnnamed": "<tool>{{tool}}</tool> refusé",
+      "youAllowed": "Vous avez autorisé <tool>{{tool}}</tool>",
+      "youAllowedForSession": "Vous avez autorisé <tool>{{tool}}</tool> pour cette session",
+      "youDenied": "Vous avez refusé <tool>{{tool}}</tool>",
+      "youAnswered": "Vous avez répondu à <tool>{{tool}}</tool> : <answer>{{answer}}</answer>"
     },
     "sessionOptionCopy": {
       "none": "Aucun",
+      "ultracode": "Ultracode",
       "availableAfterSessionStarts": "Disponible après le démarrage de la session.",
       "chooseInAgentPicker": "Choisir dans le sélecteur d'agents…",
       "effort": "Effort",
@@ -525,6 +554,11 @@
       "on": "Activé",
       "permissions": "Autorisations",
       "sessionOptions": "Options de session",
+      "permissionAppliesNextMessage": "{{saved}} s'applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · prochain message",
+      "permissionAppliesNextMessageTiming": "S'applique au prochain message · actuel : {{active}}",
+      "modelsLoading": "Chargement des modèles…",
+      "signInForModels": "Connectez-vous pour voir les modèles utilisables.",
       "setWhenSessionStarts": "Défini au démarrage de la session.",
       "speed": "Vitesse",
       "standard": "Standard",
@@ -535,12 +569,13 @@
       "xhighShort": "Extra"
     },
     "sessionOptionPickers": {
-      "agentWorking": "L'agent travaille",
-      "backToModels": "Retour aux modèles",
       "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé",
       "modelFullAccessLabel": "Modèle, {{value}}, accès complet",
       "modelLabel": "Modèle, {{value}}",
       "permissions": "Autorisations",
+      "applying": "Application en cours…",
+      "onAttach": "S'applique quand le chat se connecte",
+      "heldPickRefused": "{{picked}} n'est pas disponible dans ce chat. {{kept}} est conservé.",
       "permissionsLabel": "Autorisations, {{value}}",
       "settingsLocked": "Les paramètres du modèle seront déverrouillés à la fin de ce tour.",
       "workingAnnouncement": "L'agent travaille. Les paramètres du modèle seront déverrouillés à la fin de ce tour."
@@ -550,9 +585,6 @@
       "notReportedMarker": "Non communiqué",
       "moreModels": "Plus de modèles",
       "fewerModels": "Moins de modèles"
-    },
-    "sessionOptionSegments": {
-      "dispatchUnconfirmed": "Envoyé à l'agent — non confirmé"
     },
     "stopButton": {
       "stopAgent": "Arrêter l'agent",
@@ -779,7 +811,11 @@
       "collapse": "Masquer l'objectif complet",
       "attachmentsUnsupported": "Supprimez les pièces jointes avant de définir un objectif.",
       "pause": "Mettre en pause",
-      "resume": "Reprendre"
+      "resume": "Reprendre",
+      "checks_many": "{{count}} vérifications",
+      "checks_one": "{{count}} vérification",
+      "checks_other": "{{count}} vérifications",
+      "last-check": "Dernière vérification de l'objectif"
     },
     "rewind": {
       "title": "Revenir ici ?",
@@ -800,6 +836,15 @@
       "timeout": "Le chat ne s'est pas actualisé après le retour à ce message. Rouvrez-le pour voir les derniers échanges.",
       "pending": "Attendez que la conversation revienne au message antérieur."
     },
+    "urlRequest": {
+      "title": "Connexion demandée",
+      "open": "Ouvrir la page de connexion",
+      "decline": "Refuser",
+      "opened": "Page de connexion ouverte dans votre navigateur.",
+      "openAgain": "Rouvrir",
+      "finished": "Connexion effectuée",
+      "finishedWith": "Connexion effectuée · {{message}}"
+    },
     "fork": {
       "busy": "Une autre conversation ou un terminal s’ouvre. Patientez, puis créez à nouveau une branche de la conversation {{agent}}.",
       "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
@@ -812,8 +857,305 @@
       "action": "Citer",
       "hint": "Ajoute le texte sélectionné au message sous forme de citation"
     },
+    "botCards": {
+      "request": {
+        "pairedComputer": "Ordinateur appairé",
+        "notConnected": "N’était pas connecté",
+        "declined": "Refusé",
+        "waitingOn": "En attente d’approbation sur {{computer}}"
+      },
+      "offer": {
+        "openBot": "Ouvrir {{name}}",
+        "notNow": "Pas maintenant",
+        "heading": "Nouveau bot"
+      },
+      "toolAdded": {
+        "added": "Ajouté"
+      },
+      "memory": {
+        "openMemory": "Ouvrir la mémoire"
+      },
+      "google": {
+        "ended": "Cette configuration Google est terminée.",
+        "receipt": {
+          "change": "Modifier",
+          "dismissed": "✓ Ignoré",
+          "imported": "✓ Vous avez ajouté le fichier de votre équipe",
+          "chose": "✓ Choix : {{what}}",
+          "signedInAs": "✓ Connecté en tant que {{email}}",
+          "signedIn": "✓ Connecté",
+          "done": "✓ Terminé",
+          "takeOver": "✓ {{bot}} prend le relais",
+          "stopped": "Configuration arrêtée"
+        },
+        "heading": "Connecter Google",
+        "path": {
+          "title": "Comment effectuer la configuration ?",
+          "why": "Vous créez votre propre app Google : votre connexion reste donc sur votre ordinateur.",
+          "doIt": "Le faire pour moi",
+          "guideHere": "Me guider ici",
+          "guideBrowser": "Me guider dans mon navigateur",
+          "doItNote": "{{bot}} fait les clics à votre place",
+          "guideHereNote": "Vous cliquez, dans Orca",
+          "guideBrowserNote": "Vous cliquez, dans votre navigateur"
+        },
+        "notNow": "Pas maintenant",
+        "progress": {
+          "heading": "Configuration de Google",
+          "done": "Terminé",
+          "waiting": "En attente de votre action",
+          "working": "En cours",
+          "stopped": "Arrêtée",
+          "doneCount": "Étapes terminées : {{count}}",
+          "more": "+ {{count}} étapes de plus"
+        },
+        "account": {
+          "title": "Quel compte Google dois-je utiliser ?",
+          "personal": "Compte personnel",
+          "work": "Compte professionnel",
+          "note": "Chaque page Google Cloud s’ouvre avec le compte que vous choisissez."
+        },
+        "services": {
+          "title": "Quels services Google dois-je utiliser ?",
+          "note": "Avec n’importe lequel, je peux trouver des personnes par leur nom. Vous pourrez en ajouter d’autres plus tard."
+        },
+        "continue": "Continuer",
+        "connect": {
+          "titleAccount": "Se connecter pour relier {{email}}",
+          "title": "Se connecter pour relier le compte",
+          "onComputer": "Connectez-vous à Google dans Orca sur votre ordinateur.",
+          "signIn": "Se connecter à Google"
+        },
+        "movedDown": "La suite est plus bas.",
+        "connected": {
+          "heading": "Google connecté",
+          "canUse": "{{bot}} peut utiliser {{services}}."
+        },
+        "copied": "Copié. Envoyez-le à votre administrateur Google.",
+        "action": {
+          "onComputer": "Pour « {{action}} », utilisez Orca sur votre ordinateur.",
+          "makeNewKey": "Créer une nouvelle clé",
+          "importKey": "Importer un fichier de clé",
+          "allow": "Autoriser {{services}}",
+          "signInAgain": "Se reconnecter",
+          "continueWithout": "Continuer sans eux",
+          "keep": "Garder {{email}}",
+          "signInAs": "Se connecter en tant que {{email}}",
+          "turnOn": "Activer",
+          "copyForAdmin": "Copier pour votre administrateur",
+          "checkAgain": "Revérifier",
+          "continue": "Continuer",
+          "startOver": "Recommencer"
+        },
+        "otherAccount": "Changer de compte",
+        "letMe": "Je m’occupe de cette étape",
+        "step": {
+          "headingCount": "À vous · {{n}} sur {{total}}",
+          "watching": "Surveillance de la page",
+          "onComputer": "Faites-le dans Google Cloud sur votre ordinateur.",
+          "account": "Se connecter à Google",
+          "project": "Créer un projet",
+          "apis": "Activer {{services}}",
+          "branding": "Configurer l’écran de connexion de Google",
+          "links": "Ajouter les liens de votre app",
+          "publish": "Publier l’app",
+          "client": "Créer la clé de l’app",
+          "connect": "Connecter et vérifier"
+        },
+        "done": "Terminé",
+        "takeOver": "Confier la suite",
+        "choice": {
+          "gmail": "Gmail",
+          "calendar": "Agenda",
+          "files": "Drive, Docs et Sheets",
+          "gmailDescription": "Rechercher et lire des e-mails, rédiger des brouillons, envoyer quand vous le demandez",
+          "calendarDescription": "Voir, créer et déplacer des événements",
+          "filesDescription": "Trouver, lire et modifier des fichiers"
+        },
+        "notes": {
+          "project": {
+            "account": "Vérifiez que le compte en haut à droite est bien celui que vous voulez.",
+            "create": "Cliquez sur <b>Créer</b>. Le nom n’a pas d’importance."
+          },
+          "apis": {
+            "project": "Vérifiez que le projet en haut est bien celui que vous venez de créer.",
+            "enable": "Cliquez sur <b>Suivant</b>, puis sur <b>Activer</b>."
+          },
+          "branding": {
+            "start": "Cliquez sur <b>Commencer</b>.",
+            "name": "Nom de l’application : <b>Orca</b>, et votre adresse e-mail comme adresse d’assistance.",
+            "external": "Audience : <b>Externe</b>.",
+            "internal": "Audience : <b>Interne</b>.",
+            "either": "Audience : <b>Externe</b> pour un compte Gmail, <b>Interne</b> pour un compte professionnel.",
+            "contact": "Votre adresse e-mail comme adresse de contact.",
+            "agree": "Cochez <b>J’accepte le Règlement sur les données utilisateur dans les services d’API Google</b>, puis cliquez sur <b>Créer</b>."
+          },
+          "links": {
+            "domain": "Sous <b>Domaine de l’application</b>, collez les liens de la page d’accueil et des règles de confidentialité.",
+            "authorized": "Sous <b>Domaines autorisés</b>, ajoutez le domaine.",
+            "save": "Cliquez sur <b>Enregistrer</b>."
+          },
+          "publish": {
+            "publish": "Cliquez sur <b>Publier l’application</b>, puis sur <b>Confirmer</b>.",
+            "why": "Une app publiée vous garde connecté au-delà de 7 jours."
+          },
+          "client": {
+            "type": "Type d’application : <b>Application de bureau</b>, puis <b>Créer</b>.",
+            "agent": "Si vous voyez <b>Utiliser ce client pour un agent basé sur l’IA</b>, cochez-le.",
+            "download": "Cliquez sur <b>Télécharger le fichier JSON</b>. Orca enregistre la clé."
+          }
+        },
+        "blocker": {
+          "stoppedWhy": "Configuration arrêtée : {{reason}}",
+          "stopped": "Configuration arrêtée.",
+          "paused": "La configuration s’est mise en pause à l’étape « {{step}} ». Tout ce qui a été fait est enregistré.",
+          "yourTurn": "À vous : {{step}}.",
+          "noKey": "Orca a d’abord besoin de la clé de l’app.",
+          "keyGone": "La clé de cette app ne fonctionne plus : elle a été supprimée dans Google Cloud.",
+          "keyOtherProject": "La clé enregistrée est pour le projet {{keyProject}}, pas {{project}}.",
+          "otherAccount": "Vous vous êtes connecté en tant que {{signedIn}} ; cette configuration était pour {{wanted}}.",
+          "signedOut": "La connexion de {{email}} a pris fin.",
+          "needsPermission": "Presque terminé : autorisez {{services}}. Google affiche une case pour chacun ; cochez-les toutes.",
+          "apiOff": "Désactivé dans Google Cloud : {{services}}.",
+          "adminBlocked": "L’administrateur Google de votre entreprise a bloqué {{services}}.",
+          "checkFailed": "Orca n’a pas pu vérifier {{services}}."
+        },
+        "ownerStep": "Étape {{step}} sur 3",
+        "adminRequest": "Veuillez définir cette app Google comme « Fiable » dans la console d’administration (Sécurité › Commandes des API › Gérer l’accès des applications tierces) : {{clientId}}"
+      },
+      "importDone": {
+        "heading": "Import terminé",
+        "title": "{{name}} a été importé depuis {{app}}",
+        "open": "Ouvrir",
+        "stayed": "Toujours dans {{app}} : {{things}}. Rien n’a été modifié dans {{app}}.",
+        "unchanged": "Rien n’a été modifié dans {{app}}.",
+        "paused": "Les automatisations sont en pause pour que rien ne s’exécute deux fois. Activez-les une fois l’ancien bot désactivé dans {{app}}.",
+        "soulOnComputer": "Ouvrez l’âme et la mémoire dans Orca sur votre ordinateur."
+      },
+      "importPlan": {
+        "comes": "À importer",
+        "changed": "À importer avec des modifications",
+        "already": "Déjà présent",
+        "stays": "Reste dans {{app}}",
+        "fromAgain": "Depuis {{app}}, à nouveau",
+        "from": "Depuis {{app}}",
+        "selected": "{{chosen}} sur {{total}} sélectionnés · les clés et identifiants de connexion ne sont jamais copiés",
+        "importOne": "Importer 1 élément",
+        "importMany": "Importer {{count}} éléments",
+        "askedOne": "Import de 1 élément demandé",
+        "askedMany": "Import de {{count}} éléments demandé"
+      },
+      "composio": {
+        "heading": "Composio",
+        "step": "Étape {{index}} sur {{total}}",
+        "setUpTitle": "{{app}} nécessite une configuration unique dans Composio",
+        "setUpDeveloperApp": "Créez une app de développeur sur le site développeur de {{app}}. La page {{app}} de Composio explique comment faire.",
+        "setUpAuthConfig": "Dans Composio, ouvrez Auth Configs, ajoutez-en une pour {{app}} et collez les clés de votre app de développeur.",
+        "setUpCheckAgain": "Revenez ici et choisissez Revérifier.",
+        "setUpNotYet": "Composio n’a pas encore d’Auth Config pour {{app}}.",
+        "openAuthConfigs": "Ouvrir Auth Configs",
+        "appGuide": "Page {{app}}",
+        "checkAgain": "Revérifier",
+        "connectTitle": "Connecter {{app}}",
+        "connecting": "En attente de la fin de votre connexion dans le navigateur",
+        "connectKeyNote": "Ouvre Composio pour saisir votre clé API {{app}}. Composio la conserve, pas Orca.",
+        "connectNote": "Ouvre la connexion à {{app}} depuis Composio dans votre navigateur. Composio conserve cette connexion, pas Orca.",
+        "signInOnComposio": "Connectez-vous à {{app}} sur la page de Composio.",
+        "openAgain": "Rouvrir",
+        "cancel": "Annuler",
+        "keyFirst": "Ajoutez d’abord votre clé Composio.",
+        "connect": "Connecter {{app}}",
+        "byHandCopy": "Copiez l’adresse de {{bot}}.",
+        "byHandPaste": "Dans Composio, ouvrez les paramètres de votre projet, puis Webhooks, et collez-la.",
+        "byHandOpen": "Ouvrir Composio",
+        "byHandDone": "Terminé",
+        "byHandDoneNote": "Orca active ensuite {{trigger}} et enregistre le secret de signature de Composio.",
+        "eventsTitle": "Faire appeler {{bot}} par Composio sur {{trigger}}",
+        "eventsReplaceNote": "Votre projet Composio envoie déjà ses événements à une autre adresse. Cette configuration les envoie ici à la place, et cette adresse ne les reçoit plus.",
+        "eventsOneAddressNote": "Orca active {{trigger}} pour votre connexion. Les événements de votre projet Composio arrivent dans Orca à une seule adresse, et chacun est transmis au bot concerné.",
+        "eventsDone": "✓ Configuré",
+        "eventsChosenByHand": "Configuration dans Composio",
+        "eventsReplace": "Remplacer et configurer",
+        "eventsSetUp": "Configurer",
+        "eventsByHand": "Configuration manuelle",
+        "keyAdded": "✓ Clé ajoutée",
+        "declined": "Ignoré",
+        "keyRejectedTitle": "Remplacer votre clé Composio",
+        "keyTitle": "Ajouter votre clé Composio",
+        "keyRejectedNote": "Composio n’accepte plus la clé enregistrée. Créez-en une nouvelle dans Composio, sous Settings, API Keys.",
+        "keyLabel": "Clé API Composio",
+        "keyPlaceholder": "Collez votre clé",
+        "keyPurposeOnHost": "Votre clé de projet Composio permet aux bots de {{host}} d’utiliser les apps que vous connectez dans Composio. Elle reste sur {{host}} ; les bots ne la voient jamais.",
+        "keyPurpose": "Votre clé de projet Composio permet à vos bots d’utiliser les apps que vous connectez dans Composio. Elle reste sur votre ordinateur ; les bots ne la voient jamais.",
+        "checking": "Vérification…",
+        "replaceKey": "Remplacer la clé",
+        "addKey": "Ajouter la clé",
+        "getKey": "Obtenir une clé",
+        "dismiss": "Ignorer",
+        "goneHeading": "Configuration requise",
+        "ready": "Prêt",
+        "goneTitle": "{{bot}} ne peut plus utiliser {{app}}",
+        "readyTitle": "{{bot}} peut désormais utiliser {{app}}",
+        "goneDetail": "Reconfigurez-la depuis les Outils du bot.",
+        "readyAs": "En tant que {{label}}. Vos connexions aux apps sont conservées par Composio.",
+        "custody": "Vos connexions aux apps sont conservées par Composio.",
+        "browseOnComputer": "Parcourez d’autres apps depuis les Outils du bot dans Orca sur votre ordinateur.",
+        "browse": "Parcourir d’autres apps"
+      },
+      "webhookSetup": {
+        "heading": "Configurer un webhook",
+        "on": "Activé",
+        "hint": "Faites pointer votre service vers cette URL",
+        "gettingUrl": "Récupération de l’URL…",
+        "keyAndSecret": "Clé et secret de signature",
+        "headerKey": "Clé d’en-tête",
+        "copy": "Copier",
+        "signingSecret": "Secret de signature",
+        "noSecret": "Aucun",
+        "sampleCall": "Appel d’exemple",
+        "sampleNote": "Lance une vraie exécution",
+        "send": "Envoyer",
+        "copiedReceipt": "✓ URL copiée"
+      }
+    },
+    "eventRow": {
+      "running": "En cours",
+      "failed": "Échec"
+    },
+    "workerApproval": {
+      "allowFor": "Autoriser {{tool}} pour {{worker}} ?",
+      "title": "{{worker}} · {{title}}",
+      "allow": "Autoriser",
+      "deny": "Refuser",
+      "waiting": "{{count}} workers en attente · les plus anciens d'abord",
+      "countdown": "Claude refuse automatiquement dans {{time}} si personne ne répond.",
+      "openWorker": "Ouvrir le worker",
+      "record": {
+        "youAllowedFor": "Vous avez autorisé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "youDeniedFor": "Vous avez refusé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "coordinatorAllowed": "Le coordinateur a autorisé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "coordinatorDenied": "Le coordinateur a refusé <tool>{{tool}}</tool> pour <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> autorisé dans son terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> refusé dans son terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> pour <task>{{task}}</task> autorisé dans son chat",
+        "deniedInChat": "<tool>{{tool}}</tool> pour <task>{{task}}</task> refusé dans son chat",
+        "timedOut": "<tool>{{tool}}</tool> pour <task>{{task}}</task> expiré",
+        "waitsInTerminal": "<tool>{{tool}}</tool> pour <task>{{task}}</task> attend dans son terminal",
+        "workerEnded": "<tool>{{tool}}</tool> pour <task>{{task}}</task> clos : le worker s'est terminé",
+        "closedUnnamed": "<tool>{{tool}}</tool> pour <task>{{task}}</task> clos sans réponse enregistrée",
+        "reasonSentAsMessage": "Raison, envoyée sous forme de message",
+        "coordinatorReason": "Raison du coordinateur"
+      }
+    },
     "messageTime": {
       "yesterday": "Hier {{time}}"
+    },
+    "pairedServerAsk": {
+      "title": "{{from}} veut envoyer un message à {{to}} sur cet ordinateur",
+      "once": "Autoriser une fois",
+      "always": "Toujours autoriser {{server}}",
+      "deny": "Refuser",
+      "thisServer": "ce serveur"
     },
     "mcp": {
       "status": {
@@ -824,12 +1166,14 @@
         "finishOnPage": "Terminez sur la page qui s’est ouverte",
         "needsAuth": "Connexion requise",
         "needsAuthAfterSend": "Connexion requise. Envoyez un message pour vous connecter ici.",
-        "off": "Désactivé",
+        "disabled": "Désactivé",
         "pending": "Connexion…",
         "tools_many": "{{count}} outils",
         "tools_one": "{{count}} outil",
         "tools_other": "{{count}} outils",
-        "waitingForSignIn": "En attente de connexion…"
+        "waitingForSignIn": "En attente de connexion…",
+        "orcaRemoved": "Supprimé : redémarre au prochain message",
+        "orcaChanged": "Modifié : redémarre au prochain message"
       },
       "source": {
         "project": "Projet",
@@ -861,10 +1205,32 @@
         "failed": "Échecs : {{count}}",
         "needsAuth_many": "{{count}} connexions requises"
       },
-      "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici."
+      "pasteHint": "Lorsque le navigateur arrive sur une page qui ne se charge pas, copiez son adresse et collez-la ici.",
+      "manage": "Gérer les serveurs MCP",
+      "stillFailing": "Échoue toujours après la reconnexion."
     },
     "agentMessage": {
+      "open": "Ouvrir {{name}}",
+      "row": {
+        "started": "Démarré",
+        "forItems": "pour",
+        "reopened": "Rouvert",
+        "followedUp": "Suivi envoyé à",
+        "handedOff": "Transféré à",
+        "task": "Tâche envoyée par",
+        "update": "Mise à jour envoyée par",
+        "message": "Message envoyé par",
+        "notSentYet": "pas encore envoyé"
+      },
+      "kind": {
+        "started": "Démarré",
+        "reopened": "Rouvert",
+        "followedUp": "Suivi",
+        "handedOff": "Transféré",
+        "task": "Tâche"
+      },
       "unnamedRecipient": "un agent",
+      "recipientName": "{{name}}",
       "event": {
         "followedUp": "Suivi envoyé",
         "update": "Mise à jour",
@@ -930,12 +1296,8 @@
       "monitoring": "Surveillance des tâches en arrière-plan",
       "unverifiable": "Aucune mise à jour récente"
     },
-    "authFailedBanner": {
-      "message": "Échec de l'authentification — essayez d'abord de vous reconnecter ; si l'échec persiste, recommencez l'appairage depuis votre ordinateur."
-    },
     "authFailedBannerActions": {
-      "repair": "Appairer à nouveau",
-      "webNote": "Reconnectez cet hôte ou supprimez-le depuis l'application Orca."
+      "repair": "Appairer à nouveau"
     },
     "codexResetCredit": {
       "alreadyAppliedTitle": "Réinitialisation déjà appliquée",
@@ -973,25 +1335,13 @@
     },
     "customKeyModal": {
       "add": "Ajouter",
-      "addShortcut": "Ajouter un raccourci",
-      "command": "Commande",
       "commandPlaceholder": "Ex. : pnpm build",
       "editing": "Édition",
       "function": "Fonction",
       "key": "Touche",
-      "label": "Libellé",
-      "labelPlaceholder": "Ex. : Compilation",
-      "manageShortcuts": "Gérer les raccourcis",
-      "manageShortcutsHint": "Afficher, masquer ou réordonner les touches de raccourci",
-      "modifiers": "Modificateurs",
-      "moreKeys": "PLUS DE TOUCHES",
       "navigation": "Navigation",
-      "pickKey": "Choisir une touche",
       "pressEnter": "Appuyer sur Entrée",
-      "shortcutCombo": "Combinaison de touches",
-      "shortcutComboHint": "Créer des combinaisons avec Ctrl, Alt et Shift",
-      "textMacro": "Macro de texte",
-      "textMacroHint": "Envoyer une commande texte personnalisée"
+      "labelPlaceholder": "Ex. : Compilation"
     },
     "dictationSetupSheet": {
       "description": "Téléchargez ou choisissez un modèle et activez la dictée sur l'ordinateur appairé, le tout depuis cet écran.",
@@ -1033,8 +1383,6 @@
       "tooLargeMessage": "Ce diff est trop volumineux pour l'aperçu sur mobile."
     },
     "diffReviewDrawers": {
-      "addNote": "Ajouter une note",
-      "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
       "copyNotes": "Copier les notes",
       "deleteNote": "Supprimer la note",
@@ -1043,12 +1391,10 @@
       "discardTitle": "Abandonner les modifications",
       "editNote": "Modifier la note",
       "fileNote": "Note sur le fichier",
-      "lineNumber": "Ligne {{lineNumber}}",
       "loadingSessions": "Chargement des sessions d'agent…",
       "newAgentSession": "Nouvelle session d'agent",
       "openInSession": "Ouvrir dans une session",
       "reviewNote": "Note de revue",
-      "saveLineNote": "Enregistrer la note sur la ligne {{lineNumber}}",
       "sendNotes": "Envoyer les notes",
       "sendNotesLabel": "Envoyer les notes à l'agent",
       "viewedFiles_many": "{{count}} fichiers consultés",
@@ -1064,10 +1410,7 @@
       "discardChanges": "Abandonner les modifications",
       "rangeLine": "Ligne {{line}}",
       "rangeLines": "Lignes {{startLine}}–{{line}}",
-      "sendToAgent": "Envoyer à {{agent}}",
-      "sendToAnAgent": "Envoyer à un agent",
       "rangePlaceholder": "Que faut-il changer ici ?",
-      "commentOnGitHub": "Commenter sur GitHub",
       "sendUnsentNotes": "Envoyer les notes non envoyées",
       "statusUnreadable": "Impossible de lire l'état de cet hôte. Nouvelle tentative…",
       "terminal": "Terminal",
@@ -1102,7 +1445,6 @@
       "title": "Modifications"
     },
     "diffReviewLine": {
-      "addNoteOnLine": "Ajouter une note à la ligne {{number}}",
       "addedLine": "Ligne ajoutée",
       "addedLineNumber": "Ligne {{number}} ajoutée",
       "contextLine": "Ligne de contexte",
@@ -1125,13 +1467,9 @@
       "openHost": "Ouvrir {{title}}",
       "pairingInvalid": "Appairage invalide",
       "pairingTemporarilyUnavailable": "Appairage temporairement indisponible",
-      "repairHint": "Touchez pour appairer à nouveau votre ordinateur.",
-      "sameNetworkOnlyHint": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau",
       "unlockHint": "Déverrouillez votre téléphone, puis touchez pour réessayer.",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité"
-    },
-    "hostDiagnosticsLink": {
-      "viewDiagnostics": "Voir les diagnostics réseau"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} en activité",
+      "tapToPairAgain": "Touchez pour appairer à nouveau votre ordinateur."
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Vérification de la compatibilité de l'hôte"
@@ -1190,11 +1528,9 @@
       "agent": "Agent",
       "connectTarget": "Se connecter à la cible",
       "options": "Options",
-      "createWorkspace": "Créer un espace de travail",
       "startFrom": "À partir de",
       "loadingProjects": "Chargement des projets…",
       "connectTargetFirst": "Connectez-vous d'abord à la cible",
-      "createWorktree": "Créer un worktree",
       "noProjectsFound": "Aucun projet trouvé",
       "note": "Note",
       "notePlaceholder": "Écrire une note",
@@ -1246,14 +1582,10 @@
       "linkUrl": "URL du lien"
     },
     "richMarkdownToolbar": {
-      "body": "Corps de texte",
       "bold": "Gras",
       "bulletList": "Liste à puces",
       "checklist": "Liste de tâches",
       "codeBlock": "Bloc de code",
-      "heading1": "H1",
-      "heading2": "H2",
-      "heading3": "H3",
       "image": "Image",
       "inlineCode": "Code en ligne",
       "italic": "Italique",
@@ -1326,19 +1658,10 @@
       "failed": "Échec"
     },
     "terminalShortcutSettings": {
-      "addDescription": "Créer une combinaison de touches ou une macro de texte",
-      "addShortcut": "Ajouter un raccourci personnalisé…",
-      "customShortcuts": "RACCOURCIS PERSONNALISÉS",
-      "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
-      "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
-      "moreKeys": "PLUS DE TOUCHES",
-      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
-      "directionPad": "PAVÉ DIRECTIONNEL",
+      "moreKeys": "Plus de touches",
       "showDirectionPad": "Afficher le pavé directionnel",
-      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
-      "showShortcut": "Afficher le raccourci {{label}}"
+      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées."
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",
@@ -1357,13 +1680,10 @@
     "voiceModelList": {
       "deleteModel": "Supprimer {{label}}",
       "downloadModel": "Télécharger {{label}}",
-      "inUse": "Utilisé",
       "modelExtracting": "{{size}} · extraction…",
       "modelProgress": "{{size}} · {{progress}} %",
       "modelSize": "{{size}} Mo",
-      "recommended": "Recommandé",
-      "use": "Utiliser",
-      "useModel": "Utiliser {{label}}"
+      "recommended": "Recommandé"
     },
     "workspaceDetailPlaceholder": {
       "description": "Choisissez un espace de travail dans la barre latérale pour ouvrir son terminal ici.",
@@ -1426,15 +1746,34 @@
     },
     "native-chat": {
       "turnDiff": {
-        "changedFiles_many": "{{count}} fichiers modifiés",
-        "changedFiles_one": "{{count}} fichier modifié",
-        "changedFiles_other": "{{count}} fichiers modifiés",
+        "changed_many": "{{count}} fichiers modifiés",
+        "changed_one": "{{count}} fichier modifié",
+        "changed_other": "{{count}} fichiers modifiés",
         "partial": "Diff partiel",
         "showMoreFiles": "Afficher {{count}} de plus"
       },
       "composer": {
         "planMode": "Planifier",
-        "exitPlanMode": "Quitter le mode plan"
+        "exitPlanMode": "Quitter le mode plan",
+        "botChats": "Chats",
+        "backToBots": "Retour aux bots",
+        "loadingBotChats": "Chargement des chats du bot {{name}}…",
+        "noOtherChats": "Aucun autre chat",
+        "noMatchingChats": "Aucun chat correspondant",
+        "retryChats": "Réessayer",
+        "permissionAsk": "Demander l’approbation",
+        "permissionAcceptEdits": "Accepter les modifications",
+        "permissionAuto": "Approuver pour moi",
+        "permissionFullAccess": "Accès complet",
+        "permissionAskDescription": "Demande avant les modifications et commandes que vos réglages n'autorisent pas",
+        "permissionAskSharedDescription": "Demande avant les modifications ou commandes qui ne sont pas déjà autorisées",
+        "permissionAcceptEditsAntigravityDescription": "Approuve les modifications de fichiers ; demande pour le reste",
+        "permissionAcceptEditsDescription": "Approuve les modifications et commandes de fichiers ; demande pour le reste",
+        "permissionAutoDescription": "Examine les demandes d’approbation pour vous",
+        "permissionFullAccessCodexDescription": "Ne demande jamais ; peut modifier n’importe quel fichier et utiliser le réseau",
+        "permissionFullAccessDescription": "Ne demande jamais avant les modifications ou les commandes",
+        "permissionAgentSettings": "Paramètres de {{agent}}",
+        "permissionFromAgentSettings": "{{mode}}, d’après les paramètres de {{agent}}"
       },
       "goal": {
         "sentAsGoal": "Envoyé comme objectif"
@@ -1450,8 +1789,15 @@
         "noAccess": "aucun accès",
         "earlierMessages_many": "{{count}} messages précédents dans le fil",
         "earlierMessages_one": "{{count}} message précédent dans le fil",
-        "earlierMessages_other": "{{count}} messages précédents dans le fil"
+        "earlierMessages_other": "{{count}} messages précédents dans le fil",
+        "via": "{{name}} via {{bot}}"
       },
+      "slackMirror": {
+        "retry": "Réessayer",
+        "switch": "Publier ce chat dans Slack",
+        "delete": "Supprimer de Slack"
+      },
+      "dismissDeliveryNotice": "Ignorer",
       "typedBy": {
         "anotherComputer": "un autre ordinateur",
         "fromVia": "De {{name}} via {{computer}}",
@@ -1566,23 +1912,13 @@
   },
   "diagnostics": {
     "connectionDiagnosticsView": {
-      "authFailed": "échec de l'authentification",
-      "connected": "connecté",
-      "connecting": "connexion en cours",
       "copyReport": "Copier le rapport",
-      "diagnosisHeading": "Cause probable",
-      "disconnected": "déconnecté",
-      "handshaking": "négociation en cours",
       "noEvents": "Aucun événement de connexion pour le moment. Les événements s'affichent lorsque l'application tente de se connecter à cet hôte.",
       "noHosts": "Aucun hôte appairé.",
-      "privacyHint": "Envoie un rapport expurgé de taille limitée contenant le nom de l'hôte, le point de terminaison, les versions, l'état de la connexion et les événements — jamais le contenu des terminaux ni les identifiants de connexion.",
-      "reconnecting": "reconnexion en cours",
       "retrySending": "Réessayer l'envoi",
-      "sendDiagnostics": "Envoyer les diagnostics",
       "sending": "Envoi…",
       "sent": "Diagnostics envoyés",
-      "stateWithAttempt": "{{state}} · tentative {{attempts}}",
-      "title": "Diagnostics réseau"
+      "stateWithAttempt": "{{state}} · tentative {{attempts}}"
     },
     "mobileWebBundleProbeRow": {
       "assets": "Ressources",
@@ -1603,14 +1939,11 @@
     "troubleshootCommonIssues": {
       "allowNotifications": "Vérifiez que les paramètres système autorisent les notifications Orca et que le mode Concentration ou Ne pas déranger est désactivé.",
       "checkTailnet": "Vérifiez que l'ordinateur n'est pas en veille et apparaît connecté à votre tailnet.",
-      "desktopTitle": "Application de bureau arrêtée",
       "disableVpn": "Désactivez ce VPN ou activez le routage fractionné / « Autoriser le LAN ».",
-      "firewallTitle": "Pare-feu bloquant le port {{port}}",
       "linuxFirewall": "Linux: sudo ufw allow {{port}}",
       "keepTailscaleOn": "Les adresses d'hôte comme 100.x.x.x ou *.ts.net passent par Tailscale — laissez-le ACTIVÉ.",
       "macosFirewall": "macOS : Réglages Système → Réseau → Pare-feu — autorisez Orca.",
       "notificationNetwork": "Essayez les données mobiles ou un autre réseau Wi-Fi. Si les alertes arrivent après ce changement, votre réseau retarde peut-être leur réception.",
-      "notificationsTitle": "Notifications push",
       "openDesktop": "Orca doit être ouvert sur votre ordinateur pour accepter les connexions.",
       "pairAfterUpdate": "Après une mise à jour, vous devrez peut-être refaire l'appairage via un QR code.",
       "reconnectWifi": "Essayez de reconnecter les deux appareils au WiFi.",
@@ -1621,22 +1954,14 @@
       "retryHost": "Revenez à la liste des hôtes et touchez votre hôte pour réessayer.",
       "sameNetwork": "Les deux appareils doivent être sur le même LAN (sauf s'ils sont connectés via Tailscale).",
       "sameSubnet": "Ethernet et le WiFi doivent utiliser le même sous-réseau.",
-      "tailscaleTitle": "Hôte Tailscale inaccessible",
-      "timeoutTitle": "Délai de connexion dépassé",
       "updateTailscale": "Mettez à jour l'application Tailscale — les versions récentes corrigent des bugs de reconnexion.",
       "vpnRouting": "Les VPN autres que Tailscale peuvent acheminer le trafic local via un serveur distant.",
-      "vpnTitle": "Interférences d'autres VPN",
       "wifiSignal": "Vérifiez la puissance du signal WiFi sur votre téléphone.",
-      "wifiTitle": "Réseaux WiFi différents",
       "windowsFirewall": "Windows : Pare-feu Windows Defender → Autoriser une application — autorisez Orca sur les réseaux privés."
     },
     "troubleshootView": {
       "commonIssues": "Problèmes courants",
-      "runAgain": "Relancer",
-      "runDiagnostics": "Lancer les diagnostics",
-      "running": "En cours…",
-      "title": "Dépannage",
-      "viewNetworkDiagnostics": "Voir les diagnostics réseau"
+      "title": "Dépannage"
     },
     "useTroubleshootDiagnostics": {
       "connected": "Connecté",
@@ -1779,9 +2104,6 @@
       "backToSession": "Retour à la session",
       "closeFiles": "Fermer les fichiers",
       "emptyState": "Aucun fichier trouvé",
-      "filterPlaceholder": "Filtrer les fichiers",
-      "noMatchesHint": "Seuls les dossiers que vous avez ouverts sont parcourus.",
-      "clearFilter": "Effacer le filtre",
       "loading": "Chargement des fichiers…",
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
@@ -1795,13 +2117,8 @@
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",
-      "searchAll": "Tout rechercher",
-      "searchAllIn": "Rechercher dans tout {{folder}}",
       "ignored": "Ignoré par .gitignore",
-      "searched": "{{loaded}} sur {{total}} parcourus dans {{folder}}.",
-      "searching": "Recherche dans {{folder}}… {{loaded}} sur {{total}}",
-      "showMore": "Afficher {{rows}} de plus",
-      "unavailable": "Indisponible sur mobile"
+      "showMore": "Afficher {{rows}} de plus"
     },
     "fileExplorerRowActions": {
       "copyName": "Copier le nom",
@@ -1892,52 +2209,33 @@
     },
     "automationsTab": {
       "connectDesktop": "Connectez {{desktop}} pour afficher et exécuter des automatisations.",
-      "createHint": "Touchez + pour planifier un agent.",
       "emptyTitle": "Planifier le travail des agents",
-      "lastStatus": "Dernière : {{status}}",
       "newAutomation": "Nouvelle automatisation",
-      "noAutomations": "Aucune automatisation pour l'instant",
-      "pairDesktop": "Appairez un ordinateur pour afficher et exécuter des automatisations.",
-      "paused": "En pause",
       "scheduled": "Planifiées",
       "showFor": "Afficher les automatisations de",
       "toggleFailed": "Impossible de mettre à jour {{name}}",
-      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations."
-    },
-    "emptyState": {
-      "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
-      "connectedTitle": "Vous êtes connecté",
-      "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
-      "pairDesktopButton": "Appairer un ordinateur",
-      "scanCodeBelowDescription": "Touchez « Appairer un ordinateur » ci-dessous, puis pointez votre caméra vers le QR code affiché à l'écran.",
-      "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
-      "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "scanCodeTitle": "Scanner le code",
-      "title": "Connectez votre ordinateur"
+      "updateDesktop": "Mettez à jour Orca sur {{desktop}} pour utiliser les automatisations.",
+      "pairComputer": "Appairez un ordinateur pour afficher et exécuter des automatisations."
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur"
+      "openTasksOn": "Ouvrir les tâches sur"
     },
     "listHeader": {
-      "desktopsHeading": "Ordinateurs"
+      "computersHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
-      "removeHostFailed": "Impossible de supprimer l'hôte",
-      "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
-      "removeHostTitle": "Supprimer l'hôte",
-      "tryAgain": "Veuillez réessayer."
+      "tryAgain": "Veuillez réessayer.",
+      "removeComputerFailed": "Impossible de supprimer l'hôte",
+      "removeComputerTitle": "Supprimer l'hôte",
+      "removeComputerMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
+      "sameNetworkOnly": "Se connecte uniquement sur le même Wi-Fi ou via Tailscale. Pour vous connecter de partout, connectez-vous sur votre ordinateur et appairez de nouveau"
     },
     "bottomBar": {
-      "connectFirst": "Connectez un ordinateur pour démarrer un nouveau travail.",
       "newWorkspace": "Nouvel espace de travail"
     },
-    "desktops": {
-      "pairDesktop": "Appairer un ordinateur"
-    },
     "sections": {
-      "tasks": "Tâches",
-      "tasksSubtitle": "Parcourez vos issues et vos revues"
+      "tasks": "Tâches"
     },
     "stats": {
       "agentTime": "Temps agent",
@@ -1950,27 +2248,44 @@
     },
     "tabs": {
       "automations": "Automatisations",
-      "chooseDesktop": "{{desktop}}, choisir un autre ordinateur",
       "feed": "Activité",
       "usage": "Utilisation",
       "agents": "Agents",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}, choisir un autre ordinateur"
     },
     "usage": {
       "active": "Actif",
-      "addAccounts": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
       "connectDesktop": "Connectez {{desktop}} pour voir l'utilisation des comptes d'agent.",
       "emptyTitle": "Aucune utilisation pour l'instant",
-      "openAccountsHint": "Ouvre les comptes de cet ordinateur",
-      "pairDesktop": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
       "refresh": "Actualiser l'utilisation",
       "showUsageFor": "Afficher l'utilisation de",
       "updatedAgo": "Mis à jour il y a {{time}}",
-      "updatedJustNow": "Mis à jour à l'instant"
+      "updatedJustNow": "Mis à jour à l'instant",
+      "pairComputer": "Appairez un ordinateur pour voir l'utilisation des comptes d'agent.",
+      "addAccountsOnComputer": "Ajoutez des comptes dans Paramètres → Comptes sur l'ordinateur.",
+      "openComputerAccountsHint": "Ouvre les comptes de cet ordinateur"
     },
     "activeAgents": {
       "heading": "Actifs",
       "seeAll": "Voir tous les agents"
+    },
+    "bots": {
+      "waits": {
+        "questions_many": "{{count}} questions",
+        "questions_one": "question",
+        "questions_other": "{{count}} questions",
+        "access_many": "{{count}} demandes d’accès",
+        "access_one": "demande d’accès",
+        "access_other": "{{count}} demandes d’accès",
+        "workers_many": "{{count}} workers",
+        "workers_one": "worker",
+        "workers_other": "{{count}} workers",
+        "items_many": "{{count}} éléments",
+        "items_one": "élément",
+        "items_other": "{{count}} éléments"
+      },
+      "pairComputer": "Appairez un ordinateur pour voir ses bots ici."
     }
   },
   "hooks": {
@@ -1997,37 +2312,34 @@
       "updateStepsServer": "Mettez à jour Orca sur le serveur, puis redémarrez-le.",
       "orcaVersion": "Version d'Orca",
       "goBack": "Précédent",
-      "hostNamePlaceholder": "Nom de l'hôte",
-      "hostRemoved": "Cet hôte a été supprimé de ce téléphone.",
-      "loadFailed": "Impossible de charger l'hôte.",
-      "missingHost": "Hôte manquant.",
       "name": "Nom",
-      "saveFailed": "Impossible d'enregistrer l'hôte.",
-      "saveHost": "Enregistrer l'hôte",
-      "title": "Modifier l'hôte",
-      "removeHost": "Retirer l'hôte"
+      "editComputer": "Modifier l'hôte",
+      "computerRemoved": "Cet hôte a été supprimé de ce téléphone.",
+      "couldNotLoad": "Impossible de charger l'hôte.",
+      "couldNotSave": "Impossible d'enregistrer l'hôte.",
+      "save": "Enregistrer"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Se connecter",
       "disconnect": "Déconnecter",
-      "editHost": "Modifier l'hôte",
       "networkDiagnostics": "Diagnostic réseau",
-      "reconnect": "Reconnecter"
+      "reconnect": "Reconnecter",
+      "editComputer": "Modifier l'hôte"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Création de l'espace de travail…"
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "backToHosts": "Retour aux hôtes",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",
       "tasks": "Tâches",
       "moreActions": "Plus d'actions",
       "automations": "Automatisations",
+      "sharedLinks": "Liens partagés",
       "mcpServers": "Serveurs MCP"
     },
     "deleteConfirm": {
@@ -2051,7 +2363,6 @@
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
       "pin": "Épingler",
-      "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "deleteFailed": "Impossible de supprimer « {{name}} »",
@@ -2061,8 +2372,7 @@
       "markRead": "Marquer comme lu",
       "markUnread": "Marquer comme non lu",
       "muteNotifications": "Désactiver les notifications",
-      "unmuteNotifications": "Réactiver les notifications",
-      "moveToStatus": "Déplacer vers le statut"
+      "unmuteNotifications": "Réactiver les notifications"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -2124,27 +2434,19 @@
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
-      "hideAutomationCreated": "Masquer ceux créés par l'automatisation",
-      "hideCliCreated": "Masquer ceux créés par le CLI",
       "hideDefaultBranch": "Masquer la branche par défaut",
-      "hideDetachedHead": "Masquer les HEAD détachés",
-      "hideOtherClientWorkspaces": "Masquer les espaces de travail d'autres clients",
       "hideSleeping": "Masquer les espaces en veille",
-      "hosts": "Hôtes",
       "localLinux": "Linux local",
       "localMac": "Mac local",
       "localWindows": "Windows local",
       "projectOrder": "Ordre des projets",
       "projects": "Projets",
-      "savingToDesktop": "Enregistrement sur l'hôte",
       "show": "Afficher",
       "showProperties": "Afficher les propriétés",
       "sortBy": "Trier par",
-      "syncedAcrossDevices": "Synchronisées sur vos appareils",
       "done": "Terminé",
       "reset": "Réinitialiser",
       "thisComputer": "Cet ordinateur",
-      "waitingForDesktop": "Toujours en attente de l'hôte",
       "workspaceOptions": "Options des espaces de travail"
     },
     "hostBottomBar": {
@@ -2170,7 +2472,6 @@
       "accounts": "Comptes",
       "agentSessionHistory": "Historique des sessions d'agent",
       "changes": "Modifications",
-      "editHost": "Modifier l'hôte",
       "host": "Hôte",
       "pullRequest": "Pull Request",
       "sourceControl": "Contrôle de code source",
@@ -2178,12 +2479,13 @@
       "terminal": "Terminal",
       "workspace": "Espace de travail",
       "automations": "Automatisations",
-      "mcpServers": "Serveurs MCP"
+      "mcpServers": "Serveurs MCP",
+      "editComputer": "Modifier l'hôte"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Créer un espace de travail sur"
+      "newWorkspaceOn": "Créer un espace de travail sur"
     },
     "loadingDrawer": {
       "downloadProgress": "Téléchargement… {{progress}}",
@@ -2202,14 +2504,8 @@
       "silentName": "Notifications silencieuses Orca"
     },
     "notificationDeliverySection": {
-      "footer": "Les types d'alertes suivent les paramètres de notification de chaque ordinateur appairé. Les notifications sont suspendues après 7 jours sans utilisation de cette application ; ouvrez-la et reconnectez-vous pour les réactiver.",
       "onlyWhenAgentNeedsInput": "Uniquement quand un agent a besoin de moi",
-      "onlyWhenAgentNeedsInputHint": "Demandes d'autorisation et questions. Ignore les agents qui ont terminé.",
-      "onlyWhenAway": "Uniquement si vous n'êtes pas à l'ordinateur",
-      "onlyWhenAwayHint": "Après 3 minutes sans activité au clavier ou à la souris, ou si l'ordinateur est verrouillé.",
-      "sound": "Son des notifications",
-      "suppressWhileFocused": "Suspendre pendant la consultation",
-      "suppressWhileFocusedHint": "Ignorer les alertes de l'espace de travail ouvert sur ce téléphone."
+      "sound": "Son des notifications"
     }
   },
   "onboarding": {
@@ -2221,16 +2517,11 @@
       "waitingOnYou": "En attente de votre intervention."
     },
     "onboardingPage": {
-      "enableAgentNotifications": "Activer les notifications des agents",
       "enableNotifications": "Activer les notifications",
       "keepTerminal": "Conserver le terminal",
       "notNow": "Pas maintenant",
-      "notificationsDescription": "Recevez une notification sur ce téléphone lorsqu'un agent a terminé ou est en attente, même si vous n'utilisez pas l'application.",
-      "notificationsDisclosure": "Envoyées via le service de notifications push d'Orca après 3 minutes d'inactivité de votre ordinateur. Modifiez ce réglage à tout moment dans les paramètres.",
       "notificationsTitle": "Soyez averti quand un agent a besoin de vous",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
       "openInTerminal": "Ouvrir les sessions dans le terminal",
-      "sessionViewDescription": "Choisissez si les sessions d'agent compatibles s'ouvrent dans le terminal ou l'interface de chat sur cet appareil. Appuyez longuement sur l'onglet d'une session pour changer de vue, ou modifiez le choix par défaut à tout moment dans Paramètres → Chat UI.",
       "sessionViewTitle": "Comment ouvrir les sessions ?",
       "skipNotifications": "Ignorer les notifications pour le moment",
       "useChatUi": "Utiliser le chat"
@@ -2250,7 +2541,6 @@
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
       "editPlaceholder": "Modifier le commentaire…",
-      "replyToComment": "Répondre au commentaire",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
       "hoursAgo_other": "il y a {{count}} h",
@@ -2262,40 +2552,23 @@
       "monthsAgo_one": "il y a {{count}} mois",
       "monthsAgo_other": "il y a {{count}} mois",
       "reply": "Répondre",
-      "editComment": "Modifier le commentaire",
-      "deleteComment": "Supprimer le commentaire",
-      "unresolveThread": "Marquer le fil comme non résolu",
-      "resolveThread": "Résoudre le fil",
       "resolve": "Résoudre",
-      "replyPlaceholder": "Écrire une réponse…",
       "unresolve": "Marquer comme non résolu",
       "yearsAgo_many": "il y a {{count}} ans",
       "yearsAgo_one": "il y a {{count}} an",
-      "yearsAgo_other": "il y a {{count}} ans",
-      "resolved": "résolu",
-      "openOnGitHub": "Ouvrir le commentaire sur GitHub"
+      "yearsAgo_other": "il y a {{count}} ans"
     },
     "commentsSection": {
-      "all": "Tous",
-      "humans": "Humains",
-      "bots": "Bots",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noHumanComments": "Aucun commentaire humain.",
       "comment": "Commenter",
       "resolvedThreadSingle": "Fil de {{author}} résolu",
       "resolvedThreadCount": "Fil de {{author}} résolu ({{count}})",
-      "resolvedCommentSingle": "Commentaire de {{author}} résolu",
-      "resolvedCommentCount": "Commentaire de {{author}} résolu ({{count}})",
       "commentsLoadFailedRetry": "Impossible de charger les commentaires.",
       "description": "Description",
       "descriptionLoadFailed": "Impossible de charger la description. Appuyez sur Actualiser pour réessayer.",
       "noComments": "Aucun commentaire pour le moment.",
       "noDescription": "Aucune description fournie.",
       "showMore": "Afficher {{count}} de plus",
-      "addCommentPlaceholder": "Ajouter un commentaire…",
-      "title": "Commentaires",
-      "commentsLoadFailed": "Impossible de charger les commentaires. Appuyez sur Actualiser pour réessayer.",
-      "showMoreOf": "Afficher {{count}} de plus sur {{remaining}}"
+      "title": "Commentaires"
     },
     "linkPrForm": {
       "linkButton": "Lier la pull request",
@@ -2407,14 +2680,6 @@
       "stateOpen": "Ouverte",
       "unavailable": "Checks indisponibles"
     },
-    "prCommentAudienceLabels": {
-      "all": "Tous",
-      "bots": "Bots",
-      "humans": "Humains",
-      "noBotComments": "Aucun commentaire de bot.",
-      "noComments": "Aucun commentaire pour le moment.",
-      "noHumanComments": "Aucun commentaire humain."
-    },
     "tab": {
       "updated": "mis à jour {{time}}",
       "moreActions": "Autres actions sur la pull request",
@@ -2467,8 +2732,8 @@
       "titleLabel": "Titre",
       "descriptionLabel": "Description",
       "writeWithAi": "Rédiger avec l'IA",
-      "descriptionPlaceholder": "Facultatif",
-      "draft": "Créer en brouillon"
+      "draft": "Créer en brouillon",
+      "create": "Créer"
     },
     "screens": {
       "hideLog": "Masquer le journal",
@@ -2478,7 +2743,6 @@
       "failedAfter": "Échec après {{duration}}",
       "failed": "Échec",
       "checkActions": "Plus d'actions pour {{name}}",
-      "rerun": "Relancer",
       "copyErrorFailed": "Impossible de copier l'erreur.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",
@@ -2614,25 +2878,20 @@
       "dismissKeyboard": "Masquer le clavier",
       "sendKey": "Envoyer {{label}}",
       "typeCharacter": "Saisir {{character}}",
+      "control": "Control",
       "interrupt": "Interrompre le terminal",
+      "alt": "Alt",
+      "shift": "Shift",
       "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
       "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
       "moreKeys": "Plus de touches et d’actions",
       "showKeyboard": "Afficher le clavier",
-      "dismissKeyboardHint": "Masque le clavier virtuel et garde la session de terminal en cours ouverte.",
-      "switchToDesktopMode": "Passer en mode bureau",
-      "switchToPhoneMode": "Basculer en mode téléphone",
-      "pasteFromClipboard": "Coller depuis le presse-papiers",
-      "paste": "Coller",
-      "addCustomShortcut": "Ajouter un raccourci personnalisé"
+      "pasteFromClipboard": "Coller depuis le presse-papiers"
     },
     "activeContent": {
-      "createTab": "Créer un onglet",
       "creatingTab": "Création…",
       "fileTitle": "Fichier",
       "loadingTerminal": "Chargement du terminal",
-      "noTabs": "Aucun onglet dans cette session",
-      "retryLoadingTerminal": "Réessayer de charger le terminal",
       "terminalTakingLonger": "Le chargement du terminal prend plus de temps que prévu"
     },
     "agentChildRow": {
@@ -2733,20 +2992,11 @@
       "workflow": "Flux de travail en arrière-plan"
     },
     "browserTabActionSheet": {
-      "forward": "Suivant",
-      "reload": "Recharger",
+      "hardReload": "Forcer le rechargement",
       "title": "Navigateur"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Fermer les autres onglets"
-    },
-    "bulkTabClose": {
-      "confirm": "Fermer les onglets",
-      "description": "Les onglets sélectionnés seront fermés. Les onglets épinglés resteront ouverts.",
-      "titleEditors": "Fermer tous les onglets de l’éditeur ?",
-      "titleLeft": "Fermer les onglets à gauche ?",
-      "titleOthers": "Fermer les autres onglets ?",
-      "titleRight": "Fermer les onglets à droite ?"
     },
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
@@ -2767,21 +3017,40 @@
       "committedChangesFailed": "Échec du chargement des modifications committées",
       "committedChangesUnavailable": "Modifications committées indisponibles",
       "committedDiffUnavailable": "Le diff des modifications committées est indisponible",
+      "commitLoadFailed": "Impossible de charger ce commit",
+      "commitDiffUnavailable": "Le diff du commit est indisponible",
       "desktopUpdateRequired": "Mettez à jour Orca sur cet hôte pour examiner les modifications sur mobile.",
       "diffLoadFailed": "Impossible de charger le diff",
       "reviewNotesLoadFailed": "Impossible de charger les notes de revue"
     },
     "diffReviewQueue": {
       "committedOnBranch": "Committé sur la branche",
+      "inCommit": "Dans ce commit",
       "staged": "Dans l’index",
       "unstaged": "Hors de l’index"
     },
     "diffReviewScreenModel": {
       "branch": "Branche",
       "staged": "Dans l’index",
-      "unstaged": "Hors de l’index"
+      "unstaged": "Hors de l’index",
+      "positionUncommitted": "Non commité : {{position}} sur {{count}}",
+      "positionInCommit": "{{position}} sur {{count}} dans ce commit",
+      "positionViewed": "{{position}} sur {{count}} · consultés : {{viewedCount}}",
+      "commitFiles_many": "{{count}} fichiers",
+      "commitFiles_one": "{{count}} fichier",
+      "commitFiles_other": "{{count}} fichiers",
+      "uncommittedFiles_many": "{{count}} non commités",
+      "uncommittedFiles_one": "{{count}} non commité",
+      "uncommittedFiles_other": "{{count}} non commités",
+      "viewedOfCount": "Consultés : {{viewedCount}} sur {{count}}"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} n'a pas trouvé cette réponse dans le chat d'origine. Ouvrez-le et créez une branche à partir de là.",
+      "forkOriginalUnavailable": "{{agent}} ne peut pas créer de branche à partir de cette réponse dans le chat d'origine. Ouvrez-le et créez une branche à partir de là.",
+      "forkOriginalMissingNamed": "{{agent}} n'a pas trouvé cette réponse dans « {{detail}} ». Ouvrez ce chat et créez une branche à partir de là.",
+      "forkOriginalUnavailableNamed": "{{agent}} ne peut pas créer de branche à partir de cette réponse dans « {{detail}} ». Ouvrez ce chat et créez une branche à partir de là.",
+      "forkOriginalLatestOnly": "{{agent}} ne peut créer une branche qu'à partir de la dernière réponse du chat d'origine. Ouvrez ce chat et créez une branche à partir de sa dernière réponse une fois qu'elle est terminée.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} ne peut créer une branche qu'à partir de la dernière réponse de « {{detail}} ». Ouvrez ce chat et créez une branche à partir de sa dernière réponse une fois qu'elle est terminée.",
       "accountSwitchInProgress": "La configuration de {{agent}} est en cours de modification sur cet hôte. Réessayez une fois l'opération terminée.",
       "agentCommandNotRunnable": "{{agent}} : la Commande dans Paramètres → Agents doit être le chemin ou le nom d'un programme qu'Orca peut trouver, sans arguments ni variables. Modifiez-la ou réinitialisez-la.",
       "agentCommandFailed": "La Commande de {{agent}} dans Réglages → Agents n’a pas lancé {{agent}} : {{detail}}. Modifiez-la ou réinitialisez-la.",
@@ -2792,6 +3061,7 @@
       "answerUnconfirmed": "Votre réponse a été enregistrée, mais l'agent ne l'a pas confirmée.",
       "pluginInputRequired": "{{agent}} s’est arrêté car le plugin « {{plugin}} » attend une saisie dans un volet de terminal. Désactivez le plugin pour les sessions de chat ou exécutez la tâche dans un terminal {{agent}}.",
       "antigravityNotSignedIn": "Antigravity n’est pas connecté. Connectez-vous dans Paramètres → Comptes → Antigravity. Puis renvoyez votre message.",
+      "antigravitySystemNotSignedIn": "Antigravity n'est pas connecté. Connectez-vous en exécutant `agy` sur l'ordinateur qui exécute ce chat, puis renvoyez votre message.",
       "argumentsMissingValue": "Les arguments enregistrés nécessitent une valeur pour {{option}}.",
       "argumentsMultipleValues": "Les arguments enregistrés donnent plusieurs valeurs à {{option}}.",
       "argumentsPositionalPrompt": "Les arguments enregistrés contiennent un message.",
@@ -2818,6 +3088,7 @@
       "chooseClaudeAccount": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude.",
       "chooseClaudeAccountThenRunCommand": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis relancez /{{command}}.",
       "chooseClaudeAccountThenSend": "Choisissez-en un ou ajoutez-en un dans les paramètres Comptes Claude, puis renvoyez votre message.",
+      "unconfirmed": "Impossible de confirmer l'envoi. Le message n'a pas été renvoyé.",
       "claudeAccountFolderMissing": "Le dossier du compte Claude sélectionné est introuvable. Reconnectez-vous à ce compte ou choisissez-en un autre.",
       "claudeAccountSetupFailed": "Le compte Claude sélectionné n'a pas pu être configuré. Réessayez ou choisissez un autre compte.",
       "claudeEffortInvalid": "Le niveau d'effort de Claude est invalide ; choisissez low, medium, high, xhigh ou max, puis renvoyez le message.",
@@ -2919,6 +3190,7 @@
       "imageLabel": "Image : {{title}}",
       "noReviewNotes": "Aucune note de revue",
       "previewLabel": "Aperçu de {{title}}",
+      "loading": "Chargement du fichier…",
       "reviewNotes_many": "{{count}} notes de revue",
       "reviewNotes_one": "{{count}} note de revue",
       "reviewNotes_other": "{{count}} notes de revue",
@@ -2930,47 +3202,40 @@
     },
     "githubPrMutations": {
       "reviewThreadUpdateFailed": "Impossible de mettre à jour le fil de revue.",
+      "fileViewedFailed": "Impossible de mettre à jour l'état « consulté » du fichier.",
       "titleUpdateFailed": "Impossible de mettre à jour le titre."
     },
     "githubPrRpc": {
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
-      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
-      "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
       "terminalTitle": "Terminal",
       "terminalLayout": "Disposition du terminal",
-      "fileExplorer": "Explorateur de fichiers",
       "sourceControl": "Contrôle de code source",
-      "newTab": "Nouvel onglet",
+      "itemsNeedYou": "Éléments, {{count}} à traiter",
       "quickCommands": "Commandes rapides",
-      "items": "Éléments"
+      "items": "Éléments",
+      "textSize": "Taille du texte"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
       "agentHistoryHint": "Parcourir et reprendre des sessions d'agent",
-      "checks": "Vérifications",
-      "checksHint": "Ouvrir les vérifications de la pull request"
+      "checks": "Vérifications"
     },
     "markdownReader": {
       "changedOnDesktop": "Modifié sur l'ordinateur",
       "copyLoaded": "Copier le contenu chargé",
-      "copyLoadedSource": "Copier la source Markdown chargée",
-      "copyPath": "Copier le chemin",
-      "copyPathLabel": "Copier le chemin du fichier Markdown",
-      "copySource": "Copier la source Markdown",
+      "loading": "Chargement du document…",
       "discard": "Abandonner",
       "previewTruncated": "Aperçu tronqué.",
       "readOnly": "Lecture seule"
     },
     "nativeChatAttachActions": {
-      "availableSkills": "Disponibles : {{count}}",
       "commands": "Commandes",
-      "fileTypes": "PDF, texte, code…",
       "files": "Fichiers",
       "photos": "Photos",
       "skills": "Skills",
@@ -2980,7 +3245,7 @@
       "collapse": "Réduire"
     },
     "nativeChatCliFork": {
-      "resumeInNewCli": "Reprendre dans une nouvelle CLI"
+      "continueInTerminal": "Continuer dans le terminal"
     },
     "nativeChatFloatingControls": {
       "scrollToLatest": "Faire défiler jusqu'au dernier message"
@@ -2995,11 +3260,8 @@
     },
     "nativeChatRenderData": {
       "defaultAgentLabel": "l'agent",
-      "emptySubtitle": "Demandez à {{agent}} d'examiner le code, d'expliquer la sortie ou d'effectuer une modification.",
       "emptyTitle": "Démarrez un chat avec {{agent}}",
-      "errorSubtitle": "La transcription n'a pas pu être lue. Rebasculez sur le terminal pour continuer à travailler.",
       "errorTitle": "Impossible de charger la conversation",
-      "notFoundSubtitle": "Envoyez un message pour en démarrer une, ou ouvrez la vue du terminal pour voir ce que fait {{agent}}.",
       "notFoundTitle": "Conversation introuvable pour le moment"
     },
     "nativeChatToggleAction": {
@@ -3049,7 +3311,6 @@
     },
     "quickCommandEditorForm": {
       "action": "Action",
-      "addQuickCommand": "Ajouter une commande rapide",
       "advanced": "Avancé",
       "agent": "Agent",
       "agentPrompt": "Prompt d'agent",
@@ -3068,7 +3329,6 @@
       "promptSizeCharacters": "{{used}} / {{max}} caractères",
       "promptSizeKilobytes": "{{used}} Ko / {{max}} Ko",
       "promptTooLong": "Trop long pour être enregistré.",
-      "scope": "Portée",
       "terminalCommand": "Commande de terminal"
     },
     "quickCommandLaunch": {
@@ -3097,9 +3357,9 @@
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
       "editTitle": "Modifier la commande rapide",
-      "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
-      "untitled": "Sans titre"
+      "untitled": "Sans titre",
+      "add": "Ajouter"
     },
     "routeHelpers": {
       "connected": "Connecté",
@@ -3115,20 +3375,17 @@
     "sheets": {
       "browser": "Navigateur",
       "chat": "Chat",
-      "copyAllAndLeave": "Tout copier et quitter",
-      "copyDraftsFailed": "Impossible de copier les brouillons",
+      "cli": "CLI",
+      "cliOnly": "CLI uniquement",
       "copyNotes": "Copier les notes",
       "copyNotesFailed": "Impossible de copier les notes",
       "copyPath": "Copier le chemin",
       "discard": "Abandonner",
-      "discardAndLeave": "Abandonner et quitter",
       "discardChanges": "Abandonner les modifications",
       "discardMessage": "Remplacer le brouillon du téléphone par la dernière version du fichier sur l'ordinateur ?",
-      "draftsHint": "Copiez ou abandonnez les brouillons du téléphone avant de quitter.",
       "file": "Fichier",
       "markdown": "Markdown",
       "markdownNote": "Note Markdown",
-      "newBrowser": "Nouveau navigateur",
       "newTab": "Nouvel onglet",
       "notesCopied": "Notes copiées",
       "notesHint": "Choisissez une session d'agent pour les notes actuelles.",
@@ -3138,13 +3395,14 @@
       "shortcut": "Raccourci",
       "terminal": "Terminal",
       "terminalWithShell": "Terminal: {{shell}}",
+      "more": "Plus",
+      "linkCopied": "Lien copié",
+      "copyLinkFailed": "Impossible de copier le lien",
       "shellPowerShell": "PowerShell",
       "shellCmd": "Invite CMD",
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalName": "Nom du terminal",
-      "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
       "allowAutoClose": "Autoriser la fermeture automatique",
       "agents": "Agents",
       "renameTerminalFailed": "Impossible de renommer le terminal. {{reason}}"
@@ -3162,7 +3420,6 @@
     },
     "tabStrip": {
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
-      "newTab": "Nouvel onglet",
       "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides"
     },
     "terminalActionSheetActions": {
@@ -3171,20 +3428,12 @@
       "switchToDesktop": "Passer en mode ordinateur",
       "switchToPhone": "Passer en mode téléphone"
     },
-    "terminalInputActions": {
-      "attachFileHint": "Appuyez longuement pour joindre un fichier à la place.",
-      "attachPhoto": "Joindre une photo",
-      "sendingImage": "Envoi de l'image"
-    },
     "terminalLiveInputStatus": {
       "listening": "Écoute en cours",
-      "liveInput": "Saisie en direct",
       "preparingMic": "Préparation du microphone",
       "processing": "Traitement en cours",
       "releaseMicHint": "Relâchez le micro pour arrêter",
-      "startingMic": "Démarrage du micro",
-      "uploadingImage": "Envoi de l'image à l'hôte",
-      "uploadingImageTitle": "Envoi de l'image"
+      "startingMic": "Démarrage du micro"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -3217,7 +3466,8 @@
       "browserUnavailable": "La page du navigateur n'est pas encore disponible.",
       "invalidUrl": "Saisissez une URL valide",
       "noteCreateFailed": "Échec de la création de la note Markdown",
-      "untitledNoteCreateFailed": "Impossible de créer une note Markdown sans titre"
+      "untitledNoteCreateFailed": "Impossible de créer une note Markdown sans titre",
+      "browserStreamingUnavailable": "Cet hôte ne peut pas diffuser les onglets du navigateur"
     },
     "useDiffComments": {
       "copyNotesFailed": "Impossible de copier les notes",
@@ -3233,6 +3483,7 @@
     },
     "useDiffReviewController": {
       "loadFailed": "Impossible de charger la revue",
+      "commitMissing": "Mettez à jour l'app Orca pour ouvrir ici les fichiers du commit.",
       "missingWorktree": "Worktree manquant"
     },
     "useDiffReviewDiffLoading": {
@@ -3393,6 +3644,7 @@
       "reattachFiles": "Retirez-les et joignez-les à nouveau.",
       "recordFailed": "Orca n'a pas pu enregistrer ceci dans l'historique du chat.",
       "recordUnreadable": "Orca n'a pas pu lire l'état enregistré de ce chat.",
+      "mailOwnerUnconfirmed": "Orca n'a pas pu confirmer que ce message est toujours destiné à ce chat.",
       "reopenChat": "Rouvrez le chat pour vérifier à nouveau.",
       "restartFailed": "L'agent n'a pas pu redémarrer.",
       "runClearWhenDone": "Lancez /clear quand il aura terminé.",
@@ -3418,21 +3670,14 @@
       "waitMoment": "Patientez un instant."
     },
     "workerAutoClose": {
-      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
-      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
       "keepOpen": "Garder ouvert"
     },
     "terminalLayoutSheet": {
       "title": "Disposition du terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Sélectionné",
       "auto": "Automatique",
-      "autoHint": "Diviser selon l’espace disponible",
       "sideBySide": "Côte à côte",
-      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
-      "stacked": "Empilés",
-      "stackedHint": "Deux rangées quelle que soit l’orientation",
-      "selectedHint": "Sélectionné · {{hint}}"
+      "stacked": "Empilés"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
@@ -3441,37 +3686,92 @@
     "terminalMoreKeys": {
       "sendKey": "Envoyer {{label}}",
       "paste": "Coller",
-      "sending": "Envoi…",
       "photo": "Photo",
       "file": "Fichier",
       "desktopWidth": "Largeur bureau",
       "phoneWidth": "Largeur téléphone",
       "keys": "Touches",
-      "combos": "Combinaisons",
       "yourKeys": "Vos touches",
       "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
-      "addCustomKey": "Ajouter une touche personnalisée",
-      "addKey": "Ajouter une touche"
+      "addCustomKey": "Ajouter une touche personnalisée"
     },
     "terminalPaneView": {
       "focusedPane": "{{title}}, actif",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, touchez pour activer",
-      "inputPane": "{{title}} · Saisie"
+      "tapToFocusPane": "{{title}}, touchez pour activer"
     },
     "structuredOpen": {
+      "goneGeneric": "Le chat de l'agent n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
+      "unknownGeneric": "Le chat de l'agent est introuvable sur cet hôte. Reconnectez-vous à son ordinateur et réessayez.",
+      "unsupportedGeneric": "Le chat de l'agent ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
+      "unreachableGeneric": "Le chat de l'agent n'est pas encore disponible. Réessayez dans un instant.",
+      "gone": "Le chat de {{agent}} n'est plus sur cet hôte, il ne peut donc pas être rouvert ici.",
+      "unknown": "Le chat de {{agent}} est introuvable sur cet hôte. Reconnectez-vous à son ordinateur et réessayez.",
+      "unsupported": "Le chat de {{agent}} ne peut pas être rouvert tant qu'Orca n'est pas mis à jour.",
+      "unreachable": "Le chat de {{agent}} n'est pas encore disponible. Réessayez dans un instant.",
+      "paneUnavailable": "Le volet de l'agent n'est plus disponible.",
       "worktreeDeleted": "Le worktree a été supprimé.",
       "projectRemoved": "Le projet a été retiré d’Orca.",
       "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré."
     },
     "nativeChatView": {
+      "loading": "Chargement de la conversation…",
       "linkedMessageMissing": "Ce message est introuvable."
+    },
+    "contentState": {
+      "connectingTo": "Connexion à {{host}}…",
+      "connecting": "Connexion…",
+      "tabsStalled": "Le chargement des onglets prend plus de temps que prévu",
+      "tabsAsOf": "Dernier état des onglets : {{time}}"
+    },
+    "presentation": {
+      "loadingTabs": "Chargement des onglets",
+      "tapToRetry": "{{status}} — touchez pour réessayer"
+    },
+    "documentReaders": {
+      "markdownFailed": "Impossible de charger le Markdown",
+      "diffFailed": "Impossible de charger l'aperçu du diff",
+      "fileFailed": "Impossible de charger l'aperçu du fichier",
+      "outsideWorkspace": "Ce fichier se trouve en dehors de l'espace de travail. Ouvrez-le sur l'ordinateur pour le consulter."
+    },
+    "linkActionSheet": {
+      "openInOrca": "Ouvrir dans le navigateur Orca",
+      "openInBrowser": "Ouvrir dans le navigateur système",
+      "copyLink": "Copier le lien"
+    },
+    "usePrTextAction": {
+      "updateFailed": "Impossible de mettre à jour la pull request."
+    },
+    "smartKeys": {
+      "always": "Toujours",
+      "answer": "Répondre",
+      "background": "Arrière-plan",
+      "cancel": "Annuler",
+      "confirm": "Confirmer",
+      "edit": "Modifier",
+      "history": "Historique",
+      "keyLabel": "{{word}}, envoie {{combo}}",
+      "mode": "Mode",
+      "no": "Non",
+      "queue": "Mettre en file",
+      "reject": "Refuser",
+      "rewind": "Revenir",
+      "sendNow": "Envoyer maintenant",
+      "skip": "Ignorer",
+      "stop": "Arrêter",
+      "yes": "Oui"
     },
     "tabsSheet": {
       "needsYou": "Nécessitent votre attention",
       "working": "En cours",
       "everythingElse": "Tout le reste",
-      "closeTab": "Fermer {{title}}"
+      "closeTab": "Fermer {{title}}",
+      "panes_many": "{{count}} volets",
+      "panes_one": "{{count}} volet",
+      "panes_other": "{{count}} volets"
+    },
+    "tabMenu": {
+      "closeTab": "Fermer l'onglet"
     },
     "tabRows": {
       "browser": "Navigateur",
@@ -3481,16 +3781,38 @@
       "terminal": "Terminal"
     },
     "browserProfile": {
-      "default": "Par défaut"
+      "title": "Profil",
+      "default": "Par défaut",
+      "workspaceDefault": "Par défaut (espace de travail)"
+    },
+    "orcaCommands": {
+      "desktopOnly": "Disponible dans l'application de bureau"
     },
     "tabBar": {
       "oneTab": "1 onglet",
       "tabCount": "Onglets : {{count}}",
-      "anotherNeedsYou": "un autre onglet nécessite votre attention",
       "actionsHint": "Affiche les actions de cet onglet",
-      "next": "Onglet suivant",
-      "previous": "Onglet précédent",
       "hint": "Affiche tous les onglets"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Texte du chat",
+      "size": "Taille",
+      "moreChat": "Autres paramètres de texte",
+      "terminalTitle": "Texte du terminal",
+      "pointsAndColumns": "{{points}} · {{count}} colonnes",
+      "moreTerminal": "Autres paramètres du terminal"
+    },
+    "terminalChatContinuation": {
+      "busy": "Un autre chat ou terminal est en cours d'ouverture. Patientez, puis réessayez.",
+      "continueInChat": "Continuer dans le chat",
+      "failed": "Impossible de continuer dans le chat. {{detail}}",
+      "failedAfterClose": "Impossible de continuer dans le chat. {{detail}} La conversation se trouve dans l'historique des agents.",
+      "otherJob": "{{process}} est en cours d'exécution dans ce terminal. Quittez-le, puis continuez dans le chat.",
+      "terminalChanged": "Ce terminal a changé pendant qu'Orca le vérifiait. Réessayez.",
+      "tryAgain": "Réessayez.",
+      "unavailable": "Les chats {{agent}} ne sont pas disponibles sur cet ordinateur.",
+      "uncheckable": "Orca n'a pas pu vérifier ce qui s'exécute dans ce terminal. Réessayez.",
+      "unconfirmed": "Orca n'a pas pu confirmer l'ouverture du chat. Vérifiez vos onglets avant de réessayer."
     }
   },
   "settings": {
@@ -3507,7 +3829,6 @@
       "checkUpdates": "Rechercher des mises à jour",
       "checkUpdatesStatus": "Rechercher des mises à jour, {{status}}",
       "checking": "Vérification…",
-      "installedVersion": "Version {{version}}",
       "lastCheckedDays_many": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_one": "Dernière vérification il y a {{count}} j",
       "lastCheckedDays_other": "Dernière vérification il y a {{count}} j",
@@ -3520,13 +3841,11 @@
       "lastCheckedMinutes_other": "Dernière vérification il y a {{count}} min",
       "neverChecked": "Jamais",
       "upToDate": "À jour",
-      "update": "Mettre à jour",
       "updateToVersion": "Mettre à jour vers Orca {{version}}"
     },
     "appearance": {
       "language": {
-        "description": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
-        "heading": "LANGUE",
+        "heading": "Langue",
         "systemWithCurrent": "Système ({{language}})"
       },
       "usage": {
@@ -3538,7 +3857,7 @@
       "theme": {
         "dark": "Sombre",
         "description": "L'option Système utilise le thème clair ou sombre de cet appareil.",
-        "heading": "THÈME",
+        "heading": "Thème",
         "light": "Clair",
         "system": "Système"
       },
@@ -3546,15 +3865,10 @@
     },
     "browserSettingsScreen": {
       "askEachTime": "Demander à chaque fois",
-      "askEachTimeDescription": "Choisissez à chaque fois le navigateur Orca, celui du téléphone ou la copie du lien.",
       "desktopBrowser": "Navigateur Orca sur l'ordinateur",
-      "desktopBrowserDescription": "Ouvrir dans le navigateur diffusé depuis votre ordinateur appairé.",
-      "terminalAndChatLinksDescription": "Choisissez où ouvrir les liens web que vous touchez dans la sortie du terminal et dans le chat.",
-      "linksHeading": "LIENS",
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
       "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
-      "phoneBrowserDescription": "Ouvrir dans Safari, Chrome ou un autre navigateur sur ce téléphone.",
       "saveFailed": "Impossible d'enregistrer les préférences du navigateur. Réessayez.",
       "title": "Navigateur"
     },
@@ -3562,7 +3876,6 @@
       "about": "À propos",
       "appearance": "Apparence",
       "browser": "Navigateur",
-      "chatUi": "Chat UI",
       "notifications": "Notifications",
       "terminal": "Terminal",
       "troubleshooting": "Dépannage",
@@ -3571,14 +3884,6 @@
     "menuScreen": {
       "privacyPolicy": "Politique de confidentialité",
       "support": "Assistance"
-    },
-    "nativeChatSettingsScreen": {
-      "defaultViewDescription": "Choisissez comment ouvrir sur cet appareil les sessions des agents compatibles (Claude, Codex et les autres agents prenant en charge le chat). Le mode « Terminal » affiche la CLI brute ; Chat UI affiche une interface de chat similaire à celle de l'application pour ordinateur. Vous pouvez toujours changer l'affichage de chaque session via son menu accessible par un appui long.",
-      "defaultViewHeading": "VUE PAR DÉFAUT",
-      "off": "Désactivé",
-      "on": "Activé",
-      "openInChatUi": "Ouvrir les sessions dans l'interface de chat",
-      "title": "Chat UI"
     },
     "nativeChatText": {
       "heading": "TEXTE",
@@ -3658,32 +3963,20 @@
     "voiceSettingsScreen": {
       "connectDesktop": "Connectez-vous à un ordinateur pour gérer les paramètres vocaux.",
       "deleteFailed": "Échec de la suppression",
-      "dictationDescription": "Dictez du texte dans n'importe quel volet actif de votre ordinateur.",
-      "dictationHeading": "DICTÉE",
-      "dictationMode": "Mode de dictée",
-      "dictationModeDescription": "Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que vous maintenez l'appui.",
-      "dictationModeWithAutoDescription": "Auto : appuyez pour démarrer et arrêter ; sur votre ordinateur, maintenir le raccourci enregistre jusqu’à ce que vous relâchiez. Maintien : dictez tant que vous maintenez l’appui. Bascule : appuyez une fois pour démarrer, puis à nouveau pour arrêter.",
       "autoMode": "Auto",
       "downloadFailed": "Échec du téléchargement",
-      "enableDictation": "Activer la dictée vocale",
       "holdMode": "Maintien",
       "loadFailed": "Impossible de charger les paramètres de voix",
       "loadFailedMessage": "Impossible de charger les paramètres vocaux.",
       "noneSelected": "Aucun modèle sélectionné",
       "selectModelFailed": "Impossible de sélectionner le modèle",
-      "speechModel": "Modèle vocal",
       "loading": "Chargement des paramètres de voix…",
-      "speechModelHeading": "MODÈLE VOCAL",
       "title": "Voix",
       "toggleMode": "Bascule",
       "updateFailed": "Impossible de mettre à jour"
     },
-    "agents": {
-      "permissionOwnAll": "Paramètres propres aux agents"
-    },
     "voiceTranscribeOn": {
-      "heading": "TRANSCRIRE SUR",
-      "description": "Ce que ce téléphone entend reste sur ce téléphone. Automatique utilise votre ordinateur quand ce téléphone ne peut pas transcrire.",
+      "heading": "Transcrire sur",
       "automatic": "Automatique",
       "phone": "Ce téléphone",
       "computer": "Ordinateur",
@@ -3695,8 +3988,36 @@
       "downloadSize": "Environ {{size}} Mo",
       "phoneChecking": "Vérification…"
     },
+    "bots": {
+      "slackStatus": {
+        "notInstalled": "Non installé",
+        "unknown": "Vérification impossible",
+        "updateNeeded": "Mise à jour requise",
+        "waiting": "En attente d’installation"
+      },
+      "addConnector": "Ajouter un connecteur",
+      "connectors": "Connecteurs",
+      "retry": "Réessayer",
+      "memoryHistory": {
+        "today": "Aujourd’hui",
+        "yesterday": "Hier",
+        "undoAction": "Annuler",
+        "nothingToUndo": "Plus rien à annuler : ces lignes ont changé depuis.",
+        "empty": "Aucune modification pour l’instant."
+      },
+      "githubStatus": {
+        "notInstalled": "Orca non installé",
+        "unlinked": "Non lié"
+      },
+      "linearStatus": {
+        "unlinked": "Non lié",
+        "notInstalled": "Orca non installé"
+      }
+    },
     "sharedLinks": {
-      "bots": "Bots"
+      "title": "Liens partagés",
+      "bots": "Bots",
+      "description": "Liens que vous avez publiés."
     }
   },
   "sourceControl": {
@@ -3777,12 +4098,7 @@
     },
     "commitFailurePanel": {
       "fix": "Corriger",
-      "fixWithAi": "Corriger l'échec du commit avec l'IA",
       "hideDetails": "Masquer les détails",
-      "hideFailureDetails": "Masquer les détails de l'échec du commit",
-      "showDetails": "Afficher les détails",
-      "showFailureDetails": "Afficher les détails de l'échec du commit",
-      "summary": "Échec du commit.",
       "title": "Échec du commit"
     },
     "commitMessageAi": {
@@ -3802,10 +4118,7 @@
       "cancelGeneration": "Annuler la génération du message de commit",
       "commitMessageDisabled": "Message de commit désactivé. Aucun fichier indexé.",
       "commitMessagePlaceholder": "Message de commit",
-      "emptyMessage": "Le worktree est propre.",
-      "emptyTitle": "Aucune modification locale",
       "generateMessage": "Générer le message de commit avec l'IA",
-      "reconnecting": "Reconnexion à l'ordinateur…",
       "regenerateHint": "Effacez le message pour le régénérer."
     },
     "createPrAction": {
@@ -3959,7 +4272,6 @@
       "updateDesktop": "Mettez à jour Orca sur cet hôte pour utiliser le contrôle de code source sur mobile."
     },
     "modals": {
-      "currentBranch": "actuelle",
       "discardButton": "Abandonner",
       "discardConfirmMessage": "Abandonner les modifications de « {{path}} » ? Cette action est irréversible.",
       "discardTitle": "Abandonner la modification",
@@ -4104,6 +4416,9 @@
       "agentCouldNotStart": "Impossible de démarrer {{label}}. Vérifiez la commande de l’agent dans les Paramètres et réessayez.",
       "agentFailedToStart": "Le démarrage de {{label}} a échoué. Vérifiez la commande de l’agent dans les Paramètres et réessayez.",
       "agentReportedError": "{{label}} a signalé une erreur.",
+      "antigravityInvalidEvents": "Antigravity a renvoyé des événements JSON invalides.",
+      "antigravityInvalidResult": "Antigravity a renvoyé un résultat invalide.",
+      "antigravityNoFinalResult": "Antigravity n’a renvoyé aucun résultat final.",
       "chatNameAgentUnsupported": "Choisissez un agent de nommage des chats pris en charge pour cette action dans Paramètres -> Chat -> Noms des chats. Agents pris en charge : {{agents}}, ou « Commande personnalisée ».",
       "chatNameCustomCommandEmpty": "La commande personnalisée est vide. Ajoutez-en une dans Paramètres -> Chat -> Noms des chats.",
       "cliFailed": "La commande CLI de {{label}} a échoué avec le code {{exitCode}}.",
@@ -4263,14 +4578,6 @@
       "behind": "{{count}} en retard",
       "upToDate": "À jour",
       "switchBranch": "Changer de branche (actuelle : {{branch}})",
-      "mergeInProgress": "Merge en cours",
-      "rebaseInProgress": "Rebase en cours",
-      "cherryPickInProgress": "Cherry-pick en cours",
-      "filesNeedDecision_many": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "filesNeedDecision_one": "{{count}} fichier nécessite une décision avant de pouvoir terminer.",
-      "filesNeedDecision_other": "{{count}} fichiers nécessitent une décision avant de pouvoir terminer.",
-      "conflictsResolved": "Tous les conflits sont résolus. Terminez depuis la barre ci-dessous.",
-      "continueOnComputer": "Tous les conflits sont résolus. Continuez sur votre ordinateur pour terminer.",
       "commits_many": "{{count}} commits",
       "commits_one": "{{count}} commit",
       "commits_other": "{{count}} commits",
@@ -4295,33 +4602,18 @@
     },
     "pagination": {
       "pageUnreachable": "La page {{page}} dépasse la limite des résultats de recherche GitHub.",
-      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub.",
-      "noMoreResults": "Aucun autre résultat sur la page {{page}}."
+      "loadPageFailed": "La page {{page}} n’a pas pu être chargée depuis GitHub."
     },
     "filterSheet": {
-      "sortBy": "Trier par",
       "issueSource": "Source des issues",
-      "issueSourceRow": "Upstream ou origin",
       "view": "Affichage",
-      "projectView": "Vue de projet",
-      "projectItems_many": "{{count}} éléments",
-      "projectItems_one": "{{count}} élément",
-      "projectItems_other": "{{count}} éléments",
-      "chooseView": "Choisir",
       "showOnRows": "Afficher sur les lignes",
-      "projectFields": "Champs du projet",
       "workspace": "Espace de travail",
-      "linearWorkspace": "Espace de travail Linear",
       "layout": "Disposition",
       "groupBy": "Grouper par",
       "orderBy": "Ordonner par",
-      "displayProperties": "Propriétés affichées",
       "title": "Filtre et affichage",
-      "done": "Terminé",
-      "jqlReplacesPreset": "Votre recherche JQL remplace le préréglage « Afficher ». Effacez la recherche pour en choisir un à nouveau."
-    },
-    "jiraViewControls": {
-      "jqlSearch": "Recherche JQL"
+      "done": "Terminé"
     },
     "itemComments": {
       "noComments": "Aucun commentaire pour l'instant",
@@ -4359,24 +4651,11 @@
     "filterPickers": {
       "allTeams": "Toutes les équipes",
       "changeStatus": "Changer le statut",
-      "fieldHidden": "Masqué sur les cartes",
-      "fieldShown": "Affiché sur les cartes",
-      "fieldsSubtitle": "Choisissez les champs du projet à afficher sur les cartes des éléments.",
-      "fieldsTitle": "Champs du projet",
-      "gitlabFilter": "Filtre GitLab",
-      "gitlabView": "Vue GitLab",
-      "jiraFilter": "Filtre Jira",
-      "jiraSite": "Site Jira",
       "statesFailed": "Impossible de charger les statuts. Rouvrez pour réessayer.",
-      "linearFilter": "Filtre Linear",
       "linearIssue": "Ticket Linear",
-      "linearWorkspace": "Espace de travail Linear",
       "loadingStates": "Chargement des statuts…",
-      "noFields": "Cette vue n'a aucun champ supplémentaire à afficher.",
       "noStates": "Aucun statut disponible",
       "switchWorkspaceFailed": "Impossible de changer d'espace de travail",
-      "teamsSubtitle": "Choisissez les équipes à afficher dans Tâches.",
-      "teamsTitle": "Équipes Linear",
       "teams_many": "{{count}} équipes",
       "teams_one": "{{count}} équipe",
       "teams_other": "{{count}} équipes"
@@ -4430,41 +4709,19 @@
       "copyLink": "Copier le lien",
       "startWorkspace": "Démarrer l'espace de travail",
       "moreActions": "Plus d'actions",
-      "copyGitHubLink": "Copier le lien GitHub",
-      "copyLinearLink": "Copier le lien Linear",
-      "creating": "Création…",
       "mergeConflicts": "GitHub signale des conflits de fusion.",
       "mergeMergeRequest": "Fusionner la merge request",
       "mergePullRequest": "Fusionner la pull request"
     },
     "itemDetailContent": {
-      "addSubIssue": "Ajouter un sous-ticket",
       "checks": "Vérifications",
       "description": "Description",
       "discussion": "Discussion",
-      "noChecks": "Aucune vérification trouvée.",
-      "noComments": "Aucun commentaire.",
-      "details": "Détails",
-      "type": "Type",
-      "status": "Statut",
-      "assignee": "Assigné",
       "project": "Projet",
       "priority": "Priorité",
       "assignees": "Assignés",
       "loading": "Chargement des détails…",
-      "noPipelineRuns": "Aucune exécution de pipeline pour cette MR.",
-      "noSubIssues": "Aucun sous-ticket.",
-      "none": "Aucun",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} jobs",
-      "pipelineJobs_one": "{{count}} job",
-      "pipelineJobs_other": "{{count}} jobs",
-      "rerunAll": "Tout relancer",
-      "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Actualiser les détails"
     },
     "itemFieldEditors": {
       "addLabels": "Étiquettes à ajouter, séparées par des virgules",
@@ -4517,9 +4774,6 @@
     },
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
-    },
-    "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées"
     },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
@@ -4574,7 +4828,6 @@
       "projectMergeRequests": "MR du projet",
       "projectMergeRequestsDescription": "Merge requests et issues par dépôt",
       "projects": "Projets",
-      "pullRequests": "PRs",
       "repository": "Dépôt",
       "repositorySortDescription": "Par dépôt, puis par activité la plus récente",
       "reviewRequestsDescription": "Demandes de revue qui vous sont assignées",
@@ -4696,42 +4949,8 @@
       "reviewers": "Reviewers",
       "viewFile": "Afficher"
     },
-    "providerControls": {
-      "myTodos": "Mes tâches à faire",
-      "reposLabel": "Dépôts : {{repos}}",
-      "filterCount": "Filtre · {{count}}",
-      "filter": "Filtre",
-      "filterLabel": "Filtre et affichage",
-      "projectMergeRequests": "MR du projet"
-    },
-    "providerItemList": {
-      "intoBranch": "vers {{base}}",
-      "kindAndStatus": "{{kind}}, {{status}}",
-      "nextPage": "Page suivante",
-      "page": "Page {{page}}",
-      "pageOfTotal": "Page {{page}} sur {{total}}",
-      "previousPage": "Page précédente",
-      "selectPage": "Sélectionner une page, page {{page}}",
-      "selectPageOfTotal": "Sélectionner une page, page {{page}} sur {{total}}"
-    },
     "providerPickers": {
-      "allRepositories": "Tous les dépôts",
-      "githubView": "Vue GitHub",
-      "issueSources": "Sources des tickets GitHub",
-      "issueSourcesDescription": "Pour chaque dépôt, choisissez upstream ou origin pour rechercher et créer des tickets.",
-      "issues": "Tickets",
-      "noIssueSources": "Aucune autre source de tickets disponible.",
-      "origin": "Origine",
-      "pageHint": "Accédez à une page de résultats chargée ou disponible.",
-      "pageLoaded": "Chargée",
-      "pageNotLoaded": "Charge des résultats plus anciens",
-      "pageNumber": "Page {{page}}",
-      "pages": "Pages GitHub",
-      "pullRequests": "Pull requests",
-      "queryingSource": "Recherche dans {{source}}",
-      "repoDescription": "Choisissez les dépôts à interroger.",
-      "repos": "Dépôts",
-      "upstream": "Upstream"
+      "allRepositories": "Tous les dépôts"
     },
     "providerViewProjection": {
       "all": "Tous",
@@ -4740,7 +4959,6 @@
       "allWorkspaces": "Tous les espaces de travail",
       "chooseProject": "Choisir le projet",
       "default": "Par défaut",
-      "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
       "openState": "Ouvert",
       "projects": "Projets",
@@ -4757,15 +4975,7 @@
     "screenChrome": {
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
-      "refreshGitHub": "Actualiser le travail GitHub",
-      "refreshGitLab": "Actualiser les éléments de travail GitLab",
-      "refreshJira": "Actualiser les tickets Jira",
-      "refreshLinear": "Actualiser Linear",
       "title": "Tâches"
-    },
-    "searchControl": {
-      "projectPlaceholder": "Rechercher dans la vue du projet…",
-      "providerPlaceholder": "Rechercher des tâches {{provider}}…"
     },
     "smartSourceModes": {
       "allStates": "Toutes",
@@ -4792,27 +5002,21 @@
     },
     "tasksCreateDrawers": {
       "connect": "Se connecter",
-      "connectLinearWorkspace": "Connecter un espace de travail Linear",
-      "createIssue": "Créer un ticket",
       "createWorkspaceIn": "Créer un espace de travail dans",
       "description": "Description",
-      "descriptionPlaceholder": "Ajouter du contexte",
-      "fileIn": "Créer dans {{slug}}",
-      "issueSource": "Source des issues",
       "keySecurityHint": "Votre clé est chiffrée via le trousseau du système d'exploitation de l'hôte et stockée localement.",
-      "linearConnectSubtitle": "Collez une clé d'API personnelle pour parcourir les tickets de cet espace de travail.",
       "linearSettingsLink": "Ouvrir les paramètres Linear",
       "linearTeam": "Équipe Linear",
-      "linearTeamSubtitle": "Créez un ticket dans l'équipe Linear sélectionnée.",
-      "newIssueTitle": "Nouveau ticket {{providerLabel}}",
       "origin": "Origine",
       "personalApiKey": "Clé d'API personnelle",
       "repository": "Dépôt",
-      "repositorySubtitle": "Créez un ticket dans le dépôt sélectionné.",
       "team": "Équipe",
       "title": "Titre",
-      "titlePlaceholder": "Titre de la tâche",
-      "upstream": "Upstream"
+      "upstream": "Upstream",
+      "newIssue": "Nouveau ticket",
+      "create": "Créer",
+      "fileInRow": "Classer dans",
+      "connectLinear": "Connecter Linear"
     },
     "workspaceAgentSelection": {
       "blankTerminal": "Terminal vierge"
@@ -4822,8 +5026,6 @@
       "advanced": "Avancé",
       "agent": "Agent",
       "connectFirst": "Connectez d'abord le dépôt",
-      "connectRepository": "Connecter le dépôt",
-      "optionalLabel": "Facultatif",
       "defaultBranch": "Branche par défaut",
       "detectingAgents": "Détection des agents…",
       "remoteRepository": "Dépôt distant",
@@ -4831,8 +5033,9 @@
       "repositoryNotFound": "Dépôt introuvable.",
       "selectRepository": "Sélectionner un dépôt",
       "startFrom": "À partir de",
-      "title": "Créer un espace de travail",
-      "workspaceName": "Nom de l'espace de travail"
+      "createWorkspace": "Créer un espace de travail",
+      "nameSection": "Nom de l'espace de travail",
+      "connectRepositoryAction": "Connecter le dépôt"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "Un préréglage nommé « {{name}} » existe déjà.",
@@ -4872,7 +5075,6 @@
       "directories_other": "{{count}} répertoires",
       "editSparsePreset": "Modifier le préréglage de checkout partiel",
       "nameLabel": "Nom",
-      "namePlaceholder": "Interface de rendu",
       "newSparsePreset": "Nouveau préréglage de checkout partiel",
       "runSetupAndCreate": "Exécuter le setup et créer",
       "setupSubtitle": "Choisissez si vous souhaitez exécuter le setup de {{name}} avant de créer cet espace de travail.",
@@ -4913,7 +5115,6 @@
     },
     "webviewEngineErrorState": {
       "code": "code {{code}}",
-      "reload": "Recharger",
       "rendererCrashed": "le moteur de rendu a planté",
       "status": "statut {{statusCode}}",
       "title": "Échec du chargement du terminal"
@@ -4999,8 +5200,7 @@
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore.",
-      "loading": "Chargement des espaces de travail…",
-      "retryingAutomatically": "Nouvelle tentative automatique."
+      "loading": "Chargement des espaces de travail…"
     },
     "workspaceListSections": {
       "all": "Tous",
@@ -5025,7 +5225,6 @@
   },
   "automations": {
     "mobile": {
-      "extraAgentArguments": "Arguments supplémentaires de l'agent",
       "allAutomations": "Toutes les automatisations",
       "schedule": "Planification",
       "project": "Projet",
@@ -5037,8 +5236,6 @@
       "cancel": "Annuler",
       "name": "Nom",
       "back": "Retour",
-      "continue": "Continuer",
-      "createAutomation": "Créer une automatisation",
       "automations": "Automatisations",
       "runs": "Exécutions",
       "refresh": "Actualiser",
@@ -5048,7 +5245,6 @@
       "skipped": "Ignoré",
       "started": "Démarré",
       "trigger": "Déclenchement",
-      "run": "Exécution",
       "output": "Sortie",
       "noOutput": "Aucun contenu de sortie disponible.",
       "loadingRuns": "Chargement des exécutions…",
@@ -5061,46 +5257,19 @@
       "host": "Hôte",
       "pending": "En attente",
       "starting": "Démarrage",
-      "baseBranchOptional": "Branche de base (facultatif)",
-      "workspaceSetupScript": "Script de configuration de l’espace de travail",
-      "useProjectSettings": "Utiliser les paramètres du projet",
-      "runSetupScript": "Exécuter le script de configuration",
-      "skipSetupScript": "Ignorer le script de configuration",
       "reuseAgentSession": "Réutiliser la session de l’agent",
-      "precheckCommandOptional": "Commande de vérification préalable (facultatif)",
-      "precheckTimeoutSeconds": "Délai de vérification préalable (secondes)",
-      "missedRunGraceMinutes": "Délai de grâce des exécutions manquées (minutes)",
-      "choose": "Choisir…",
       "runOnSchedule": "Exécuter {{name}} selon le calendrier",
       "noNextScheduledRun": "Aucune prochaine exécution planifiée",
       "agent": "Agent",
-      "newWorkspacePerRun": "Nouvel espace de travail à chaque exécution",
       "instructions": "Instructions",
       "runNow": "Exécuter maintenant",
-      "savedAgent": "{{agent}} (enregistré)",
       "chooseAProjectSetUpOnThisHost": "Choisissez un projet configuré sur cet hôte.",
       "newAutomation": "Nouvelle automatisation",
-      "editorStep": "{{step}} sur 3 · {{section}}",
-      "retryProjectLoading": "Réessayer le chargement des projets",
-      "loadingProjects": "Chargement des projets…",
-      "projectAndHostSetup": "Configuration du projet et de l’hôte",
       "savedTarget": "Cible enregistrée",
-      "useAnExistingWorkspace": "Utiliser un espace de travail existant",
-      "existingWorkspace": "Espace de travail existant",
       "savedWorkspace": "Espace de travail enregistré",
       "loadMoreWorkspaces": "Charger plus d’espaces de travail",
-      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "L’inventaire des espaces de travail de cet hôte est incomplet. Actualisez ou chargez-en davantage.",
-      "agentDetecting": "Agent · détection…",
       "installAndEnableAnAgentOnThisHostThenRetry": "Installez et activez un agent sur cet hôte, puis réessayez.",
-      "hideAdvancedOptions": "Masquer les options avancées",
-      "advancedOptions": "Options avancées",
-      "chooseAnAgent": "Choisir un agent",
-      "saveChanges": "Enregistrer les modifications",
       "loadingAutomations": "Chargement des automatisations…",
-      "letYourAgentsWorkOnASchedule": "Faites travailler vos agents selon un calendrier",
-      "createAnAutomationToRunATaskOnThisHost": "Créez une automatisation pour exécuter une tâche sur cet hôte.",
-      "nextDate": "Prochaine : {{date}}",
-      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnectez-vous à cet hôte pour actualiser ou modifier. Les informations enregistrées restent disponibles ci-dessous.",
       "recentRuns": "Exécutions récentes",
       "outcome": "Résultat",
       "allOutcomes": "Tous les résultats",
@@ -5109,14 +5278,9 @@
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Impossible de vérifier le panneau d’origine de l’agent. Reconnectez-vous et réessayez.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Le panneau d’origine de l’agent ne peut plus être ouvert. La sortie enregistrée reste ici.",
       "allRuns": "Toutes les exécutions",
-      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Cette exécution ne figure plus dans l’historique conservé de l’hôte. Les dernières informations enregistrées restent ci-dessous.",
       "scheduledFor": "Planifiée pour",
-      "notCreated": "Non créé",
-      "projectHost": "Hôte du projet",
-      "notRecorded": "Non enregistré",
       "capturedTruncated": "Capturé le {{date}} · Sortie tronquée par l’hôte",
       "capturedDate": "Capturé le {{date}}",
-      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Le panneau d’origine de l’agent est indisponible. La sortie enregistrée reste ici.",
       "openAgent": "Ouvrir l’agent",
       "retryHistory": "Réessayer l’historique",
       "fullOutputUnavailable": "Impossible de charger la sortie complète.",
@@ -5127,12 +5291,7 @@
       "loadMoreRuns": "Charger plus d’exécutions",
       "customCronOrRRULE": "Cron ou RRULE personnalisé",
       "cadence": "Fréquence",
-      "cronOrRRULE": "Cron ou RRULE",
-      "minuteFromHHMM": "Minute (de HH:MM)",
-      "timeHHMM24Hour": "Heure (HH:MM, 24 heures)",
-      "useATimeSuchAs0900": "Utilisez une heure comme 09:00.",
       "timeZone": "Fuseau horaire",
-      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "S’exécute sur l’hôte sélectionné. Gardez cet hôte disponible à l’heure prévue.",
       "pairedHost": "Hôte associé",
       "chooseHost": "Automatisations sur {{host}}, choisir un autre hôte",
       "selectedServerUnavailable": "Serveur sélectionné (indisponible)",
@@ -5161,15 +5320,12 @@
       "unknownResult": "Résultat inconnu",
       "notReported": "Non communiqué",
       "searchOptions": "Rechercher des options",
-      "task": "Tâche",
-      "review": "Vérifier",
       "discardChangesTitle": "Abandonner les modifications ?",
       "discardChangesMessage": "Les modifications non enregistrées de cette automatisation seront perdues.",
       "discard": "Abandonner",
       "keepEditing": "Continuer la modification",
       "on": "Activée",
       "repeats": "Répétition",
-      "newOnePerRun": "Nouveau à chaque exécution",
       "moreActions": "Plus d'actions",
       "noRunsYet": "Aucune exécution pour l'instant",
       "nextRunToday": "Prochaine exécution aujourd'hui à {{time}}",
@@ -5221,9 +5377,50 @@
       },
       "wslDistroStopped": "La distribution WSL {{distro}} est arrêtée, donc cette exécution planifiée ne l’a pas démarrée. Démarrez la distribution ou utilisez Exécuter maintenant ; les exécutions suivantes ont lieu tant qu’elle tourne.",
       "botsOff": "Les bots sont désactivés dans les Réglages, donc Orca a ignoré cette exécution.",
+      "botsOffByTeam": "Les bots sont désactivés par votre équipe ; Orca a donc ignoré cette exécution.",
       "botMissing": "Le bot sous lequel cette automatisation s’exécute n’existe plus.",
       "botFolderMissing": "Le dossier du bot n’est plus disponible.",
       "botPaused": "{{bot}} est en pause, donc Orca a ignoré cette exécution."
+    },
+    "botTarget": {
+      "fieldLabel": "Bot ou projet",
+      "option": "Bot · {{name}}",
+      "deletedBot": "Bot supprimé",
+      "prompt": "Que doit-il faire ?",
+      "promptMissing": "Indiquez ce qu’il doit faire.",
+      "when": "Quand",
+      "noSchedule": "Uniquement sur événements",
+      "never": "Jamais",
+      "onEvents": "Quand quelque chose se produit…",
+      "runsIn": "S’exécute dans",
+      "runsInNew": "Une nouvelle conversation à chaque fois",
+      "chat": "Chat de {{name}}",
+      "runsInUntitledChat": "Un chat sans titre",
+      "agent": "Agent",
+      "agentSameAsBot": "Identique à {{name}}",
+      "agentInChat": "Agent de ce chat",
+      "resultsTo": "Envoyer les résultats vers",
+      "resultsToThread": "Le fil de l’événement",
+      "resultsToChannel": "Un canal",
+      "resultsToLinear": "Une issue Linear",
+      "resultsToNone": "Nulle part",
+      "channelPlaceholder": "#canal ou un lien Slack",
+      "channelLabel": "Canal",
+      "linearIssuePlaceholder": "Clé d’issue (p. ex. ENG-123) ou un lien Linear",
+      "linearIssueLabel": "Issue Linear",
+      "channelMissing": "Indiquez le canal où envoyer les résultats.",
+      "linearIssueInvalid": "Indiquez l’issue Linear où envoyer les résultats, par exemple ENG-123.",
+      "letBotReact": "Laisser {{name}} réagir",
+      "letBotReactHelp": "Chaque résultat lance un tour pour que {{name}} puisse agir en conséquence.",
+      "time": "Heure",
+      "minute": "Minute",
+      "runs": "Exécution"
+    },
+    "botEvents": {
+      "label": "Événements",
+      "editInChat": "Modifier dans le chat",
+      "editDraft": "Modifie l’automatisation « {{name}} » : ",
+      "addDraft": "Modifie l’automatisation « {{name}} » pour qu’elle s’exécute aussi quand "
     },
     "eventsWontFire": "S’exécute uniquement selon sa planification : nécessite le connecteur {{connectors}}",
     "wontFire": "Ne s’exécutera pas : nécessite le connecteur {{connectors}}"
@@ -5245,7 +5442,6 @@
         }
       },
       "TaskPage": {
-        "99c2755218": "Recherchez des issues ou saisissez du JQL, ex. project = ABC",
         "jiraTextMatchesNotice": "Résultats textuels affichés. Jira n'a pas pu exécuter cette recherche en JQL."
       },
       "editor": {
@@ -5460,11 +5656,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Aucun agent ne correspond à « {{query}} »",
       "emptyTitle": "Aucun agent en cours d'exécution",
-      "pairDesktop": "Appairez un ordinateur pour voir ses agents ici.",
       "emptyBody": "Démarrez un agent dans n'importe quel espace de travail : il apparaîtra ici.",
       "unread": "Non lu",
-      "noDesktopTitle": "Aucun ordinateur connecté",
-      "noDesktopBody": "Les agents apparaîtront ici dès qu'un ordinateur sera connecté.",
       "hideWorkers": "Masquer {{workers}}",
       "showWorkers": "Afficher {{workers}}"
     },
@@ -5483,31 +5676,17 @@
       "status": "Statut",
       "workspace": "Espace de travail",
       "project": "Projet",
-      "agent": "Agent",
-      "desktop": "Ordinateur"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "Grouper par",
       "showWorkers": "Afficher les workers",
-      "open": "Options de la liste des agents",
       "unreadOnly": "Non lus uniquement",
       "markAllRead": "Tout marquer comme lu",
       "clearFinished": "Retirer les agents terminés"
     },
     "search": {
-      "toggle": "Rechercher des agents",
       "placeholder": "Rechercher des agents"
-    },
-    "desktops": {
-      "pickerTitle": "Afficher les agents sur",
-      "agents_many": "{{count}} agents",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "Tous les ordinateurs",
-      "offline": "Hors ligne",
-      "needsYou_many": "{{count}} ont besoin de vous",
-      "needsYou_one": "{{count}} a besoin de vous",
-      "needsYou_other": "{{count}} ont besoin de vous"
     },
     "sections": {
       "needsYou": "Nécessitent votre attention",
@@ -5531,7 +5710,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -5586,6 +5764,16 @@
       "effort": "Effort",
       "modelDefault": "Par défaut",
       "signInChanged": "La connexion Orca a changé",
+      "whoCanAskName": "Qui peut demander à {{name}}",
+      "you": "Vous",
+      "owner": "Propriétaire",
+      "soulAndMemory": "Âme et mémoire",
+      "memoryFiles_many": "{{count}} fichiers",
+      "memoryFiles_one": "{{count}} fichier",
+      "memoryFiles_other": "{{count}} fichiers",
+      "none": "Aucun",
+      "readFailed": "Chargement impossible",
+      "usingChatDefault": "Utilise votre réglage par défaut du chat.",
       "sameAsChatsDetail": "Utilise votre réglage d’autorisation des chats.",
       "needsPermissionDetail": "Quand le bot ou un worker a besoin de votre approbation.",
       "taskCompleteDetail": "Un fil, une automatisation ou un worker se termine.",
@@ -5612,14 +5800,16 @@
       "save": "Enregistrer",
       "lookNow": "Lancer un tour d’horizon",
       "notYet": "Pas encore",
-      "backToLookAround": "Retour au tour d’horizon"
+      "backToLookAround": "Retour au tour d’horizon",
+      "footer": "Lecture seule. Chaque tour d’horizon utilise le forfait de votre agent."
     },
     "connectorOffer": {
       "slack": "Discutez avec le bot depuis des canaux et messages privés Slack.",
       "google": "Laissez le bot travailler dans votre Gmail, Agenda et Drive, et lancez des automatisations à la réception d’e-mails.",
       "linear": "Confiez des issues au bot en le @mentionnant ou en les lui assignant, et lancez des automatisations sur des événements Linear.",
       "github": "Confiez du travail au bot en le @mentionnant, et lancez des automatisations sur des événements GitHub.",
-      "heading": "Connecter un service"
+      "heading": "Connecter un service",
+      "connect": "Connecter {{service}}"
     },
     "groups": {
       "group": "Groupe",
@@ -5639,9 +5829,40 @@
       "newThreadTab": "Nouveau fil",
       "newThreadHint": "repart de zéro",
       "newThread": "Nouveau fil dans {{name}}",
+      "peerReadItems": "{{bot}} a lu une mise à jour de ses éléments",
+      "remoteReplied": "A répondu sur {{computer}}",
+      "remoteNotice": "N’a pas répondu sur {{computer}}",
+      "remoteNotSent": "Non envoyé à {{computer}}",
+      "remoteUnknown": "Statut de réception inconnu",
+      "remoteStopped": "Arrêté ici",
+      "remoteSending": "Demande en cours sur {{computer}}…",
+      "remoteAsked": "Demande envoyée sur {{computer}}",
+      "remoteMayAnswer": "Peut encore répondre sur {{computer}}.",
+      "remoteShortened": "Réponse abrégée. La réponse complète est sur {{computer}}.",
+      "needsLocalBot": "Ce groupe a besoin d’au moins un bot sur cet ordinateur.",
+      "remoteOnComputer": "Ajoutez ou retirez des bots d’autres ordinateurs dans Orca sur {{host}}.",
       "handoffsPaused": "En pause après {{count}} transferts. Répondez pour continuer.",
       "stopCouldNotBeConfirmed": "L’arrêt n’a pas pu être confirmé.",
-      "notStarted": "Non démarré"
+      "notStarted": "Non démarré",
+      "workingCount_many": "{{count}} en cours",
+      "workingCount_one": "{{count}} en cours",
+      "workingCount_other": "{{count}} en cours",
+      "workingCount": "{{count}} en cours",
+      "memberCount_many": "{{count}} bots",
+      "memberCount_one": "{{count}} bot",
+      "memberCount_other": "{{count}} bots",
+      "memberCount": "{{count}} bots",
+      "moreCount_many": "{{count}} de plus",
+      "moreCount_one": "{{count}} de plus",
+      "moreCount_other": "{{count}} de plus",
+      "moreCount": "{{count}} de plus",
+      "andNames": "{{names}} et {{last}}",
+      "membersHere_many": "{{names}} sont là.",
+      "membersHere_one": "{{names}} est là.",
+      "membersHere_other": "{{names}} sont là.",
+      "membersHere": "{{names}} sont là.",
+      "starting": "Démarrage…",
+      "peerReadReplyFrom": "{{reader}} a lu la réponse de {{peer}}"
     },
     "templates": {
       "title": "Modèles de bots",
@@ -5664,9 +5885,17 @@
     "tidyUp": {
       "title": "Entretien de la mémoire",
       "never": "Pas encore",
-      "backToTidyUp": "Retour à l’entretien de la mémoire"
+      "backToTidyUp": "Retour à l’entretien de la mémoire",
+      "footerShort": "Modifie uniquement les fichiers de mémoire. Utilise le forfait de votre agent.",
+      "undoNoteShort": "Remet MEMORY.md tel qu’il était avant ce rangement."
     },
     "items": {
+      "chat": {
+        "anotherAgent": "Un autre agent"
+      },
+      "status": {
+        "waiting": "En attente"
+      },
       "filter": {
         "clearAll": "Réinitialiser les filtres"
       },
@@ -5675,10 +5904,17 @@
         "notSent": "Non envoyé.",
         "retry": "Réessayer",
         "discard": "Abandonner",
-        "mayHaveArrived": "Peut-être reçu."
+        "mayHaveArrived": "Peut-être reçu.",
+        "replyingTo": "Réponse à : {{question}}. Aller à la question"
       },
       "comment": {
-        "replyingTo": "En réponse à :"
+        "replyingTo": "En réponse à :",
+        "hideReplyingTo": "Masquer"
+      },
+      "link": {
+        "automation": "Automatisation",
+        "automationOn": "Réveillera l’agent pour cet élément",
+        "automationEnded": "Terminée"
       },
       "view": {
         "title": "Élément",
@@ -5696,13 +5932,118 @@
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
         "skipped": "Ignorées",
+        "notNow": "Pas maintenant",
         "heldImagesLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} photos. Retirez-en quelques-unes et réessayez.",
         "heldSkillsLimit": "Vos réponses partent en un seul commentaire, qui accepte au plus {{max}} skills. Retirez-en quelques-uns et réessayez."
+      },
+      "wait": {
+        "offlineSave": "{{host}} est hors ligne. Votre texte est conservé ; Enregistrer fonctionnera de nouveau à son retour.",
+        "placeholder": "En attente de",
+        "count": "{{count}} éléments"
+      },
+      "empty": {
+        "allClear": "Rien à traiter"
       }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
-      "access": "{{person}} a demandé l’accès"
+      "access": "{{person}} a demandé l’accès",
+      "fixConnector": "Ouvrir {{name}}",
+      "pairedAsk": "{{from}} veut envoyer un message à {{name}}",
+      "connectorFix": "Connectez-vous ou corrigez le problème",
+      "questions": "{{count}} questions",
+      "signInApps": "Se connecter à {{count}} apps",
+      "listSeparator": ", "
+    },
+    "access": {
+      "titleOne": "Donner à {{person}} l’accès à {{name}} ?",
+      "titleMany": "Donner à {{count}} personnes l’accès à {{name}} ?",
+      "place": "{{connector}} ({{workspace}})",
+      "confirmWarning": "Cet accès permet d’agir en votre nom sur {{computer}}.",
+      "confirmComputer": "Exécuter des commandes et modifier des fichiers",
+      "confirmNoApprovals": "Agit sans demander d’abord",
+      "confirmMaySkipApprovals": "Peut agir sans demander d’abord",
+      "confirmApproveOne": "{{person}} peut approuver ses demandes",
+      "confirmApproveMany": "Ces personnes peuvent approuver ses demandes",
+      "confirmGoogle": "Utiliser votre compte Google",
+      "confirmGitHub": "Commenter et pousser sur GitHub en votre nom",
+      "confirmLinear": "Mettre à jour des issues Linear en votre nom",
+      "descriptionOne": "{{person}} pourra demander à {{name}} depuis {{place}} et, par son intermédiaire, travailler sur {{computer}} en votre nom : exécuter des commandes, ouvrir et modifier des fichiers, utiliser vos comptes connectés et approuver ses demandes.",
+      "account": "Compte {{connector}} : {{identity}}",
+      "yourAccess": "Leurs demandes utilisent votre accès, pas le leur. Tout ce que {{name}} peut faire {{there}}, ces personnes peuvent le lui demander.",
+      "removeAnyTime": "Vous pouvez les retirer de « Qui peut demander » à tout moment.",
+      "thisComputer": "cet ordinateur",
+      "here": "ici",
+      "thisServer": "ce serveur",
+      "executionComputer": "l’ordinateur sur lequel cet agent s’exécute",
+      "there": "là-bas",
+      "confirm": "Donner l’accès",
+      "heading": "Demandes d’accès",
+      "decline": "Refuser",
+      "review": "Examiner…",
+      "full": "Retirez quelqu’un avant d’ajouter {{person}}.",
+      "decideFailed": "Impossible d’enregistrer votre réponse. Réessayez.",
+      "whoCanAsk": "Qui peut demander à {{name}}",
+      "summaryOnlyYou": "Vous seul pouvez demander à {{name}}.",
+      "summaryOne": "Vous et {{person}} pouvez demander à {{name}}.",
+      "summarySome": "Vous, {{people}} et {{last}} pouvez demander à {{name}}.",
+      "summaryMany": "Vous et {{count}} autres personnes pouvez demander à {{name}}.",
+      "controlNone": "Toute personne que vous ajoutez peut utiliser {{name}} pour travailler sur {{computer}} en votre nom : exécuter des commandes, ouvrir et modifier des fichiers, et utiliser vos comptes connectés.",
+      "controlOne": "{{person}} peut utiliser {{name}} pour travailler sur {{computer}} en votre nom : exécuter des commandes, ouvrir et modifier des fichiers, et utiliser vos comptes connectés.",
+      "controlMany": "Ces personnes peuvent utiliser {{name}} pour travailler sur {{computer}} en votre nom : exécuter des commandes, ouvrir et modifier des fichiers, et utiliser vos comptes connectés.",
+      "reachHeading": "Ce à quoi {{name}} a accès",
+      "reachComputer": "Vos fichiers, commandes et comptes sur {{computer}}",
+      "reachComputerDetail": "En votre nom, dans la limite de l’autorisation ci-dessous.",
+      "reachPermission": "Les nouvelles conversations démarrent en mode {{mode}}",
+      "reachPermissionUnknown": "Les nouvelles conversations démarrent selon votre réglage d’autorisation des chats",
+      "permissionFellBack": "{{agent}} n’a pas de mode {{mode}}, donc {{name}} utilise Demander l’approbation.",
+      "codexAsk": "Sandbox Codex : lecture seule jusqu’à l’approbation d’une demande.",
+      "codexOwnSandbox": "Codex utilise sa sandbox configurée.",
+      "codexNoSandbox": "Aucune sandbox Codex.",
+      "whoeverAskedApproves": "Si une approbation est demandée, la personne à l’origine de la requête peut l’accorder.",
+      "reachLinear": "Commenter, mettre à jour et créer des issues Linear en votre nom",
+      "reachSlack": "Publier dans Slack en tant que {{name}}",
+      "reachGitHub": "Commenter, relire et pousser sur GitHub en votre nom",
+      "reachGoogleEmail": "Lire et envoyer vos e-mails",
+      "reachGoogleCalendar": "Utiliser votre agenda",
+      "reachGoogleDrive": "Utiliser vos fichiers Drive",
+      "reachGoogleDocs": "Lire et modifier vos Docs",
+      "reachGoogleSheets": "Lire et modifier vos Sheets",
+      "reachGoogleUnknown": "Votre compte Google, dans la limite de ce que vous avez autorisé à la connexion",
+      "trust": "N’ajoutez que des personnes à qui vous confieriez votre clavier.",
+      "adviceHeading": "Avant de partager",
+      "fixOnlyMe": "Garder {{name}} pour vous",
+      "fixOnlyMeDetail": "Retire les personnes que vous avez ajoutées ici.",
+      "fixOnlyMeAction": "Ne garder que moi",
+      "fixGoogle": "Désactiver Google pour {{name}}",
+      "fixGoogleDetail": "Pour tout le monde, vous compris, dès sa prochaine requête Google.",
+      "fixGoogleAction": "Désactiver",
+      "fixGoogleDone": "Google est désactivé pour {{name}}.",
+      "fixAsk": "Démarrer les nouvelles conversations en mode Demander l’approbation",
+      "fixAskDetail": "{{name}} demande avant d’agir dans davantage de cas. La personne à l’origine de la requête peut toujours approuver. Les conversations déjà ouvertes gardent leur autorisation.",
+      "fixAskDetailCodex": "Codex travaille alors en lecture seule jusqu’à l’approbation d’une demande. La personne à l’origine de la requête peut toujours approuver. Les conversations déjà ouvertes gardent leur autorisation.",
+      "fixAskAction": "Changer",
+      "fixOnlyMeConfirm": "Garder {{name}} pour vous ?",
+      "fixOnlyMeConfirmDetail": "{{name}} n’acceptera plus les demandes de {{people}}. Redonner l’accès demandera d’abord votre confirmation.",
+      "fixAskConfirm": "Démarrer les nouvelles conversations en mode Demander l’approbation ?",
+      "fixOnlyMeFailed": "Impossible de retirer {{names}}. Réessayez.",
+      "fixAskDone": "Les nouvelles conversations démarrent en mode Demander l’approbation.",
+      "undo": "Annuler",
+      "separateBot": "Un bot distinct pour l’équipe dispose de sa propre autorisation, de son propre interrupteur Google et de ses propres outils. Il s’exécute toujours sur {{computer}} en votre nom.",
+      "newBot": "Nouveau bot…",
+      "whatTheyCanDo": "Ce que {{person}} peut faire",
+      "reject": "Refuser",
+      "controlBrief": "Ces personnes peuvent agir en votre nom ici.",
+      "controlBriefIfAdded": "Toute personne que vous ajoutez peut agir en votre nom ici.",
+      "controlBriefOnHost": "Ces personnes peuvent agir en votre nom sur {{computer}}.",
+      "controlBriefIfAddedOnHost": "Toute personne que vous ajoutez peut agir en votre nom sur {{computer}}.",
+      "yourComputer": "votre ordinateur"
+    },
+    "accessDecide": {
+      "expired": "Cette demande a déjà reçu une réponse ou a expiré.",
+      "grantedNotAdded": "L’accès a été donné, mais {{person}} ne figure pas encore dans la liste. Orca l’ajoutera.",
+      "signedOut": "Connectez-vous à Orca sur votre ordinateur pour répondre aux demandes.",
+      "whatTheyCanDoMany": "Ce que ces personnes peuvent faire"
     },
     "waits": {
       "cancel": "Annuler",
@@ -5742,6 +6083,7 @@
         "stopCancels_other": "Pour une clé divulguée. {{count}} appels en attente qu’elle a laissé passer sont annulés.",
         "stopNote": "Pour une clé divulguée.",
         "done": "Clé renouvelée. Copiez la nouvelle URL.",
+        "action": "Renouveler",
         "stopCancels_many": "Pour une clé divulguée. {{count}} appels en attente qu’elle a laissé passer sont annulés."
       },
       "secret": {
@@ -5759,6 +6101,9 @@
         "paste": "Secret {{sender}}",
         "save": "Enregistrer",
         "saved": "Secret de signature enregistré",
+        "copyInto": "Copiez-le dans les paramètres de webhook de {{sender}}.",
+        "title": "Secret de signature",
+        "create": "Créer",
         "changeOpen": "Modifier le secret de signature…",
         "back": "Retour au secret de signature"
       },
@@ -5855,6 +6200,7 @@
         "unverifiable": "Invérifiable",
         "unverifiableDetail": "L’ordinateur de {{bot}} est injoignable"
       },
+      "copiedKey": "Clé copiée",
       "back": "Retour aux Webhooks",
       "hookCount_many": "{{count}} hooks"
     },
@@ -5910,8 +6256,20 @@
       "colorPink": "Rose",
       "nameLabel": "Nom du bot",
       "mascotN": "Mascotte {{n}} sur {{total}}",
+      "outfit": "Tenue",
+      "outfitNone": "Aucune tenue",
+      "outfitTie": "Cravate",
+      "outfitDetective": "Détective",
+      "outfitHardHat": "Casque de chantier",
+      "outfitReviewer": "Relecteur",
+      "outfitNightShift": "Équipe de nuit",
+      "outfitArtist": "Artiste",
+      "outfitScientist": "Scientifique",
+      "outfitParty": "Fête",
+      "outfitSecurity": "Sécurité",
       "tooBig": "Cette image dépasse 10 Mo.",
       "tooSmall": "Trop petite. Utilisez une image d’au moins 128 px.",
+      "color": "Couleur",
       "colorLavender": "Lavande",
       "colorPeach": "Pêche",
       "colorButter": "Beurre",
@@ -5991,6 +6349,28 @@
       "readOnly": "En lecture seule ici. Modifiez-les dans {{agent}}.",
       "fromYours": "{{count}} depuis votre {{agent}}",
       "tryAgain": "Réessayer",
+      "edit": "Modifier",
+      "editTitle": "Modifier l’outil",
+      "save": "Enregistrer",
+      "reading": "Lecture des détails de l’outil…",
+      "url": "URL du serveur",
+      "urlPlaceholder": "https://example.com/mcp",
+      "headers": "En-têtes",
+      "executable": "Exécutable",
+      "commandPlaceholder": "npx",
+      "args": "Arguments",
+      "addArg": "Ajouter un argument",
+      "env": "Variables d’environnement",
+      "keyPlaceholder": "Nom",
+      "valuePlaceholder": "Valeur",
+      "savedPlaceholder": "Valeur enregistrée · saisir pour remplacer",
+      "addHeader": "Ajouter un en-tête",
+      "addVariable": "Ajouter une variable",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "nameTaken": "Un outil nommé {{name}} existe déjà. Choisissez un autre nom.",
+      "useName": "Utiliser {{name}}",
+      "checkUnfinished": "La vérification native ne s’est pas terminée. Vérifiez à nouveau pour réessayer.",
       "signedInTo": "Connecté à {{app}}",
       "back": "Retour aux outils",
       "problem": "Problème",
@@ -6017,10 +6397,10 @@
       "removeVariableRow": "Supprimer la variable",
       "emptyArgument": "Vide",
       "valueNew": "Nouvelle valeur",
-      "valueSaved": "Enregistré"
+      "valueSaved": "Enregistré",
+      "hostMcpServers": "Vos serveurs MCP"
     },
     "handToBot": {
-      "menu": "Transmettre à un bot…",
       "title": "Transmettre {{name}} à un bot",
       "noAgents": "Aucun agent ne s’exécute.",
       "oneAgent": "Son agent continue de s’exécuter et travaille pour le bot.",
@@ -6061,6 +6441,8 @@
       "title": "Importer depuis une autre app",
       "newBot": "Nouveau bot",
       "nameAnother": "Nommer un nouveau bot",
+      "update": "Mettre à jour {{bot}}",
+      "updateDraft": "Importe tout ce qui est nouveau de {{name}} dans {{app}}.",
       "keysStay": "Les clés et identifiants restent sur place",
       "chooseFolderTitle": "Choisir un dossier",
       "loadingFolders": "Chargement des dossiers…",
@@ -6074,11 +6456,16 @@
       "nudgeOne": "Nous avons trouvé un bot dans {{app}}.",
       "nudgeMany": "Nous avons trouvé {{count}} bots dans {{app}}.",
       "noFolders": "Aucun dossier",
+      "more": "Plus d’actions",
+      "makeNew": "Créer plutôt un nouveau bot",
       "folderItems_many": "{{count}} éléments"
     },
     "saveFailed": "Impossible d’enregistrer",
     "chats": {
-      "readFailedTitle": "Impossible de charger les chats"
+      "readFailedTitle": "Impossible de charger les chats",
+      "needsYouCount": "{{count}} à traiter",
+      "open": "Ouvrir",
+      "delete": "Supprimer le chat"
     },
     "panel": {
       "backTo": "Retour à {{name}}"
@@ -6117,6 +6504,7 @@
       "toolCredentialsRaced": "Les identifiants d’outils du bot ont changé dans un autre Orca. Réessayez.",
       "toolSourceManaged": "Orca gère cet outil. Modifiez-le là où vous l’avez configuré.",
       "toolValuesUnmoved": "Un outil contient encore ses valeurs enregistrées. Rouvrez les outils du bot pour les déplacer.",
+      "googleAccountsChanged": "Ses comptes Google ont changé depuis que vous les avez ouverts. Vérifiez-les et enregistrez à nouveau.",
       "toolCodexCheckFailed": "Codex n’a pas pu vérifier ni connecter les outils. Vérifiez sa configuration et réessayez.",
       "toolCodexNoThread": "Codex n’a démarré aucun fil pour y vérifier les outils.",
       "toolSignInFolderFailed": "Impossible de préparer le dossier de connexion : {{detail}}",
@@ -6172,9 +6560,20 @@
       "groupReplierNotMember": "Choisissez un membre actuel du salon dans Réponses du salon.",
       "groupMailNeverStarted": "Ce message n’a jamais lancé de tour.",
       "groupRemoteUnreachable": "Impossible de joindre {{host}}. {{detail}}",
-      "groupRemoteUnreachableRetry": "Impossible de joindre {{host}}. {{detail}} Publiez à nouveau pour réessayer."
+      "groupRemoteUnreachableRetry": "Impossible de joindre {{host}}. {{detail}} Publiez à nouveau pour réessayer.",
+      "composioKeyCantCreateSessions": "Cette clé Composio ne peut pas créer de sessions. Elle a besoin de {{permission}}.",
+      "composioKeyNeedsPermission": "Il manque une autorisation à cette clé Composio. Elle a besoin de {{permission}}.",
+      "composioKeyMissingPermission": "Il manque à cette clé Composio une autorisation dont Orca a besoin."
+    },
+    "pairedServers": {
+      "heading": "Serveurs appairés",
+      "remove": "Retirer",
+      "removeServer": "Retirer {{server}}",
+      "unnamed": "Serveur appairé",
+      "footer": "Leurs agents peuvent faire des demandes sans votre approbation."
     },
     "automations": {
+      "viewRuns": "Voir les exécutions",
       "paused": "En pause",
       "newDraft": "Configurer une automatisation qui "
     },
@@ -6233,22 +6632,217 @@
         "miro": "Tableaux, notes adhésives et cadres",
         "reddit": "Publications, commentaires et subreddits"
       },
+      "added": "Ajoutée",
+      "filter": "Filtre",
+      "filterActive": "Filtre, {{filter}}",
+      "all": "Toutes les apps",
       "webhooks": {
         "line": "Événements de n’importe quel outil ou script"
       },
+      "category": {
+        "coding": "Développement",
+        "chat": "Messagerie",
+        "docs": "Documents et projets",
+        "mail": "E-mails et réunions",
+        "monitoring": "Surveillance",
+        "sales": "Ventes et support",
+        "design": "Design"
+      },
+      "search": "Rechercher des apps",
+      "onBot": "Sur {{bot}}",
+      "noMatch": "Aucune app ne correspond à « {{query}} ».",
+      "connectors": "Connecteurs",
       "composio": {
+        "connectTitle": "Connecter Composio",
+        "once": "Une fois, pour tous vos bots",
+        "browseAll": "Parcourir les apps Composio",
         "keyOnHost": "Stockée sur {{host}} ; les bots ne la voient jamais."
-      }
+      },
+      "close": "Fermer",
+      "couldNotSignIn": "Impossible de se connecter à {{app}}",
+      "signingIn": "Connexion en cours",
+      "openPageAgain": "Rouvrir la page",
+      "closeKeepsSigningIn": "Si vous fermez cet écran, la connexion se poursuit dans le navigateur.",
+      "appsCaption": "Apps",
+      "addByUrl": "Ajouter par URL"
     },
     "share": {
-      "signInOtherSite": "L’ordinateur a envoyé un lien de connexion vers un autre site, il n’a donc pas été ouvert."
+      "receive": {
+        "fromLink": "Depuis un lien",
+        "pasteDescription": "Collez un lien que quelqu’un a partagé.",
+        "ask": "Demander l’approbation",
+        "askDetail": "Choisi pour les bots créés à partir d’un lien",
+        "full": "Accès complet",
+        "fullDetail": "Exécute des commandes sans demander",
+        "chatsDetail": "Part de votre réglage d’autorisation des chats",
+        "origin": "Depuis le lien de {{who}}",
+        "originAnonymous": "Depuis un lien partagé",
+        "back": "Retour",
+        "continue": "Continuer",
+        "linkPlaceholder": "https://app.orca.dev/bots/share/…",
+        "link": "Lien",
+        "paste": "Coller",
+        "have": "Vous avez déjà ce bot",
+        "haveDetail": "{{name}} · créé le {{date}}",
+        "open": "Ouvrir",
+        "stopped": "Ce lien ne fonctionne plus",
+        "stoppedDetail": "Demandez-en un nouveau à la personne qui l’a partagé.",
+        "sharedBot": "Bot partagé"
+      },
+      "binaryFile": "Ce n’est pas du texte, il n’est donc pas affiché.",
+      "linkCopied": "Lien copié",
+      "copyFailed": "Impossible de copier le lien",
+      "previewChanged": "L’aperçu a changé. Vérifiez-le avant de publier.",
+      "movedHere": "Ce lien a été mis à jour ailleurs.",
+      "shareBot": "Partager le bot…",
+      "countOf": "{{picked}} sur {{all}}",
+      "removeSecret": "Retirez le secret pour publier",
+      "title": "Partager le bot",
+      "noPurpose": "Aucun rôle pour l’instant",
+      "linkStatusUnavailable": "Impossible de vérifier le lien de partage",
+      "updatedJustNow": "Mis à jour à l’instant",
+      "publishedJustNow": "Publié à l’instant",
+      "description": "Toute personne disposant du lien peut en faire une copie.",
+      "updatedAt": "Mis à jour le {{date}}",
+      "upToDate": "À jour",
+      "changedSince": "Bot modifié depuis",
+      "copy": "Copier",
+      "copyLink": "Copier le lien",
+      "secretFoundTitle": "Secret détecté",
+      "secretWhere": "{{flag}} dans {{where}}, ligne {{line}}",
+      "view": "Afficher",
+      "nextUpdate": "Prochaine mise à jour",
+      "sameLink": "Publiée sur le même lien. Les copies déjà créées restent telles quelles.",
+      "none": "Aucun",
+      "soul": "Âme",
+      "skills": "Skills",
+      "automations": "Automatisations",
+      "tools": "Outils",
+      "includeMemory": "Inclure la mémoire",
+      "notIncluded": "Non inclus",
+      "setupNote": "Note de configuration",
+      "add": "Ajouter",
+      "safetyCheck": "Contrôle de sécurité",
+      "done": "Terminé",
+      "waitingSignIn": "Connexion en attente dans le navigateur",
+      "signInFor": "Connecte {{host}} à Orca.",
+      "cancelSignIn": "Annuler la connexion",
+      "signIn": "Connectez-vous à Orca pour partager.",
+      "signInToPublish": "Se connecter pour publier",
+      "reload": "Recharger",
+      "updateLink": "Mettre à jour le lien",
+      "publishLink": "Publier le lien",
+      "previewFile": "Aperçu de {{name}}",
+      "outsideSkillWith": "Hors de {{project}} · {{description}}",
+      "outsideSkill": "Hors de {{project}}",
+      "duplicateSkill": "Même nom, dans {{folder}} · non partagée",
+      "all": "Tous",
+      "memoryLimit": "Jusqu’à {{count}} fichiers",
+      "flagOnLine": "{{flag}} à la ligne {{line}}",
+      "memory": "Mémoire",
+      "review": {
+        "notIncluded": "Non inclus",
+        "reviewAgain": "Vérifier à nouveau",
+        "accounts": "Comptes à connecter",
+        "leftOut": "Exclus",
+        "none": "Aucun",
+        "byline": "{{who}} · {{date}} · Non vérifié",
+        "someone": "Quelqu’un",
+        "oneNote": "1 note",
+        "notes": "{{count}} notes",
+        "updated": "{{who}} a mis à jour ce bot. Vérifiez-le à nouveau.",
+        "theSharer": "L’auteur du partage",
+        "createBot": "Créer le bot…",
+        "contact": "Lui permettre de contacter {{host}}",
+        "files": "{{count}} fichiers",
+        "flagLine": "{{flag}}, ligne {{line}}",
+        "off": "Désactivé",
+        "suggested": "Suggéré · {{when}}",
+        "memoryIndex": "Son index de mémoire, avec les notes partagées",
+        "flagIn": "{{flag}} dans {{where}}"
+      },
+      "lines": "{{count}} lignes",
+      "backToSharing": "Retour au partage",
+      "backToLinks": "Retour aux liens partagés",
+      "manageLinks": "Gérer les liens",
+      "notShared": "Non partagé",
+      "loadingLinks": "Chargement des liens partagés…",
+      "isShared": "{{name}} est partagé",
+      "stopSharing": "Arrêter de partager",
+      "stopTitle": "Arrêter de partager {{name}} ?",
+      "stopDescription": "Le lien cesse de fonctionner.",
+      "stopping": "Arrêt…",
+      "stopped": "Partage de {{name}} arrêté",
+      "moreActions": "Plus d’actions pour {{name}}",
+      "noLinks": "Aucun lien de bot. Partagez un bot depuis ses paramètres.",
+      "error": {
+        "blocked": "Un secret a été détecté dans le contenu à partager. Retirez-le, puis réessayez.",
+        "noteSecret": "La note de configuration semble contenir un secret. Retirez-le, puis réessayez.",
+        "expired": "Cet aperçu de partage a expiré. Rouvrez « Partager le bot ».",
+        "prepareAgain": "Ce bot a été partagé depuis une autre fenêtre entre-temps. Rouvrez « Partager le bot ».",
+        "stopped": "Ce lien a été désactivé. Publiez pour créer un nouveau lien.",
+        "moved": "Ce lien a été mis à jour ailleurs. Rouvrez « Partager le bot » pour le voir.",
+        "unavailable": "Orca Cloud n’accepte pas encore les partages de bots.",
+        "avatarRefused": "Orca Cloud a refusé l’image du bot. Choisissez une autre image, puis réessayez.",
+        "tooLarge": "Ce bot est trop volumineux pour être partagé. Excluez une partie de la mémoire ou des skills, puis réessayez."
+      },
+      "reconnect": "Reconnectez-vous à Orca pour partager.",
+      "flag": {
+        "secret": "Secret",
+        "pipeToShell": "Exécute un script téléchargé",
+        "sudo": "S’exécute en tant qu’administrateur",
+        "sendsFile": "Envoie un fichier",
+        "hiddenUnicode": "Caractères masqués",
+        "runnable": "Fichier exécutable"
+      },
+      "secretFound": "1 secret détecté",
+      "secretsFound": "{{count}} secrets détectés",
+      "oneWarning": "1 avertissement",
+      "warnings": "{{count}} avertissements",
+      "nothingFound": "Rien trouvé",
+      "whereLine": "{{where}}, ligne {{line}}",
+      "oneLine": "1 ligne",
+      "webhookNotShared": "Webhook · non partagé",
+      "commandNotShared": "Commande · non partagée",
+      "fileLinkNotShared": "Contient un lien symbolique ou physique · non partagé",
+      "tooLargeNotShared": "Trop volumineux · non partagé",
+      "unreadableNotShared": "Illisible · non partagé",
+      "overLimitNotShared": "Limite de skills dépassée · non partagé",
+      "linkNoLongerAvailable": "Ce lien de partage n’est plus disponible.",
+      "signInOtherSite": "L’ordinateur a envoyé un lien de connexion vers un autre site, il n’a donc pas été ouvert.",
+      "original": {
+        "sharedBy": "Partagé par {{who}}",
+        "viewOriginal": "Voir l’original",
+        "originalGone": "Plus disponible"
+      },
+      "sameLinkShort": "Les copies déjà créées restent telles quelles."
     },
     "settingsPage": {
       "off": "Désactivé",
       "lastLooked": "dernier tour d’horizon {{when}}",
+      "yesterdayAt": "hier à {{time}}",
       "today": "aujourd’hui",
       "yesterday": "hier",
       "lastTidied": "dernier rangement {{when}}"
+    },
+    "whoCanAsk": {
+      "cap": "{{count}} personnes au maximum ici.",
+      "addPeople": "Ajouter des personnes",
+      "addFailed": "Impossible d’ajouter {{names}}.",
+      "fullBot": "Personne n’a été ajouté : avec {{names}}, la limite de {{count}} personnes par bot serait dépassée.",
+      "fullWorkspace": "Personne n’a été ajouté : avec {{names}}, la limite de {{count}} personnes de cet espace de travail serait dépassée.",
+      "retry": "Réessayer",
+      "searching": "Recherche…",
+      "cancel": "Annuler",
+      "selectedHeading": "Sélection",
+      "incomplete": "Tout le monde n’est pas listé. Recherchez par nom pour trouver quelqu’un.",
+      "searchIn": "Rechercher des personnes dans {{workspace}}",
+      "peopleIn": "Personnes dans {{workspace}}",
+      "noOneNamed": "Aucune personne nommée « {{query}} » dans {{workspace}}",
+      "needsSlack": "Ajoutez d’abord {{name}} à Slack pour choisir des personnes de votre espace de travail.",
+      "noMatchDetail": "Les membres, les invités et les personnes d’autres organisations présents dans le Slack de {{workspace}} peuvent être ajoutés. Toute autre personne reçoit une note privée pour vous en faire la demande.",
+      "add": "Ajouter",
+      "allAdded": "Ces personnes peuvent déjà demander"
     },
     "usageLimit": {
       "continuesAt": "Reprend à {{time}}",
@@ -6256,7 +6850,473 @@
       "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     },
     "new": {
-      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
+      "purposeLabel": "Identité",
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}.",
+      "purposePlaceholder": "Qui il est et ce qu’il fait",
+      "noAgent": "Aucun",
+      "noChatAgents": "Aucun agent de chat disponible sur {{host}}."
+    },
+    "chat": {
+      "mentionOwnChats": "Vos autres chats",
+      "mentionPaused": "En pause",
+      "mentionChatsLoadFailed": "Impossible de charger les chats"
+    },
+    "tabs": {
+      "homeTitle": "Principal"
+    },
+    "lookAroundEvery": {
+      "every4h": "Toutes les 4 heures, de 8 h à 20 h",
+      "every2h": "Toutes les 2 heures, de 8 h à 20 h",
+      "twiceDaily": "Deux fois par jour, à 8 h et à 13 h",
+      "mornings": "Chaque matin à 8 h"
+    },
+    "host": {
+      "errors": {
+        "signedOut": "Connectez {{host}} à Orca Cloud pour connecter {{service}}.",
+        "accountChanged": "La connexion Orca de {{host}} a changé. Recommencez.",
+        "notRouted": "La page de {{service}} doit s’ouvrir dans le navigateur d’Orca pour {{host}}. Reconnectez {{host}}, puis recommencez."
+      }
+    },
+    "slack": {
+      "errors": {
+        "notAToken": "Ce n’est pas un jeton d’actualisation de configuration. Il commence par xoxe-.",
+        "grantExpired": "Slack n’accepte plus le jeton de cet espace de travail. Générez-en un nouveau et collez-le.",
+        "rateLimited": "Trop de tentatives. Attendez une minute, puis réessayez.",
+        "slackUnavailable": "Slack n’a pas répondu. Réessayez.",
+        "slackRefused": "Slack a refusé de configurer l’app.",
+        "unknownBot": "Orca Cloud n’a pas encore vu ce bot. Réessayez dans une minute.",
+        "wrongWorkspace": "L’app Slack de ce bot se trouve dans un autre espace de travail. Retirez-la d’abord de Slack.",
+        "notInstalled": "Ajoutez d’abord ce bot à Slack.",
+        "unreachable": "Impossible de joindre Orca Cloud. Vérifiez votre connexion et réessayez."
+      },
+      "setup": {
+        "checking": "Vérification de Slack…",
+        "isIn": "{{name}} est dans Slack",
+        "retry": "Réessayer",
+        "connectAnother": "Connecter un autre espace de travail Slack",
+        "connect": "Connecter Slack",
+        "cancel": "Annuler",
+        "reconnectShort": "Reconnecter",
+        "createShort": "Créer",
+        "settingUp": "Configuration de votre app Slack…",
+        "readyTitle": "Votre app Slack est prête",
+        "readyDetail": "Approuvez-la dans Slack pour terminer. Si votre espace de travail exige qu’un administrateur approuve les nouvelles apps, {{name}} le rejoint dès que c’est fait.",
+        "approve": "Approuver dans Slack",
+        "waiting": "En attente de Slack…",
+        "newLink": "Obtenir un nouveau lien",
+        "uncertain": "Slack a peut-être créé une app nommée {{name}} qu’Orca ne peut pas utiliser. Si elle existe, supprimez-la dans les paramètres de l’app Slack, puis relancez la configuration.",
+        "uncertainChecked": "J’ai vérifié Slack : cette app n’existe pas, ou je l’ai supprimée",
+        "again": "Relancer la configuration",
+        "tryIt": "Essayez-le dans n’importe quel canal ou DM",
+        "openInSlack": "Lui écrire dans Slack",
+        "preview": {
+          "askPlain": "@{{name}} résumez ce fil"
+        },
+        "pick": "Choisissez un espace de travail Slack.",
+        "another": "Connecter un autre espace de travail"
+      },
+      "connection": {
+        "installedBy": "installée par {{installer}}",
+        "waiting": "En attente de l’installation dans Slack.",
+        "none": "Pas encore dans Slack.",
+        "unfinished": "La configuration de Slack n’a pas abouti.",
+        "removeFromTitle": "Retirer {{name}} de {{place}} ?",
+        "removeNote": "Le retrait arrête tout nouveau travail venant de Slack. Il ne supprime pas l’app dans Slack.",
+        "removeConfirm": "Retirer",
+        "add": "Ajouter à Slack",
+        "finish": "Terminer la configuration",
+        "update": "Mettre à jour dans Slack",
+        "appSettings": "Paramètres de l’app Slack",
+        "updatePermissions": "Mettre à jour les autorisations Slack…"
+      },
+      "mentionLinePlain": "Mentionnez @{{name}} dans un canal ou un DM.",
+      "replies": "Réponses",
+      "postAs": {
+        "title": "Publier en tant que",
+        "changeOn": "Modifiez-le sur {{host}}",
+        "orcaUser": "Utilisateur Orca",
+        "viaOrca": "{{name}} (via Orca)",
+        "sample": "On le livre après ça",
+        "linePlain": "Quand vous répondez à un fil Slack depuis Orca, la réponse est publiée en tant que {{name}}.",
+        "approve": "Approuver dans Slack",
+        "waitingOn": "Passer à {{name}} nécessite l’approbation de {{installer}} dans Slack.",
+        "waiting": "Passer à {{name}} nécessite une approbation dans Slack."
+      },
+      "token": {
+        "open": "Obtenir le jeton de configuration",
+        "step1": "Dans les paramètres de l’app Slack, trouvez « Your App Configuration Tokens » et choisissez Generate Token.",
+        "step2": "Sélectionnez l’espace de travail de votre bot.",
+        "step3": "Copiez le Refresh Token et collez-le ci-dessous.",
+        "label": "Jeton d’actualisation de configuration",
+        "paste": "Coller",
+        "accessPasted": "C’est l’Access Token. Copiez le Refresh Token, celui juste à côté.",
+        "kept": "Orca Cloud conserve ce jeton chiffré, vos prochains bots dans cet espace de travail ne demanderont donc qu’un clic.",
+        "step2Title": "Choisir l’espace de travail",
+        "step3Title": "Coller le Refresh Token"
+      },
+      "problem": {
+        "otherUser": "Un autre compte Slack a approuvé la connexion.",
+        "otherUserNext": "Une personne connectée à un autre compte Slack a approuvé le lien Slack, donc {{bot}} ne peut pas agir en votre nom. Obtenez un nouveau lien et approuvez-le en étant connecté à votre propre compte Slack.",
+        "expired": "La connexion à Slack n’a pas abouti.",
+        "expiredNext": "Le lien Slack a expiré avant que quiconque n’approuve la connexion.",
+        "code": "Code",
+        "computer": "Ordinateur",
+        "workspace": "Espace de travail"
+      },
+      "reconnect": {
+        "whyNeeded": "Orca n’a aucun jeton Slack valide pour cet espace de travail.",
+        "continue": "Continuer",
+        "stopped": "Slack n’accepte plus le jeton qu’utilise {{host}}."
+      }
+    },
+    "cloudSignIn": {
+      "paused": "En pause tant que vous êtes déconnecté",
+      "needsSignIn": "Connexion requise"
+    },
+    "connectors": {
+      "back": "Retour aux Connecteurs",
+      "addOrg": "Ajouter une organisation",
+      "addWorkspace": "Ajouter un espace de travail",
+      "addAnotherWorkspace": "Ajouter un autre espace de travail",
+      "backShort": "Retour",
+      "addGitHubAccess": "Ajouter des dépôts ou des organisations",
+      "addBack": "Rajouter",
+      "addBackNamed": "Rajouter {{name}}"
+    },
+    "connector": {
+      "titleSeparator": " · ",
+      "actions": "Actions pour {{name}}",
+      "removeFrom": "Retirer de {{place}}…"
+    },
+    "composio": {
+      "viaComposio": "via Composio",
+      "group": "Plus d’apps avec Composio",
+      "showMore": "Afficher plus",
+      "loading": "Lecture des apps de Composio…",
+      "key": {
+        "label": "Clé API Composio",
+        "placeholder": "Collez votre clé",
+        "getKey": "Obtenir une clé"
+      },
+      "signInEnded": "La connexion a été refusée, a échoué ou a pris trop de temps.",
+      "signInOnComposio": "Connectez-vous à {{app}} sur la page de Composio.",
+      "tryAgain": "Réessayer",
+      "disconnectTitle": "Déconnecter {{app}} ?",
+      "disconnectNote": "{{bot}} ne peut plus utiliser {{app}}. Vous pouvez la reconnecter à tout moment.",
+      "disconnect": "Déconnecter",
+      "signInAgainAs": "Reconnexion requise · {{label}}",
+      "signInAgain": "Reconnexion requise",
+      "connectedAs": "Connecté en tant que {{label}}",
+      "connected": "Connecté",
+      "people": "Personnes",
+      "peopleNote": "Toute personne qui peut demander à {{bot}} peut l’utiliser",
+      "signInLabel": "Connexion",
+      "signInHeld": "Conservée par Composio",
+      "signInAgainMenu": "Se reconnecter",
+      "disconnectNamed": "Déconnecter {{app}}",
+      "added": "{{bot}} peut désormais utiliser {{app}}",
+      "signedOut": "Déconnecté · {{via}}",
+      "unreadShort": "Impossible de charger les apps de Composio.",
+      "reading": "Lecture de Composio…",
+      "keyRejected": "Clé refusée",
+      "fixKey": "Corriger la clé",
+      "signInsUnreadShort": "Impossible de lire les connexions",
+      "checkAgain": "Revérifier",
+      "toolName": "Apps Composio"
+    },
+    "setup": {
+      "for": "pour {{name}}",
+      "copyHowToAsk": "Copier {{text}}"
+    },
+    "settingsView": {
+      "sharing": "Partage",
+      "sharingOn": "Activé"
+    },
+    "memory": {
+      "source": "Depuis {{source}}",
+      "title": "Mémoire",
+      "cancel": "Annuler",
+      "save": "Enregistrer",
+      "fact": "Mémoire",
+      "topicLines_many": "{{count}} lignes",
+      "topicLines_one": "{{count}} ligne",
+      "topicLines_other": "{{count}} lignes",
+      "topicFiles": "Fichiers thématiques",
+      "add": "Ajouter à la mémoire",
+      "addPlaceholder": "Retenir quelque chose de nouveau…",
+      "lines": "{{count}} / {{cap}} lignes",
+      "empty": "Aucun fait enregistré pour l’instant.",
+      "edit": "Modifier",
+      "forget": "Oublier",
+      "tabFacts": "Ce qu’il sait",
+      "tabHistory": "Historique"
+    },
+    "homeFile": {
+      "offline": "{{file}} s’ouvrira dès que {{host}} sera de retour.",
+      "retry": "Réessayer",
+      "reading": "Lecture de {{file}}…"
+    },
+    "soul": {
+      "title": "Âme",
+      "stats": "{{lines}} lignes · {{words}} mots",
+      "empty": "Aucune instruction pour l’instant.",
+      "changeInChat": "Modifier dans le chat",
+      "changeDraft": "Modifie ton SOUL.md pour que "
+    },
+    "skills": {
+      "count_many": "{{count}} skills",
+      "count_one": "{{count}} skill",
+      "count_other": "{{count}} skills",
+      "none": "Aucun skill dans ce projet pour l’instant",
+      "own": "Skills propres à {{bot}}",
+      "title": "Skills",
+      "listedTitle": "{{agent}} ne peut pas charger ces skills directement.",
+      "listedBody": "{{bot}} en reçoit la liste dans ses instructions et en lit un quand il convient. Ils n’apparaîtront pas dans son menu /.",
+      "reading": "Lecture de ses skills…",
+      "nextChat": "Les skills se chargent dans le prochain chat de {{bot}}.",
+      "ownNone": "Aucun skill propre pour l’instant.",
+      "link": "Lier un projet",
+      "notYet": "Pas encore disponible",
+      "noneShort": "Aucun skill",
+      "back": "Retour aux Skills",
+      "search": "Rechercher des projets",
+      "noMatch": "Aucun projet ne correspond à votre recherche.",
+      "remoteShort": "Sur un autre hôte",
+      "missingShort": "N’est plus dans Orca",
+      "remove": "Retirer",
+      "removeProject": "Retirer {{project}}"
+    },
+    "linear": {
+      "whoCanAsk": {
+        "needsSetup": "Terminez la configuration pour associer votre compte Linear dans {{workspace}}, puis choisissez des personnes ici.",
+        "noMatchDetail": "Les membres et invités du Linear de {{workspace}} peuvent être ajoutés. Toute autre personne reçoit une réponse publique l’invitant à s’adresser à vous."
+      },
+      "errors": {
+        "off": "Linear arrive bientôt.",
+        "replaced": "Linear n’a pas abouti. Une connexion Linear ou GitHub plus récente l’a peut-être remplacée. Recommencez.",
+        "wrongAccount": "Cette connexion a été lancée depuis un autre compte Orca. Reconnectez Linear depuis celui-ci.",
+        "alreadyLinked": "Ce compte Orca est associé à un autre utilisateur Linear dans cet espace de travail. Dissociez-le d’abord depuis ⋯ sur la page Linear.",
+        "notAMember": "Seuls les membres à part entière de l’espace de travail Linear peuvent y choisir des personnes.",
+        "rateLimited": "Trop de tentatives. Attendez une minute, puis réessayez.",
+        "unavailable": "Linear n’a pas répondu. Réessayez."
+      },
+      "connection": {
+        "removeNote": "Les personnes de {{workspace}} ne peuvent plus lui confier d’issues, et sa liste de personnes Linear est vidée. Orca y reste installé.",
+        "removeConfirm": "Retirer",
+        "finishSetup": "Terminer la configuration"
+      },
+      "howToAskPlain": "Mentionnez @Orca {{handle}} sur une issue, ou ajoutez l’étiquette bot:{{handle}}.",
+      "setup": {
+        "isOn": "{{name}} est sur Linear",
+        "checking": "Vérification de Linear…",
+        "retry": "Réessayer",
+        "install": "Orca n’est pas encore installé dans {{workspace}}. Un administrateur Linear l’installe une fois pour tout le monde.",
+        "copyForAdmin": "Copier le lien pour l’administrateur",
+        "installing": "En attente de l’installation…",
+        "copied": "Lien copié.",
+        "connectTitle": "Connecter Linear",
+        "close": "Fermer",
+        "tryIt": "Essayez-le sur n’importe quelle issue Linear",
+        "orLabelLine": "Ou ajoutez l’étiquette {{label}}."
+      },
+      "connect": {
+        "another": "Utiliser un autre espace de travail",
+        "stuck": "Bloqué sur une page Linear qui indique « Could not find OAuth client » ? L’app Linear d’Orca n’est pas encore ouverte à cet espace de travail. Un administrateur de l’espace de travail propriétaire de l’app doit la rendre publique.",
+        "pick": "Choisissez un espace de travail Linear.",
+        "handoffPick": "Choisissez l’espace de travail, puis Authorize.",
+        "signIn": "Se connecter à Linear",
+        "pickSubtitle": "Choisissez l’espace de travail dans lequel {{name}} travaille"
+      },
+      "address": "linear.app/{{urlKey}}",
+      "account": {
+        "unlink": "Dissocier le compte Linear",
+        "reconnect": "Reconnecter"
+      }
+    },
+    "github": {
+      "whoCanAsk": {
+        "needsSetup": "Terminez la configuration pour associer votre compte GitHub, puis choisissez des personnes ici.",
+        "exactOnly": "GitHub trouve les personnes par leur nom d’utilisateur exact.",
+        "search": "Rechercher par nom d’utilisateur GitHub",
+        "found": "Personnes sur GitHub",
+        "noUser": "Aucun utilisateur GitHub nommé « {{query}} »",
+        "typeUsername": "Saisissez un nom d’utilisateur GitHub"
+      },
+      "errors": {
+        "off": "GitHub arrive bientôt.",
+        "replaced": "GitHub n’a pas abouti. Une connexion Linear ou GitHub plus récente l’a peut-être remplacée. Recommencez.",
+        "wrongAccount": "Cette connexion a été lancée depuis un autre compte Orca. Reconnectez-vous avec GitHub depuis celui-ci.",
+        "alreadyLinked": "Ce compte Orca est associé à un autre utilisateur GitHub. Dissociez-le d’abord depuis ⋯ sur la page GitHub.",
+        "unavailable": "GitHub n’a pas répondu. Réessayez."
+      },
+      "setup": {
+        "isOn": "{{name}} est sur GitHub",
+        "repositories": "Dépôts",
+        "checking": "Vérification de GitHub…",
+        "retry": "Réessayer",
+        "installing": "En attente de l’installation ou de l’approbation d’un propriétaire de l’organisation…",
+        "install": "Installer l’app Orca",
+        "finish": "Terminé",
+        "connectTitle": "Connecter GitHub",
+        "close": "Fermer",
+        "tryIt": "Essayez-le sur n’importe quelle issue ou PR",
+        "preview": {
+          "ask": "relisez cette PR"
+        },
+        "pushesOnHost": "{{name}} pousse du code depuis {{host}} avec son identifiant git."
+      },
+      "connection": {
+        "removeNote": "Les personnes ne peuvent plus lui demander sur GitHub, et sa liste de personnes GitHub est vidée. L’app Orca reste installée.",
+        "removeConfirm": "Retirer",
+        "finishSetup": "Terminer la configuration",
+        "refresh": "Actualiser",
+        "addAnotherAccount": "Ajouter un autre compte"
+      },
+      "allRepositories": "Tous les dépôts de {{account}}",
+      "account": {
+        "unlink": "Dissocier le compte GitHub",
+        "reconnect": "Reconnecter"
+      },
+      "howToAskPlain": "Mentionnez {{mention}} {{handle}} … sur une issue ou une pull request.",
+      "addMore": "Ajouter des dépôts ou une organisation",
+      "checkingInstalls": "Recherche de modifications sur GitHub…",
+      "connect": {
+        "readsOnly": "Orca lit uniquement votre nom d’utilisateur et votre identifiant GitHub.",
+        "requested": "Un propriétaire de l’organisation a été invité à approuver l’app Orca.",
+        "notInstalled": "L’app Orca n’est encore sur aucun de vos dépôts.",
+        "handoffPick": "Connectez-vous et choisissez les dépôts.",
+        "signIn": "Se connecter à GitHub",
+        "pickSubtitle": "Choisissez les dépôts dans lesquels il peut travailler"
+      },
+      "allRepositoriesShort": "tous les dépôts",
+      "ghSignedOut": {
+        "line": "gh est déconnecté sur {{host}}. Exécutez-y gh auth login.",
+        "copy": "Copier {{text}}"
+      }
+    },
+    "connect": {
+      "finishOnHost": "Terminez la connexion de {{service}} dans Orca sur {{host}}.",
+      "otherComputer": "Un bot sur un autre ordinateur",
+      "askEachTime": "Demander quel bot",
+      "account": "Compte",
+      "linkedAs": "Associé en tant que",
+      "defaultBot": "Bot par défaut pour mes demandes",
+      "opensOnHost": "S’ouvre dans le navigateur d’Orca sur {{host}}.",
+      "signedInAs": "Connecté en tant que {{who}}",
+      "continueOn": "Continuer sur {{host}}",
+      "openSignInPage": "Ouvrir la page de connexion",
+      "cancel": "Annuler",
+      "signInTo": "Se connecter à {{app}}",
+      "updatesWhenDone": "Cette page se met à jour quand vous avez terminé.",
+      "turnOnShort": "Activer"
+    },
+    "google": {
+      "isOn": "Google est activé pour {{name}}",
+      "continuesInChat": "La configuration de Google se poursuit dans le chat de {{name}}.",
+      "file": {
+        "notAFile": "Ce fichier n’est pas un fichier d’app Google. Essayez-en un autre."
+      },
+      "turnOn": {
+        "title": "Activer Google pour {{name}} ?",
+        "confirm": "Activer"
+      },
+      "connect": "Connecter Google",
+      "cancel": "Annuler",
+      "retry": "Réessayer",
+      "checking": "Vérification de Google…",
+      "hostChoice": {
+        "continue": "Continuer",
+        "description": "Choisissez comment {{bot}} se connecte à votre Gmail, Agenda et Drive.",
+        "self": "Auto-hébergé",
+        "selfNote": "Votre propre app Google.",
+        "orca": "Hébergé par Orca",
+        "orcaNote": "Connexion avec Google.",
+        "soon": "Bientôt"
+      },
+      "importFromTeam": "Importer un fichier de configuration de votre équipe",
+      "service": {
+        "contacts": "Trouver des personnes par leur nom"
+      },
+      "bot": {
+        "removeTitle": "Retirer Google de {{name}} ?",
+        "removeNoteOnHost": "{{name}} ne peut plus utiliser votre Gmail, Agenda et Drive. Google reste connecté sur {{host}}.",
+        "removeConfirm": "Retirer",
+        "signedOutOnHost": "Non connecté sur {{host}}",
+        "uses": "Ce qu’il peut utiliser",
+        "whoNote": "Toute personne qui peut demander à {{name}} peut lui faire lire vos e-mails, votre agenda et vos fichiers, et envoyer des e-mails.",
+        "removeFrom": "Retirer Google de {{name}}…"
+      },
+      "fix": {
+        "turnOn": "Activer",
+        "copyForAdmin": "Copier pour votre administrateur",
+        "checkAgain": "Revérifier",
+        "allowAgain": "Autoriser à nouveau"
+      },
+      "adminRequest": "Veuillez définir cette app Google comme « Fiable » dans la console d’administration (Sécurité › Commandes des API › Gérer l’accès des applications tierces) : {{clientId}}",
+      "copied": "Copié. Envoyez-le à votre administrateur Google.",
+      "state": {
+        "ready": "Prêt",
+        "apiOff": "Désactivé dans Google Cloud",
+        "adminBlocked": "Bloqué par l’administrateur Google de votre entreprise",
+        "error": "Impossible de vérifier",
+        "notAllowed": "Vous ne l’avez pas autorisé",
+        "allowOnHost": "Autoriser à nouveau sur {{host}}"
+      },
+      "headline": {
+        "connected": "Google est connecté",
+        "toFixOne": "Presque terminé : 1 point à corriger",
+        "toFix": "Presque terminé : {{count}} points à corriger",
+        "noDefault": "Choisissez un compte par défaut",
+        "ended": "L’accès Google a pris fin.",
+        "endedOnHost": "L’accès Google a pris fin. Reconnectez-vous sur {{host}}."
+      },
+      "defaultBadge": "Par défaut",
+      "setDefault": "Définir par défaut",
+      "shareButton": "Partager la configuration",
+      "share": {
+        "copied": "Copié. Envoyez-le à vos coéquipiers."
+      },
+      "disconnect": {
+        "title": "Déconnecter {{email}} ?",
+        "revokeNote": "Les bots cessent d’utiliser ce compte ici, et Google révoque l’accès d’Orca partout où il avait été autorisé.",
+        "removeOneNote": "Les bots cessent d’utiliser ce compte ici.",
+        "removeNote": "Les bots cessent d’utiliser ce compte ici. Les réglages des bots sont conservés : Connecter Google le réactive donc.",
+        "promotes": "{{email}} devient le compte par défaut.",
+        "confirm": "Déconnecter",
+        "removeFromHost": "Retirer de {{host}}",
+        "revoke": "Retirer et révoquer chez Google"
+      },
+      "accounts": "Comptes",
+      "row": {
+        "signedOut": "Déconnecté par Google"
+      },
+      "reconnect": "Reconnecter",
+      "addAccount": "Ajouter un autre compte",
+      "signIn": "Se connecter à Google",
+      "handoff": "Choisissez votre compte, puis Autoriser.",
+      "signInWarning": "Google affichera un avertissement, car cette app est la vôtre et toute nouvelle. Choisissez Paramètres avancés, puis Accéder à Orca, et cochez toutes les cases sur l’écran suivant.",
+      "signInRun": {
+        "failed": "La connexion Google a échoué. Réessayez."
+      }
+    },
+    "upcoming": {
+      "needsSignIn": "Connexion requise"
+    },
+    "memoryHistory": {
+      "tidyUp": "Rangement"
+    },
+    "list": {
+      "readFailed": "Impossible de charger les bots de {{host}}."
+    },
+    "search": {
+      "pausedMatches_many": "{{count}} bots en pause correspondants",
+      "pausedMatches_one": "{{count}} bot en pause correspondant",
+      "pausedMatches_other": "{{count}} bots en pause correspondants",
+      "showPausedAction": "Afficher les bots en pause"
+    },
+    "section": {
+      "reorderTitle": "Réordonner les bots",
+      "reorder": "Réordonner…"
     }
   },
   "hostMutation": {
@@ -6268,6 +7328,17 @@
   "sidebar": {
     "cardSlot": {
       "working": "En activité"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Supprimer ce chat ?",
+      "descriptionHost": "Il est définitivement supprimé de {{host}}. Cette action est irréversible.",
+      "action": "Supprimer",
+      "failed": "Impossible de supprimer le chat",
+      "groupRoom": "Le chat d'un salon de groupe ne peut pas être supprimé",
+      "home": "Le chat principal d'un agent géré ne peut pas être supprimé",
+      "workerOwed": "Une orchestration attend encore ce chat"
     }
   },
   "mcpServers": {
@@ -6353,6 +7424,7 @@
     "agentFilesMessage": "Orca gardera vos serveurs MCP dans leurs fichiers de paramètres. Vos propres entrées restent telles quelles.",
     "allow": "Autoriser",
     "removeTitle": "Supprimer {{name}} ?",
+    "removeMessageSavedData": "Les sessions qui l'utilisent peuvent perdre l'accès dès maintenant. Cela peut supprimer les en-têtes, variables d'environnement ou la connexion enregistrés pour ce serveur. Dans ce cas, vous devrez peut-être les saisir à nouveau ou vous reconnecter pour retrouver cet accès.",
     "remove": "Supprimer",
     "moveTitle": "Déplacer {{name}} vers Orca ?",
     "moveMessage": "Orca le retire des paramètres de {{agents}} et en conserve une sauvegarde.",
@@ -6360,6 +7432,7 @@
     "workspacesCount": "{{count}} espaces de travail",
     "workspacesAllButCount": "Tous sauf {{count}}",
     "headerMissing": "Renseignez {{header}} pour ajouter ce serveur.",
-    "servers": "Serveurs"
+    "servers": "Serveurs",
+    "unreadable": "La connexion ou la clé enregistrée ne peut pas être ouverte. Reconnectez-vous."
   }
 }

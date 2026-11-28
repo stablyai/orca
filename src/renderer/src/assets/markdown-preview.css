@@ -272,23 +272,20 @@
   display: flex;
   width: fit-content;
   max-width: 100%;
+  /* Room for the 28px send button, so the document does not shift when it appears. */
+  min-height: 28px;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   margin-left: auto;
   margin-bottom: 8px;
-  padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--background) 94%, var(--editor-surface));
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
 }
 
-.markdown-review-toolbar-button,
-.markdown-review-icon-button {
+.markdown-review-toolbar-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
+  white-space: nowrap;
   height: 26px;
   border: 1px solid transparent;
   border-radius: 5px;
@@ -297,21 +294,17 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-}
-
-.markdown-review-toolbar-button {
   gap: 6px;
   padding: 0 8px;
 }
 
-.markdown-review-icon-button {
-  width: 26px;
-  padding: 0;
+.markdown-review-toolbar-button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.markdown-review-toolbar-button:hover:not(:disabled),
-.markdown-review-toolbar-button[aria-expanded='true'],
-.markdown-review-icon-button:hover:not(:disabled) {
+.markdown-review-toolbar-button:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--border) 82%, transparent);
   background: var(--accent);
   color: var(--foreground);
@@ -320,25 +313,6 @@
 .markdown-review-toolbar-button:disabled {
   cursor: default;
   opacity: 0.48;
-}
-
-.markdown-review-icon-button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
-.markdown-review-count {
-  display: inline-flex;
-  min-width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--foreground) 8%, transparent);
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
 }
 
 .markdown-annotation-block,

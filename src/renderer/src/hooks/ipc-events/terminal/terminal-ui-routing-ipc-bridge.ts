@@ -15,6 +15,7 @@ import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-sur
 import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { isBotPage } from '@/components/bots/bot-workspace'
 import {
+  findTabByChatPaneKey,
   findTabByIdOrChatAlias,
   structuredAgentSessionIdOfTab
 } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -184,10 +185,12 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
   )
 
   unsubs.push(
-    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, userInitiated }) => {
+    window.api.ui.onFocusEditorTab(({ tabId, worktreeId, paneKey, userInitiated }) => {
       const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
       const store = useAppStore.getState()
-      const tab = findTabByIdOrChatAlias(store.unifiedTabsByWorktree[worktreeId], localTabId)
+      const tab = paneKey
+        ? findTabByChatPaneKey(store.unifiedTabsByWorktree[worktreeId], paneKey)
+        : findTabByIdOrChatAlias(store.unifiedTabsByWorktree[worktreeId], localTabId)
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
       // Courtesy completion reveals must not undo user navigation; explicit notification clicks may reveal before async activation updates the active ID.
       if (

@@ -131,8 +131,9 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
-      # Build required out/mobile-web using mobile’s React Native/Expo install.
+      # Build required out/mobile-web only when shared release JavaScript is not restored.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: inputs.javascript_source_sha == ''
 
       - name: Verify macOS signing environment
         run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
@@ -196,6 +197,34 @@ jobs:
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ inputs.javascript_source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      # Overlap checkout/install/build with parent release-cut's orcad-template; wait here before packaging.
+      - name: Wait for the qualified orcad template from the release run
+        if: >-
+          !inputs.qualification_only &&
+          hashFiles('config/scripts/orcad-distribution/template/packaged-orcad-template.cjs', 'config/scripts/packaged-orcad-template.cjs') != ''
+        uses: actions/github-script@v8
+        env:
+          PARENT_RUN_ID: ${{ inputs.release_run_id }}
+        with:
+          script: |
+            const runId = Number(process.env.PARENT_RUN_ID)
+            const deadline = Date.now() + 30 * 60_000
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: runId, filter: 'latest', per_page: 100
+              })
+              const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+              const failed = lanes.find(job => job.status === 'completed' &&
+                ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(job.conclusion))
+              if (failed) throw new Error(`Parent template qualification failed: ${failed.name} (${failed.conclusion})`)
+              const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                ...context.repo, run_id: runId, per_page: 100
+              })
+              if (artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for parent orcad-template artifact.')
 
       # Design D2: the parent release-cut run merged it from every node-server lane at this tag.
       - name: Download the orcad deployment template from the release run

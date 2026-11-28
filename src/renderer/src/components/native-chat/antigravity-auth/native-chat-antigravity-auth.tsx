@@ -4,11 +4,11 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore
 } from 'react'
 import { toast } from 'sonner'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -158,34 +158,33 @@ export function NativeChatAntigravityAuthProvider({
       host,
       ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY
     ) === 'supported'
-  const [switching, setSwitching] = useState<Method | null>(null)
+  // Kept with the chat tab: a view released mid-switch returns still switching, so it can't start another.
+  const [switching, setSwitching, readSwitching] = useNativeChatViewGuard<Method | null>(
+    'antigravity-auth-switch',
+    null
+  )
   const [confirming, setConfirming] = useState<AntigravitySwitchableMethod | null>(null)
-  const busy = useRef(false)
 
   const apply = useCallback(
     (target: RuntimeClientTarget, action: AuthAction): Promise<void> => {
-      if (busy.current) {
+      if (readSwitching() !== null) {
         return Promise.resolve()
       }
-      busy.current = true
       setSwitching(action === GOOGLE_SIGN_IN ? 'oauth-personal' : action)
       const done =
         action === GOOGLE_SIGN_IN
           ? startAntigravityChatSignIn(target, 'signIn')
           : applyAntigravityChatAuthMethod(target, action, t)
-      return done.then(() => {
-        busy.current = false
-        setSwitching(null)
-      })
+      return done.then(() => setSwitching(null))
     },
-    [t]
+    [t, readSwitching, setSwitching]
   )
 
   // A switch restarts the host's running chats, so re-read first: a chat may have started since
   // mount. An unanswered read can't rule chats out, so it asks too. Signing agy in restarts none.
   const decide = useCallback(
     async (target: RuntimeClientTarget, action: AuthAction): Promise<void> => {
-      if (busy.current) {
+      if (readSwitching() !== null) {
         return
       }
       if (action === GOOGLE_SIGN_IN) {
@@ -204,7 +203,7 @@ export function NativeChatAntigravityAuthProvider({
       }
       await apply(target, action)
     },
-    [apply]
+    [apply, readSwitching]
   )
 
   // A sign-in or a method saved elsewhere (Settings, another client) changes what's detected.

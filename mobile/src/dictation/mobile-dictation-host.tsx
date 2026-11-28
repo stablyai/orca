@@ -1,3 +1,4 @@
+import { translate } from '../i18n/mobile-i18n'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
@@ -101,12 +102,12 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       screen.reportFailure(err)
       // A setup refusal opens the setup sheet, which is read on its own.
       if (!isDictationSetupRequiredError(err.message)) {
-        speak(dictationFailureMessage(err.message))
+        speak(dictationFailureMessage(err.message, translate))
       }
       return
     }
     triggerError()
-    setToast({ message: dictationFailureMessage(err.message) })
+    setToast({ message: dictationFailureMessage(err.message, translate) })
   })
 
   const dictation = useMobileDictation({
@@ -126,7 +127,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       }
       void insertMobileDictationAway(current, text).then((inserted) => {
         if (inserted) {
-          say(dictationAwayCopy.insertedIn(current), current)
+          say(dictationAwayCopy.insertedIn(current, translate), current)
           return
         }
         triggerError()

@@ -4,6 +4,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/jou
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { readPromptSuggestionText } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-prompt-suggestion-text'
 import {
   claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
@@ -58,7 +59,7 @@ export type ClaudeOpenTurnDeps = {
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
   usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
-  /** Block late output from reopening ended or failed turns until an accepted send arrives. */
+  /** Block late output from reopening ended or failed turns until a send or a new provider cycle. */
   private reopenSuppressed = false
   /** Track root work since cycle init; background output may open a turn before that init. */
   private cycleWorkObserved = false
@@ -145,9 +146,8 @@ export class ClaudeOpenTurn {
 
   observeProviderCycleStart(): void {
     this.steerHandoffEnd = null
-    this.cycleWorkObserved = false
     this.cycleTurn = null
-    this.inputChoiceWorkObserved = false
+    this.cycleWorkObserved = this.inputChoiceWorkObserved = this.reopenSuppressed = false
   }
 
   observeProviderCycleWork(): void {
@@ -174,6 +174,16 @@ export class ClaudeOpenTurn {
     this.deps.sink.setActivity?.(null)
     // Every open clears, since a relaunch can leave the host holding the last process's guess.
     this.deps.sink.setPromptSuggestion?.(null)
+  }
+
+  /** The turn a kept agent was running when the last app quit: its row exists, so only its end is
+   *  published, the replay continues it instead of opening another, and a follow-up steers it. */
+  adoptKept(turn: ClaudeCurrentTurn): void {
+    if (!this.current) {
+      this.current = turn
+      this.cycleTurn = turn
+      this.cycleWorkObserved = this.inputChoiceWorkObserved = true
+    }
   }
 
   /** The host already wrote the command row; only publish its eventual end. */
@@ -274,7 +284,7 @@ export class ClaudeOpenTurn {
     this.reopenSuppressed = true
   }
 
-  /** Keep failure suppression latched until a new accepted send. */
+  /** Keep failure suppression latched until a send or a new provider cycle. */
   suppressReopenOnFailure(failed: boolean): void {
     this.reopenSuppressed ||= failed
   }
@@ -318,9 +328,6 @@ export class ClaudeOpenTurn {
   }
 }
 
-// Claude's guesses are a short sentence; a longer one is not worth a frame to every reader.
-const CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH = 1000
-
 /** Takes the CLI's guess at the next prompt off the journal path, so no turn, context or activity
  *  logic sees it. It arrives after `result`; a turn or a send started since then makes it stale. */
 export function withClaudePromptSuggestions(
@@ -334,14 +341,8 @@ export function withClaudePromptSuggestions(
       return
     }
     const { suggestion, uuid } = event.message
-    const text = typeof suggestion === 'string' ? suggestion.trim() : ''
-    if (
-      !turn.isOpen &&
-      !event.startedSend &&
-      typeof uuid === 'string' &&
-      text &&
-      text.length <= CLAUDE_PROMPT_SUGGESTION_MAX_LENGTH
-    ) {
+    const text = readPromptSuggestionText(suggestion)
+    if (!turn.isOpen && !event.startedSend && typeof uuid === 'string' && text) {
       sink.setPromptSuggestion?.({ id: uuid, text })
     }
   }

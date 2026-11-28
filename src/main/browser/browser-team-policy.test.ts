@@ -74,6 +74,28 @@ describe('browser-team-policy', () => {
     expect(() => assertTeamAllowsBrowserRpc('terminal.list', { kind: 'local-cli' })).not.toThrow()
   })
 
+  it("lets a person's stream viewer read a tab's details while agents stay blocked", () => {
+    setTeamBrowserUseFlag(false)
+
+    expect(() => assertTeamAllowsBrowserRpc('browser.tabShow', { kind: 'desktop' })).not.toThrow()
+    expect(() =>
+      assertTeamAllowsBrowserRpc('browser.tabShow', { kind: 'paired-device', deviceId: 'dev_1' })
+    ).not.toThrow()
+    expect(() => assertTeamAllowsBrowserRpc('browser.tabShow', { kind: 'local-cli' })).toThrow(
+      'Browser Use is turned off by your team.'
+    )
+    expect(() =>
+      assertTeamAllowsBrowserRpc('browser.tabShow', {
+        kind: 'paired-device',
+        deviceId: 'dev_1',
+        agent: true
+      })
+    ).toThrow('Browser Use is turned off by your team.')
+
+    setTeamBrowserUseFlag(true)
+    expect(() => assertTeamAllowsBrowserRpc('browser.tabShow', { kind: 'local-cli' })).not.toThrow()
+  })
+
   it('allows browser use when the team policy does not disable it', () => {
     setTeamBrowserUseFlag(true)
     expect(() => assertTeamAllowsBrowserUse()).not.toThrow()

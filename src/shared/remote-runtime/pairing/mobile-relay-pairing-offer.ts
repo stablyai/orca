@@ -45,13 +45,17 @@ function isCanonicalBase64Key(value: string): boolean {
 
 // A relay offer's fields but its expiry, which a pairing checks on read and a share offer when it connects.
 export const PAIRING_RELAY_OFFER_FIELDS = {
-  v: z.literal(1),
-  directorUrl: z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
-  cellUrl: z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
-  assignmentEpoch: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-  relayHostId: z.string().regex(BASE64URL_16_PATTERN),
-  inviteToken: z.string().regex(BASE64URL_43_PATTERN),
-  e2eeFraming: z.literal(2)
+  v: lazyZodSchema(() => z.literal(1)),
+  directorUrl: lazyZodSchema(() =>
+    z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin')
+  ),
+  cellUrl: lazyZodSchema(() =>
+    z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin')
+  ),
+  assignmentEpoch: lazyZodSchema(() => z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)),
+  relayHostId: lazyZodSchema(() => z.string().regex(BASE64URL_16_PATTERN)),
+  inviteToken: lazyZodSchema(() => z.string().regex(BASE64URL_43_PATTERN)),
+  e2eeFraming: lazyZodSchema(() => z.literal(2))
 }
 
 export function createPairingOfferSchema(now: () => number = () => Date.now()) {
@@ -102,6 +106,6 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
     })
 }
 
-export const PairingOfferSchema = createPairingOfferSchema()
+export const PairingOfferSchema = lazyZodSchema(() => createPairingOfferSchema())
 export type PairingOffer = z.infer<typeof PairingOfferSchema>
 export type PairingRelay = NonNullable<PairingOffer['relay']>

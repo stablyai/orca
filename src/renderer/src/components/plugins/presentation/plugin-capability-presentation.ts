@@ -1,5 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../../../shared/plugins/capabilities/plugin-capabilities'
 import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import type { PluginTrust } from './plugin-access-profile'
 
@@ -68,6 +69,31 @@ export function pluginCapabilityDescription(
       return t(
         'auto.components.settings.PluginConsentDialog.capability.settingsOwn',
         'Read and change its own settings'
+      )
+    case 'appearance:write':
+      return t(
+        'auto.components.settings.PluginConsentDialog.capability.appearanceWrite',
+        PLUGIN_CAPABILITY_DESCRIPTIONS['appearance:write']
+      )
+    case 'workspace:create':
+      return t(
+        'auto.components.settings.PluginConsentDialog.capability.workspaceCreate',
+        PLUGIN_CAPABILITY_DESCRIPTIONS['workspace:create']
+      )
+    case 'automation:read':
+      return t(
+        'auto.components.settings.PluginConsentDialog.capability.automationRead',
+        PLUGIN_CAPABILITY_DESCRIPTIONS['automation:read']
+      )
+    case 'automation:write':
+      return t(
+        'auto.components.settings.PluginConsentDialog.capability.automationWrite',
+        PLUGIN_CAPABILITY_DESCRIPTIONS['automation:write']
+      )
+    case 'history:read':
+      return t(
+        'auto.components.settings.PluginConsentDialog.capability.historyRead',
+        PLUGIN_CAPABILITY_DESCRIPTIONS['history:read']
       )
     default:
       return fallback

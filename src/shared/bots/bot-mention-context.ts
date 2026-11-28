@@ -239,7 +239,7 @@ export function botMentionContext(
           : `${BOT_ADDRESS_PREFIX}${id}`
       const target = /^[\w-]+$/.test(id) && /^[\w-]+$/.test(client.installationId)
       return target
-        ? `${shown} is an agent on ${computer}. To message it, run \`orca orchestration send --on-client ${client.installationId} --to ${address} --type question|handoff --subject … --body-file …\`; that computer's owner may need to approve it first, and the send fails at once if that computer isn't connected. Don't message it unless asked.`
+        ? `${shown} is an agent on ${computer}. To message it, run \`orca orchestration send --on-client ${client.installationId} --to ${address} --type question|handoff --subject … --body-file …\`; that computer's owner may need to approve it first. Don't message it unless asked.`
         : `${shown} is an agent on ${computer}, but its mention can't be used. Tell the user.`
     }
     // A name a code span or the block can't hold as typed is addressed by its id instead.

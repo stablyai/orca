@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import { useAppStore } from '@/store'
 import { observeOffscreenRow } from '@/lib/window-activity/offscreen-animation-pause'
@@ -22,7 +22,12 @@ export function countRecordKeysByReference(record: Record<string, unknown>): num
   if (cached !== undefined) {
     return cached
   }
-  const count = Object.keys(record).length
+  let count = 0
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      count += 1
+    }
+  }
   recordKeyCountCache.set(record, count)
   return count
 }
@@ -47,10 +52,7 @@ export function useVirtualRowMeasurementSync(args: {
   const { virtualizer, isCurrentVirtualRowElement } = virtualization
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
-  const activeRenderRowKeys = useMemo(
-    () => new Set(virtualization.rowIndexByKey.keys()),
-    [virtualization.rowIndexByKey]
-  )
+  const { rowIndexByKey } = virtualization
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -93,7 +95,7 @@ export function useVirtualRowMeasurementSync(args: {
 
   useLayoutEffect(() => {
     pruneStaleVirtualRowElementCache({
-      activeRowKeys: activeRenderRowKeys,
+      activeRowKeys: rowIndexByKey,
       virtualizer
     })
     // Why: a stale retained element after delete/collapse measures 0px and corrupts the next slot; measure only key-matched rows.
@@ -101,7 +103,7 @@ export function useVirtualRowMeasurementSync(args: {
     const frameId = window.requestAnimationFrame(measureMountedRows)
     return () => window.cancelAnimationFrame(frameId)
   }, [
-    activeRenderRowKeys,
+    rowIndexByKey,
     prCacheLen,
     issueCacheLen,
     measureMountedRows,

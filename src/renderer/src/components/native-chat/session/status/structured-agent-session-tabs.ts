@@ -1,7 +1,8 @@
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { readTabRowChanges } from '@/store/record-transitions/keyed-tab-row-changes'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -27,6 +28,8 @@ type Lineage = {
   list: readonly StructuredTab[] | null
   /** The last materialized list, reused when a rebuild yields the same chats. */
   stale: readonly StructuredTab[] | null
+  /** Open tabs per conversation pane key, kept with `chats` so a close never walks every tab. */
+  byConversation: Map<string, Map<string, Tab>>
 }
 let lineage: Lineage | null = null
 
@@ -79,6 +82,42 @@ function placeInOrder(target: Lineage, worktreeId: string, present: boolean): vo
   }
 }
 
+function updateConversationTab(
+  { byConversation }: Lineage,
+  worktreeId: string,
+  tabId: string,
+  before: Tab | undefined,
+  after: Tab | undefined
+): void {
+  if (
+    before === after ||
+    (before?.contentType !== 'agent-session' && after?.contentType !== 'agent-session')
+  ) {
+    return
+  }
+  const slot = `${worktreeId}\0${tabId}`
+  if (
+    before?.contentType === 'agent-session' &&
+    (after?.contentType !== 'agent-session' || before.entityId !== after.entityId)
+  ) {
+    const key = chatPaneKey(before.entityId)
+    const showing = byConversation.get(key)
+    if (showing?.delete(slot) && showing.size === 0) {
+      byConversation.delete(key)
+    }
+  }
+  if (after?.contentType === 'agent-session') {
+    const key = chatPaneKey(after.entityId)
+    const showing = byConversation.get(key)
+    if (showing) {
+      // Refresh row metadata in place without changing its conversation membership.
+      showing.set(slot, after)
+    } else {
+      byConversation.set(key, new Map([[slot, after]]))
+    }
+  }
+}
+
 function setChats(target: Lineage, worktreeId: string, tabs: readonly StructuredTab[]): void {
   const before = target.chats.get(worktreeId) ?? NO_TABS
   if (tabs === before) {
@@ -105,13 +144,18 @@ function rebuildFromSnapshot(source: TabsByWorktree, previous: Lineage | null): 
     chats: new Map(),
     order: null,
     list: null,
-    stale: previous?.list ?? previous?.stale ?? null
+    stale: previous?.list ?? previous?.stale ?? null,
+    byConversation: new Map()
   }
   for (const worktreeId of Object.keys(source)) {
     rebuilt.rank.set(worktreeId, rebuilt.nextRank++)
-    const tabs = structuredTabsOf(source[worktreeId] ?? [], previous?.chats.get(worktreeId))
+    const bucket = source[worktreeId] ?? []
+    const tabs = structuredTabsOf(bucket, previous?.chats.get(worktreeId))
     if (tabs.length) {
       rebuilt.chats.set(worktreeId, tabs)
+    }
+    for (const tab of bucket) {
+      updateConversationTab(rebuilt, worktreeId, tab.id, undefined, tab)
     }
   }
   return rebuilt
@@ -129,8 +173,32 @@ function applyAddressed(
   for (const worktreeId of changes.addedWorkspaceIds) {
     target.rank.set(worktreeId, target.nextRank++)
   }
+  const changedRows = readTabRowChanges(source, target.source)
   for (const worktreeId of changes.workspaceIds) {
     const bucket = Object.hasOwn(source, worktreeId) ? source[worktreeId] : undefined
+    if (changedRows === 'unknown') {
+      // A reorder can hide row provenance, but the changed tab IDs are still available.
+      const previous = Object.hasOwn(target.source, worktreeId) ? target.source[worktreeId] : []
+      const before = new Map<string, Tab>()
+      for (const tab of previous) {
+        if (changes.tabIds.has(tab.id) && tab.contentType === 'agent-session') {
+          before.set(tab.id, tab)
+        }
+      }
+      for (const tab of bucket ?? []) {
+        if (changes.tabIds.has(tab.id) && tab.contentType === 'agent-session') {
+          updateConversationTab(target, worktreeId, tab.id, before.get(tab.id), tab)
+          before.delete(tab.id)
+        }
+      }
+      for (const [tabId, tab] of before) {
+        updateConversationTab(target, worktreeId, tabId, tab, undefined)
+      }
+    } else {
+      for (const [tabId, row] of changedRows?.get(worktreeId) ?? []) {
+        updateConversationTab(target, worktreeId, tabId, row.before, row.after)
+      }
+    }
     setChats(
       target,
       worktreeId,
@@ -169,6 +237,29 @@ function materialize(current: Lineage): readonly StructuredTab[] {
   return current.list
 }
 
+const NO_CONVERSATION_TABS: ReadonlyMap<string, Tab> = new Map()
+
+/** Every open tab showing the conversation with this pane key, in any workspace. */
+export function chatTabsShowingConversation(
+  unifiedTabsByWorktree: TabsByWorktree,
+  paneKey: string
+): Iterable<Tab> {
+  return (
+    advance(unifiedTabsByWorktree).byConversation.get(paneKey) ?? NO_CONVERSATION_TABS
+  ).values()
+}
+
+export function* structuredTabsShowingConversation(
+  unifiedTabsByWorktree: TabsByWorktree,
+  paneKey: string
+): IterableIterator<StructuredTab> {
+  for (const tab of chatTabsShowingConversation(unifiedTabsByWorktree, paneKey)) {
+    if (isStructuredTab(tab)) {
+      yield tab
+    }
+  }
+}
+
 /** Structured-session tabs; the same list while no chat tab changed, so non-chat tab writes stay quiet. */
 export function getStructuredAgentSessionTabs(
   unifiedTabsByWorktree: TabsByWorktree
@@ -182,15 +273,9 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
-// Chat tabs keep their objects across non-chat writes, so a full pass never re-hashes a session id.
-const paneKeysByTab = new WeakMap<StructuredTab, string>()
+/** A chat tab's pane key: its conversation's, whatever tab it sits in. */
 export function structuredTabPaneKey(tab: StructuredTab): string {
-  let paneKey = paneKeysByTab.get(tab)
-  if (paneKey === undefined) {
-    paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    paneKeysByTab.set(tab, paneKey)
-  }
-  return paneKey
+  return chatPaneKey(tab.entityId)
 }
 
 const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
@@ -214,7 +299,14 @@ export function structuredTabsByPaneKey(
   if (cached) {
     return cached
   }
-  const result = new Map(structuredTabs.map((tab) => [structuredTabPaneKey(tab), tab]))
+  // The first listed tab stands for a conversation, as the status member and projection do.
+  const result = new Map<string, StructuredTab>()
+  for (const tab of structuredTabs) {
+    const key = chatPaneKey(tab.entityId)
+    if (!result.has(key)) {
+      result.set(key, tab)
+    }
+  }
   paneTabs.set(structuredTabs, result)
   return result
 }

@@ -1,5 +1,9 @@
 import * as z from 'zod'
-import { BRIDGE_MAX_METHOD_CHARS } from './bridge-caps'
+import {
+  BRIDGE_LEGACY_EXTERNAL_LINK_CHARS,
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
+  BRIDGE_MAX_METHOD_CHARS
+} from './bridge-caps'
 
 // Version gates incompatible shape; negotiate capabilities through grants. Drop unknown keys so independently updated desktop bundles and installed shells tolerate additive fields.
 // New closed-list values are incompatible: older readers reject the whole frame. Negotiate them like opcodes rather than assuming unknown-key tolerance applies.
@@ -26,6 +30,16 @@ export const BRIDGE_EXTERNAL_LINK_GRANT = 'externalLink'
 // Negotiate rpcEnvelope before relying on extra wire fields; older shells drop unknown fields and could execute without caller-required metadata.
 export const BRIDGE_RPC_ENVELOPE_GRANT = 'rpcEnvelope'
 
+// This shell takes external links up to BRIDGE_MAX_EXTERNAL_LINK_CHARS; older shells refuse any past the route href cap.
+export const BRIDGE_LONG_EXTERNAL_LINK_GRANT = 'externalLinkLong'
+
+/** The longest external link this page's shell takes. */
+export function bridgeExternalLinkMaxChars(hasGrant: (grant: string) => boolean): number {
+  return hasGrant(BRIDGE_LONG_EXTERNAL_LINK_GRANT)
+    ? BRIDGE_MAX_EXTERNAL_LINK_CHARS
+    : BRIDGE_LEGACY_EXTERNAL_LINK_CHARS
+}
+
 // The shell skipped the build's language-catalog chunks, so the page reads its catalog from the desktop.
 export const BRIDGE_HOST_CATALOGS_GRANT = 'hostCatalogs'
 
@@ -41,5 +55,6 @@ export const BRIDGE_SHELL_GRANTS: readonly string[] = [
   BRIDGE_RPC_ENVELOPE_GRANT,
   BRIDGE_HOST_CATALOGS_GRANT,
   BRIDGE_SESSION_PANE_RETURN_GRANT,
-  BRIDGE_CHAT_VISUAL_FRAME_GRANT
+  BRIDGE_CHAT_VISUAL_FRAME_GRANT,
+  BRIDGE_LONG_EXTERNAL_LINK_GRANT
 ]
