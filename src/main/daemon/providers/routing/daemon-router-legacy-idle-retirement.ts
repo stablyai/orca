@@ -145,10 +145,7 @@ export class DaemonRouterLegacyIdleRetirement {
       }
       await new Promise((resolve) => setTimeout(resolve, delayMs).unref?.())
     }
-    if (!this.disposed && this.modes.get(adapter) === 'held' && !adapter.isHeldForRetirement()) {
-      // Still unproven: endpoint-loss handling keeps it, and the next activity looks again.
-      this.modes.delete(adapter)
-    }
+    // Still unproven, but still tracked: its next close, reconnect or activity looks again.
     return false
   }
 
