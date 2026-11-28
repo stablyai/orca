@@ -11982,6 +11982,26 @@
               "6efd8b2174": "PowerShell のバージョン",
               "94792c10ac": "デフォルトのシェル"
             }
+          },
+          "history": {
+            "scopeTitle": "ワークスペースごとに bash・zsh・fish の履歴を分離",
+            "scopeDescription": "bash、zsh、fish のコマンド履歴をワークスペースごとに分離します。PowerShell とコマンド プロンプトには影響しません。変更は新しいターミナルセッションに適用されます。",
+            "search": {
+              "shell": "シェル",
+              "history": "履歴",
+              "workspace": "ワークスペース",
+              "worktree": "ワークツリー",
+              "reverseSearch": "逆方向検索",
+              "autosuggestions": "自動候補",
+              "shared": "共有",
+              "isolated": "分離",
+              "arrowUp": "上矢印",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {

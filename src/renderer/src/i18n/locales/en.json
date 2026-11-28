@@ -12910,6 +12910,26 @@
               "6efd8b2174": "PowerShell version",
               "94792c10ac": "Default shell"
             }
+          },
+          "history": {
+            "scopeTitle": "Scope bash, zsh, and fish history by workspace",
+            "scopeDescription": "Keeps command history separate between workspaces for bash, zsh, and fish. PowerShell and Command Prompt are unaffected. Changes apply to new terminal sessions.",
+            "search": {
+              "shell": "shell",
+              "history": "history",
+              "workspace": "workspace",
+              "worktree": "worktree",
+              "reverseSearch": "reverse search",
+              "autosuggestions": "autosuggestions",
+              "shared": "shared",
+              "isolated": "isolated",
+              "arrowUp": "Arrow Up",
+              "ctrlR": "Ctrl+R",
+              "histfile": "HISTFILE",
+              "zsh": "zsh",
+              "bash": "bash",
+              "fish": "fish"
+            }
           }
         },
         "voice": {

@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getTerminalShellHistorySearchEntry } from '../terminal-shell-history-search'
 
 export function getTerminalLimitSearchKeywords(t?: Translate): string[] {
   return [
@@ -60,7 +61,8 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.affb14efd4', 'selection')
     ]
-  }
+  },
+  getTerminalShellHistorySearchEntry()
 ])
 
 export const getTerminalMacOptionSearchEntries = createLocalizedCatalog(() => [

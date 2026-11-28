@@ -72,7 +72,7 @@ type SettingsSwitchRowProps = {
   label: React.ReactNode
   description?: React.ReactNode
   checked: boolean
-  onChange: () => void
+  onChange: (checked: boolean) => void
   className?: string
   ariaLabel?: string
   disabled?: boolean

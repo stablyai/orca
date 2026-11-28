@@ -18,6 +18,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getTerminalWindowsPowershellImplementationSearchEntry } from './platform/terminal-windows-search'
 import { TerminalMacKeyboardSection } from './platform/TerminalMacKeyboardSection'
+import { TerminalShellHistorySetting } from './TerminalShellHistorySetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -247,6 +248,8 @@ export function TerminalAdvancedSection({
           }
         />
       </SearchableSetting>
+
+      <TerminalShellHistorySetting settings={settings} updateSettings={updateSettings} />
 
       {showWindowsPowerShellImplementation &&
       matchesSettingsSearch(
