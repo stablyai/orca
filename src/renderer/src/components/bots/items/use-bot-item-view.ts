@@ -14,6 +14,8 @@ export type BotItemViewRead = {
   events: BotItemEvent[]
   /** False while the item shows from its list row and its Activity is still being read. */
   eventsRead: boolean
+  /** Newest activity event returned by this visit's first successful refresh. */
+  activityReadThrough?: string
   /** Older events wait behind Show earlier. */
   hasEarlier: boolean
   failed: boolean
@@ -65,6 +67,7 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
       (listed ? { item: listed, events: [], earlierCursor: null, eventsRead: false } : null)
   )
   const [failed, setFailed] = useState(false)
+  const [activityReadThrough, setActivityReadThrough] = useState<string>()
   const [deleted, setDeleted] = useState(false)
   const [attempt, setAttempt] = useState(0)
   const current = useRef<Loaded | null>(null)
@@ -90,6 +93,7 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
         if (!known?.eventsRead) {
           const page = await showBotItem(ref, uid, { newest: true })
           if (live) {
+            setActivityReadThrough((through) => through ?? page.events.at(-1)?.id ?? 'e0')
             setLoaded({
               item: page.item,
               events: page.events,
@@ -112,6 +116,9 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
             after = page.nextCursor
           }
           if (live) {
+            setActivityReadThrough(
+              (through) => through ?? added.at(-1)?.id ?? known.events.at(-1)?.id ?? 'e0'
+            )
             setLoaded((prev) => withChanges(prev, item, added))
           }
         }
@@ -182,6 +189,7 @@ export function useBotItemView(bot: BotRef, uid: string, listed?: BotItem): BotI
     item: loaded?.item ?? null,
     events: loaded?.events ?? [],
     eventsRead: loaded?.eventsRead ?? false,
+    activityReadThrough,
     hasEarlier: Boolean(loaded?.earlierCursor),
     failed: failed && !deleted,
     deleted,

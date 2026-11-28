@@ -27533,6 +27533,7 @@
         "subWhere": "Element {{number}} · {{chat}}"
       },
       "activity": {
+        "newMessages": "Neue Nachrichten",
         "linked": "hat {{links}} verknüpft",
         "anotherAgent": "Ein anderer Agent",
         "you": "Du",

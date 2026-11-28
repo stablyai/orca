@@ -7,6 +7,7 @@ import { flushSync } from 'react-dom'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
+import { botRefKey } from '@/lib/bot-hosts'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
@@ -55,7 +56,7 @@ export function BotItemPane({
     <BotItemPaneFrame walk={walk} offline={offline} onBack={onBack} owner={named ? bot : null}>
       {(slots) => (
         <BotItemView
-          key={uid}
+          key={`${botRefKey(bot)}\0${uid}`}
           bot={bot}
           uid={uid}
           listed={listed}

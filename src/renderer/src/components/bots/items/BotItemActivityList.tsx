@@ -1,6 +1,6 @@
 // An item's Activity on a rail: comments on one quiet surface, and between them one muted line per event
 // (worker started and finished from the worker's record, edits, links and status changes).
-import { useCallback, useRef, useState } from 'react'
+import { Fragment, useCallback, useMemo, useRef, useState } from 'react'
 import {
   AlarmClock,
   AlarmClockOff,
@@ -13,6 +13,7 @@ import {
   Plus
 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { botRefKey } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_ITEM_STATUSES,
@@ -33,6 +34,8 @@ import { BotItemWaitCard } from './BotItemWaitCard'
 import { revealBotItemComment } from './bot-item-comment-reveal'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 import { NativeChatMessageTimestamp } from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
+import { ChatUnreadDivider } from '../../native-chat/viewport/new-rows/NativeChatNewRowsMarker'
+import { useBotItemActivityRead } from './use-bot-item-activity-read'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
@@ -259,7 +262,9 @@ export function BotItemActivityList({
   item,
   events,
   pending,
-  quickReplies
+  quickReplies,
+  history,
+  scrollRef
 }: {
   bot: Bot
   item: BotItem
@@ -268,12 +273,23 @@ export function BotItemActivityList({
   pending?: BotItemPendingComments
   /** What the waiting question's quick replies do; absent where the item takes no comment (deleted). */
   quickReplies?: BotItemQuickReplyActions
+  history?: { activityReadThrough?: string; hasEarlier: boolean }
+  scrollRef?: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
-  const entries = botItemActivity(item, events)
+  const entries = useMemo(() => botItemActivity(item, events), [item, events])
   const waitKey = botItemWaitEntryKey(item, entries)
   const liveAskId = botItemLiveAskKey(entries)
   const list = useRef<HTMLDivElement | null>(null)
+  const divider = useBotItemActivityRead({
+    key: `${botRefKey(bot)}\0${item.uid}`,
+    list,
+    scroll: scrollRef,
+    entries,
+    firstEvent: events[0]?.id,
+    readThrough: history?.activityReadThrough,
+    hasEarlier: history?.hasEarlier ?? false
+  })
   // A reply's quote leads to its question, focused so Tab goes on from there.
   const jump = useCallback(
     (eventId: string) => revealBotItemComment(list.current, eventId, 'focus'),
@@ -295,21 +311,28 @@ export function BotItemActivityList({
           }
           if (entry.kind === 'comment') {
             return (
-              <BotItemCommentCard
-                key={entry.key}
-                bot={bot}
-                item={item}
-                // A several-question card stays live until the host read confirms the send.
-                entry={
-                  quickReplies?.sent?.has(entry.event.id) &&
-                  quickReplies.steps?.askId !== entry.event.id
-                    ? { ...entry, waiting: false }
-                    : entry
-                }
-                onJump={jump}
-                liveAskId={liveAskId}
-                quickReplies={quickReplies}
-              />
+              <Fragment key={entry.key}>
+                {divider === entry.key ? (
+                  <ChatUnreadDivider
+                    label={t('bots.items.activity.newMessages', 'New messages')}
+                    className="relative my-1 bg-sidebar py-0.5"
+                  />
+                ) : null}
+                <BotItemCommentCard
+                  bot={bot}
+                  item={item}
+                  // A several-question card stays live until the host read confirms the send.
+                  entry={
+                    quickReplies?.sent?.has(entry.event.id) &&
+                    quickReplies.steps?.askId !== entry.event.id
+                      ? { ...entry, waiting: false }
+                      : entry
+                  }
+                  onJump={jump}
+                  liveAskId={liveAskId}
+                  quickReplies={quickReplies}
+                />
+              </Fragment>
             )
           }
           // Shown last, as its card, while the item waits.
