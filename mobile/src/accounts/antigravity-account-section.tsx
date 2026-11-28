@@ -4,6 +4,7 @@ import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   PHONE_PROVIDER_ACCOUNT_SWITCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/remote-runtime/protocol/account-runtime-capabilities'
+import { ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS } from '../../../src/shared/agent-accounts/antigravity/antigravity-account-types'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
@@ -94,7 +95,9 @@ function antigravityRowNotes(state: AntigravityAccountState) {
     state.accounts.some((account) => account.id === state.selectedAccountId)
       ? state.selectedAccountId
       : null
-  return { launchesUse, changed: moved && launchesUse === null }
+  // Desktop warns only where agy is signed out or on a login Orca hasn't saved.
+  const changed = moved && (!state.currentAccount || state.activeAccountId === null)
+  return { launchesUse, changed }
 }
 
 export function AntigravityAccountSection({
@@ -163,6 +166,11 @@ export async function requestAntigravitySelect(
   accountId: string
 ): Promise<AntigravityAccountState> {
   return selectAntigravityAccount.interpret(
-    await selectAntigravityAccount.request(client, { target: ANTIGRAVITY_HOST_TARGET, accountId })
+    // Reading agy's login may raise a keychain dialog on the host; desktop waits as long.
+    await selectAntigravityAccount.request(
+      client,
+      { target: ANTIGRAVITY_HOST_TARGET, accountId },
+      { timeoutMs: ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS }
+    )
   )
 }
