@@ -1,6 +1,6 @@
 // A bot's chats in the host list, from the model the desktop sidebar draws: each chat that replies,
-// waits on the owner or is unread (never Home Chat, which the bot's row opens), then (while it is
-// open) its workers' lines and their paging.
+// waits on the owner or is unread, and Home Chat once it has workers (the bot's row opens Home
+// itself), then (while it is open) its workers' lines and their paging.
 import {
   botChatFoldKey,
   chatIsGoing,
@@ -14,9 +14,13 @@ import type { MobileBotChatLineFacts } from './host-bot-row-facts'
 import type { HostBotWorkerBranch } from './host-bot-worker-lines'
 import type { HostBotChatTree } from './bot-chat-tree-reads'
 
-/** A chat the list shows under its bot: one that needs a look now. */
-function listsUnderBot(chat: BotChatTreeChat): boolean {
-  return chat.origin !== 'home' && (chatIsGoing(chat) || chat.unread || chat.unseen === true)
+/** A chat the list shows under its bot: one that needs a look now, or Home Chat holding workers,
+ *  which fold under it as any chat's do. Home alone is the bot's own row. */
+function listsUnderBot(chat: BotChatTreeChat, hasWorkers: boolean): boolean {
+  if (chat.origin === 'home') {
+    return hasWorkers && !chat.closed
+  }
+  return chatIsGoing(chat) || chat.unread || chat.unseen === true
 }
 
 /** The bot's chat rows and their lines; null while it has no chats read (an older host, or not yet),
@@ -69,9 +73,9 @@ export function hostBotChatItems(args: {
   const liveIds = botLiveWorkspaceIds(tree.chats)
   for (const chatView of view.chats) {
     const { chat } = chatView
-    if (!listsUnderBot(chat)) {
-      // A chat left out (Home Chat, or a quiet one) still lists its live and open workers, flat
-      // under the bot, so one waiting on you can be reached.
+    if (!listsUnderBot(chat, chatView.lines.length > 0)) {
+      // A chat left out (a quiet one) still lists its live and open workers, flat under the bot,
+      // so one waiting on you can be reached.
       for (const branch of chatView.lines) {
         if (branch.lines.some((line) => liveIds.has(line.row.worktreeId) || line.row.isActive)) {
           leftOut.push(...lineItems(branch, view.notes.get(branch.id)))
