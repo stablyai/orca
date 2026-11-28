@@ -110,9 +110,12 @@ export function ProjectedAgentMenuItems({
     detection: { detectedIds, detectionFailed, needsServerUpdate }
   } = model
   const defaultAgent = 'defaultTuiAgent' in model ? model.defaultTuiAgent : desktopDefaultAgent
+  // Custom rows render below the empty-state message, so the message must not contradict them.
+  const hasCustomRows = !!customLaunchTarget && !!model.customAgents?.length
   return (
     <>
-      {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
+      {(detectedIds === null && (detectionFailed || needsServerUpdate)) ||
+      (rows.length === 0 && !hasCustomRows) ? (
         <DropdownMenuItem variant="launch" disabled>
           <span className="font-normal text-muted-foreground">
             {needsServerUpdate

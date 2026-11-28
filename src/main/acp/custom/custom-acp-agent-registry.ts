@@ -13,6 +13,9 @@ import { setConfiguredAgentLabelSource } from '../../../shared/agent-status/pres
 type Entry = { agent: CustomAcpAgent; spec: AcpLaunchSpec }
 
 const entries = new Map<string, Entry>()
+// A removed agent's spec, kept for this process: the host caches the adapter built from it, so a
+// later agent with the same id updates that spec instead of leaving the adapter on the old command.
+const retiredSpecs = new Map<string, AcpLaunchSpec>()
 const listeners = new Set<() => void>()
 
 function sameAgent(a: CustomAcpAgent, b: CustomAcpAgent): boolean {
@@ -29,7 +32,12 @@ export function syncCustomAcpAgents(saved: unknown): void {
     kept.add(agent.id)
     const entry = entries.get(agent.id)
     if (!entry) {
-      entries.set(agent.id, { agent, spec: customAcpLaunchSpec(agent) })
+      const retired = retiredSpecs.get(agent.id)
+      retiredSpecs.delete(agent.id)
+      const spec = retired
+        ? Object.assign(retired, customAcpLaunchSpec(agent))
+        : customAcpLaunchSpec(agent)
+      entries.set(agent.id, { agent, spec })
       changed = true
     } else if (!sameAgent(entry.agent, agent)) {
       Object.assign(entry.spec, customAcpLaunchSpec(agent))
@@ -39,6 +47,10 @@ export function syncCustomAcpAgents(saved: unknown): void {
   }
   for (const id of entries.keys()) {
     if (!kept.has(id)) {
+      const removed = entries.get(id)
+      if (removed) {
+        retiredSpecs.set(id, removed.spec)
+      }
       entries.delete(id)
       changed = true
     }

@@ -175,11 +175,12 @@ async function readAcpLaunchInvocation(
     Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
   }
-  Object.assign(env, spec.env)
-  const invocation = resolveAcpLaunchCommand(spec, env, { ...deps, commandSettings })
+  // On Windows a spec's `Path` must replace the base `PATH`, not sit beside it unread.
+  const launchEnv = overlayEnvironmentVariables(env, spec.env, process.platform)
+  const invocation = resolveAcpLaunchCommand(spec, launchEnv, { ...deps, commandSettings })
   return {
     ...invocation,
-    env,
+    env: launchEnv,
     envToDelete,
     spec,
     ...(antigravityChatAuth ? { antigravityChatAuth } : {})
