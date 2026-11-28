@@ -32,15 +32,18 @@ function failureStreak(
 export const USAGE_LIMIT_UNKNOWN_RESET_HOLD_MS = 60 * 60 * 1000
 
 /** The reset the last usage-limited run waits for; no scheduled run starts before it. Only a later
- *  run that finished lifts it: one that failed otherwise (e.g. never started) proves no recovery. */
-export function usageLimitedUntil(runs: readonly LookAroundRun[]): number {
+ *  run that finished lifts it: one that failed otherwise (e.g. never started) proves no recovery.
+ *  So does selecting another saved account than the one the limit hit (`selected`). */
+export function usageLimitedUntil(runs: readonly LookAroundRun[], selected?: string): number {
   const limited = runs.findLast(
     (run) =>
       run.endedAt !== undefined && (run.usageLimited !== undefined || run.error === undefined)
   )
-  return limited?.usageLimited
-    ? (limited.usageLimited.resetsAt ?? limited.endedAt! + USAGE_LIMIT_UNKNOWN_RESET_HOLD_MS)
-    : 0
+  const limit = limited?.usageLimited
+  if (!limit || (limit.accountId && selected && selected !== limit.accountId)) {
+    return 0
+  }
+  return limit.resetsAt ?? limited.endedAt! + USAGE_LIMIT_UNKNOWN_RESET_HOLD_MS
 }
 
 /** Whether a usage-limited look still finishes in its own chat, so its slot starts no other:

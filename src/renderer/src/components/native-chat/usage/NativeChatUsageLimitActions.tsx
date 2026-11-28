@@ -15,6 +15,7 @@ import { AgentSessionContinuationDialog } from '@/components/agent-session-conti
 import { buildAgentSessionContinuationPrompt } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
 import { ClaudeSwitcherMenu } from '@/components/status-bar/accounts/ClaudeSwitcherMenu'
+import { AntigravityChatSwitcherMenu } from '@/components/status-bar/accounts/AntigravityChatSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/accounts/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
@@ -52,6 +53,7 @@ export function NativeChatUsageLimitActionsProvider({
   recovery: {
     readCurrent: boolean
     canSwitchAccount: boolean | undefined
+    canSwitchAntigravityAccount?: boolean | undefined
     epoch?: string | null
   }
   children: ReactNode
@@ -102,7 +104,37 @@ export function NativeChatUsageLimitActionsProvider({
     isTuiAgent(pane.agent) &&
     directory.runtimeEnvironmentId ===
       (pane.target.kind === 'environment' ? pane.target.environmentId : null)
+  const stillSwitchable = async (
+    canSwitch: (result: AgentSessionOptionsResult) => boolean
+  ): Promise<boolean> => {
+    const current = intent.current
+    if (!current || !active) {
+      return false
+    }
+    const result = await callStructuredAgentSession<AgentSessionOptionsResult>(
+      pane.target,
+      'agentSession.options',
+      { sessionId: pane.sessionId }
+    )
+    return intent.current === current && canSwitch(result)
+  }
   let account: ReactNode = null
+  if (
+    pane.agent === 'antigravity' &&
+    active &&
+    pane.isVisible &&
+    recovery.canSwitchAntigravityAccount
+  ) {
+    account = (
+      <AntigravityChatSwitcherMenu
+        key={executionHostIdForStructuredTarget(pane.target)}
+        chatAction={{
+          target: pane.target,
+          canSwitch: () => stillSwitchable((result) => result.canSwitchAntigravityAccount === true)
+        }}
+      />
+    )
+  }
   if (pane.agent === 'claude' && active && pane.isVisible) {
     if (canSwitchAccount === undefined) {
       account = <ProviderAccountChatButton provider="claude" target={pane.target} disabled busy />
@@ -114,18 +146,7 @@ export function NativeChatUsageLimitActionsProvider({
           iconOnly
           chatAction={{
             target: pane.target,
-            canSwitch: async () => {
-              const current = intent.current
-              if (!current || !active) {
-                return false
-              }
-              const result = await callStructuredAgentSession<AgentSessionOptionsResult>(
-                pane.target,
-                'agentSession.options',
-                { sessionId: pane.sessionId }
-              )
-              return intent.current === current && result.canSwitchAccount === true
-            }
+            canSwitch: () => stillSwitchable((result) => result.canSwitchAccount === true)
           }}
         />
       )

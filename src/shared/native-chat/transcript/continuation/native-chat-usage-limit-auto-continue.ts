@@ -45,6 +45,14 @@ export function usageLimitContinueAtForCut(
   return publishedForCut(published, cut)?.continueAt ?? cut?.resetsAt
 }
 
+/** The account the chat moved to while that account is itself out of quota, for this cut. */
+export function usageLimitLimitedAccountForCut(
+  published: PublishedUsageLimitContinue,
+  cut: CutKey
+): string | undefined {
+  return publishedForCut(published, cut)?.limitedAccount
+}
+
 /** Null hides the line. "Off" only points at this machine's own setting, so other hosts hide it. */
 export function nativeChatUsageLimitAutoContinueKind(
   state: NativeChatUsageLimitContinueState | undefined,
