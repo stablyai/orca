@@ -194,6 +194,7 @@ export function BotChatTreeWorkerRow({
       workspaceId={worktreeId ?? null}
       worker={null}
       canStop={running && Boolean(dispatchId)}
+      target={botTarget(bot)}
       agent={worker.agent}
       summary={worker.summary}
       nested={{ settled: !running }}

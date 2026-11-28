@@ -34,6 +34,7 @@ export function ChatWorkersActivity(): React.JSX.Element | null {
       workspaceId={worker.worktreeId}
       worker={worker}
       canStop={canStopOrchestrationWorker(target)}
+      target={target}
       onOpen={
         sessionWorkerNeverStarted(worker)
           ? undefined

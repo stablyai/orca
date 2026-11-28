@@ -8,6 +8,7 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
+import { botTarget } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemLinkView, BotItemWorkerState } from '../../../../../shared/bots/bot-items'
 import {
@@ -201,7 +202,7 @@ function WorkerChip({
   const worker = botItemWorkerRow(link)
   const open = botChatTreeWorkerOpen(bot, worker)
   const canStop = botChatTreeWorkerRunning(worker) && Boolean(worker.dispatchId)
-  const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '')
+  const { stopping, stop } = useWorkerStop(worker.dispatchId ?? '', botTarget(bot))
   return (
     <HoverCard openDelay={400} closeDelay={100}>
       <div className="flex h-6 min-w-0 max-w-60 items-center rounded-md border border-border bg-background text-xs text-foreground">

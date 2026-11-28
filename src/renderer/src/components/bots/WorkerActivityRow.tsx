@@ -12,6 +12,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { selectOrchestrationWorkerWorkspaceLabel } from '@/lib/orchestration-worker-workspace-label'
 import { stopOrchestrationWorker } from '@/lib/stop-orchestration-worker'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   sessionWorkerLook,
   sessionWorkerRestingLabel,
@@ -53,6 +54,8 @@ export type WorkerActivityRowProps = {
   onOpen?: () => void
   /** Offered only where this computer can stop the worker. */
   canStop: boolean
+  /** The host that owns the worker's Dispatch, where Stop is sent. */
+  target: RuntimeClientTarget
   onStopped?: () => void
 }
 
@@ -99,7 +102,7 @@ function Detail({
 export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Element {
   const t = useTranslate()
   const { worker } = props
-  const { stopping, stop } = useWorkerStop(props.dispatchId, props.onStopped)
+  const { stopping, stop } = useWorkerStop(props.dispatchId, props.target, props.onStopped)
   const workspace = useAppStore((state) =>
     props.workspaceId ? selectOrchestrationWorkerWorkspaceLabel(state, props.workspaceId) : null
   )
@@ -197,15 +200,16 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
   )
 }
 
-/** Stops the worker through its host; `stopping` while the request is out. */
+/** Stops the worker through `target`, the host that owns its Dispatch; `stopping` while the request is out. */
 export function useWorkerStop(
   dispatchId: string,
+  target: RuntimeClientTarget,
   onStopped?: () => void
 ): { stopping: boolean; stop: () => void } {
   const [stopping, setStopping] = useState(false)
   const stop = (): void => {
     setStopping(true)
-    void stopOrchestrationWorker(dispatchId).finally(() => {
+    void stopOrchestrationWorker(dispatchId, target).finally(() => {
       setStopping(false)
       onStopped?.()
     })
