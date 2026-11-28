@@ -15,13 +15,13 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 import { useAutoNameFailure } from '../identity/use-auto-name-failure'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
-  const { worktree, repo, compactLine } = props
-  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
+  const { worktree, repo, compactLine, renameRowKey } = props
+  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine, renameRowKey })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
     settings: foundation.settings,
-    projectGroups: foundation.projectGroups,
+    hasProjectGroups: foundation.hasProjectGroups,
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })
