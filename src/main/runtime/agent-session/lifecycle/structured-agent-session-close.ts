@@ -224,8 +224,8 @@ async function retireClosedChatTabs(
   const closed = !runtime
     ? { hostList: true }
     : chatGone
-      ? runtime.closeChatTabs({ people: runtime.chatTabPeople(sessionId), sessionId })
-      : runtime.closeChatTabs({ people: [runtime.chatTabPerson(sessionId)], sessionId })
+      ? await runtime.closeChatTabs({ people: runtime.chatTabPeople(sessionId), sessionId })
+      : await runtime.closeChatTabs({ people: [runtime.chatTabPerson(sessionId)], sessionId })
   if (closed.hostList) {
     await retireCapturedStructuredSessionSurface(host, sessionId, surface, runtime)
   }

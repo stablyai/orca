@@ -249,21 +249,16 @@ it('moves a teammate’s list to a new version when a chat in it is renamed', as
   await r.reveal('mate-desk', C)
   const list = () => r.runtime['mobileSessionTabsByWorktree'].get(r.listOf())!
   const before = list()
-  // The row still reads its name from before a rename (or a title the agent picks).
-  r.runtime['storeMobileSessionSnapshot'](r.listOf(), {
-    ...before,
-    tabs: before.tabs.map((tab) => ({ ...tab, title: 'Before the rename' }))
-  })
-  const stale = list()
 
+  await r.host.deps.store.setUserConversationName(C, 'Sprint Plan', 'rename')
   // Where the rename lands: the chat's tabs retitle.
   r.runtime.refreshStructuredConversationTabTitle(r.workspace, C)
 
   // A desktop drops a frame that does not outrank the one it holds.
   const after = list()
-  expect(after.publicationEpoch).toBe(stale.publicationEpoch)
-  expect(after.snapshotVersion).toBeGreaterThan(stale.snapshotVersion)
-  expect(after.tabs[0]?.title).not.toBe('Before the rename')
+  expect(after.publicationEpoch).toBe(before.publicationEpoch)
+  expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion)
+  expect(after.tabs.map((tab) => tab.title)).toEqual(['Sprint Plan'])
 })
 
 it('closes only a teammate’s own tab when they close a chat in their Home', async () => {

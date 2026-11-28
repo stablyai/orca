@@ -292,7 +292,10 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
 
   /** Closes a chat's tab for each person, once per list: a teammate's in their own Home closes their
    *  own tab only. `hostList` says whether one of them is the host's list, which the caller closes. */
-  closeChatTabs(input: { people: readonly TabPerson[]; sessionId: string }): { hostList: boolean } {
+  closeChatTabs(input: {
+    people: readonly TabPerson[]
+    sessionId: string
+  }): Promise<{ hostList: boolean }> {
     return this.personChatTabs.closeFor(input.people, input.sessionId)
   }
 

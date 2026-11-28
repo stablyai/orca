@@ -102,19 +102,17 @@ export class PersonChatTabs {
     })
   }
 
-  /** Drops the chat's row from the list; the chat runs on, as a closed tab's does. */
-  close(list: string, sessionId: string): boolean {
+  /** Drops the chat's row from the list; the chat runs on, as a closed tab's does. Its saved row
+   *  goes in the same queue as the open that saved it, so a close never misses one still landing. */
+  async close(list: string, sessionId: string): Promise<void> {
     const snapshot = this.host.snapshots().get(list)
     const next = snapshot ? retireStructuredAgentSessionTabFrom(snapshot, sessionId) : null
     if (next) {
       this.host.emit(this.host.storeSnapshot(list, next))
       this.host.forgetTabs(list, [personChatTabId(sessionId)])
     }
-    const saved = this.savedChatTabId(list, sessionId)
-    if (saved) {
-      void this.host.saveChanges(list, [{ close: sessionId, tabId: saved }])
-    }
-    return next !== null || saved !== null
+    const tabId = this.savedChatTabId(list, sessionId) ?? structuredAgentSessionTabId(sessionId)
+    await this.host.saveChanges(list, [{ close: sessionId, tabId }])
   }
 
   /** A person's own workspace in their agent's Home; null for the owner and everywhere else. */
@@ -137,13 +135,13 @@ export class PersonChatTabs {
   }
 
   /** Closes the chat's tab for each person; `hostList` when one is the host's, which the caller closes. */
-  closeFor(people: readonly TabPerson[], sessionId: string): { hostList: boolean } {
+  async closeFor(people: readonly TabPerson[], sessionId: string): Promise<{ hostList: boolean }> {
     const home = homeOf(sessionId)
     let hostList = false
     for (const person of people) {
       const list = home ? this.listOf(person, home) : null
       if (list) {
-        this.close(list, sessionId)
+        await this.close(list, sessionId)
       } else {
         hostList = true
       }
@@ -153,12 +151,12 @@ export class PersonChatTabs {
 
   /** A teammate's tab close in their Home: a chat in their own workspace closes here, anything
    *  else in their list. A lifecycle close names a terminal, so it refuses a chat, as the owner's. */
-  closeTeammateTab(
+  async closeTeammateTab(
     person: TeammateTabListKey,
     home: string,
     tabId: string,
     close: { expectedTerminalHandle?: string }
-  ): MobileSessionTabCloseOutcome {
+  ): Promise<MobileSessionTabCloseOutcome> {
     const list = this.listOf(person, home)
     const chat = list ? findAddressedSessionTab(this.host.snapshots().get(list)?.tabs, tabId) : null
     if (!list || chat?.type !== 'agent-session') {
@@ -169,7 +167,7 @@ export class PersonChatTabs {
       return refusedMobileSessionTabClose('stale-terminal')
     }
     // Every chat in a shared agent's Home runs on when its tab closes, as the owner's do there.
-    this.close(list, chat.sessionId)
+    await this.close(list, chat.sessionId)
     return committedMobileSessionTabClose(this.selections, list, [chat.id])
   }
 
