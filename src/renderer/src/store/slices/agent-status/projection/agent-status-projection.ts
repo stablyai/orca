@@ -1,9 +1,4 @@
-import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../../types'
-import {
-  movedAgentSenderChannels,
-  samePublishingHosts
-} from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   readTerminalLeafAgentTypes,
@@ -34,6 +29,10 @@ import { captureProjectionState } from './agent-status-projection-capture'
 import { stageProjectionTopology } from './agent-status-projection-topology'
 import { stageProjectionRows } from './agent-status-projection-rows'
 import { stageProjectionCounts } from './agent-status-projection-counts'
+import {
+  detectProjectionSenderChanges,
+  isAgentStatusProjectionNoop
+} from './agent-status-projection-noop'
 import { publishProjectionTopology } from './agent-status-projection-publish-topology'
 import { publishProjectionRows } from './agent-status-projection-publish-rows'
 import { publishProjectionArrangement } from './agent-status-projection-publish-arrangement'
@@ -234,32 +233,21 @@ export class AgentStatusProjection {
     fullResync = false
   ): () => void {
     const data = this.data
+    if (isAgentStatusProjectionNoop(data, state, changes, refreshKeys, fullResync)) {
+      return () => {
+        data.inputs = state
+      }
+    }
     const topology = stageProjectionTopology(data, state, changes, refreshKeys)
     const publishTerminalTypes = stageTerminalLeafAgentTypes(data, state, topology.changedKeys)
     const publishTransitions = stageAcceptedAgentTransitions(data, state, changes)
     const rows = stageProjectionRows(data, state, topology)
-    const { previous } = topology
-    const ownerInputs = structuredAgentSessionOwnerInputs(state)
-    const oldOwnerInputs = previous ? structuredAgentSessionOwnerInputs(previous) : []
-    const sendersChanged =
-      previous?.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost
-    const senderLocationsChanged =
-      !previous ||
-      (sendersChanged && !samePublishingHosts(previous, state)) ||
-      previous.tabsByWorktree !== state.tabsByWorktree ||
-      previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
-      ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
-      changes.some(
-        (change) =>
-          change.previous?.terminalHandle !== change.current?.terminalHandle ||
-          (Boolean(change.previous?.terminalHandle || change.current?.terminalHandle) &&
-            change.previous?.worktreeId !== change.current?.worktreeId)
-      )
-    // Only a publication moved: notify the senders whose answer it moved, not every card.
-    const movedSenders =
-      previous && sendersChanged && !senderLocationsChanged
-        ? movedAgentSenderChannels(previous, state, data.listeners.keys())
-        : []
+    const { senderLocationsChanged, movedSenders } = detectProjectionSenderChanges(
+      data,
+      topology.previous,
+      state,
+      changes
+    )
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
       const changed = new Set(topology.changedKeys)

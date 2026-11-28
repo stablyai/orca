@@ -15,14 +15,16 @@ import { DisclosureChevron } from '../components/list/DisclosureChevron'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { SettingsNote, SettingsSection } from '../settings/settings-screen-frame'
-import { colors, radii, spacing } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import { getRuntimePathBasename } from '../../../src/shared/file-access/cross-platform-path'
 import { BOT_IMPORT_EXPORT_PROMPT } from '../../../src/shared/bots/bot-import'
 import type { ExportFolder } from './MobileBotExportFolderPage'
 
 function StepMark({ n, done }: { n: number; done: boolean }) {
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={[styles.step, done && styles.stepDone]}>
       {done ? (
@@ -44,7 +46,8 @@ export function MobileBotImportExportSteps(props: {
   /** Null while the computer can't be reached. */
   onChooseFolder: (() => void) | null
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const [seeMessage, setSeeMessage] = useState(false)
   const { copied, folder } = props
@@ -139,7 +142,7 @@ export function MobileBotImportExportSteps(props: {
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   step: {
     width: 22,
     height: 22,

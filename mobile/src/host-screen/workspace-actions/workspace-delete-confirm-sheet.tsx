@@ -4,8 +4,9 @@ import { folderIdOfSelector } from '../../../../src/shared/workspace/identity/wo
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
-import { hostScreenStyles as styles } from '../host-screen-styles'
+import { hostScreenStylesSheet } from '../host-screen-styles'
 import { useWorkspaceDeleteLoss, type WorkspaceDeleteLoss } from './workspace-delete-loss'
+import { useThemedStyles } from '../../theme/themed-styles'
 
 type Translate = ReturnType<typeof useMobileTranslation>
 
@@ -73,6 +74,7 @@ export function WorkspaceDeleteConfirmSheet(props: {
   onCancel: () => void
   onDelete: () => void
 }) {
+  const styles = useThemedStyles(hostScreenStylesSheet)
   const { row, onCancel, onDelete } = props
   const t = useMobileTranslation()
   const loss = useWorkspaceDeleteLoss(props)
@@ -85,7 +87,7 @@ export function WorkspaceDeleteConfirmSheet(props: {
       <View style={styles.confirmContent}>
         <Text style={styles.confirmTitle}>
           {isFolder
-            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove workspace')
             : t('common.delete', 'Delete')}
         </Text>
         <Text style={styles.confirmMessage}>

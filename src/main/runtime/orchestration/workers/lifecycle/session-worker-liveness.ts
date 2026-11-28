@@ -1,10 +1,6 @@
 import type { SessionPartyReader } from '../../addressing/session-party-reader'
 import type { FleetAgentStatusEvidence } from '../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import type { FleetSessionObservation } from '../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
@@ -17,12 +13,23 @@ import {
   observeStructuredWorker,
   resolveStructuredWorkerIdentity
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
-import { sessionIdFromStructuredWorkerIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import {
+  sessionIdFromStructuredWorkerIncarnation,
+  structuredWorkerIdentities,
+  structuredWorkerIdentityFromRow
+} from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerOwned } from '../../terminal-authority/structured-sessions/structured-worker-custody'
 import { chatAssigneeSessionId, observeChatAssignee } from './chat-assignee'
+import { chatPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 export type SessionWorkerSubject = {
   agentTerminalHandle: string | null
-  resource?: { processIncarnation?: string | null; paneKey?: string | null } | null
+  resource?: {
+    processIncarnation?: string | null
+    paneKey?: string | null
+    worktreeId?: string | null
+    hostScope?: string | null
+  } | null
 }
 
 /** Agent-slept terminal workers read as live and idle; their pane's kept status row is their activity. */
@@ -82,14 +89,15 @@ export function createSessionWorkerLivenessReader(
     | readonly FleetAgentStatusEvidence[]
     | ((paneKey: string) => FleetAgentStatusEvidence | undefined),
   records: AgentSessionRecordReader | null = readAgentSessionRecordStore(),
-  // A chat assignee's party, from the database unless a caller read its rows already.
-  parties: SessionPartyReader | null | undefined = db
+  options: { parties?: SessionPartyReader | null; includeResumeGuidance?: true } = {}
 ): (worker: SessionWorkerSubject) => FleetSessionObservation | undefined {
+  // A chat assignee's party, from the database unless a caller read its rows already.
+  const { parties = db } = options
   const resolveSession = createLineageRunningSessionResolver(records)
   let statusByPane: Map<string, FleetAgentStatusEvidence> | undefined
-  // A session's status row lives at its derived pane key, not the worker's minted one.
+  // A session's status row lives at its conversation's pane key, not the worker's minted one.
   const activityFor = (sessionId: string) => {
-    const paneKey = structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
+    const paneKey = chatPaneKey(sessionId)
     if (typeof statuses === 'function') {
       return statuses(paneKey)
     }
@@ -120,11 +128,33 @@ export function createSessionWorkerLivenessReader(
     }
     const observed = observeStructuredWorker({ sessionId }, { resolveSession })
     const running = resolveSession(sessionId)
+    if (observed.status === 'exited') {
+      if (
+        options.includeResumeGuidance &&
+        running.kind === 'here' &&
+        running.record.ownerObservation.deathEvidence?.resumeByMail === true &&
+        structuredWorkerOwned(running)
+      ) {
+        const resource = worker.resource
+        const identity =
+          structuredWorkerIdentities.get(handle) ??
+          (resource &&
+            structuredWorkerIdentityFromRow({
+              terminal_handle: handle,
+              pane_key: resource.paneKey ?? null,
+              process_incarnation: resource.processIncarnation ?? null,
+              worktree_id: resource.worktreeId ?? null,
+              host_scope: resource.hostScope ?? null
+            }))
+        if (identity?.sessionId === sessionId) {
+          return { status: 'exited', canResume: true }
+        }
+      }
+      return { status: 'exited' }
+    }
     return observed.status === 'live'
       ? live(running.kind === 'here' ? running.sessionId : sessionId)
-      : observed.status === 'exited'
-        ? { status: 'exited' }
-        : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
+      : { status: 'unverifiable', detail: observed.reason ?? 'The session cannot be verified.' }
   }
 }
 

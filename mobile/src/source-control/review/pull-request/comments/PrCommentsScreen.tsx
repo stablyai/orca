@@ -1,9 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, Text, View, type HostInstance } from 'react-native'
 import { Bot, ListFilter } from 'lucide-react-native'
-import { colors, pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
-import { themedStyleSheet } from '../../../../theme/themed-styles'
-import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { pressedStyle, spacing, typography } from '../../../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../../../theme/themed-styles'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import {
   groupPRComments,
@@ -28,7 +27,8 @@ import {
   MobileLoadErrorState,
   MobileStateView
 } from '../../../../components/feedback/MobileStateView'
-import { PrThreadRow, type PrAskToFix, type PrThreadActions } from './PrThreadRow'
+import { PrThreadRow, type PrAskToFix } from './PrThreadRow'
+import { usePrThreadActions } from './use-mobile-pr-comment-actions'
 import { PrThreadScreen } from './PrThreadScreen'
 import { PRCommentComposer } from './PRCommentComposer'
 import { NotReady, ScreenFrame, type ScreenProps } from '../pr-tab-screen-frame'
@@ -39,7 +39,7 @@ type CommentsFilter = 'unresolved' | 'all'
 const COMMENT_PAGE = 12
 
 export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: ScreenProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   // The tab keeps the PR it shows through reloads, so the open thread and typed comments stay with it.
   const data = readyPrData(tab)
@@ -82,24 +82,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
   const shown = open.slice(0, limit)
   const { commentActions } = tab
   const isPr = details?.item.type === 'pr'
-  const rowActions = useMemo<PrThreadActions | undefined>(
-    () =>
-      isPr
-        ? {
-            reply: commentActions.reply,
-            toggleResolve: commentActions.toggleResolve,
-            editComment: commentActions.editComment,
-            deleteComment: commentActions.deleteComment,
-            isReplyBusy: commentActions.isReplyBusy,
-            isResolveBusy: commentActions.isResolveBusy,
-            isEditBusy: commentActions.isEditBusy,
-            isDeleteBusy: commentActions.isDeleteBusy,
-            draftKey: commentActions.draftKey,
-            prRepo: data?.pr.prRepo ?? null
-          }
-        : undefined,
-    [commentActions, data?.pr.prRepo, isPr]
-  )
+  const rowActions = usePrThreadActions(isPr ? commentActions : undefined, data?.pr.prRepo)
   const canComment = isPr && canAddRootComment(data?.pr.state ?? null)
   const { hostCapabilities } = useHostProtocolGates()
   const hasBotFindings = unresolved.some((group) =>
@@ -338,7 +321,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
 }
 
 function ShowMore({ count, onPress }: { count: number; onPress: () => void }) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   return (
     <Pressable
@@ -361,7 +344,7 @@ function isResolvedGroup(group: PRCommentGroup): boolean {
   return getPRCommentGroupRoot(group).isResolved === true
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   layer: { flex: 1 },
   threadLayer: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   content: { paddingTop: spacing.sm },

@@ -6,6 +6,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
 import type { BrowserFindResultEvent, BrowserFindTarget } from './browser-find-target'
+import { BROWSER_FIND_BAR_ATTRIBUTE } from '../../annotate/palette/use-palette-top-offset'
 
 type BrowserFindProps = {
   browserPageId: string
@@ -196,6 +197,7 @@ export default function BrowserFind({
 
   return (
     <div
+      {...{ [BROWSER_FIND_BAR_ATTRIBUTE]: '' }}
       className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}

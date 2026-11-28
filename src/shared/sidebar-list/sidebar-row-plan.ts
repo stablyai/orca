@@ -11,8 +11,7 @@ import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 
 import {
-  getLaneHostWorktreeCounts,
-  getLaneHostWorktreeIds,
+  getLaneHostWorktreeScope,
   getMixedWorktreeHostContextLabels,
   getNoticeHostContextLabels
 } from './hosts/host-labels'
@@ -150,8 +149,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     childrenByParentIdentity: lineageChildren,
     isPinned: (worktree) => worktree.isPinned === true && !folders.isFolder(worktree),
     duplicatePinned: pinnedDisplayPolicy === 'duplicate-in-groups',
-    owningSectionOf: (worktree) =>
-      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex),
+    owningSectionKeyOf: (worktree) =>
+      getProjectGroupingForRepo(worktree.repoId, repoMap, projectIndex).key,
     projectIdOf: (worktree) => worktree.repoId,
     sectionsOf: ({ pinned, natural, displayRootByIdentity }) => {
       const folderBound =
@@ -250,23 +249,19 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     if (groupBy === 'none') {
       // Folder-only accounts must still render flat rows (#15362).
       if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
+        const { hostWorktreeCounts, hostWorktreeIds } = getLaneHostWorktreeScope(
+          naturalWorktrees,
+          renderableFolderWorkspaces,
+          repoOf,
+          defaultHostId
+        )
         result.push({
           type: 'header',
           key: ALL_GROUP_KEY,
           count: naturalWorktrees.length + renderableFolderWorkspaces.length,
           icon: { kind: 'all' },
-          hostWorktreeCounts: getLaneHostWorktreeCounts(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
-          hostWorktreeIds: getLaneHostWorktreeIds(
-            naturalWorktrees,
-            renderableFolderWorkspaces,
-            repoOf,
-            defaultHostId
-          ),
+          hostWorktreeCounts,
+          hostWorktreeIds,
           worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
         })
         if (!collapsedGroups.has(ALL_GROUP_KEY)) {

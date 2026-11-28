@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -44,9 +45,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
   retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
-  /** Orca changed this chat's tools since its child launched and it owes no work (see
-   *  `launchToolsRefreshDue`): the input needs a child that has them. */
-  launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
+  /** `due`: this chat's tools changed since its child launched and it owes no work (see
+   *  `launchToolsRefreshDue`), so the input needs a child that has them; `pending`: it does, but
+   *  the kept child's replay isn't durable yet, so the input reaches neither child for now. */
+  launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<LaunchToolsRefresh>
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -77,19 +79,66 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   turnContext?: StructuredAgentSessionTurnContext | undefined
 }
 
+export type LaunchToolsRefresh = 'due' | 'not-due' | 'pending'
+
 /**
  * `launchTools.outdated` (no I/O) says Orca wrote some tools a chat may use since its child launched;
  * only `changed` says they are this chat's, so an edit to tools it doesn't get never restarts it.
+ * Owed work is read once, and only when a refresh could follow.
  */
 export function launchToolsRefreshDue(
-  launchTools: {
-    outdated: (sessionId: string) => boolean
-    changed: (sessionId: string) => Promise<boolean>
-  },
-  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>
-): (sessionId: string, continuingId: string) => Promise<boolean> {
-  return async (sessionId, continuingId) =>
-    launchTools.outdated(sessionId) &&
-    !(await owesWork(sessionId, continuingId)) &&
-    (await launchTools.changed(sessionId))
+  launchTools:
+    | {
+        outdated: (sessionId: string) => boolean
+        changed: (sessionId: string) => Promise<boolean>
+      }
+    | undefined,
+  owesWork: (sessionId: string, continuingId: string) => Promise<boolean>,
+  /** See `StructuredAgentSessionAdapter.keptLaunchOutgrown`. */
+  keptLaunchOutgrown?: (
+    sessionId: string,
+    toolsOutdated: boolean,
+    owesWork: () => Promise<boolean>
+  ) => boolean | 'pending' | undefined | Promise<boolean | 'pending' | undefined>
+): ((sessionId: string, continuingId: string) => Promise<LaunchToolsRefresh>) | undefined {
+  if (!launchTools && !keptLaunchOutgrown) {
+    return undefined
+  }
+  return async (sessionId, continuingId) => {
+    let owed: Promise<boolean> | undefined
+    const owes = () => (owed ??= owesWork(sessionId, continuingId))
+    const outdated = launchTools?.outdated(sessionId) === true
+    const kept = await keptLaunchOutgrown?.(sessionId, outdated, owes)
+    if (kept === 'pending') {
+      return 'pending'
+    }
+    const outgrown = kept === true
+    const due =
+      kept !== false &&
+      (outgrown || outdated) &&
+      !(await owes()) &&
+      (outgrown || (await launchTools?.changed(sessionId)) === true)
+    return due ? 'due' : 'not-due'
+  }
+}
+
+/** How long a send waits for an outgrown kept child's replay to be durable before it fails. */
+const TOOLS_REFRESH_HOLD_MS = 30_000
+const TOOLS_REFRESH_RECHECK_MS = 250
+
+/** Asks again until the answer isn't `pending`, within the bound; the last answer is returned. */
+export async function awaitToolsRefresh(
+  refresh: () => Promise<LaunchToolsRefresh>,
+  signal: AbortSignal | undefined
+): Promise<LaunchToolsRefresh> {
+  const until = Date.now() + TOOLS_REFRESH_HOLD_MS
+  let answer = await waitForPromiseWithSignal(refresh(), signal)
+  while (answer === 'pending' && Date.now() < until) {
+    await waitForPromiseWithSignal(
+      new Promise((resolve) => setTimeout(resolve, TOOLS_REFRESH_RECHECK_MS)),
+      signal
+    )
+    answer = await waitForPromiseWithSignal(refresh(), signal)
+  }
+  return answer
 }

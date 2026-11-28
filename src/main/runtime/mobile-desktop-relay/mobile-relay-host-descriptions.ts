@@ -26,6 +26,21 @@ export async function describeRelayHosts(
   return describeRelayHostListing(await hosts.list(), hostLabelOverrides)
 }
 
+export function describeRelayHost(
+  listing: MobileDesktopRelayListing,
+  environmentId: string,
+  hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()
+): DescribedRelayHost | undefined {
+  const environment = listing.environments.find((entry) => entry.id === environmentId)
+  if (!environment) {
+    return undefined
+  }
+  return describeRelayHostListing(
+    { ...listing, environments: [environment] },
+    hostLabelOverrides
+  )[0]
+}
+
 export function describeRelayHostListing(
   listing: MobileDesktopRelayListing,
   hostLabelOverrides: ReadonlyMap<ExecutionHostId, string> = new Map()

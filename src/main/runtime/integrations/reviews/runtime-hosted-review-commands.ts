@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
+import type { HostPROutcomeRecorder } from '../../../github/pull-requests/refresh/host-pr-cache-backfill'
 import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import {
@@ -54,6 +55,7 @@ type RuntimeHostedReviewCommandsDeps = {
     admissionTier?: GitAdmissionTier
   ) => HostedReviewExecutionOptions | undefined
   recordCreated: (repoId: string, number: number, url: string) => void
+  recordPROutcome?: HostPROutcomeRecorder
 }
 
 export class RuntimeHostedReviewCommands {
@@ -98,6 +100,7 @@ export class RuntimeHostedReviewCommands {
       if ('kind' in outcome && outcome.kind === 'found') {
         this.deps.recordCreated(repo.id, outcome.pr.number, outcome.pr.url)
       }
+      this.deps.recordPROutcome?.(repo, branch, outcome, { linkedPRNumber, currentHeadOid })
       return outcome
     }
     const lookupOptions: GitHubPRBranchLookupOptions = {

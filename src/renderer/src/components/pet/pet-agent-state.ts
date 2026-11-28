@@ -1,5 +1,9 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  agentAttentionTurnAt,
+  isAgentTurnUnacknowledged
+} from '@/attention/agent-attention-acknowledgement'
 
 export type PetAnimationName =
   | 'idle'
@@ -28,6 +32,7 @@ export function nextPetDragAnimation(
 
 export type PetAnimationInput = {
   entries: AgentStatusEntry[]
+  acknowledgedAgentsByPaneKey: Record<string, number>
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
@@ -37,6 +42,7 @@ export type PetAnimationInput = {
 
 function agentStateAnimation(
   entries: AgentStatusEntry[],
+  acknowledgedAgentsByPaneKey: Record<string, number>,
   now: number,
   staleAfterMs: number
 ): PetAnimationName {
@@ -52,7 +58,14 @@ function agentStateAnimation(
     }
     if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
-    } else if (entry.state === 'done') {
+    } else if (
+      entry.state === 'done' &&
+      // Same unread rule as the dashboard and Dock, so a viewed completion stops the review row.
+      isAgentTurnUnacknowledged(
+        acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0,
+        agentAttentionTurnAt(entry)
+      )
+    ) {
       hasDone = true
     }
   }
@@ -68,13 +81,14 @@ function agentStateAnimation(
 
 export function selectPetAnimationName({
   entries,
+  acknowledgedAgentsByPaneKey,
   dragging,
   dragAnimation,
   hovering,
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, now, staleAfterMs)
+  const base = agentStateAnimation(entries, acknowledgedAgentsByPaneKey, now, staleAfterMs)
   // Horizontal drags run toward the pointer; stationary grabs retain live agent state, and plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base

@@ -27,10 +27,7 @@ import type {
 import { prepareWslMoveHost } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-host-readiness'
 import { readConfirmedRunningWslDistros } from '../../wsl/discovery/wsl-background-distro-gate'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
-import {
-  readWslMoveOrchestratorRecords,
-  writeWslMoveOrchestratorRecords
-} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store'
+import { createWslMoveOrchestratorStore } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store'
 import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import {
   trackWslMoveOrchestrator,
@@ -130,6 +127,7 @@ function createOrchestrator(
   driverDeps: () => WslMoveDriverDeps
 ): WslMoveOrchestrator {
   const userDataPath = app.getPath('userData')
+  const sidecar = createWslMoveOrchestratorStore(userDataPath)
   return new WslMoveOrchestrator({
     now: () => Date.now(),
     appVersion: app.getVersion(),
@@ -170,8 +168,10 @@ function createOrchestrator(
       releaseWslMoveChainHere(userDataPath, distro, unsavedWorkspaceIds, () =>
         createWslMoveUndoPorts(store, userDataPath)
       ),
-    load: () => readWslMoveOrchestratorRecords(userDataPath),
-    save: (records) => writeWslMoveOrchestratorRecords(userDataPath, records),
+    load: sidecar.load,
+    listKnownDistros: async () =>
+      (await readWslDistroRegistrations())?.map((registration) => registration.distro) ?? null,
+    save: sidecar.save,
     schedule: (delayMs, run) => {
       const timer = setTimeout(run, delayMs)
       timer.unref?.()

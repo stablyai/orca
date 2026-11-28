@@ -174,9 +174,11 @@ export async function resolvePRForBranchOutcome(input: {
     }
     // Tracked upstream, then the configured push head, disambiguate head branch and fork owner.
     const triedHeads = new Set(headRepo ? [branchHeadKey(headRepo, branchName)] : [])
+    // Manual refresh re-reads this worktree's branch Git config, not owner/repo identity.
+    const headArgs = [repoPath, branchName, connectionId, localGitOptions] as const
     const secondaryHeads = [
-      () => getTrackedUpstreamHead(repoPath, branchName, connectionId, localGitOptions, headRepo),
-      () => getConfiguredPushHead(repoPath, branchName, connectionId, localGitOptions)
+      () => getTrackedUpstreamHead(...headArgs, headRepo, options.userRefresh === true),
+      () => getConfiguredPushHead(...headArgs, options.userRefresh === true)
     ]
     for (const resolveHead of secondaryHeads) {
       const head = data ? null : await resolveHead()

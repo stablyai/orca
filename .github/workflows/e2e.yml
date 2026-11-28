@@ -23,13 +23,6 @@ on:
         required: false
         type: string
         default: ''
-      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
-      # Why: only required gates pay for Blacksmith; advisory lanes run on free hosted runners.
-      fast_runners:
-        description: Run on Blacksmith instead of free GitHub-hosted runners
-        required: false
-        type: boolean
-        default: false
       layout_owner:
         description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
         required: false
@@ -57,7 +50,7 @@ on:
 jobs:
   build:
     name: build e2e app
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -186,7 +179,7 @@ jobs:
     name: e2e
     needs: [build]
     if: inputs.test_files == ''
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
 
     steps:
@@ -241,7 +234,7 @@ jobs:
       ORCA_BACKGROUND_LAUNCH: ${{ inputs.background_launch && '1' || '' }}
     needs: [build]
     if: inputs.test_files != ''
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
 
     steps:

@@ -45,6 +45,7 @@ export function GoogleSignInWaiting({
       ) : null}
       {state.way === 'paste' ? (
         <SignInAddressPaste
+          memoryKey="google"
           hint={t(
             'bots.google.pasteHint',
             'After you click Allow, the page won’t load. Paste its address here.'

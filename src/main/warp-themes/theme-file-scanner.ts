@@ -1,8 +1,8 @@
-import { opendir } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import path from 'node:path'
 import type { WarpThemeImportSkippedFile } from '../../shared/terminal-themes/terminal-custom-themes'
 import { sortDirectoryEntriesByName } from './directory-entry-order'
+import { openDirectory } from '../../shared/open-directory'
 
 export const MAX_THEME_FILES = 200
 const MAX_THEME_DIRECTORY_DEPTH = 3
@@ -107,7 +107,7 @@ async function collectYamlFilesFromDirectory(
   let entryLimitHit = false
   let previewBudgetExpiredWhileReading = false
   try {
-    const directory = await opendir(directoryPath, { encoding: 'utf8' })
+    const directory = await openDirectory(directoryPath, { encoding: 'utf8' })
     if (depth === 0) {
       state.rootReadable = true
     }

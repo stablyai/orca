@@ -330,7 +330,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       workspaceLastAutoName
     ]
   )
-  return Object.assign(model, { createWorkspace })
+  return { ...model, createWorkspace }
 }
 
 export type WorkspaceCreateActionsModel = ReturnType<typeof useMobileTasksWorkspaceCreateActions>

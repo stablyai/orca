@@ -2,7 +2,10 @@ import type { StructuredAgentSessionIdleDeath } from '../../../../native-chat/ag
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 import { observeWorker } from './worker-presence-report'
-import { isWorkerStartOrStopUndecided } from '../lifecycle/worker-exit-observation'
+import {
+  isWorkerStartOrStopUndecided,
+  observeWorkerEnd
+} from '../lifecycle/worker-exit-observation'
 
 /** A chat worker's provider died with no turn running: nothing else tells its coordinator. */
 export function reportChatWorkerProviderDeath(
@@ -39,5 +42,39 @@ export function reportChatWorkerProviderDeath(
     }
   } catch (error) {
     console.warn('[orchestration] chat worker exit report failed', death.sessionId, error)
+  }
+}
+
+/** A person closed a running chat worker: like a closed terminal worker, its Dispatch fails and its
+ *  coordinator hears that it is gone, since the worker never reports for itself. */
+export function reportChatWorkerClosedByUser(
+  closed: { sessionId: string; fence: number },
+  runtimeId: string,
+  deps: WorkerTurnStopReportDeps
+): void {
+  try {
+    const db = deps.getDb()
+    if (!db) {
+      return
+    }
+    for (const { dispatch, from } of chatWorkerDispatches(closed.sessionId, db)) {
+      observeWorkerEnd(
+        db,
+        runtimeId,
+        dispatch,
+        {
+          fence: `${closed.sessionId}:${closed.fence}`,
+          from,
+          error: "The worker's chat was closed in Orca",
+          options: { workerProcessExited: true, terminationReason: 'operator_close' },
+          // A worker-stop in flight settles its own stop once its close returns.
+          processExited: false,
+          gone: { reason: 'lost', cause: 'it was closed in Orca', lastOutput: undefined }
+        },
+        deps
+      )
+    }
+  } catch (error) {
+    console.warn('[orchestration] chat worker close report failed', closed.sessionId, error)
   }
 }

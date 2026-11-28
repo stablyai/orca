@@ -31,7 +31,8 @@ function positiveTiming(value: string | undefined, fallback: number): number {
 export function installMainThreadHangWatchdog(options: {
   userDataPath: string
 }): MainThreadHangWatchdogHandle | null {
-  if (process.platform !== 'darwin') {
+  // The worker heartbeat watches any platform; native `sample` capture stays macOS-only in the worker.
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
     return null
   }
   if (!resolveObservabilityConsent().localFileEnabled) {

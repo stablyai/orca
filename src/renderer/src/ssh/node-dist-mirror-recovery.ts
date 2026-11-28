@@ -64,6 +64,8 @@ function openNodeDistMirrorSettings(): void {
   openSettingsTarget({
     pane: 'advanced',
     repoId: null,
+    // The mirror is this computer's, whatever host the Settings picker last showed.
+    hostScope: { kind: 'local' },
     sectionId: NODE_DIST_MIRROR_SETTINGS_TARGET_ID
   })
 }

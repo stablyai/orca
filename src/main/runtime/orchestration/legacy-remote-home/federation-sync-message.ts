@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import {
   MESSAGE_TYPES,
   type MessagePriority,
@@ -15,6 +16,8 @@ export type RelayedMessage = {
   type: MessageType
   priority: MessagePriority
   threadId: string | null
+  /** The message a reply answers; an older worker's Orca omits it. */
+  replyTo?: string
   payload: string | null
 }
 
@@ -48,6 +51,7 @@ export function parseRelayedMessage(payload: string): RelayedMessage {
     priority:
       message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
     threadId: typeof message.threadId === 'string' ? message.threadId : null,
+    ...(typeof message.replyTo === 'string' ? { replyTo: message.replyTo } : {}),
     payload: typeof message.payload === 'string' ? message.payload : null
   }
 }
@@ -105,20 +109,22 @@ export function parseFederatedLifecycle(
 }
 
 // Decode untrusted peer pages before import to report malformed input as an orchestration error.
-export const PulledRelayPage = z
-  .object({
-    runtimeEpoch: z.string().min(1),
-    items: z.array(
-      z
-        .object({
-          dispatch_id: z.string(),
-          direction: z.literal('to_home'),
-          sequence: z.number(),
-          message_id: z.string(),
-          kind: z.string(),
-          payload: z.string()
-        })
-        .passthrough()
-    )
-  })
-  .passthrough()
+export const PulledRelayPage = lazyZodSchema(() =>
+  z
+    .object({
+      runtimeEpoch: z.string().min(1),
+      items: z.array(
+        z
+          .object({
+            dispatch_id: z.string(),
+            direction: z.literal('to_home'),
+            sequence: z.number(),
+            message_id: z.string(),
+            kind: z.string(),
+            payload: z.string()
+          })
+          .passthrough()
+      )
+    })
+    .passthrough()
+)

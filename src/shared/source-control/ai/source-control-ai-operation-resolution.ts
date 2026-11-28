@@ -5,6 +5,7 @@ import {
   getCommitMessageModel,
   isCustomAgentId,
   isNamingOnlyTextAgent,
+  isRetiredTextAgent,
   listCommitMessageAgentCapabilities,
   resolveCommitMessageAgentChoice
 } from './generation/commit-message-agent-spec'
@@ -177,7 +178,11 @@ export function resolveSourceControlAiForOperation(
       legacy?.customPrompt
     ),
     commandInputTemplate: actionRecipe.commandInputTemplate,
-    ...(actionRecipe.agentArgs !== undefined ? { agentArgs: actionRecipe.agentArgs } : {})
+    // A retired agent's arguments would reach the agent picked in its place.
+    ...(actionRecipe.agentArgs !== undefined &&
+    !isRetiredTextAgent(preferredAgent || input.settings.defaultTuiAgent)
+      ? { agentArgs: actionRecipe.agentArgs }
+      : {})
   }
   if (isCustomAgentId(agentChoice)) {
     if (!customAgentCommand) {

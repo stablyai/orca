@@ -11,9 +11,9 @@ import {
   WorkingRing
 } from '../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
-import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { radii } from '../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../theme/themed-styles'
+import { useMobileColors } from '../theme/use-mobile-color-scheme'
 import type { BotChatTreeChat } from '../../../src/shared/bots/bot-chat-tree'
 import type { SuggestionSource } from '../../../src/shared/bots/bot-look-around'
 import { MobileConnectorSourceIcon, SOURCE_ICON_VIEW_BOX } from './MobileConnectorSourceIcon'
@@ -22,6 +22,7 @@ type LeadingChat = Pick<BotChatTreeChat, 'origin' | 'live'>
 
 /** The chat's own state before its icon, as the desktop's lane: working, waiting on the owner, or nothing. */
 export function ChatLeading({ chat }: { chat: BotChatTreeChat }) {
+  const styles = useThemedStyles(stylesSheet)
   return (
     <View style={styles.leading}>
       <View style={styles.lane}>
@@ -42,6 +43,7 @@ function ChatStateDot({ chat }: { chat: LeadingChat }) {
 
 /** The chat's icon always, its state on the icon's corner (as the desktop sidebar's badge). */
 export function ChatBadgedIcon({ chat }: { chat: LeadingChat }) {
+  const styles = useThemedStyles(stylesSheet)
   const badgeSize = chat.live === 'needs-you' ? AGENT_STATE_DOT_SIZE : WORKING_BADGE_SIZE
   const size = isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE
   return (
@@ -99,7 +101,7 @@ function useCutout(badgeSize: number | undefined, size: number, viewBox: number)
 }
 
 function ChatIcon({ chat, badgeSize }: { chat: LeadingChat; badgeSize?: number }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
   const { mask, defs } = useCutout(
     badgeSize,
     isSource(chat.origin) ? SOURCE_SIZE : LUCIDE_SIZE,
@@ -159,7 +161,7 @@ export function useMobileBotChatLabel(chat: LeadingChat, title: string): string 
   return [title, kind === title ? null : kind, state].filter(Boolean).join(', ')
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet(() => ({
   // One width whichever icon follows the lane, so chat titles line up.
   leading: { flexDirection: 'row', alignItems: 'center', gap: 6, width: 10 + 6 + LUCIDE_SIZE },
   lane: { width: 10, alignItems: 'center' },

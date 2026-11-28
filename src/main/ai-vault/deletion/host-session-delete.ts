@@ -1,4 +1,4 @@
-import { lstat, readdir, rm } from 'node:fs/promises'
+import { lstat, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../discovery/ai-vault-scan-roots'
 import { invalidateAiVaultSessionListCache } from '../listing/cached-session-list'
@@ -11,25 +11,17 @@ import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+import {
+  getRemoteAiVaultSessionDeleteDeps,
+  removeAiVaultSessionPathPermanently,
+  type HostAiVaultSessionDeleteDeps
+} from './ai-vault-remote-delete-registry'
 
-export type HostAiVaultSessionDeleteDeps = {
-  removePath: AiVaultSessionPathRemover
-  invalidateMultiHostListCache?: () => void
-  invalidateBackgroundCache?: (paths: string[]) => Promise<void>
-}
-
-/** Plain-Node hosts have no Trash, so a remote delete removes the files outright. */
-export const removeAiVaultSessionPathPermanently: AiVaultSessionPathRemover = (removal) =>
-  rm(removal.path, { recursive: removal.kind === 'directory', force: true })
-
-let remoteDeleteDeps: HostAiVaultSessionDeleteDeps = {
-  removePath: removeAiVaultSessionPathPermanently
-}
-
-/** An Electron host swaps in its Trash and its own multi-host cache; orcad keeps the default. */
-export function configureRemoteAiVaultSessionDelete(deps: HostAiVaultSessionDeleteDeps): void {
-  remoteDeleteDeps = deps
-}
+export {
+  configureRemoteAiVaultSessionDelete,
+  removeAiVaultSessionPathPermanently,
+  type HostAiVaultSessionDeleteDeps
+} from './ai-vault-remote-delete-registry'
 
 /** A paired client's delete: never trust its host stamp, only this host's own files. */
 export function deleteAiVaultSessionForRemoteClient(
@@ -37,7 +29,7 @@ export function deleteAiVaultSessionForRemoteClient(
 ): Promise<AiVaultDeleteSessionResult> {
   return deleteHostAiVaultSession(
     { ...args, executionHostId: LOCAL_EXECUTION_HOST_ID },
-    remoteDeleteDeps
+    getRemoteAiVaultSessionDeleteDeps()
   )
 }
 
@@ -134,6 +126,7 @@ export async function invalidateDeletedAiVaultSessionPaths(
   if (deletedPaths.length === 0) {
     return
   }
+  const remoteDeleteDeps = getRemoteAiVaultSessionDeleteDeps()
   remoteDeleteDeps.invalidateMultiHostListCache?.()
   invalidateAiVaultSessionListCache()
   for (const path of deletedPaths) {

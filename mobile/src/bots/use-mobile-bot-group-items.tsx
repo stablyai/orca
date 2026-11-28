@@ -28,6 +28,7 @@ import { usePhoneBotChatTree, type PhoneBotChatTree } from './use-phone-bot-chat
 import { usePhoneNeedsYouAsks, type PhoneAsk } from './items/phone-needs-you-asks'
 import { usePhoneBotItems, type PhoneBotItems } from './items/use-phone-bot-items'
 import { groupItemsFresh, memberItemReads } from './phone-group-items-freshness'
+import { recomputeOn } from '../hooks/recompute-on'
 export { memberItemReads } from './phone-group-items-freshness'
 
 /** A member's ask read count: its item reads', and its chats' own. */
@@ -215,47 +216,51 @@ export function useMobileBotGroupItems({
 
   const shownKey = shownBots.map((bot) => bot.id).join('\n')
   // Merged once per read or filter change: the room redraws this on every keystroke.
-  const { shownReads, groups, ownerOf, asks } = useMemo(() => {
-    const shownReads = shownBots.flatMap((bot) => {
-      const items = memberReads.current.get(bot.id)
-      return items?.read ? [{ bot, items, read: items.read }] : []
-    })
-    const perBot = shownReads.map(({ bot, items, read }) => ({
-      items: filterBotItems(mergeBotItemsByUid(read.items, items.items), {
-        chatIds: null,
-        botIds: null,
-        needsYou: needsYouOnly
-      }),
-      staleDays: botItemStaleDays(bot.itemsStale),
-      seenEventId: read.seenEventId,
-      more: items.loadMoreClosed !== null
-    }))
-    const grouped = groupBotsItems(perBot, now)
-    // Each member pages its own Closed, so only what time order has settled shows, as on the desktop.
-    const groups = {
-      ...grouped,
-      closed: botItemsClosedInTimeOrder(
-        perBot.map(({ items, more }) => ({
-          closed: items.filter((item) => item.status === 'done' || item.status === 'canceled'),
-          more
+  const { shownReads, groups, ownerOf, asks } = useMemo(
+    () =>
+      recomputeOn([version, members, shownKey], () => {
+        const shownReads = shownBots.flatMap((bot) => {
+          const items = memberReads.current.get(bot.id)
+          return items?.read ? [{ bot, items, read: items.read }] : []
+        })
+        const perBot = shownReads.map(({ bot, items, read }) => ({
+          items: filterBotItems(mergeBotItemsByUid(read.items, items.items), {
+            chatIds: null,
+            botIds: null,
+            needsYou: needsYouOnly
+          }),
+          staleDays: botItemStaleDays(bot.itemsStale),
+          seenEventId: read.seenEventId,
+          more: items.loadMoreClosed !== null
         }))
-      )
-    }
-    const ownerOf = new Map(
-      shownReads.flatMap(({ bot, items, read }) =>
-        [...read.items, ...items.items].map((item) => [item.uid, bot] as const)
-      )
-    )
-    // Keyed by member too: two bots' chats can share an ask's key.
-    const asks = shownBots.flatMap((bot) =>
-      (memberAsks.current.get(bot.id) ?? []).map((ask) => ({
-        ask: { ...ask, key: `${bot.id}:${ask.key}` },
-        bot
-      }))
-    )
-    return { shownReads, groups, ownerOf, asks }
-    // `version` stands for the member reads (a ref, so a report never loops), `shownKey` for the shown bots.
-  }, [version, members, shownKey, needsYouOnly, now])
+        const grouped = groupBotsItems(perBot, now)
+        // Each member pages its own Closed, so only what time order has settled shows, as on the desktop.
+        const groups = {
+          ...grouped,
+          closed: botItemsClosedInTimeOrder(
+            perBot.map(({ items, more }) => ({
+              closed: items.filter((item) => item.status === 'done' || item.status === 'canceled'),
+              more
+            }))
+          )
+        }
+        const ownerOf = new Map(
+          shownReads.flatMap(({ bot, items, read }) =>
+            [...read.items, ...items.items].map((item) => [item.uid, bot] as const)
+          )
+        )
+        // Keyed by member too: two bots' chats can share an ask's key.
+        const asks = shownBots.flatMap((bot) =>
+          (memberAsks.current.get(bot.id) ?? []).map((ask) => ({
+            ask: { ...ask, key: `${bot.id}:${ask.key}` },
+            bot
+          }))
+        )
+        return { shownReads, groups, ownerOf, asks }
+        // `version` stands for the member reads (a ref, so a report never loops), `shownKey` for the shown bots.
+      }),
+    [version, members, shownKey, needsYouOnly, now]
+  )
   const isUnseen = (item: BotItem) => {
     const owner = ownerOf.get(item.uid)
     const seen = owner ? readOf(owner)?.read?.seenEventId : undefined

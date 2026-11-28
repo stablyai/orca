@@ -2,7 +2,7 @@ import { useGitHubOperationOwner } from '@/lib/work-items/github/useGitHubOperat
 import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
-  parseGitHubItemRepository as parseOwnerRepoFromItemUrl,
+  resolveGitHubItemUrlRepository,
   type GitHubWorkItemTarget
 } from '../../../../../shared/github/work-items/work-item-target'
 import {
@@ -49,7 +49,7 @@ export function useGitHubItemTargetIdentity({
       workItem
         ? workItem.type === 'pr'
           ? resolvePullRequestRepo(workItem, projectOrigin)
-          : (projectOrigin ?? parseOwnerRepoFromItemUrl(workItem.url))
+          : (projectOrigin ?? resolveGitHubItemUrlRepository(workItem))
         : null,
     [projectOrigin, workItem]
   )

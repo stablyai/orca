@@ -1,4 +1,5 @@
 import type { AppState } from '../../../types'
+import { structuredTabsShowingConversation } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import {
   orchestrationForStatusRows,
   remoteRowContextsFor
@@ -7,7 +8,6 @@ import type { AgentStatusEntry } from '../../../../../../shared/agent-status/con
 import type { AgentStatusChange } from '../contracts/agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -18,6 +18,7 @@ import {
 } from '../../../record-transitions/keyed-record-change-reads'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const SEAM_AGENT_PRESENTATION_FIELDS = [
   'runtimePaneTitlesByTabId',
@@ -102,6 +103,9 @@ export function stageProjectionTopology(
             ...Object.keys(previous?.unifiedTabsByWorktree ?? {}),
             ...Object.keys(state.unifiedTabsByWorktree ?? {})
           ])
+    const removedKeys = new Set<string>()
+    // The first tab listed for a conversation represents it, as the status bridge's member does.
+    const insertedKeys = new Set<string>()
     for (const owner of owners) {
       for (const tab of previous?.unifiedTabsByWorktree[owner] ?? []) {
         if (
@@ -109,25 +113,38 @@ export function stageProjectionTopology(
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
-          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
           represented.delete(key)
+          removedKeys.add(key)
           nextTabOwners.set(tab.id, null)
         }
       }
+    }
+    // Insert after every removal: a chat moved between workspaces keeps its one conversation key.
+    for (const owner of owners) {
       for (const tab of state.unifiedTabsByWorktree[owner] ?? []) {
         if (
           tab.contentType === 'agent-session' &&
           (diff?.kind !== 'addressed' || diff.tabIds.has(tab.id))
         ) {
           changedTabs.add(tab.id)
-          const key = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+          const key = chatPaneKey(tab.entityId)
           changedKeys.add(key)
-          if (isStructuredTab(tab)) {
+          removedKeys.delete(key)
+          if (isStructuredTab(tab) && !insertedKeys.has(key)) {
+            insertedKeys.add(key)
             represented.set(key, tab)
           }
           nextTabOwners.set(tab.id, owner)
         }
+      }
+    }
+    // A closed tab's conversation that another open tab, in any workspace, still shows stays represented.
+    for (const key of removedKeys) {
+      const [survivor] = structuredTabsShowingConversation(state.unifiedTabsByWorktree, key)
+      if (survivor) {
+        represented.set(key, survivor)
       }
     }
   }

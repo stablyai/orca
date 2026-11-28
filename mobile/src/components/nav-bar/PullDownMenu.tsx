@@ -15,21 +15,17 @@ import {
 import { Check } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { useBackClaim } from '../../navigation/use-back-claim'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ActionSheetAction } from '../sheets/ActionSheetModal'
+import { useWindowSafeAreaInsets } from '../../layout/side-safe-area'
+import { placePullDownMenu, type PullDownMenuPlacement } from './pull-down-menu-placement'
 
-const MENU_WIDTH = 252
-const ANCHOR_GAP = 6
-const EDGE_INSET = 8
 // About 250 ms to rest with a hint of overshoot, like an iOS menu growing out of its button.
 const OPEN_SPRING = { stiffness: 420, damping: 32, mass: 1 }
 const CLOSE_FADE_MS = 150
-
-// Below the button, or above it when the button sits in the lower half, so the menu never runs off-screen.
-type Anchor = { top: number; right: number } | { bottom: number; right: number }
 
 type PullDownMenuProps = {
   visible: boolean
@@ -42,11 +38,13 @@ type PullDownMenuProps = {
 
 // The iOS pull-down: a small menu dropping from the button that opened it, instead of a sheet from the bottom.
 export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMenuProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const window = useWindowDimensions()
+  const insets = useWindowSafeAreaInsets()
   const reducedMotion = useReducedMotionEnabled()
-  const [anchor, setAnchor] = useState<Anchor | null>(null)
+  const [placement, setPlacement] = useState<PullDownMenuPlacement | null>(null)
   // The Modal outlives `visible` by the exit fade, so the menu fades out instead of vanishing.
   const [presented, setPresented] = useState(visible)
   if (visible && !presented) {
@@ -60,17 +58,14 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
       return
     }
     anchorRef.current?.measureInWindow((x, y, width, height) => {
-      const right = Math.max(EDGE_INSET, window.width - (x + width))
-      setAnchor(
-        y + height / 2 > window.height / 2
-          ? { bottom: window.height - y + ANCHOR_GAP, right }
-          : { top: y + height + ANCHOR_GAP, right }
-      )
+      setPlacement(placePullDownMenu({ anchor: { x, y, width, height }, window, insets }))
     })
-  }, [anchorRef, visible, window.width, window.height])
+  }, [anchorRef, visible, window.width, window.height, insets])
 
+  // Keyed on being placed, so a re-placement (rotation, an inset change) moves without re-popping.
+  const placed = placement !== null
   useEffect(() => {
-    if (!visible || anchor === null) {
+    if (!visible || !placed) {
       return
     }
     appear.setValue(0)
@@ -88,7 +83,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
           })
     open.start()
     return () => open.stop()
-  }, [anchor, appear, reducedMotion, visible])
+  }, [placed, appear, reducedMotion, visible])
 
   useEffect(() => {
     if (visible || !presented) {
@@ -103,7 +98,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
     close.start(({ finished }) => {
       if (finished) {
         setPresented(false)
-        setAnchor(null)
+        setPlacement(null)
       }
     })
     return () => close.stop()
@@ -150,15 +145,11 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
         disabled={!visible}
         accessibilityLabel={t('components.pullDownMenu.close', 'Close menu')}
       />
-      {anchor ? (
+      {placement ? (
         <Animated.View
           style={[
             styles.menu,
-            anchor,
-            // Long menus scroll instead of running off a short (landscape) screen.
-            {
-              maxHeight: window.height - ('top' in anchor ? anchor.top : anchor.bottom) - EDGE_INSET
-            },
+            placement,
             {
               opacity: appear.interpolate({
                 inputRange: [0, 1],
@@ -166,7 +157,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                 extrapolate: 'clamp'
               }),
               // Grows out of the button it hangs from rather than from its own middle.
-              transformOrigin: 'top' in anchor ? 'top right' : 'bottom right',
+              transformOrigin: 'top' in placement ? 'top right' : 'bottom right',
               transform: [
                 {
                   scale: appear.interpolate({
@@ -240,10 +231,9 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   menu: {
     position: 'absolute',
-    width: MENU_WIDTH,
     borderRadius: radii.surface,
     overflow: 'hidden',
     backgroundColor: colors.bgRaised,

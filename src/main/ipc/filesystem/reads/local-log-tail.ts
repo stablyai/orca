@@ -1,4 +1,5 @@
 import { ipcMain, type WebContents } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { watch, type FSWatcher } from 'node:fs'
 import type {
   LocalLogTailChangedPayload,
@@ -143,8 +144,11 @@ async function startWatch(
   }
 }
 
-export function registerLocalLogTailHandlers(store: Store): void {
-  ipcMain.handle(
+export function registerLocalLogTailHandlers(
+  store: Store,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'fs:readLocalLogTail',
     async (_event, args: LocalLogTailReadArgs): Promise<LocalLogTailReadResult> => {
       const filePath = await resolveUserNamedRegularFile(args.filePath, store)
@@ -152,11 +156,11 @@ export function registerLocalLogTailHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('fs:startLocalLogTail', (event, args: LocalLogTailWatchArgs): Promise<void> =>
+  ipc.handle('fs:startLocalLogTail', (event, args: LocalLogTailWatchArgs): Promise<void> =>
     startWatch(event.sender, args, store)
   )
 
-  ipcMain.handle('fs:stopLocalLogTail', (event, args: { subscriptionId: string }): void => {
+  ipc.handle('fs:stopLocalLogTail', (event, args: { subscriptionId: string }): void => {
     const key = watchKey(event.sender.id, validateSubscriptionId(args.subscriptionId))
     const owner = senderOwners.get(event.sender.id)
     owner?.pending.delete(key)

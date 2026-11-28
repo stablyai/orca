@@ -8,6 +8,7 @@ import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownershi
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   completionPaneKeysByTabId,
+  markerTabAddressId,
   paneKeyTabId,
   workspaceMarkerTabs
 } from '@/store/slices/workspace-attention/workspace-live-markers'
@@ -92,16 +93,17 @@ function collectWorkspaceUnreadInputs(
   for (const tab of workspaceMarkerTabs(state, worktree.id)) {
     hasStructuredTab ||= tab.sessionId !== null
     const paneKey = markerTabPaneKey(state, tab)
-    const completionKeys = completions.get(tab.id) ?? []
+    const addressId = markerTabAddressId(tab)
+    const completionKeys = completions.get(addressId) ?? []
     const statuses = [paneKey, ...completionKeys].map((key) => {
       const entry = state.agentStatusByPaneKey.get(key)
       keys?.statuses.set(key, entry)
       return entry
     })
-    keys?.tabIds.add(tab.id)
+    keys?.tabIds.add(tab.id).add(addressId)
     inputs.push(
       state.unreadTerminalTabs[tab.id],
-      completions.get(tab.id),
+      completions.get(addressId),
       // Host resolution for this tab: its layout, pty ids, and status entry.
       state.terminalLayoutsByTabId[tab.id],
       state.ptyIdsByTabId[tab.id],

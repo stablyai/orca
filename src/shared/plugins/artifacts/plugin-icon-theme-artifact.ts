@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import { pluginRelativePathSchema } from '../manifest/plugin-manifest-fields'
 import {
   pickKnownArtifactKeys,
@@ -14,14 +15,18 @@ const ICON_THEME_MAPPING_LIMIT = 512
 function hasControlCharacter(value: string): boolean {
   return [...value].some((character) => character.charCodeAt(0) <= 31)
 }
-const iconSlotSchema = z.enum(PLUGIN_ICON_THEME_SLOTS)
+const iconSlotSchema = lazyZodSchema(() => z.enum(PLUGIN_ICON_THEME_SLOTS))
 
-const entryNameSchema = z
-  .string()
-  .min(1)
-  .max(128)
-  .refine((name) => !/[\\/]/.test(name) && !hasControlCharacter(name), 'unsafe name')
-const fileExtensionSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9+._-]{0,31}$/)
+const entryNameSchema = lazyZodSchema(() =>
+  z
+    .string()
+    .min(1)
+    .max(128)
+    .refine((name) => !/[\\/]/.test(name) && !hasControlCharacter(name), 'unsafe name')
+)
+const fileExtensionSchema = lazyZodSchema(() =>
+  z.string().regex(/^[A-Za-z0-9][A-Za-z0-9+._-]{0,31}$/)
+)
 
 // Why: z.record drops an own `__proto__` key, but a file may legitimately be named that.
 function ownKeyRecord<Value>(keySchema: z.ZodType<string>, valueSchema: z.ZodType<Value>) {
@@ -138,32 +143,40 @@ export function isPlausiblePluginIconSvg(text: string): boolean {
   )
 }
 
-const svgIndexSchema = z
-  .number()
-  .int()
-  .min(0)
-  .max(PLUGIN_ICON_THEME_MAX_SVGS - 1)
+const svgIndexSchema = lazyZodSchema(() =>
+  z
+    .number()
+    .int()
+    .min(0)
+    .max(PLUGIN_ICON_THEME_MAX_SVGS - 1)
+)
 
-const pluginIconThemeMetadataSchema = z.object({
-  id: pluginContentIdSchema,
-  pluginKey: z.string(),
-  label: z.string(),
-  // Optional: older hosts omit it.
-  revision: z.string().optional()
-})
+const pluginIconThemeMetadataSchema = lazyZodSchema(() =>
+  z.object({
+    id: pluginContentIdSchema,
+    pluginKey: z.string(),
+    label: z.string(),
+    // Optional: older hosts omit it.
+    revision: z.string().optional()
+  })
+)
 
 /** Each distinct SVG is sent once; the maps point into `svgs` so rows never repeat image data. */
-const pluginIconThemeRegistrationObjectSchema = pluginIconThemeMetadataSchema.extend({
-  svgs: z.array(z.string().max(PLUGIN_ICON_SVG_MAX_BYTES)).max(PLUGIN_ICON_THEME_MAX_SVGS),
-  icons: z.partialRecord(iconSlotSchema, svgIndexSchema),
-  fileNames: ownKeyRecord(z.string(), svgIndexSchema),
-  fileExtensions: ownKeyRecord(z.string(), svgIndexSchema),
-  folderNames: ownKeyRecord(z.string(), svgIndexSchema),
-  folderNamesExpanded: ownKeyRecord(z.string(), svgIndexSchema)
-})
-const pluginIconThemeRegistrationSchema = pluginIconThemeRegistrationObjectSchema.refine(
-  (theme) => pluginIconThemeIconRefs(theme).every((index) => index < theme.svgs.length),
-  'icon index outside svgs'
+const pluginIconThemeRegistrationObjectSchema = lazyZodSchema(() =>
+  pluginIconThemeMetadataSchema.extend({
+    svgs: z.array(z.string().max(PLUGIN_ICON_SVG_MAX_BYTES)).max(PLUGIN_ICON_THEME_MAX_SVGS),
+    icons: z.partialRecord(iconSlotSchema, svgIndexSchema),
+    fileNames: ownKeyRecord(z.string(), svgIndexSchema),
+    fileExtensions: ownKeyRecord(z.string(), svgIndexSchema),
+    folderNames: ownKeyRecord(z.string(), svgIndexSchema),
+    folderNamesExpanded: ownKeyRecord(z.string(), svgIndexSchema)
+  })
+)
+const pluginIconThemeRegistrationSchema = lazyZodSchema(() =>
+  pluginIconThemeRegistrationObjectSchema.refine(
+    (theme) => pluginIconThemeIconRefs(theme).every((index) => index < theme.svgs.length),
+    'icon index outside svgs'
+  )
 )
 
 export type PluginIconThemeMetadata = z.infer<typeof pluginIconThemeMetadataSchema>

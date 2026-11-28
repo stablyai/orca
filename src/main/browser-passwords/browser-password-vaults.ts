@@ -2,21 +2,21 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import { BrowserPasswordStore } from './browser-password-store'
 import type { BrowserPasswordStoreResult } from './browser-password-vault-file'
+import {
+  configureBrowserPasswordVaults,
+  getBrowserPasswordVaultProfileDirectory
+} from './browser-password-vault-directory'
+
+export { configureBrowserPasswordVaults }
 
 const BROWSER_PASSWORD_VAULT_DIRECTORY = 'browser-passwords'
 
 // Why keyed by file path: the same browser profile id ('default') exists in every Orca profile.
 const vaults = new Map<string, BrowserPasswordStore>()
-let profileDirectory: string | null = null
-
-/** Points vaults at the active Orca profile, beside its browser-session metadata. */
-export function configureBrowserPasswordVaults(directory: string): void {
-  profileDirectory = directory
-}
 
 function vaultFilePath(browserProfileId: string): string {
   return join(
-    profileDirectory ?? app.getPath('userData'),
+    getBrowserPasswordVaultProfileDirectory() ?? app.getPath('userData'),
     BROWSER_PASSWORD_VAULT_DIRECTORY,
     `${encodeURIComponent(browserProfileId)}.json`
   )

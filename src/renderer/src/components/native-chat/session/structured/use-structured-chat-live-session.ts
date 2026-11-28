@@ -17,6 +17,7 @@ type StructuredChatController = Pick<
   | 'retainHistory'
   | 'trimHistory'
   | 'readCurrent'
+  | 'contextClear'
 >
 
 /** Keep the shared transcript loading until structured history is known. */
@@ -57,7 +58,8 @@ export function useStructuredChatLiveSession(
           : controller.status === 'error'
             ? 'error'
             : 'ready',
-      readCurrent: controller.readCurrent
+      readCurrent: controller.readCurrent,
+      conversationKey: controller.contextClear.conversationKey
     }),
     [controller, historyPhase, agent, sessionId, hostReachable]
   )

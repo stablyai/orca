@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-  type RefObject
-} from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { observeElementOffset, observeElementRect, type Range } from '@tanstack/react-virtual'
 import { useSidebarRowsVirtualizer } from '@/components/sidebar/worktree-list/viewport/use-virtualizer'
 import { extractPinnedVirtualRange } from '@/lib/list-interaction/pinned-virtual-range'
@@ -34,18 +27,23 @@ const observeListOffset: typeof observeElementOffset = (instance, report) =>
 
 export function BotSidebarVirtualRows<Entry extends { id: string }>({
   entries,
-  listRef,
   draggingId,
   revealId,
   renderEntry
 }: {
   entries: readonly Entry[]
-  listRef: RefObject<HTMLDivElement | null>
   draggingId: string | null
   revealId: string | undefined
   renderEntry: (entry: Entry, index: number) => ReactNode
 }): React.JSX.Element {
   const [focusedId, setFocusedId] = useState<string | null>(null)
+  // Not the list's ref: when the list and rows mount together (sidebar reopen, or the first lazy
+  // mount with bots already loaded), it attaches after these layout effects, so nothing is measured.
+  const rowsRef = useRef<HTMLDivElement>(null)
+  const getList = useCallback(
+    () => rowsRef.current?.closest<HTMLDivElement>('[data-bot-sidebar-list]') ?? null,
+    []
+  )
   const indexById = useMemo(() => new Map(entries.map(({ id }, index) => [id, index])), [entries])
   const rangeExtractor = useCallback(
     (range: Range) =>
@@ -58,7 +56,7 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
   const getItemKey = useCallback((index: number) => entries[index]!.id, [entries])
   const { virtualizer, totalSize, virtualRows } = useSidebarRowsVirtualizer<Element>({
     count: entries.length,
-    getScrollElement: () => listRef.current,
+    getScrollElement: getList,
     getItemKey,
     estimateSize: () => ESTIMATED_ENTRY_HEIGHT,
     initialRect: { width: 0, height: ESTIMATED_ENTRY_HEIGHT },
@@ -69,7 +67,7 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
     measureElement: measureVirtualRowRetainingHiddenSize
   })
   useLayoutEffect(() => {
-    const list = listRef.current
+    const list = getList()
     if (!list) {
       return
     }
@@ -102,7 +100,7 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
     return () => {
       botSidebarVirtualScrollers.delete(list)
     }
-  }, [indexById, listRef, virtualizer])
+  }, [getList, indexById, virtualizer])
 
   // Rendered entries sit in normal flow, with spacers standing in for the rows not rendered. A
   // bot's entry grows after its first measure (its chats load, it unfolds); placed at a measured
@@ -110,7 +108,7 @@ export function BotSidebarVirtualRows<Entry extends { id: string }>({
   // starts below it, and a stale measure can only misjudge the spacers.
   const { gaps, tail } = flowSpacers(virtualRows, totalSize)
   return (
-    <div className="shrink-0">
+    <div ref={rowsRef} className="shrink-0">
       {/* flatMap, not map: nested arrays would key rows by window position and remount them on scroll. */}
       {virtualRows.flatMap(({ key, index }, position) => {
         const entry = entries[index]!

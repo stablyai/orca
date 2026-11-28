@@ -2,6 +2,7 @@ import {
   BROWSER_CLIENT_AUTOMATION_STAGED_RESULT_MAX_BYTES,
   type BrowserClientAutomationResult as BrowserClientHostCommandResult
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { redactBrowserHostCommandResult } from './browser-host-command-result-redaction'
 import type {
   BrowserHostCommandPageState,
   BrowserHostCommandRecord,
@@ -38,6 +39,13 @@ export class BrowserHostCommandResultStaging {
 
   /** Swaps a staged marker for the value its chunks carried, and frees them either way. */
   take(
+    record: BrowserHostCommandRecord,
+    result: BrowserClientHostCommandResult
+  ): BrowserClientHostCommandResult {
+    return redactBrowserHostCommandResult(record.event.command, this.takeValue(record, result))
+  }
+
+  private takeValue(
     record: BrowserHostCommandRecord,
     result: BrowserClientHostCommandResult
   ): BrowserClientHostCommandResult {

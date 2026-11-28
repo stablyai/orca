@@ -1,12 +1,13 @@
 import { ipcMain, shell } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { systemBrowserUrlForForward } from '../../ports/forwarded-url-system-browser'
 import {
   isForwardedUrlOpenRequest,
   type ForwardedUrlOpenResult
 } from '../../../shared/workspace/ports/forwarded-url-open'
 
-export function registerForwardedUrlOpenHandler(): void {
-  ipcMain.handle(
+export function registerForwardedUrlOpenHandler(ipc: IpcHandleRegistrar = ipcMain): void {
+  ipc.handle(
     'shell:openForwardedUrl',
     async (_event, request: unknown): Promise<ForwardedUrlOpenResult> => {
       if (!isForwardedUrlOpenRequest(request)) {

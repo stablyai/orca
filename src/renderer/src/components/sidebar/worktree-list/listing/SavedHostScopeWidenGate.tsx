@@ -7,14 +7,15 @@ import {
 import { widenSavedExecutionHostIds } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { useSidebarHostScopeOptions } from '../controls/use-sidebar-host-scope-options'
 
+const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+
 /** Merged SSH rows represent two owner IDs; widen saved filters so selecting the row includes both. */
 export function SavedHostScopeWidenGate(): null {
   const { hostOptions } = useSidebarHostScopeOptions()
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
-  const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
-  const setAgentsVisibleHostIds = useAppStore((s) => s.setAgentsVisibleHostIds)
+  const { setVisibleWorkspaceHostIds, setAgentsVisibleHostIds } = getAppStoreState()
 
   useEffect(() => {
     const sidebarScope: readonly ExecutionHostId[] | null =

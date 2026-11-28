@@ -2,7 +2,7 @@
 // can change (the agent projection's workspace journal and keyed tab records), so a write elsewhere reads none.
 import type { AppState } from '@/store/types'
 import type { AgentStatusProjection } from '@/store/slices/agent-status/projection/agent-status-projection'
-import { getTabIdToWorktreeId } from '@/lib/workspace/tabs/tab-worktree-index'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
@@ -96,11 +96,12 @@ function changedBetween(before: Seen, after: Seen): Set<string> | null {
     forEachChangedKey(record, after.byWorkspace[index], add)
   )
   // A tab that moved changed both workspaces' tab lists above; its own records follow its new owner.
+  // The shared owner index follows tab-bucket writes by the buckets they name, so a title write
+  // looks up only its own tab instead of rebuilding ownership over every bucket.
   if (!sameItems(before.byTab, after.byTab)) {
-    const owners = getTabIdToWorktreeId(after.tabs)
     const addOwner = (tabId: string): void => {
-      const id = owners.get(tabId)
-      if (id !== undefined) {
+      const id = getTerminalTabOwnerWorktreeId(after.tabs, tabId)
+      if (id !== null) {
         changed.add(id)
       }
     }

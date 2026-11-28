@@ -5,7 +5,6 @@ import { AlertTriangle } from 'lucide-react'
 import React from 'react'
 import { useSectionOnScreen } from '../../right-sidebar/source-control/panel/section-viewport-presence'
 import type {
-  OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -20,11 +19,11 @@ import { formatCreditCount } from '../../../../../shared/agent-usage/display/cre
 import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
-import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import { UsageErrorAlert, getUsageChipDescription } from './UsageErrorAlert'
 import {
-  getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
-  isClaudeUsageWaitingForClaude
+  isUsageStatusNotice,
+  isUsageWaitingForCli
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage } from './usage-percentage-label'
@@ -32,9 +31,6 @@ import { formatUsageChipTitle } from './usage-chip-title'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
-import { GroupedPoolUsage } from './usage-grouped-pools'
-import { formatStatusBarSectionLabel } from './usage-pool-label'
-import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { useNow } from '@/lib/window-activity/use-now'
 
@@ -64,7 +60,7 @@ function WindowLabel({
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
-  /** Compact bar: a bold bright number with a smaller, regular-weight muted unit. */
+  /** Compact bar: a regular-weight bright number with a smaller unit at 70% of its color. */
   compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -73,11 +69,7 @@ function WindowLabel({
     const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
     const at = text.indexOf(value)
     const unit = (part: string) =>
-      part.trim() ? (
-        <span className="text-[0.82em] font-normal text-muted-foreground">{part}</span>
-      ) : (
-        part
-      )
+      part.trim() ? <span className="text-[0.82em] opacity-70">{part}</span> : part
     return (
       <span className="tabular-nums">
         {showLabel && labelFirst ? (
@@ -86,9 +78,9 @@ function WindowLabel({
           ''
         )}
         {at === -1 ? (
-          <span className="font-semibold text-foreground">{text}</span>
+          <span className="text-foreground">{text}</span>
         ) : (
-          <span className="font-semibold text-foreground">
+          <span className="text-foreground">
             {unit(text.slice(0, at))}
             {value}
             {unit(text.slice(at + value.length))}
@@ -124,27 +116,6 @@ export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX
   )
 }
 
-// Why only the host name truncates: the phrase around it must stay readable in every locale.
-function OwnerNotSetUpLabel({
-  placeholder
-}: {
-  placeholder: OwnerNotSetUpPlaceholder
-}): React.JSX.Element {
-  const t = useTranslate()
-  const { before, host, after } = getOwnerNotSetUpLabelParts(placeholder, t)
-  return (
-    <span className="text-[11px] font-medium">
-      {before}
-      {host ? (
-        <span data-owner-host className="inline-block max-w-28 truncate align-bottom">
-          {host}
-        </span>
-      ) : null}
-      {after}
-    </span>
-  )
-}
-
 /**
  * A provider at 80%+ used keeps its chip when the status bar runs out of room, whatever % display
  * the user chose. Why 80: the status bar's original threshold; it drives collapsing, not color.
@@ -162,8 +133,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'O'
     case 'kimi':
       return 'K'
-    case 'antigravity':
-      return 'A'
     case 'minimax':
       return 'M'
     case 'grok':
@@ -279,8 +248,8 @@ export function ProviderSegment({
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
   const template = resolveStatusBarUsageTemplate(usageFormat, provider)
   const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
-  // Why: not a problem; Claude updates its own login the next time it runs.
-  const calm = p ? isClaudeUsageWaitingForClaude(p) : false
+  // Why: not a problem; the CLI updates its own login the next time it runs.
+  const calm = p ? isUsageWaitingForCli(p) : false
   const calmClock = useNow(60_000, calm && p?.status === 'error')
   const tightest = p
     ? mode === 'compact'
@@ -288,19 +257,12 @@ export function ProviderSegment({
       : getTightestUsageSection(p, t, 'all')
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
-  const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
-    !countdownActive
-      ? []
-      : template && p
-        ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-        : mode === 'verbose'
-          ? groupedBuckets
-              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
-              .map((bucket) => bucket.resetsAt)
-          : []
+    countdownActive && template && p
+      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+      : []
   )
 
   const compactBar = barMode === 'compact'
@@ -323,35 +285,42 @@ export function ProviderSegment({
     )
   }
 
-  if (p.usageMetadata?.ownerNotSetUp) {
+  const description = getUsageChipDescription(p, t)
+  if (description) {
+    // Why "--", not the alert: not set up, unavailable and similar states are not failures to fix.
+    if (isUsageStatusNotice(p)) {
+      return (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <ProviderIcon provider={provider} />
+          --
+        </span>
+      )
+    }
     return (
-      <span
-        className="inline-flex items-center gap-1 text-muted-foreground"
-        title={measuring ? undefined : getProviderUsageErrorMessage(p, t)}
-      >
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <UsageErrorAlert label={description} />
         <ProviderIcon provider={provider} />
-        {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
-        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
       </span>
     )
   }
 
+  // Why text: only a calm CLI wait reaches here, and it is not a problem to flag.
   if (p.status === 'error' && !tightest) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
         {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
       </span>
     )
   }
 
   // Why: calm is honest only while the kept bars are recent; old ones still deserve the warning.
+  // A notice (e.g. no subscription) is not a failure, so its kept bars never carry the alert.
   const isStale =
-    p.status === 'error' && (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
+    p.status === 'error' &&
+    !isUsageStatusNotice(p) &&
+    (!calm || calmClock - p.updatedAt > CALM_STALE_USAGE_MAX_AGE_MS)
   const showBalance = isExtraUsageActive(p)
-  const showGroupedPools =
-    mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
   // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
   const compactTitle =
@@ -372,22 +341,13 @@ export function ProviderSegment({
       ) : null}
       {template ? (
         <CustomUsageText template={template} limits={p} display={display} now={now} />
-      ) : showGroupedPools ? (
-        <GroupedPoolUsage
-          visibleBuckets={groupedBuckets}
-          allBuckets={p.buckets ?? []}
-          display={display}
-          now={now}
-        />
       ) : (
         sections.map((section, index) => (
           <React.Fragment key={section.key}>
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
             <WindowLabel
               w={section.window}
-              label={
-                mode === 'compact' ? section.label : formatStatusBarSectionLabel(p, section, now, t)
-              }
+              label={section.label}
               display={display}
               showLabel={showLabels && section.label !== '' && !(compactBar && section.labelFirst)}
               labelFirst={section.labelFirst}

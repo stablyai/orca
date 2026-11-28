@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { DropdownMenuRadioItem, useDropdownMenuClose } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { lastPressWasTouch } from './last-pointer-type'
+import { lastPressWasTouch } from '@/lib/keyboard/keyboard-input-modality'
 
 // The side tooltip needs a hover pointer and room beside the menu; otherwise (touch-only
 // screens, narrow or zoomed windows) the description renders inline. One media rule per state,
@@ -31,7 +31,6 @@ export function PermissionChoiceRadioItem({
   const closeMenu = useDropdownMenuClose()
   const [inline, setInline] = useState(lastPressWasTouch)
   const inlineRef = useRef<HTMLDivElement>(null)
-  const touchPress = useRef(false)
   const [tooltipOpen, setTooltipOpen] = useState(false)
   // Why: leaving a row moves menu focus to the menu itself; that blur must not close the
   // tooltip, so the pointer can travel onto it. Radix's hover grace area closes it instead.
@@ -53,17 +52,10 @@ export function PermissionChoiceRadioItem({
           value={value}
           // Why not `disabled`: menus keep disabled items focusable so keyboard users can read why.
           aria-disabled={disabled || undefined}
-          onPointerDown={(event) => {
-            touchPress.current = event.pointerType === 'touch'
-          }}
-          onKeyDown={() => {
-            touchPress.current = false
-          }}
           onSelect={(event) => {
             // Why: a tap can't hover, so the first tap on a row whose description is hidden
             // (a mouse-opened menu) shows it; the next tap selects.
-            const hidden = !inlineRef.current?.getClientRects().length
-            if (touchPress.current && hidden) {
+            if (lastPressWasTouch() && !inlineRef.current?.getClientRects().length) {
               event.preventDefault()
               setInline(true)
               return
@@ -76,9 +68,17 @@ export function PermissionChoiceRadioItem({
           }}
           aria-describedby={descriptionId}
           onBlur={(event) => {
-            keepOpenOnBlur.current =
+            if (
               event.relatedTarget instanceof HTMLElement &&
               event.relatedTarget.getAttribute('role') === 'menu'
+            ) {
+              // Radix closes the tooltip synchronously after this handler; if it was already
+              // closed nothing consumes the flag, so drop it before a later close is skipped.
+              keepOpenOnBlur.current = true
+              queueMicrotask(() => {
+                keepOpenOnBlur.current = false
+              })
+            }
           }}
         >
           <div className={cn('min-w-0', disabled && 'opacity-40')}>
@@ -110,6 +110,9 @@ export function PermissionChoiceRadioItem({
           )}
           // Why: the tooltip is the top layer, so without this the first Escape closes only it.
           onEscapeKeyDown={closeMenu}
+          // Why: the tooltip can't take focus, so a click on it would drop focus to the page and
+          // leave the still-open menu deaf to arrow keys.
+          onMouseDown={(event) => event.preventDefault()}
         >
           {description}
         </TooltipContent>

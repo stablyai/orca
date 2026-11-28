@@ -10,12 +10,12 @@ import {
   Sparkles,
   type LucideIcon
 } from 'lucide-react-native'
-import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { feedback, radii, spacing, typography } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MessageBox } from '../../components/composer-input/MessageBox'
-import { composerInputStyles } from '../../components/composer-input/composer-input-styles'
+import { composerInputStylesSheet } from '../../components/composer-input/composer-input-styles'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from '../changes/mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import type { MobileSourceControlPrimaryAction } from '../workflows/mobile-source-control-primary-action'
@@ -29,7 +29,7 @@ import type {
   MobileNextStepIcon,
   MobileNextStepTone
 } from './mobile-source-control-next-step'
-import { styles as sourceControlStyles } from '../mobile-source-control-styles'
+import { stylesSheet } from '../mobile-source-control-styles'
 import { useMobileDictationClearance } from '../../dictation/mobile-dictation-host-context'
 
 const ICONS: Record<MobileNextStepIcon, LucideIcon> = {
@@ -81,7 +81,8 @@ export function MobileSourceControlNextStepBar({
   mergeConfirm,
   onHeightChange
 }: Props) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   const t = useMobileTranslation()
   const [composerFocused, setComposerFocused] = useState(false)
   // The bar rides the keyboard only for its own commit box; for any other field it steps aside.
@@ -199,7 +200,8 @@ function BarButton({
   accessibilityHint?: string
   onPress: () => void
 }) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesThemedSheet)
   const off = disabled && !loading
   const fg = off
     ? colors.textMuted
@@ -247,7 +249,9 @@ function CommitComposer({
   primaryAction: MobileSourceControlPrimaryAction
   onFocusChange: (focused: boolean) => void
 }) {
-  useMobileColorScheme()
+  const sourceControlStyles = useThemedStyles(stylesSheet)
+  const colors = useMobileColors()
+  const composerInputStyles = useThemedStyles(composerInputStylesSheet)
   const t = useMobileTranslation()
   const {
     busyAction,
@@ -348,7 +352,7 @@ function CommitComposer({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesThemedSheet = themedStyleSheet((colors) => ({
   bar: {
     position: 'absolute',
     left: 0,

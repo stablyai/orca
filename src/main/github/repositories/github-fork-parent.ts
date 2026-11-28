@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
 import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import type { GitHubRepositoryIdentity } from '../../../shared/github/repositories/repository-identity'
@@ -10,13 +11,15 @@ import { isValidGitHubApiRepository } from './github-api-repository-validation'
 import { ghRepoExecOptions, type GitHubRepoContext } from './github-repository-identity'
 import { githubRepositorySlugArg, githubHostExecOptions } from './github-repository-host'
 
-const metadata = z.discriminatedUnion('isFork', [
-  z.object({ isFork: z.literal(false) }),
-  z.object({
-    isFork: z.literal(true),
-    parent: z.object({ owner: z.object({ login: z.string() }), name: z.string() })
-  })
-])
+const metadata = lazyZodSchema(() =>
+  z.discriminatedUnion('isFork', [
+    z.object({ isFork: z.literal(false) }),
+    z.object({
+      isFork: z.literal(true),
+      parent: z.object({ owner: z.object({ login: z.string() }), name: z.string() })
+    })
+  ])
+)
 
 type ForkParent = GitHubRepositoryIdentity | null
 const cache = new BoundedMap<string, { parent: ForkParent; expires: number }>({ maxEntries: 512 })

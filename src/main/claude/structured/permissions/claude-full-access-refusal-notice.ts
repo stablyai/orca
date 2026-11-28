@@ -111,10 +111,11 @@ export function claimClaudeFullAccessRefusalNotice(
   }
 }
 
-/** Checked on every root frame; writes only the warning the chat is due. */
+/** Checked on every root frame; writes only the warning the chat is due. The scope is read only
+ *  when one is due: building it per streamed delta was a measurable share of main's chat work. */
 export function journalClaudeFullAccessRefusal(
   deps: Pick<ClaudeJournalTranslatorDeps, 'sink' | 'fullAccessRefusalNotice'>,
-  turnScope: AgentJournalTurnScope
+  turnScope: () => AgentJournalTurnScope
 ): void {
   const notice = deps.fullAccessRefusalNotice?.()
   if (!notice) {
@@ -123,7 +124,7 @@ export function journalClaudeFullAccessRefusal(
   deps.sink.appendItem(
     { provider: 'orca', clientMessageId: `full-access-refused:claude:${notice.id}` },
     notice.body,
-    { turnScope }
+    { turnScope: turnScope() }
   )
   deps.sink.publish()
 }
