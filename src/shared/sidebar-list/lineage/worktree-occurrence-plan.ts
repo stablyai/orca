@@ -1,7 +1,6 @@
-import {
-  getVisibleLineageAncestorRoots,
-  getVisibleLineagePlacement
-} from './worktree-lineage-placement'
+import { getLineagePlacementRows, type LineagePlacementRows } from './worktree-lineage-placement'
+
+export { getLineagePlacementRows }
 
 const EMPTY_OCCURRENCES: readonly never[] = []
 
@@ -34,60 +33,6 @@ export type WorktreeOccurrenceSection<Row> = {
 export type WorktreeOccurrencePlan<Row> = {
   bySection: ReadonlyMap<string, readonly WorktreeOccurrence<Row>[]>
   preferredByIdentity: ReadonlyMap<string, WorktreeOccurrence<Row>>
-}
-
-type LineagePlacementRows<Row> = {
-  pinned: Row[]
-  natural: readonly Row[]
-  displayRootByIdentity: ReadonlyMap<string, Row>
-}
-
-export function getLineagePlacementRows<Row>(args: {
-  rows: readonly Row[]
-  childrenByParentIdentity: ReadonlyMap<string, readonly Row[]>
-  identityOf: (row: Row) => string
-  isPinned: (row: Row) => boolean
-  duplicatePinned: boolean
-}): LineagePlacementRows<Row> {
-  const { rows, childrenByParentIdentity, identityOf } = args
-  let pinnedRoots: Row[] | undefined
-  for (const row of rows) {
-    if (args.isPinned(row)) {
-      pinnedRoots ??= []
-      pinnedRoots.push(row)
-    }
-  }
-  if (!pinnedRoots) {
-    return {
-      pinned: [],
-      natural: rows,
-      displayRootByIdentity: getVisibleLineageAncestorRoots(
-        rows,
-        childrenByParentIdentity,
-        identityOf
-      )
-    }
-  }
-  const pinnedPlacement = getVisibleLineagePlacement(
-    rows,
-    pinnedRoots,
-    childrenByParentIdentity,
-    identityOf,
-    true
-  )
-  const pinned = rows.filter((row) => pinnedPlacement.has(identityOf(row)))
-  const natural = args.duplicatePinned
-    ? rows
-    : rows.filter((row) => !pinnedPlacement.has(identityOf(row)))
-  return {
-    pinned,
-    natural,
-    displayRootByIdentity: getVisibleLineageAncestorRoots(
-      natural,
-      childrenByParentIdentity,
-      identityOf
-    )
-  }
 }
 
 /** Compute placement/disclosure before collapse removes occurrences. */

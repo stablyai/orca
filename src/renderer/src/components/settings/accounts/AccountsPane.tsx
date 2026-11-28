@@ -356,13 +356,8 @@ export function AccountsPane({
   }
   // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
   const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
+  const managedDataShown = !searchQuery || /opencode|devin|account/i.test(searchQuery)
   const visibleSections = [
-    !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
-      <div key={accountOwnerKey} className="space-y-8">
-        <ManagedDataAccountsSection provider="opencode" target={accountOwner} />
-        <ManagedDataAccountsSection provider="devin" target={accountOwner} />
-      </div>
-    ) : null,
     wslSupportedPlatform &&
     !isRemoteAccountScope &&
     !wslHostDistro &&
@@ -380,9 +375,22 @@ export function AccountsPane({
         ownerPlatform={accountOwnerPlatform}
       />
     ) : null,
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+      <GrokAccountsSection key="grok" />
+    ) : null,
+    managedDataShown ? (
+      <ManagedDataAccountsSection key={accountOwnerKey} provider="opencode" target={accountOwner} />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
       ? renderOpenCodeAccountsSection(model, t)
       : null,
+    managedDataShown ? (
+      <ManagedDataAccountsSection
+        key={`devin:${accountOwnerKey}`}
+        provider="devin"
+        target={accountOwner}
+      />
+    ) : null,
     matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
       <MiniMaxAccountsSection
         key={`minimax:${accountOwnerKey}`}
@@ -391,9 +399,6 @@ export function AccountsPane({
         miniMaxRateLimits={isRemoteAccountScope ? null : miniMaxRateLimits}
         recordFeatureInteraction={recordFeatureInteraction}
       />
-    ) : null,
-    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
-      <GrokAccountsSection key="grok" />
     ) : null,
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />

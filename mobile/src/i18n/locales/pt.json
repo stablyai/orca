@@ -1470,7 +1470,7 @@
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade",
-      "tapToPairAgain": "Toque para parear novamente com seu desktop"
+      "tapToPairAgain": "Toque para parear novamente"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Verificando a compatibilidade do host"
@@ -5253,7 +5253,7 @@
       "started": "Iniciado",
       "trigger": "Acionador",
       "output": "Saída",
-      "noOutput": "Nenhum conteúdo de saída disponível.",
+      "noOutput": "Saída indisponível.",
       "loadingRuns": "Carregando execuções…",
       "loading": "Carregando…",
       "hourly": "De hora em hora",

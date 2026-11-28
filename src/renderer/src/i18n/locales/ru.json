@@ -1760,7 +1760,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost означает компьютер этого бота.",
           "headers": "Заголовки",
-          "authHint": "Если серверу нужен вход через браузер, кнопка «Подключить» появится после нативной проверки.",
+          "authHint": "Если серверу нужен вход через браузер, кнопка «Войти» появится после нативной проверки.",
           "executable": "Исполняемый файл",
           "commandPlaceholder": "npx",
           "args": "Аргументы",
@@ -20479,7 +20479,7 @@
           "runStatusDispatchFailed": "Ошибка"
         },
         "runContent": {
-          "noOutput": "Нет доступного содержимого вывода."
+          "noOutput": "Нет вывода."
         },
         "runViewState": {
           "viewRun": "Просмотреть запуск",

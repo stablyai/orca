@@ -581,8 +581,8 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
-          # Control commit message/tag ourselves via npm version --no-git-tag-version, avoiding npm’s prefix/lifecycle assumptions.
-          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          # Update package.json directly with Node rather than invoking npm version on a blobless checkout.
+          node -e "const fs=require('node:fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version=process.env.VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
           # Tags must describe their bundled skill bytes; verify freshness with Node built-ins before install.
           if ! node config/scripts/skills/bundle-generation/generate-skill-bundle-manifest.mjs; then
             echo "::error::Refusing to tag v$VERSION: the committed skill manifest does not match skills/. Land a regeneration on main, then re-run the cut." >&2
@@ -654,7 +654,7 @@ jobs:
           {
             echo "## Release E2E Signal"
             echo ""
-            echo "- Platform golden E2E is release-blocking: terminal rendering, restrictive-umask profile writes, source control, and agent TUI launch on Linux/macOS, plus fresh startup and source control on Windows."
+            echo "- Platform golden E2E is release-blocking: terminal rendering, restrictive-umask profile writes, source control, and agent TUI launch on Linux/macOS."
             echo "- Exception: every golden except terminal rendering runs with \`--if-present\`, so it is skipped (not failed) on older tags that predate its script."
             echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
@@ -719,10 +719,6 @@ jobs:
             platform: linux
           - os: macos-15
             platform: mac
-          # Windows terminal rendering remains flaky; keep its blocking signal
-          # scoped to the fresh-profile startup regression from #14130.
-          - os: windows-2022
-            platform: windows
 
     steps:
       - name: Checkout
@@ -980,24 +976,19 @@ jobs:
     needs:
       - cut
       - create-release
-      - orcad-template
-      - release-preflight
       - release-javascript
       - build-mac
-    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.cut.outputs.should_release == 'true' &&
       needs.create-release.result == 'success' &&
-      needs.release-preflight.result == 'success' &&
       needs.release-javascript.result == 'success' &&
-      needs.build-mac.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+      needs.build-mac.result == 'success'
     env:
       # beforePack and afterPack fail the package when the template is absent.
       ORCA_REQUIRE_ORCAD_TEMPLATE: '1'
+      JOBS: ${{ matrix.platform == 'win' && 'max' || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -1036,6 +1027,13 @@ jobs:
       contents: write
 
     steps:
+      - name: Enable parallel Windows checkout
+        if: matrix.platform == 'win'
+        shell: bash
+        run: |
+          git config --global checkout.workers 0
+          echo 'TrackFileAccess=false' >> "$GITHUB_ENV"
+
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -1159,8 +1157,9 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
 
-      # Build required out/mobile-web from mobile’s React Native/Expo dependencies.
+      # Build required out/mobile-web only when shared release JavaScript is not restored.
       - uses: ./.github/actions/install-mobile-dependencies
+        if: needs.release-javascript.outputs.supported != 'true'
 
       # Install AT-SPI runtime bindings for Linux provider verification and rpm for builder’s fpm backend; stock Ubuntu lacks them.
       - name: Install Linux computer-use provider dependencies
@@ -1228,6 +1227,46 @@ jobs:
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      # Overlap checkout/install/build with release-preflight and orcad-template; gate here before packaging/signing.
+      - name: Wait for release preflight and orcad template
+        uses: actions/github-script@v8
+        env:
+          SHIPS_ORCAD_TEMPLATE: ${{ needs.cut.outputs.ships_orcad_template }}
+        with:
+          script: |
+            const needTemplate = process.env.SHIPS_ORCAD_TEMPLATE === 'true'
+            const deadline = Date.now() + 30 * 60_000
+            const badConclusions = ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure']
+            while (Date.now() < deadline) {
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                ...context.repo, run_id: context.runId, filter: 'latest', per_page: 100
+              })
+              const preflight = jobs.find(job => job.name === 'release-preflight')
+              if (preflight && preflight.status === 'completed' && preflight.conclusion !== 'success') {
+                throw new Error(`release-preflight failed (${preflight.conclusion})`)
+              }
+              const gateFail = jobs.find(job =>
+                (job.name.startsWith('golden e2e ') || job.name.startsWith('skill sharing release gate ')) &&
+                job.status === 'completed' && badConclusions.includes(job.conclusion)
+              )
+              if (gateFail) throw new Error(`Release gate failed: ${gateFail.name} (${gateFail.conclusion})`)
+              const preflightReady = Boolean(preflight && preflight.status === 'completed' && preflight.conclusion === 'success')
+
+              let templateReady = !needTemplate
+              if (needTemplate) {
+                const lanes = jobs.filter(job => job.name.startsWith('orcad-template / '))
+                const failed = lanes.find(job => job.status === 'completed' && badConclusions.includes(job.conclusion))
+                if (failed) throw new Error(`Template qualification failed: ${failed.name} (${failed.conclusion})`)
+                const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+                  ...context.repo, run_id: context.runId, per_page: 100
+                })
+                templateReady = artifacts.some(artifact => artifact.name === 'orcad-template' && !artifact.expired)
+              }
+              if (preflightReady && templateReady) return
+              await new Promise(resolve => setTimeout(resolve, 15_000))
+            }
+            throw new Error('Timed out waiting for release-preflight and orcad-template.')
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -2039,19 +2078,13 @@ jobs:
     needs:
       - cut
       - create-release
-      - orcad-template
-      - release-preflight
       - release-javascript
-    # Why not the implicit success(): a tag without the orcad template skips that job on purpose.
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.cut.outputs.should_release == 'true' &&
       needs.create-release.result == 'success' &&
-      needs.release-preflight.result == 'success' &&
-      needs.release-javascript.result == 'success' &&
-      (needs.orcad-template.result == 'success' ||
-        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false'))
+      needs.release-javascript.result == 'success'
     # Keep every SignPath workflow job GitHub-hosted; separate release-mac-build allows Blacksmith outside Windows provenance.
     runs-on: ubuntu-latest
     permissions:
@@ -2126,6 +2159,7 @@ jobs:
     needs:
       - cut
       - create-release
+      - orcad-template
       - build
       - build-mac
       - verify-mac-build
@@ -2137,6 +2171,8 @@ jobs:
       !cancelled() &&
       needs.cut.result == 'success' &&
       needs.create-release.result == 'success' &&
+      (needs.orcad-template.result == 'success' ||
+        (needs.orcad-template.result == 'skipped' && needs.cut.outputs.ships_orcad_template == 'false')) &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&

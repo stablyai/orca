@@ -9,6 +9,7 @@ import {
   useRef,
   useState
 } from 'react'
+import { revealFocusBelowBotPanelHeader } from './BotPanelStickyHeader'
 
 /** Each row's wrapper names its need, so focus can find a row's controls. */
 const NEED_KEY_ATTRIBUTE = 'data-need-key'
@@ -37,7 +38,14 @@ function focuses(control: HTMLElement): boolean {
     return false
   }
   control.focus({ preventScroll: true })
-  return document.activeElement === control
+  if (document.activeElement !== control) {
+    return false
+  }
+  revealFocusBelowBotPanelHeader(
+    control,
+    control.closest<HTMLElement>(`[${NEED_KEY_ATTRIBUTE}]`) ?? control
+  )
+  return true
 }
 
 /** Focus a removed or moved node had goes to the page itself. */

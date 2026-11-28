@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import {
+  createDeliveredDiffCommentMatcher,
   matchesDeliveredDiffComment,
   type DiffCommentDeliverySnapshot
 } from '../../../../../shared/file-review/diff-comment-mutation'
@@ -36,7 +37,7 @@ export function enqueueDeliveredDiffCommentCleanup(
     }
     // Why: a host that processed the command never answers with an unchanged delivered note; one that
     // dropped the unknown field (older host, stripped transport) answers with it, which is not success.
-    if (saved.some((note) => snapshots.some((s) => matchesDeliveredDiffComment(note, s)))) {
+    if (saved.some(createDeliveredDiffCommentMatcher(snapshots))) {
       throw new DeliveredCleanupNotAppliedError()
     }
     const expected = new Map(snapshots.map((note) => [note.id, note]))

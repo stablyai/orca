@@ -32,6 +32,7 @@ import {
 } from '../integrations/git/runtime-branch-switch-host'
 import { OrcaRuntimeWithFileCommands } from './runtime-file-command-state'
 import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
+import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithFileCommands {
   protected readonly gitCommands = new RuntimeGitCommands({
@@ -177,6 +178,10 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
 
   protected readonly repositoryHooks = new LazyRuntimeRepositoryHooksCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    resolveProjectGroupOwner: (groupId) => {
+      const group = this.store?.getProjectGroups?.().find((entry) => entry.id === groupId)
+      return group ? projectGroupHookOwner(group) : null
+    },
     readCreateSourceHooks: async (repo, source) => {
       const { readCreateSourceSetupHooks } =
         await import('../../workspace-hooks/create-source-setup-hooks')
