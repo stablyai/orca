@@ -8,14 +8,13 @@ import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group
 import type { OrchestrationPartyIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { botRequestRefusal, botNotFound } from '../../../../../bots/bot-request-policy'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
-import { BOT_ITEM_MAIL_ID_PREFIX } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { Bot } from '../../../../../../shared/bot-types'
 import type { BotItemRecord } from '../../../../../bots/bot-items-schema'
 import type { BotItemsRemote } from '../../../../../bots/bot-items-ops'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcContext } from '../../../core'
-import { replyToWaiting, waitingRequest } from './bot-status-reply'
+import { assertNoWaitingAsk, itemUidOfRequest } from './bot-status-waiting-ask'
 import {
   creatorSession,
   refuse,
@@ -87,7 +86,7 @@ export function assertNoStatusFiles(
 export async function statusNoteInstead(
   context: RpcContext,
   mail: {
-    params: StatusMail & { type?: string; threadId?: string }
+    params: StatusMail & { type?: string }
     messageId?: string
     to: string
     images?: readonly string[]
@@ -114,14 +113,16 @@ export async function statusNoteInstead(
   if (refusal || !target) {
     return refuse(refusal ?? botNotFound(receiving.bot.name, runtime.bots.list()))
   }
-  // An answer to what the other bot is waiting on wakes it, as a reply.
-  const db = runtime.getOrchestrationDb()
-  const waiting = waitingRequest(db, target.id, bot.id, sessionId, mail.params.threadId)
-  if (waiting) {
-    const body = mail.params.body?.trim()
-      ? `${mail.params.subject}\n\n${mail.params.body}`
-      : mail.params.subject
-    return { receipt: await replyToWaiting(context, waiting, target.name, body), nudge: () => {} }
+  // Cross-bot only: a bot's own chats ask each other all day, and a relay between them is a handoff.
+  if (target.id !== bot.id) {
+    const asker = { id: target.id, name: target.name }
+    await assertNoWaitingAsk(
+      runtime.getOrchestrationDb(),
+      runtime.botItems.store(),
+      asker,
+      bot.id,
+      sessionId
+    )
   }
   const receipt = await recordBotStatusNote(runtime, { ...acting, bot, sessionId }, target, {
     ...mail.params,
@@ -152,7 +153,7 @@ async function recordBotStatusNote(
     recorded: { item: item.number, bot: owner },
     messages: [],
     recipients: 0,
-    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff; to answer a question or handoff of theirs, reply to it with \`orca orchestration reply --id <msg>\`.`
+    next: `Done: ${reader} has this on item ${n} (\`orca bot item show ${n}\`). A status never notifies anyone; that is how it works, not a failed delivery. Tell your owner it is on item ${n}, and don't resend it or offer to. Only if ${target.id === acting.bot.id ? 'your other chat' : target.name} must act or answer now, send --type question or --type handoff; to pass on your owner's decision or an instruction, send --type handoff --item <n>; to answer a question or handoff of theirs, reply to it with \`orca orchestration reply --id <msg>\`.`
   }
 }
 
@@ -233,14 +234,4 @@ function pickOne(open: OpenItems): BotItemRecord {
     'invalid_argument',
     `A status is recorded on the item it is about, and this chat has several open items: ${listed(open)}. Nothing was sent. To answer a bot waiting on you, reply to its message (\`orca orchestration reply --id <msg>\`). Otherwise send it again once, with --item <n> for the one item it is about; if it is about none of them, there is nothing to record, so don't make an item to hold it or offer to send it as a message.`
   )
-}
-
-/** `bot item add --for` mail is `msg_item_` and the item's uid without its dashes. */
-function itemUidOfRequest(messageId: string | null): string | null {
-  const hex = messageId?.startsWith(BOT_ITEM_MAIL_ID_PREFIX)
-    ? messageId.slice(BOT_ITEM_MAIL_ID_PREFIX.length)
-    : ''
-  return /^[0-9a-f]{32}$/.test(hex)
-    ? `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
-    : null
 }

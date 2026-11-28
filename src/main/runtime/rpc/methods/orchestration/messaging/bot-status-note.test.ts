@@ -149,21 +149,41 @@ describe('a bot status to another bot is recorded on its item, not delivered', (
     expect(mail.runtime.notifyMessageArrived).toHaveBeenCalledTimes(1)
   })
 
-  it("a status answering the other bot's open question wakes it as the reply", async () => {
+  it('refuses a status to a bot waiting on your answer, naming reply --id', async () => {
     const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'question', body: 'b' })
-    const receipt = await mail.sent(DOCS_CHAT, {
-      to: 'bot:Ranger',
-      type: 'status',
-      subject: 'PR is ready',
-      body: 'merge it'
-    })
-
+    // An immediate acceptance doesn't end the wait for the result.
+    await mail.reply(DOCS_CHAT, { id: asked.message.id, body: 'on it' })
+    await expect(
+      mail.send(DOCS_CHAT, { to: 'bot:Ranger', type: 'status', subject: 'PR is ready' })
+    ).rejects.toThrow(
+      new RegExp(
+        `Ranger is waiting on your answer to its question ${asked.message.id}.*orca orchestration reply --id ${asked.message.id}`
+      )
+    )
     expect(messageCount()).toEqual({ n: 2 })
     expect(mail.runtime.notifyMessageArrived).toHaveBeenCalledTimes(2)
-    const answer = mail.db.getMessageById(receipt.message.id)
-    expect(answer?.reply_to).toBe(asked.message.id)
-    expect(answer?.to_handle).toBe(`orca_session_id:${RANGER_THREAD}`)
-    expect(receipt.next).toContain(`orca orchestration reply --id ${asked.message.id}`)
+  })
+
+  it('finds an ask the coordinator mail trigger stored as run:<id>', async () => {
+    const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', body: 'b' })
+    const run = mail.db.createRun({ objective: 'Docs chat run', coordinatorHandle: 'term_docs' })
+    mail.db.rememberRunCoordinatorHandle(run.id, `orca_session_id:${DOCS_CHAT}`)
+    mail.db.db
+      .prepare('UPDATE messages SET to_handle = ?, run_id = ? WHERE id = ?')
+      .run(`run:${run.id}`, run.id, asked.message.id)
+    await expect(
+      mail.send(DOCS_CHAT, { to: 'bot:Ranger', type: 'status', subject: 'done' })
+    ).rejects.toThrow(/Ranger is waiting on your answer to its handoff/)
+  })
+
+  it('keeps an accepted handoff open: the later result reply wakes the asker again', async () => {
+    const asked = await mail.sent(RANGER_THREAD, { to: 'bot:Docs', type: 'handoff', body: 'b' })
+    await mail.reply(DOCS_CHAT, { id: asked.message.id, body: 'accepted' })
+    await mail.reply(DOCS_CHAT, { id: asked.message.id, body: 'done: PR #42 is ready' })
+
+    expect(messageCount()).toEqual({ n: 3 })
+    expect(mail.runtime.notifyMessageArrived).toHaveBeenCalledTimes(3)
+    expect(mail.db.getBotRequestOutcome(asked.message.id)).toBe('answered')
   })
 
   it('a reply to a question still wakes the asker', async () => {

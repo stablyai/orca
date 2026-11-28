@@ -190,6 +190,7 @@ async function admitBotRequestMail(
           }
         }
       : {}),
+    ...(params.item ? { item: params.item } : {}),
     ...botRequestSender(acting.bot, args.pairedSender),
     ...(acting.worker ? { fromWorker: true } : {}),
     toBotId: target.id,
