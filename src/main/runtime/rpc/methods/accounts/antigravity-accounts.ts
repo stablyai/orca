@@ -32,6 +32,7 @@ import {
   subscribeAntigravityChatSignIn
 } from '../../../../antigravity/antigravity-chat-sign-in'
 import { forgetAgyLogin } from './agy-login-change'
+import { AGY_HOST_SELECTION } from '../../../../antigravity/agy-account-selection'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 import {
@@ -182,9 +183,13 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       // New chats use the account at once; running ones move at their next send (the selection
       // noted by the host's vault drives that).
       const state = await service.selectAccount(accountId, () => (switched = true))
-      // Chats run only on the host's agy; what they listed belongs to the previous account.
-      if (target.runtime === 'host' && switched) {
-        forgetAgyLogin(ctx.runtime)
+      if (target.runtime === 'host') {
+        // agy's login now verifiably holds it: chats a failed move held back follow at their next send.
+        AGY_HOST_SELECTION.prepared({ key: accountId, target: accountId })
+        // Chats run only on the host's agy; what they listed belongs to the previous account.
+        if (switched) {
+          forgetAgyLogin(ctx.runtime)
+        }
       }
       return withAntigravityChatBackend(ctx.runtime, target, state)
     }

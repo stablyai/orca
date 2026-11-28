@@ -26,7 +26,10 @@ import type {
 
 /** Where preparation left a login several saved accounts share (`AcpLaunchAccount`): `key` is the
  *  account the launch runs on, `target` the selection it prepared for, `failure` why they differ. */
-export type AcpPreparedAccount = { key: string; target: string; failure?: string }
+export type AcpPreparedLogin = { key: string; target: string; failure?: string }
+/** `foreign`: the launch runs on another home or credential store than the login saved accounts
+ *  swap, so none names its login and no switch moves it. */
+export type AcpPreparedAccount = AcpPreparedLogin | { foreign: true }
 
 /** Opaque saved-account keys, where several share one login. A launch records the account its
  *  preparation left the login on (`AcpPreparedAccount`), else `current()` as it spawns. */
@@ -38,13 +41,10 @@ export type AcpLaunchAccount = {
   target(): string | null
   /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
   usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
-  /** Before a person's send in a chat on `childKey`: one bounded attempt to reach a selection a
-   *  failed move holds chats off. */
-  retry?(childKey: string): Promise<void>
   /** A chat's process spawned on `key`; `prepared` when its preparation said so. */
   spawned?(
     process: { onExit(listener: () => void): void },
-    chat: { sessionId: string; key: string; prepared?: AcpPreparedAccount }
+    chat: { sessionId: string; key: string; prepared?: AcpPreparedLogin }
   ): void
 }
 

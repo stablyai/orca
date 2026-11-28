@@ -22,7 +22,6 @@ export class AgyAccountSelection {
   private revision = 0
   private emails = new Map<string, string>()
   private readVault: (() => Promise<unknown>) | null = null
-  private restore: (() => Promise<unknown>) | null = null
   private readonly listeners = new Set<SelectionChangedListener>()
   private readonly processes = new Map<Process, string>()
   private readonly oldLoginsGone = new Set<() => void>()
@@ -34,11 +33,6 @@ export class AgyAccountSelection {
   /** How the selection is read before anything noted it. */
   readWith(read: () => Promise<unknown>): void {
     this.readVault = read
-  }
-
-  /** How a held-back chat's send tries to put agy's login on the selection (bounded, no dialog). */
-  restoreWith(restore: () => Promise<unknown>): void {
-    this.restore = restore
   }
 
   /** The vault as the host's account service last read or wrote it. */
@@ -67,24 +61,16 @@ export class AgyAccountSelection {
   readonly current = (): string | null =>
     this.selected === undefined ? null : (this.selected ?? NONE)
 
-  /** What a running child should match: the selection, or null while moving to it is known to fail. */
+  /** What a running child should match: the selection, or null while moving to it is known to
+   *  fail. In memory only, so a send's check does no IO. */
   readonly target = (): string | null => {
     const current = this.current()
     return current !== null && current === this.stuck ? null : current
   }
 
-  /** Before a person's send in a chat on `childKey` while a failed move holds chats off the
-   *  selection: one attempt to reach it, whose outcome (`prepared`) lifts the hold or keeps it. */
-  readonly retry = async (childKey: string): Promise<void> => {
-    const current = this.current()
-    if (current === null || current !== this.stuck || childKey === current) {
-      return
-    }
-    await this.restore?.().catch(() => undefined)
-  }
-
-  /** A failed preparation stops chats moving to its selection; the next one that reaches the
-   *  selection (a later launch, listing or restore) lets them move again. */
+  /** A failed preparation stops chats moving to its selection; the next evidence that agy's login
+   *  holds it (a launch, listing, exit-time restore or the switch itself) lets them move again,
+   *  each at its next send. */
   prepared(login: AgyPreparedLogin): void {
     if (login.failure !== undefined) {
       this.stuck = login.target

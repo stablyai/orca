@@ -75,7 +75,7 @@ function picksNewLaunchModel(
 async function launchedUnderOtherAccount(
   child: OutgrownChildReading['child'],
   current: (() => Promise<AgentSessionAccountHome | null>) | undefined,
-  currentKey: (() => string | null | Promise<string | null>) | undefined
+  currentKey: (() => string | null) | undefined
 ): Promise<boolean> {
   if (!child || child.phase === 'starting' || child.close) {
     return false
@@ -86,7 +86,7 @@ async function launchedUnderOtherAccount(
       return true
     }
   }
-  const key = child.accountKey === undefined ? null : ((await currentKey?.()) ?? null)
+  const key = child.accountKey === undefined ? null : (currentKey?.() ?? null)
   return key !== null && key !== child.accountKey
 }
 
@@ -112,7 +112,7 @@ export async function retireOutgrownStructuredAgentSessionChild(
     }
     launchPermission?: () => Promise<AgentChatPermissionChoice | null>
     launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
-    launchAccountKey?: () => string | null | Promise<string | null>
+    launchAccountKey?: () => string | null
     launchToolsChanged?: () => Promise<boolean>
     /** The send about to be handed over; a new model pick may need the requested approval mode. */
     next?: AgentJournalSubmission

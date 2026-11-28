@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { AntigravityLaunchRestoreError } from './native-account-login-view'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
-import { agyLoginHolderAfter, agyPreparedLogin } from './native-account-launch'
+import { AgyForeignCredentialAuthority, agyLoginAfterFailure } from './native-account-launch'
 
 // Two saved accounts, `a` selected, and an agy still running on `b` wrote b's login back. agy's
 // login reads here without a dialog only through `read` (Linux keyring, Windows).
@@ -53,16 +53,21 @@ it('reads who holds the login where that read raises no dialog', async () => {
   expect(await h.service.readLoginHolder()).toBe(b)
 })
 
-it('records a launch on another home or credential store as on an unknown login, never the host default', () => {
-  const mismatch = new Error(
-    'This agy launch uses a different credential authority from the selected Antigravity account.'
-  )
-  expect(agyLoginHolderAfter(mismatch)).toBeNull()
-  expect(agyPreparedLogin('a', agyLoginHolderAfter(mismatch), mismatch.message)).toEqual({
+it('records a launch on another home or credential store as foreign, never on the host login', () => {
+  expect(agyLoginAfterFailure('a', new AgyForeignCredentialAuthority())).toEqual({ foreign: true })
+  // Only a failed restore of the host's own login names who holds it.
+  const other = new Error('keyring went away')
+  expect(agyLoginAfterFailure('a', other)).toEqual({
     key: '?',
     target: 'a',
-    failure: mismatch.message
+    failure: other.message
   })
-  expect(agyPreparedLogin('a', 'a', 'unused')).toEqual({ key: 'a', target: 'a' })
-  expect(agyPreparedLogin('a', 'b', 'signed in elsewhere')).toMatchObject({ key: 'b', target: 'a' })
+  expect(agyLoginAfterFailure('a', new AntigravityLaunchRestoreError(other, 'b'))).toMatchObject({
+    key: 'b',
+    target: 'a'
+  })
+  expect(agyLoginAfterFailure('a', new AntigravityLaunchRestoreError(other, 'a'))).toEqual({
+    key: 'a',
+    target: 'a'
+  })
 })
