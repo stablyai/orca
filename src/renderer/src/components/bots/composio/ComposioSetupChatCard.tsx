@@ -34,6 +34,10 @@ import {
   readComposioApp,
   useComposioBot
 } from './composio-client'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../../native-chat/pane/ownership/native-chat-view-memory'
 
 const COMPOSIO = (): string => translate('bots.composio.card.heading', 'Composio')
 
@@ -163,8 +167,14 @@ function ConnectCard({
   bot: Bot
 }): React.JSX.Element | null {
   const view = useComposioBot(bot)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Kept with the chat tab: a card released mid-connect returns still connecting, or with why it failed.
+  const keptAs = `${bot.id}:${card.app?.slug ?? ''}`
+  const [busy, setBusy] = useNativeChatViewGuard(`composio-connect:${keptAs}`, false)
+  const [error, setError] = useNativeChatViewGuard<string | null>(
+    `composio-connect-error:${keptAs}`,
+    null,
+    KEPT_PROMPT_VIEWS
+  )
   const app = card.app
   const signIn = useAppSignIn(bot, app?.slug, view.status?.key === 'ok')
   if (!app) {

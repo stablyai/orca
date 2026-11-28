@@ -188,7 +188,6 @@
 1 src/renderer/src/components/native-chat/conversation/projection/use-native-chat-context-clear-floor.ts
 2 src/renderer/src/components/native-chat/conversation/projection/use-native-chat-transcript-projection.ts
 4 src/renderer/src/components/native-chat/host-access/NativeChatSessionGate.tsx
-1 src/renderer/src/components/native-chat/host-access/use-native-chat-mobile-hold-notice.ts
 2 src/renderer/src/components/native-chat/host-access/use-native-chat-provisional-launch.ts
 2 src/renderer/src/components/native-chat/media/visuals/NativeChatVisualFrame.tsx
 1 src/renderer/src/components/native-chat/media/visuals/use-native-chat-visual-theme.ts
@@ -204,7 +203,7 @@
 1 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options.ts
 1 src/renderer/src/components/native-chat/session/options/terminal/use-native-chat-session-option-command.ts
 3 src/renderer/src/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices.ts
-2 src/renderer/src/components/native-chat/session/structured/use-structured-agent-session.ts
+1 src/renderer/src/components/native-chat/session/structured/use-structured-agent-session.ts
 16 src/renderer/src/components/native-chat/session/terminal/assembly/use-native-chat-assembled-messages.ts
 1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-launch-prompt-delivery-notice.ts
 1 src/renderer/src/components/native-chat/session/terminal/delivery/use-native-chat-pending-delivery.ts

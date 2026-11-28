@@ -32,6 +32,8 @@ export type NativeChatLiveSession = NativeChatSession & {
   olderHistoryGeneration: number
   /** Changes when the owning terminal transcript is rebound or replaced. */
   transcriptIdentity?: string
+  /** Names the conversation a rewind or /clear replaced, so its kept view state never carries over. */
+  conversationKey?: string
   /** Resolve after page publication; concurrent calls share the in-flight read. */
   loadEarlier: () => Promise<NativeChatOlderPageResult>
   /** A parked view keeps shared history until it returns or unmounts. */
