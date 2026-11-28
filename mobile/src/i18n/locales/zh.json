@@ -6004,7 +6004,6 @@
       "suggestThree": "{{a}}、{{b}} 和 {{c}}",
       "suggestMore": "{{a}}、{{b}} 及另外 {{count}} 个",
       "pickOne": "请选择一个 bot",
-      "needsTwoBots": "需要 {{host}} 上有 2 个 bot",
       "stopCouldNotBeConfirmed": "无法确认是否已停止",
       "notStarted": "尚未启动",
       "workingCount_one": "{{count}} 个工作中",

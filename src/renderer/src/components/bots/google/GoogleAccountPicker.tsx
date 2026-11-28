@@ -28,15 +28,18 @@ export type GoogleAccountPickerBot = Pick<Bot, 'id' | 'name' | 'members'> & BotO
 export function GoogleAccountPicker({
   bot,
   chosen,
-  onChosenChange
+  onChosenChange,
+  signInMemoryKey
 }: {
   bot: GoogleAccountPickerBot
   chosen: readonly string[]
   onChosenChange: React.Dispatch<React.SetStateAction<string[]>>
+  /** A picker in a chat's setup card: a sign-in still waiting stays shown, and cancellable, after a switch. */
+  signInMemoryKey?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const view = useGoogleHost(botTarget(bot))
-  const signIn = useGoogleSignIn(botTarget(bot), bot)
+  const signIn = useGoogleSignIn(botTarget(bot), bot, signInMemoryKey)
   const accounts = view.status === 'ready' ? view.google.accounts : []
   const warning = googleWhoCanAskWarning(bot.name, botOtherAskers(bot))
   // A sign-in from here (another account, or a reconnect) ticks the account it signed in.
