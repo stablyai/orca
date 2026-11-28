@@ -1,5 +1,12 @@
-import { record, taskAliasId, taskId } from '../background-tasks/claude-background-task-frames'
-import type { DecodedClaudeTask } from './claude-child-work-evidence'
+import {
+  liveClaudeTaskRunState,
+  record,
+  taskAliasId,
+  taskId,
+  taskText,
+  taskUsageTotalTokens
+} from '../background-tasks/claude-background-task-frames'
+import { claudeRosterEntries, type DecodedClaudeTask } from './claude-child-work-evidence'
 
 /** The roster entries a background-tasks frame starts or refreshes: a subagent's task, or one already
  *  running here that Claude has moved to the background. The decoder still checks each entry against
@@ -25,6 +32,55 @@ export function claudeRosterStarts(
       ? [[id, task]]
       : []
   })
+}
+
+/** A roster entry that reports the owner running proves the provider resumes it. One that does not
+ *  says nothing about the resume, so it must not revive an owner the lease settled. */
+export function claudeRosterConfirmations(
+  message: Record<string, unknown>
+): { id: string; task: Record<string, unknown> }[] {
+  if (!Array.isArray(message.tasks)) {
+    return []
+  }
+  return claudeRosterEntries(message.tasks)
+    .filter((entry) => entry.live)
+    .map(({ id, task }) => ({ id, task }))
+}
+
+/** A roster-shaped start for an owner the provider confirms running; no spawn call of its own. */
+export function claudeRosterStart(
+  id: string,
+  task: Record<string, unknown>
+): Record<string, unknown> {
+  return { ...task, type: 'system', subtype: 'task_started', task_id: id, status: 'running' }
+}
+
+/** The frame that proves a task runs, for a lease confirm: a running update reports it under the patch,
+ *  and `task_progress` is emitted only while it runs. Null when the frame proves nothing about a resume. */
+export function claudeRunningFrame(
+  message: Record<string, unknown>
+): Record<string, unknown> | null {
+  const patch = record(message.patch)
+  if (liveClaudeTaskRunState(patch?.status) !== null) {
+    return patch!
+  }
+  if (liveClaudeTaskRunState(message.status) !== null || message.subtype === 'task_progress') {
+    return message
+  }
+  return null
+}
+
+/** The ending a notification reports: its run and usage, and a summary unless a forked command's
+ *  summary only repeats its name. */
+export function claudeEndedReport(
+  message: Record<string, unknown>,
+  forkedCommand: boolean
+): { runId: string | undefined; lastMessage: string | undefined; totalTokens: number | undefined } {
+  return {
+    runId: taskAliasId(message.tool_use_id),
+    lastMessage: forkedCommand ? undefined : taskText(message.summary),
+    totalTokens: taskUsageTotalTokens(message)
+  }
 }
 
 /** Whether this frame ends the lead's turn (`result`). A tool result instead marks the live tasks whose
