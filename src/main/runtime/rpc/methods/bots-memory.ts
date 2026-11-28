@@ -1,12 +1,12 @@
 // A bot's MEMORY.md as Settings and the bot's own commands change it: every change goes through the
 // host's memory record, so it lands in history and no turn end undoes it.
 import {
-  addBotMemoryFact,
   botMemoryChange,
   botMemoryDate,
   editBotMemoryFact,
   parseBotMemoryFacts
 } from '../../../../shared/bot-memory-lines'
+import { quickAddBotMemoryChange } from '../../../../shared/bot-memory-quick-add'
 import {
   BotChat,
   BotMemoryEdit,
@@ -69,16 +69,20 @@ export const BOT_MEMORY_METHODS = [
     handler: async (params, context) => {
       context.runtime.bots.assertEnabled()
       const { bot } = namedOrCallerBot(params, context)
+      if (params.fact === undefined && params.text.trim() === '') {
+        throw new InvalidArgumentError('Missing text')
+      }
+      // A Quick add the file already states changes nothing and leaves nothing to undo.
+      let stated = false
       await context.runtime.bots.memory.change(
         bot.id,
         botHomeFolder(bot),
         { kind: 'owner' },
         (file) => {
           if (params.fact === undefined) {
-            return botMemoryChange(
-              file,
-              addBotMemoryFact(file, params.text, botMemoryDate(new Date()))
-            )
+            const asked = quickAddBotMemoryChange(file, params.text, botMemoryDate(new Date()))
+            stated = asked.stated
+            return asked.change
           }
           const fact = parseBotMemoryFacts(file).find((entry) => entry.text === params.fact)
           if (!fact) {
@@ -89,7 +93,7 @@ export const BOT_MEMORY_METHODS = [
           return botMemoryChange(file, editBotMemoryFact(file, fact, params.text))
         }
       )
-      return {}
+      return params.fact === undefined ? { alreadyInMemory: stated } : {}
     }
   }),
   defineMethod({

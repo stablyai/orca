@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { toast } from 'sonner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { type BotRef, useStableBotRef } from '@/lib/bot-hosts'
 import { useTranslate } from '@/i18n/use-translate'
@@ -33,11 +34,18 @@ export function BotMemoryPanel({
   const factCount = useMemo(() => parseBotMemoryFacts(file.disk).length, [file.disk])
   const edits = useMemo<BotMemoryEdits>(
     () => ({
-      add: (text) => editBotMemory(bot, text),
-      reword: (fact, text) => editBotMemory(bot, text, fact),
+      add: async (text) => {
+        const { alreadyInMemory } = await editBotMemory(bot, text)
+        if (alreadyInMemory) {
+          toast.info(t('settings.bots.memoryAlreadySaved', 'That fact is already in memory.'))
+        }
+      },
+      reword: async (fact, text) => {
+        await editBotMemory(bot, text, fact)
+      },
       forget: (fact) => forgetBotMemory(bot, fact)
     }),
-    [bot]
+    [bot, t]
   )
   const load = useCallback(() => readBotMemoryHistory(bot), [bot])
   const undo = useCallback((id: string) => undoBotMemoryChange(bot, id), [bot])

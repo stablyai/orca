@@ -14,6 +14,7 @@ import {
   findBotMemoryFact,
   parseBotMemoryFacts
 } from '../../../../../shared/bot-memory-lines'
+import { botMemoryFactHasWords } from '../../../../../shared/bot-memory-quick-add'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { toast } from 'sonner'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
@@ -100,7 +101,7 @@ export function BotMemoryList({
   }
 
   const submitQuickAdd = async (): Promise<void> => {
-    if (saving || quickAdd.trim() === '') {
+    if (saving || !botMemoryFactHasWords(quickAdd)) {
       return
     }
     const submitted = quickAdd
@@ -122,7 +123,7 @@ export function BotMemoryList({
 
   // Closing (Back, Escape, another bot) saves open drafts, as Soul's editor does.
   const unsavedEdit = editing !== null && !saving && draft.trim() !== '' && draft !== editing.text
-  const unsavedQuickAdd = !saving && quickAdd.trim() !== ''
+  const unsavedQuickAdd = !saving && botMemoryFactHasWords(quickAdd)
   useSaveOnClose(
     unsavedEdit || unsavedQuickAdd
       ? () => {
@@ -205,7 +206,7 @@ export function BotMemoryList({
           }}
           className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
         />
-        {quickAdd.trim() ? (
+        {botMemoryFactHasWords(quickAdd) ? (
           <Button type="button" size="xs" disabled={saving} onClick={() => void submitQuickAdd()}>
             {t('settings.bots.save', 'Save')}
           </Button>

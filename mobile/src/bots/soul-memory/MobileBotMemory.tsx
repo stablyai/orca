@@ -11,6 +11,7 @@ import {
   findBotMemoryFact,
   parseBotMemoryFacts
 } from '../../../../src/shared/bot-memory-lines'
+import { botMemoryFactHasWords } from '../../../../src/shared/bot-memory-quick-add'
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import {
@@ -29,7 +30,7 @@ import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { botMemoryEdit, botMemoryForget } from './bot-memory-operations'
+import { botMemoryEdit, botMemoryForget, interpretBotMemoryEdit } from './bot-memory-operations'
 import { MobileBotMemoryHistory } from './MobileBotMemoryHistory'
 import type { BotMemoryTopic, BotMemoryTopics } from './use-bot-home-files'
 
@@ -41,6 +42,22 @@ export type MemoryActions = {
   run: (change: (client: RpcClient) => Promise<void>) => Promise<boolean>
   busy: boolean
   showToast: (message: string) => void
+}
+
+function saveBotMemory(
+  actions: MemoryActions,
+  t: ReturnType<typeof useMobileTranslation>,
+  params: { botId: string; text: string; fact?: string }
+): Promise<boolean> {
+  return actions.run(async (client) => {
+    const { alreadyInMemory } = interpretBotMemoryEdit(
+      await botMemoryEdit.request(client, params, { failWhenDisconnected: true }),
+      t('settings.bots.memoryNoFact', 'Add some words first.')
+    )
+    if (alreadyInMemory) {
+      actions.showToast(t('settings.bots.memoryAlreadySaved', 'That fact is already in memory.'))
+    }
+  })
 }
 
 function shortDate(date: string, intlLocale: string): string {
@@ -81,16 +98,12 @@ export function MobileBotMemoryEditPage(props: {
   const { actions, botId, fact } = props
   const [draft, setDraft] = useState(fact.text)
   const save = async () => {
-    const saved = await actions.run(async (client) => {
-      // A fact the bot removed meanwhile is saved as a new one, as on the desktop.
-      const now = findBotMemoryFact(props.text, fact)
-      botMemoryEdit.interpret(
-        await botMemoryEdit.request(
-          client,
-          now ? { botId, fact: now.text, text: draft } : { botId, text: draft },
-          { failWhenDisconnected: true }
-        )
-      )
+    // A fact the bot removed meanwhile is saved as a new one, as on the desktop.
+    const now = findBotMemoryFact(props.text, fact)
+    const saved = await saveBotMemory(actions, t, {
+      botId,
+      text: draft,
+      ...(now ? { fact: now.text } : {})
     })
     if (saved) {
       props.onClose()
@@ -196,14 +209,10 @@ function Facts(
   const add = async () => {
     const submitted = quickAdd
     const text = submitted.trim()
-    if (locked || text === '') {
+    if (locked || !botMemoryFactHasWords(text)) {
       return
     }
-    const saved = await actions.run(async (client) => {
-      botMemoryEdit.interpret(
-        await botMemoryEdit.request(client, { botId, text }, { failWhenDisconnected: true })
-      )
-    })
+    const saved = await saveBotMemory(actions, t, { botId, text })
     if (saved) {
       setQuickAdd((current) => (current === submitted ? '' : current))
     }
@@ -223,7 +232,7 @@ function Facts(
       <TextField
         leading={<Plus size={18} color={colors.textMuted} strokeWidth={2} />}
         trailing={
-          quickAdd.trim() ? (
+          botMemoryFactHasWords(quickAdd) ? (
             <MobileBotTextButton
               label={t('bots.memory.save', 'Save')}
               disabled={locked}

@@ -1771,7 +1771,9 @@
       "connectorRequests": "{{count}} 個請求",
       "connectorRequests_other": "{{count}} 個請求",
       "connectorOnlyYou": "僅你自己",
-      "memorySource": "來自 {{source}}"
+      "memorySource": "來自 {{source}}",
+      "memoryAlreadySaved": "這條已經在記憶裡了",
+      "memoryNoFact": "請先輸入一些文字"
     },
     "windowMaterial": {
       "description": "半透明終端機後方顯示的內容。需要重新啟動。",

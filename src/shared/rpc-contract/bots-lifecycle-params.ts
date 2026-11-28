@@ -36,6 +36,7 @@ export const BOT_ERROR_CODES = [
   'bot_avatar_invalid',
   'bot_avatar_changed',
   'bot_avatar_home_unreadable',
+  'bot_memory_no_fact',
   BOT_OFFER_ALREADY_ANSWERED
 ] as const
 

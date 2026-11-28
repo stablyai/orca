@@ -2,7 +2,12 @@ import { join } from 'node:path'
 import { HELD_BOT_RULES } from './bot-turn-rules.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
+import {
+  addBotMemoryFact,
+  botMemoryChange,
+  parseBotMemoryFacts
+} from '../../shared/bot-memory-lines'
+import { BOT_MEMORY_NO_FACT, quickAddBotMemoryChange } from '../../shared/bot-memory-quick-add'
 import { createBotMemoryHistory } from './bot-memory-history'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { createBotMemoryRecord } from './bot-memory-record'
@@ -73,6 +78,14 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
         botMemoryChange(file, file.replace(from, to))
       ),
     forget: (fact: string) => record.forget('bot-1', FOLDER, fact, { kind: 'owner' }),
+    /** The owner's Quick add, as Settings and the phone make it. */
+    quickAdd: (fact: string) =>
+      record.change(
+        'bot-1',
+        FOLDER,
+        { kind: 'owner' },
+        (file) => quickAddBotMemoryChange(file, fact, '2026-11-06').change
+      ),
     rows: () => record.history('bot-1'),
     record,
     later: (ms: number) => (now += ms),
@@ -177,6 +190,85 @@ describe("a bot's memory history", () => {
     ])
     expect(await undo((await rows())[0].id)).toBe(true)
     expect(read()).toBe(OLD)
+  })
+
+  it("never loses an owner's Quick add to an open code fence", async () => {
+    const { quickAdd, read } = bot('# Notes\n\n```sh\npnpm build\n')
+
+    // Below the unclosed fence the new line would read as code.
+    await quickAdd('deploys at noon')
+    expect(read()).toBe('# Notes\n- 2026-11-06 deploys at noon\n\n```sh\npnpm build\n')
+    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toEqual(['deploys at noon'])
+  })
+
+  it('saves nothing and leaves no Undo for a fact the file already states', async () => {
+    const mixed = '# Notes\r\n- 2026-11-01 deploys at noon\n'
+    const { quickAdd, read, rows, turnEnded, write } = bot(mixed)
+
+    expect(await quickAdd('deploys at noon')).toEqual({ added: [], removed: [] })
+    expect(read()).toBe(mixed)
+    // A chat wrote this one mid-turn, twice: on disk, not yet in the record.
+    const written = `${mixed}- 2026-11-06 releases go out Tuesdays\n## Later\n- releases go out Tuesdays\n`
+    write(written)
+    expect(await quickAdd('releases go out Tuesdays')).toEqual({ added: [], removed: [] })
+    expect(read()).toBe(written)
+    expect(await rows()).toEqual([])
+    // The turn end records it as the chat's, as without the add.
+    await turnEnded('Slack, Dana')
+    expect(read()).toContain('- 2026-11-06 releases go out Tuesdays · from: Slack, Dana')
+    expect((await rows()).map(({ by }) => by.kind)).toEqual(['chat'])
+  })
+
+  it('rejects a Quick add that is only a bullet or separator, and keeps any with words', async () => {
+    const { quickAdd, read, rows } = bot(OLD)
+    for (const fact of ['-', ':', ' - ', '–', '—', ' — ']) {
+      await expect(quickAdd(fact)).rejects.toThrow(BOT_MEMORY_NO_FACT)
+    }
+    expect(read()).toBe(OLD)
+    expect(await rows()).toEqual([])
+    // A leading dash reads as the date's separator, as for any dated line.
+    for (const fact of ['部署在周二', '🚀', '!', '...', '#', '-x', '– note']) {
+      await quickAdd(fact)
+    }
+    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toEqual([
+      'note',
+      'x',
+      '#',
+      '...',
+      '!',
+      '🚀',
+      '部署在周二',
+      'owner fact'
+    ])
+  })
+
+  it('undoes a Forget after the last copy of the line it followed outside a code fence', async () => {
+    const undone = async (memory: string): Promise<string> => {
+      const { history, read, rows, undo } = bot(memory)
+      await history.append(
+        'bot-1',
+        { kind: 'owner' },
+        { added: [], removed: [{ line: '- target', after: '## Deploy' }] }
+      )
+      expect(await undo((await rows())[0].id)).toBe(true)
+      return read()
+    }
+    // As on main: after the last copy.
+    expect(await undone('## Deploy\n- a\n## Deploy\n- b\n')).toBe(
+      '## Deploy\n- a\n## Deploy\n- target\n- b\n'
+    )
+    // A copy inside a code fence is never one a fact followed, so it can't pull the fact into it.
+    expect(await undone('## Deploy\n- a\n```md\n## Deploy\n```\n')).toBe(
+      '## Deploy\n- target\n- a\n```md\n## Deploy\n```\n'
+    )
+  })
+
+  it('rejects a blank Quick add, saving nothing', async () => {
+    const { quickAdd, read, rows } = bot(OLD)
+
+    await expect(quickAdd(' \n\t')).rejects.toThrow(BOT_MEMORY_NO_FACT)
+    expect(read()).toBe(OLD)
+    expect(await rows()).toEqual([])
   })
 
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {

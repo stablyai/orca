@@ -3877,6 +3877,8 @@
       "phoneChecking": "확인 중…"
     },
     "bots": {
+      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다.",
+      "memoryNoFact": "먼저 내용을 입력하세요.",
       "slackStatus": {
         "notInstalled": "설치되지 않음",
         "unknown": "확인할 수 없음",

@@ -1,6 +1,9 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
+import { botMemoryPutBack } from './bot-memory-anchors'
+import { BOT_MEMORY_FENCE, botMemoryFenceOpeners } from './bot-memory-fences'
+
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
 export const BOT_MEMORY_INDEX_LINE_CAP = 200
 
@@ -22,7 +25,6 @@ export const BOT_MEMORY_SEED_INTRO =
   'One line per fact, newest first. Longer notes go in memory/<topic>.md.'
 // Headings ("# x", never "#123"), table rows, HTML comments and rules (---, ***, ===, * * *).
 const NOT_A_FACT = /^(?:#{1,6}(?:\s|$)|\||<!--|[\s*_=:-]+$)/
-const FENCE = /^\s*(`{3,}|~{3,})/
 const DATED_TEXT = /^(\d{4}-\d{2}-\d{2})(?:\s*[:\u2013\u2014-]\s*|\s+)(.*)$/
 
 function splitLines(text: string): { lines: string[]; eol: string } {
@@ -48,23 +50,11 @@ type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
 
 /** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
 function lineFacts(lines: readonly string[]): (FactParts | null)[] {
-  // The open fence, if any: it closes only on the same character at least as many times.
-  let open: string | null = null
-  return lines.map((raw) => {
-    const fence = FENCE.exec(raw)?.[1]
-    // A closer is the same character, at least as long, with nothing but spaces after it.
-    const closes =
-      open !== null &&
-      fence !== undefined &&
-      fence[0] === open[0] &&
-      fence.length >= open.length &&
-      raw.trim() === fence
-    if (fence && (open === null || closes)) {
-      open = open === null ? fence : null
-      return null
-    }
-    return open !== null ? null : factParts(raw)
-  })
+  const openers = botMemoryFenceOpeners(lines)
+  // A fence's opener opens the place after it; its closer is in the place before it.
+  return lines.map((raw, line) =>
+    openers[line] === -1 && openers[line + 1] === -1 ? factParts(raw) : null
+  )
 }
 
 export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
@@ -84,7 +74,7 @@ export function parseBotMemoryFacts(text: string): BotMemoryFact[] {
 function factParts(raw: string): FactParts | null {
   // A list line, or any other line with words in it: every line of MEMORY.md is one fact.
   const plain = raw.trim()
-  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || FENCE.test(plain)) {
+  if (plain === BOT_MEMORY_SEED_INTRO || NOT_A_FACT.test(plain) || BOT_MEMORY_FENCE.test(plain)) {
     return null
   }
   const listed = FACT_LINE.exec(raw)
@@ -234,9 +224,13 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
   return { added: only(after, before), removed: only(before, after) }
 }
 
-/** `text` with `change` made: its removed facts gone, and each added one not already there after
- *  the line it followed, or at the end when that line is gone. */
+/** `text` with `change` made: its removed facts gone, and each added one not already there where
+ *  botMemoryPutBack puts it. `text` itself when that
+ *  changes no line, so its line endings stay as they are. */
 export function applyBotMemoryChange(text: string, change: BotMemoryChange): string {
+  if (isEmptyBotMemoryChange(change)) {
+    return text
+  }
   const gone = new Set(change.removed.map(({ line }) => rawFactKey(line)))
   const { lines, eol } = splitLines(text)
   const keys = lineKeys(lines)
@@ -244,18 +238,20 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     const key = keys[index]
     return key === null || !gone.has(key)
   })
-  const present = new Set(lineKeys(kept))
-  for (const { line, after } of change.added) {
-    const key = rawFactKey(line)
+  let changed = kept.length !== lines.length
+  // Nothing to add reads no more of the file.
+  const present = new Set(change.added.length > 0 ? lineKeys(kept) : [])
+  const putBack = change.added.length > 0 ? botMemoryPutBack(kept) : () => {}
+  for (const added of change.added) {
+    const key = rawFactKey(added.line)
     if (key === null || present.has(key)) {
       continue
     }
     present.add(key)
-    const anchor = after === null ? -1 : kept.lastIndexOf(after)
-    const end = kept.findLastIndex((raw) => raw.trim() !== '') + 1
-    kept.splice(after === null || anchor !== -1 ? anchor + 1 : end, 0, line)
+    putBack(added.line, added.after)
+    changed = true
   }
-  return kept.join(eol)
+  return changed ? kept.join(eol) : text
 }
 
 /** A source's words and its link, as Orca writes them: "Slack, Dana <https://…>". */
@@ -330,7 +326,8 @@ export function forgetBotMemoryFact(text: string, fact: BotMemoryFact): string {
   return editBotMemoryFact(text, fact, '')
 }
 
-/** Newest first: above the first fact, else at the end. */
+/** Newest first: above the first fact, else at the end, or above a code fence the end is in. The
+ *  text as it was when it already states the fact. */
 export function addBotMemoryFact(text: string, fact: string, date: string): string {
   const next = oneLine(fact)
   if (next === '') {
@@ -338,11 +335,18 @@ export function addBotMemoryFact(text: string, fact: string, date: string): stri
   }
   const { lines, eol } = splitLines(text)
   const line = factLine('- ', date, next)
-  // Above the first list line, so prose a file opens with stays first.
   const facts = lineFacts(lines)
+  const key = rawFactKey(line)
+  if (facts.some((parts) => parts !== null && factKey(parts.text) === key)) {
+    return text
+  }
+  // Above the first list line, so prose a file opens with stays first; with none, above a fence
+  // left open to the end, where below it the line would read as code.
   const first = lines.findIndex((raw, index) => FACT_LINE.test(raw) && facts[index] !== null)
-  if (first !== -1) {
-    lines.splice(first, 0, line)
+  const open = botMemoryFenceOpeners(lines)[lines.length]
+  const at = first !== -1 ? first : open === -1 ? lines.length : open
+  if (at !== lines.length) {
+    lines.splice(at, 0, line)
     return lines.join(eol)
   }
   const body = text.trimEnd()

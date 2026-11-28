@@ -1447,6 +1447,8 @@
       },
       "askNewHomeChat": "Demander avant un nouveau Home Chat",
       "askNewHomeChatDescription": "Demander confirmation avant de remplacer le Home Chat d’un bot par une nouvelle conversation.",
+      "memoryAlreadySaved": "Ce fait est déjà en mémoire.",
+      "memoryNoFact": "Ajoutez d’abord quelques mots.",
       "muteNotifications": "Couper les notifications",
       "muteNotificationsDescription": "Ne plus envoyer de notifications système. Les indicateurs de non-lu s’affichent toujours.",
       "notifyNeedsPermission": "Autorisation requise",

@@ -146,6 +146,8 @@ export function MobileBotMemoryHistory(props: {
   const [loaded, setLoaded] = useState<{ rows: BotMemoryHistoryView[]; now: Date } | null>(null)
   const [failed, setFailed] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
+  // An Undo writes a row even when the file it reads back is byte for byte the same.
+  const [undone, setUndone] = useState(0)
   useEffect(() => {
     if (!client) {
       return
@@ -166,13 +168,14 @@ export function MobileBotMemoryHistory(props: {
     return () => {
       live = false
     }
-  }, [client, botId, version])
+  }, [client, botId, version, undone])
 
   const undo = (id: string) =>
     props.actions.run(async (rpc) => {
       const reply = botMemoryUndo.interpret(
         await botMemoryUndo.request(rpc, { botId, id }, { failWhenDisconnected: true })
       )
+      setUndone((count) => count + 1)
       if (!reply.undone) {
         props.actions.showToast(
           t(

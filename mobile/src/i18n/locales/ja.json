@@ -3868,6 +3868,8 @@
       "phoneChecking": "確認中…"
     },
     "bots": {
+      "memoryAlreadySaved": "その内容はすでにメモリーにあります。",
+      "memoryNoFact": "まず言葉を入力してください。",
       "slackStatus": {
         "notInstalled": "未インストール",
         "unknown": "確認できません",

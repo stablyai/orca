@@ -212,7 +212,9 @@
       "linearStatus": {
         "unlinked": "Not linked",
         "notInstalled": "Orca not installed"
-      }
+      },
+      "memoryAlreadySaved": "That fact is already in memory.",
+      "memoryNoFact": "Add some words first."
     },
     "sharedLinks": {
       "title": "Shared links",

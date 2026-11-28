@@ -1200,7 +1200,9 @@
         "notLoaded": "Ningún agente la carga"
       },
       "askNewHomeChat": "Preguntar antes de iniciar un nuevo chat principal",
-      "askNewHomeChatDescription": "Pide confirmación antes de que «Nuevo chat principal» sustituya la conversación actual del bot."
+      "askNewHomeChatDescription": "Pide confirmación antes de que «Nuevo chat principal» sustituya la conversación actual del bot.",
+      "memoryAlreadySaved": "Ese dato ya está en la memoria.",
+      "memoryNoFact": "Escribe algunas palabras primero."
     },
     "windowMaterial": {
       "description": "Lo que se ve detrás de los terminales translúcidos. Requiere reiniciar.",

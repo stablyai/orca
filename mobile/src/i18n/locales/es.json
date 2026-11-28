@@ -3989,6 +3989,8 @@
       "phoneChecking": "Comprobando…"
     },
     "bots": {
+      "memoryAlreadySaved": "Ese dato ya está en la memoria.",
+      "memoryNoFact": "Escribe algunas palabras primero.",
       "slackStatus": {
         "notInstalled": "Sin instalar",
         "unknown": "No se puede comprobar",

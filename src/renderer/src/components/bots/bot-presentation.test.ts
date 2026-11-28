@@ -45,6 +45,17 @@ describe('botErrorMessage', () => {
 
     expect(botErrorMessage(error)).not.toContain('this computer')
   })
+
+  it('says why the host refused a Quick add with no words in it', () => {
+    const error = new RuntimeRpcCallError({
+      id: 'desktop-ipc',
+      ok: false,
+      error: { code: 'runtime_error', message: 'bot_memory_no_fact' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    expect(botErrorMessage(error)).toBe('Add some words first.')
+  })
 })
 
 describe('botErrorMessage on invalid_argument', () => {

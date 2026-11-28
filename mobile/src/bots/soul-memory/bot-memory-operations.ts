@@ -1,5 +1,7 @@
 import * as z from 'zod'
 import { BotMemoryHistoryRowSchema } from '../../../../src/shared/bots/bot-memory-history'
+import { BOT_MEMORY_NO_FACT } from '../../../../src/shared/bot-memory-quick-add'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
@@ -10,9 +12,25 @@ export const botMemoryEdit = bindDeferredRpcOperation(
     method: 'bots.memory.edit',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('memory-edited', z.unknown())
+    read: rpcResultVariant(
+      'memory-edited',
+      z.looseObject({ alreadyInMemory: z.boolean().optional() })
+    )
   })
 )
+
+/** What the host's reply to an add or edit says; a refused add with no words throws `noFact`, the
+ *  owner's words for it, instead of the host's code. */
+export function interpretBotMemoryEdit(
+  response: RpcResponse,
+  noFact: string
+): { alreadyInMemory?: boolean } {
+  try {
+    return botMemoryEdit.interpret(response)
+  } catch (error) {
+    throw error instanceof Error && error.message === BOT_MEMORY_NO_FACT ? new Error(noFact) : error
+  }
+}
 
 export const botMemoryForget = bindDeferredRpcOperation(
   defineRpcOperation({

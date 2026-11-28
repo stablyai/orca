@@ -1334,7 +1334,9 @@
         "notLoaded": "どの Agent も読み込みません"
       },
       "askNewHomeChat": "新規ホームチャットの前に確認",
-      "askNewHomeChatDescription": "ボットの現在の会話を新規ホームチャットに切り替える前に確認します。"
+      "askNewHomeChatDescription": "ボットの現在の会話を新規ホームチャットに切り替える前に確認します。",
+      "memoryAlreadySaved": "その内容はすでにメモリーにあります。",
+      "memoryNoFact": "まず言葉を入力してください。"
     },
     "sharedLinks": {
       "bots": "Bots",

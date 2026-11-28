@@ -1162,7 +1162,9 @@
         "notLoaded": "불러오는 에이전트 없음"
       },
       "askNewHomeChat": "새 홈 채팅 전에 확인",
-      "askNewHomeChatDescription": "새 홈 채팅이 봇이 이어 가는 대화를 대체하기 전에 확인합니다."
+      "askNewHomeChatDescription": "새 홈 채팅이 봇이 이어 가는 대화를 대체하기 전에 확인합니다.",
+      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다.",
+      "memoryNoFact": "먼저 내용을 입력하세요."
     },
     "windowMaterial": {
       "description": "반투명 터미널 뒤에 보이는 것을 정합니다. 다시 시작해야 합니다.",

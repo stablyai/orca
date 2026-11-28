@@ -2863,6 +2863,8 @@
         "listedBody": "{{bot}} recebe uma lista delas nas instruções e lê uma quando for pertinente. Elas não aparecem no menu / dele.",
         "remoteSsh": "Em {{host}} via SSH. {{bot}} é executado neste computador, então ainda não pode carregá-las."
       },
+      "memoryAlreadySaved": "Essa informação já está na memória.",
+      "memoryNoFact": "Escreva algumas palavras primeiro.",
       "fileChangedOnDisk": "{{file}} alterado no disco.",
       "pictureCurrent": "Imagem atual",
       "agent": "Agente",

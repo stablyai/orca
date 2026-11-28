@@ -3876,6 +3876,8 @@
       "phoneChecking": "Wird geprüft…"
     },
     "bots": {
+      "memoryAlreadySaved": "Diese Erinnerung ist bereits gespeichert.",
+      "memoryNoFact": "Gib zuerst ein paar Wörter ein.",
       "slackStatus": {
         "notInstalled": "Nicht installiert",
         "unknown": "Prüfung nicht möglich",
