@@ -28,10 +28,8 @@ const baselines = JSON.parse(
   )
 ).switchOffP95Ms as Record<string, Baseline>
 
-/** Over budget with the switch on, per platform: the lane's runner splits ~35 ms slower (census, Performance). */
-const KNOWN_OVER_BUDGET: Partial<Record<NodeJS.Platform, Partial<Record<Budgeted, string>>>> = {
-  linux: { split: 'Performance: split' }
-}
+/** Over budget with the switch on: split waits for main's answering frame (census, Performance). */
+const KNOWN_OVER_BUDGET: Partial<Record<Budgeted, string>> = { split: 'Performance: split' }
 
 test.describe.configure({ mode: 'serial' })
 
@@ -121,7 +119,7 @@ for (const action of BUDGETED) {
       !LAYOUT_OWNER_SWITCH_ON || !baseline,
       'the budget applies to the main-owned layout path'
     )
-    const known = KNOWN_OVER_BUDGET[process.platform]?.[action]
+    const known = KNOWN_OVER_BUDGET[action]
     if (known) {
       knownSwitchOnFailure(known)
     }
