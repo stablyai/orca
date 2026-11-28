@@ -43,6 +43,7 @@ export function buildInterfaceSettingsSections(
         showDesktopThemeImports: showDesktopOnlySettings,
         showSystemTray: showDesktopOnlySettings && isWindows,
         showMenuBarIcon: showDesktopOnlySettings && isMac,
+        showNotchStatus: showDesktopOnlySettings && isMac,
         showTilingWindowMode: showDesktopOnlySettings && !isMac && !isWindows,
         showWorkspaceCardLayout
       }),

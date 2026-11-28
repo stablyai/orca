@@ -10,7 +10,7 @@ import { getStatusBarToggles } from './appearance-status-bar-search'
 import { getUsagePercentageDisplayEntry } from './appearance-usage-percentage-search'
 import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-format-search'
 import { getStatusBarMemoryEntry } from './appearance-status-bar-memory-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import { getSystemPresenceEntries } from './appearance-system-presence-search'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 
@@ -285,6 +285,7 @@ type AppearancePaneSearchOptions = {
   showDesktopThemeImports?: boolean
   showSystemTray?: boolean
   showMenuBarIcon?: boolean
+  showNotchStatus?: boolean
   showTilingWindowMode?: boolean
   showWorkspaceCardLayout?: boolean
 }
@@ -308,7 +309,6 @@ export function getAppearancePaneSearchEntries(
     ...getSidebarEntries(),
     ...(options.showWorkspaceCardLayout ? [getWorkspaceCardLayoutEntry()] : []),
     ...getAppIconEntries(),
-    ...getSystemTrayEntries(options),
-    ...getMenuBarIconEntries(options)
+    ...getSystemPresenceEntries(options)
   ]
 }

@@ -26,6 +26,7 @@ import {
   safelyRevealWindow
 } from '../../window/activation/focus-existing-window'
 import { mainProcessState as state } from '../main-process-state'
+import { startMacSystemPresence } from '../notch-status-wiring'
 import { quitTeardownStartGate } from '../quit/quit-teardown-start-gate'
 import { getDashboardPopoutWindow } from '../../window/dashboard-popout-window'
 import { getWorkspaceSpaceWindow } from '../../window/workspace-space-window'
@@ -268,9 +269,7 @@ export function createSystemTrayDeferred(
     }
     trayCreated = true
     if (process.platform === 'darwin') {
-      if (syncMacMenuBarIcon(state.store.getSettings().showMenuBarIcon !== false)) {
-        onCreated?.()
-      }
+      startMacSystemPresence(state.store.getSettings(), syncMacMenuBarIcon, onCreated)
       return
     }
     const options = getSystemTrayOptions()

@@ -9,6 +9,7 @@ import type { BrowserMemorySaverGlobalSettings } from '../browser/guest-lifecycl
 import type { PerfNoticeGlobalSettings } from '../perf-notices/perf-notice-settings'
 import type { ClaudeAccountSwitchSettings } from '../agent-accounts/claude/claude-account-switch-settings'
 import type { NativeChatGlobalSettings } from '../native-chat/settings/native-chat-appearance-settings'
+import type { NotchStatusSettings } from '../notch/notch-status-settings'
 import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-chat-idle-stop'
 import type { SharedCodexServersSettings } from '../native-chat/settings/native-chat-shared-codex-servers'
 import type { NativeChatUsageLimitAutoContinueSettings } from '../native-chat/settings/native-chat-usage-limit-auto-continue'
@@ -51,6 +52,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
+  NotchStatusSettings &
   NativeChatIdleStopSettings &
   SharedCodexServersSettings &
   NativeChatUsageLimitAutoContinueSettings &

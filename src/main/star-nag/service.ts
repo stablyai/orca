@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import type { IpcHandleRegistrar } from '../ipc/lazy-ipc-handle-group'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/feature-education/star-nag/star-nag-threshold'
+import { findAppWindow } from '../window/app-window-lookup'
 import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
@@ -160,7 +161,7 @@ export class StarNagService {
     mode: StarNagPromptMode,
     surface: StarNagSurface = 'card'
   ): boolean {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    const win = findAppWindow()
     if (!win) {
       this.promptVisible = false
       this.promptSession = null

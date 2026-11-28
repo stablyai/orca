@@ -20,6 +20,7 @@ import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cach
 import { MAIN_BUILD_ENTRY_POINTS } from './config/build-plugins/main-build-entry-points'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import { createDevServeConfig } from './config/build-plugins/dev-serve-config'
+import { RENDERER_HTML_INPUTS } from './config/build-plugins/renderer-html-inputs'
 import {
   ignoreIneffectiveDynamicImport,
   RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
@@ -286,18 +287,12 @@ export const electronViteConfig: UserConfig = {
       modulePreload: { polyfill: true },
       minify: 'oxc',
       target: 'es2020',
-      // Give pop-out dashboard its own HTML/React root with shared preload API; retain index or overriding input drops electron-vite’s default entry.
       rollupOptions: {
         // Shared chunks must not import HTML entries that mount another React root.
         preserveEntrySignatures: 'strict',
         onwarn: ignoreIneffectiveDynamicImport,
         output: { charset: 'ascii' },
-        input: {
-          index: resolve('src/renderer/index.html'),
-          popout: resolve('src/renderer/popout.html'),
-          space: resolve('src/renderer/space.html'),
-          web: resolve('src/renderer/web-index.html')
-        }
+        input: RENDERER_HTML_INPUTS
       }
     }
   }

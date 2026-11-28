@@ -1,6 +1,7 @@
 import type { PreloadApi } from '../../../preload/api-types'
 import type { StatsSummary } from '../../../shared/diagnostics/process-stats-types'
 import { createWebE2EApi } from './preload-api/app/web-e2e-api'
+import { createWebNotchApi } from './preload-api/app/web-notch-api'
 import {
   createClaudeAccountsApi,
   createCodexAccountsApi,
@@ -81,6 +82,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     linkPreview: createWebLinkPreviewApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
+    ...createWebNotchApi(),
     ...createWebSettingsApi(),
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),

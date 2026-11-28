@@ -930,6 +930,16 @@
         "gitBlameKeywordCommit": "commit",
         "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit."
       },
+      "notchStatus": {
+        "title": "Show Agent Status at the Notch",
+        "description": "Pin live agent counts beside the camera, and keep them updating while the Orca window is closed.",
+        "keyword": {
+          "notch": "notch",
+          "agents": "agents",
+          "status": "status",
+          "counts": "counts"
+        }
+      },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
         "keyword": {
@@ -24652,6 +24662,20 @@
         "removeSentNotes": "Remove"
       }
     }
+  },
+  "notch": {
+    "status": {
+      "working": "{{count}} working",
+      "attention": "{{count}} awaiting input",
+      "done": "{{count}} finished",
+      "idle": "No agents running"
+    },
+    "rowState": {
+      "working": "Working",
+      "attention": "Needs you",
+      "done": "Finished"
+    },
+    "sessionList": "Agent sessions"
   },
   "dashboardPopout": {
     "recoverableError": {

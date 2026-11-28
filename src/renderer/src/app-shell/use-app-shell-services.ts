@@ -25,6 +25,7 @@ import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-no
 import { usePerfNotices } from '../components/perf-notices/use-perf-notices'
 import { useVisibleHostedReviewRefresh } from '../store/slices/hosted-review/refresh/use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './storage/use-profile-state-save-delay-notice'
+import { useNotchRevealBridge } from '../components/notch/useNotchRevealBridge'
 import { useBotHomeTabPlacement } from '../components/bots/bot-home-tab-placement'
 import { useUnsavedEditorHostReport } from '../runtime/workspace-cleanup/unsaved-editor-host-report'
 
@@ -49,6 +50,7 @@ export function useAppShellServices(): void {
   useUnsavedEditorHostReport()
   useVisibleHostedReviewRefresh({ enabled: workspaceSessionReady })
   useTerminalViewerColorPublication()
+  useNotchRevealBridge()
   useReadOnScreenAttention()
   useAppMenuPaste()
   useAppMenuSelectionActions()

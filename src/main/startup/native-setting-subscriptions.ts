@@ -2,9 +2,9 @@ import type { NativeSettingsProjection } from '../core-desktop/native-settings-p
 import type { MainThreadHangWatchdogHandle } from '../hang-watchdog/main-thread-hang-watchdog'
 import { switchBrowserExtensionSupport } from '../browser/extensions/browser-extension-startup'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
-import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { syncSystemPresenceSettingUpdate } from './system-presence-setting-sync'
 
-/** Main's native effects of settings changes: the pre-ready HTTP/1 marker, extensions and menu-bar icon. */
+/** Main's native effects of settings changes: the pre-ready HTTP/1 marker, extensions, menu-bar icon and notch. */
 export function followNativeSettingChanges(
   nativeSettings: NativeSettingsProjection,
   options: {
@@ -26,8 +26,8 @@ export function followNativeSettingChanges(
     }
     if ('showMenuBarIcon' in updates) {
       options.hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
-      // Store owns settings mutations; sync every menu-bar toggle through this listener.
-      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
+    // Store owns settings mutations; menu-bar and notch toggles both sync through this listener.
+    syncSystemPresenceSettingUpdate(updates, settings)
   })
 }
