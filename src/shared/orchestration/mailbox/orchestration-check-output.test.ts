@@ -3,6 +3,10 @@ import {
   formatOrchestrationCheckText,
   type OrchestrationMessageSummary
 } from './orchestration-check-output'
+import {
+  formatReportFollowUpCommand,
+  type ReportFollowUpAction
+} from './orchestration-report-follow-up'
 
 describe('formatOrchestrationCheckText reply guidance', () => {
   const orcaItemMail: OrchestrationMessageSummary = {
@@ -25,5 +29,33 @@ describe('formatOrchestrationCheckText reply guidance', () => {
   it('omits the raw check reply action for Orca item mail only', () => {
     expect(check(botItemMail)).toMatch(replyAction)
     expect(check(orcaItemMail)).not.toMatch(replyAction)
+  })
+
+  it('answers with a body file so no quoted text reaches the shell', () => {
+    // A reporter follows this hint literally; `--body "..."` would run backticks in its report.
+    expect(check(botItemMail)).toContain('--body-file <path>')
+    expect(check(botItemMail)).not.toContain('--body "')
+  })
+})
+
+describe('formatReportFollowUpCommand', () => {
+  // Every one of these lines is copied by an agent, so each must pass its body as a file.
+  const actions: ReportFollowUpAction[] = [
+    { kind: 'send', dispatchId: 'dispatch_1', active: false },
+    { kind: 'send', dispatchId: 'dispatch_1', active: true },
+    { kind: 'worker_start' },
+    { kind: 'worker_start_on', server: 'studio' },
+    { kind: 'mail_sender', to: 'bot:reviewer' },
+    { kind: 'mail_sender', to: 'bot:reviewer', chat: '123' }
+  ]
+
+  it('never writes the body inline for a command it prints', () => {
+    for (const action of actions) {
+      if (action.kind === 'information') {
+        continue
+      }
+      const command = formatReportFollowUpCommand(action)
+      expect(command).not.toContain('--body "')
+    }
   })
 })

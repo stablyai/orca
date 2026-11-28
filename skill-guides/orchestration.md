@@ -31,7 +31,7 @@ argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 sca
 `ORCA` stands for the executable you used to run `skills get`; type it in its
 place and use it for every command.
 
-Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file.
+Write multiline text to a file with your file tool, then pass that file: --body-file, --spec-file, git commit -F, gh ... --body-file. Never pass text you composed to --body "...": the shell runs $(...) and backticks inside double quotes before the command sees them, so your message would arrive as command output.
 Never use heredocs (<<) or here-strings (<<<); they can hang the shell.
 If send, reply or worker-start fails, do only what the CLI prints and keep that file unchanged. Never retry on your own or with a new ID.
 
@@ -77,7 +77,7 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use
-  `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body "<message>"`
+  `ORCA orchestration send --to dispatch:<dispatch_id> --subject "<topic>" --body-file <file>`
   in any state: a working worker gets it when its current turn ends; a finished
   or closed one gets it as a follow-up Task and reports with `worker_done` (do
   not pass `--on` for a Dispatch follow-up). The receipt says which.
@@ -100,7 +100,7 @@ Never:
 - In a chat, each message arrives whole as its own message: act on it. A wake
   that names a `check` command (a terminal, or one message too large for a chat
   message) means run that command. Answer a `question` with
-  `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
+  `ORCA orchestration reply --id <message_id> --body-file <file>` when the answer
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: for `lost`, inspect `worker-show` first — the original agent

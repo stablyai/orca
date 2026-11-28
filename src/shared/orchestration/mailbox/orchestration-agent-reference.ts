@@ -37,7 +37,7 @@ export function agentReferenceToken(reference: OrchestrationAgentReference): str
 
 /** The routing line a sent message ends with, one per mentioned agent. */
 export function agentReferenceNote(label: string, address: string): string {
-  return `[Orca agent "${label}": ${address} — message it with orca orchestration send --to ${address} --subject "<topic>" --body "<message>"]`
+  return `[Orca agent "${label}": ${address} — message it with orca orchestration send --to ${address} --subject "<topic>" --body-file <file>]`
 }
 
 export function terminalAgentReference(reference: OrchestrationAgentReference): string | null {
