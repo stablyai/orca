@@ -193,7 +193,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     },
     [client, loadTasks, repoListReload, taskUiReady]
   )
-  return Object.assign(model, { createTask, setGitHubIssueSourcePreference })
+  return { ...model, createTask, setGitHubIssueSourcePreference }
 }
 
 export type TaskCreateActionsModel = ReturnType<typeof useMobileTasksTaskCreateActions>

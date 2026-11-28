@@ -7,7 +7,8 @@ import {
   readStructuredCreateSupport,
   REGISTERED_STRUCTURED_AGENTS,
   type AgentLaunchSupportPlace,
-  type CreateSupportRuntime
+  type CreateSupportRuntime,
+  type StructuredCreateSupportWithInstallation
 } from './agent-launch-support-place'
 import {
   nativeChatPreferenceFor,
@@ -16,10 +17,7 @@ import {
   type StructuredNativeChatBlocker
 } from '../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import type {
-  StructuredAgentCreateSupportReason,
-  StructuredAgentCreateSupportReply
-} from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
+import type { StructuredAgentCreateSupportReason } from '../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
@@ -210,7 +208,7 @@ export async function resolveAgentLaunchModeOnHost(
 
 export function downgradeAgentLaunchModeForHost(
   receipt: AgentLaunchModeReceipt,
-  support: StructuredAgentCreateSupportReply | null,
+  support: StructuredCreateSupportWithInstallation | null,
   vocabulary: AgentLaunchModeVocabulary = DEFAULT_LAUNCH_VOCABULARY,
   context?: AgentLaunchModeSettlement
 ): AgentLaunchModeReceipt {
@@ -220,6 +218,17 @@ export function downgradeAgentLaunchModeForHost(
   const preference = chatPreferenceOf(receipt)
   if (support === null) {
     return downgraded(BLOCKER_REASON['runtime-capability-unknown'], vocabulary, preference)
+  }
+  if (support.installation) {
+    const { agent, installedVersion, minimumVersion } = support.installation
+    return unavailableLaunchMode(
+      'agent_cli_too_old',
+      vocabulary,
+      preference,
+      context,
+      true,
+      `the installed ${formatAgentTypeLabel(agent)} CLI is ${installedVersion}, and chats need ${minimumVersion} or newer — update it`
+    )
   }
   return unavailableLaunchMode(
     support.reason ? HOST_SUPPORT_REASON[support.reason] : 'structured_unsupported_on_host',
@@ -270,15 +279,16 @@ function unavailableLaunchMode(
   vocabulary: AgentLaunchModeVocabulary,
   preference: ChatPreference,
   context?: AgentLaunchModeSettlement,
-  conclusive = true
+  conclusive = true,
+  detailOverride?: string
 ): AgentLaunchModeReceipt {
   if (preference === 'requested' && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detailOverride ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
       reason
     )
   }
-  return downgraded(reason, vocabulary, preference)
+  return downgraded(reason, vocabulary, preference, detailOverride)
 }
 
 export function warnStructuredLaunchDowngrade(

@@ -39,6 +39,13 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
   if (items.length === 0) {
     return false
   }
+  const sentThrough = new Map<string, number>()
+  for (const item of items) {
+    sentThrough.set(
+      item.dispatch_id,
+      Math.max(sentThrough.get(item.dispatch_id) ?? 0, item.sequence)
+    )
+  }
   const returned = Returned.parse(
     await runtime.callOrchestrationWorkerServer(
       asks.environmentId,
@@ -56,21 +63,26 @@ async function returnPage(runtime: OrcaRuntimeService, asks: PairedServerAsks): 
     )
   )
   for (const ack of returned.acknowledgments) {
+    const sentMax = sentThrough.get(ack.conversationId)
+    if (sentMax === undefined) {
+      continue
+    }
     db.acknowledgeFederationRelay({
       dispatchId: ack.conversationId,
       direction: 'to_home',
-      throughSequence: ack.throughSequence
+      throughSequence: Math.min(ack.throughSequence, sentMax)
     })
   }
   // A conversation the server no longer has under this pairing: its askers were told there.
   for (const conversationId of returned.gone) {
-    const through = Math.max(
-      ...items.filter((item) => item.dispatch_id === conversationId).map((item) => item.sequence)
-    )
+    const sentMax = sentThrough.get(conversationId)
+    if (sentMax === undefined) {
+      continue
+    }
     db.acknowledgeFederationRelay({
       dispatchId: conversationId,
       direction: 'to_home',
-      throughSequence: through
+      throughSequence: sentMax
     })
   }
   return items.length === PAGE

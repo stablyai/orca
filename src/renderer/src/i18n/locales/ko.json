@@ -1085,7 +1085,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost는 이 봇의 컴퓨터를 뜻합니다.",
           "headers": "헤더",
-          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “연결” 버튼이 표시됩니다.",
+          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “로그인” 버튼이 표시됩니다.",
           "executable": "실행 파일",
           "commandPlaceholder": "npx",
           "args": "인수",
@@ -5366,9 +5366,8 @@
             "84c3b15dca": "에이전트 사용량 한도",
             "d663430cf9": "사용량 추적 설정",
             "remoteLabel": "{{host}}에 사용량 없음",
-            "remoteTitle": "{{host}}의 사용량",
-            "remoteBody": "이 워크스페이스는 {{host}}에서 실행되므로 상태 표시줄에는 해당 호스트의 사용량이 표시됩니다. 그 호스트에서 에이전트에 로그인하거나, 로컬 워크스페이스로 전환하면 이 컴퓨터의 사용량을 볼 수 있습니다.",
-            "remoteOpenAccounts": "{{host}} 계정 열기"
+            "remoteNoUsageYet": "아직 사용량이 없습니다. 해당 호스트에서 로그인하세요.",
+            "remoteAccounts": "계정"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "업데이트에 실패했습니다. 확장하려면 클릭하세요.",
@@ -15021,7 +15020,10 @@
             "operationResolve": "해결",
             "operationResolveLabel": "AI로 충돌 해결",
             "operationMoreActions": "추가 작업",
-            "operationAbortConfirm": "다시 선택하면 중단됩니다"
+            "operationAbortConfirm": "다시 선택하면 중단됩니다",
+            "operationRunChangedTitle": "중단된 작업이 없습니다",
+            "operationRunChangedDescription": "중단을 선택한 후 작업이 바뀌었습니다. 현재 상태를 확인하고 다시 시도하세요.",
+            "operationRunUnknown": "일시 중지된 실행을 확인할 수 없어 여기서는 중단할 수 없습니다. 소스 제어를 새로 고치거나 터미널에서 중단하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -19150,7 +19152,7 @@
           "runStatusDispatchFailed": "실패"
         },
         "runContent": {
-          "noOutput": "사용 가능한 출력 내용이 없습니다."
+          "noOutput": "출력이 없습니다."
         },
         "runViewState": {
           "viewRun": "실행 보기",
@@ -23149,6 +23151,9 @@
           "always": "항상",
           "never": "안 함"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "문제 해결을 위한 낮은 수준의 호환성 설정입니다. 이 설정은 {{host}}이(가) 아닌 이 컴퓨터에 저장됩니다."
       },
       "repositoryHooks": {
         "availableEnvVars": "사용 가능한 환경 변수"
@@ -29260,10 +29265,10 @@
         "replyTo": "{{name}}에게 답장…"
       },
       "empty": {
-        "allClear": "확인이 필요한 것이 없습니다",
+        "allClear": "확인할 항목이 없습니다",
         "body": "{{bot}}이(가) 내 일을 맡으면 무엇을 하고 있는지, 나에게 무엇이 필요한지와 함께 여기에 표시됩니다.",
         "filtered": "일치하는 항목이 없습니다.",
-        "needsYou": "확인이 필요한 것이 없습니다.",
+        "needsYou": "확인할 항목이 없습니다.",
         "title": "아직 항목이 없습니다",
         "short": "아직 항목이 없습니다. {{bot}}이(가) 일을 맡으면 여기에 표시됩니다."
       },

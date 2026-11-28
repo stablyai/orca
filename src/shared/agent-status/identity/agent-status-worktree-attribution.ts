@@ -1,11 +1,15 @@
 import type { Tab } from '../../workspace-layout/tab-groups/tab-types'
-import { structuredAgentSessionPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../contracts/agent-status-types'
 import { isWebTerminalSurfaceTabId } from '../../workspace-layout/terminal-surface-id'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../workspace-layout/stable-pane-id'
+import {
+  chatPaneAddressTabId,
+  chatPaneKey,
+  chatPaneKeySessionId
+} from '../../agent-session/view/structured-agent-session-projection'
 
 export type AgentStatusPaneIdentity = { tabId: string; paneId: string }
 
@@ -18,9 +22,12 @@ export function parseAgentStatusPaneIdentity(
   }
   if (
     representedTab?.contentType === 'agent-session' &&
-    structuredAgentSessionPaneKey(representedTab.id, representedTab.entityId) === paneKey
+    chatPaneKey(representedTab.entityId) === paneKey
   ) {
-    return { tabId: representedTab.id, paneId: paneKey.slice(representedTab.id.length + 1) }
+    return {
+      tabId: representedTab.id,
+      paneId: paneKey.slice(chatPaneAddressTabId(representedTab.entityId).length + 1)
+    }
   }
   const parsed = parsePaneKey(paneKey)
   if (parsed) {
@@ -36,10 +43,13 @@ export function resolveAgentStatusWorktreeId(
   orchestration = entry.orchestration
 ): string | null {
   const paneIdentity = parseAgentStatusPaneIdentity(entry.paneKey)
-  // Host-reported workspace ownership survives colliding mirrored tab IDs.
+  // Host-reported workspace ownership survives colliding mirrored tab IDs; a chat's key names its
+  // conversation, which another workspace's tab id can equal, so its own row's workspace wins.
   if (
     entry.worktreeId &&
-    (entry.connectionId || isWebTerminalSurfaceTabId(paneIdentity?.tabId ?? ''))
+    (entry.connectionId ||
+      isWebTerminalSurfaceTabId(paneIdentity?.tabId ?? '') ||
+      chatPaneKeySessionId(entry.paneKey) !== null)
   ) {
     return entry.worktreeId
   }

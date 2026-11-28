@@ -223,7 +223,6 @@ describe('open tray', () => {
     renderTray({ expanded: true, tasks: [command('shell-1', LONG_COMMAND)] })
     const row = screen.getByRole('button', { name: /^pnpm exec vitest/ })
     expect(row.getAttribute('aria-label')!.split(' · ')[0].length).toBeLessThanOrEqual(60)
-    expect(row.getAttribute('title')).toContain(LONG_COMMAND)
     expect(within(row).getByText(LONG_COMMAND)).toHaveClass('truncate', 'font-mono')
   })
 

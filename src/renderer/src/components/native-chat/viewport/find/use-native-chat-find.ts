@@ -3,7 +3,6 @@ import {
   useCallback,
   useEffect,
   useRef,
-  useState,
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject
 } from 'react'
@@ -12,6 +11,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '../../../../store/index'
+import { useNativeChatViewState } from '../../pane/ownership/native-chat-view-memory'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import type { NativeChatMessageListHandle } from '../../messages/actions/use-native-chat-reveal-latest'
 import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
@@ -30,6 +30,10 @@ export type NativeChatFind = {
   rootRef: RefObject<HTMLDivElement | null>
   barRef: RefObject<HTMLDivElement | null>
   inputRef: RefObject<HTMLInputElement | null>
+  /** Whether the bar now mounting was opened here, so takes focus; a bar restored with its chat leaves focus be. */
+  takeOpenFocus: () => boolean
+  /** Whether the bar now mounting was opened here; a restored one keeps the reader's place. */
+  isOpenedHere: () => boolean
   /** Brings a match into the transcript's view, clear of the bar, as a reader step would. */
   revealMatch: (match: Range) => void
 }
@@ -53,11 +57,19 @@ export function useNativeChatFind(
   composerRef: RefObject<Pick<NativeChatComposerHandle, 'focus'> | null>,
   messageListRef: RefObject<Pick<NativeChatMessageListHandle, 'revealFindMatch'> | null>
 ): NativeChatFind {
-  const [isOpen, setIsOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  // Kept with the chat tab: a released view returns with Find open on the same query.
+  const [isOpen, setIsOpen] = useNativeChatViewState('find-open', false)
+  const [query, setQuery] = useNativeChatViewState('find-query', '')
   const barRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const focusBeforeOpenRef = useRef<HTMLElement | null>(null)
+  const openedHereRef = useRef(false)
+  const takeOpenFocus = useCallback(() => {
+    const opened = openedHereRef.current
+    openedHereRef.current = false
+    return opened
+  }, [])
+  const isOpenedHere = useCallback(() => openedHereRef.current, [])
 
   const close = useCallback(() => {
     const root = rootRef.current
@@ -86,7 +98,7 @@ export function useNativeChatFind(
     if (!composerRef.current?.focus()) {
       root.focus({ preventScroll: true })
     }
-  }, [composerRef, rootRef])
+  }, [composerRef, rootRef, setIsOpen])
 
   const open = useCallback(
     (returnFocusTo = rootRef.current?.ownerDocument.activeElement) => {
@@ -96,9 +108,10 @@ export function useNativeChatFind(
         return
       }
       focusBeforeOpenRef.current = returnFocusTo instanceof HTMLElement ? returnFocusTo : null
+      openedHereRef.current = true
       setIsOpen(true)
     },
-    [rootRef]
+    [rootRef, setIsOpen]
   )
 
   useEffect(() => {
@@ -167,6 +180,8 @@ export function useNativeChatFind(
     rootRef,
     barRef,
     inputRef,
+    takeOpenFocus,
+    isOpenedHere,
     revealMatch
   }
 }

@@ -4,6 +4,7 @@ import {
   type ConnectorRequest,
   type ConnectorResult
 } from './connector-cloud-request'
+import { noteSentConnectorCall, type SentConnectorCall } from './connector-sent-calls'
 
 // Renew early so a token cannot lapse between the check and the request.
 const TOKEN_RENEWAL_MARGIN_MS = 60_000
@@ -48,7 +49,9 @@ export class ConnectorAccountTransport {
     private readonly origin: string,
     private readonly mint: ConnectorTokenMint,
     private readonly fetchImpl: typeof globalThis.fetch = globalThis.fetch,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    /** Told each call's request and answer once it settles; it can't change or fail the call. */
+    private readonly observe: SentConnectorCall = noteSentConnectorCall
   ) {}
 
   /** An authorized call; a 401 mints one new token and tries once more. */
@@ -57,6 +60,21 @@ export class ConnectorAccountTransport {
     body: unknown,
     schema: TSchema,
     options: ConnectorCallOptions = {}
+  ): Promise<ConnectorResult<z.infer<TSchema>>> {
+    const result = await this.authorizedCall(path, body, schema, options)
+    try {
+      this.observe(path, body, result)
+    } catch {
+      // Observation never fails a call.
+    }
+    return result
+  }
+
+  private async authorizedCall<TSchema extends z.ZodType>(
+    path: string,
+    body: unknown,
+    schema: TSchema,
+    options: ConnectorCallOptions
   ): Promise<ConnectorResult<z.infer<TSchema>>> {
     const { requests } = options
     requests?.callStarted()

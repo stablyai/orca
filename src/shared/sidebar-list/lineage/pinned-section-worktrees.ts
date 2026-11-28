@@ -1,5 +1,6 @@
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
+import type { WorktreeWithInlineLineage } from '../../worktree/lineage/workspace-lineage-graph'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { getLineagePlacementRows } from './worktree-occurrence-plan'
 import {
@@ -7,15 +8,83 @@ import {
   type SidebarLineageParentIdentities
 } from './worktree-lineage-projection'
 
+const rowsByWorktreeMapCache = new WeakMap<ReadonlyMap<string, Worktree>, Map<string, Worktree>>()
+
+function getCachedRowsByWorktreeMap(
+  worktreeMap: ReadonlyMap<string, Worktree>
+): Map<string, Worktree> {
+  const cached = rowsByWorktreeMapCache.get(worktreeMap)
+  if (cached) {
+    return cached
+  }
+  const rows = new Map<string, Worktree>()
+  for (const worktree of worktreeMap.values()) {
+    rows.set(getWorktreeHostIdentity(worktree), worktree)
+  }
+  rowsByWorktreeMapCache.set(worktreeMap, rows)
+  return rows
+}
+
+function getSidebarLineageRowsByIdentityReadonly(
+  worktrees: readonly Worktree[],
+  worktreeMap: ReadonlyMap<string, Worktree>,
+  folderRows: readonly Worktree[]
+): ReadonlyMap<string, Worktree> {
+  const baseRows = getCachedRowsByWorktreeMap(worktreeMap)
+  let rowsByIdentity: Map<string, Worktree> | undefined
+  for (const worktree of worktrees) {
+    const identity = getWorktreeHostIdentity(worktree)
+    if (rowsByIdentity) {
+      rowsByIdentity.set(identity, worktree)
+    } else if (baseRows.get(identity) !== worktree) {
+      rowsByIdentity = new Map(baseRows)
+      rowsByIdentity.set(identity, worktree)
+    }
+  }
+  if (folderRows.length > 0) {
+    rowsByIdentity ??= new Map(baseRows)
+    for (const worktree of folderRows) {
+      rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
+    }
+  }
+  return rowsByIdentity ?? baseRows
+}
+
+function hasAnyLineageSource(
+  worktrees: readonly Worktree[],
+  worktreeMap: ReadonlyMap<string, Worktree>,
+  lineageById: Readonly<Record<string, WorktreeLineage>>,
+  lineageParentIdentities?: SidebarLineageParentIdentities
+): boolean {
+  if (lineageParentIdentities && lineageParentIdentities.size > 0) {
+    return true
+  }
+  for (const key in lineageById) {
+    if (Object.hasOwn(lineageById, key)) {
+      return true
+    }
+  }
+  for (const worktree of worktrees) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read.
+    if ((worktree as WorktreeWithInlineLineage).lineage) {
+      return true
+    }
+  }
+  for (const worktree of worktreeMap.values()) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: resolved rows may carry an inline lineage the Worktree type omits; it is only read.
+    if ((worktree as WorktreeWithInlineLineage).lineage) {
+      return true
+    }
+  }
+  return false
+}
+
 export function getSidebarLineageRowsByIdentity(
   worktrees: readonly Worktree[],
   worktreeMap: ReadonlyMap<string, Worktree>,
   folderRows: readonly Worktree[] = []
 ): Map<string, Worktree> {
-  const rowsByIdentity = new Map<string, Worktree>()
-  for (const worktree of worktreeMap.values()) {
-    rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
-  }
+  const rowsByIdentity = new Map(getCachedRowsByWorktreeMap(worktreeMap))
   for (const worktree of worktrees) {
     rowsByIdentity.set(getWorktreeHostIdentity(worktree), worktree)
   }
@@ -35,7 +104,10 @@ export function getSidebarLineageChildren(
   lineageParentIdentities?: SidebarLineageParentIdentities,
   folderRows: readonly Worktree[] = []
 ): Map<string, Worktree[]> {
-  const rowsByIdentity = getSidebarLineageRowsByIdentity(
+  if (!hasAnyLineageSource(worktrees, worktreeMap, lineageById, lineageParentIdentities)) {
+    return new Map<string, Worktree[]>()
+  }
+  const rowsByIdentity = getSidebarLineageRowsByIdentityReadonly(
     worktrees,
     worktreeMap,
     lineageParentIdentities ? folderRows : []

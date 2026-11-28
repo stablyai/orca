@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -9,9 +9,14 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import type { WorkerDockStopBlock } from './worker-dock-stop-check'
+import {
+  KEPT_PROMPT_VIEWS,
+  useNativeChatViewGuard
+} from '../../../pane/ownership/native-chat-view-memory'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
+const NO_PENDING: ReadonlySet<string> = new Set()
 const message = (value: unknown) => (value instanceof Error ? value.message : String(value))
 /** A failure no Retry can change, such as a Stop for a worker that has already settled. */
 class FinalWorkerDockError extends Error {}
@@ -25,8 +30,24 @@ export function useWorkerDockOwnerActions(
   stopBlock?: (row: WorkerDockRowView, party: string) => WorkerDockStopBlock
 ) {
   const t = useTranslate()
-  const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
-  const [failure, setFailure] = useState<WorkerDockFailure | null>(null)
+  // Kept with the chat tab: a dock released mid-request returns with those rows still pending.
+  const [pending, setPending] = useNativeChatViewGuard('worker-dock-pending', NO_PENDING)
+  // Kept with it, so a request failing while the chat is switched away still says why on return. Only the message:
+  // Retry stays with the view that made it, whose stop check is current.
+  const [kept, setKept] = useNativeChatViewGuard<{ message: string } | null>(
+    'worker-dock-failure',
+    null,
+    KEPT_PROMPT_VIEWS
+  )
+  const [retryOf, setRetryOf] = useState<{ failure: object; retry: () => void } | null>(null)
+  const failure = useMemo<WorkerDockFailure | null>(
+    () =>
+      kept && {
+        message: kept.message,
+        ...(retryOf?.failure === kept ? { retry: retryOf.retry } : {})
+      },
+    [kept, retryOf]
+  )
   const acknowledge = useCallback(
     async (settlements: { dispatchId: string; settlement: string }[]) => {
       if (!party) {
@@ -42,22 +63,31 @@ export function useWorkerDockOwnerActions(
     },
     [party, target]
   )
-  const track = useCallback((ids: ReadonlySet<string>, request: () => Promise<unknown>) => {
-    const attempt = () => {
-      setFailure(null)
-      setPending((current) => new Set([...current, ...ids]))
-      void request()
-        .catch((value) =>
-          setFailure(
-            value instanceof FinalWorkerDockError
-              ? { message: message(value) }
-              : { message: message(value), retry: attempt }
+  const track = useCallback(
+    (ids: ReadonlySet<string>, request: () => Promise<unknown>) => {
+      const attempt = () => {
+        setKept(null)
+        setPending((current) => new Set([...current, ...ids]))
+        void request()
+          .catch((value) => {
+            const failed = { message: message(value) }
+            setKept(failed)
+            setRetryOf(
+              value instanceof FinalWorkerDockError ? null : { failure: failed, retry: attempt }
+            )
+          })
+          .finally(() =>
+            setPending((current) => {
+              const left = new Set([...current].filter((id) => !ids.has(id)))
+              // Back at the empty default, the kept entry is deleted.
+              return left.size === 0 ? NO_PENDING : left
+            })
           )
-        )
-        .finally(() => setPending((current) => new Set([...current].filter((id) => !ids.has(id)))))
-    }
-    attempt()
-  }, [])
+      }
+      attempt()
+    },
+    [setKept, setPending]
+  )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
       // Clear only acknowledges; a row with no settlement has nothing to clear and must not Stop.
@@ -105,7 +135,7 @@ export function useWorkerDockOwnerActions(
   return {
     pending,
     failure,
-    dismissFailure: () => setFailure(null),
+    dismissFailure: () => setKept(null),
     action,
     clearAll
   }

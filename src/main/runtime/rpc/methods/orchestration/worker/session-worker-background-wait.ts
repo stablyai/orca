@@ -1,5 +1,5 @@
 import { agentBackgroundWait } from '../../../../../../shared/agent-status/lifecycle/agent-background-wait'
-import { structuredAgentSessionStatusPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { chatPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusIpcPayload } from '../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
@@ -14,9 +14,7 @@ export function sessionWorkerBackgroundWait(
   if (state !== 'working') {
     return {}
   }
-  const chatRow = chatSessionId
-    ? chatStatusRows.get(structuredAgentSessionStatusPaneKey(chatSessionId))
-    : undefined
+  const chatRow = chatSessionId ? chatStatusRows.get(chatPaneKey(chatSessionId)) : undefined
   const wait = worker.stage.backgroundWait ?? (chatRow ? agentBackgroundWait(chatRow) : null)
   return wait ? { backgroundWait: wait } : {}
 }

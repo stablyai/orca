@@ -354,13 +354,14 @@ export function useMobileTasksGithubCheckFileActions<
       finish()
     }
   }
-  return Object.assign(model, {
+  return {
+    ...model,
     rerunGitHubChecks,
     toggleGitHubFileViewed,
     toggleGitHubReviewThread,
     toggleGitHubFileExpansion,
     addGitHubFileReviewComment
-  })
+  }
 }
 
 export type GithubCheckFileActionsModel = HostedCommentReviewActionsModel &

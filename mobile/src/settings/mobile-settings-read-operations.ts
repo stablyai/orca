@@ -1,6 +1,5 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import type { RpcCompatibleReader } from '../transport/rpc/rpc-operation-contract'
-import '../../../src/shared/source-control/listing/source-control-group-order'
 import { settingsMember } from './mobile-settings-projection'
 
 // Keep settings opaque because callers retain fields without validating their shapes.

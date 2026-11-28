@@ -32,8 +32,9 @@ export type NativeChatSubagentSheetControls = {
 export type NativeChatOpenSubagent = { agentId: string; parentId: string | null }
 
 const openByPane = new Map<string, NativeChatOpenSubagent>()
-// What had focus when the sheet opened, to hand it back on close; 'prompt': the pane's waiting prompt.
-const openerByPane = new Map<string, Element | 'prompt'>()
+// What had focus when the sheet opened, to hand it back on close; 'prompt': the pane's waiting prompt. Held weakly:
+// the opener lives in a chat view that can be released while the sheet stays open, and must not keep its DOM.
+const openerByPane = new Map<string, WeakRef<Element> | 'prompt'>()
 // The subagent a Show swapped the sheet to; its waiting prompt takes focus as it moves into the sheet.
 const promptFocusByPane = new Map<string, string>()
 const listeners = new Set<() => void>()
@@ -61,7 +62,7 @@ export function openNativeChatSubagent(paneKey: string, agentId: string | null):
     openByPane.delete(paneKey)
   } else {
     if (!openByPane.has(paneKey) && document.activeElement) {
-      openerByPane.set(paneKey, document.activeElement)
+      openerByPane.set(paneKey, new WeakRef(document.activeElement))
     }
     openByPane.set(paneKey, { agentId, parentId: null })
   }
@@ -95,7 +96,12 @@ export function takeNativeChatSubagentPromptFocus(paneKey: string, agentId: stri
 export function takeNativeChatSubagentOpener(paneKey: string): Element | 'prompt' | undefined {
   const opener = openerByPane.get(paneKey)
   openerByPane.delete(paneKey)
-  return opener
+  if (opener === 'prompt' || opener === undefined) {
+    return opener
+  }
+  // A released view's opener is gone from the page; nothing to hand focus back to.
+  const element = opener.deref()
+  return element?.isConnected ? element : undefined
 }
 
 /** A closed or replaced chat tab takes its panes' open subagents with it. */

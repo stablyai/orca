@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
-import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { openDirectory } from '../../../../shared/open-directory'
 
 export type CodexSessionBridgeIncrementalOptions = {
   /** Directory entries to process before yielding back to the event loop. */
@@ -87,7 +87,7 @@ async function* listCodexSessionFilesIncrementally(
       continue
     }
     try {
-      const directory = await opendir(currentDirectory)
+      const directory = await openDirectory(currentDirectory)
       for await (const entry of directory) {
         const childPath = join(currentDirectory, entry.name)
         if (entry.isDirectory()) {

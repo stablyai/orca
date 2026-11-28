@@ -19,6 +19,12 @@ import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease
 } from '../../node-runtime/managed-runtime-release'
+import {
+  isUnderWindowsDriveMount,
+  isWslGuestProcessAsync,
+  readGuestWindowsDriveMountsAsync,
+  withoutWindowsDriveMountDirs
+} from '../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import type {
   AcpHostBackendInput,
@@ -111,23 +117,61 @@ export function selectAcpHostAccountHomeForCatalog(
 
 const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z]\//i
 
+function stripWslDriveMountDirs(
+  pathValue: string | null,
+  guestMounts: readonly string[],
+  isWslGuest: boolean
+): string | null {
+  if (guestMounts.length > 0) {
+    const value = pathValue ?? process.env.PATH ?? null
+    return value === null ? null : withoutWindowsDriveMountDirs(value, guestMounts)
+  }
+  if (!isWslGuest) {
+    return pathValue
+  }
+  const value = pathValue ?? process.env.PATH ?? null
+  if (value === null) {
+    return null
+  }
+  return value
+    .split(delimiter)
+    .filter((dir) => !WINDOWS_DRIVE_MOUNT.test(`${dir.replace(/\/+$/, '')}/`))
+    .join(delimiter)
+}
+
 /** `command` on PATH or in its installers' folders, found without blocking; null when absent. A
  *  WSL host can't run a Windows-drive copy, so that copy doesn't count. */
 export async function findHostProgram(
   command: string,
   env: Readonly<Record<string, string>>,
-  installDirectories: readonly string[]
+  installDirectories: readonly string[],
+  options?: {
+    guestWindowsDriveMounts?: readonly string[]
+    isWslGuest?: boolean
+    resolveCommand?: typeof resolveCliCommandAsync
+  }
 ): Promise<string | null> {
   const homePath = env.HOME ?? env.USERPROFILE
   const path = env.PATH ?? env.Path ?? null
-  const resolved = await resolveCliCommandAsync(command, {
-    pathEnv:
-      installDirectories.length > 0
-        ? [path, ...installDirectories].filter(Boolean).join(delimiter)
-        : path,
+  const combinedPath =
+    installDirectories.length > 0
+      ? [path, ...installDirectories].filter(Boolean).join(delimiter)
+      : path
+  const guestMounts = options?.guestWindowsDriveMounts ?? (await readGuestWindowsDriveMountsAsync())
+  const isWslGuest =
+    options?.isWslGuest ?? (guestMounts.length > 0 || (await isWslGuestProcessAsync(env)))
+  const resolve = options?.resolveCommand ?? resolveCliCommandAsync
+  const resolved = await resolve(command, {
+    pathEnv: stripWslDriveMountDirs(combinedPath, guestMounts, isWslGuest),
     ...(homePath ? { homePath } : {})
   })
-  return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved) ? resolved : null
+  if (!isAbsolute(resolved)) {
+    return null
+  }
+  if (guestMounts.length > 0) {
+    return isUnderWindowsDriveMount(resolved, guestMounts) ? null : resolved
+  }
+  return isWslGuest && WINDOWS_DRIVE_MOUNT.test(resolved) ? null : resolved
 }
 
 /** `startsProgram`: someone is using the agent, so answering may start its program. */

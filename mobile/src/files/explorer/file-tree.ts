@@ -52,7 +52,30 @@ export type FolderPagingNode = {
   total: number
 }
 
-export type FileExplorerRow = TreeNode | InlineStatusNode | FolderPagingNode
+/** A titled break in the search results, e.g. hits inside files under the name matches. */
+export type SectionNode = { id: string; relativePath: string; depth: 0; kind: 'section' }
+
+/** One line inside a file that the content search matched; opens the file at that line. */
+export type ContentHitNode = {
+  id: string
+  relativePath: string
+  name: string
+  depth: 0
+  kind: 'contentHit'
+  line: number
+  column: number
+  matchLength: number
+  lineContent: string
+  displayColumn?: number
+  displayMatchLength?: number
+}
+
+export type FileExplorerRow =
+  | TreeNode
+  | InlineStatusNode
+  | FolderPagingNode
+  | SectionNode
+  | ContentHitNode
 
 /** Rows per "Show more"; a folder bigger than this shows its entry count. */
 export const DIRECTORY_PAGE_SIZE = 500
@@ -204,6 +227,30 @@ export function searchResultRows(paths: readonly string[]): TreeNode[] {
         folder: slash === -1 ? '' : relativePath.slice(0, slash)
       }
     ]
+  })
+}
+
+/** Content search answer as rows: each file as a result row, then its matched lines. */
+export function contentSearchRows(
+  files: readonly {
+    relativePath: string
+    matches: readonly Omit<ContentHitNode, 'id' | 'relativePath' | 'name' | 'depth' | 'kind'>[]
+  }[]
+): FileExplorerRow[] {
+  return files.flatMap((file) => {
+    const [fileRow] = searchResultRows([file.relativePath])
+    if (!fileRow || file.matches.length === 0) {
+      return []
+    }
+    const hits = file.matches.map((match): ContentHitNode => ({
+      ...match,
+      id: `hit:${file.relativePath}:${match.line}:${match.column}`,
+      relativePath: file.relativePath,
+      name: fileRow.name,
+      depth: 0,
+      kind: 'contentHit'
+    }))
+    return [{ ...fileRow, id: `hit-file:${file.relativePath}` }, ...hits]
   })
 }
 

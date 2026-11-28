@@ -94,7 +94,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     const recall = useNativeChatComposerRecall({
       draft,
       source: recallSource,
-      inputRef: textareaRef
+      inputRef: textareaRef,
+      scopeKey: draftScopeKey
     })
     const { cancelPendingSends, trackPendingSend } = useNativeChatSendLifecycle(
       terminalTabId,

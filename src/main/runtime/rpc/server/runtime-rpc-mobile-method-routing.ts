@@ -104,6 +104,8 @@ export const EXECUTION_HOST_METHODS = [
   'files.readTerminalArtifactChunk',
   'files.readTerminalArtifactPreview',
   'files.resolveTerminalPath',
+  // Files explorer search inside file contents; the host trims the reply to the phone's content budget.
+  'files.search',
   'files.searchPaths',
   // Upload into a workspace folder (files.upload.staged.v1): bytes stage outside the worktree, the commit never replaces a file.
   'files.uploadBegin',

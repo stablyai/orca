@@ -249,7 +249,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       void loadTasks({ silent: true })
     }
   }, [serverRepoList, loadTasks, effectiveRepoIds.size, provider, connState, taskStateHydrated])
-  return Object.assign(model, { loadTasks, captureTaskListRefresh, revalidating, rowsReadAt })
+  return { ...model, loadTasks, captureTaskListRefresh, revalidating, rowsReadAt }
 }
 
 export type TaskListLoadingModel = ReturnType<typeof useMobileTasksTaskListLoading>

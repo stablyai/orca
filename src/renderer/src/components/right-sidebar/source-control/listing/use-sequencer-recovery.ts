@@ -11,10 +11,10 @@ import {
   sequencerAbortRuntimeGit,
   sequencerContinueRuntimeGit
 } from '@/runtime/source-control/git/runtime-git-commit-actions-client'
-import '@/lib/source-control/graph/git-graph-tab'
 import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/source-control/graph/git-graph-refresh-event'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
+import { toastIfOperationRunChanged } from '../sync/operation-run-changed-toast'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
 import { useAppStore } from '@/store/index'
 import {
@@ -70,7 +70,14 @@ export function useSequencerRecovery({
       unsubscribe()
     }
   }, [])
-  const run = async (action: 'abort' | 'continue', { confirmed = false } = {}) => {
+  const run = async (
+    action: 'abort' | 'continue',
+    // expectedRunIdentity: the run an in-place confirm was for; the abort refuses on another run.
+    {
+      confirmed = false,
+      expectedRunIdentity
+    }: { confirmed?: boolean; expectedRunIdentity?: string } = {}
+  ) => {
     const copy = resolveWorktreeGitCopyNow(worktreeId)
     const target = copy?.transport
     const path = context.worktreePath
@@ -121,9 +128,10 @@ export function useSequencerRecovery({
             worktreePath: path,
             connectionId: copy.connectionId
           }
-          const result = await (
-            action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
-          )(request, operation)
+          const result =
+            action === 'abort'
+              ? await sequencerAbortRuntimeGit(request, operation, { expectedRunIdentity })
+              : await sequencerContinueRuntimeGit(request, operation)
           if (result?.outcome === 'empty') {
             toast.message(
               operation === 'revert'
@@ -135,6 +143,9 @@ export function useSequencerRecovery({
             )
           }
         } catch (error) {
+          if (toastIfOperationRunChanged(error)) {
+            return
+          }
           toast.error(
             extractIpcErrorMessage(
               error,

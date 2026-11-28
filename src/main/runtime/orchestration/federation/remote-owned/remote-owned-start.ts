@@ -43,9 +43,9 @@ import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
 import { remoteForwardKey } from './remote-forward-caller'
 import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/dispatch-creator'
 import {
+  answeredWorktreeId,
   errorData,
   failedBeforeSending,
-  answeredWorktreeId,
   inServerTerms,
   serverNeverAnswered
 } from './remote-owned-answers'
@@ -177,7 +177,7 @@ export async function startRemoteOwnedWorker(
   const link = openRemoteRunLink(db, run.id, server, (handle, type) =>
     runtime.notifyMessageArrived(handle, type)
   )
-  const { task, nothingSent } = reserveRemotePlacement(db, {
+  const { task, nothingSent, sendAttempt } = reserveRemotePlacement(db, {
     link,
     taskId,
     requestKey: forward.key,
@@ -240,14 +240,16 @@ export async function startRemoteOwnedWorker(
     receipt = called.result
     retryWarning = called.droppedWarning ?? retryWarning
   } catch (error) {
-    settleUnansweredStart(runtime, {
-      conversationId: link.conversation_id,
+    settleUnansweredStart(
+      runtime,
+      link.conversation_id,
       taskId,
+      forward.key,
       error,
-      key: forward.key,
-      createdByStart: !existingTask,
-      nothingSent
-    })
+      !existingTask,
+      nothingSent,
+      sendAttempt
+    )
     throw nameRefusingComputer(inServerTerms(error, { server: server.name, forward }), server.name)
   }
   const started = StartedOnServer.safeParse(receipt)
@@ -303,33 +305,25 @@ export async function startRemoteOwnedWorker(
 /** What a start's failure says about its reservation: adopt the Dispatch it names, keep it for the server's queue to answer, or free it. */
 function settleUnansweredStart(
   runtime: OrcaRuntimeService,
-  start: {
-    conversationId: string
-    taskId: string
-    key: string
-    error: unknown
-    createdByStart: boolean
-    nothingSent: boolean
-  }
+  conversationId: string,
+  taskId: string,
+  key: string,
+  error: unknown,
+  createdByStart: boolean,
+  nothingSent: boolean,
+  sendAttempt: number
 ): void {
   const db = runtime.getOrchestrationDb()
-  const data = errorData(start.error)
+  const data = errorData(error)
   const named = typeof data?.dispatchId === 'string' ? data.dispatchId : undefined
-  // An unknown outcome stays reserved: the queue item for any Dispatch the server created adopts it.
   const outcomeUnknown =
-    (start.error instanceof OrchestrationError && start.error.code === 'operation_unknown') ||
-    (serverNeverAnswered(start.error) && data?.effectsApplied !== false)
+    (error instanceof OrchestrationError && error.code === 'operation_unknown') ||
+    (serverNeverAnswered(error) && data?.effectsApplied !== false)
   if (named) {
-    recordRemoteStart(db, {
-      conversationId: start.conversationId,
-      taskId: start.taskId,
-      dispatchId: named,
-      requestKey: start.key
-    })
+    recordRemoteStart(db, { conversationId, taskId, dispatchId: named, requestKey: key })
   } else if (!outcomeUnknown) {
-    // The server's ordinary start refused it, which a start that had launched answers with a receipt.
-    releaseRemotePlacement(db, start.taskId, start.key, { createdByStart: start.createdByStart })
-  } else if (start.nothingSent && failedBeforeSending(start.error)) {
-    markRemotePlacementNeverSent(db, start.taskId, start.key)
+    releaseRemotePlacement(db, taskId, key, { createdByStart })
+  } else if (nothingSent && failedBeforeSending(error)) {
+    markRemotePlacementNeverSent(db, taskId, key, sendAttempt)
   }
 }

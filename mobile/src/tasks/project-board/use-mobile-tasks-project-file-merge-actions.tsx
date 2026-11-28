@@ -347,12 +347,13 @@ export function useMobileTasksProjectFileMergeActions<Model extends ProjectFileM
     },
     [claimPublication, client, captureTaskListRefresh, tryBeginMutation]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     toggleProjectGitHubFileExpansion,
     addProjectGitHubFileReviewComment,
     mergeProjectGitHubPullRequest,
     toggleGitHubStatus
-  })
+  }
 }
 
 export type ProjectFileMergeActionsModel = ProjectReviewCheckActionsModel &

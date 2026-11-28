@@ -14,7 +14,6 @@ import type { GitHubWorkItemDetails } from '../../../../../src/shared/github/wor
 import type { HostedReviewInfo } from '../../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import { refusedRpcMessageOrFallback } from '../../../transport/rpc/rpc-refusal-message'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
-import '../creation/mobile-pr-create'
 import { mobileRepoSelectorFromWorktreeId } from '../creation/mobile-hosted-review-service'
 import {
   githubPrAssignableUsersRead,

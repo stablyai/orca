@@ -5,8 +5,6 @@ import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
-import '../../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import '../../../../src/shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 

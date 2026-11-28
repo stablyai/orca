@@ -5,6 +5,7 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { CoordinatorChatPermission } from '../worker-chat-permission'
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
 import type { AgentLaunchSurfaceFactory } from '../../../../../../../agent-launch/agent-launch-surface-factories'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
@@ -62,6 +63,7 @@ type WorkerAgentPlacementArgs = {
   resolvedWorktree: PlacedWorktree | undefined
   /** Decided before the dispatch record; for an existing worktree, already settled on its host. */
   mode: WorkerStartModeReceipt
+  parentPermission: CoordinatorChatPermission | undefined
   agent: TuiAgent | undefined
   launch: {
     preferences: AgentLaunchPreferences | undefined
@@ -262,6 +264,7 @@ function workerSurfaceFactory(
         worktreeId,
         agent,
         dispatchId: args.dispatchId,
+        parentPermission: args.parentPermission,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
         effects: args.effects
       })

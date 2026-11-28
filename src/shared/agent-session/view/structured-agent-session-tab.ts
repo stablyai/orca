@@ -1,8 +1,9 @@
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
-  structuredAgentSessionPaneKey,
+  chatPaneKeySessionId,
   structuredAgentSessionTabId
 } from './structured-agent-session-projection'
+import { parsePaneKey } from '../../workspace-layout/stable-pane-id'
 import {
   isStructuredAgentSessionHostTabId,
   structuredAgentSessionHostTabId
@@ -13,11 +14,6 @@ export function isStructuredTab<T extends { contentType?: string; agentSessionAg
   tab: T
 ): tab is T & { contentType: 'agent-session' } {
   return tab.contentType === 'agent-session' && isStructuredAgentId(tab.agentSessionAgent)
-}
-
-/** The pane key a session's status row is published under, whether or not it has a tab. */
-export function structuredAgentSessionStatusPaneKey(sessionId: string): string {
-  return structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
 }
 
 /** The session a structured tab id names, or null for any other tab id. */
@@ -47,4 +43,18 @@ export function findTabByIdOrChatAlias<
     }
   }
   return chat
+}
+
+/** A canonical chat pane key addresses its conversation before the tab id embedded in that key. */
+export function findTabByChatPaneKey<
+  T extends { id: string; contentType?: string; entityId?: string | null }
+>(tabs: readonly T[] | undefined, paneKey: string): T | undefined {
+  const sessionId = chatPaneKeySessionId(paneKey)
+  if (sessionId) {
+    return (tabs ?? []).find(
+      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+    )
+  }
+  const tabId = parsePaneKey(paneKey)?.tabId
+  return tabId === undefined ? undefined : (tabs ?? []).find((tab) => tab.id === tabId)
 }

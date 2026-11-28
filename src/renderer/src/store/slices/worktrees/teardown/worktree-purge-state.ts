@@ -1,5 +1,6 @@
 import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
+import { forgetDiffCommentFailureOwners } from '../../diff-comments/diff-comment-failure-owners'
 import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
@@ -99,6 +100,7 @@ export function buildFullWorktreePurgeState(
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetDisplayedPanesForWorktrees(normalizedTargets.map(({ id }) => ({ id })))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
+  forgetDiffCommentFailureOwners(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
   for (const worktreeId of worktreeIdSet) {
@@ -127,7 +129,7 @@ export function buildFullWorktreePurgeState(
     omitWorkspaceLineageByWorktree,
     omitWorkspaceSessionKeyByWorktree,
     pruneRightSidebarTabByWorktree,
-    omitByPaneKeyTabPrefix
+    omitByPaneKey
   } = omitters
 
   const removedActive = s.activeWorktreeId != null && worktreeIdSet.has(s.activeWorktreeId)
@@ -151,8 +153,8 @@ export function buildFullWorktreePurgeState(
     return next
   })()
   const tabPrefixedSleeping = {
-    sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
-    agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey)
+    sleepingAgentSessionsByPaneKey: omitByPaneKey(s.sleepingAgentSessionsByPaneKey),
+    agentLaunchConfigByPaneKey: omitByPaneKey(s.agentLaunchConfigByPaneKey)
   }
   // Why both: tab-prefix omission misses a sleeping record whose tab is already gone.
   const nextSleeping = {
@@ -171,13 +173,7 @@ export function buildFullWorktreePurgeState(
       tabIds: doomed.doomedTabIds,
       activeFileCleared
     }),
-    ...buildWorktreePurgeSurfacePatch(
-      s,
-      omitters,
-      doomed.doomedTabIds,
-      nextSleeping,
-      changedPaneKeys
-    ),
+    ...buildWorktreePurgeSurfacePatch(s, omitters, nextSleeping, changedPaneKeys),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
     contestedPrimaryHostBySessionKey: omitWorkspaceSessionKeyByWorktree(
@@ -200,6 +196,7 @@ export function buildFullWorktreePurgeState(
     gitRebaseIndexObservationByWorktree: omitByWorktree(
       s.gitRebaseIndexObservationByWorktree ?? {}
     ),
+    gitOperationRunIdentityByWorktree: omitByWorktree(s.gitOperationRunIdentityByWorktree ?? {}),
     gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
     gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
     gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),

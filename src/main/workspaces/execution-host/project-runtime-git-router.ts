@@ -208,18 +208,19 @@ function buildRoutes(store: ProjectRuntimeGitRouterStore): Route[] {
       .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
       .map((repo) => [repo.id, repo])
   )
-  const distroByRepo = new Map(
-    [...localRepos.values()].map((repo) => [
-      repo.id,
-      wslGitDistro(repo, ownerByRepoId, globalDefault)
-    ])
-  )
+  const distroByRepo = new Map<string, string | undefined>()
   // Host-Git routes stay too, so a project nested in a WSL one keeps its own Git.
-  const routes: Route[] = [...localRepos.values()].map((repo) => ({
-    root: normalizeRuntimePathForComparison(repo.path),
-    wslDistro: distroByRepo.get(repo.id)
-  }))
-  for (const worktreeId of Object.keys(store.getAllWorktreeMeta())) {
+  const routes: Route[] = []
+  for (const repo of localRepos.values()) {
+    const wslDistro = wslGitDistro(repo, ownerByRepoId, globalDefault)
+    distroByRepo.set(repo.id, wslDistro)
+    routes.push({ root: normalizeRuntimePathForComparison(repo.path), wslDistro })
+  }
+  const allMeta = store.getAllWorktreeMeta()
+  for (const worktreeId in allMeta) {
+    if (!Object.hasOwn(allMeta, worktreeId)) {
+      continue
+    }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     const parsed = localRepos.has(repoId) ? splitWorktreeIdForFilesystem(worktreeId) : null
     if (parsed) {

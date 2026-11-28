@@ -1414,7 +1414,7 @@
       "pairingTemporarilyUnavailable": "ペアリングが一時的に利用できません",
       "unlockHint": "スマートフォンのロックを解除してから、タップして再試行してください。",
       "worktreeAccessibilitySummary": "{{summary}}、{{activeCount}} 件がアクティブ",
-      "tapToPairAgain": "タップしてデスクトップと再ペアリングしてください。"
+      "tapToPairAgain": "タップして再ペアリング"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "ホストの互換性を確認中"
@@ -5092,7 +5092,7 @@
       "started": "開始済み",
       "trigger": "トリガー",
       "output": "出力",
-      "noOutput": "出力内容はありません。",
+      "noOutput": "表示できる出力はありません。",
       "loadingRuns": "実行を読み込み中…",
       "loading": "読み込み中…",
       "hourly": "毎時",
@@ -5774,7 +5774,7 @@
         "count": "{{count}} 件"
       },
       "empty": {
-        "allClear": "対応が必要なものはありません"
+        "allClear": "対応が必要な項目はありません"
       }
     },
     "needs": {

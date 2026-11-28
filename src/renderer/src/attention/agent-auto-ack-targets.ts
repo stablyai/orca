@@ -19,6 +19,8 @@ export type AutoAckTabTarget = {
   worktreeId: string | null
   /** Which adapter owns `tabId`: a terminal tab id, or a structured chat's unified tab id. */
   surfaceKind: 'terminal' | 'structured'
+  /** A structured target's conversation, whose address its pane keys carry. */
+  sessionId?: string
 }
 
 export type AutoAckTargetState = FloatingWorkspacePanelVisibilityState & {
@@ -45,13 +47,23 @@ function resolveWorkspaceAutoAckTargets(
     const activeTabId = groups.find((group) => group.id === groupId)?.activeTabId
     const tab = activeTabId ? tabs.find((candidate) => candidate.id === activeTabId) : undefined
     if (tab && isStructuredTab(tab)) {
-      targets.push({ tabId: tab.id, worktreeId, surfaceKind: 'structured' })
+      targets.push({
+        tabId: tab.id,
+        worktreeId,
+        surfaceKind: 'structured',
+        sessionId: tab.entityId
+      })
     } else if (tab?.contentType === 'terminal') {
       targets.push({ tabId: tab.entityId, worktreeId, surfaceKind: 'terminal' })
     } else if (tab?.contentType === 'room') {
       // A room shows only its own members' chats, never its sibling threads'.
       for (const session of botGroupRoomSessions(tab.entityId)) {
-        targets.push({ tabId: session.id, worktreeId, surfaceKind: 'structured' })
+        targets.push({
+          tabId: session.id,
+          worktreeId,
+          surfaceKind: 'structured',
+          sessionId: session.sessionId
+        })
       }
     }
   }
