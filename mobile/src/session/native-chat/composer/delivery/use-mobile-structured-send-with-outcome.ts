@@ -35,6 +35,7 @@ import { structuredSessionOperationId } from '../../agent-session/structured-ses
 import { UNCONFIRMED_SEND_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
 import { timeoutForDeadline } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { nativeChatTextWithFileReferences } from '../attachments/mobile-native-chat-file-attachment'
+import { projectMobileCrewMentions } from '../../../orchestration-crew/mobile-orchestration-crew'
 import {
   actionableStructuredApproval,
   actionableStructuredQuestion
@@ -209,7 +210,10 @@ export function useMobileStructuredSendWithOutcome(args: {
           imageAttachments.push(attachment)
         }
       }
-      const wireText = nativeChatTextWithFileReferences(messageText, files)
+      const wireText = nativeChatTextWithFileReferences(
+        projectMobileCrewMentions(messageText),
+        files
+      )
       const skills = takesSkills ? (pickedSkills ?? []) : []
       let body: ReturnType<typeof structuredAgentSessionSendBody>
       try {

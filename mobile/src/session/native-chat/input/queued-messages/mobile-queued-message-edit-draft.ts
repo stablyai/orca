@@ -30,6 +30,7 @@ import {
   type MobileComposerWriter
 } from '../../composer/drafts/mobile-native-chat-draft-store'
 import { nativeChatTextWithFileReferences } from '../../composer/attachments/mobile-native-chat-file-attachment'
+import { projectMobileCrewMentions } from '../../../orchestration-crew/mobile-orchestration-crew'
 
 export type MobileQueuedMessageInlineEditor = {
   messageId: string
@@ -143,7 +144,7 @@ export function serializeMobileQueuedEdit(
   const inputs = readMobileNativeChatDraftInputs(edit.scopeKey)
   return {
     text: nativeChatTextWithFileReferences(
-      edit.text,
+      projectMobileCrewMentions(edit.text),
       inputs.files.flatMap(({ path }) => (path ? [{ path }] : []))
     ),
     ...(imagesCapable

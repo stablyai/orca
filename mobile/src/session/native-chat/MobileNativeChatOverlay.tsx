@@ -27,8 +27,14 @@ import { MobileNativeChatRowOverlaysHost } from './transcript/message-actions/Mo
 import type { MobileLinkOpenMode } from '../../storage/preferences'
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { MobileNativeChatNoticeContext } from './transcript/notices/mobile-native-chat-notice-context'
+import {
+  MobileNativeChatNoticeContext,
+  mobileNativeChatNoticeView
+} from './transcript/notices/mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
+import { crewComposerTray } from './input/MobileSessionCrewActivity'
+import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-host-outage'
 import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
@@ -72,6 +78,7 @@ type Props = {
   /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: (command: string) => void
   hostOutage?: MobileNativeChatHostOutage | null
+  crew?: { client: RpcClient | null; tab: MobileSessionTab | null } | null
 }
 
 // Hide the last chat behind its terminal instead of unmounting it, so returning keeps its rows and parsed markdown.
@@ -123,6 +130,7 @@ function MobileNativeChatOverlayContent({
   onRunInTerminal,
   hostOutage = null,
   onOpenAccounts,
+  crew = null,
   accountSignIn
 }: Props): React.JSX.Element {
   const session = controller.nativeChatSession
@@ -227,27 +235,18 @@ function MobileNativeChatOverlayContent({
   const t = useMobileTranslation()
   const continuation = controller.nativeChatInterruptedContinue
   const noticeView = useMemo(
-    () => ({
-      hostName,
-      ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
-      onRunInTerminal: runInTerminal,
-      usageLimit: controller.nativeChatUsageLimit,
-      unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
-      ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
-      ...(accountSignIn ? { accountSignIn } : {}),
-      ...(continuation
-        ? {
-            continuation: {
-              ...continuation,
-              // A Continue tap is the person's newer action, so it clears the composer's error.
-              continueNow: () => {
-                onClearSendError()
-                continuation.continueNow()
-              }
-            }
-          }
-        : {})
-    }),
+    () =>
+      mobileNativeChatNoticeView({
+        hostName,
+        agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
+        onRunInTerminal: runInTerminal,
+        usageLimit: controller.nativeChatUsageLimit,
+        unresolvedFailureRows: controller.nativeChatUnresolvedFailureRows,
+        onOpenAccounts,
+        accountSignIn,
+        continuation,
+        onClearSendError
+      }),
     [
       hostName,
       agent,
@@ -325,7 +324,7 @@ function MobileNativeChatOverlayContent({
                       permission={controller.nativeChatPermission}
                       workerApprovals={controller.nativeChatWorkerApprovals}
                       onRespondPermission={controller.handleNativeChatRespondPermission}
-                      composerTray={composerTray}
+                      composerTray={crewComposerTray(composerTray, crew, controller)}
                       onOpenFile={openFile}
                       hasMore={session.hasMore}
                       olderPages={session.olderPages}

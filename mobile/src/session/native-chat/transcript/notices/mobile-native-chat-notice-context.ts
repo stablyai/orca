@@ -23,6 +23,41 @@ export type MobileNativeChatNoticeView = {
   unresolvedFailureRows?: ReadonlySet<string>
 }
 
+export function mobileNativeChatNoticeView(args: {
+  hostName: string | null
+  agentName?: string
+  onRunInTerminal: (command: string) => void
+  usageLimit: MobileNativeChatUsageLimit | null | undefined
+  unresolvedFailureRows: ReadonlySet<string> | undefined
+  onOpenAccounts?: () => void
+  accountSignIn?: ChatAccountSignIn
+  continuation: MobileStructuredInterruptedContinue | null
+  onClearSendError: () => void
+}): MobileNativeChatNoticeView {
+  const { continuation } = args
+  return {
+    hostName: args.hostName,
+    ...(args.agentName ? { agentName: args.agentName } : {}),
+    onRunInTerminal: args.onRunInTerminal,
+    usageLimit: args.usageLimit,
+    unresolvedFailureRows: args.unresolvedFailureRows,
+    ...(args.onOpenAccounts ? { openAccounts: args.onOpenAccounts } : {}),
+    ...(args.accountSignIn ? { accountSignIn: args.accountSignIn } : {}),
+    ...(continuation
+      ? {
+          continuation: {
+            ...continuation,
+            // A Continue tap is the person's newer action, so it clears the composer's error.
+            continueNow: () => {
+              args.onClearSendError()
+              continuation.continueNow()
+            }
+          }
+        }
+      : {})
+  }
+}
+
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({
   hostName: null
 })

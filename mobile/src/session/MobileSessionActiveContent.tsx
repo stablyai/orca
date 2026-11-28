@@ -374,6 +374,7 @@ export function MobileSessionActiveContent({
                     onRunInTerminal={nativeChatTerminalRunner(controller)}
                     onOpenAccounts={chatAccounts.openAccounts}
                     accountSignIn={chatAccounts.accountSignIn}
+                    crew={{ client, tab: controller.activeSessionTab }}
                   />
                 </MobileSessionBotIdentity>
               </MobileBotCardHostProvider>

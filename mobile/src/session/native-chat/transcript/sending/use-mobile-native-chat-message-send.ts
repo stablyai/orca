@@ -30,6 +30,7 @@ import {
 } from '../../composer/delivery/use-mobile-native-chat-unconfirmed-sends'
 import type { MobileNativeChatLaunchDraftSeed } from '../../composer/drafts/use-mobile-native-chat-launch-draft-seed'
 import { buildNativeChatPasteBytes } from '../../../../../../src/shared/native-chat/input/composer/native-chat-paste-bytes'
+import { projectMobileCrewMentions } from '../../../orchestration-crew/mobile-orchestration-crew'
 
 export type MobileNativeChatMessageSend = {
   send: (text: string, images?: string[]) => Promise<boolean>
@@ -103,7 +104,7 @@ export function useMobileNativeChatMessageSend(args: {
       // Trim only outgoing bytes to prevent rapid-send concatenation; restore the exact typed draft on rejection.
       const text = draftText.trimEnd()
       const handle = handleRef.current
-      const origin = captureSendOrigin(text, sentAt)
+      const origin = captureSendOrigin(projectMobileCrewMentions(text), sentAt)
       const agent = agentRef.current
       const recordCommand = commandSendRef.current
       // Connection drops precede lease collapse by one render; gate immediately to avoid waiting the whole send budget.
@@ -188,7 +189,7 @@ export function useMobileNativeChatMessageSend(args: {
         : await sendMobileNativeChatMessageWithOutcome({
             client,
             terminal: handle,
-            text: buildNativeChatPasteBytes(text),
+            text: buildNativeChatPasteBytes(projectMobileCrewMentions(text)),
             ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
             deadline,
             ...(mobileClient ? { mobileClient } : {})
@@ -198,7 +199,7 @@ export function useMobileNativeChatMessageSend(args: {
           // Lost acknowledgement proves no failure; wait for the transcript, then hand back text it never showed.
           holdUnconfirmedSend(
             origin,
-            text,
+            projectMobileCrewMentions(text),
             () => {
               // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
               if (!owner.owned || origin.queuedDuringWorkingEpoch !== undefined) {
@@ -226,7 +227,7 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       if (classification === 'chat') {
-        acceptSend(origin, text, images)
+        acceptSend(origin, projectMobileCrewMentions(text), images)
       } else if (recordControlSend) {
         // The session-option catalog can recognize controls omitted from the
         // autocomplete catalog (for example Claude `/model` and `/fast`).
