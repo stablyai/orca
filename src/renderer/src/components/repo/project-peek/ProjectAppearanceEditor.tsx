@@ -1,31 +1,23 @@
 import React from 'react'
-import { toast } from 'sonner'
-import { RotateCcw } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { explicitRepoMarkColor } from '../../../../../shared/repository/appearance/repo-mark-appearance'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import { RepositoryIconColorSection } from '../../settings/repository/identity/RepositoryIconColorSection'
 import {
   useRepositoryIconActions,
   type RepoAppearanceUpdate
 } from '../../settings/repository/identity/use-repository-icon-actions'
 import type { ProjectRemoteDisplay } from './project-remote-display'
-import {
-  GlyphPanel,
-  LettersPanel,
-  PicturePanel,
-  useSuggestedMonogram
-} from './ProjectIconStylePanels'
+import { GlyphPanel, LettersPanel, useSuggestedMonogram } from './ProjectIconStylePanels'
+import { ProjectImageSourceList } from './ProjectImageSourceList'
 
 function SectionLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="text-2xs font-medium text-muted-foreground">{children}</div>
 }
 
-type IconStyle = 'letters' | 'icon' | 'picture'
+type IconStyle = 'letters' | 'icon' | 'image'
 
 /** The fill the letters will show: the picked color, else what Auto resolves to. */
 function autoColorFor(repo: Repo, autoColor: string): string {
@@ -37,7 +29,7 @@ function iconStyleOf(repoIcon: Repo['repoIcon']): IconStyle {
   if (repoIcon == null || repoIcon.type === 'letters') {
     return 'letters'
   }
-  return repoIcon.type === 'image' ? 'picture' : 'icon'
+  return repoIcon.type === 'image' ? 'image' : 'icon'
 }
 
 export function ProjectAppearanceEditor({
@@ -77,81 +69,57 @@ export function ProjectAppearanceEditor({
     }
   }
 
-  const isDefault = repo.badgeColor === DEFAULT_REPO_BADGE_COLOR && repo.repoIcon == null
-  const reset = (): void => {
-    const previous = {
-      repoIcon: repo.repoIcon ?? null,
-      badgeColor: repo.badgeColor
-    }
-    actions.resetToDefault()
-    updateRepo(repo.id, { badgeColor: DEFAULT_REPO_BADGE_COLOR })
-    toast(t('auto.components.repo.ProjectPeek.resetDone', 'Icon and color reset'), {
-      action: {
-        label: t('auto.components.repo.ProjectPeek.undo', 'Undo'),
-        onClick: () => updateRepo(repo.id, previous)
-      }
-    })
-  }
-
   return (
-    <>
-      <div className="space-y-3 px-3 pt-1 pb-3">
-        <Tabs
-          value={style}
-          onValueChange={(value) => {
-            if (value === 'letters' || value === 'icon' || value === 'picture') {
-              chooseStyle(value)
-            }
-          }}
-        >
-          <TabsList className="h-7 w-full">
-            <TabsTrigger value="letters">
-              {t('auto.components.repo.ProjectPeek.styleLetters', 'Letters')}
-            </TabsTrigger>
-            <TabsTrigger value="icon">
-              {t('auto.components.settings.RepositoryIconPicker.b2d7fd2116', 'Icon')}
-            </TabsTrigger>
-            <TabsTrigger value="picture">
-              {t('auto.components.repo.ProjectPeek.stylePicture', 'Picture')}
-            </TabsTrigger>
-          </TabsList>
-          {/* Pictures keep their own colors, so color only applies to letters and icons. */}
-          {repo.repoIcon?.type === 'image' ? null : (
-            <div className="space-y-1.5">
-              <SectionLabel>
-                {t('auto.components.settings.RepositoryIconPicker.642dc29c6d', 'Color')}
-              </SectionLabel>
-              <RepositoryIconColorSection
-                compact
-                autoColor={autoColor}
-                badgeColor={repo.badgeColor}
-                onBadgeColorChange={(badgeColor) => updateRepo(repo.id, { badgeColor })}
-              />
-            </div>
-          )}
-          <TabsContent value="letters" className="mt-1">
-            <LettersPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
-          </TabsContent>
-          <TabsContent value="icon" className="mt-1">
-            <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
-          </TabsContent>
-          <TabsContent value="picture" className="mt-1">
-            <PicturePanel
-              repo={repo}
-              remote={remote}
-              loadingGitHub={actions.loadingGitHub}
-              onUseGitHubAvatar={() => void actions.applyGitHubAvatar()}
-              onSetIcon={setIcon}
+    <div className="space-y-3 px-3 pt-1 pb-3">
+      <Tabs
+        value={style}
+        onValueChange={(value) => {
+          if (value === 'letters' || value === 'icon' || value === 'image') {
+            chooseStyle(value)
+          }
+        }}
+      >
+        <TabsList size="segmented" className="w-full">
+          <TabsTrigger value="letters">
+            {t('auto.components.repo.ProjectPeek.styleLetters', 'Letters')}
+          </TabsTrigger>
+          <TabsTrigger value="icon">
+            {t('auto.components.settings.RepositoryIconPicker.b2d7fd2116', 'Icon')}
+          </TabsTrigger>
+          <TabsTrigger value="image">
+            {t('auto.components.repo.ProjectPeek.styleImage', 'Image')}
+          </TabsTrigger>
+        </TabsList>
+        {/* Images keep their own colors, so color only applies to letters and icons. */}
+        {repo.repoIcon?.type === 'image' ? null : (
+          <div className="space-y-1.5">
+            <SectionLabel>
+              {t('auto.components.settings.RepositoryIconPicker.642dc29c6d', 'Color')}
+            </SectionLabel>
+            <RepositoryIconColorSection
+              compact
+              autoColor={autoColor}
+              badgeColor={repo.badgeColor}
+              onBadgeColorChange={(badgeColor) => updateRepo(repo.id, { badgeColor })}
             />
-          </TabsContent>
-        </Tabs>
-      </div>
-      <div className="flex items-center px-1.5 pb-2">
-        <Button type="button" variant="ghost" size="xs" disabled={isDefault} onClick={reset}>
-          <RotateCcw />
-          {t('auto.components.repo.ProjectPeek.resetAppearance', 'Reset icon & color')}
-        </Button>
-      </div>
-    </>
+          </div>
+        )}
+        <TabsContent value="letters" className="mt-1">
+          <LettersPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
+        </TabsContent>
+        <TabsContent value="icon" className="mt-1">
+          <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
+        </TabsContent>
+        <TabsContent value="image" className="mt-1">
+          <ProjectImageSourceList
+            repo={repo}
+            remote={remote}
+            loadingGitHub={actions.loadingGitHub}
+            onUseGitHubAvatar={() => void actions.applyGitHubAvatar()}
+            onSetIcon={setIcon}
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   )
 }

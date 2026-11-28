@@ -16403,14 +16403,19 @@
           "resetDone": "Icono y color restablecidos",
           "undo": "Deshacer",
           "styleLetters": "Letras",
-          "stylePicture": "Imagen",
-          "resetAppearance": "Restablecer icono y color",
+          "styleImage": "Imagen",
           "faviconPlaceholder": "Sitio web para el favicon",
           "lettersInput": "Hasta 2 letras",
           "lettersPlaceholder": "1–2 letras",
           "useLetters": "Usar «{{value0}}»",
-          "usingGitHubAvatar": "Usando el avatar de GitHub",
-          "openSettings": "Abrir Ajustes"
+          "openSettings": "Abrir Ajustes",
+          "noIconFound": "No se encontró ningún icono",
+          "githubAvatar": "Avatar de GitHub",
+          "websiteIcon": "Icono del sitio web",
+          "fetchIcon": "Obtener",
+          "uploadTooLarge": "Más de 256 KB",
+          "uploadedImage": "Imagen",
+          "options": "Opciones"
         }
       },
       "pet": {

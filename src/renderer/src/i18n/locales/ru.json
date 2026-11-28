@@ -17429,14 +17429,19 @@
           "resetDone": "Значок и цвет сброшены",
           "undo": "Отменить",
           "styleLetters": "Буквы",
-          "stylePicture": "Изображение",
-          "resetAppearance": "Сбросить значок и цвет",
+          "styleImage": "Изображение",
           "faviconPlaceholder": "Сайт для favicon",
           "lettersInput": "До 2 букв",
           "lettersPlaceholder": "1–2 буквы",
           "useLetters": "Использовать «{{value0}}»",
-          "usingGitHubAvatar": "Используется аватар GitHub",
-          "openSettings": "Открыть настройки"
+          "openSettings": "Открыть настройки",
+          "noIconFound": "Значок не найден",
+          "githubAvatar": "Аватар GitHub",
+          "websiteIcon": "Значок сайта",
+          "fetchIcon": "Загрузить",
+          "uploadTooLarge": "Больше 256 КБ",
+          "uploadedImage": "Изображение",
+          "options": "Параметры"
         }
       },
       "pet": {

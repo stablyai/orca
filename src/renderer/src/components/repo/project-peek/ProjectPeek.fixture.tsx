@@ -184,9 +184,159 @@ export const lettersEdit = defineFixture({
   interact: open
 })
 
-export const picturePanel = defineFixture({
+const faviconRepo: Repo = {
+  ...githubRepo,
+  id: 'orca-site',
+  repoIcon: {
+    type: 'image',
+    src: 'https://www.google.com/s2/favicons?domain=linear.app&sz=64',
+    source: 'favicon',
+    label: 'Website favicon'
+  }
+}
+
+const uploadRepo: Repo = {
+  ...githubRepo,
+  id: 'orca-upload',
+  repoIcon: {
+    type: 'image',
+    src: 'https://github.com/github.png?size=64',
+    source: 'upload',
+    label: 'logo.png'
+  }
+}
+
+const noneRepo: Repo = { ...githubRepo, id: 'orca-none', repoIcon: null }
+
+const longImageRepo: Repo = {
+  ...longRepo,
+  id: 'long-image',
+  repoIcon: uploadRepo.repoIcon
+}
+
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+const peekButton = (label: string): HTMLElement | undefined =>
+  Array.from(document.querySelectorAll<HTMLElement>('[data-slot="popover-content"] button')).find(
+    (element) => element.textContent?.includes(label)
+  )
+
+const openImageTab = clickTab('Image')
+
+const fetchWebsite = async (frame: HTMLElement): Promise<void> => {
+  await openImageTab(frame)
+  peekButton('Website icon')?.click()
+  await wait(100)
+  const input = document.querySelector<HTMLInputElement>('[data-slot="popover-content"] form input')
+  if (input) {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
+      input,
+      'linear.app'
+    )
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+  await wait(50)
+  peekButton('Fetch')?.click()
+  await wait(300)
+}
+
+/** Stands in for the favicon request so the fetch outcome is fixed. */
+const stubImageLoad = (outcome: 'never' | 'error') => (): void => {
+  class StubImage extends Image {
+    override set src(_value: string) {
+      if (outcome === 'error') {
+        setTimeout(() => this.dispatchEvent(new Event('error')), 10)
+      }
+    }
+  }
+  window.Image = StubImage
+}
+
+export const imageGitHub = defineFixture({
   width: 380,
   store: STORE,
   render: () => <Peek repo={githubRepo} />,
-  interact: clickTab('Picture')
+  interact: openImageTab
+})
+
+export const imageWebsite = defineFixture({
+  width: 380,
+  store: STORE,
+  render: () => <Peek repo={faviconRepo} />,
+  interact: openImageTab
+})
+
+export const imageUpload = defineFixture({
+  width: 380,
+  store: STORE,
+  render: () => <Peek repo={uploadRepo} />,
+  interact: openImageTab
+})
+
+export const imageNone = defineFixture({
+  width: 380,
+  store: STORE,
+  render: () => <Peek repo={noneRepo} />,
+  interact: openImageTab
+})
+
+export const imageSizeError = defineFixture({
+  width: 380,
+  store: STORE,
+  setup: () => {
+    window.api.shell.pickRepoIconImage = async () => ({
+      ok: false,
+      error: 'Repo icon image must be 256KB or smaller.',
+      errorCode: 'tooLarge'
+    })
+  },
+  render: () => <Peek repo={githubRepo} />,
+  interact: async (frame) => {
+    await openImageTab(frame)
+    peekButton('Upload PNG')?.click()
+    await wait(200)
+  }
+})
+
+export const imageFetching = defineFixture({
+  width: 380,
+  store: STORE,
+  setup: stubImageLoad('never'),
+  render: () => <Peek repo={githubRepo} />,
+  interact: fetchWebsite
+})
+
+export const imageNotFound = defineFixture({
+  width: 380,
+  store: STORE,
+  setup: stubImageLoad('error'),
+  render: () => <Peek repo={githubRepo} />,
+  interact: fetchWebsite
+})
+
+/** The popover's narrowest width, reached on small windows through its viewport cap. */
+export const imageNarrowLong = defineFixture({
+  width: 380,
+  store: STORE,
+  render: () => (
+    <>
+      <style>{'[data-slot="popover-content"] { width: 260px !important; }'}</style>
+      <Peek repo={longImageRepo} />
+    </>
+  ),
+  interact: openImageTab
+})
+
+export const gearMenu = defineFixture({
+  width: 380,
+  store: STORE,
+  render: () => <Peek repo={githubRepo} />,
+  interact: async (frame) => {
+    await open(frame)
+    const gear = document.querySelector<HTMLElement>(
+      '[data-slot="popover-content"] button[aria-label="Options"]'
+    )
+    gear?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+    await wait(300)
+  }
 })

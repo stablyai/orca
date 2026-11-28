@@ -16001,14 +16001,19 @@
           "resetDone": "アイコンと色をリセットしました",
           "undo": "元に戻す",
           "styleLetters": "文字",
-          "stylePicture": "画像",
-          "resetAppearance": "アイコンと色をリセット",
+          "styleImage": "画像",
           "faviconPlaceholder": "ファビコンを取得するウェブサイト",
           "lettersInput": "2 文字まで",
           "lettersPlaceholder": "1〜2 文字",
           "useLetters": "「{{value0}}」を使用",
-          "usingGitHubAvatar": "GitHub のアバターを使用中",
-          "openSettings": "設定を開く"
+          "openSettings": "設定を開く",
+          "noIconFound": "アイコンが見つかりません",
+          "githubAvatar": "GitHub アバター",
+          "websiteIcon": "Web サイトのアイコン",
+          "fetchIcon": "取得",
+          "uploadTooLarge": "256 KB を超えています",
+          "uploadedImage": "画像",
+          "options": "オプション"
         }
       },
       "pet": {

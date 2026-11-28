@@ -1,13 +1,21 @@
 import React from 'react'
-import { GitFork, Github, Gitlab, Globe, Settings } from 'lucide-react'
+import { GitFork, Github, Gitlab, Globe, RotateCcw, Settings } from 'lucide-react'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { buildGitHubRepoUrl } from '../../../../../shared/github/repositories/links'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../shared/repository/appearance/repo-badge-color'
 import type { RepoAppearanceUpdate } from '../../settings/repository/identity/use-repository-icon-actions'
 import { RepoMarkTile, useRepoAutoMarkColor, useRepoMarkAppearance } from '../RepoMark'
 import { ProjectAppearanceEditor } from './ProjectAppearanceEditor'
@@ -128,17 +136,20 @@ function RemoteLines({
 function ProjectPeekHeader({
   repo,
   remote,
-  onOpenSettings
+  onOpenSettings,
+  onReset
 }: {
   repo: Repo
   remote: ProjectRemoteDisplay | null
   onOpenSettings: () => void
+  onReset: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const appearance = useRepoMarkAppearance(repo)
-  const openSettingsLabel = t('auto.components.repo.ProjectPeek.openSettings', 'Open Settings')
+  const optionsLabel = t('auto.components.repo.ProjectPeek.options', 'Options')
+  const isDefault = repo.badgeColor === DEFAULT_REPO_BADGE_COLOR && repo.repoIcon == null
   return (
-    <div className="flex items-start gap-3 px-3 pt-3 pb-2">
+    <div className="flex items-center gap-3 px-3 pt-3 pb-2">
       <RepoMarkTile appearance={appearance} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="min-w-0 truncate text-sm font-semibold leading-5 text-foreground">
@@ -146,23 +157,35 @@ function ProjectPeekHeader({
         </span>
         <RemoteLines repo={repo} remote={remote} />
       </div>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="muted-field-icon"
-            size="icon-xs"
-            className="self-start"
-            aria-label={openSettingsLabel}
-            onClick={onOpenSettings}
-          >
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="muted-field-icon"
+                size="icon-xs"
+                aria-label={optionsLabel}
+              >
+                <Settings />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {optionsLabel}
+          </TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end" sideOffset={4} className="min-w-36">
+          <DropdownMenuItem onSelect={onOpenSettings}>
             <Settings />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {openSettingsLabel}
-        </TooltipContent>
-      </Tooltip>
+            {t('auto.components.repo.ProjectPeek.openSettings', 'Open Settings')}
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={isDefault} onSelect={onReset}>
+            <RotateCcw />
+            {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -175,6 +198,7 @@ export function ProjectPeek({
   /** Closes the popover, e.g. before navigating to settings. */
   onRequestClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const storeUpdateRepo = useAppStore((state) => state.updateRepo)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
@@ -192,9 +216,25 @@ export function ProjectPeek({
     openSettingsTarget({ pane: 'repo', repoId: repo.id })
     openSettingsPage()
   }, [onRequestClose, openSettingsPage, openSettingsTarget, repo.id])
+  const reset = (): void => {
+    const previous = { repoIcon: repo.repoIcon ?? null, badgeColor: repo.badgeColor }
+    // The default mark is the project's letters, so resetting clears the chosen icon and color.
+    updateRepo(repo.id, { repoIcon: null, badgeColor: DEFAULT_REPO_BADGE_COLOR })
+    toast(t('auto.components.repo.ProjectPeek.resetDone', 'Icon and color reset'), {
+      action: {
+        label: t('auto.components.repo.ProjectPeek.undo', 'Undo'),
+        onClick: () => updateRepo(repo.id, previous)
+      }
+    })
+  }
   return (
     <div className="text-xs">
-      <ProjectPeekHeader repo={repo} remote={remote} onOpenSettings={openRepoSettings} />
+      <ProjectPeekHeader
+        repo={repo}
+        remote={remote}
+        onOpenSettings={openRepoSettings}
+        onReset={reset}
+      />
       <ProjectAppearanceEditor
         repo={repo}
         remote={remote}

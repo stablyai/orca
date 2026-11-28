@@ -16004,13 +16004,18 @@
           "openRemote": "在浏览器中打开 {{value0}}",
           "openSettings": "打开设置",
           "openUpstream": "在浏览器中打开 {{value0}}",
-          "resetAppearance": "重置图标和颜色",
           "resetDone": "图标和颜色已重置",
           "styleLetters": "字母",
-          "stylePicture": "图片",
+          "styleImage": "图片",
           "undo": "撤销",
           "useLetters": "使用“{{value0}}”",
-          "usingGitHubAvatar": "正在使用 GitHub 头像"
+          "noIconFound": "未找到图标",
+          "githubAvatar": "GitHub 头像",
+          "websiteIcon": "网站图标",
+          "fetchIcon": "获取",
+          "uploadTooLarge": "超过 256 KB",
+          "uploadedImage": "图片",
+          "options": "选项"
         }
       },
       "pet": {

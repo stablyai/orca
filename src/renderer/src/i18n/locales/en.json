@@ -16947,14 +16947,19 @@
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
-          "stylePicture": "Picture",
-          "resetAppearance": "Reset icon & color",
+          "styleImage": "Image",
           "faviconPlaceholder": "Website for favicon",
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar",
-          "openSettings": "Open Settings"
+          "openSettings": "Open Settings",
+          "noIconFound": "No icon found",
+          "githubAvatar": "GitHub avatar",
+          "websiteIcon": "Website icon",
+          "fetchIcon": "Fetch",
+          "uploadTooLarge": "Over 256 KB",
+          "uploadedImage": "Image",
+          "options": "Options"
         }
       },
       "pet": {
