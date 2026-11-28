@@ -4,7 +4,10 @@ import { resolveDefaultBaseRefViaExec } from '../../../shared/git/refs/git-defau
 import { localBranchHasNoUnmergedChanges } from '../../git/refs/resolution/local-branch-merge-proof'
 import type { PRInfo } from '../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import type { PRCacheView } from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
+import {
+  readWorkspaceReviewPR,
+  type PRCacheView
+} from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { isFullGitObjectId } from '../../git/refs/resolution/commit-object-ref'
 import {
   resolveWorktreeAddBaseRef,
@@ -17,12 +20,6 @@ import {
   WorkspaceCleanupScanCancelledError,
   withWorkspaceCleanupTimeout
 } from './workspace-cleanup-scan-primitives'
-import {
-  readWorkspaceCleanupReview,
-  workspaceCleanupMergedReview,
-  type WorkspaceCleanupLinkedPRReader,
-  type WorkspaceCleanupReview
-} from './workspace-cleanup-linked-review'
 
 type CleanupGit = (argv: string[]) => Promise<{ stdout: string }>
 
@@ -30,7 +27,6 @@ type CleanupGit = (argv: string[]) => Promise<{ stdout: string }>
 export type WorkspaceCleanupRepoRefs = {
   defaultBaseRef: () => Promise<string | null>
   commitOid: (qualifiedRef: string) => Promise<string | null>
-  readLinkedPR?: WorkspaceCleanupLinkedPRReader
 }
 
 function cleanupGit(cwd: string, signal: AbortSignal | undefined): CleanupGit {
@@ -41,14 +37,12 @@ function cleanupGit(cwd: string, signal: AbortSignal | undefined): CleanupGit {
 /** Runs under the scan's signal, not a row's deadline, so one slow row cannot leave a cancelled answer for the rest. */
 export function createWorkspaceCleanupRepoRefs(
   repo: Repo,
-  signal?: AbortSignal,
-  readLinkedPR?: WorkspaceCleanupLinkedPRReader
+  signal?: AbortSignal
 ): WorkspaceCleanupRepoRefs {
   const git = cleanupGit(repo.path, signal)
   let defaultBaseRef: Promise<string | null> | undefined
   const commitOids = new Map<string, Promise<string | null>>()
   return {
-    readLinkedPR,
     defaultBaseRef: () => (defaultBaseRef ??= resolveDefaultBaseRefViaExec(git)),
     commitOid: (qualifiedRef) => {
       let oid = commitOids.get(qualifiedRef)
@@ -61,7 +55,7 @@ export function createWorkspaceCleanupRepoRefs(
   }
 }
 
-/** Local refs and the cached PR; only a linked PR the cache does not show merged is read online. */
+/** Offline: local refs and the cached PR only, so a stale cache can miss a merge but never invent one. */
 export async function readWorkspaceCleanupMergeEvidence(
   worktree: Worktree,
   repo: Repo,
@@ -70,17 +64,9 @@ export async function readWorkspaceCleanupMergeEvidence(
   signal?: AbortSignal,
   coordinatorBranch?: string | null
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
-  // Outside the git deadline: a slow GitHub read must not cost the git proof.
-  const review = await readWorkspaceCleanupReview(
-    worktree,
-    repo,
-    prCache,
-    repoRefs.readLinkedPR,
-    signal
-  )
   try {
     return await withWorkspaceCleanupTimeout(
-      (signal) => readMergeEvidence(worktree, repoRefs, repo, review, signal, coordinatorBranch),
+      (signal) => readMergeEvidence(worktree, repoRefs, repo, prCache, signal, coordinatorBranch),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
       'Timed out reading merge evidence.',
       signal
@@ -97,7 +83,7 @@ async function readMergeEvidence(
   worktree: Worktree,
   repoRefs: WorkspaceCleanupRepoRefs,
   repo: Repo,
-  review: WorkspaceCleanupReview | null,
+  prCache: PRCacheView<PRInfo>,
   signal: AbortSignal,
   coordinatorBranch: string | null | undefined
 ): Promise<WorkspaceCleanupMergeEvidence | undefined> {
@@ -132,7 +118,7 @@ async function readMergeEvidence(
       options: { signal }
     })
   const headInDefaultBranch = aheadOfDefault === 0 || (await headLandedIn(baseOid))
-  const mergedReview = workspaceCleanupMergedReview(review, headOid)
+  const mergedReview = readCachedMergedReview(worktree, repo, prCache, headOid)
   // Only worth proving when HEAD has not already landed another way.
   const coordinatorOid =
     coordinatorBranch && !headInDefaultBranch && mergedReview?.containsHead !== true
@@ -200,5 +186,26 @@ async function resolveCommitOid(git: CleanupGit, ref: string): Promise<string | 
     )
   } catch {
     return null
+  }
+}
+
+/** A cached merged PR counts as holding HEAD only when its head (or a provider-confirmed head) is HEAD. */
+export function readCachedMergedReview(
+  worktree: Pick<Worktree, 'branch' | 'linkedPR' | 'suppressedGitHubPR'>,
+  repo: Repo,
+  prCache: PRCacheView<PRInfo>,
+  headOid: string
+): WorkspaceCleanupMergeEvidence['mergedReview'] {
+  const review = readWorkspaceReviewPR(worktree, repo, prCache)
+  if (review?.state !== 'merged') {
+    return undefined
+  }
+  const head = headOid.toLowerCase()
+  return {
+    number: review.number,
+    provider: 'github',
+    containsHead: [review.headSha, review.confirmedContainedHeadOid].some(
+      (oid) => oid?.trim().toLowerCase() === head
+    )
   }
 }

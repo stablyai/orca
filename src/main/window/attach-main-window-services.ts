@@ -93,7 +93,7 @@ export async function attachMainWindowServices(
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
   // Folder projects have no watcher target; poll for external git init so they upgrade without restart (#11477).
   startFolderRepoGitUpgradeWatch(store, mainWindow)
-  registerWorkspaceCleanupHandlers(store, () => runtime.getExistingOrchestrationDb())
+  registerWorkspaceCleanupHandlers(store, () => runtime.getExistingOrchestrationDb(), runtime)
   registerPtyHandlers(
     mainWindow,
     runtime,
