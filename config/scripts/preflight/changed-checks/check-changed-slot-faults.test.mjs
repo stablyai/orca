@@ -4,18 +4,9 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it } from 'vitest'
 import { settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
-  insertTicket,
-  root,
-  keepCheckingIn,
   observe,
-  openQueue,
-  outsider,
-  queueRows,
   registerSlotHarness,
-  run,
-  runWithFreshHolder,
   shownHolder,
-  spawnOwned,
   UNNAMED,
   until,
   WAITING,
@@ -33,26 +24,25 @@ function failDeletes(db, id, name) {
 
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot queue faults', () => {
-  it('does not name a holder that left while this waiter was paused mid-decision', async () => {
+  it('does not name a holder that left while this waiter was paused mid-decision', async ({
+    slot
+  }) => {
+    const { root, spawnOwned, spawnPinnedHolder, runWithFreshHolder } = slot
     // Holders heartbeat every 200 ms and are named for 600 ms.
     const staleMs = 3000
     const signalFile = join(root, 'paused')
     const tookFile = join(root, 'took')
-    const holder = spawnOwned(`const release = await acquireChangedCheckSlot(file, {
-  staleMs: ${staleMs},
-  pollMs: 5,
-  ancestors: [],
-  log: () => {}
-})
-process.stdout.write('held\\n')
-// Releases once the paused decision below signals that it holds the queue.
+    const holder = spawnPinnedHolder(
+      `// Releases once the paused decision below signals that it holds the queue.
 const { existsSync } = await import('node:fs')
 while (!existsSync(${JSON.stringify(signalFile)})) {
   await new Promise((resolve) => setTimeout(resolve, 10))
 }
 await release()
 process.stdout.write('released\\n')
-await next()`)
+await next()`,
+      { staleMs }
+    )
     await holder.waitFor('held')
     // A run from an older checkout: it takes the slot directly as soon as it can.
     const legacy = spawnOwned(`const db = new DatabaseSync(file)
@@ -72,6 +62,8 @@ writeFileSync(${JSON.stringify(tookFile)}, '')
 process.stdout.write('took\\n')
 await next()`)
     await legacy.waitFor('ready')
+    legacy.send('take')
+    await legacy.waitFor('armed')
     const messages = []
     let pause = false
     let pausedUntilTakeover
@@ -80,7 +72,13 @@ await next()`)
     const waiter = observe(
       runWithFreshHolder({
         staleMs,
-        log: (message) => messages.push({ message, resumed }),
+        log: (message) => {
+          messages.push({ message, resumed })
+          if (messages.length === 1) {
+            holder.send('reported')
+            pause = true
+          }
+        },
         // Holds this waiter inside its decision transaction, and so the queue's write lock, until
         // the older checkout has taken the slot (at most 60 s).
         beforeClaim: () => {
@@ -106,25 +104,31 @@ await next()`)
     // The holder releases once the pause begins and cannot remove its ticket while the paused
     // decision holds the queue; it unlocks once it can no longer be named, and the older
     // checkout takes the slot. The paused decision then resumes and reports.
-    legacy.send('take')
-    // Confirmed before the pause, which freezes this process's own I/O.
-    await legacy.waitFor('armed')
-    const before = messages.length
-    pause = true
     await until(() => pausedUntilTakeover !== undefined, 'paused decision resuming')
     // The older checkout took the slot while this decision was still paused.
     expect(pausedUntilTakeover).toBe(true)
-    await until(() => messages.length > before, 'report after the pause')
+    await until(() => messages.length > 1, 'report after the pause')
     // The paused decision itself must correct the line at once: repeating the old holder would
     // print nothing new and leave its name showing after the older checkout took over.
-    expect(messages[before]).toEqual({
+    expect(messages[1]).toEqual({
       message: `${WAITING} Position 1 of 1. ${UNNAMED}`,
       resumed: true
     })
     expect(waiter.settled).toBe(false)
   }, 180_000)
 
-  it('keeps the slot after a release whose ticket removal fails, until the holder can no longer be named', async () => {
+  it('keeps the slot after a release whose ticket removal fails, until the holder can no longer be named', async ({
+    slot
+  }) => {
+    const {
+      run,
+      queueRows,
+      openQueue,
+      insertTicket,
+      keepCheckingIn,
+      runWithFreshHolder,
+      outsider
+    } = slot
     const staleMs = 3000
     const release = await run({ staleMs })
     const [held] = queueRows()
@@ -164,9 +168,12 @@ await next()`)
     expect(queueRows().some((row) => row.id === held.id)).toBe(false)
   }, 180_000)
 
-  it('reports a holder only as what the queue last showed, even when it hands over before the line prints', async () => {
-    // A 24 s naming window, so the handover inside the pause leaves the holder's last heartbeat
-    // recent enough to show even on a heavily loaded host.
+  it('reports a holder only as what the queue last showed, even when it hands over before the line prints', async ({
+    slot
+  }) => {
+    const { root, spawnOwned, run } = slot
+    // The handover handshake orders the events. The name still depends on the last heartbeat
+    // being within the 24 s naming window when the line prints.
     const staleMs = 120_000
     const signalFile = join(root, 'decided')
     const tookFile = join(root, 'took')
@@ -236,7 +243,10 @@ await next()`)
     expect(legacy.errors).toEqual([])
   }, 180_000)
 
-  it('never shows a holder whose heartbeat is in the future, as after the clock steps back', async () => {
+  it('never shows a holder whose heartbeat is in the future, as after the clock steps back', async ({
+    slot
+  }) => {
+    const { run, outsider, insertTicket } = slot
     await (
       await run()
     )()
@@ -252,7 +262,10 @@ await next()`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('keeps retrying removal of an abandoned ticket through a write failure, so the next call goes once storage recovers', async () => {
+  it('keeps retrying removal of an abandoned ticket through a write failure, so the next call goes once storage recovers', async ({
+    slot
+  }) => {
+    const { run, queueRows, openQueue } = slot
     const holder = await run({ staleMs: 60_000 })
     const abandoned = run({ staleMs: 60_000 })
     await until(() => queueRows().some((row) => row.held_at === null), 'queued ticket')
@@ -273,7 +286,10 @@ await next()`)
     expect(queueRows().some((row) => row.id === ticket.id)).toBe(false)
   }, 180_000)
 
-  it('stops waiting on an abandoned ticket whose removal keeps failing once it goes silent', async () => {
+  it('stops waiting on an abandoned ticket whose removal keeps failing once it goes silent', async ({
+    slot
+  }) => {
+    const { run, queueRows, openQueue } = slot
     const staleMs = 2000
     const holder = await run({ staleMs })
     const abandoned = run({ staleMs })

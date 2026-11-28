@@ -4,20 +4,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it, vi } from 'vitest'
 import { queueFileFor, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
-import {
-  exitedPid,
-  file,
-  insertTicket,
-  observe,
-  openQueue,
-  outsider,
-  queueRows,
-  registerSlotHarness,
-  run,
-  spawnOwned,
-  until,
-  within
-} from './check-changed-slot.test-harness.mjs'
+import { observe, registerSlotHarness, until, within } from './check-changed-slot.test-harness.mjs'
 
 registerSlotHarness()
 
@@ -34,7 +21,10 @@ function failDeletes(db, where, name) {
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot without a usable queue', () => {
   for (const errcode of [5, 6, 15, 261, 262, 271]) {
-    it(`retries slot contention code ${errcode} without the queue and still holds the SQLite lock`, async () => {
+    it(`retries slot contention code ${errcode} without the queue and still holds the SQLite lock`, async ({
+      slot
+    }) => {
+      const { file, run, outsider } = slot
       await mkdir(queueFileFor(file), { recursive: true })
       const exec = DatabaseSync.prototype.exec
       let remaining = 2
@@ -57,7 +47,8 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     }, 180_000)
   }
 
-  it('propagates slot storage errors without blaming or bypassing the queue', async () => {
+  it('propagates slot storage errors without blaming or bypassing the queue', async ({ slot }) => {
+    const { file, run, queueRows } = slot
     const failure = Object.assign(new Error('slot storage failed'), { errcode: 10 })
     const exec = DatabaseSync.prototype.exec
     const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (sql) {
@@ -80,7 +71,53 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     )()
   }, 180_000)
 
-  it('bounds queue warnings to one line', async () => {
+  for (const errcode of [5, 10]) {
+    it(`preserves a hard slot error when queue rollback fails with code ${errcode}`, async ({
+      slot
+    }) => {
+      const { outsider, run, queueRows, file } = slot
+      const other = outsider()
+      expect(other.tryLock()).toBe(true)
+      const messages = []
+      const waiter = run({ log: (message) => messages.push(message) })
+      expect(queueRows().filter((row) => row.held_at === null)).toHaveLength(1)
+      other.close()
+
+      const primary = Object.assign(new Error('slot BEGIN failed'), { errcode: 10 })
+      const secondary = Object.assign(new Error('queue ROLLBACK failed'), { errcode })
+      const exec = DatabaseSync.prototype.exec
+      let lock
+      let failedQueue
+      const injected = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (sql) {
+        if (!lock && this.location() === file && sql === 'BEGIN IMMEDIATE') {
+          lock = this
+          throw primary
+        }
+        if (lock && !failedQueue && this.location() === queueFileFor(file) && sql === 'ROLLBACK') {
+          failedQueue = this
+          throw secondary
+        }
+        return exec.call(this, sql)
+      })
+      try {
+        await expect(within(waiter, 'compound slot failure', 5000)).rejects.toBe(primary)
+        expect(primary.rollbackError).toBe(secondary)
+      } finally {
+        injected.mockRestore()
+      }
+      expect(lock?.isOpen).toBe(false)
+      expect(failedQueue?.isOpen).toBe(false)
+      expect(messages).toHaveLength(1)
+      await settleChangedCheckSlotCleanup()
+      expect(queueRows()).toEqual([])
+      await (
+        await run()
+      )()
+    }, 180_000)
+  }
+
+  it('bounds queue warnings to one line', async ({ slot }) => {
+    const { run, openQueue } = slot
     await (
       await run()
     )()
@@ -96,7 +133,8 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     await release()
   }, 180_000)
 
-  it('removes its committed ticket when a later queue decision degrades', async () => {
+  it('removes its committed ticket when a later queue decision degrades', async ({ slot }) => {
+    const { run, queueRows, insertTicket, openQueue } = slot
     const holder = await run()
     const messages = []
     const waiter = observe(run({ log: (message) => messages.push(message) }))
@@ -113,7 +151,10 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     )()
   }, 180_000)
 
-  it('waits for the slot directly when the queue cannot open, still one holder at a time', async () => {
+  it('waits for the slot directly when the queue cannot open, still one holder at a time', async ({
+    slot
+  }) => {
+    const { file, outsider, run } = slot
     await mkdir(queueFileFor(file), { recursive: true })
     // Counted before any connection opens; compared once every connection here has closed.
     const before = readdirSync('/dev/fd').length
@@ -137,7 +178,10 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     expect(readdirSync('/dev/fd').length).toBe(before)
   }, 180_000)
 
-  it('waits for the slot directly when its join fails, and a later call uses the queue again', async () => {
+  it('waits for the slot directly when its join fails, and a later call uses the queue again', async ({
+    slot
+  }) => {
+    const { run, openQueue, queueRows } = slot
     await (
       await run()
     )()
@@ -164,14 +208,14 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
   for (const { label, poison } of [
     {
       label: 'an expired ticket cannot be deleted',
-      poison: async (db) => {
+      poison: (db, { insertTicket }) => {
         const id = insertTicket({ pid: process.pid, seenAt: Date.now() - 60 * 60_000, lane: 2 })
         return failDeletes(db, `old.id = ${id}`, 'keep_expired')
       }
     },
     {
       label: '17 dead tickets ahead cannot be deleted',
-      poison: async (db) => {
+      poison: async (db, { exitedPid, insertTicket }) => {
         const dead = await exitedPid()
         for (let index = 0; index < 17; index++) {
           insertTicket({ pid: dead })
@@ -181,7 +225,7 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     },
     {
       label: 'a left-over held ticket cannot be deleted',
-      poison: async (db) => {
+      poison: (db, { insertTicket }) => {
         const id = insertTicket({
           pid: process.pid,
           heldAt: Date.now() - 60_000,
@@ -191,10 +235,13 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
       }
     }
   ]) {
-    it(`waits for the slot directly when ${label}, one holder at a time, and uses the queue again once it can`, async () => {
+    it(`waits for the slot directly when ${label}, one holder at a time, and uses the queue again once it can`, async ({
+      slot
+    }) => {
+      const { run, openQueue, queueRows } = slot
       const holder = await run()
       const db = openQueue()
-      const recover = await poison(db)
+      const recover = await poison(db, slot)
       const messages = []
       const waiter = observe(run({ log: (message) => messages.push(message) }))
       // Exclusion holds in either mode: nothing is admitted while the holder holds the slot.
@@ -220,7 +267,10 @@ describe.skipIf(process.platform === 'win32')('check:changed slot without a usab
     }, 180_000)
   }
 
-  it('keeps exactly one holder at a time across processes while every waiter is without the queue', async () => {
+  it('keeps exactly one holder at a time across processes while every waiter is without the queue', async ({
+    slot
+  }) => {
+    const { run, openQueue, insertTicket, spawnOwned } = slot
     await (
       await run()
     )()

@@ -1,10 +1,10 @@
-import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { homedir, hostname } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
+import { describeSelf, processGone } from './check-changed-slot-processes.mjs'
 
 const slotDirectory = path.join(homedir(), '.cache', 'orca', 'preflight')
 const slotFile = path.join(slotDirectory, `${hostname()}.sqlite`)
@@ -21,7 +21,6 @@ const MAX_STEPS = 16
 const EXPIRE_BATCH = 8
 // Most queue entries one count reads; longer lines are reported as "100+".
 const COUNT_CAP = 100
-const MAX_ANCESTORS = 16
 // Releases and ticket removals still in flight; tests await them before deleting files.
 const pending = new Set()
 
@@ -194,18 +193,21 @@ class Waiter {
       if (!this.queue.setup()) {
         return false
       }
-      // A busy queue skips this poll: no decision is made from unavailable or unrefreshed state.
-      outcome = attempt(() => transaction(this.queue.db, () => this.decide(lock, claim)))
+      outcome = transaction(this.queue.db, () => this.decide(lock, claim))
     } catch (error) {
       releaseClaim(lock, claim)
-      if (claim.error === error) {
-        throw error
+      if (claim.error) {
+        if (error !== claim.error) {
+          claim.error.rollbackError = error
+          this.queue.discardFailedDecision()
+        }
+        throw claim.error
+      }
+      // No decision is made from unavailable or unrefreshed queue state.
+      if (isBusy(error)) {
+        return false
       }
       throw new QueueUnusable(error)
-    }
-    if (outcome === undefined) {
-      releaseClaim(lock, claim)
-      return false
     }
     this.id = outcome.id
     this.lastBeat = outcome.lastBeat
@@ -435,6 +437,7 @@ class Queue {
     } catch (error) {
       throw new QueueUnusable(error)
     }
+    this.file = file
     this.timing = timing
     this.statements = undefined
     this.closed = false
@@ -491,6 +494,13 @@ class Queue {
     )
   }
 
+  discardFailedDecision() {
+    // Closing rolls back the uncommitted decision. Any prior ticket is removed on a fresh connection.
+    closeQuietly(this.db)
+    this.db = undefined
+    this.statements = undefined
+  }
+
   /**
    * Removes this request's ticket in the background, then closes. Busy is retried every 250 ms
    * until it succeeds; other errors are retried every second for staleMs, after which the ticket,
@@ -502,6 +512,7 @@ class Queue {
       return
     }
     const startedAt = Date.now()
+    let removeOwn = this.statements?.removeOwn
     this.removal ??= track(
       new Promise((resolve) => {
         const step = () => {
@@ -509,10 +520,12 @@ class Queue {
           let retryMs = 250
           try {
             done =
-              id === undefined || this.statements === undefined
+              id === undefined
                 ? true
                 : attempt(() => {
-                    this.statements.removeOwn.run(id, token)
+                    this.db ??= new DatabaseSync(this.file, { timeout: 100 })
+                    removeOwn ??= prepareRemoveOwn(this.db)
+                    removeOwn.run(id, token)
                     return true
                   })
           } catch {
@@ -573,8 +586,12 @@ function prepareStatements(db) {
     ),
     removeOtherHeld: db.prepare('DELETE FROM tickets_v4 WHERE held_at IS NOT NULL AND id <> ?'),
     remove: db.prepare('DELETE FROM tickets_v4 WHERE id = ?'),
-    removeOwn: db.prepare('DELETE FROM tickets_v4 WHERE id = ? AND token = ?')
+    removeOwn: prepareRemoveOwn(db)
   }
+}
+
+function prepareRemoveOwn(db) {
+  return db.prepare('DELETE FROM tickets_v4 WHERE id = ? AND token = ?')
 }
 
 function isBusy(error) {
@@ -654,73 +671,4 @@ export function formatAge(ms) {
   }
   const minutes = Math.floor(seconds / 60)
   return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-}
-
-/** True only when the OS says no such process; any other answer counts as still running. */
-function processGone(pid) {
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return true
-  }
-  try {
-    process.kill(pid, 0)
-    return false
-  } catch (error) {
-    return error.code === 'ESRCH'
-  }
-}
-
-function currentDirectory() {
-  try {
-    return process.cwd()
-  } catch {
-    return ''
-  }
-}
-
-/**
- * This process's launchers: the processes above it when it queues, up to MAX_ANCESTORS levels,
- * stopping at init or at the first link that cannot be read. One ps call per acquisition on
- * macOS (none on Linux); nothing is inferred when it fails.
- */
-function describeSelf(ancestors) {
-  const self = { pid: process.pid, cwd: currentDirectory(), ancestors }
-  if (ancestors !== undefined) {
-    return self
-  }
-  let parentOf
-  if (process.platform === 'linux') {
-    parentOf = (pid) => {
-      try {
-        const text = readFileSync(`/proc/${pid}/stat`, 'utf8')
-        // The command name can hold spaces and parentheses; fields resume after the last ')'.
-        return Number(text.slice(text.lastIndexOf(')') + 2).split(' ')[1]) || 0
-      } catch {
-        return 0
-      }
-    }
-  } else {
-    const result = spawnSync('ps', ['-A', '-o', 'pid=,ppid='], { encoding: 'utf8', timeout: 5000 })
-    const parents = new Map()
-    if (result.status === 0) {
-      for (const line of result.stdout.split('\n')) {
-        const match = /^\s*(\d+)\s+(\d+)\s*$/.exec(line)
-        if (match) {
-          parents.set(Number(match[1]), Number(match[2]))
-        }
-      }
-    }
-    parentOf = (pid) => parents.get(pid) ?? 0
-  }
-  self.ancestors = []
-  for (
-    let pid = process.ppid;
-    pid > 1 && self.ancestors.length < MAX_ANCESTORS;
-    pid = parentOf(pid)
-  ) {
-    if (self.ancestors.includes(pid)) {
-      break
-    }
-    self.ancestors.push(pid)
-  }
-  return self
 }

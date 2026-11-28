@@ -1,20 +1,12 @@
+import { rm } from 'node:fs/promises'
+import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
 import { describe, expect, it, vi } from 'vitest'
-import { formatAge, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
+import { formatAge, queueFileFor, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
-  createQueue,
-  exitedPid,
-  insertTicket,
+  createSlotHarness,
   observe,
-  openQueue,
-  outsider,
-  queueRows,
-  queueWriter,
-  root,
-  run,
-  runWithFreshHolder,
   shownHolder,
-  spawnOwned,
   UNNAMED,
   until,
   registerSlotHarness,
@@ -22,20 +14,103 @@ import {
   within
 } from './check-changed-slot.test-harness.mjs'
 
-registerSlotHarness()
+it.skipIf(process.platform === 'win32')(
+  'rejects resource creation by a retained continuation after the next test starts',
+  async () => {
+    const first = await createSlotHarness({ drainMs: 0 })
+    const admitted = Promise.withResolvers()
+    const resume = Promise.withResolvers()
+    let release
+    const late = first.run({}, async (unlock) => {
+      release = unlock
+      admitted.resolve(first.openQueue())
+      await resume.promise
+      const probe = first.outsider()
+      return probe.tryLock()
+    })
+    let successor
+    try {
+      const firstQueue = await within(admitted.promise, 'first continuation admitted')
+      await expect(first.teardown()).rejects.toMatchObject({
+        errors: [
+          expect.objectContaining({
+            message: 'a cleanup did not finish before the teardown deadline'
+          }),
+          expect.objectContaining({ message: expect.stringContaining(first.root) })
+        ]
+      })
+      expect(firstQueue.isOpen).toBe(false)
+
+      successor = await createSlotHarness()
+      expect(successor.file).not.toBe(first.file)
+      const nextLock = successor.outsider()
+      expect(nextLock.tryLock()).toBe(true)
+      const nextQueue = successor.openQueue()
+      const probe = new DatabaseSync(first.file)
+      try {
+        expect(() => probe.exec('BEGIN IMMEDIATE')).toThrow('database is locked')
+        resume.resolve()
+        await expect(late).rejects.toThrow('a test resource was requested after teardown')
+        await until(
+          () => {
+            try {
+              probe.exec('BEGIN IMMEDIATE')
+              return true
+            } catch (error) {
+              if (error.errcode !== 5) {
+                throw error
+              }
+              return false
+            }
+          },
+          'retained slot released',
+          5000
+        )
+      } finally {
+        probe.close()
+      }
+      expect(nextQueue.isOpen).toBe(true)
+      await successor.teardown()
+      successor = undefined
+      expect(nextQueue.isOpen).toBe(false)
+    } finally {
+      resume.resolve()
+      await late.catch(() => {})
+      await release?.()
+      await successor?.teardown()
+      await settleChangedCheckSlotCleanup()
+      await rm(first.root, { recursive: true, force: true })
+    }
+  },
+  180_000
+)
 
 // Production Windows runs check:changed concurrently and never loads the slot; these tests need POSIX ps or /proc.
 describe.skipIf(process.platform === 'win32')('check:changed slot queue recovery', () => {
-  it('admits the next waiter when the holder process is killed, and names the holder while waiting', async () => {
-    const holder =
-      spawnOwned(`await acquireChangedCheckSlot(file, { pollMs: 5, ancestors: [], log: () => {} })
-process.stdout.write('held\\n')
-await next()`)
+  registerSlotHarness()
+
+  it('names the holder even when the first poll is busy, and admits the waiter after a crash', async ({
+    slot
+  }) => {
+    const { spawnPinnedHolder, file, runWithFreshHolder, root, queueRows } = slot
+    const holder = spawnPinnedHolder('await next()', { initialAgeMs: 60_000 })
     await holder.waitFor('held')
     const messages = []
-    const waiter = observe(runWithFreshHolder({ log: (message) => messages.push(message) }))
+    const exec = DatabaseSync.prototype.exec
+    const busy = vi.spyOn(DatabaseSync.prototype, 'exec').mockImplementation(function (sql) {
+      if (this.location() === queueFileFor(file) && sql === 'BEGIN IMMEDIATE') {
+        throw Object.assign(new Error('first decision is busy'), { errcode: 5 })
+      }
+      return exec.call(this, sql)
+    })
+    let waiter
+    try {
+      waiter = observe(runWithFreshHolder({ log: (message) => messages.push(message) }))
+      expect(messages).toEqual([])
+    } finally {
+      busy.mockRestore()
+    }
     await until(() => messages.length > 0, 'first wait message')
-    await delay(100)
     expect(waiter.settled).toBe(false)
     expect(messages).toHaveLength(1)
     expect(messages[0]).toMatch(
@@ -43,12 +118,15 @@ await next()`)
         `^${WAITING} Position 1 of 1\\. The queue last showed pid ${holder.pid} in ${root.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')} holding the slot, claimed \\d+s ago\\.$`
       )
     )
+    holder.send('reported')
+    await holder.waitFor('resumed')
     await holder.kill()
     await within(waiter.promise, 'waiter after holder crash')
     expect(queueRows().map((row) => row.pid)).toEqual([process.pid])
   }, 240_000)
 
-  it('formats a listed holder with its age at the time of the message', async () => {
+  it('formats a listed holder with its age at the time of the message', async ({ slot }) => {
+    const { createQueue, outsider, insertTicket, runWithFreshHolder } = slot
     await createQueue()
     const other = outsider()
     expect(other.tryLock()).toBe(true)
@@ -63,7 +141,10 @@ await next()`)
     await within(waiter.promise, 'waiter')
   }, 180_000)
 
-  it('stops naming a released holder whose cleanup was blocked once an older checkout takes the slot', async () => {
+  it('stops naming a released holder whose cleanup was blocked once an older checkout takes the slot', async ({
+    slot
+  }) => {
+    const { run, runWithFreshHolder, queueWriter, outsider } = slot
     const staleMs = 3000
     const release = await run({ staleMs })
     const messages = []
@@ -93,7 +174,9 @@ await next()`)
   }, 240_000)
 
   for (const kind of ['fresh dead', 'stale live']) {
-    it(`leaves a ${kind} holder unnamed`, async () => {
+    it(`leaves a ${kind} holder unnamed`, async ({ slot }) => {
+      const { createQueue, outsider, insertTicket, exitedPid, runWithFreshHolder, run, queueRows } =
+        slot
       await createQueue()
       const other = outsider()
       expect(other.tryLock()).toBe(true)
@@ -114,7 +197,10 @@ await next()`)
     }, 180_000)
   }
 
-  it('bounds release grace by elapsed time when the wall clock steps backward', async () => {
+  it('bounds release grace by elapsed time when the wall clock steps backward', async ({
+    slot
+  }) => {
+    const { run, queueWriter, outsider } = slot
     const release = await run({ staleMs: 1000 })
     const writer = await queueWriter()
     const now = Date.now()
@@ -133,7 +219,10 @@ await next()`)
     }
   }, 180_000)
 
-  it('never re-creates its held ticket after the row is lost, and still releases', async () => {
+  it('never re-creates its held ticket after the row is lost, and still releases', async ({
+    slot
+  }) => {
+    const { run, queueRows, openQueue, outsider } = slot
     const staleMs = 1500
     const release = await run({ staleMs })
     const [held] = queueRows()
@@ -149,7 +238,10 @@ await next()`)
     expect(queueRows()).toEqual([])
   }, 180_000)
 
-  it('keeps holding the slot when its queue metadata breaks, and still releases it', async () => {
+  it('keeps holding the slot when its queue metadata breaks, and still releases it', async ({
+    slot
+  }) => {
+    const { run, openQueue, outsider } = slot
     const staleMs = 1500
     const release = await run({ staleMs })
     const db = openQueue()
@@ -162,7 +254,10 @@ await next()`)
     expect(other.tryLock()).toBe(true)
   }, 180_000)
 
-  it('removes its ticket when acquisition fails, so the next call is not held up', async () => {
+  it('removes its ticket when acquisition fails, so the next call is not held up', async ({
+    slot
+  }) => {
+    const { run, queueRows } = slot
     const holder = await run()
     const failing = run({
       staleMs: 60_000,
@@ -178,7 +273,10 @@ await next()`)
     await within(run({ staleMs: 60_000 }), 'next call', 30_000)
   }, 180_000)
 
-  it('lets the next call through once a queue writer stalls cleanup of an aborted call', async () => {
+  it('lets the next call through once a queue writer stalls cleanup of an aborted call', async ({
+    slot
+  }) => {
+    const { run, queueRows, queueWriter } = slot
     const holder = await run({ staleMs: 3000 })
     const aborted = run({ staleMs: 60_000 })
     await until(() => queueRows().some((row) => row.held_at === null), 'queued ticket')
@@ -198,7 +296,10 @@ await next()`)
     expect(queueRows().filter((row) => row.held_at === null)).toEqual([])
   }, 240_000)
 
-  it('keeps waiters pending while another process holds the queue database, then admits them in order', async () => {
+  it('keeps waiters pending while another process holds the queue database, then admits them in order', async ({
+    slot
+  }) => {
+    const { run, queueRows, queueWriter } = slot
     const holder = await run({ staleMs: 3000 })
     const order = []
     const queued = observe(
@@ -231,7 +332,10 @@ await next()`)
     expect(arrival.error).toBeUndefined()
   }, 240_000)
 
-  it('corrects its place once a ticket beyond the run ahead dies and is removed', async () => {
+  it('corrects its place once a ticket beyond the run ahead dies and is removed', async ({
+    slot
+  }) => {
+    const { run, insertTicket, openQueue, queueRows, spawnOwned } = slot
     // Long enough that no ticket here goes silent during the test, even on a loaded host.
     const staleMs = 15_000
     const holder = await run({ staleMs })
