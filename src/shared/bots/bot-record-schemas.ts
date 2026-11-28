@@ -41,7 +41,8 @@ export const BOT_AGENTS = [
   'qwen-code',
   'cline',
   'devin',
-  'codebuddy'
+  'codebuddy',
+  'qoder'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** A bot agent as old records and peers name it: a retired agent reads as its successor. */

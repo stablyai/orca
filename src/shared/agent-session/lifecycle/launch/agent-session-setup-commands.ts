@@ -120,6 +120,12 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  {
+    agent: 'qoder',
+    loginCommand: ['qodercli', 'login'],
+    installCommand: 'curl -fsSL https://qoder.com/install | bash',
+    windowsInstallScript: 'https://qoder.com/install.ps1'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

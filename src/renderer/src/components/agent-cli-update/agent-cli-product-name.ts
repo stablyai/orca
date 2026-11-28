@@ -45,5 +45,7 @@ export function agentCliProductName(
       return t('agentCliUpdate.devinProduct', 'Devin CLI')
     case 'codebuddy':
       return t('agentCliUpdate.codebuddyProduct', 'CodeBuddy Code')
+    case 'qoder':
+      return t('agentCliUpdate.qoderProduct', 'Qoder CLI')
   }
 }
