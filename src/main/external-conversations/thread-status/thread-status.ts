@@ -17,7 +17,6 @@ import {
   armedFact,
   armedLinks,
   disarmedFact,
-  mayHavePosted,
   statusReplyId,
   withArmed,
   withBotLine,
@@ -154,11 +153,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       return
     }
     const posted = withHostLine({ ...fact, armed: fact.armed }, at)
-    if (fact.pending.stop) {
-      this.disarm(link, posted)
-    } else {
-      this.write(link, posted)
-    }
+    return fact.pending.stop ? this.disarm(link, posted) : this.write(link, posted)
   }
 
   private async evaluate(thread: Thread): Promise<void> {
@@ -234,7 +229,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     }
     const saved = current.fact.pending ? this.settleSaved(current.link) : 'drop'
     // A dropped line that may have posted counts as one, so the next tick decides on the fact as is.
-    if (saved !== 'drop' || mayHavePosted(current.fact)) {
+    if (saved !== 'drop' || this.waits.mayHavePosted(id, current.fact.pending?.replyId)) {
       return saved === 'send' ? await this.send(current.link) : undefined
     }
     const seq = current.fact.seq + 1
@@ -248,6 +243,7 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       ...withArmed(current.fact, current.armed, { seq }),
       pending
     })
+    this.waits.saved(id, pending.replyId)
     await this.send(current.link)
   }
 
@@ -261,17 +257,13 @@ export class ThreadStatus implements ConversationWorkersWatcher {
     // Asked again after the save, with nothing awaited between this and the post.
     const cloud = this.deps.cloud()
     const link = findLink(this.deps.store, given)?.link
-    const fact = link?.threadStatus
-    const pending = fact?.pending
+    const pending = link?.threadStatus?.pending
     const conversation = link && cloudConversation(link)
-    if (!cloud || !link || !fact || !pending || !conversation) {
+    if (!cloud || !link || !pending || !conversation || this.settleSaved(link) !== 'send') {
       return
     }
-    if (this.settleSaved(link) !== 'send') {
-      return
-    }
-    // Kept before it goes, with nothing awaited between: a line sent with no answer may have posted.
-    this.write(link, { ...fact, pending: { ...pending, triedAt: this.now() } })
+    // From here the cloud may take it even if no answer comes back.
+    this.waits.sending(idOf(link))
     // One try: the next tick sends it again under the same id once every check passes again.
     const sent = await sendThreadStatusLine(cloud, conversation, pending, () => false)
     const id = idOf(link)
@@ -313,10 +305,18 @@ export class ThreadStatus implements ConversationWorkersWatcher {
       answerClear: this.waits.answerClearFor(idOf(link), this.answerKey(link), link.paneKey),
       cloudReady: (this.deps.cloud()?.cloudFeatures() ?? null) !== null
     })
-    if (fact && verdict === 'disarm') {
-      this.disarm(link, fact)
-    } else if (fact && verdict === 'drop') {
-      this.write(link, withoutSavedLine(fact))
+    const dropped =
+      fact && verdict === 'drop'
+        ? withoutSavedLine(
+            fact,
+            this.now(),
+            this.waits.mayHavePosted(idOf(link), fact.pending?.replyId)
+          )
+        : undefined
+    if (fact && (verdict === 'disarm' || (dropped && !dropped.armed))) {
+      this.disarm(link, dropped ?? fact)
+    } else if (dropped) {
+      this.write(link, dropped)
     }
     return verdict
   }

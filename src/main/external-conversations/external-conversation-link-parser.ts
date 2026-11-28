@@ -29,8 +29,7 @@ function threadStatusSchema() {
         replyId: z.string().min(1).max(128),
         text: z.string().max(500),
         at: z.number(),
-        stop: z.boolean(),
-        triedAt: z.number().optional()
+        stop: z.boolean()
       })
       .optional()
   })

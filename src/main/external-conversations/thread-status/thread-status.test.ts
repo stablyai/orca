@@ -317,30 +317,33 @@ describe('ThreadStatus', () => {
     expect(after.fact()).toMatchObject({ seq: 1, dayCount: 1 })
   })
 
-  it('drops a saved line older than 10 minutes and decides afresh under the next id', async () => {
-    // Saved while the cloud had not said hello, so it never went out.
-    const store = botHome()
-    const before = harness(store, { features: false })
-    await before.turnEnded()
-    await before.advance(30 * MIN)
-    expect(before.sent).toHaveLength(0)
-    const pending = before.fact()?.pending
-    expect(pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
-    await store.flushPendingOrThrowAsync()
-    await closeTestStores()
-
-    const after = harness(createStore())
-    after.clock.now = pending!.at + 11 * MIN
-    after.status.watched()
-    await after.polled()
-    expect(after.sent.map((body) => body.replyId)).toEqual([statusReplyId(THREAD, START, 2)])
-    expect(after.sent[0]?.text).toBe('Still working on this (41 min).')
+  it('replaces a saved line older than 10 minutes that never went out under the next id', async () => {
+    // Saved while the cloud had not said hello, so this process knows it never went out.
+    let hello = false
+    const sent: ConnectorReplyBody[] = []
+    const run = harness(botHome(), {
+      cloud: () => ({
+        cloudFeatures: () => (hello ? new Set<string>() : null),
+        reply: (body) => {
+          sent.push(body)
+          run.status.observed('/v1/connector/replies', { v: 1, ...body }, { ok: true, value: {} })
+          return Promise.resolve({ ok: true as const })
+        }
+      })
+    })
+    await run.turnEnded()
+    await run.advance(41 * MIN)
+    expect(run.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, START, 2))
+    hello = true
+    await run.advance(MIN)
+    expect(sent.map((body) => [body.replyId, body.text])).toEqual([
+      [statusReplyId(THREAD, START, 2), 'Still working on this (41 min).']
+    ])
   })
 
   it('counts a dropped line that went out with no answer, so none follows it too soon', async () => {
-    const store = botHome()
     // The cloud may have taken the line before it failed; a turn then holds the retry for 15 min.
-    const run = harness(store, { answers: [{ ok: false, status: null, error: null }] })
+    const run = harness(botHome(), { answers: [{ ok: false, status: null, error: null }] })
     await run.turnEnded()
     await run.advance(30 * MIN)
     run.clock.running = run.clock.now
@@ -351,35 +354,93 @@ describe('ThreadStatus', () => {
     expect(run.fact()).toMatchObject({
       seq: 1,
       dayCount: 1,
-      armed: { lastLineAt: START + 30 * MIN, dueStep: 1, lines: 1 }
+      armed: { lastLineAt: START + 46 * MIN, dueStep: 1, lines: 1 }
     })
-    await run.advance(43 * MIN)
+    await run.advance(59 * MIN)
     expect(run.sent).toHaveLength(1)
     await run.advance(MIN)
     expect(run.lines()).toEqual([
       '02:39 Still working on this (30 min).',
-      '03:39 Still working on this (1 h 30 min).'
+      '03:55 Still working on this (1 h 46 min).'
     ])
     expect(run.sent[1]?.replyId).toBe(statusReplyId(THREAD, START, 2))
   })
 
-  it('ends the run on a dropped stop line that went out with no answer', async () => {
-    const run = harness(botHome(), {
-      answers: [{ ok: true }, { ok: false, status: null, error: null }]
+  it('counts a saved line read back after a restart or from an older Orca', async () => {
+    // The cloud takes the line, but the app quits before its answer comes back.
+    const store = botHome()
+    const before = harness(store, {
+      cloud: () => ({ cloudFeatures: () => new Set<string>(), reply: () => new Promise(() => {}) })
     })
+    await before.turnEnded()
+    await before.advance(30 * MIN)
+    expect(before.fact()?.pending?.replyId).toBe(statusReplyId(THREAD, START, 1))
+    await store.flushPendingOrThrowAsync()
+    await closeTestStores()
+
+    const after = harness(createStore())
+    after.clock.now = START + 41 * MIN
+    after.status.watched()
+    await after.polled()
+    expect(after.sent).toHaveLength(0)
+    expect(after.fact()).toMatchObject({
+      seq: 1,
+      dayCount: 1,
+      armed: { lastLineAt: START + 41 * MIN, dueStep: 1 }
+    })
+    await after.advance(60 * MIN)
+    expect(after.lines()).toEqual(['03:50 Still working on this (1 h 41 min).'])
+    await closeTestStores()
+
+    // A line an older Orca saved and may have sent; nothing on it says whether it went.
+    const older = botHome()
+    writeLinkFact(older, THREAD, {
+      threadStatus: {
+        seq: 1,
+        day: '2026-11-26',
+        dayCount: 0,
+        armed: { at: START, turnEndAt: START, lastLineAt: START, lastBotAt: 0, dueStep: 0 },
+        pending: {
+          replyId: statusReplyId(THREAD, START, 1),
+          text: 'Still working on this (30 min).',
+          at: START + 30 * MIN,
+          stop: false
+        }
+      }
+    })
+    const upgraded = harness(older)
+    upgraded.clock.now = START + 41 * MIN
+    upgraded.status.watched()
+    await upgraded.polled()
+    expect(upgraded.sent).toHaveLength(0)
+    expect(upgraded.fact()).toMatchObject({ seq: 1, dayCount: 1, armed: { dueStep: 1 } })
+  })
+
+  it('ends the run on a dropped stop line that went out with no answer, and starts the next clean', async () => {
+    const conflict = { ok: false as const, status: 409, error: 'reply_id_conflict' }
+    const noAnswer = { ok: false as const, status: null, error: null }
+    const run = harness(botHome(), { answers: [{ ok: true }, conflict, noAnswer, conflict] })
     await run.turnEnded()
     await run.advance(30 * MIN)
-    // The workers read cap closes them; the stop line gets no answer, and a turn holds its retry.
+    // The workers read cap closes them: the stop line conflicts once, then gets no answer, and a
+    // turn holds its retry past 10 minutes.
     await run.polled(view({ activity: 'idle', open: false }))
-    expect(run.sent[1]?.text).toBe(THREAD_STATUS_STOP_LINE)
+    await run.advance(MIN)
+    expect(run.sent.map((body) => body.text).slice(1)).toEqual([
+      THREAD_STATUS_STOP_LINE,
+      THREAD_STATUS_STOP_LINE
+    ])
     run.clock.running = run.clock.now
     await run.advance(15 * MIN)
     run.clock.running = null
     await run.advance(MIN)
-    await run.polled(view({ activity: 'idle', open: false }))
-    await run.advance(30 * MIN)
-    expect(run.sent).toHaveLength(2)
-    expect(run.fact()).toEqual({ seq: 2, day: '2026-11-26', dayCount: 2 })
+    expect(run.sent).toHaveLength(3)
+    expect(run.fact()).toEqual({ seq: 3, day: '2026-11-26', dayCount: 2 })
+    // A new run's first conflict only drops its line: the old run's conflict is forgotten.
+    await run.turnEnded()
+    await run.advance(31 * MIN)
+    expect(run.sent).toHaveLength(5)
+    expect(run.fact()?.armed?.lines).toBe(1)
   })
 
   it('posts one line, not the missed ones, after the computer slept for 3 hours', async () => {
@@ -517,7 +578,7 @@ describe('ThreadStatus', () => {
     ])
   })
 
-  it('sends a saved line again only while a new one could go', async () => {
+  it('sends a saved line again only while a new one could go, and counts it once dropped', async () => {
     const busy = { ok: false as const, status: 503, error: null, retryAfterMs: 5 * MIN }
     const run = harness(botHome(), { answers: [busy] })
     await run.turnEnded()
@@ -526,11 +587,15 @@ describe('ThreadStatus', () => {
     run.clock.running = START + 32 * MIN
     await run.advance(20 * MIN)
     expect(run.sent).toHaveLength(1)
-    // The turn's answer makes the saved line moot: the next one waits 30 minutes from it.
+    // The turn's answer makes the saved line moot. It may still have posted before the answer, so
+    // once dropped it counts, and the next line waits the longer backoff from then.
     run.clock.running = null
     await run.turnEnded()
     run.botSaid()
-    await run.advance(29 * MIN)
+    await run.advance(30 * MIN)
+    expect(run.sent).toHaveLength(1)
+    expect(run.fact()).toMatchObject({ dayCount: 1, armed: { lastLineAt: run.clock.now } })
+    await run.advance(59 * MIN)
     expect(run.sent).toHaveLength(1)
     await run.advance(MIN)
     expect(run.sent.map((body) => body.replyId)).toEqual([

@@ -15,6 +15,9 @@ export class ThreadStatusWaits {
   private readonly settling = new Map<string, number>()
   // When each pane's latest turn ended, as told: a read begun before it is for an older turn.
   private readonly endedAt = new Map<string, number>()
+  // The line each thread saved in this process and has not handed to the cloud yet: the one saved
+  // line known to be absent from the thread.
+  private readonly unsent = new Map<string, string>()
 
   constructor(private readonly now: () => number) {}
 
@@ -66,9 +69,25 @@ export class ThreadStatusWaits {
     return read?.key === key && (ended === undefined || ended < read.at)
   }
 
+  /** A line saved, not yet sent; `sending` once it goes to the cloud, whatever its answer. */
+  saved(id: string, replyId: string): void {
+    this.unsent.set(id, replyId)
+  }
+
+  sending(id: string): void {
+    this.unsent.delete(id)
+  }
+
+  /** Whether a saved line may already be in the thread: any but one this process kept unsent. A
+   *  line saved before a restart, or by an older Orca, may have gone out with no answer seen. */
+  mayHavePosted(id: string, replyId: string | undefined): boolean {
+    return replyId !== undefined && this.unsent.get(id) !== replyId
+  }
+
   forgetThread(id: string): void {
     this.prompts.delete(id)
     this.answerClear.delete(id)
+    this.unsent.delete(id)
   }
 
   forgetPane(paneKey: string): void {
