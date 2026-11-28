@@ -109,9 +109,11 @@ function priority(item: WorkspaceAttachment, details: WorkspaceReferenceDetailsM
           : 4
 }
 
-// The peek sits inside the card: inset this far from its edges, never wider than the cap.
+// The peek sits inside the card, inset this far from its edges and between the width bounds.
 const PEEK_CARD_INSET = 8
 const PEEK_MAX_WIDTH = 300
+// Deeply nested cards get too narrow to read; the peek then extends left past the card.
+const PEEK_MIN_WIDTH = 176
 const PEEK_SCROLL_STEP = 28
 
 type PeekGeometry = { width: number; alignOffset: number }
@@ -125,7 +127,7 @@ function measurePeek(trigger: HTMLElement): PeekGeometry | null {
   const cardRect = card.getBoundingClientRect()
   const triggerRect = trigger.getBoundingClientRect()
   return {
-    width: Math.max(0, Math.min(cardRect.width - 2 * PEEK_CARD_INSET, PEEK_MAX_WIDTH)),
+    width: Math.max(PEEK_MIN_WIDTH, Math.min(cardRect.width - 2 * PEEK_CARD_INSET, PEEK_MAX_WIDTH)),
     // Radix shifts an end-aligned popper left by a positive offset.
     alignOffset: triggerRect.right - (cardRect.right - PEEK_CARD_INSET)
   }
