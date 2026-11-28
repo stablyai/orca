@@ -56,6 +56,7 @@ async function open(saved?: SavedText) {
 
   return {
     settings,
+    storage,
     fallbackFont: settings.defaultNativeChatTextSettings().font,
     shown,
     stored: async (): Promise<unknown> => {
@@ -182,4 +183,78 @@ describe('native chat text settings: font', () => {
     await page.otherRuntimeWrites({ size: 16, font: 'system', lineSpacing: 'default' })
     expect(page.shown().font).toBe('system')
   })
+
+  // The page rereads storage when the app republishes it, which can happen while this page's own save is
+  // still on its way to storage.
+  it.each([
+    ['a size change', { size: 18 }],
+    ['a spacing change', { lineSpacing: 'relaxed' as const }]
+  ])(
+    'a reread that sees storage from before a pending pick keeps the pick, then %s saves it',
+    async (_name, next) => {
+      const page = await open({ size: 14, lineSpacing: 'default', v: 2 })
+      const landing = holdNextWrite(page.storage)
+
+      const pick = page.settings.updateNativeChatTextSettings({ font: 'mono' })
+      const reread = page.settings.reloadNativeChatTextSettings()
+      landing.release()
+      await pick
+      await reread
+
+      expect(page.shown().font).toBe('mono')
+      await page.settings.updateNativeChatTextSettings(next)
+      expect(await page.stored()).toMatchObject({ font: 'mono' })
+    }
+  )
+
+  it('a stale reread cannot undo a newer pick or a reset', async () => {
+    const page = await open({ size: 14, lineSpacing: 'default', v: 2 })
+    const first = holdNextWrite(page.storage)
+    const mono = page.settings.updateNativeChatTextSettings({ font: 'mono' })
+    const reread = page.settings.reloadNativeChatTextSettings()
+    const serif = page.settings.updateNativeChatTextSettings({ font: 'serif' })
+    first.release()
+    await Promise.all([mono, reread, serif])
+    expect(page.shown().font).toBe('serif')
+    expect(await page.stored()).toMatchObject({ font: 'serif' })
+
+    const second = holdNextWrite(page.storage)
+    const pick = page.settings.updateNativeChatTextSettings({ font: 'mono' })
+    const rereadAgain = page.settings.reloadNativeChatTextSettings()
+    const reset = page.settings.resetNativeChatTextSettings()
+    second.release()
+    await Promise.all([pick, rereadAgain, reset])
+    expect(await page.stored()).toBeNull()
+    expect(page.shown().font).toBe(page.fallbackFont)
+    await page.settings.updateNativeChatTextSettings({ size: 16 })
+    expect(await page.stored()).toEqual({ size: 16, lineSpacing: 'default', v: 2 })
+  })
+
+  it('a failed save shows the font storage still holds', async () => {
+    const page = await open({ size: 14, font: 'system', lineSpacing: 'default', v: 2 })
+    vi.spyOn(page.storage, 'setItem').mockRejectedValueOnce(new Error('storage full'))
+
+    await page.settings.updateNativeChatTextSettings({ font: 'mono' })
+    await page.settings.reloadNativeChatTextSettings()
+
+    expect(page.shown().font).toBe('system')
+    await page.settings.updateNativeChatTextSettings({ size: 16 })
+    expect(await page.stored()).toEqual({ size: 16, font: 'system', lineSpacing: 'default', v: 2 })
+  })
 })
+
+/** Holds the next storage write until released, as a slow storage bridge would. */
+function holdNextWrite(storage: { setItem: (key: string, value: string) => Promise<void> }): {
+  release: () => void
+} {
+  const write = storage.setItem.bind(storage)
+  let release = (): void => {}
+  const opened = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  vi.spyOn(storage, 'setItem').mockImplementationOnce(async (key, value) => {
+    await opened
+    await write(key, value)
+  })
+  return { release: () => release() }
+}

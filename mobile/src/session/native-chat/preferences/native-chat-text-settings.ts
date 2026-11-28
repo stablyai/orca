@@ -138,7 +138,8 @@ function watchScreen(): void {
 /** Rereads storage; the page calls it when the app republishes storage after a Settings change. */
 export function reloadNativeChatTextSettings(): Promise<void> {
   const readAt = changeCount
-  return Promise.resolve()
+  // Read after this runtime's queued saves land, so a reread never adopts storage from before them.
+  return writes
     .then(() => AsyncStorage.getItem(NATIVE_CHAT_TEXT_KEY))
     .then((raw) => {
       watchScreen()
