@@ -1,4 +1,5 @@
 import { forgetProviderRelayRunVerdict } from '../../../provider-relay/app-provider-relays'
+import { takeProviderRelayFrontRefused } from '../../../provider-relay/provider-relay-front-pins'
 import { observeNativeChatPromptSubmissions } from '../../../telemetry/native-chat-prompt-submissions'
 import { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
@@ -29,6 +30,7 @@ export function createStructuredAgentSessionPublicationWiring(input: {
       input.client().requestFailures.forget(id)
       // A closed chat's undecided run is asked again at its next open.
       forgetProviderRelayRunVerdict(id)
+      takeProviderRelayFrontRefused(id)
       input.delivery().closed(id)
     },
     deliver: (id, journal, inputChanged) => {

@@ -16,10 +16,13 @@ export async function openDaemonToolRelayConnection(
   client: Pick<DaemonClient, 'socketPath' | 'tokenPath' | 'protocolVersion' | 'clientId'>,
   frontConnectionId: string,
   /** Aborting ends the setup and its socket, whatever step it is at. */
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** The daemon's token, read once for many connections; by default read here. */
+  readToken: () => Promise<string> = async () =>
+    (await readFile(client.tokenPath, { encoding: 'utf8', signal })).trim()
 ): Promise<{ socket: Socket; remainder: Buffer }> {
   signal?.throwIfAborted()
-  const token = (await readFile(client.tokenPath, 'utf8')).trim()
+  const token = await readToken()
   signal?.throwIfAborted()
   const socket = connect(client.socketPath)
   const onAbort = (): void => {

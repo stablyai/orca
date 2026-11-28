@@ -1,4 +1,5 @@
 import { providerDiagnostic } from '../../shared/agent-session/failures/agent-session-failure'
+import { BoundedMap } from '../../shared/collections/bounded-map'
 import type {
   ToolRelayFrontCaller,
   ToolRelayFrontGrant,
@@ -113,10 +114,13 @@ export class ProviderRelayFrontMovedError extends Error {
   }
 }
 
-/** Chats whose last launch was given a front but couldn't run under its daemon start. */
-const frontRefused = new Set<string>()
+/**
+ * Chats whose last launch was given a front but couldn't run under its daemon start; the oldest
+ * goes past the cap (its next launch only tries a front again).
+ */
+const frontRefused = new BoundedMap<string, true>({ maxEntries: 256 })
 
-/** Taken by the chat's next launch, which gets its tools at the app's own address. */
+/** Taken by the chat's next launch (or its close), which gets its tools at the app's own address. */
 export function takeProviderRelayFrontRefused(chatKey: string): boolean {
   return frontRefused.delete(chatKey)
 }
@@ -134,7 +138,7 @@ export function refuseUnrelayedFront<R>(
   if (relayed !== null || front === null || relay.only === 'reattach') {
     return relayed
   }
-  frontRefused.add(relay.chatKey)
+  frontRefused.set(relay.chatKey, true)
   throw new ProviderRelayFrontMovedError(relay.chatKey, FRONT_UNUSED_DETAIL)
 }
 
@@ -142,7 +146,7 @@ export function refuseUnrelayedFront<R>(
 export function refuseFrontOutsideRelay(chatKey: string): void {
   if (pins.has(chatKey)) {
     pins.delete(chatKey)
-    frontRefused.add(chatKey)
+    frontRefused.set(chatKey, true)
     throw new ProviderRelayFrontMovedError(chatKey, FRONT_UNUSED_DETAIL)
   }
 }

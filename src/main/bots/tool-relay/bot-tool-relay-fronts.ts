@@ -2,7 +2,9 @@
 // agent will run on; every start that holds one is served, so agents kept under an older start keep
 // their tools. The daemon never dials the app: for each connection it announces, the app opens its own
 // authenticated connection to the daemon and the relay's HTTP server takes it in-process.
+import { readFile } from 'node:fs/promises'
 import type { Socket } from 'node:net'
+import { TOOL_RELAY_FRONT_MAX_HELD } from '../../daemon/tool-relay-front/daemon-tool-relay-front'
 import type { DaemonClient } from '../../daemon/transport/client/daemon-client'
 import {
   TOOL_RELAY_FRONT_EVENT,
@@ -20,6 +22,7 @@ import {
 import { daemonReadsFolder } from '../../provider-relay/provider-relay-spawn-request'
 
 const CONNECT_TIMEOUT_MS = 1_000
+const TOKEN_READ_MS = 5_000
 const FRONT_REQUEST_TIMEOUT_MS = 5_000
 const SERVE_RETRY_MIN_MS = 5_000
 const SERVE_RETRY_MAX_MS = 60_000
@@ -41,6 +44,10 @@ type Watched = {
   servedConnection: number | null
   /** Announced connections being opened, so a re-announcement starts no second one. */
   opening: Set<string>
+  /** This connection's read of the daemon's token, shared by every connection it opens. */
+  token: Promise<string> | null
+  /** Relay ends heard while a serve is asked: its reply may still list them. */
+  ended: Set<string> | null
   /** The wait before a failed serve is asked again, and that retry while it waits. */
   retryMs: number
   retry: ReturnType<typeof setTimeout> | null
@@ -118,6 +125,16 @@ export class ToolRelayFronts {
     }
   }
 
+  /** The serve of the daemon start whose front is `port`: its kept agents' tokens are known once it settles. */
+  servedAt(port: number): Promise<void> | null {
+    for (const watched of this.watched.values()) {
+      if (watched.port === port) {
+        return watched.served
+      }
+    }
+    return null
+  }
+
   /** A Host header the relay may answer: one of the fronts it serves. */
   serves(port: number): boolean {
     for (const watched of this.watched.values()) {
@@ -151,6 +168,8 @@ export class ToolRelayFronts {
       if (typeof id === 'string') {
         void this.answer(client, id)
       } else if (typeof ended === 'string') {
+        // Ends come on the stream and the serve reply on control, in either order.
+        this.watched.get(client)?.ended?.add(ended)
         this.keptEnded(client, ended)
       }
     })
@@ -159,6 +178,7 @@ export class ToolRelayFronts {
       const watched = this.watched.get(client)
       if (watched) {
         watched.connection += 1
+        watched.token = null
         // The last connection's retry is moot; this one's failure schedules its own.
         clearTimeout(watched.retry ?? undefined)
         watched.retry = null
@@ -172,6 +192,8 @@ export class ToolRelayFronts {
       connection: 0,
       servedConnection: null,
       opening: new Set(),
+      token: null,
+      ended: null,
       retryMs: SERVE_RETRY_MIN_MS,
       retry: null,
       stop: () => {
@@ -194,6 +216,8 @@ export class ToolRelayFronts {
       return watched.served
     }
     watched.servedConnection = watched.connection
+    const ended = new Set<string>()
+    watched.ended = ended
     const served = client
       .request<ToolRelayFrontServeResult>(
         'toolRelayFrontServe',
@@ -203,7 +227,13 @@ export class ToolRelayFronts {
       .then(({ port, kept }) => {
         this.noteServed(client, Number.isSafeInteger(port) ? port : null)
         // Before any held connection is answered, so a kept agent's token is already known.
-        this.adopt(client, Array.isArray(kept) ? kept : [])
+        const live = (Array.isArray(kept) ? kept : []).filter((relay) => !ended.has(relay.relayId))
+        this.adopt(client, live)
+      })
+      .finally(() => {
+        if (watched.ended === ended) {
+          watched.ended = null
+        }
       })
     watched.served = served
     served.then(
@@ -213,14 +243,14 @@ export class ToolRelayFronts {
         watched.retry = null
       },
       () => {
-        // A failed serve is asked again by the next launch, and meanwhile on its own (backing off),
-        // so agents kept under an older daemon start never wait for a launch that won't come.
+        // A failed serve is asked again by the next launch or hello, and meanwhile a few times on
+        // its own (backing off), so agents kept under an older daemon start needn't wait for one.
         if (watched.servedConnection !== watched.connection) {
           return
         }
         watched.servedConnection = null
         // One retry waits per daemon start, however many launches failed meanwhile.
-        if (watched.retry) {
+        if (watched.retry || watched.retryMs > SERVE_RETRY_MAX_MS) {
           return
         }
         const connection = watched.connection
@@ -236,7 +266,7 @@ export class ToolRelayFronts {
           }
         }, watched.retryMs)
         watched.retry.unref()
-        watched.retryMs = Math.min(watched.retryMs * 2, SERVE_RETRY_MAX_MS)
+        watched.retryMs *= 2
       }
     )
     await served
@@ -251,7 +281,9 @@ export class ToolRelayFronts {
 
   private async answer(client: DaemonClient, frontConnectionId: string): Promise<void> {
     const watched = this.watched.get(client)
-    if (this.closed || !watched || watched.opening.has(frontConnectionId)) {
+    // The daemon holds at most that many, so more would be setups for connections it already let go.
+    const full = watched && watched.opening.size >= TOOL_RELAY_FRONT_MAX_HELD
+    if (this.closed || !watched || full || watched.opening.has(frontConnectionId)) {
       return
     }
     watched.opening.add(frontConnectionId)
@@ -263,7 +295,8 @@ export class ToolRelayFronts {
         const opened = await openDaemonToolRelayConnection(
           client,
           frontConnectionId,
-          this.closing.signal
+          this.closing.signal,
+          () => this.token(client, watched)
         ).catch(() => null)
         if (!opened) {
           continue
@@ -283,6 +316,20 @@ export class ToolRelayFronts {
     } finally {
       watched.opening.delete(frontConnectionId)
     }
+  }
+
+  /** Read once per connection, bounded, and dropped when it fails so the next one reads again. */
+  private token(client: DaemonClient, watched: Watched): Promise<string> {
+    const signal = AbortSignal.any([this.closing.signal, AbortSignal.timeout(TOKEN_READ_MS)])
+    const read = (watched.token ??= readFile(client.tokenPath, { encoding: 'utf8', signal }).then(
+      (token) => token.trim()
+    ))
+    read.catch(() => {
+      if (watched.token === read) {
+        watched.token = null
+      }
+    })
+    return read
   }
 
   get isClosed(): boolean {
