@@ -384,7 +384,6 @@
 3 src/renderer/src/components/settings/terminal/session-management/ManageSessionsSection.tsx
 2 src/renderer/src/components/settings/terminal/session-management/TerminalLimitSetting.tsx
 1 src/renderer/src/components/settings/terminal/themes/useWarpThemeImport.ts
-3 src/renderer/src/components/settings/updates/GeneralUpdateSettingsSection.tsx
 1 src/renderer/src/components/settings/updates/ReleaseBuildPicker.tsx
 1 src/renderer/src/components/settings/updates/ReleaseChannelSection.tsx
 1 src/renderer/src/components/settings/virtual-machines/recipes/EphemeralVmsPane.tsx

@@ -38,12 +38,15 @@ function formatBuildLabel(build: ReleaseBuild, intlLocale: string = getIntlLocal
 export function ReleaseBuildPicker({
   builds,
   selectedTag,
+  runningVersion,
   onSelect,
   disabled,
   placeholder
 }: {
   builds: readonly ReleaseBuild[]
   selectedTag: string | null
+  /** Marks the build this app is running so it reads as current, not as a switch target. */
+  runningVersion?: string | null
   onSelect: (tag: string) => void
   disabled: boolean
   placeholder: string
@@ -61,12 +64,13 @@ export function ReleaseBuildPicker({
         const label = formatBuildLabel(build, intlLocale)
         return {
           tag: build.tag,
+          running: build.version === runningVersion,
           label,
           searchText: `${label} ${build.version} ${build.tag}`.toLowerCase()
         }
       }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- labels format dates in the UI language.
-    [builds, languageRevision, intlLocale]
+    [builds, languageRevision, intlLocale, runningVersion]
   )
   const terms = query.trim().toLowerCase().split(/\s+/)
   const filtered = entries.filter((entry) => terms.every((term) => entry.searchText.includes(term)))
@@ -128,6 +132,11 @@ export function ReleaseBuildPicker({
                 >
                   <Check className={cn('size-4', entry.tag !== selectedTag && 'opacity-0')} />
                   <span className="truncate">{entry.label}</span>
+                  {entry.running ? (
+                    <span className="ms-auto shrink-0 text-xs text-muted-foreground">
+                      {t('settings.about.channel.running', 'Running')}
+                    </span>
+                  ) : null}
                 </CommandItem>
               ))}
             </CommandGroup>

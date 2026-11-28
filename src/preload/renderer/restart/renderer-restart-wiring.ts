@@ -49,24 +49,48 @@ export function registerRendererRestartIpcRelays(
   })
 }
 
-export async function prepareAndInvokeUpdaterInstall(
+// Windows with an install request in flight; like appRestartState.pending, it outlives any one
+// caller, so reopening Settings or clicking another surface can't start a second preparation.
+const updaterInstallsInFlight = new WeakMap<EventTarget, Promise<void>>()
+
+export function prepareAndInvokeUpdaterInstall(
   eventTarget: EventTarget,
   relay: Pick<UpdaterQuitAbortRelay, 'markPrepared' | 'abort'>,
   invoke: () => Promise<void>,
   awaitCheckpoint: () => Promise<void>
 ): Promise<void> {
-  await prepareRendererForAppRestart(eventTarget, {
-    startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-    abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-    awaitCheckpoint
-  })
-  relay.markPrepared()
-  try {
-    await invoke()
-  } catch (error) {
-    relay.abort()
-    throw error
+  // A repeat request shares the one in flight, so it settles (or fails) with it.
+  const inFlight = updaterInstallsInFlight.get(eventTarget)
+  if (inFlight) {
+    return inFlight
   }
+  // Published before preparation runs: preparation dispatches restart events synchronously, and a
+  // listener that asks to install again must join this request rather than start a second one.
+  let settle!: { resolve: () => void; reject: (error: unknown) => void }
+  const request = new Promise<void>((resolve, reject) => {
+    settle = { resolve, reject }
+  })
+  updaterInstallsInFlight.set(eventTarget, request)
+  const run = async (): Promise<void> => {
+    await prepareRendererForAppRestart(eventTarget, {
+      startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
+      abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+      awaitCheckpoint
+    })
+    relay.markPrepared()
+    try {
+      await invoke()
+    } catch (error) {
+      relay.abort()
+      throw error
+    }
+  }
+  void run()
+    .then(settle.resolve, settle.reject)
+    .finally(() => {
+      updaterInstallsInFlight.delete(eventTarget)
+    })
+  return request
 }
 
 export async function prepareAndInvokeAppRestart<T>(

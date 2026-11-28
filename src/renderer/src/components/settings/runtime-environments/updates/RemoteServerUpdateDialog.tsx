@@ -1,6 +1,6 @@
 import type React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -13,41 +13,13 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store/index'
 import type { RemoteServerUpdateEntry } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
+import { useTranslate } from '@/i18n/use-translate'
+import { RemoteServerUpdateStatus } from './RemoteServerUpdateStatus'
 import {
-  getRemoteServerManualUpdateHelp,
-  RemoteServerUpdateStatus
-} from './RemoteServerUpdateStatus'
-
-function versionDescription(entry: RemoteServerUpdateEntry, t: Translate = translate): string {
-  if (entry.currentVersion && entry.targetVersion && entry.currentVersion !== entry.targetVersion) {
-    return `${entry.currentVersion} → ${entry.targetVersion}`
-  }
-  if (entry.currentVersion) {
-    return `v${entry.currentVersion}`
-  }
-  return t(
-    'auto.components.settings.RemoteServerUpdateDialog.versionUnavailable',
-    'Version unavailable'
-  )
-}
-
-function entryHelp(entry: RemoteServerUpdateEntry, t: Translate = translate): string | null {
-  if (entry.error) {
-    return entry.error
-  }
-  if (entry.phase === 'manual') {
-    return getRemoteServerManualUpdateHelp(entry, t)
-  }
-  if (entry.phase === 'restarting') {
-    return t(
-      'auto.components.settings.RemoteServerUpdateDialog.restartingHelp',
-      'Waiting for the replacement server to reconnect on the new version.'
-    )
-  }
-  return null
-}
+  getRemoteServerEntryHelp as entryHelp,
+  getRemoteServerVersionDescription as versionDescription
+} from './remote-server-update-entry-copy'
 
 function ServerUpdateRow({
   entry,
@@ -137,15 +109,44 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           value0: liveLeafCount
         })
 
+  // Updates act only on targets and live-session counts this dialog checked itself: it owns the
+  // check its own refresh returned, for the current revision. A refresh skipped because another
+  // check or update was running is retried once that work ends; a failed one waits for Retry.
+  // The opening id is bumped synchronously by the store on every open and close, so a check or
+  // failure from an earlier opening never counts for this one, even across a batched reopen.
+  const revision = useAppStore((state) => state.remoteServerUpdatesCheckRevision)
+  const openingId = useAppStore((state) => state.remoteServerUpdateDialogOpeningId)
+  const [owned, setOwned] = useState<{ check: RemoteServerUpdateCheck; openingId: number } | null>(
+    null
+  )
+  const [failedIn, setFailedIn] = useState<number | null>(null)
+  const refreshFailed = failedIn === openingId
+  const currentCheck =
+    owned?.openingId === openingId && owned.check.revision === revision ? owned.check : null
+  const runRefresh = useCallback((): void => {
+    const startedIn = useAppStore.getState().remoteServerUpdateDialogOpeningId
+    setFailedIn(null)
+    void refresh().then(
+      (check) => {
+        if (check) {
+          setOwned({ check, openingId: startedIn })
+        }
+      },
+      () => setFailedIn(startedIn)
+    )
+  }, [refresh])
+  // Each opening gets its own check, so the opening id is a dependency too.
+  const needsCheck = open && currentCheck === null && !refreshFailed && !checking && !running
   useEffect(() => {
-    if (open) {
-      void refresh()
+    if (needsCheck) {
+      runRefresh()
     }
-  }, [open, refresh])
+  }, [needsCheck, openingId, runRefresh])
+  const updatesBlocked = currentCheck === null || checking || running
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] gap-4 sm:max-w-2xl">
+      <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {t(
@@ -185,7 +186,8 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                     'Checking paired servers…'
                   )}
                 </span>
-              ) : (
+              ) : refreshFailed ? null : (
+                // A failed check says nothing about pairing; its error line below says what happened.
                 t(
                   'auto.components.settings.RemoteServerUpdateDialog.empty',
                   'No paired Remote Orca Servers.'
@@ -198,8 +200,12 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
                 <ServerUpdateRow
                   key={entry.environmentId}
                   entry={entry}
-                  disabled={running || checking}
-                  onUpdate={() => void start([entry.environmentId])}
+                  disabled={updatesBlocked}
+                  onUpdate={() => {
+                    if (currentCheck) {
+                      void start([entry.environmentId], currentCheck)
+                    }
+                  }}
                 />
               ))}
             </div>
@@ -214,6 +220,22 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               'Checking paired servers…'
             )}
           </div>
+        ) : refreshFailed ? (
+          <p className="text-xs text-destructive">
+            {t(
+              'auto.components.settings.RemoteServerUpdateDialog.refreshFailed',
+              'Could not check paired servers.'
+            )}{' '}
+            <Button
+              type="button"
+              variant="link"
+              size="inlineInherit"
+              disabled={running}
+              onClick={runRefresh}
+            >
+              {t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')}
+            </Button>
+          </p>
         ) : allCurrent ? (
           <p className="text-xs text-muted-foreground">
             {t(
@@ -229,8 +251,12 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               type="button"
               size="sm"
               autoFocus={eligible.length > 0}
-              onClick={() => void start()}
-              disabled={checking || running}
+              onClick={() => {
+                if (currentCheck) {
+                  void start(undefined, currentCheck)
+                }
+              }}
+              disabled={updatesBlocked}
             >
               {t(
                 'auto.components.settings.RemoteServerUpdateDialog.updateAll',

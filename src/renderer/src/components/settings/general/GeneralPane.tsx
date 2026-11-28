@@ -5,7 +5,7 @@ import { useAppStore } from '../../../store/index'
 import { CliSection } from '../cli/install/CliSection'
 import { GeneralEditorSettingsSection } from '../editor/GeneralEditorSettingsSection'
 import { GeneralAutoSaveSetting } from '../editor/GeneralAutoSaveSetting'
-import { GeneralSupportSection } from './GeneralSupportSection'
+import { GeneralSupportStarAction } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from '../updates/GeneralUpdateSettingsSection'
 import {
   GeneralWorkspaceSettingsSection,
@@ -303,9 +303,7 @@ function GeneralRootSettings({
         />
       ) : null}
       {aboutMatches ? (
-        <GeneralUpdateSettingsSection>
-          <GeneralSupportSection hasPrecedingSections={false} inline />
-        </GeneralUpdateSettingsSection>
+        <GeneralUpdateSettingsSection headerAction={<GeneralSupportStarAction />} />
       ) : null}
     </>
   )

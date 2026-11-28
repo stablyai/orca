@@ -236,6 +236,14 @@ export function updaterMessageText(source: {
   return codedText(source.messageCode, source.messageParams) ?? source.message
 }
 
+/** True when the message's code resolved to copy (prose), false when it falls back to raw text. */
+export function hasTranslatedUpdaterMessage(source: {
+  messageCode?: unknown
+  messageParams?: unknown
+}): boolean {
+  return codedText(source.messageCode, source.messageParams) !== null
+}
+
 /** The install-instructions result already names its reason; unknown reasons keep main's English. */
 export function linuxPackageCommandUnavailableText(instructions: {
   reason: LinuxPackageCommandUnavailableReason

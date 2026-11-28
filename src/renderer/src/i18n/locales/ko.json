@@ -1208,7 +1208,6 @@
     "automaticUpdates": {
       "title": "자동 업데이트",
       "description": "지원되는 데스크톱 설치 환경에서는 Orca가 정기 업데이트 확인 시 적용 가능한 업데이트를 다운로드한 후 자동으로 다시 시작하여 설치합니다.",
-      "info": "자동 업데이트 안내",
       "saveFailed": "자동 업데이트 설정을 저장하지 못했습니다."
     },
     "cloudConsole": {
@@ -1363,20 +1362,10 @@
     },
     "updateDelay": {
       "1b4d825e0e": "업데이트 지연",
-      "ab7e864374": "업데이트 지연 안내",
-      "ee1d96f74a": "이번만 지연 건너뛰기",
       "teamManaged": "팀에서 설정함",
       "description": "새 버전이 게시된 후 설정한 일수만큼 기다렸다가 Orca에서 업데이트를 제공합니다.",
       "none": "없음",
-      "availableSoon": "{{relative}} 이용 가능",
-      "availableOn": "{{date}}에 이용 가능 ({{relative}})",
-      "clearedTitle": "Orca {{version}} 버전을 이용할 수 있습니다",
-      "heldTitle": "Orca {{version}} 제공이 보류되었습니다",
-      "released": "{{released}}에 게시됨",
-      "progress": "Orca {{version}} 버전이 제공될 때까지 남은 시간",
       "skipDelayOnceHint": "지금 이 버전을 확인합니다. 지연 설정은 그대로 유지됩니다.",
-      "upToDateWithHeld": "최신 상태입니다. 새 버전은 {{date}}까지 제공이 보류됩니다.",
-      "heldReleaseReady": "새 버전을 이용할 수 있습니다. 업데이트를 확인하여 받으세요.",
       "keywordDelay": "지연",
       "keywordCooldown": "대기",
       "keywordSecurity": "보안"
@@ -1530,6 +1519,68 @@
         "open": "{{file}} 열기"
       },
       "unreadable": "저장된 로그인 또는 키를 이 컴퓨터에서 열 수 없습니다"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}}개 준비됨",
+        "updateAll": "모두 업데이트",
+        "title": "서버",
+        "otherCount": "기타 {{value0}}개",
+        "confirmOne": "{{name}}을(를) 다시 시작할까요?",
+        "confirmMany": "서버 {{count}}개를 다시 시작할까요?",
+        "liveMayDrop": "활성 세션이 끊길 수 있습니다.",
+        "sessionsMayDrop": "세션이 끊길 수 있음",
+        "restartCount": "{{count}}개 다시 시작?",
+        "restartOne": "다시 시작?",
+        "updateOne": "{{name}} 업데이트",
+        "retryOne": "{{name}} 다시 시도",
+        "updatingCount": "{{value0}}개 업데이트 중",
+        "failedCount": "{{value0}}개 실패",
+        "failed": "실패",
+        "retryAll": "모두 다시 시도",
+        "manualHelp": "{{name}} 수동 업데이트",
+        "updateAllNarrow": "모두 업데이트",
+        "retryAllNarrow": "모두 다시 시도"
+      },
+      "status": {
+        "browserBlockGuidance": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
+        "browserBlockGuidanceMany": "브라우저 프로세스(PID {{pids}})를 종료한 뒤 다시 시도하세요. 서버는 계속 실행됩니다.",
+        "blocked": "차단됨",
+        "heldNarrow": "{{version}} {{date}}부터",
+        "notes": "노트",
+        "checking": "확인 중…",
+        "upToDate": "최신 상태",
+        "heldUntil": "{{version}} {{date}}까지 보류",
+        "available": "{{version}} 사용 가능",
+        "latestForMac": "이 Mac용 최신 버전",
+        "ready": "{{version}} 준비됨",
+        "installing": "{{version}} 설치 중…",
+        "installOnQuit": "종료하여 설치",
+        "installBlocked": "설치 차단됨",
+        "updateFailed": "업데이트 실패",
+        "checkFailed": "확인 실패",
+        "failed": "실패",
+        "hideDetails": "세부 정보 숨기기",
+        "showDetails": "세부 정보 보기",
+        "hide": "숨기기",
+        "details": "세부 정보",
+        "copyDetails": "세부 정보 복사",
+        "copied": "복사됨",
+        "copyFailed": "세부 정보를 복사할 수 없습니다.",
+        "downloadingPercent": "다운로드 중 {{percent}}"
+      },
+      "action": {
+        "checkHeldNow": "지금 {{version}}을(를) 확인합니다. 지연 설정은 그대로 유지됩니다.",
+        "check": "확인",
+        "update": "업데이트",
+        "retry": "다시 시도",
+        "skipDelay": "지연 건너뛰기",
+        "restart": "다시 시작",
+        "checkForUpdates": "업데이트 확인"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}}은(는) 릴리스 빌드가 아니어서 여기서 채널을 변경할 수 없습니다."
+      }
     }
   },
   "menu": {
@@ -3958,8 +4009,7 @@
           "statusDownloading": "업데이트 다운로드 중",
           "statusDownloaded": "업데이트 설치 준비 완료",
           "statusError": "업데이트 오류"
-        },
-        "b3b02a9d84": "다시 시도"
+        }
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "이동",
@@ -8896,32 +8946,14 @@
           "confirm_running_work_close": "실행 중인 채팅이나 터미널을 닫기 전에 확인"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "지원해 주셔서 감사합니다!",
           "6922c1fa2b": "GitHub에서 Orca 스타 누르기",
-          "511782265b": "GitHub 스타로 프로젝트를 지원하세요.",
-          "55a87e5fd1": "Orca 지원",
-          "964acc6bb4": "스타",
-          "397719bee5": "스타 표시 중...",
-          "cb65c75b11": "여는 중...",
-          "f2d4f877b2": "GitHub 열기"
+          "964acc6bb4": "스타"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "릴리스 노트",
           "02dc082e70": "업데이트 다운로드를 시작할 수 없습니다.",
           "ceb579abaf": "앱 업데이트를 확인하고 최신 Orca 버전을 설치하세요.",
-          "bd79d412f0": "업데이트 확인에 실패했습니다. {{value0}}",
-          "b9ad70c30d": "업데이트 오류입니다. {{value0}}",
-          "f40d88390d": "최신 버전을 사용 중입니다.",
-          "31fd7150cf": "업데이트 확인 중...",
-          "d69a09b672": "업데이트는 시작 시 자동으로 확인됩니다.",
           "6d27bd46e3": "업데이트 확인",
-          "downloadUpdate": "업데이트 다운로드",
-          "restartToUpdate": "다시 시작하여 업데이트",
-          "versionAvailable": "{{version}} 버전을 사용할 수 있습니다.",
-          "externallyManagedVersionAvailable": "{{version}} 버전을 사용할 수 있습니다. Orca에서 직접 설치할 수 없으므로 시스템 패키지 관리자를 통해 업데이트하세요.",
-          "versionReadyToInstall": "{{version}} 버전을 설치할 준비가 되었습니다.",
-          "versionInstalling": "{{version}} 버전을 설치하는 중입니다.",
-          "downloadingVersion": "버전 {{version}} 다운로드 중 ({{percent}}%)…"
+          "externallyManagedVersionAvailable": "{{version}} 버전을 사용할 수 있습니다. Orca에서 직접 설치할 수 없으므로 시스템 패키지 관리자를 통해 업데이트하세요."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "워크스페이스의 열기 메뉴에서 사용 가능한 앱을 선택하세요.",
@@ -12761,15 +12793,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "페어링된 서버 {{value0}}개",
-          "availableCount": "{{value0}}개 업데이트 가능",
           "currentCount": "{{value0}}개 최신 상태",
           "manualCount": "{{value0}}개 수동 업데이트",
           "offlineCount": "{{value0}}개 오프라인",
           "description": "이 클라이언트에서 페어링된 Orca 서버를 확인하고 업데이트합니다.",
-          "updating": "서버 업데이트 중…",
           "serverCountOne": "페어링된 서버 1개",
           "fdd271abf0": "원격 Orca 서버",
-          "e4e5937469": "업데이트 확인",
           "newerCount": "이 앱보다 최신인 서버 {{value0}}대"
         },
         "RemoteServerUpdateDialog": {
@@ -12788,7 +12817,8 @@
           "liveTabs": "{{value0}}개 활성 탭",
           "livePaneOne": "1개 활성 창",
           "livePanes": "{{value0}}개 활성 창",
-          "dca6780b3a": "원격 Orca 서버 업데이트"
+          "dca6780b3a": "원격 Orca 서버 업데이트",
+          "refreshFailed": "페어링된 서버를 확인할 수 없습니다."
         },
         "RemoteServerUpdateStatus": {
           "checking": "확인 중…",
@@ -13274,34 +13304,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "해당 버전으로 전환할 수 없습니다.",
-          "title": "업데이트 채널",
-          "description": "업데이트 채널을 바꾸거나 이전 버전을 포함한 모든 배포 버전으로 전환할 수 있습니다. 다운그레이드도 가능하지만, 검증되지 않은 버전은 정상적으로 작동하지 않을 수 있습니다.",
-          "devOnly": "개발자 전용",
-          "adhocWarning": "Windows용 버전은 서명되지 않았습니다. 작성자가 유지보수를 중단할 수 있으니 안정 버전을 준비해 두세요.",
           "loadingBuilds": "버전 불러오는 중…",
           "noBuilds": "버전을 찾을 수 없습니다.",
           "refresh": "버전 목록 새로고침",
-          "cacheHint": "버전 목록은 5분 동안 캐시됩니다. 새 버전을 확인하려면 새로고침하세요.",
-          "switchTo": "이 버전으로 전환",
-          "alreadyRunning": "현재 사용 중인 버전입니다.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "버전 전환은 데스크톱 앱에서만 가능합니다.",
-          "devChannelUnsupportedAria": "{{value0}}({{value1}}만 해당)",
-          "devChannelUnsupported": "‘{{value0}}’ 채널의 버전은 {{value1}}용으로만 제공됩니다. Linux에서는 {{stable}} 또는 {{rc}} 채널을 사용하세요.",
           "downloadInstaller": "설치 프로그램 다운로드",
           "manualInstallHint": "‘{{value0}}’ 채널의 버전은 Windows에서 서명되지 않았으므로 앱 내 업데이트 기능으로는 서명된 버전 위에 설치할 수 없습니다. 다운로드한 설치 프로그램을 한 번 실행하세요. Windows에서 알 수 없는 게시자 경고가 표시됩니다. 이후에는 ‘{{stable}}’ 채널로 돌아가는 경우를 포함해 여기서 버전을 전환할 수 있습니다.",
           "stableLabel": "안정판",
-          "stableDescription": "일반 사용자를 위한 안정 버전입니다.",
           "rcLabel": "RC",
-          "rcDescription": "안정 버전이 나오기 전에 배포하는 출시 후보 버전입니다.",
           "hourlyLabel": "매시간",
-          "hourlyDescription": "main에서 매시간 새 버전을 만듭니다.",
           "dailyLabel": "매일",
-          "dailyDescription": "main에서 하루에 한 번 새 버전을 만듭니다.",
           "adhocLabel": "브랜치 버전",
-          "adhocDescription": "병합 전 변경 사항을 시험할 수 있도록 브랜치에서 별도로 만든 버전입니다.",
-          "devChannelPlatforms": "macOS 및 Windows",
-          "scheduledWarning": "이 버전은 필수 테스트 없이 배포됩니다. Windows용 버전은 서명되지 않았습니다. 안정 버전을 준비해 두세요."
+          "devChannelPlatforms": "macOS 및 Windows"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "시스템 기본값",

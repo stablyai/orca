@@ -1,0 +1,245 @@
+import type React from 'react'
+import { useId } from 'react'
+import { Check, CircleAlert, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
+import { cn } from '@/lib/class-names'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
+import { getRemoteServerUpdatePhaseLabel } from '../runtime-environments/updates/RemoteServerUpdateStatus'
+import {
+  getRemoteServerEntryHelp,
+  getRemoteServerVersionDescription
+} from '../runtime-environments/updates/remote-server-update-entry-copy'
+import { MiddleEllipsisLabel } from '../../new-workspace/run-target/MiddleEllipsisLabel'
+import { ServerRestartButton } from './ServerRestartButton'
+import {
+  UPDATING_PHASES,
+  getServerRestartQuestion,
+  getSessionsMayDropLabel
+} from './server-restart-copy'
+
+function statusDotClass(entry: RemoteServerUpdateEntry): string {
+  switch (entry.phase) {
+    case 'available':
+      return 'bg-theme-accent'
+    case 'current':
+      return 'bg-status-success'
+    case 'manual':
+      return 'bg-status-warning'
+    case 'offline':
+      return 'border border-muted-foreground'
+    // These phases draw a spinner, check or alert icon instead of this dot.
+    case 'updated':
+    case 'failed':
+    case 'checking':
+    case 'checking-update':
+    case 'downloading':
+    case 'queued':
+    case 'restarting':
+      return 'bg-muted-foreground'
+  }
+}
+
+function StatusGlyph({ entry }: { entry: RemoteServerUpdateEntry }): React.JSX.Element {
+  if (entry.phase === 'checking' || UPDATING_PHASES.has(entry.phase)) {
+    return <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+  }
+  if (entry.phase === 'updated') {
+    return <Check className="size-3.5 text-status-success" strokeWidth={2.5} />
+  }
+  if (entry.phase === 'failed') {
+    return <CircleAlert className="size-3.5 text-destructive" />
+  }
+  return <span className={cn('size-2 rounded-full', statusDotClass(entry))} />
+}
+
+// Intl formatter caches key on option identity, so this must be a module constant.
+const PERCENT_FORMAT: Intl.NumberFormatOptions = { style: 'percent', maximumFractionDigits: 0 }
+
+/** The right-hand status while a server needs no button; short so it never wraps at 256px. */
+function statusText(
+  entry: RemoteServerUpdateEntry,
+  t: ReturnType<typeof useTranslate>,
+  intlLocale: string
+): string {
+  if (entry.phase === 'downloading' && entry.progress !== null) {
+    return uiNumberFormat(PERCENT_FORMAT, intlLocale).format(Math.round(entry.progress) / 100)
+  }
+  // Preparing a download is still checking, as far as the row needs to say.
+  if (entry.phase === 'checking-update') {
+    return getRemoteServerUpdatePhaseLabel('checking', t)
+  }
+  // The check mark and new version already say it.
+  return entry.phase === 'updated' ? '' : getRemoteServerUpdatePhaseLabel(entry.phase, t)
+}
+
+export function RemoteServerAboutRow({
+  entry,
+  armed,
+  disabled,
+  onArm,
+  onDisarm,
+  onConfirm
+}: {
+  entry: RemoteServerUpdateEntry
+  armed: boolean
+  /** Updates can't start right now (one is running, or the list's fresh check isn't in). */
+  disabled: boolean
+  onArm: () => void
+  onDisarm: () => void
+  onConfirm: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const errorId = useId()
+  const failed = entry.phase === 'failed'
+  const help = getRemoteServerEntryHelp(entry, t)
+  const version = getRemoteServerVersionDescription(entry, t)
+  // Manual and restarting help are long sentences; the status on the right already says it.
+  const sub =
+    help && entry.phase !== 'manual' && entry.phase !== 'restarting' && !failed
+      ? `${version} · ${help}`
+      : version
+  const progress =
+    entry.phase === 'downloading' && entry.progress !== null
+      ? Math.max(0, Math.min(100, Math.round(entry.progress)))
+      : null
+  const status = statusText(entry, t, intlLocale)
+  const manualHelpTitle = t('settings.about.servers.manualHelp', 'Manual update for {{name}}', {
+    name: entry.name
+  })
+
+  let subtitle: React.ReactNode
+  if (armed) {
+    subtitle = (
+      // Wraps rather than truncates, so a longer translation of the warning is never cut.
+      <div className="break-words text-settings-detail text-status-warning-text">
+        {getSessionsMayDropLabel(t)}
+      </div>
+    )
+  } else if (failed) {
+    // What it still runs and why it failed, on one line; the full error is in the tooltip and the
+    // Retry button's description.
+    const failedLine = [
+      entry.currentVersion ? `v${entry.currentVersion}` : null,
+      help ?? t('settings.about.servers.failed', 'Failed')
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    subtitle = (
+      <div title={help ?? failedLine} className="truncate text-settings-detail text-destructive">
+        {failedLine}
+      </div>
+    )
+  } else {
+    subtitle = (
+      <div title={sub} className="truncate text-settings-detail text-muted-foreground">
+        {sub}
+      </div>
+    )
+  }
+
+  return (
+    // Narrow cards keep the control on the name line and give the subtitle the full width beneath
+    // it, so a warning or version is never cut short by the button.
+    <div
+      data-settings-row=""
+      className="relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3"
+    >
+      <span
+        aria-hidden
+        className="col-start-1 row-start-1 row-end-3 grid size-3.5 place-items-center"
+      >
+        <StatusGlyph entry={entry} />
+      </span>
+      {/* Shortened in the middle so hosts sharing a long prefix stay distinguishable. */}
+      <div title={entry.name} className="col-start-2 row-start-1 flex min-w-0 text-sm">
+        {/* Assistive tech reads the full host; the shortened one is visual only. */}
+        <span className="sr-only">{entry.name}</span>
+        <span aria-hidden className="flex min-w-0 flex-1">
+          <MiddleEllipsisLabel text={entry.name} />
+        </span>
+      </div>
+      <div className="col-start-2 row-start-2 min-w-0 @max-xs/about-servers:col-end-4">
+        {subtitle}
+        {failed && help ? (
+          <span id={errorId} className="sr-only">
+            {help}
+          </span>
+        ) : null}
+      </div>
+      <div className="col-start-3 row-start-1 row-end-3 flex justify-end @max-xs/about-servers:row-end-2">
+        {entry.phase === 'available' || failed ? (
+          <ServerRestartButton
+            label={
+              failed
+                ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+                : t('settings.about.action.update', 'Update')
+            }
+            armedLabel={t('settings.about.servers.restartOne', 'Restart?')}
+            question={getServerRestartQuestion([entry], t)}
+            armed={armed}
+            disabled={disabled}
+            confirmBlocked={disabled}
+            target={entry.name}
+            restingName={
+              failed
+                ? t('settings.about.servers.retryOne', 'Retry {{name}}', { name: entry.name })
+                : t('settings.about.servers.updateOne', 'Update {{name}}', { name: entry.name })
+            }
+            describedBy={failed && help ? errorId : undefined}
+            onArm={onArm}
+            onDisarm={onDisarm}
+            onConfirm={onConfirm}
+          />
+        ) : entry.phase === 'manual' && help ? (
+          // The install procedure is a long, host-specific sentence; it opens from the status.
+          <span className="shrink-0 whitespace-nowrap text-settings-detail">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="link-muted"
+                  size="inlineInherit"
+                  aria-label={manualHelpTitle}
+                >
+                  {status}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="top"
+                align="end"
+                aria-label={manualHelpTitle}
+                className="w-72 max-w-[calc(100vw-2rem)]"
+              >
+                <p className="p-3 text-settings-detail">{help}</p>
+              </PopoverContent>
+            </Popover>
+          </span>
+        ) : status ? (
+          <span className="shrink-0 whitespace-nowrap text-settings-detail text-muted-foreground tabular-nums">
+            {status}
+          </span>
+        ) : null}
+      </div>
+      {progress !== null ? (
+        // Rides the row's bottom edge under the text column, so the row never changes height.
+        <div
+          role="progressbar"
+          aria-label={entry.name}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          className="absolute end-0 bottom-0 start-[calc(0.875rem+0.75rem)] h-0.5 overflow-hidden rounded-full bg-border"
+        >
+          <div
+            className="h-full bg-theme-accent transition-[width] duration-300 motion-reduce:transition-none"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}

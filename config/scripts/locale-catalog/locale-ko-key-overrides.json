@@ -4487,9 +4487,6 @@
   "auto.components.settings.GeneralRemoteServerUpdates.serverCount": {
     "ko": "페어링된 서버 {{value0}}개"
   },
-  "auto.components.settings.GeneralRemoteServerUpdates.availableCount": {
-    "ko": "{{value0}}개 업데이트 가능"
-  },
   "auto.components.settings.GeneralRemoteServerUpdates.currentCount": {
     "ko": "{{value0}}개 최신 상태"
   },
@@ -4504,9 +4501,6 @@
   },
   "auto.components.settings.GeneralRemoteServerUpdates.description": {
     "ko": "이 클라이언트에서 페어링된 Orca 서버를 확인하고 업데이트합니다."
-  },
-  "auto.components.settings.GeneralRemoteServerUpdates.updating": {
-    "ko": "서버 업데이트 중…"
   },
   "auto.components.settings.GeneralRemoteServerUpdates.reviewServers": {
     "ko": "서버 업데이트 확인"

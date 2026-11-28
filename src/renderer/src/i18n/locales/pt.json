@@ -2581,21 +2581,11 @@
     "updateDelay": {
       "description": "Aguarde esse número de dias após a publicação de uma versão para que o Orca a ofereça.",
       "none": "Nenhum",
-      "heldTitle": "Orca {{version}} está em espera",
-      "progress": "Tempo até o Orca {{version}} ficar disponível",
       "skipDelayOnceHint": "Verifique este lançamento agora. Sua configuração de atraso permanece a mesma.",
-      "upToDateWithHeld": "Você está usando a versão mais recente disponível. Uma versão mais nova ficará disponível em {{date}}.",
-      "heldReleaseReady": "Uma versão mais recente está pronta. Verifique se há atualizações para obtê-la.",
       "keywordDelay": "atraso",
       "keywordCooldown": "intervalo",
       "keywordSecurity": "segurança",
-      "availableSoon": "Disponível para você {{relative}}",
-      "availableOn": "Disponível para você em {{date}} ({{relative}})",
-      "clearedTitle": "Orca {{version}} está pronto",
-      "released": "Lançado {{released}}",
       "1b4d825e0e": "Atraso de atualização",
-      "ab7e864374": "Sobre o atraso de atualização",
-      "ee1d96f74a": "Ignorar o atraso uma vez",
       "teamManaged": "Definido pela sua equipe"
     },
     "groupHooks": {
@@ -3000,7 +2990,6 @@
     "automaticUpdates": {
       "title": "Atualizações automáticas",
       "description": "Nas instalações compatíveis para computador, o Orca baixa as atualizações elegíveis durante as verificações programadas e reinicia automaticamente para instalá-las.",
-      "info": "Sobre as atualizações automáticas",
       "saveFailed": "Não foi possível salvar a configuração de atualizações automáticas."
     },
     "cloudConsole": {
@@ -3185,6 +3174,68 @@
         "open": "Abrir {{file}}"
       },
       "unreadable": "O login ou a chave salvos não podem ser abertos neste computador"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} prontos",
+        "updateAll": "Atualizar tudo",
+        "title": "Servidores",
+        "otherCount": "{{value0}} outros",
+        "confirmOne": "Reiniciar {{name}}?",
+        "confirmMany": "Reiniciar {{count}} servidores?",
+        "liveMayDrop": "Sessões ativas podem cair.",
+        "sessionsMayDrop": "Sessões podem cair",
+        "restartCount": "Reiniciar {{count}}?",
+        "restartOne": "Reiniciar?",
+        "updateOne": "Atualizar {{name}}",
+        "retryOne": "Tentar {{name}} de novo",
+        "updatingCount": "{{value0}} atualizando",
+        "failedCount": "{{value0}} com falha",
+        "failed": "Falhou",
+        "retryAll": "Repetir todos",
+        "manualHelp": "Atualização manual de {{name}}",
+        "updateAllNarrow": "Tudo",
+        "retryAllNarrow": "Repetir"
+      },
+      "status": {
+        "browserBlockGuidance": "Encerre o processo do navegador (PID {{pids}}) e tente de novo. O servidor dele continua em execução.",
+        "browserBlockGuidanceMany": "Encerre os processos do navegador (PIDs {{pids}}) e tente de novo. Os servidores continuam em execução.",
+        "blocked": "Bloqueado",
+        "heldNarrow": "{{version}} em {{date}}",
+        "notes": "Notas",
+        "checking": "Verificando…",
+        "upToDate": "Atualizado",
+        "heldUntil": "{{version}} em espera até {{date}}",
+        "available": "{{version}} disponível",
+        "latestForMac": "Mais recente para este Mac",
+        "ready": "{{version}} pronta",
+        "installing": "Instalando {{version}}…",
+        "installOnQuit": "Saia para instalar",
+        "installBlocked": "Instalação bloqueada",
+        "updateFailed": "Falha na atualização",
+        "checkFailed": "Falha na verificação",
+        "failed": "Falhou",
+        "hideDetails": "Ocultar detalhes",
+        "showDetails": "Mostrar detalhes",
+        "hide": "Ocultar",
+        "details": "Detalhes",
+        "copyDetails": "Copiar detalhes",
+        "copied": "Copiado",
+        "copyFailed": "Não foi possível copiar os detalhes.",
+        "downloadingPercent": "Baixando {{percent}}"
+      },
+      "action": {
+        "checkHeldNow": "Verificar {{version}} agora. Sua configuração de atraso continua a mesma.",
+        "check": "Verificar",
+        "update": "Atualizar",
+        "retry": "Repetir",
+        "skipDelay": "Pular atraso",
+        "restart": "Reiniciar",
+        "checkForUpdates": "Verificar atualizações"
+      },
+      "channel": {
+        "unknownVersion": "O Orca {{version}} não é uma versão de lançamento, então o canal não pode ser alterado aqui."
+      }
     }
   },
   "auto": {
@@ -8785,22 +8836,10 @@
           "keywordCloud": "nuvem"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "Notas de versão",
           "02dc082e70": "Não foi possível iniciar o download da atualização.",
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
-          "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
-          "b9ad70c30d": "Erro de atualização. {{value0}}",
-          "f40d88390d": "Você está na versão mais recente.",
-          "31fd7150cf": "Verificando atualizações...",
-          "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
           "6d27bd46e3": "Verificar Atualizações",
-          "downloadUpdate": "Baixar atualização",
-          "restartToUpdate": "Reiniciar para atualizar",
-          "versionAvailable": "A versão {{version}} está disponível.",
-          "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria.",
-          "versionReadyToInstall": "A versão {{version}} está pronta para instalar.",
-          "versionInstalling": "Instalando a versão {{version}}.",
-          "downloadingVersion": "Baixando a versão {{version}} ({{percent}}%)…"
+          "externallyManagedVersionAvailable": "A versão {{version}} está disponível. Atualize o Orca pelo gerenciador de pacotes do sistema. O Orca não pode instalar essa versão por conta própria."
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -8987,7 +9026,8 @@
           "liveTabs": "{{value0}} abas ativas",
           "livePaneOne": "1 painel ativo",
           "livePanes": "{{value0}} painéis ativos",
-          "dca6780b3a": "Atualizar Servidores Orca Remotos"
+          "dca6780b3a": "Atualizar Servidores Orca Remotos",
+          "refreshFailed": "Não foi possível verificar os servidores pareados."
         },
         "PluginInstallDialog": {
           "localRequired": "Digite o caminho da pasta do plugin.",
@@ -9040,34 +9080,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Não foi possível mudar para essa versão.",
-          "title": "Canal de atualização",
-          "description": "Mude de canal de atualização ou escolha uma versão publicada, inclusive uma anterior. Versões não verificadas podem falhar.",
-          "devOnly": "Somente dev",
-          "adhocWarning": "As versões para Windows não são assinadas. Quem gerou a versão pode deixar de mantê-la. Tenha uma versão estável à mão.",
           "loadingBuilds": "Carregando versões…",
           "noBuilds": "Nenhuma versão encontrada",
           "refresh": "Atualizar lista de versões",
-          "switchTo": "Mudar de versão",
-          "alreadyRunning": "Esta é a versão em uso.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Só é possível mudar de versão no aplicativo para computador.",
-          "devChannelUnsupportedAria": "{{value0}} (somente {{value1}})",
-          "devChannelUnsupported": "As versões do canal “{{value0}}” estão disponíveis apenas para {{value1}}. No Linux, use {{stable}} ou {{rc}}.",
           "downloadInstaller": "Baixar instalador",
           "manualInstallHint": "As versões do canal “{{value0}}” não são assinadas no Windows. O atualizador do aplicativo não consegue instalá-las sobre uma versão assinada. Execute o instalador baixado uma vez. O Windows vai avisar sobre um editor desconhecido. Depois, você pode mudar de versão aqui, inclusive voltar ao canal “{{stable}}”.",
-          "cacheHint": "A lista de versões fica em cache por 5 minutos. Atualize a lista para procurar novas versões.",
           "stableLabel": "Estável",
-          "stableDescription": "Versões estáveis para uso geral.",
           "rcLabel": "RC",
-          "rcDescription": "Versões candidatas publicadas antes de uma versão estável.",
           "hourlyLabel": "Por hora",
-          "hourlyDescription": "Versão gerada a cada hora a partir de main.",
           "dailyLabel": "Diário",
-          "dailyDescription": "Versão gerada uma vez por dia a partir de main.",
           "adhocLabel": "Pontual",
-          "adhocDescription": "Versões pontuais de uma branch para experimentar alterações antes de integrá-las.",
-          "devChannelPlatforms": "macOS e Windows",
-          "scheduledWarning": "Essas versões são publicadas sem testes obrigatórios. As versões para Windows não são assinadas. Tenha uma versão estável à mão."
+          "devChannelPlatforms": "macOS e Windows"
         },
         "ManageSessionsSection": {
           "33c2a1e1b4": "Encerrar sessão {{value0}}",
@@ -9466,14 +9491,8 @@
           "ee110e1830": "Nenhuma ref base padrão"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "Obrigado pelo apoio!",
           "6922c1fa2b": "Dar estrela ao Orca no GitHub",
-          "511782265b": "Apoie o projeto com uma estrela no GitHub.",
-          "55a87e5fd1": "Apoiar o Orca",
-          "964acc6bb4": "Dar Estrela",
-          "397719bee5": "Dando estrela...",
-          "cb65c75b11": "Abrindo...",
-          "f2d4f877b2": "Abrir GitHub"
+          "964acc6bb4": "Dar Estrela"
         },
         "MobileEmulatorAgentControlRow": {
           "8af7a8bc38": "Os comandos têm como alvo o emulador ativo da worktree atual. As coordenadas são normalizadas de 0 a 1.",
@@ -9713,15 +9732,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} servidores pareados",
-          "availableCount": "{{value0}} prontos para atualizar",
           "currentCount": "{{value0}} atualizados",
           "manualCount": "{{value0}} manual(is)",
           "offlineCount": "{{value0}} off-line",
           "description": "Verifique e atualize servidores Orca pareados a partir deste cliente.",
-          "updating": "Atualizando servidores…",
           "serverCountOne": "1 servidor pareado",
           "fdd271abf0": "Servidores Orca Remotos",
-          "e4e5937469": "Verificar Atualizações",
           "newerCount": "{{value0}} com versão mais recente que a deste aplicativo"
         },
         "BrowserTerminalLinkActionsSetting": {
@@ -20593,8 +20609,7 @@
           "statusDownloading": "Baixando atualização",
           "statusDownloaded": "Atualização pronta para instalar",
           "statusError": "Erro na atualização"
-        },
-        "b3b02a9d84": "Tentar Novamente"
+        }
       },
       "LinearIssueWorkspace": {
         "ad5dec37b7": "Pré-visualize, edite e comece a trabalhar a partir da issue selecionada.",

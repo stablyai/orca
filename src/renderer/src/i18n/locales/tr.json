@@ -1757,18 +1757,8 @@
       "keywordDelay": "gecikme",
       "keywordCooldown": "bekleme süresi",
       "keywordSecurity": "güvenlik",
-      "upToDateWithHeld": "Güncelsiniz. Daha yeni bir sürüm {{date}} tarihine kadar bekletiliyor.",
-      "heldReleaseReady": "Daha yeni bir sürüm hazır. Almak için güncellemeleri kontrol edin.",
       "none": "Yok",
-      "ab7e864374": "Güncelleme gecikmesi hakkında",
-      "availableSoon": "{{relative}} kullanımınıza sunulacak",
-      "availableOn": "{{date}} tarihinde ({{relative}}) kullanımınıza sunulacak",
-      "clearedTitle": "Orca {{version}} hazır",
-      "heldTitle": "Orca {{version}} bekletiliyor",
-      "released": "Yayınlanma: {{released}}",
-      "progress": "Orca {{version}} sürümünün kullanımınıza sunulmasına kalan süre",
       "skipDelayOnceHint": "Bu sürümü şimdi kontrol edin. Gecikme ayarınız değişmez.",
-      "ee1d96f74a": "Gecikmeyi bir kez atla",
       "teamManaged": "Ekibiniz tarafından ayarlandı",
       "1b4d825e0e": "Güncelleme gecikmesi",
       "description": "Orca bir sürümü sunmadan önce yayınlanmasının üzerinden bu kadar gün geçmesini bekler."
@@ -2065,7 +2055,6 @@
     "automaticUpdates": {
       "title": "Otomatik güncellemeler",
       "description": "Desteklenen masaüstü kurulumlarında Orca, düzenli denetimler sırasında uygun güncellemeleri indirir ve bunları yüklemek için otomatik olarak yeniden başlatılır.",
-      "info": "Otomatik güncellemeler hakkında",
       "saveFailed": "Otomatik güncelleme ayarı kaydedilemedi."
     },
     "accounts": {
@@ -2274,6 +2263,68 @@
         "open": "{{file}} dosyasını aç"
       },
       "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} hazır",
+        "updateAll": "Tümünü güncelle",
+        "title": "Sunucular",
+        "otherCount": "{{value0}} diğer",
+        "confirmOne": "{{name}} yeniden başlatılsın mı?",
+        "confirmMany": "{{count}} sunucu yeniden başlatılsın mı?",
+        "liveMayDrop": "Canlı oturumlar kopabilir.",
+        "sessionsMayDrop": "Oturumlar kopabilir",
+        "restartCount": "{{count}} yeniden başlatılsın mı?",
+        "restartOne": "Yeniden başlatılsın mı?",
+        "updateOne": "{{name}} güncelle",
+        "retryOne": "{{name}} için yeniden dene",
+        "updatingCount": "{{value0}} güncelleniyor",
+        "failedCount": "{{value0}} başarısız",
+        "failed": "Başarısız",
+        "retryAll": "Tümünü yeniden dene",
+        "manualHelp": "{{name}} için manuel güncelleme",
+        "updateAllNarrow": "Tümü",
+        "retryAllNarrow": "Yeniden dene"
+      },
+      "status": {
+        "browserBlockGuidance": "Tarayıcı işlemini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucusu çalışmaya devam eder.",
+        "browserBlockGuidanceMany": "Tarayıcı işlemlerini (PID {{pids}}) sonlandırıp yeniden deneyin. Sunucuları çalışmaya devam eder.",
+        "blocked": "Engellendi",
+        "heldNarrow": "{{version}} {{date}} itibarıyla",
+        "notes": "Notlar",
+        "checking": "Denetleniyor…",
+        "upToDate": "Güncel",
+        "heldUntil": "{{version}} {{date}} tarihine kadar beklemede",
+        "available": "{{version}} mevcut",
+        "latestForMac": "Bu Mac için en son",
+        "ready": "{{version}} kuruluma hazır",
+        "installing": "{{version}} yükleniyor…",
+        "installOnQuit": "Yüklemek için çıkın",
+        "installBlocked": "Yükleme engellendi",
+        "updateFailed": "Güncelleme başarısız",
+        "checkFailed": "Denetim başarısız",
+        "failed": "Başarısız",
+        "hideDetails": "Ayrıntıları gizle",
+        "showDetails": "Ayrıntıları göster",
+        "hide": "Gizle",
+        "details": "Ayrıntılar",
+        "copyDetails": "Ayrıntıları kopyala",
+        "copied": "Kopyalandı",
+        "copyFailed": "Ayrıntılar kopyalanamadı.",
+        "downloadingPercent": "İndiriliyor {{percent}}"
+      },
+      "action": {
+        "checkHeldNow": "{{version}} sürümünü şimdi denetle. Gecikme ayarınız aynı kalır.",
+        "check": "Denetle",
+        "update": "Güncelle",
+        "retry": "Yeniden dene",
+        "skipDelay": "Gecikmeyi atla",
+        "restart": "Yeniden başlat",
+        "checkForUpdates": "Güncellemeleri denetle"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} bir sürüm derlemesi değil, bu yüzden kanalı burada değiştirilemez."
+      }
     }
   },
   "menu": {
@@ -4732,8 +4783,7 @@
           "statusDownloading": "Güncelleme indiriliyor",
           "statusDownloaded": "Güncelleme yüklenmeye hazır",
           "statusError": "Güncelleme hatası"
-        },
-        "b3b02a9d84": "Tekrar Dene"
+        }
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Taşı",
@@ -9689,32 +9739,14 @@
           "5cb5475664": "Sabitlenmiş sekmeleri kapatmadan önce onayla"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "Desteğiniz için teşekkürler!",
           "6922c1fa2b": "Orca'yı GitHub'da Yıldızlayın",
-          "511782265b": "GitHub'da yıldız vererek projeyi destekleyin.",
-          "55a87e5fd1": "Orca'yı Destekleyin",
-          "964acc6bb4": "Yıldızla",
-          "397719bee5": "Yıldızlanıyor...",
-          "cb65c75b11": "Açılıyor...",
-          "f2d4f877b2": "GitHub'ı Aç"
+          "964acc6bb4": "Yıldızla"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "Sürüm notları",
           "02dc082e70": "Güncelleme indirmesi başlatılamadı.",
           "ceb579abaf": "Uygulama güncellemelerini kontrol edin ve daha yeni bir Orca sürümü yükleyin.",
-          "bd79d412f0": "Güncelleme kontrolü başarısız oldu. {{value0}}",
-          "b9ad70c30d": "Güncelleme hatası. {{value0}}",
-          "f40d88390d": "En son sürümdesiniz.",
-          "31fd7150cf": "Güncellemeler kontrol ediliyor...",
-          "d69a09b672": "Güncellemeler açılışta otomatik olarak kontrol edilir.",
           "6d27bd46e3": "Güncellemeleri Kontrol Et",
-          "downloadUpdate": "Güncellemeyi indir",
-          "restartToUpdate": "Güncellemek için yeniden başlat",
-          "versionAvailable": "{{version}} sürümü kullanılabilir.",
-          "externallyManagedVersionAvailable": "{{version}} sürümü kullanılabilir. Orca bu sürümü kendi başına yükleyemediği için sistem paket yöneticisini kullanarak güncelleyin.",
-          "versionReadyToInstall": "{{version}} sürümü yüklemeye hazır.",
-          "versionInstalling": "{{version}} sürümü yükleniyor.",
-          "downloadingVersion": "{{version}} sürümü indiriliyor (%{{percent}})…"
+          "externallyManagedVersionAvailable": "{{version}} sürümü kullanılabilir. Orca bu sürümü kendi başına yükleyemediği için sistem paket yöneticisini kullanarak güncelleyin."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Bir çalışma alanının Şunda Aç menüsünden kullanılabilir uygulamaları seçin.",
@@ -13522,15 +13554,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} eşleştirilmiş sunucu",
-          "availableCount": "{{value0}} güncellemeye hazır",
           "currentCount": "{{value0}} güncel",
           "manualCount": "{{value0}} manuel",
           "offlineCount": "{{value0}} çevrimdışı",
           "description": "Bu istemciden eşleştirilmiş Orca sunucularını kontrol edin ve güncelleyin.",
-          "updating": "Sunucular güncelleniyor…",
           "serverCountOne": "1 eşleştirilmiş sunucu",
           "fdd271abf0": "Uzak Orca Sunucuları",
-          "e4e5937469": "Güncellemeleri Kontrol Et",
           "newerCount": "{{value0}} tanesi bu uygulamadan daha yeni"
         },
         "RemoteServerUpdateDialog": {
@@ -13549,7 +13578,8 @@
           "liveTabs": "{{value0}} canlı sekme",
           "livePaneOne": "1 canlı bölme",
           "livePanes": "{{value0}} canlı bölme",
-          "dca6780b3a": "Uzak Orca Sunucularını Güncelle"
+          "dca6780b3a": "Uzak Orca Sunucularını Güncelle",
+          "refreshFailed": "Eşleştirilmiş sunucular kontrol edilemedi."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Kontrol ediliyor…",
@@ -13914,34 +13944,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "O sürüme geçilemedi.",
-          "title": "Güncelleme kanalı",
-          "description": "Güncelleme kanalını değiştirin veya daha eski sürümler de dahil olmak üzere yayımlanmış bir sürüme geçin. Doğrulanmamış sürümler çalışmayabilir.",
-          "devOnly": "Geliştirme için",
-          "adhocWarning": "Windows sürümleri imzasızdır. Sürümü hazırlayan kişi desteği bırakabilir. Elinizin altında kararlı bir sürüm bulundurun.",
           "loadingBuilds": "Sürümler yükleniyor…",
           "noBuilds": "Sürüm bulunamadı",
           "refresh": "Sürüm listesini yenile",
-          "cacheHint": "Sürüm listeleri 5 dakika önbelleğe alınır. Yeni sürümleri kontrol etmek için yenileyin.",
-          "switchTo": "Şu sürüme geç",
-          "alreadyRunning": "Şu anda çalıştırdığınız sürüm bu.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Sürüm değiştirme yalnızca masaüstü uygulamasında kullanılabilir.",
-          "devChannelUnsupportedAria": "{{value0}} (yalnızca {{value1}})",
-          "devChannelUnsupported": "“{{value0}}” kanalındaki sürümler yalnızca {{value1}} için üretilir. Linux’ta {{stable}} ve {{rc}} kanallarını kullanabilirsiniz.",
           "downloadInstaller": "Yükleyiciyi indir",
           "manualInstallHint": "“{{value0}}” kanalındaki sürümler Windows'ta imzasızdır, bu yüzden uygulama içi güncelleyici bunu imzalı bir sürümün üzerine yükleyemez. İndirilen yükleyiciyi bir kez çalıştırın; Windows bilinmeyen bir yayımcı konusunda uyaracaktır ve “{{stable}}” kanalına dönüş dahil sonraki her geçiş buradan çalışır.",
           "stableLabel": "Kararlı",
-          "stableDescription": "Genel kullanım için kararlı sürümler.",
           "rcLabel": "RC",
-          "rcDescription": "Kararlı sürümden önce yayımlanan sürüm adayları.",
           "hourlyLabel": "Saatlik",
-          "hourlyDescription": "main dalından her saat derlenir.",
           "dailyLabel": "Günlük",
-          "dailyDescription": "main dalından günde bir kez derlenir.",
           "adhocLabel": "Tek seferlik",
-          "adhocDescription": "Değişiklikleri birleştirilmeden önce denemek için bir daldan üretilen tek seferlik sürümler.",
-          "devChannelPlatforms": "macOS ve Windows",
-          "scheduledWarning": "Bu sürümler zorunlu test olmadan yayımlanır. Windows sürümleri imzasızdır. Elinizin altında kararlı bir sürüm bulundurun."
+          "devChannelPlatforms": "macOS ve Windows"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Sistem varsayılanı",

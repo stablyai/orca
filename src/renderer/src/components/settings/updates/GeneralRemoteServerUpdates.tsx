@@ -1,14 +1,58 @@
 import type React from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   getUpdateCheckClickOptions,
   getUpdateCheckHint
 } from '@/app-shell/updates/update-check-click-options'
-import { getRemoteServerNewerThanClientVersion } from '../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
+import type { RemoteServerUpdateCheck } from '@/store/slices/runtime-host-updates/remote-server-updates'
+import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
+import { AboutDisclosureRow } from './AboutDisclosureRow'
+import { RemoteServerAboutRow } from './RemoteServerAboutRow'
+import { ServerUpdateSummary } from './ServerUpdateSummary'
+import { ServerRestartButton } from './ServerRestartButton'
+import { getServerRestartQuestion } from './server-restart-copy'
+
+const isEligible = (entry: RemoteServerUpdateEntry): boolean =>
+  entry.phase === 'available' || entry.phase === 'failed'
+
+type Snapshot =
+  | { phase: 'owed' | 'failed' }
+  | { phase: 'running'; request: Promise<RemoteServerUpdateCheck | undefined> }
+  | { phase: 'ready'; check: RemoteServerUpdateCheck }
+
+/** A bulk label with a short form for the narrow header, where long translations would cover "Servers". */
+function narrowable(full: string, short: string): React.ReactNode {
+  return full === short ? (
+    full
+  ) : (
+    <>
+      <span className="@max-xs/about-row:hidden">{full}</span>
+      <span className="hidden @max-xs/about-row:inline">{short}</span>
+    </>
+  )
+}
+
+function isFocusable(element: HTMLElement): boolean {
+  return (
+    element.isConnected &&
+    !(element instanceof HTMLButtonElement && element.disabled) &&
+    element.getClientRects().length > 0
+  )
+}
+
+/** Which button is waiting for its second click, bound to the servers it would restart. */
+type Armed = {
+  /** One server's id, or null for Update all. */
+  serverId: string | null
+  key: string
+}
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const t = useTranslate()
@@ -16,67 +60,279 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const entries = [...entryMap.values()]
   const checking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const running = useAppStore((state) => state.remoteServerUpdatesRunning)
+  const revision = useAppStore((state) => state.remoteServerUpdatesCheckRevision)
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
+  const start = useAppStore((state) => state.startRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
-  const updateCheckHint = getUpdateCheckHint()
+  const [open, setOpen] = useState(false)
+  const [armed, setArmed] = useState<Armed | null>(null)
+  const disarm = useCallback((): void => setArmed(null), [])
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const bulkActionRef = useRef<HTMLDivElement>(null)
+  const actionRef = useRef<HTMLDivElement>(null)
+  // The action button that last had keyboard focus; cleared when focus genuinely moves away.
+  const lastFocusedAction = useRef<HTMLElement | null>(null)
+  const [snapshot, setSnapshot] = useState<Snapshot>({ phase: 'owed' })
+  const refreshSnapshot = useCallback(
+    (options?: UpdateCheckOptions): void => {
+      const request = refresh(options, {
+        preserveFailureDetails: options === undefined
+      })
+      setSnapshot({ phase: 'running', request })
+      const settle = (next: Snapshot): void => {
+        // Folding or another Check disowns this result, even if it settles during a reopen.
+        setSnapshot((current) =>
+          current.phase === 'running' && current.request === request ? next : current
+        )
+      }
+      void request.then(
+        (check) => settle(check ? { phase: 'ready', check } : { phase: 'owed' }),
+        () => settle({ phase: 'failed' })
+      )
+    },
+    [refresh]
+  )
+  const needsSnapshot = snapshot.phase === 'owed'
+  useEffect(() => {
+    if (!open || !needsSnapshot || checking || running) {
+      return
+    }
+    const store = useAppStore.getState()
+    if (store.remoteServerUpdatesChecking || store.remoteServerUpdatesRunning) {
+      return
+    }
+    refreshSnapshot()
+  }, [open, needsSnapshot, checking, running, refreshSnapshot])
+
+  // A modifier-click Check picks a one-off release track; closing the dialog clears it, and so
+  // does folding this list or leaving the page, so a later Update all can't inherit it.
+  const clearCheckOptions = useCallback((): void => {
+    if (!useAppStore.getState().remoteServerUpdateDialogOpen) {
+      setDialogOpen(false)
+    }
+  }, [setDialogOpen])
+  useEffect(() => clearCheckOptions, [clearCheckOptions])
+
+  const eligible = entries.filter(isEligible)
+  const busy = checking || running
+  const authorizedCheck =
+    snapshot.phase === 'ready' && snapshot.check.revision === revision ? snapshot.check : null
+  const updatesBlocked = busy || !authorizedCheck
+  // The compact header has one control. If its check failed or went stale, offer a fresh check.
+  const needsRetry =
+    eligible.length > 0 &&
+    open &&
+    !busy &&
+    (snapshot.phase === 'failed' || (snapshot.phase === 'ready' && !authorizedCheck))
+  const targetsOf = (serverId: string | null): RemoteServerUpdateEntry[] =>
+    serverId === null ? eligible : eligible.filter((entry) => entry.environmentId === serverId)
+  const keyOf = (servers: RemoteServerUpdateEntry[]): string =>
+    servers.map((entry) => entry.environmentId).join('\n')
+  // The question is bound to the servers it named: if that set changes, an update starts, the
+  // list folds, or its check fails, it reverts unanswered and never re-arms by itself.
+  if (
+    armed &&
+    (armed.key !== keyOf(targetsOf(armed.serverId)) ||
+      running ||
+      needsRetry ||
+      (armed.serverId !== null && !open))
+  ) {
+    setArmed(null)
+  }
+
+  // The header action changes under focus: buttons are replaced when servers become eligible or
+  // updates start, disabled while a check runs, or hidden by the narrow layout. Whenever that
+  // strands keyboard focus (on the page, a hidden button or a disabled one), land on Servers.
+  const hasEntries = entries.length > 0
+  const rescueActionFocus = useCallback((): void => {
+    const container = actionRef.current
+    if (!container) {
+      return
+    }
+    const active = container.ownerDocument.activeElement
+    // Dropped only when the button that had focus can no longer take it (removed, disabled or
+    // hidden); a usable button the user blurred to the page must not pull focus back.
+    const lastFocused = lastFocusedAction.current
+    const dropped =
+      lastFocused !== null &&
+      !isFocusable(lastFocused) &&
+      (!active || active === container.ownerDocument.body)
+    const stranded =
+      active instanceof HTMLButtonElement &&
+      container.contains(active) &&
+      (active.disabled || active.getClientRects().length === 0)
+    if (dropped || stranded) {
+      toggleRef.current?.focus()
+    }
+    // One pass per loss: a ref that can no longer take focus is spent, rescued or not, so it can't
+    // pull focus back on a later commit.
+    if (lastFocused !== null && !isFocusable(lastFocused)) {
+      lastFocusedAction.current = null
+    }
+  }, [])
+  // No deps: a cheap check after every commit, since any re-render can replace the action.
+  useLayoutEffect(rescueActionFocus)
+  useEffect(() => {
+    const container = actionRef.current
+    if (!container) {
+      return
+    }
+    // Container queries hide buttons on resize without a re-render.
+    const observer = new ResizeObserver(rescueActionFocus)
+    observer.observe(container)
+    return () => observer.disconnect()
+    // The action mounts only once there are servers to show.
+  }, [rescueActionFocus, hasEntries])
 
   if (entries.length === 0) {
     return null
   }
 
-  const available = entries.filter(
-    (entry) => entry.phase === 'available' || entry.phase === 'failed'
-  ).length
-  const manual = entries.filter((entry) => entry.phase === 'manual').length
-  const offline = entries.filter((entry) => entry.phase === 'offline').length
-  const settled = entries.filter((entry) => entry.phase === 'current' || entry.phase === 'updated')
-  // A newer server needs nothing from its own updater; this app is the one behind.
-  const newer = settled.filter((entry) => getRemoteServerNewerThanClientVersion(entry)).length
-  const current = settled.length - newer
-  const summary = [
-    entries.length === 1
-      ? t('auto.components.settings.GeneralRemoteServerUpdates.serverCountOne', '1 paired server')
-      : t(
-          'auto.components.settings.GeneralRemoteServerUpdates.serverCount',
-          '{{value0}} paired servers',
-          { value0: entries.length }
-        ),
-    available > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.availableCount',
-          '{{value0}} ready to update',
-          { value0: available }
-        )
-      : null,
-    current > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
-          '{{value0}} up to date',
-          { value0: current }
-        )
-      : null,
-    newer > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.newerCount',
-          '{{value0}} newer than this app',
-          { value0: newer }
-        )
-      : null,
-    manual > 0
-      ? t('auto.components.settings.GeneralRemoteServerUpdates.manualCount', '{{value0}} manual', {
-          value0: manual
-        })
-      : null,
-    offline > 0
-      ? t(
-          'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
-          '{{value0}} offline',
-          { value0: offline }
-        )
-      : null
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const focusServers = (): void => toggleRef.current?.focus()
+  const arm = (serverId: string | null): void => {
+    setArmed({ serverId, key: keyOf(targetsOf(serverId)) })
+  }
+  const confirm = (serverId: string | null): void => {
+    const ids = targetsOf(serverId).map((entry) => entry.environmentId)
+    if (busy || !authorizedCheck || ids.length === 0) {
+      return
+    }
+    setArmed(null)
+    // The armed button disappears as soon as its servers become queued.
+    focusServers()
+    void start(ids, authorizedCheck)
+  }
+  // Opening re-checks on the default track, as the dialog did, so targets and live-session
+  // counts are never a stale snapshot from an earlier (possibly modifier) check.
+  const setOpenAndRefresh = (next: boolean): void => {
+    setOpen(next)
+    setSnapshot({ phase: 'owed' })
+    if (!next) {
+      clearCheckOptions()
+    }
+  }
+
+  const check = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    setOpen(true)
+    refreshSnapshot(getUpdateCheckClickOptions(event))
+  }
+  const checkLabel = t('settings.about.action.checkForUpdates', 'Check for updates')
+  const checkAction = (
+    <Button
+      ref={
+        needsRetry
+          ? (button) => {
+              if (
+                button &&
+                bulkActionRef.current?.contains(button.ownerDocument.activeElement) &&
+                button.getClientRects().length
+              ) {
+                button.focus()
+              }
+            }
+          : undefined
+      }
+      type="button"
+      variant="outline"
+      size="sm"
+      title={getUpdateCheckHint()}
+      disabled={busy}
+      onClick={(event) => {
+        if (needsRetry) {
+          focusServers()
+        }
+        check(event)
+      }}
+    >
+      {checking ? <Loader2 className="animate-spin" /> : null}
+      {t('settings.about.action.check', 'Check')}
+    </Button>
+  )
+  // When only failed servers can act, the header names the same action as their rows.
+  const onlyFailed = eligible.length > 0 && eligible.every((entry) => entry.phase === 'failed')
+  const allArmed = armed !== null && armed.serverId === null
+  // Rows carry their own progress while updates run, so the header drops its control.
+  const action = running ? null : eligible.length > 0 ? (
+    <div className="flex items-center gap-1">
+      {allArmed ? null : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost-muted"
+              size="icon-sm"
+              className="@max-xs/about-row:hidden"
+              aria-label={checkLabel}
+              disabled={busy}
+              onClick={check}
+            >
+              {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+            {checkLabel}
+            <span className="block text-muted-foreground">{getUpdateCheckHint()}</span>
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {needsRetry ? <div className="hidden @max-xs/about-row:block">{checkAction}</div> : null}
+      <div ref={bulkActionRef} className={needsRetry ? '@max-xs/about-row:hidden' : undefined}>
+        <ServerRestartButton
+          // One server reads as that server's own action, not "Update all" / "Restart 1?".
+          label={
+            onlyFailed
+              ? eligible.length === 1
+                ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+                : narrowable(
+                    t('settings.about.servers.retryAll', 'Retry all'),
+                    t('settings.about.servers.retryAllNarrow', 'Retry all')
+                  )
+              : eligible.length === 1
+                ? t('settings.about.action.update', 'Update')
+                : narrowable(
+                    t('settings.about.servers.updateAll', 'Update all'),
+                    t('settings.about.servers.updateAllNarrow', 'Update all')
+                  )
+          }
+          restingName={
+            eligible.length === 1
+              ? onlyFailed
+                ? t('settings.about.servers.retryOne', 'Retry {{name}}', { name: eligible[0].name })
+                : t('settings.about.servers.updateOne', 'Update {{name}}', {
+                    name: eligible[0].name
+                  })
+              : // The narrow card shows a short form; assistive tech always gets the full action.
+                onlyFailed
+                ? t('settings.about.servers.retryAll', 'Retry all')
+                : t('settings.about.servers.updateAll', 'Update all')
+          }
+          armedLabel={
+            eligible.length === 1
+              ? t('settings.about.servers.restartOne', 'Restart?')
+              : t('settings.about.servers.restartCount', 'Restart {{count}}?', {
+                  count: eligible.length
+                })
+          }
+          question={getServerRestartQuestion(eligible, t)}
+          armed={allArmed}
+          disabled={open ? updatesBlocked : busy}
+          confirmBlocked={updatesBlocked}
+          disabledReason={checking ? t('settings.about.status.checking', 'Checking…') : checkLabel}
+          onArm={() => {
+            arm(null)
+            // Arming from the folded header shows what would restart and re-checks it.
+            if (!open) {
+              setOpenAndRefresh(true)
+            }
+          }}
+          onDisarm={disarm}
+          onConfirm={() => confirm(null)}
+        />
+      </div>
+    </div>
+  ) : (
+    checkAction
+  )
 
   return (
     <SearchableSetting
@@ -89,49 +345,55 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
-      className="space-y-3 py-3"
+      className="@container/about-servers"
     >
-      <div className="space-y-0.5">
-        <div className="text-sm font-medium">
-          {t(
-            'auto.components.settings.GeneralRemoteServerUpdates.fdd271abf0',
-            'Remote Orca servers'
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'auto.components.settings.GeneralRemoteServerUpdates.description',
-            'Check and update paired Orca servers from this client.'
-          )}
-        </p>
-      </div>
-      <div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          title={updateCheckHint}
-          disabled={checking || running}
-          onClick={(event) => {
-            setDialogOpen(true)
-            void refresh(getUpdateCheckClickOptions(event))
-          }}
-        >
-          {checking || running ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="size-3.5" />
-          )}
-          {running
-            ? t('auto.components.settings.GeneralRemoteServerUpdates.updating', 'Updating servers…')
-            : t(
-                'auto.components.settings.GeneralRemoteServerUpdates.e4e5937469',
-                'Check for updates'
-              )}
-        </Button>
-      </div>
-      <p className="text-xs text-muted-foreground">{summary}</p>
+      <AboutDisclosureRow
+        label={t('settings.about.servers.title', 'Servers')}
+        toggleRef={toggleRef}
+        summary={<ServerUpdateSummary entries={entries} armed={allArmed} />}
+        open={open}
+        onOpenChange={setOpenAndRefresh}
+        control={
+          <div
+            ref={actionRef}
+            // Keeps the header's height when updates hide its button, so the rows below don't jump.
+            className="flex min-h-8 items-center"
+            onFocus={(event) => {
+              lastFocusedAction.current = event.target instanceof HTMLElement ? event.target : null
+            }}
+            onBlur={(event) => {
+              // Focus moving to another control, or a blur from a button that can still take
+              // focus, is a real move away. Chromium also blurs a button that was removed,
+              // disabled or hidden onto the page; that keeps the ref so focus can land on Servers.
+              const movedOutside =
+                event.relatedTarget instanceof Node &&
+                !actionRef.current?.contains(event.relatedTarget)
+              if (
+                movedOutside ||
+                (event.target instanceof HTMLElement && isFocusable(event.target))
+              ) {
+                lastFocusedAction.current = null
+              }
+            }}
+          >
+            {action}
+          </div>
+        }
+      >
+        {open
+          ? entries.map((entry) => (
+              <RemoteServerAboutRow
+                key={entry.environmentId}
+                entry={entry}
+                armed={armed?.serverId === entry.environmentId}
+                disabled={updatesBlocked}
+                onArm={() => arm(entry.environmentId)}
+                onDisarm={disarm}
+                onConfirm={() => confirm(entry.environmentId)}
+              />
+            ))
+          : null}
+      </AboutDisclosureRow>
     </SearchableSetting>
   )
 }

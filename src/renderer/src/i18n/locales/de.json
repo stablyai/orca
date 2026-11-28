@@ -2075,7 +2075,6 @@
     "automaticUpdates": {
       "title": "Automatische Updates",
       "description": "Bei unterstützten Desktop-Installationen lädt Orca verfügbare Updates bei der regulären Prüfung herunter und startet zur Installation automatisch neu.",
-      "info": "Über automatische Updates",
       "saveFailed": "Die Einstellung für automatische Updates konnte nicht gespeichert werden."
     },
     "cloudConsole": {
@@ -2107,20 +2106,10 @@
     },
     "updateDelay": {
       "1b4d825e0e": "Update-Verzögerung",
-      "ab7e864374": "Info zur Update-Verzögerung",
-      "ee1d96f74a": "Verzögerung einmal überspringen",
       "teamManaged": "Vom Team festgelegt",
       "description": "Nach Veröffentlichung einer Version wartet Orca so viele Tage, bevor es sie anbietet.",
       "none": "Keine",
-      "availableSoon": "Für dich verfügbar {{relative}}",
-      "availableOn": "Für dich verfügbar am {{date}} ({{relative}})",
-      "clearedTitle": "Orca {{version}} ist verfügbar",
-      "heldTitle": "Orca {{version}} wird später angeboten",
-      "released": "Veröffentlicht am {{released}}",
-      "progress": "Zeit bis Orca {{version}} verfügbar ist",
       "skipDelayOnceHint": "Jetzt nach dieser Version suchen. Die Verzögerungseinstellung bleibt unverändert.",
-      "upToDateWithHeld": "Du bist auf dem aktuellen Stand. Eine neuere Version wird bis {{date}} zurückgehalten.",
-      "heldReleaseReady": "Eine neuere Version ist verfügbar. Suche nach Updates, um sie zu erhalten.",
       "keywordDelay": "Verzögerung",
       "keywordCooldown": "Wartezeit",
       "keywordSecurity": "Sicherheit"
@@ -2274,6 +2263,68 @@
         "open": "{{file}} öffnen"
       },
       "unreadable": "Gespeicherte Anmeldung oder Schlüssel lässt sich auf diesem Computer nicht öffnen"
+    },
+    "about": {
+      "servers": {
+        "readyCount": "{{value0}} bereit",
+        "updateAll": "Alle aktualisieren",
+        "title": "Server",
+        "otherCount": "{{value0}} weitere",
+        "confirmOne": "{{name}} neu starten?",
+        "confirmMany": "{{count}} Server neu starten?",
+        "liveMayDrop": "Aktive Sitzungen können abbrechen.",
+        "sessionsMayDrop": "Sitzungen können abbrechen",
+        "restartCount": "{{count}} neu starten?",
+        "restartOne": "Neu starten?",
+        "updateOne": "{{name}} aktualisieren",
+        "retryOne": "{{name}} erneut versuchen",
+        "updatingCount": "{{value0}} in Aktualisierung",
+        "failedCount": "{{value0}} fehlgeschlagen",
+        "failed": "Fehlgeschlagen",
+        "retryAll": "Alle wiederholen",
+        "manualHelp": "Manuelles Update für {{name}}",
+        "updateAllNarrow": "Alle",
+        "retryAllNarrow": "Wiederholen"
+      },
+      "status": {
+        "browserBlockGuidance": "Beende den Browser-Prozess (PID {{pids}}) und versuche es erneut. Sein Server läuft weiter.",
+        "browserBlockGuidanceMany": "Beende die Browser-Prozesse (PIDs {{pids}}) und versuche es erneut. Ihre Server laufen weiter.",
+        "blocked": "Blockiert",
+        "heldNarrow": "{{version}} ab {{date}}",
+        "notes": "Notizen",
+        "checking": "Wird geprüft…",
+        "upToDate": "Aktuell",
+        "heldUntil": "{{version}} zurückgestellt bis {{date}}",
+        "available": "{{version}} verfügbar",
+        "latestForMac": "Neueste für diesen Mac",
+        "ready": "{{version}} bereit",
+        "installing": "{{version}} wird installiert…",
+        "installOnQuit": "Zum Installieren beenden",
+        "installBlocked": "Installation blockiert",
+        "updateFailed": "Update fehlgeschlagen",
+        "checkFailed": "Prüfung fehlgeschlagen",
+        "failed": "Fehler",
+        "hideDetails": "Details ausblenden",
+        "showDetails": "Details anzeigen",
+        "hide": "Ausblenden",
+        "details": "Details",
+        "copyDetails": "Details kopieren",
+        "copied": "Kopiert",
+        "copyFailed": "Details konnten nicht kopiert werden.",
+        "downloadingPercent": "Lädt {{percent}}"
+      },
+      "action": {
+        "checkHeldNow": "Jetzt nach {{version}} suchen. Deine Verzögerungseinstellung bleibt gleich.",
+        "check": "Prüfen",
+        "update": "Update",
+        "retry": "Wiederholen",
+        "skipDelay": "Verzögerung überspringen",
+        "restart": "Neu starten",
+        "checkForUpdates": "Nach Updates suchen"
+      },
+      "channel": {
+        "unknownVersion": "Orca {{version}} ist kein Release-Build, daher lässt sich der Kanal hier nicht ändern."
+      }
     }
   },
   "menu": {
@@ -4732,8 +4783,7 @@
           "statusDownloading": "Aktualisierung wird heruntergeladen",
           "statusDownloaded": "Aktualisierung zur Installation bereit",
           "statusError": "Aktualisierungsfehler"
-        },
-        "b3b02a9d84": "Erneut versuchen"
+        }
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Navigieren",
@@ -9686,32 +9736,14 @@
           "5cb5475664": "Vor dem Schließen angehefteter Tabs nachfragen"
         },
         "GeneralSupportSection": {
-          "af7d9f4396": "Danke für die Unterstützung!",
           "6922c1fa2b": "Orca auf GitHub einen Stern geben",
-          "511782265b": "Das Projekt mit einem GitHub-Stern unterstützen.",
-          "55a87e5fd1": "Orca unterstützen",
-          "964acc6bb4": "Stern vergeben",
-          "397719bee5": "Stern wird vergeben…",
-          "cb65c75b11": "Wird geöffnet…",
-          "f2d4f877b2": "GitHub öffnen"
+          "964acc6bb4": "Stern vergeben"
         },
         "GeneralUpdateSettingsSection": {
-          "8a52ca1d02": "Versionshinweise",
           "02dc082e70": "Der Update-Download konnte nicht gestartet werden.",
           "ceb579abaf": "Nach App-Updates suchen und eine neuere Orca-Version installieren.",
-          "bd79d412f0": "Suche nach Updates fehlgeschlagen. {{value0}}",
-          "b9ad70c30d": "Update-Fehler. {{value0}}",
-          "f40d88390d": "Die neueste Version ist installiert.",
-          "31fd7150cf": "Nach Updates wird gesucht…",
-          "d69a09b672": "Beim Start wird automatisch nach Updates gesucht.",
           "6d27bd46e3": "Nach Updates suchen",
-          "downloadUpdate": "Update herunterladen",
-          "restartToUpdate": "Zum Aktualisieren neu starten",
-          "versionAvailable": "Version {{version}} ist verfügbar.",
-          "externallyManagedVersionAvailable": "Version {{version}} ist verfügbar. Aktualisiere Orca über die Paketverwaltung deines Systems. Orca kann diese Version nicht selbst installieren.",
-          "versionReadyToInstall": "Version {{version}} ist bereit zur Installation.",
-          "versionInstalling": "Version {{version}} wird installiert.",
-          "downloadingVersion": "Version {{version}} wird heruntergeladen ({{percent}} %)…"
+          "externallyManagedVersionAvailable": "Version {{version}} ist verfügbar. Aktualisiere Orca über die Paketverwaltung deines Systems. Orca kann diese Version nicht selbst installieren."
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Apps auswählen, die im Menü „Öffnen in“ eines Arbeitsbereichs verfügbar sind.",
@@ -13519,15 +13551,12 @@
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} gekoppelte Server",
-          "availableCount": "{{value0}} zur Aktualisierung bereit",
           "currentCount": "{{value0}} auf dem neuesten Stand",
           "manualCount": "{{value0}} manuell",
           "offlineCount": "{{value0}} offline",
           "description": "Gekoppelte Orca-Server über diesen Client prüfen und aktualisieren.",
-          "updating": "Server werden aktualisiert…",
           "serverCountOne": "1 gekoppelter Server",
           "fdd271abf0": "Entfernte Orca-Server",
-          "e4e5937469": "Nach Updates suchen",
           "newerCount": "{{value0}} neuer als diese App"
         },
         "RemoteServerUpdateDialog": {
@@ -13546,7 +13575,8 @@
           "liveTabs": "{{value0}} aktive Tabs",
           "livePaneOne": "1 aktiver Bereich",
           "livePanes": "{{value0}} aktive Bereiche",
-          "dca6780b3a": "Entfernte Orca-Server aktualisieren"
+          "dca6780b3a": "Entfernte Orca-Server aktualisieren",
+          "refreshFailed": "Gekoppelte Server konnten nicht geprüft werden."
         },
         "RemoteServerUpdateStatus": {
           "checking": "Wird geprüft…",
@@ -13911,34 +13941,19 @@
         },
         "ReleaseChannelSection": {
           "switchFailed": "Wechsel zu dieser Version fehlgeschlagen.",
-          "title": "Update-Kanal",
-          "description": "Update-Kanal wechseln oder eine veröffentlichte Version auswählen, auch eine ältere. Ungeprüfte Versionen funktionieren möglicherweise nicht.",
-          "devOnly": "Nur für die Entwicklung",
-          "adhocWarning": "Versionen für Windows sind nicht signiert. Die Verantwortlichen können die Pflege einstellen. Halte eine stabile Version bereit.",
           "loadingBuilds": "Versionen werden geladen…",
           "noBuilds": "Keine Versionen gefunden",
           "refresh": "Versionsliste aktualisieren",
-          "cacheHint": "Die Versionsliste bleibt 5 Minuten im Cache. Aktualisiere sie, um nach neuen Versionen zu suchen.",
-          "switchTo": "Version wechseln",
-          "alreadyRunning": "Diese Version läuft bereits.",
           "willSwitch": "{{value0}} → {{value1}}",
           "webUnavailable": "Ein Versionswechsel ist nur in der Desktop-App möglich.",
-          "devChannelUnsupportedAria": "{{value0}} (nur {{value1}})",
-          "devChannelUnsupported": "Versionen aus dem Kanal „{{value0}}“ sind nur für {{value1}} verfügbar. Unter Linux sind „{{stable}}“ und „{{rc}}“ verfügbar.",
           "downloadInstaller": "Installationsprogramm herunterladen",
           "manualInstallHint": "Windows-Versionen aus dem Kanal „{{value0}}“ sind nicht signiert. Der integrierte Updater kann sie nicht über eine signierte Version installieren. Führe das heruntergeladene Installationsprogramm einmal aus. Windows warnt dabei vor einem unbekannten Herausgeber. Danach kannst du hier die Version wechseln, auch zurück zum Kanal „{{stable}}“.",
           "stableLabel": "Stabil",
-          "stableDescription": "Stabile Versionen für den allgemeinen Einsatz.",
           "rcLabel": "RC",
-          "rcDescription": "Release-Kandidaten vor der Veröffentlichung einer stabilen Version.",
           "hourlyLabel": "Stündlich",
-          "hourlyDescription": "Wird stündlich aus main gebaut.",
           "dailyLabel": "Täglich",
-          "dailyDescription": "Wird einmal täglich aus main gebaut.",
           "adhocLabel": "Ad hoc",
-          "adhocDescription": "Einmalige Versionen aus einem Branch, um Änderungen vor dem Merge auszuprobieren.",
-          "devChannelPlatforms": "macOS und Windows",
-          "scheduledWarning": "Diese Versionen werden ohne vorgeschaltete Tests veröffentlicht. Versionen für Windows sind nicht signiert. Halte eine stabile Version bereit."
+          "devChannelPlatforms": "macOS und Windows"
         },
         "VoiceMicrophoneSetting": {
           "systemDefault": "Systemstandard",
