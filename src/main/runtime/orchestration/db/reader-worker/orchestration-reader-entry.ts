@@ -6,6 +6,7 @@ import Database from '../../../../sqlite/sync-database'
 import { installWorkerSendLedger } from '../../../../worker-threads/worker-send-ledger'
 import { readConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
 import { readBotGroupTurnSource } from './bot-group-turn-source'
+import { readBotGroupPosts } from './bot-group-post-read'
 import type { OrchestrationDbConnection } from '../orchestration-db'
 import type {
   OrchestrationReaderRequest,
@@ -61,6 +62,8 @@ function runRead(
       return readConnectorWorkerCandidates(connection, request.args.sessionIds, request.args.now)
     case 'botGroupTurnSource':
       return readBotGroupTurnSource(connection.db, request.args)
+    case 'botGroupPosts':
+      return readBotGroupPosts(connection.db, request.args)
   }
 }
 

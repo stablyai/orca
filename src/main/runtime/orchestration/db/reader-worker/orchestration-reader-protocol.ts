@@ -1,6 +1,7 @@
 // Electron-free: shared by the orchestration reader thread and its client.
 import type { ConnectorWorkerCandidates } from '../connector-workers/connector-worker-candidates'
 import type { BotGroupTurnDetailPage } from '../../../../../shared/bots/use-bot-group-turn-details'
+import type { BotGroupMessage } from '../../../../../shared/bots/bot-group'
 
 export type BotGroupTurnSourceInput = {
   groupId: string
@@ -16,6 +17,16 @@ export type BotGroupTurnSource =
   | { kind: 'frozen'; page: BotGroupTurnDetailPage }
   | null
 
+/** Room post reads execute in the reader thread so paging never blocks the runtime loop. */
+export type BotGroupPostReadInput =
+  | { kind: 'page'; groupId: string; threadId?: string; limit: number; beforeSequence?: number }
+  | { kind: 'post'; id: string }
+  | { kind: 'operation'; operationId: string }
+
+export type BotGroupPostReadResult =
+  | { kind: 'page'; messages: BotGroupMessage[] }
+  | { kind: 'post'; message: BotGroupMessage | null }
+
 /** Each read the thread runs, by name, with its arguments and answer. */
 export type OrchestrationReads = {
   connectorWorkerCandidates: {
@@ -25,6 +36,10 @@ export type OrchestrationReads = {
   botGroupTurnSource: {
     args: BotGroupTurnSourceInput
     value: BotGroupTurnSource
+  }
+  botGroupPosts: {
+    args: BotGroupPostReadInput
+    value: BotGroupPostReadResult
   }
 }
 
