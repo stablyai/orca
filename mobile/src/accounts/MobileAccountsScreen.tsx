@@ -24,10 +24,8 @@ import {
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getSystemDefaultProviderUsage,
-  getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
-import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
@@ -38,11 +36,13 @@ import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
 import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
+import { ProviderAccountSections } from './provider-account-sections'
 import {
   getManagedAccountInlineLabel,
   getManagedAccountPrimaryLabel
@@ -76,6 +76,7 @@ export function MobileAccountsScreen() {
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
   const [notice, setNotice] = useState<AccountsNotice | null>(null)
+  const { message: toastMessage, showToast } = useTransientToast()
 
   const accounts = useMobileAccountsSnapshot({
     hostId,
@@ -83,7 +84,12 @@ export function MobileAccountsScreen() {
     connState,
     lastConnectedAt: connectionInputs.lastConnectedAt
   })
-  const { snapshot, live, refresh, refreshing, acceptSnapshot } = accounts
+  const { snapshot, live, refreshing, acceptSnapshot } = accounts
+  const [providerAccountsReload, setProviderAccountsReload] = useState(0)
+  const refresh = useCallback(async () => {
+    setProviderAccountsReload((value) => value + 1)
+    await accounts.refresh()
+  }, [accounts.refresh])
   const error = accounts.error ?? hostError
   // Stored accounts stay up while connecting or offline; re-pair and a failed read on a live connection say so instead.
   const showsAccounts =
@@ -292,34 +298,6 @@ export function MobileAccountsScreen() {
     )
   }
 
-  // Every other provider desktop shows usage for; usage only, since accounts are managed on desktop.
-  const renderOtherProviders = () => {
-    const providers = snapshot ? getOtherUsageProviders(snapshot) : []
-    if (providers.length === 0) {
-      return null
-    }
-    return (
-      <View>
-        <SectionHeader title={t('accounts.screen.otherAgents', 'Other agents')} />
-        <ListGroup style={styles.group}>
-          {providers.map((limits) => (
-            <ListRow
-              key={limits.provider}
-              title={getProviderDisplayName(limits.provider)}
-              leading={<MobileAgentIcon agentId={limits.provider} size={16} />}
-              detail={
-                <>
-                  <ProviderUsageWindows limits={limits} now={now} />
-                  <UsageStatusNote limits={limits} />
-                </>
-              }
-            />
-          ))}
-        </ListGroup>
-      </View>
-    )
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <NavBar
@@ -371,7 +349,19 @@ export function MobileAccountsScreen() {
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}
-            {renderOtherProviders()}
+            <ProviderAccountSections
+              client={client}
+              live={live}
+              snapshot={snapshot}
+              now={now}
+              reloadKey={providerAccountsReload}
+              busyAccountId={busyAccountId}
+              switchBlocked={busyAccountId !== null || resettingCodex || !live}
+              onBusyAccountId={setBusyAccountId}
+              onSwitched={refresh}
+              onNotice={setNotice}
+              onToast={showToast}
+            />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
@@ -392,6 +382,7 @@ export function MobileAccountsScreen() {
         onConfirm={acceptCodexReset}
         onCancel={cancelCodexReset}
       />
+      <TransientToast message={toastMessage} bottomInset={insets.bottom} />
       <ConfirmModal
         visible={notice !== null}
         title={notice?.title ?? ''}

@@ -73,7 +73,9 @@ export function MobileNativeChatUsageLimitStatus({
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const locale = intlLocaleFor(useMobileUiLocale())
-  const { usageLimit, openAccounts } = useContext(MobileNativeChatNoticeContext)
+  const { usageLimit, openAccounts, openAntigravityAccounts } = useContext(
+    MobileNativeChatNoticeContext
+  )
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const resetsAt = failure?.kind === 'usageLimitReached' ? failure.usageLimit?.resetsAt : undefined
   const actions =
@@ -108,7 +110,11 @@ export function MobileNativeChatUsageLimitStatus({
     t,
     locale
   )
-  const switchAccount = actions?.canSwitchAccount ? (openAccounts ?? null) : null
+  const switchAccount = actions?.antigravityAccounts
+    ? (openAntigravityAccounts ?? null)
+    : actions?.canSwitchAccount
+      ? (openAccounts ?? null)
+      : null
   const continueNow = actions && resetPassed ? actions.continueNow : null
   if (!status && !switchAccount && !continueNow) {
     return null

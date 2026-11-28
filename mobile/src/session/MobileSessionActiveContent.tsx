@@ -367,6 +367,7 @@ export function MobileSessionActiveContent({
                     onOpenAccounts={
                       executionHost === undefined ? openNativeChatAccounts : undefined
                     }
+                    onToast={controller.showToast}
                   />
                 </MobileSessionBotIdentity>
               </MobileBotCardHostProvider>
