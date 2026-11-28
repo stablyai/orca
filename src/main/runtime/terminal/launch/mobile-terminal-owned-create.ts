@@ -9,6 +9,7 @@ import type {
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
+import { holderOfTabList } from '../../session-tabs/person/person-workspace-target'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -52,6 +53,8 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     }
   }
 
+  /** `worktreeId` is the tab list it joins: a teammate's own workspace (`person:`) runs the terminal
+   *  in their agent's Home, stamped as theirs (`holder`). */
   protected async createRuntimeOwnedMobileSessionTerminal(
     worktreeId: string,
     activate: boolean,
@@ -59,13 +62,10 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
     opts: OwnedMobileTerminalCreateOptions = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     this.pruneOwnedMobileDispatchRecipes()
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${worktreeId}`,
-      undefined,
-      {
-        wslUserAct: opts.wslUserAct === true
-      }
-    )
+    const { home, holder } = holderOfTabList(worktreeId)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${home}`, undefined, {
+      wslUserAct: opts.wslUserAct === true
+    })
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
     // Why: an SSH sessionId means reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
@@ -80,9 +80,11 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         )
       : undefined
     const create = (preAllocatedHandle?: string) =>
-      this.createTerminal(`id:${worktreeId}`, {
+      this.createTerminal(`id:${home}`, {
         focus: false,
-        ...(opts.presentation ? { presentation: opts.presentation } : {}),
+        // A teammate's terminal is never revealed: no window shows their workspace.
+        ...(holder ? { presentation: 'background' as const, holder } : {}),
+        ...(opts.presentation && !holder ? { presentation: opts.presentation } : {}),
         ...(opts.afterDesktopTabId ? { afterTabId: opts.afterDesktopTabId } : {}),
         onPtySpawnDispatched: (launch) => {
           if (mutationHandle && launch) {
@@ -142,16 +144,16 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.resumesSleepingRecord ? { resumesSleepingRecord: true } : {}),
         ...(opts.reopensPane ? { reopensPane: true } : {})
       })
-    const terminal = opts.createMutation
-      ? await this.dedupeTerminalCreate(
+    const terminal = await (opts.createMutation
+      ? this.dedupeTerminalCreate(
           opts.createMutation.clientIdentity,
-          `id:${worktreeId}`,
+          `id:${home}`,
           opts.createMutation.id,
           true,
           (_selector, handle) => create(handle),
           { wslUserAct: opts.wslUserAct === true }
         )
-      : await create()
+      : create())
     if (terminal.ptyId) {
       opts.onPtyCreated?.(terminal.ptyId, terminal)
     }
@@ -196,7 +198,7 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
       }
     }
     if (opts.createMutation && opts.identity && terminal.ptyId) {
-      this.registerPty(terminal.ptyId, worktreeId, workspace.connectionId ?? null, {
+      this.registerPty(terminal.ptyId, home, workspace.connectionId ?? null, {
         tabId: opts.identity.tabId,
         leafId: opts.identity.leafId,
         terminalHandle: terminal.handle

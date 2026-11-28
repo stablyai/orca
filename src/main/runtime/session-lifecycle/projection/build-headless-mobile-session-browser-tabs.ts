@@ -90,7 +90,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       }
     })
     const publishedClientTabs = buildRuntimeClientBrowserTabs(
-      getRuntimeBrowserPageRegistry(this).pagesOf('host', worktreeId),
+      getRuntimeBrowserPageRegistry(this).pagesOfList(worktreeId),
       getBrowserHostLeaseRegistry(this)
     )
     return [...publishedServerTabs, ...publishedClientTabs]

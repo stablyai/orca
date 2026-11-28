@@ -62,7 +62,12 @@ export class RuntimeAgentSenderAssociations {
   }
   private chatKey: unknown[] = []
   private chats: AgentSenderAssociation[] = []
-  readonly publisher = new AgentSenderPublisher((id) => this.deps.hasPublishedScope?.(id) ?? false)
+  /** Each terminal row's tab list, by pane, for the rows whose list is not where they run. */
+  private tabListByPane = new Map<string, string>()
+  readonly publisher = new AgentSenderPublisher(
+    (id) => this.deps.hasPublishedScope?.(id) ?? false,
+    (row) => this.tabListByPane.get(row.paneKey) ?? row.worktreeId
+  )
   constructor(private readonly deps: Dependencies) {}
 
   private publicationTail: Promise<void> = Promise.resolve()
@@ -283,6 +288,11 @@ export class RuntimeAgentSenderAssociations {
     }
     this.terminalKey = key
     this.failedKey = []
+    this.tabListByPane = new Map(
+      [...panes.values()].flatMap((pane) =>
+        pane.tabList ? [[pane.paneKey, pane.tabList] as const] : []
+      )
+    )
     const rows = new Map<string, AgentSenderAssociation>()
     const add = (identity: string, paneKey: string, dispatchActor?: true) => {
       const pane = panes.get(paneKey)

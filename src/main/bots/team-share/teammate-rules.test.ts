@@ -116,13 +116,13 @@ function paramKeys(schema: unknown): string[] {
 }
 
 describe('a teammate’s own Home tab list (rule 4)', () => {
-  const { person, hostList, none } = TEAMMATE_METHOD_CLASS_TABLE.homeTabs
+  const { person, ownWorkspace, hostList, none } = TEAMMATE_METHOD_CLASS_TABLE.homeTabs
   const byName = new Map<string, (typeof ALL_RPC_METHODS)[number]>(
     ALL_RPC_METHODS.map((method) => [method.name, method])
   )
 
   it('classifies every session.tabs method a teammate reaches, and nothing else twice', () => {
-    const named = [...person, ...hostList, ...none]
+    const named = [...person, ...ownWorkspace, ...hostList, ...none]
     expect(named.filter((name, index) => named.indexOf(name) !== index)).toEqual([])
     expect(named.filter((name) => !byName.has(name))).toEqual([])
     const unclassified = ALL_RPC_METHODS.filter(
@@ -139,7 +139,7 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
   it('reads the workspace of every host-list writer it refuses early in a teammate’s Home', () => {
     // A chats-only teammate reaches none of them; the workspace tier's call names its workspace
     // (`worktree`, or a launch's `target.worktree`). One naming none is refused at admission.
-    for (const name of hostList) {
+    for (const name of [...ownWorkspace, ...hostList]) {
       const method = byName.get(name)!
       expect(method.share, name).toBe('not-shared')
       expect(
@@ -170,9 +170,14 @@ describe('a teammate’s own Home tab list (rule 4)', () => {
     const calls = files.flatMap(({ file, text }) =>
       [...text.matchAll(writes)].flatMap((match) => {
         const at = match.index + match[0].length
-        // A declaration (`name(` after `async`, a method head) names no person.
+        // A declaration (`name(` after `async`, a method head) names no person; an override's
+        // forward to `super` passes on its own caller's, and those callers are in this census.
         const head = text.slice(text.lastIndexOf('\n', match.index) + 1, match.index)
-        if (/^\s*(async |protected |private |public )*$/.test(head) || /function\s+$/.test(head)) {
+        if (
+          /^\s*(async |protected |private |public |abstract |override )*$/.test(head) ||
+          /function\s+$/.test(head) ||
+          /\bsuper\.$/.test(head)
+        ) {
           return []
         }
         let depth = 1

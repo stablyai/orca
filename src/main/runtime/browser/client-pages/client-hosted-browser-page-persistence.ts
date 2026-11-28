@@ -1,3 +1,4 @@
+import { toWireWorkspaceId } from '../../session-tabs/person/person-workspace-target'
 import {
   CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS,
   CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS,
@@ -41,16 +42,15 @@ export type ClientHostedBrowserPagePersistenceHost = {
   now?: () => number
 }
 
-/** Persist the registry projection at the shared tab-change seam; unchanged projections write nothing. */
+/** Persist one tab list's pages at the shared tab-change seam; unchanged projections write nothing.
+ *  `worktreeId` is the list (a teammate's own workspace saves theirs); each row keeps its page's
+ *  workspace. */
 export function persistClientHostedBrowserPages(
   host: ClientHostedBrowserPagePersistenceHost,
-  registry: Pick<RuntimeBrowserPageRegistry, 'everyPage'>,
+  pages: readonly RuntimeBrowserClientPage[],
   worktreeId: string
 ): boolean {
-  const rows = buildPersistedClientHostedBrowserPages(
-    registry.everyPage(worktreeId),
-    host.now?.() ?? Date.now()
-  )
+  const rows = buildPersistedClientHostedBrowserPages(pages, host.now?.() ?? Date.now())
   let session: WorkspaceSessionState | null
   try {
     session = host.getWorkspaceSession(worktreeId)
@@ -129,7 +129,7 @@ export function rehydrateClientHostedBrowserPages(
       }
       for (const row of rows) {
         if (
-          row.workspaceId !== worktreeId ||
+          row.workspaceId !== toWireWorkspaceId(worktreeId) ||
           now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS ||
           registry.getPage(row.browserPageId) !== undefined
         ) {

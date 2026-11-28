@@ -135,6 +135,10 @@ export async function publishAgentLaunchTabEarly(
   }
   let workspace: Awaited<ReturnType<typeof runtime.showTerminalWorkspaceLaunchScope>>
   try {
+    // A teammate's own workspace in a Home is headless, as on a paired server: its tab comes at spawn.
+    if (await runtime.tabListHolderOf(params.target.worktree, context.callerScope)) {
+      return null
+    }
     workspace = await runtime.showTerminalWorkspaceLaunchScope(params.target.worktree)
   } catch {
     // The launch resolves it again after admission and answers for it there.

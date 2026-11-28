@@ -1221,8 +1221,7 @@
       "browser.tabProfileClone",
       "files.open",
       "files.openDiff",
-      "terminal.reveal",
-      "terminal.split"
+      "terminal.reveal"
     ],
     "conditional": {
       "activatesOnlyForCaller": ["worktree.create"],
@@ -1320,7 +1319,8 @@
         "browser.wait",
         "browser.zoom"
       ],
-      "unfocusedOwnClientPage": ["browser.tabSwitch"]
+      "unfocusedOwnClientPage": ["browser.tabSwitch"],
+      "ownWorkspaceTerminal": ["terminal.split"]
     },
     "none": [
       "agent.launch",
@@ -1752,22 +1752,24 @@
       "session.tabs.unsubscribe",
       "session.tabs.unsubscribeAll"
     ],
-    "hostList": [
+    "ownWorkspace": [
       "agent.launch",
       "agent.launchReplay",
-      "browser.openUrl",
       "markdown.readTab",
       "markdown.saveTab",
-      "session.tabs.closeLifecycle",
       "session.tabs.move",
       "session.tabs.movePaneToNewTab",
       "session.tabs.setTabProps",
       "session.tabs.updatePaneLayout",
-      "terminal.adoptOrphans",
-      "terminal.closeAll",
       "terminal.create",
       "terminal.createAgentSession",
-      "terminal.ensureAgentSession",
+      "terminal.ensureAgentSession"
+    ],
+    "hostList": [
+      "browser.openUrl",
+      "session.tabs.closeLifecycle",
+      "terminal.adoptOrphans",
+      "terminal.closeAll",
       "terminal.sleep",
       "terminal.stop",
       "worktree.sleep"

@@ -43,14 +43,12 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     // Legacy clients may hide their mirror first; republish it without authorizing an unattributed destructive close.
     const list = this.homeTabListOf(caller.person, snapshot.worktree)
     if (isTeammateTabList(list)) {
-      if (clientNavigationId) {
-        this.emitMobileSessionTabsSnapshotToClient(
-          this.projectMobileSessionTabsForClient(
-            this.personSessionTabsFrame(list, snapshot.worktree),
-            clientNavigationId
-          ),
-          clientNavigationId
-        )
+      // Their own workspace's frame, as their devices read it: the Home's id, their pick.
+      const own =
+        clientNavigationId &&
+        this.ownSessionTabListFrame(snapshot.worktree, clientNavigationId, false, true)
+      if (own) {
+        this.emitMobileSessionTabsSnapshotToClient(own, clientNavigationId)
       }
     } else {
       this.republishMobileSessionTabsSnapshot(snapshot.worktree)

@@ -1,6 +1,5 @@
 // Each person on a shared agent's host has their own tab list in its Home; every other workspace has
 // one list, shared. Through the real dispatcher, runtime, chat host and record store.
-import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import {
@@ -157,50 +156,6 @@ it('never returns to a closed tab when it opens again, after a restart too (#502
   expect(fresh.mine().chats).toEqual([B, C])
 })
 
-it('refuses a host-list tab write in a teammate’s own Home', async () => {
-  const r = await rig()
-  const refused = await r.send('mate-desk', 'terminal.create', { worktree: `id:${r.workspace}` })
-  expect(refused).toMatchObject({ ok: false, error: { code: 'not_found' } })
-  expect(await r.hostChats()).toEqual([])
-})
-
-it('moves a teammate’s tab an older build saved in the owner’s list to their own, once', async () => {
-  const r = await rig()
-  // What an older build did for a teammate: the paired-caller reveal into the host's list.
-  await r.reveal('owner-phone', C)
-  await r.reveal('owner-desk', O)
-  expect(await r.hostChats()).toEqual([C, O])
-
-  // The upgrade's first start, which has not moved this Home's tabs yet.
-  r.runtime['personSessionTabs']['movedHomes'].clear()
-  await r.runtime['backfillBotBackgroundChats']()
-  await chatTabCommandsSettled()
-  expect(await r.hostChats()).toEqual([O])
-  expect(savedIds(r)).toEqual([O])
-  expect(sessions(await r.list('mate-phone'))).toEqual([C])
-  // Again: nothing left to move, nothing changes.
-  const after = await r.ownerView()
-  await r.runtime['backfillBotBackgroundChats']()
-  expect(await r.ownerView()).toBe(after)
-
-  const fresh = await rig({ opened: await physicalReload(r) })
-  expect(sessions(await fresh.list('mate-desk'))).toEqual([C])
-  expect(await fresh.hostChats()).toEqual([O])
-  // Moved once: a teammate's chat the owner opens later stays in the owner's list, restarts too.
-  await fresh.reveal('owner-phone', B)
-  await fresh.runtime['backfillBotBackgroundChats']()
-  expect(await fresh.hostChats()).toEqual([O, B])
-  // Two more restarts: the saved marker survives loading, so the move never runs again.
-  let again = fresh
-  for (let restart = 0; restart < 2; restart += 1) {
-    again = await rig({ opened: await physicalReload(again) })
-    await again.runtime['backfillBotBackgroundChats']()
-    await chatTabCommandsSettled()
-    expect(await again.hostChats()).toEqual([O, B])
-    expect(sessions(await again.list('mate-desk'))).toEqual([C])
-  }
-})
-
 it('lists a teammate’s chats in the owner’s chat list under their name; the owner opening one changes only the owner’s list', async () => {
   const r = await rig()
   // Their New chat acts for them, so it lists under their name once it holds a turn; an empty chat
@@ -273,22 +228,6 @@ it('closes only a teammate’s own tab when they close a chat in their Home', as
   expect(r.mine().chats).toEqual([])
   expect(r.mineSaved()).toEqual([])
   expect(await r.hostChats()).toEqual([C])
-  expect(await r.ownerView()).toBe(before)
-})
-
-it('refuses a teammate’s agent launch into their own Home before it writes a tab', async () => {
-  const r = await rig()
-  await r.reveal('owner-desk', O)
-  const before = await r.ownerView()
-  for (const method of ['agent.launch', 'agent.launchReplay']) {
-    const refused = await r.send('mate-desk', method, {
-      agent: 'codex',
-      target: { kind: 'existing', worktree: `id:${r.workspace}` },
-      surface: 'terminal',
-      operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`
-    })
-    expect(refused, method).toMatchObject({ ok: false, error: { code: 'not_found' } })
-  }
   expect(await r.ownerView()).toBe(before)
 })
 
@@ -445,9 +384,8 @@ it('closes a deleted chat’s tab in every person’s list, on every device', as
   expect(r.mineSaved()).toEqual([])
 })
 
-// A teammate's devices read their own workspace through the wire boundary (piece C); until then
-// their reads, activations and device picks still come from the old per-person list.
-describe.skip('a teammate’s devices, once their reads come from their own workspace', () => {
+// A teammate's devices read their own workspace through the wire boundary.
+describe('a teammate’s devices, once their reads come from their own workspace', () => {
   it('shows a teammate’s two devices one list, each with its own focus', async () => {
     const r = await rig()
     await r.reveal('mate-desk', B)
@@ -521,7 +459,8 @@ describe.skip('a teammate’s devices, once their reads come from their own work
     expect(await r.hostChats()).toEqual([O])
   })
 
-  it('never returns to a closed tab when it opens again, after a restart too (#50219 round 1, 4; round 2, 2)', async () => {
+  // A device's pick after its tab reopens across a restart: the chat open's own choice (piece D).
+  it.skip('never returns to a closed tab when it opens again, after a restart too (#50219 round 1, 4; round 2, 2)', async () => {
     const r = await rig()
     await r.reveal('mate-desk', B)
     await r.reveal('mate-desk', C)

@@ -194,12 +194,6 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
   ): void {
     // All visible title/foreground/bind updates pass here; apply phone pane-title rules consistently.
     this.markPaneLiveTitlesDirty(ptyId)
-    // A teammate's own terminal is in their list alone (its stamp); the host's snapshots index the rest.
-    const pty = this.ptysById.get(ptyId)
-    if (pty?.holder) {
-      this.touchSessionTabList({ workspaceId: pty.worktreeId, holder: pty.holder }, options)
-      return
-    }
     // Copy: a touch can re-store a snapshot and rewrite this PTY's index entry.
     for (const worktreeId of Array.from(
       this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId)

@@ -8,6 +8,8 @@ import {
   spawnSurfaceClaimSequence
 } from '../surface/pty-recorded-surface-topology'
 import { randomUUID } from 'node:crypto'
+import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { tabListOfPty } from '../../session-tabs/person/person-workspace-target'
 import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
 import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -54,13 +56,15 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       throw new Error('terminal_handle_stale')
     }
     const direction = opts.direction ?? 'horizontal'
+    // A teammate's terminal splits in their own workspace; it runs in the Home, as its source does.
+    const list = tabListOfPty(pty)
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${pty.worktreeId}`,
       createdWorktree,
       { wslUserAct: opts.wslUserAct === true }
     )
     const sourceAuthority = this.resolveTerminalSplitSourceAuthority(
-      workspace.id,
+      list,
       parentTabId,
       parsedPaneKey.leafId,
       pty.ptyId
@@ -96,6 +100,13 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       tabId: parentTabId,
       leafId,
       persistHostSessionBinding: true,
+      ...(pty.holder
+        ? {
+            paneWorkspaceId: list,
+            sessionId: mintServePtySessionId(workspace.id, randomUUID()),
+            isNewSession: true
+          }
+        : {}),
       placement: runtimeSplitPlacement(parsedPaneKey.leafId, direction),
       // Layout-owner build: views mounting the pane from main's frame attach, never spawn.
       ...this.paneStartStatusArgs({}),
@@ -116,7 +127,10 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
           }
         : {})
     }
-    const result = await spawnInAdmittedPane(this.store, this.ptyController, splitArgs)
+    const controller = this.ptyController
+    const result = await this.heldTerminals.whileStarting(splitArgs.sessionId, pty.holder, () =>
+      spawnInAdmittedPane(this.store, controller, splitArgs)
+    )
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
     if (result.wslDistro) {
       this.preparePtyExecutionContext(result.id, result.wslDistro)
@@ -161,7 +175,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     try {
       const revalidateSourceAuthority = (): void => {
         const current = this.resolveTerminalSplitSourceAuthority(
-          workspace.id,
+          list,
           parentTabId,
           parsedPaneKey.leafId,
           pty.ptyId
@@ -176,13 +190,14 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
         }
       }
       revalidateSourceAuthority()
-      if (!sourceAuthority.persisted) {
+      // No window shows a teammate's own workspace.
+      if (!sourceAuthority.persisted && !pty.holder) {
         await revealSplit()
         // Retirement emits a non-final pane exit and unmounts only the new pane; closing by tabId would also drop the source sibling.
         revalidateSourceAuthority()
       }
       if (createdPty) {
-        this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
+        this.publishPtyBackedMobileSessionTerminal(list, createdPty, {
           tabId: parentTabId,
           leafId,
           title: null,

@@ -1,3 +1,4 @@
+import { personWorkspacePartition } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
@@ -17,7 +18,10 @@ export async function persistFreshPaneBinding(
   absentOwner?: AbsentPaneBinding
 ): Promise<boolean> {
   let targetChanged = false
-  const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
+  // A teammate's own workspace is saved in their partition, whatever machine runs it.
+  const hostId =
+    personWorkspacePartition(binding.worktreeId) ??
+    (connectionId ? toSshExecutionHostId(connectionId) : undefined)
   const persisted = await store.persistPtyBinding(() => {
     const session = store.getWorkspaceSession(hostId)
     const paneKey = makePaneKey(binding.tabId, binding.leafId)

@@ -148,6 +148,7 @@ export type RuntimePtySpawnArgs = {
   /** No renderer view exists at spawn; main owns delivery and query replies until one mounts. */
   initiallyHidden?: boolean
   persistHostSessionBinding?: boolean
+  paneWorkspaceId?: string
   expectedSourceBinding?: PtyBindingSourceExpectation
   placement?: TerminalPanePlacement
   terminalKittyKeyboardProtocol?: boolean

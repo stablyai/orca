@@ -1,3 +1,4 @@
+import { holderOfTabList } from '../../session-tabs/person/person-workspace-target'
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
@@ -253,6 +254,12 @@ export class RuntimeBrowserPageRegistry {
    *  list pages for a caller or act on them by index. */
   pagesOf(list: PageList, workspaceId?: string): readonly RuntimeBrowserClientPage[] {
     return this.everyPage(workspaceId).filter((page) => pageListOf(page) === list)
+  }
+
+  /** The pages a tab list shows: a teammate's own workspace's are their pages in the Home. */
+  pagesOfList(list: string): readonly RuntimeBrowserClientPage[] {
+    const { home, holder } = holderOfTabList(list)
+    return this.pagesOf(holder ?? 'host', home)
   }
 
   /** Every page record, whoever's list holds it: only for keeping the records themselves

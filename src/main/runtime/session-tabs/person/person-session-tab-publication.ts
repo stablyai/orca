@@ -32,8 +32,11 @@ import {
 import { OrcaRuntimeWithRuntimeId } from '../../construction/runtime-identity-state'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { PersonSessionTabLists } from './person-session-tab-lists'
+import { tabListOfPty, windowOwns } from './person-workspace-target'
+import { HeldTerminalStamps, heldPageOf } from './teammate-workspace-surfaces'
+import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../../shared/workspace-session/teammate-homes-session-partition'
 import type { PersonSurface } from './person-tab-list-snapshot'
-import { personSurfaceRow, withoutHeldTabs } from './person-surface-rows'
+import { personSurfaceRow } from './person-surface-rows'
 import {
   structuredConversationForked,
   titleStructuredConversationTabs
@@ -77,6 +80,13 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     Projection['getMobileSessionProjectionHost']
   >
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
+  /** A teammate's own workspace as their devices read it: their Home (`toWireTabList`), projected
+   *  for `projectFor`'s picks first when given. */
+  protected abstract teammateWorkspaceFrame(
+    list: string,
+    includeAgentSenders?: boolean,
+    projectFor?: { clientNavigationId: string | undefined }
+  ): RuntimeMobileSessionTabsResult
   abstract listMobileSessionTabs(
     worktreeSelector: string,
     clientNavigationId?: string,
@@ -115,11 +125,8 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
       this.personSessionTabs.hydrate(persisted)
       this.pruneTeammateTabLists()
     }
-    getRuntimeBrowserPageRegistry(this).setHolderLookup(
-      (browserPageId) =>
-        this.personSessionTabs.holderOfSurface(
-          (surface) => surface.kind === 'browser' && surface.browserPageId === browserPageId
-        )?.person ?? null
+    getRuntimeBrowserPageRegistry(this).setHolderLookup((pageId) =>
+      heldPageOf(this.heldTerminals, this.store, pageId)
     )
     const bots = () => this.store?.getBots?.() ?? []
     this.clientSessionTabSelections.setPersistListener(() => this.persistSessionTabLists())
@@ -139,9 +146,9 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
   }
 
   protected sessionTabListDeliverySource(list: SessionTabListName, worktreeId: string): unknown {
-    return list === 'host'
-      ? this.mobileSessionTabsByWorktree.deliverySource(worktreeId)
-      : this.personSessionTabs.deliverySource(list, worktreeId)
+    return this.mobileSessionTabsByWorktree.deliverySource(
+      list === 'host' ? worktreeId : tabListOfPty({ worktreeId, holder: list })
+    )
   }
 
   protected personSessionTabsFrame(
@@ -169,29 +176,15 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     return includeAgentSenders ? this.withMobileSessionTabSenders(result) : result
   }
 
-  /** Rule 4: the host's list never shows a terminal or page a teammate opened in their Home, by the
-   *  stamp on its PTY or page record. Every write of the host's list passes here
-   *  (`storeMobileSessionSnapshot`), whichever projection made it. */
-  protected withoutPersonSurfaces(
-    snapshot: RuntimeMobileSessionTabsSnapshot
-  ): RuntimeMobileSessionTabsSnapshot {
-    const pages = getRuntimeBrowserPageRegistry(this)
-    return withoutHeldTabs(snapshot, (tab) =>
-      tab.type === 'terminal'
-        ? Boolean(tab.ptyId && this.ptysById.get(tab.ptyId)?.holder)
-        : tab.type === 'browser' &&
-          Boolean(tab.browserPageId && pages.getPage(tab.browserPageId)?.holder)
-    )
-  }
-
   /** The stamp a terminal's record takes when it is made: the teammate whose list holds its PTY (bound
    *  as it registers, or saved before a restart). */
   protected terminalHolderStamp(ptyId: string): { holder?: TeammateTabListKey } {
-    const held = this.personSessionTabs.holderOfSurface(
-      (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
-    )
-    return held ? { holder: held.person } : {}
+    const saved = this.store?.getWorkspaceSession?.(TEAMMATE_HOMES_SESSION_PARTITION)
+    const holder = this.heldTerminals.stampOf(ptyId, this.mobileSessionTabsByWorktree, saved)
+    return holder ? { holder } : {}
   }
+
+  protected readonly heldTerminals = new HeldTerminalStamps()
 
   /** Chat tabs titled for the list's person, and their Home pinned: the host's list (the owner's), or
    *  a teammate's own (theirs; no saved tabs). */
@@ -213,15 +206,21 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     return projectTabsWithBotHomePins(this.store, titled, this.getMobileSessionProjectionHost(), of)
   }
 
-  /** A teammate's own list in this workspace, unprojected; null when the client reads the host's. */
+  /** A teammate's own list in this workspace, projected for the client's picks when `project`; null
+   *  when the client reads the host's. */
   protected ownSessionTabListFrame(
     worktreeId: string,
     clientNavigationId: string | undefined,
-    includeAgentSenders?: boolean
+    includeAgentSenders?: boolean,
+    project = false
   ): RuntimeMobileSessionTabsResult | null {
     const owner = this.tabOwnerOfClient(clientNavigationId, worktreeId)
     return isTeammateTabList(owner)
-      ? this.personSessionTabsFrame(owner, worktreeId, includeAgentSenders)
+      ? this.teammateWorkspaceFrame(
+          tabListOfPty({ worktreeId, holder: owner }),
+          includeAgentSenders,
+          project ? { clientNavigationId } : undefined
+        )
       : null
   }
 
@@ -233,12 +232,22 @@ export abstract class OrcaRuntimeWithPersonSessionTabs extends OrcaRuntimeWithRu
     includeAgentSenders?: boolean
   ): RuntimeMobileSessionTabsResult[] {
     const own = this.ownSessionTabListsOf(clientNavigationId)
+    // No one reads a teammate's own workspace as it is; theirs stands in for the owner's Home.
     return [
-      ...frames.filter((frame) => !own.some((list) => list.worktreeId === frame.worktree)),
+      ...frames
+        .filter(
+          (frame) =>
+            windowOwns(frame.worktree) && !own.some((list) => list.worktreeId === frame.worktree)
+        )
+        .map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId)),
       ...own.map((list) =>
-        this.personSessionTabsFrame(list.person, list.worktreeId, includeAgentSenders)
+        this.teammateWorkspaceFrame(
+          tabListOfPty({ worktreeId: list.worktreeId, holder: list.person }),
+          includeAgentSenders,
+          { clientNavigationId }
+        )
       )
-    ].map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId))
+    ]
   }
 
   private ownSessionTabListsOf(clientNavigationId: string | undefined): OwnList[] {

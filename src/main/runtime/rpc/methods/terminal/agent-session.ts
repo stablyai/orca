@@ -11,10 +11,15 @@ import {
   EnsureAgentSessionParams
 } from '../../../../../shared/rpc-contract/terminal/agent-session-params'
 
-function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {
+async function callerContext(
+  context: RpcContext,
+  worktree: string | undefined
+): Promise<RuntimeAgentSessionRpcCaller> {
   const { pairedDeviceId, clientId, clientKind, signal } = context
   const viewerSupported = terminalImageViewerSupported(context)
+  const holder = await context.runtime.tabListHolderOf(worktree, context.callerScope)
   return {
+    ...(holder ? { holder } : {}),
     ...((pairedDeviceId ?? clientId) !== undefined ? { clientId: pairedDeviceId ?? clientId } : {}),
     ...(clientKind !== undefined ? { clientKind } : {}),
     ...(signal ? { signal } : {}),
@@ -47,10 +52,10 @@ export const AGENT_SESSION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: EnsureAgentSessionParams,
-    handler: (params, context) =>
+    handler: async (params, context) =>
       context.runtime.ensureAgentSession(
         withExecutionHostAgentPresentation(params, context.clientKind),
-        callerContext(context)
+        await callerContext(context, 'worktree' in params ? params.worktree : undefined)
       )
   }),
   defineMethod({
@@ -59,11 +64,11 @@ export const AGENT_SESSION_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: CreateAgentSessionParams,
-    handler: (params, context) => {
+    handler: async (params, context) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)
       return context.runtime.createAgentSession(
         withExecutionHostAgentPresentation(params, context.clientKind),
-        callerContext(context)
+        await callerContext(context, params.worktree)
       )
     }
   })

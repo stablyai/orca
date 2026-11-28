@@ -1,3 +1,4 @@
+import { titledForItsReader } from '../../session-tabs/person/person-workspace-target'
 import {
   collectReturnedSessionTabIds,
   sanitizeMobileSessionTabGroups
@@ -90,9 +91,10 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   protected toMobileSessionTabsResult(
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsResult {
-    return this.titledSessionTabsResult(
+    return titledForItsReader(
       inlineRuntimeBrowserTabFavicons(this, this.settleOwedMobileSessionSnapshotVersion(snapshot)),
-      this.savedWorkspaceTabs(snapshot.worktree)
+      (asRead, reader) =>
+        this.titledSessionTabsResult(asRead, this.savedWorkspaceTabs(snapshot.worktree), reader)
     )
   }
 
