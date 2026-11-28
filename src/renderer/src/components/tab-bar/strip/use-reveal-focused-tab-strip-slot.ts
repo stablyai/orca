@@ -71,9 +71,11 @@ export function useRevealFocusedTabStripSlot({
       let removeReleaseListener = (): void => {}
       removeReleaseListener = onTabStripPointerGestureRelease(() => {
         removeReleaseListener()
-        if (isFocusedRef.current) {
-          revealFocusedSlot()
-        }
+        requestAnimationFrame(() => {
+          if (isFocusedRef.current) {
+            revealFocusedSlot()
+          }
+        })
       })
       return removeReleaseListener
     }
