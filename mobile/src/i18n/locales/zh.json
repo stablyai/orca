@@ -6629,7 +6629,8 @@
         "showMore": "展开",
         "placeOf": "第 {{index}} 项，共 {{total}} 项",
         "previous": "上一个事项",
-        "next": "下一个事项"
+        "next": "下一个事项",
+        "numberLabel": "事项 {{number}}"
       },
       "readFailedShort": "无法加载事项",
       "lastRead": "显示的是上次读取的事项",

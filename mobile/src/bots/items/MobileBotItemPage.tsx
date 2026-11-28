@@ -11,7 +11,6 @@ import {
 } from '../../../../src/shared/bot-runtime-capabilities'
 import { botItemAttachmentTarget } from '../../../../src/shared/agent-session/agent-session-attachments'
 import {
-  formatBotItemNumber,
   isBotItemLive,
   isBotItemSnoozed,
   type BotItem
@@ -46,7 +45,7 @@ import { useBotItemActivityFollow } from './use-bot-item-activity-follow'
 import { usePhoneBotItemView } from './use-phone-bot-item-view'
 import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
-import { MobileBotItemDescription } from './MobileBotItemDescription'
+import { MobileBotItemHead } from './MobileBotItemHead'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
 import {
   botItemCommentDraftKey,
@@ -162,8 +161,15 @@ export function MobileBotItemPage({
     // In the tap itself: iOS opens the keyboard only for a focus the gesture made.
     commentField.current?.focus()
   }
-  const back = <MobileBotItemPageHeader stepper={stepper} online={online} onBack={onBack} />
   const item = view.item
+  const back = (
+    <MobileBotItemPageHeader
+      number={item?.number ?? null}
+      stepper={stepper}
+      online={online}
+      onBack={onBack}
+    />
+  )
   if (!item) {
     return (
       <View style={styles.page}>
@@ -216,13 +222,7 @@ export function MobileBotItemPage({
               onMomentumScrollEnd={jump.tail.endMomentum}
               scrollEventThrottle={32}
             >
-              <View style={styles.head}>
-                <Text style={styles.title}>
-                  <Text style={styles.number}>{formatBotItemNumber(item.number)} </Text>
-                  {item.title}
-                </Text>
-                {item.description ? <MobileBotItemDescription text={item.description} /> : null}
-              </View>
+              <MobileBotItemHead title={item.title} description={item.description} />
               {view.failed ? (
                 <ListGroup>
                   <ListRow
@@ -388,9 +388,6 @@ const stylesSheet = themedStyleSheet((colors) => ({
   askSlot: { flexShrink: 1, minHeight: 0, marginHorizontal: -spacing.sm },
   scroll: { flex: 1 },
   content: { gap: spacing.sm, paddingBottom: spacing.lg },
-  head: { paddingHorizontal: spacing.xs, gap: spacing.xs },
-  title: { fontSize: typography.titleSize, fontWeight: '600', color: colors.textPrimary },
-  number: { fontWeight: '400', color: colors.textMuted, fontVariant: ['tabular-nums'] },
   note: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

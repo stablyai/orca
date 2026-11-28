@@ -282,7 +282,14 @@ export type MarkdownTone = {
   heading?: TextStyle | null
 }
 
-export type MarkdownToneName = 'default' | 'userMessage' | 'reply' | 'strong' | 'medium' | 'muted'
+export type MarkdownToneName =
+  | 'default'
+  | 'userMessage'
+  | 'reply'
+  | 'strong'
+  | 'medium'
+  | 'muted'
+  | 'quiet'
 
 export const DEFAULT_MARKDOWN_TONE: MarkdownTone = {
   text: null,
@@ -300,12 +307,9 @@ export const markdownTonesSheet = themedStyles(
     // The answer card's question: body size, lighter than its options' bold labels.
     medium: { text: { fontWeight: '500' }, secondary: null, link: null, inlineCode: null },
     // Settled text beside a receipt's muted answer.
-    muted: {
-      text: { color: colors.textMuted },
-      secondary: null,
-      link: null,
-      inlineCode: null
-    },
+    muted: { ...DEFAULT_MARKDOWN_TONE, text: { color: colors.textMuted } },
+    // Text under the heading it follows, such as an item's description under its title.
+    quiet: { ...DEFAULT_MARKDOWN_TONE, text: { color: colors.textSecondary } },
     // An agent's reply in the chat: desktop's softer strong chat foreground, headings at full strength.
     reply: {
       text: { color: colors.chatForegroundStrong },
@@ -315,11 +319,6 @@ export const markdownTonesSheet = themedStyles(
       heading: { color: colors.textPrimary }
     },
     // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
-    userMessage: {
-      text: { color: colors.chatForegroundStrong },
-      secondary: null,
-      link: null,
-      inlineCode: null
-    }
+    userMessage: { ...DEFAULT_MARKDOWN_TONE, text: { color: colors.chatForegroundStrong } }
   })
 )

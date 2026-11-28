@@ -12,6 +12,8 @@ type SheetTextAction = { label: string; onPress: () => void; disabled?: boolean;
 
 type SheetHeaderProps = {
   title: string
+  /** What a screen reader says for the title, when the title alone is terse (e.g. "#528"). */
+  titleAccessibilityLabel?: string
   titleAboveActions?: boolean
   subtitle?: string
   /** "Cancel" or "Reset"; omit for a plain list sheet. */
@@ -36,6 +38,7 @@ function oneButton(node: ReactNode): boolean {
 // The one sheet header: a centred title, with a text action or a round button on either side.
 export function SheetHeader({
   title,
+  titleAccessibilityLabel,
   subtitle,
   leading,
   onBack,
@@ -60,7 +63,12 @@ export function SheetHeader({
       <View>
         {titleAboveActions ? (
           <View style={styles.heading}>
-            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+            <Text
+              style={styles.title}
+              numberOfLines={1}
+              accessibilityRole="header"
+              accessibilityLabel={titleAccessibilityLabel}
+            >
               {title}
             </Text>
             {subtitle !== undefined ? (
@@ -87,7 +95,12 @@ export function SheetHeader({
           {!titleAboveActions ? (
             <View style={styles.center}>
               {title ? (
-                <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+                <Text
+                  style={styles.title}
+                  numberOfLines={1}
+                  accessibilityRole="header"
+                  accessibilityLabel={titleAccessibilityLabel}
+                >
                   {title}
                 </Text>
               ) : null}

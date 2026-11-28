@@ -6443,7 +6443,8 @@
         "showMore": "Show more",
         "placeOf": "{{index}} of {{total}}",
         "previous": "Previous item",
-        "next": "Next item"
+        "next": "Next item",
+        "numberLabel": "Item {{number}}"
       },
       "readFailedShort": "Couldn’t load items.",
       "lastRead": "Showing the last items read.",

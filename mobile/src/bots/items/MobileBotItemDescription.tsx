@@ -6,9 +6,14 @@ import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 
-const DESCRIPTION_LINES_HEIGHT = 3 * 20
+// Body text at 15/20: the shared Markdown base is 13/21, so scale it up and close its lines to 20.
+const DESCRIPTION_LINE_HEIGHT = 20
+const DESCRIPTION_TEXT_SCALE = 15 / 13
+const DESCRIPTION_LINE_SPACING = DESCRIPTION_LINE_HEIGHT / (21 * DESCRIPTION_TEXT_SCALE)
+const DESCRIPTION_LINES_HEIGHT = 3 * DESCRIPTION_LINE_HEIGHT
 
-/** The description's first three lines, then Show more; Markdown, as the desktop draws it. */
+/** The description's first three lines, then Show more; Markdown, as the desktop draws it, in the
+ *  secondary text color so the title leads. */
 export function MobileBotItemDescription({ text }: { text: string }) {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
@@ -19,7 +24,13 @@ export function MobileBotItemDescription({ text }: { text: string }) {
     <View style={styles.description}>
       <View style={!open && clamps ? styles.clamped : undefined}>
         <View onLayout={(event) => setHeight(event.nativeEvent.layout.height)}>
-          <MobileNativeChatMarkdown content={text} rangeSelectable={INLINE_TEXT_SELECTION} />
+          <MobileNativeChatMarkdown
+            content={text}
+            rangeSelectable={INLINE_TEXT_SELECTION}
+            textScale={DESCRIPTION_TEXT_SCALE}
+            lineSpacing={DESCRIPTION_LINE_SPACING}
+            tone="quiet"
+          />
         </View>
       </View>
       {clamps ? (
@@ -36,7 +47,7 @@ export function MobileBotItemDescription({ text }: { text: string }) {
 }
 
 const stylesSheet = themedStyleSheet((colors) => ({
-  description: { marginTop: spacing.xs, gap: spacing.xs },
+  description: { marginTop: 6, gap: spacing.xs },
   clamped: { maxHeight: DESCRIPTION_LINES_HEIGHT, overflow: 'hidden' },
-  showMore: { fontSize: 13, fontWeight: '600', color: colors.textPrimary }
+  showMore: { fontSize: 13, fontWeight: '600', color: colors.textSecondary }
 }))
