@@ -33,8 +33,8 @@ it('rides once ahead of the next turn, survives a restart, and is gone once the 
   let innerGiven = 0
   const context = withCrossVendorHandoffTurnContext(
     {
-      plan: async () => ({
-        text: 'BOT RULES',
+      plan: async (_sessionId, _message, _held, clientMessageId) => ({
+        text: clientMessageId === 'look-around-opener' ? 'BOT RULES WITH IDLE ITEMS' : 'BOT RULES',
         given: () => {
           innerGiven++
         }
@@ -42,8 +42,8 @@ it('rides once ahead of the next turn, survives a restart, and is gone once the 
     },
     seeds
   )
-  const plan = await context.plan('session-0001', message)
-  expect(plan?.text).toBe('EARLIER CONVERSATION\n\nBOT RULES')
+  const plan = await context.plan('session-0001', message, null, 'look-around-opener')
+  expect(plan?.text).toBe('EARLIER CONVERSATION\n\nBOT RULES WITH IDLE ITEMS')
   // Refused or unanswered turns keep owing the context.
   expect((await context.plan('session-0001', message))?.text).toContain('EARLIER CONVERSATION')
   plan?.given({ instructionsRecorded: false })

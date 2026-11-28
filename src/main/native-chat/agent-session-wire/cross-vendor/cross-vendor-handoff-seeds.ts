@@ -100,8 +100,8 @@ export function withCrossVendorHandoffTurnContext(
   }
   return {
     ...inner,
-    plan: (sessionId, message, held) =>
-      seeded(sessionId, () => inner?.plan(sessionId, message, held) ?? Promise.resolve(null)),
+    plan: (sessionId, ...args) =>
+      seeded(sessionId, () => inner?.plan(sessionId, ...args) ?? Promise.resolve(null)),
     launchUpdate: (sessionId, held) =>
       seeded(sessionId, () => inner?.launchUpdate?.(sessionId, held) ?? Promise.resolve(null))
   }

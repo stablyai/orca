@@ -167,16 +167,17 @@ function SessionOptionPopover(props: {
   focusComposer?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const { model, options, pendingIds, demandModelCatalog } = props
+  const { pendingIds, demandModelCatalog } = props
+  const whileWorking = (descriptor: SessionOptionDescriptor): SessionOptionDescriptor =>
+    props.isWorking && descriptor.transport !== 'agent-session'
+      ? { ...descriptor, settable: false }
+      : descriptor
+  const model = whileWorking(props.model)
+  const options = props.options.map(whileWorking)
   const crossVendor = useNativeChatCrossVendor() !== null
   const canOpen =
     crossVendor ||
-    [model, ...options].some(
-      (descriptor) =>
-        descriptor.settable &&
-        !pendingIds.has(descriptor.id) &&
-        (!props.isWorking || descriptor.transport === 'agent-session')
-    )
+    [model, ...options].some((descriptor) => descriptor.settable && !pendingIds.has(descriptor.id))
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
@@ -222,7 +223,7 @@ function SessionOptionPopover(props: {
 
   // Different descriptors can save together; hold only a repeat of the same pick.
   const set = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
-    if (pendingIds.has(descriptor.id)) {
+    if (!descriptor.settable || pendingIds.has(descriptor.id)) {
       return
     }
     focusReturn.notePick()
@@ -240,7 +241,7 @@ function SessionOptionPopover(props: {
     }
   }
   const act = (descriptor: SessionOptionDescriptor): void => {
-    if (pendingIds.has(descriptor.id)) {
+    if (!descriptor.settable || pendingIds.has(descriptor.id)) {
       return
     }
     // Why: agent-picker opens the TUI, and that picker owns focus.
