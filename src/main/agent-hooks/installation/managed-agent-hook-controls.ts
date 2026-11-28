@@ -201,6 +201,11 @@ export async function installManagedAgentHooks(
       agent === 'claude' && presence.executablePath
         ? await probeClaudeCliVersion(presence.executablePath)
         : null
+    // Why re-check: a decline can land while the probe runs.
+    if (options.shouldContinue && !options.shouldContinue(agent)) {
+      results.push(skippedStatus(agent, 'not_consented', 'Hooks for this agent were not approved.'))
+      continue
+    }
     results.push(
       await runInstaller(entry, options.onInstallError, {
         ...(options.userInitiated !== undefined ? { userInitiated: options.userInitiated } : {}),

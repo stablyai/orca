@@ -47,15 +47,18 @@ async function showNext(): Promise<void> {
     if (offer.ask && isUndecided(agent) && !laterThisRun.has(agent)) {
       // One Install covers only CLIs this computer actually has.
       const detected = new Set<string>(await useAppStore.getState().ensureNativeDetectedAgents())
-      publish({
-        agent,
-        agents: offer.agents.filter(
-          (other) =>
-            other === agent ||
-            (detected.has(other) && !laterThisRun.has(other) && isUndecided(other))
-        ),
-        configPath: offer.configPath
-      })
+      // Settings may have answered while detection ran.
+      if (isUndecided(agent) && !laterThisRun.has(agent)) {
+        publish({
+          agent,
+          agents: offer.agents.filter(
+            (other) =>
+              other === agent ||
+              (detected.has(other) && !laterThisRun.has(other) && isUndecided(other))
+          ),
+          configPath: offer.configPath
+        })
+      }
     }
   } catch (error) {
     console.warn('[agent-hook-consent] could not check hooks for', agent, error)

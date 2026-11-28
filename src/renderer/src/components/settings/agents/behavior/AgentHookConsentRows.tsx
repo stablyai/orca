@@ -22,11 +22,12 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
   const detected = useAppStore((state) => state.detectedAgentIds)
   const settings = useAppStore((state) => state.settings)
   const ensureNativeDetectedAgents = useAppStore((state) => state.ensureNativeDetectedAgents)
-  const [statuses, setStatuses] = useState<AgentHookInstallStatus[]>([])
+  // null until the first read lands; an unknown status never offers an action.
+  const [statuses, setStatuses] = useState<AgentHookInstallStatus[] | null>(null)
   const [busy, setBusy] = useState<AgentHookTarget | null>(null)
 
   const refresh = useCallback(() => {
-    void window.api.agentHookConsent.statuses().then(setStatuses, () => setStatuses([]))
+    void window.api.agentHookConsent.statuses().then(setStatuses, () => setStatuses(null))
   }, [])
   useEffect(() => {
     void ensureNativeDetectedAgents()
@@ -47,10 +48,13 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
     setBusy(null)
     refresh()
     if (failure !== null) {
+      const label = formatAgentProductName(agent)
       toast.error(
-        t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', {
-          agent: formatAgentProductName(agent)
-        }),
+        decision === 'granted'
+          ? t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', { agent: label })
+          : t('agentHookConsent.removeFailed', 'Couldn’t remove hooks for {{agent}}', {
+              agent: label
+            }),
         { description: failure || undefined }
       )
     }
@@ -59,11 +63,12 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
   return (
     <SettingsGroupNestedRows>
       {agents.map((agent) => {
-        const status = statuses.find((entry) => entry.agent === agent)
+        const status = statuses?.find((entry) => entry.agent === agent)
         // Disk is the truth: a failed removal still shows Installed with Remove.
         const present = status?.managedHooksPresent === true
-        // Some agents (Codex) write their hooks only when they next start.
-        const pending = !present && readAgentHookConsent(settings, agent) === 'granted'
+        // Only Codex writes its hooks on its own next start rather than at Install.
+        const pending =
+          !present && agent === 'codex' && readAgentHookConsent(settings, agent) === 'granted'
         const installed = present || pending
         return (
           <div key={agent} className="flex min-h-9 items-center gap-2.5 py-1.5 text-[13px]">
@@ -73,18 +78,20 @@ export function AgentHookConsentRows(): React.JSX.Element | null {
               className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
               title={status?.configPath || undefined}
             >
-              {present
-                ? t('agentHookConsent.settings.installed', 'Installed')
-                : pending
-                  ? t('agentHookConsent.settings.pending', 'Added when it next starts')
-                  : t('agentHookConsent.settings.notInstalled', 'Not installed')}
+              {!status
+                ? t('agentHookConsent.settings.checking', 'Checking…')
+                : present
+                  ? t('agentHookConsent.settings.installed', 'Installed')
+                  : pending
+                    ? t('agentHookConsent.settings.pending', 'Added when it next starts')
+                    : t('agentHookConsent.settings.notInstalled', 'Not installed')}
             </span>
             <Button
               type="button"
               variant="outline"
               size="xs"
               className="w-16"
-              disabled={busy !== null}
+              disabled={busy !== null || !status}
               onClick={() => void change(agent, installed ? 'declined' : 'granted')}
             >
               {busy === agent ? (

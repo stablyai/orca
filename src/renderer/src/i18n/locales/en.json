@@ -31571,8 +31571,10 @@
       "installed": "Installed",
       "notInstalled": "Not installed",
       "remove": "Remove",
-      "pending": "Added when it next starts"
+      "pending": "Added when it next starts",
+      "checking": "Checking…"
     },
-    "declineFailed": "Couldn’t save your choice"
+    "declineFailed": "Couldn’t save your choice",
+    "removeFailed": "Couldn’t remove hooks for {{agent}}"
   }
 }

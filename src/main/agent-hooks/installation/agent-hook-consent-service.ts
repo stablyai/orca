@@ -13,7 +13,10 @@ import {
   type AgentHookConsentDecision
 } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import { MANAGED_AGENT_HOOK_TARGETS } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
-import { isAgentStatusHooksEnabled } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
+import {
+  isAgentStatusHooksEnabled,
+  isAgentStatusHooksEnabledForAgent
+} from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isTuiAgentEnabled } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentHookConsentOffer } from '../../../shared/agent-hook-listener/configuration/agent-hook-consent-offer'
@@ -88,7 +91,9 @@ export function createAgentHookConsentService(
       agents,
       userInitiated: true,
       shouldHydrateShellPath: options.shouldHydrateShellPath,
-      onInstallError: recordManagedHookInstallFailure
+      onInstallError: recordManagedHookInstallFailure,
+      // Live check: the global switch or this consent can change while the install runs.
+      shouldContinue: (agent) => isAgentStatusHooksEnabledForAgent(store.getSettings(), agent)
     })
     const consent = store.getSettings().agentHookConsent
     const failed = statuses

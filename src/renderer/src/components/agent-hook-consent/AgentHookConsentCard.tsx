@@ -128,6 +128,8 @@ function AgentHookConsentOfferCard({
   const [all, setAll] = useState(true)
   const [view, setView] = useState<View>({ kind: 'ask' })
   const [showSpinner, setShowSpinner] = useState(false)
+  const [declining, setDeclining] = useState(false)
+  const busy = view.kind === 'installing' || declining
 
   useEffect(() => {
     if (
@@ -181,9 +183,11 @@ function AgentHookConsentOfferCard({
 
   const neverAsk = async (): Promise<void> => {
     // Commit the decline before the next offer is built, and keep the card if it fails.
+    setDeclining(true)
     try {
       await window.api.agentHookConsent.decide({ agents: [offer.agent], decision: 'declined' })
     } catch (error) {
+      setDeclining(false)
       toast.error(t('agentHookConsent.declineFailed', 'Couldn’t save your choice'), {
         description: error instanceof Error ? error.message : String(error)
       })
@@ -208,6 +212,7 @@ function AgentHookConsentOfferCard({
       type="button"
       variant="ghost-muted"
       size="icon-xs"
+      disabled={busy}
       onClick={view.kind === 'done' ? () => closeAgentHookConsentOffer({ later: false }) : later}
       aria-label={t('agentHookConsent.close', 'Close')}
     >
@@ -266,7 +271,6 @@ function AgentHookConsentOfferCard({
     )
   }
 
-  const busy = view.kind === 'installing'
   return (
     <Card
       size="notice"
@@ -382,7 +386,7 @@ function AgentHookConsentOfferCard({
             disabled={busy}
             onClick={() => void install()}
           >
-            {busy && showSpinner ? (
+            {view.kind === 'installing' && showSpinner ? (
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
             ) : (
               t('agentHookConsent.install', 'Install')
