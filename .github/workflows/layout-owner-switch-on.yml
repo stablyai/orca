@@ -1,0 +1,104 @@
+name: Layout owner switch-on (advisory)
+
+# Runs the new layout path (ORCA_LAYOUT_OWNER=main) on every PR into and push to the layout-owner-v2 dev branch.
+# No path filter: switch-reading code is spread too widely for one. Advisory: not a required check.
+# Known switch-on failures are marked expected-fail with their census row; a fix turns them red so the mark is dropped.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [layout-owner-v2]
+  push:
+    branches: [layout-owner-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layout-owner-switch-on-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  units:
+    name: switch-on units
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: config/.bun-version
+          no-cache: true
+
+      # Every test whose imports reach a switch-reading file, plus the restored layout invariants.
+      - name: Run switch-on units
+        run: |
+          export ORCA_LAYOUT_OWNER=main
+          echo "ORCA_LAYOUT_OWNER=$ORCA_LAYOUT_OWNER"
+          node config/scripts/workspace-package-build/build-workspace-packages.mjs
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node
+          mapfile -t SOURCES < <(git grep -l ORCA_LAYOUT_OWNER_IS_MAIN -- 'src/**' 'packages/**' ':!*.test.*' ':!*.spec.*')
+          mapfile -t TESTS < config/scripts/ci/layout-owner/switch-on-unit-tests.txt
+          # Vitest exits 1 for the listed failures; the check below judges every failure, so only a crash (>1) stops here.
+          status=0
+          ORCA_SWITCH_ON_RUN_ERRORS=switch-on-run-errors.json \
+            node config/scripts/test-runtime/execution-policy/run-vitest.mjs related --run --config config/vitest.config.ts \
+            --reporter=dot --reporter=json --reporter=./config/scripts/ci/layout-owner/switch-on-run-errors-reporter.mjs \
+            --outputFile.json=switch-on-units.json "${SOURCES[@]}" "${TESTS[@]}" || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "Vitest exited with $status"
+            exit "$status"
+          fi
+          # Fails on a new failure, a suite or hook error, an unlisted unhandled error, and a listed failure that
+          # passes (including any run with the switch off).
+          node config/scripts/ci/layout-owner/check-switch-on-unit-results.mjs switch-on-units.json \
+            config/scripts/ci/layout-owner/switch-on-known-unit-failures.json switch-on-run-errors.json
+
+  e2e-window:
+    name: switch-on e2e (window)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle.spec.ts","tests/layout-owner-e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/layout-owner-e2e/terminal-cli-split-closed-before-mount.spec.ts"]'
+      playwright_config: tests/layout-owner-playwright.config.ts
+      artifact_suffix: -layout-owner-window
+      layout_owner: main
+
+  e2e-restore:
+    name: switch-on e2e (restore)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle-headless.spec.ts","tests/layout-owner-e2e/default-tabs-mark-crash-relaunch.spec.ts","tests/layout-owner-e2e/layout-stream-loss-reopen.spec.ts","tests/layout-owner-e2e/relaunch-first-terminal.spec.ts","tests/layout-owner-e2e/unopened-workspace-agent-single-resume.spec.ts","tests/layout-owner-e2e/cli-first-worktree-single-terminal.spec.ts","tests/layout-owner-e2e/terminal-tab-close-restart-persistence.spec.ts","tests/layout-owner-e2e/finished-agent-ghost-resume.spec.ts","tests/layout-owner-e2e/cli-file-open-position.spec.ts","tests/layout-owner-e2e/local-cli-terminal-retention.spec.ts","tests/layout-owner-e2e/floating-workspace-pane-height.spec.ts","tests/layout-owner-e2e/editor-model-host-isolation.spec.ts","tests/layout-owner-e2e/terminal-cold-activation-deferral.spec.ts","tests/layout-owner-e2e/terminal-pane-close-layout-consistency.spec.ts","tests/layout-owner-e2e/layout-compat-old-phone-on-new-server.spec.ts","tests/layout-owner-e2e/layout-compat-serve-restart-keeps-at-at-terminals.spec.ts"]'
+      playwright_config: tests/layout-owner-playwright.config.ts
+      artifact_suffix: -layout-owner-restore
+      layout_owner: main
+
+  e2e-paired:
+    name: switch-on e2e (paired)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      test_files: '["tests/layout-owner-e2e/paired-remote-terminal-serve-restart-binding.spec.ts","tests/layout-owner-e2e/headless-serve-cli-terminal-retention-parity.spec.ts","tests/layout-owner-e2e/headless-paired-remote-terminal-retention-memory.spec.ts","tests/layout-owner-e2e/paired-desktop-server-layout-frames.spec.ts","tests/layout-owner-e2e/paired-desktop-server-held-pane-reopen.spec.ts","tests/layout-owner-e2e/paired-desktop-server-file-open-group.spec.ts","tests/layout-owner-e2e/paired-desktop-server-layout-intents.spec.ts","tests/layout-owner-e2e/paired-desktop-server-layout-writes.spec.ts","tests/layout-owner-e2e/paired-desktop-server-editor-handover.spec.ts","tests/layout-owner-e2e/paired-mobile-serve-restart-terminal-tabs.spec.ts","tests/layout-owner-e2e/headless-serve-desktop-activation.spec.ts","tests/layout-owner-e2e/headless-serve-chat-tab-placement.spec.ts","tests/layout-owner-e2e/headless-serve-mobile-native-chat-identity.spec.ts","tests/layout-owner-e2e/headless-serve-focused-terminal-create.spec.ts"]'
+      playwright_config: tests/layout-owner-playwright.config.ts
+      artifact_suffix: -layout-owner-paired
+      layout_owner: main
