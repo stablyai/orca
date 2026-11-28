@@ -38,13 +38,14 @@ The probes cost the same on both builds, but they do add overhead, so compare OL
 
 A metric fails when every NEW run is worse than every OLD run by more than the metric's relative and absolute margins (`METRICS` in `fleet-gate-report.mjs`). In the idle window, NEW also fails above a fixed ceiling (`IDLE_CEILINGS`) unless OLD is already over it, which prints `WARN`.
 
-A run that didn't do what it measures can't pass. If any run of either build had a workload that didn't happen, or a probe or metric that's missing, the result is `INCOMPLETE` and each gap is printed as an `incomplete:` line. Examples:
+A run that didn't do what it measures can't pass. If any run of either build had a workload that didn't happen, or a required probe or metric that's missing, the result is `INCOMPLETE` and each gap is printed as an `incomplete:` line. Examples:
 
 - fewer than 80% of the planned workspace switches landed;
 - more than 20% of the hook posts failed;
 - no typed key reached main;
-- the fleet loaded fewer than 1,900 workspaces;
-- the store probe found no notify loop.
+- the fleet loaded fewer than 1,900 workspaces.
+
+If the store probe cannot attach, the report prints `store pubs/wakeups: not measured (probe could not attach)` for the affected build. The gate skips those store comparisons and judges the remaining metrics.
 
 | Exit | Result                                                        |
 | ---- | ------------------------------------------------------------- |
@@ -66,7 +67,7 @@ For example, `--old v1.4.262 --new v1.4.263`.
 - `--force` is required: a release always runs, even if the hot-path filter finds nothing.
 - Each tag is built from its own source in e2e mode, the same code as the release but not the signed artifact. Packaged apps (`--old-app`/`--new-app`) are refused because they don't expose the store the gate drives and probes.
 - Runtime: on the 28-core Linux QA machine, v1.4.261 vs v1.4.262 took about 35 minutes cold (building both tags and seeding the fleet took about 10 minutes) and 25 minutes once both builds and the seed were cached. Builds are cached under `~/.cache/orca-fleet-gate/builds` and the seed per old tag. A laptop takes longer: allow 90 minutes cold. Keep about 15 GB of disk free; set `ORCA_FLEET_GATE_CACHE` to put the cache somewhere else.
-- PASS means no metric got worse beyond its margin, at fleet scale, in any scenario, and all launches in the burst started. FAIL names the scenario and metric that regressed. Check the raw numbers before blocking: two `--runs` pairs is the minimum, and a FAIL with one pair at the margin should be rerun with `--runs 4`. INCOMPLETE means the run couldn't show anything; rerun it or report the `incomplete:` lines, but don't treat it as a pass. A FAIL that also prints `incomplete:` lines comes from a run that didn't fully drive its workload: rerun it before blocking.
+- PASS means no measured metric got worse beyond its margin, at fleet scale, in any scenario, and all launches in the burst started. FAIL names the scenario and metric that regressed. Check the raw numbers before blocking: two `--runs` pairs is the minimum, and a FAIL with one pair at the margin should be rerun with `--runs 4`. INCOMPLETE means the run couldn't show anything; rerun it or report the `incomplete:` lines, but don't treat it as a pass. A FAIL that also prints `incomplete:` lines comes from a run that didn't fully drive its workload: rerun it before blocking.
 - Runs on one machine can overlap safely: each cache entry is built under a lock, and each copy's terminal daemon is stopped when it quits. They share the machine's cores, though, so their numbers get noisy. Run candidates one at a time. If a run is killed while building, its lock stays behind, and the next run stops with exit 2 and prints the `rm -rf` that clears it.
 - A killed run leaves nothing running. Each run works in `~/.cache/orca-fleet-gate/runs/<id>`, never `/tmp`; copies get their `TMPDIR` there too. The folder records its owner (pid and start time) and every copy it launched. On any exit the gate kills its copies' process groups and their terminal daemons. The next run reaps folders whose owner is gone, including after SIGKILL, a timeout or a lost host: it stops their recorded copies and verified daemons, then deletes the folder.
 - Results go to `--out` (default `~/.cache/orca-fleet-gate/reports`): `fleet-gate-<old>-<new>-<time>.txt` is the table that was printed, `.json` has every run's raw numbers, and a screenshot of each copy after settling is saved next to them.
