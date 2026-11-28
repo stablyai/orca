@@ -1,6 +1,6 @@
 // A sign-in page this phone's shell can't open (a link longer than it takes) is copied for the browser
 // instead, keeping the same attempt; a newer shell opens it.
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { canOpenExternalLink } from '../../platform/external-links/external-link'
 
@@ -24,16 +24,27 @@ export function useSignInLinkCopy(
   if (copiedUrl !== null && copiedUrl !== url) {
     setCopiedUrl(null)
   }
+  // A copy that settles after its attempt ended reports nothing: the error line is the next attempt's.
+  const latest = useRef(url)
+  useEffect(() => {
+    latest.current = url
+  }, [url])
   const copyLink = useCallback(() => {
-    if (url) {
-      void clipboard.writeText(url).then(
-        () => {
-          setCopiedUrl(url)
-          onCopy(true)
-        },
-        () => onCopy(false)
-      )
+    if (!url) {
+      return
     }
+    const settled = (copied: boolean) => {
+      if (latest.current === url) {
+        if (copied) {
+          setCopiedUrl(url)
+        }
+        onCopy(copied)
+      }
+    }
+    void clipboard.writeText(url).then(
+      () => settled(true),
+      () => settled(false)
+    )
   }, [clipboard, url, onCopy])
   return { opensHere, copyLink, copied: url !== null && copiedUrl === url }
 }
