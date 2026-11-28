@@ -132,7 +132,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtyRetireWhenIdl
     try {
       const result = await this.client.request<ShutdownIfIdleResult>('shutdownIfIdle', undefined)
       if (result.retiring) {
-        this.idleRetirementState = 'retiring'
+        this.markRetiredForIdle()
         return { state: 'retiring' }
       }
       let liveSessions: number | null = null

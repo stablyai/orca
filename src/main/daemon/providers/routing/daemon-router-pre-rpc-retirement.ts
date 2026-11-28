@@ -196,7 +196,7 @@ export class DaemonRouterPreRpcRetirement {
     this.decisions.set(adapter, decision)
     try {
       const result = await decision
-      if (result.state === 'retiring') {
+      if (result.state === 'retiring' && !this.disposed) {
         this.forget(adapter)
       } else if (!this.disposed && result.state === 'busy') {
         this.checkAgainLater(adapter)

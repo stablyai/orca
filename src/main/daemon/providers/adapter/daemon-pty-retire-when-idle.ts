@@ -3,6 +3,8 @@ import { RETIRE_WHEN_IDLE_REQUEST } from '../../server/daemon-superseded-clients
 import { isDaemonEndpointGoneError } from '../../protocol/daemon-errors'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { preservedDaemonProcessExited } from './daemon-preserved-endpoint-loss'
+import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
+import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
 
 /** An older generation asked to retire by itself once it owns nothing (`retireWhenIdle`). */
 export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory {
@@ -82,7 +84,7 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
       ) {
         return 'unknown'
       }
-      this.idleRetirementState = 'retiring'
+      this.markRetiredForIdle()
       this.idleRetirementAdmissionClosed = true
       this.respawnAdoptionClosed = true
       return 'retired'
@@ -101,6 +103,26 @@ export abstract class DaemonPtyRetireWhenIdle extends DaemonPtySessionInventory 
 
   onConnectionLost(listener: () => void): () => void {
     return this.client.onDisconnected(listener)
+  }
+
+  /** The incarnation that accepted retirement; a successor on the same endpoint is not covered by it. */
+  private retiredIncarnation: DaemonEndpointIdentity | null = null
+
+  protected markRetiredForIdle(): void {
+    this.idleRetirementState = 'retiring'
+    this.retiredIncarnation = this.lastAuthenticatedIdentity
+  }
+
+  /** Retired, and nothing else has since answered on this endpoint as this adapter's daemon. */
+  retiredIncarnationIsCurrent(): boolean {
+    const retired = this.retiredIncarnation
+    const last = this.lastAuthenticatedIdentity
+    return (
+      this.idleRetirementState === 'retiring' &&
+      retired !== null &&
+      last !== null &&
+      sameEndpointIdentity(retired, last)
+    )
   }
 
   protected daemonProcessExited(pid: number | undefined): boolean {

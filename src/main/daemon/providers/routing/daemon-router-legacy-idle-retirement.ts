@@ -11,7 +11,9 @@ import {
 } from './daemon-router-pre-rpc-retirement'
 
 /** A retiring generation closes, then exits; both are proven within a few of these. */
-const RETIRED_CONFIRM_DELAYS_MS = [50, 100, 250, 500, 1_000, 2_000]
+const RETIRED_CONFIRM_DELAYS_MS = [0, 50, 100, 250, 500, 1_000, 2_000]
+/** Bounded: a generation that never answers stays as today, until quit. */
+const ASK_RETRY_DELAYS_MS = [5_000, 30_000, 120_000]
 
 export type LegacyIdleRetirementOptions = {
   current: () => DaemonPtyAdapter
@@ -29,6 +31,8 @@ export type LegacyIdleRetirementOptions = {
 export class DaemonRouterLegacyIdleRetirement {
   private readonly modes = new WeakMap<DaemonPtyAdapter, 'asking' | 'held' | 'pre-rpc'>()
   private readonly lostListeners = new Map<DaemonPtyAdapter, () => void>()
+  private readonly askAttempts = new WeakMap<DaemonPtyAdapter, number>()
+  private readonly askTimers = new Map<DaemonPtyAdapter, ReturnType<typeof setTimeout>>()
   private readonly preRpc: DaemonRouterPreRpcRetirement
   private disposed = false
 
@@ -77,17 +81,24 @@ export class DaemonRouterLegacyIdleRetirement {
     if (!mayComeFromRetirement(error)) {
       return false
     }
+    const reached = target && target !== 'any' ? target : undefined
     // Refused while an older generation decided past the fence: route again once it has answered.
-    const decision = target && target !== 'any' ? this.preRpc.pendingDecision(target) : undefined
-    if (decision) {
+    const decision = reached ? this.preRpc.pendingDecision(reached) : undefined
+    if (reached && decision) {
       await decision
-      return true
+      // Its own admission refused the spawn before sending it, or it retired: either way nothing ran there.
+      return !this.options.legacy().includes(reached) || isAdmissionRefusal(error)
     }
     const held = this.options.legacy().filter((adapter) => this.modes.get(adapter) === 'held')
     // Only the generation the spawn reached can have refused it before its close arrives.
     const settled = await Promise.all(
       held.map((adapter) => this.confirmRetired(adapter, target === 'any' || adapter === target))
     )
+    // A spawn sent to an older generation replays only once that generation itself is proven retired.
+    if (reached) {
+      return !this.options.legacy().includes(reached)
+    }
+    // Nothing was sent (owner resolution failed) or it was attach-only, which never creates.
     return settled.includes(true) || this.options.legacy().length < generationsAtStart
   }
 
@@ -98,16 +109,33 @@ export class DaemonRouterLegacyIdleRetirement {
       return
     }
     if (result === 'unanswered') {
-      // The next exit, discovery or reattach asks again.
       this.modes.delete(adapter)
+      this.askAgainSoon(adapter)
       return
     }
+    this.askAttempts.delete(adapter)
     if (result === 'unsupported') {
       this.modes.set(adapter, 'pre-rpc')
       this.preRpc.noteActivity(adapter)
       return
     }
     this.adoptHeld(adapter)
+  }
+
+  /** A few spaced retries after an unanswered ask; later exits, discovery or reattaches ask again too. */
+  private askAgainSoon(adapter: DaemonPtyAdapter): void {
+    const attempt = this.askAttempts.get(adapter) ?? 0
+    const delayMs = ASK_RETRY_DELAYS_MS[attempt]
+    if (delayMs === undefined || this.askTimers.has(adapter)) {
+      return
+    }
+    this.askAttempts.set(adapter, attempt + 1)
+    const timer = setTimeout(() => {
+      this.askTimers.delete(adapter)
+      this.noteActivity(adapter)
+    }, delayMs)
+    timer.unref?.()
+    this.askTimers.set(adapter, timer)
   }
 
   private adoptHeld(adapter: DaemonPtyAdapter): void {
@@ -123,6 +151,9 @@ export class DaemonRouterLegacyIdleRetirement {
   /** A held connection only closes when the daemon retires, stops, or the link drops. */
   private async confirmRetired(adapter: DaemonPtyAdapter, awaitClose: boolean): Promise<boolean> {
     for (const delayMs of RETIRED_CONFIRM_DELAYS_MS) {
+      if (delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs).unref?.())
+      }
       if (this.disposed || this.modes.get(adapter) !== 'held') {
         return false
       }
@@ -143,14 +174,14 @@ export class DaemonRouterLegacyIdleRetirement {
       if (verdict === 'connected' && !awaitClose) {
         return false
       }
-      await new Promise((resolve) => setTimeout(resolve, delayMs).unref?.())
     }
     // Still unproven, but still tracked: its next close, reconnect or activity looks again.
     return false
   }
 
   noteAll(): void {
-    for (const adapter of this.options.legacy()) {
+    // A copy: an adapter already retired is removed from the list while this walks it.
+    for (const adapter of [...this.options.legacy()]) {
       this.noteActivity(adapter)
     }
   }
@@ -158,6 +189,10 @@ export class DaemonRouterLegacyIdleRetirement {
   dispose(): void {
     this.disposed = true
     this.preRpc.dispose()
+    for (const timer of this.askTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.askTimers.clear()
     for (const stop of this.lostListeners.values()) {
       stop()
     }
@@ -192,4 +227,9 @@ function mayComeFromRetirement(error: unknown): boolean {
       (error.message.includes('temporarily unavailable') ||
         error.message.includes('decommissioning')))
   )
+}
+
+/** The generation's own admission refused the spawn, so it never sent it. */
+function isAdmissionRefusal(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('decommissioning')
 }
