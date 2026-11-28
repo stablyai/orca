@@ -36,6 +36,15 @@ const INERT_STRING_PREFIXES = new Set([INERT_OSC_PREFIX, INERT_DCS_PREFIX])
 // oxlint-disable-next-line no-control-regex -- C0/C1 bytes (including 8-bit ST 0x9c) that can end an open OSC/DCS string.
 const STRING_END_BYTE = /[\x07\x18\x1a\x1b\u0080-\u009f]/
 
+const C1_TO_7BIT_PREFIX: Record<number, string> = {
+  0x90: '\x1bP',
+  0x98: '\x1bX',
+  0x9b: '\x1b[',
+  0x9d: '\x1b]',
+  0x9e: '\x1b^',
+  0x9f: '\x1b_'
+}
+
 /** VT500 C1 control dispatch inside an open sequence; 0x9c (ST) and other C1 executes return to ground. */
 function stateAfterC1Byte(code: number): ScanState {
   if (code === 0x9b) {
@@ -191,7 +200,15 @@ function scanPartialEscapeTail(stream: string, stateOnly: boolean): string {
   if (state === 'oscEsc' || state === 'stringEsc') {
     return '\x1b'
   }
-  return stateOnly ? STATE_PREFIX[state] : state === 'ground' ? '' : stream.slice(start)
+  if (stateOnly) {
+    return STATE_PREFIX[state]
+  }
+  if (state === 'ground') {
+    return ''
+  }
+  // Normalize C1 openers to 7-bit ESC prefixes so ground-state re-ingest preserves fold equivalence.
+  const c1Prefix = C1_TO_7BIT_PREFIX[stream.charCodeAt(start)]
+  return c1Prefix ? c1Prefix + stream.slice(start + 1) : stream.slice(start)
 }
 
 const STATE_BY_PREFIX: Record<string, ScanState> = {

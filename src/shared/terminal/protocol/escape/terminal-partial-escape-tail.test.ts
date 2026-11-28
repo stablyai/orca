@@ -63,6 +63,24 @@ describe('extractPartialEscapeTail', () => {
     const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
     expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
+
+  it.each([
+    ['\x1b]t\x9b3', '1', '\x1b[31', 'm'],
+    ['\x1b]t\x9d0;', 'hi', '\x1b]0;hi', '\x07'],
+    ['\x1b]t\x90q', 'ab', '\x1bPqab', '\x1b\\'],
+    ['\x1b]t\x9fG', 'a=1', '\x1b_Ga=1', '\x9c']
+  ])(
+    'preserves extract(a + b) === extract(extract(a) + b) for C1 opener %j inside an open OSC',
+    (first, second, expected, terminator) => {
+      const combined = extractPartialEscapeTail(first + second)
+      expect(combined).toBe(expected)
+      expect(extractPartialEscapeTail(extractPartialEscapeTail(first) + second)).toBe(combined)
+
+      const pending = advancePartialEscapeTail('', first)
+      expect(advancePartialEscapeTail(pending, second)).toBe(combined)
+      expect(advancePartialEscapeTail(combined, terminator)).toBe('')
+    }
+  )
 })
 
 describe('advancePartialEscapeTail past the length cap', () => {
