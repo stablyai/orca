@@ -71,7 +71,7 @@ export function nativeChatDockFits(dock: HTMLElement): boolean {
     // Its own item, so a squeezed item (one the next item then overlaps) cannot pass for fitting.
     const clip = pinned.closest(CLIP_SELECTOR)
     const scrollsWithinClip = clip != null && !clipsPinnedContent(clip)
-    if (scrollsWithinClip) {
+    if (scrollsWithinClip && clip instanceof HTMLElement && clip.clientHeight > 0) {
       // The item's own box was checked above; a card scroller owns reachability of its contents.
       continue
     }
