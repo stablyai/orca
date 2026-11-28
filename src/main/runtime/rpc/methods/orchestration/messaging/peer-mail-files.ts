@@ -2,7 +2,7 @@
 // store first, with the upload calls a desktop uses to paste into a server's chat; the mail then names
 // the stored paths, and that Orca admits them into the chat the mail lands in: the item's with
 // `--item`, else the `--chat` it names or the bot's Home Chat. Mail that can't carry them sends nothing.
-import { readFile, stat } from 'node:fs/promises'
+import { open, type FileHandle } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { z } from 'zod'
 import { lazyZodSchema } from '../../../../../../shared/schema/lazy-zod-schema'
@@ -16,6 +16,7 @@ import { BOT_ITEM_COMMENT_FILE_MAX_COUNT } from '../../../../../../shared/bots/b
 import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { BOT_NEW_CHAT } from './bot-chat-address'
+import { isBotRequestPurpose } from '../../../../../bots/bot-request-policy'
 import { uploadBufferWith } from '../../../../../ipc/agent-attachments/agent-session-attachment-upload'
 import type { PeerMailServer } from '../../../../orchestration/federation/peer-mail/peer-mail-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -33,7 +34,13 @@ function refused(message: string): OrchestrationError {
   })
 }
 
-type PeerMailFilesParams = { to?: string; chat?: string; item?: string; files?: string[] }
+type PeerMailFilesParams = {
+  to?: string
+  chat?: string
+  item?: string
+  type?: string
+  files?: string[]
+}
 
 /** `--file` with `--on` goes to a bot, into a chat it has; refused before the server is asked. */
 export function assertPeerMailFilesAddress(params: PeerMailFilesParams): void {
@@ -42,8 +49,14 @@ export function assertPeerMailFilesAddress(params: PeerMailFilesParams): void {
   }
   if (!params.to || parseBotAddress(params.to) === null) {
     throw refused(
-      '--file with --on goes to a bot there: --to bot:<name>. To share text with an agent, paste it with --body-file.'
+      '--file with --on works only when sending to a bot there: --to bot:<name>. To share text with an agent, paste it with --body-file.'
     )
+  }
+  if (!isBotRequestPurpose(params.type ?? 'status')) {
+    throw refused('--file goes with mail a bot takes: --type status, handoff or question.')
+  }
+  if (params.item !== undefined && params.chat !== undefined) {
+    throw refused('Pass --item or --chat, not both.')
   }
   if (params.chat === BOT_NEW_CHAT) {
     throw refused(
@@ -92,46 +105,117 @@ export async function uploadPeerMailFiles(
   if (files.length - imageCount > BOT_ITEM_COMMENT_FILE_MAX_COUNT) {
     throw refused(`A message takes up to ${BOT_ITEM_COMMENT_FILE_MAX_COUNT} files besides images.`)
   }
-  const sizes = await Promise.all(
-    files.map(async (path) => {
-      const info = await stat(path).catch(() => null)
+  // Every file is opened and sized before the first upload, so one that can't be read sends nothing,
+  // and each upload reads the file it sized.
+  const opened = await openAll(files)
+  try {
+    const sizes = opened.map(({ size }) => size)
+    const imageBytes = sizes.reduce((sum, size, index) => (isImage[index] ? sum + size : sum), 0)
+    if (imageBytes > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
+      throw refused(
+        `These images add up to ${Math.ceil(imageBytes / MB)} MB. A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
+      )
+    }
+    const call = (method: string, params: unknown) =>
+      runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        method,
+        params,
+        CALL_TIMEOUT_MS,
+        undefined,
+        {
+          expectedEnvironmentPairingRevision: server.pairingRevision
+        }
+      )
+    const target = await uploadTarget(call, server, params.item, bot)
+    const stored: string[] = []
+    try {
+      for (const [index, path] of files.entries()) {
+        const buffer = await opened[index]!.handle.readFile()
+        if (buffer.byteLength !== sizes[index]) {
+          throw refused(`${basename(path)} changed while it was sent.`)
+        }
+        const { path: storedPath } = await uploadBufferWith(call, target, basename(path), buffer)
+        stored.push(storedPath)
+      }
+    } catch (error) {
+      throw withUnattachedUploads(error, server, stored.length)
+    }
+    return stored
+  } finally {
+    await Promise.all(opened.map(({ handle }) => handle.close().catch(() => {})))
+  }
+}
+
+/** Each file opened for reading, with its size; refused, with nothing left open, when one can't be. */
+async function openAll(files: string[]): Promise<{ handle: FileHandle; size: number }[]> {
+  const opened: { handle: FileHandle; size: number }[] = []
+  try {
+    for (const path of files) {
+      const handle = await open(path, 'r').catch(() => null)
+      const info = await handle?.stat().catch(() => null)
+      if (handle) {
+        opened.push({ handle, size: info?.size ?? 0 })
+      }
       if (!info?.isFile()) {
         throw refused(`${basename(path)} can't be read.`)
       }
       if (info.size > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
         throw refused(`${basename(path)} is over ${AGENT_SESSION_ATTACHMENT_MAX_BYTES / MB} MB.`)
       }
-      return info.size
-    })
-  )
-  const imageBytes = sizes.reduce((sum, size, index) => (isImage[index] ? sum + size : sum), 0)
-  if (imageBytes > AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES) {
-    throw refused(
-      `These images add up to ${Math.ceil(imageBytes / MB)} MB. A message takes up to ${AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES / MB} MB.`
-    )
-  }
-  const call = (method: string, params: unknown) =>
-    runtime.callOrchestrationWorkerServer(
-      server.environmentId,
-      method,
-      params,
-      CALL_TIMEOUT_MS,
-      undefined,
-      {
-        expectedEnvironmentPairingRevision: server.pairingRevision
-      }
-    )
-  const target = await uploadTarget(call, server, params.item, bot)
-  const stored: string[] = []
-  for (const [index, path] of files.entries()) {
-    const buffer = await readFile(path)
-    if (buffer.byteLength !== sizes[index]) {
-      throw refused(`${basename(path)} changed while it was sent.`)
     }
-    const { path: storedPath } = await uploadBufferWith(call, target, basename(path), buffer)
-    stored.push(storedPath)
+    return opened
+  } catch (error) {
+    await Promise.all(opened.map(({ handle }) => handle.close().catch(() => {})))
+    throw error
   }
-  return stored
+}
+
+// The server may yet have stored mail that ends in one of these: its answer never came back.
+const MAYBE_DELIVERED = new Set([
+  'runtime_timeout',
+  'remote_runtime_unavailable',
+  'delivery_in_progress',
+  'operation_unknown',
+  'outcome_unknown'
+])
+
+/** The server answered that it refused the mail, so none of it is stored there. */
+export function peerMailStoredNothing(error: unknown): boolean {
+  if (!(error instanceof OrchestrationError) || MAYBE_DELIVERED.has(error.code)) {
+    return false
+  }
+  const data: unknown = error.data
+  return (
+    typeof data !== 'object' ||
+    data === null ||
+    !('effectsApplied' in data) ||
+    data.effectsApplied === false
+  )
+}
+
+/** A send that certainly stored no mail, after files reached the server, says so: the message wasn't
+ *  sent, and those files wait there, attached to nothing, until that Orca clears its unused uploads. */
+export function withUnattachedUploads(
+  error: unknown,
+  server: Pick<PeerMailServer, 'name'>,
+  count: number
+): unknown {
+  if (count === 0) {
+    return error
+  }
+  const files = count === 1 ? 'A file' : `${count} files`
+  const note = `${files} already copied to ${server.name} for it ${count === 1 ? 'is' : 'are'} attached to nothing there; Orca on ${server.name} clears unused uploads later.`
+  const known = error instanceof OrchestrationError
+  const reason = (error instanceof Error ? error.message : String(error))
+    .replace(/ ?Nothing was sent\.$/, '')
+    .replace(/([^.])$/, '$1.')
+  const data = known && typeof error.data === 'object' && error.data !== null ? error.data : {}
+  return new OrchestrationError(
+    known ? error.code : 'peer_mail_not_sent',
+    `${reason} The message wasn't sent. ${note}`,
+    { ...data, effectsApplied: true, unattachedUploads: count }
+  )
 }
 
 /** Uploads with an item belong to the item's chat there, which the item names; other bot mail's go

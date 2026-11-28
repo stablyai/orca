@@ -37,8 +37,9 @@ export type BotItemCommentAttachmentDeps = {
    *  the store holds every comment image. A paired client names store paths only. */
   local: boolean
   claim: AgentSessionAttachmentClaimer | null
-  /** The item's chat's live session and title; null when that chat is gone. */
-  chat: () => Promise<{ sessionId: string; title: string | null } | null>
+  /** The item's chat's live session and title; null when that chat is gone. `later`: the chat is
+   *  chosen as the mail is admitted, so the uploads are claimed then, by `claimFor`. */
+  chat: (() => Promise<{ sessionId: string; title: string | null } | null>) | 'later'
 }
 
 export type BotItemCommentAttached = {
@@ -46,6 +47,8 @@ export type BotItemCommentAttached = {
   images: BotItemCommentImage[]
   /** The uploads claimed for the item's chat, when the comment names any. */
   claimed?: AdmittedCommentClaim
+  /** With `chat: 'later'` and uploads named: claims them for the session the mail lands in. */
+  claimFor?: (sessionId: string) => Promise<void>
 }
 
 /** The comment's text and images, named and sized on this host, once each upload it names is claimed
@@ -94,6 +97,14 @@ export async function admitBotItemCommentAttachments(
   const uploadIds = agentSessionAttachmentReferences(store.rootDir, body)
   if (uploadIds.size === 0) {
     return { text, images }
+  }
+  if (deps.chat === 'later') {
+    const { claim } = deps
+    return {
+      text,
+      images,
+      claimFor: (sessionId) => claimBotItemCommentAttachments(claim, sessionId, body)
+    }
   }
   const chat = await deps.chat()
   if (!chat) {

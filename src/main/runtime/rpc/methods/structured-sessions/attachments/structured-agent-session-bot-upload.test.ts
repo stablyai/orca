@@ -9,6 +9,7 @@ import type { StructuredAgentSessionHost } from '../../../../../native-chat/agen
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { makeTestBot } from '../../../../../bots/bot.test-fixture'
 import type { RpcContext } from '../../../core'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-agent-session-attachments'
 
 const upload = STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS.find(
@@ -23,6 +24,9 @@ function asCaller(caller: Record<string, unknown>): RpcContext {
   return {
     caller,
     pairedDeviceId: 'device_a',
+    // A paired Orca calls as a runtime client that speaks structured sessions.
+    clientKind: 'runtime',
+    clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
     runtime: {
       ensureStructuredAgentSessionHost: async () => {},
       bots: { list: () => [bot], assertEnabled: () => {} }
@@ -59,5 +63,7 @@ it('stages a paired Orca upload for a bot here, by name or id, and refuses an un
 it("refuses a bot's own agent the owner's upload target", async () => {
   const agent = asCaller({ kind: 'paired-device', deviceId: 'bot-cli', agent: true })
   const params = upload.params.parse({ bot: 'Docs', name: 'notes.txt', byteLength: 0 })
-  await expect(upload.handler(params, agent)).rejects.toThrow('Only your owner')
+  await expect(upload.handler(params, agent)).rejects.toThrow(
+    'Only your owner sends files to a bot this way, in Orca.'
+  )
 })

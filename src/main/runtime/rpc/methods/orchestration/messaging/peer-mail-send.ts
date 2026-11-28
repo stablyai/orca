@@ -22,7 +22,9 @@ import type { SendRecipientWarning } from './recipient-routing'
 import {
   assertPeerMailFilesAddress,
   assertPeerMailServerTakesFiles,
-  uploadPeerMailFiles
+  peerMailStoredNothing,
+  uploadPeerMailFiles,
+  withUnattachedUploads
 } from './peer-mail-files'
 import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import {
@@ -119,7 +121,10 @@ export async function sendPeerMail(args: {
     if (type === 'question') {
       forgetPeerQuestionOut(db, id)
     }
-    throw error
+    // A refusal names the files it left there; a timeout may yet have delivered them with the mail.
+    throw peerMailStoredNothing(error)
+      ? withUnattachedUploads(error, server, attachments?.length ?? 0)
+      : error
   }
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,

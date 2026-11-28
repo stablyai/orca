@@ -3,7 +3,6 @@
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
-import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import {
   failureHeldChat,
@@ -21,36 +20,28 @@ import {
   botRequestRefusal,
   isBotRequestPurpose
 } from '../../../../../bots/bot-request-policy'
-import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { generateId } from '../../../../orchestration/db/generated-id'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { SendParams } from './send-params'
 import {
   botAddressReach,
   readActingSender,
   receivingBot,
   refuse,
   toOtherChat,
-  type ActingMail,
-  type ActingSender,
-  type ReceivingBot
+  type ActingMail
 } from './bot-recipient'
 import { exposeMessage } from './mailbox-message-receipt'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
+import type { SendBotRequestArgs, SendParamsInput } from './bot-request-send-args'
+import { claimMailFilesFor } from './bot-mail-files-claim'
 import { botRequestChain, botRequestSendKey } from './bot-request-chain'
 import { answersRequest, askedInConversation, botRequestSender } from './bot-request-record'
-import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
-
-type SendParamsInput = Pick<
-  z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
->
 
 /** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
 export function mayReachBot(
@@ -75,7 +66,10 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
-  } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
+  } & Pick<
+      SendBotRequestArgs,
+      'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted' | 'claimFiles'
+    >
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
@@ -109,30 +103,6 @@ export async function sendToBot(
     ...(mail.holdNudge ? { held } : {})
   })
   return { receipt, nudge: () => held.splice(0).forEach((nudge) => nudge()) }
-}
-
-type SendBotRequestArgs = {
-  runtime: OrcaRuntimeService
-  db: OrchestrationDb
-  params: SendParamsInput
-  from: string
-  to: string
-  receiving: ReceivingBot
-  acting: ActingSender
-  senderRunId: string | undefined
-  senderPaneKey: string | undefined
-  recordMutationReceipt: ((receipt: unknown) => void) | undefined
-  messageId?: string
-  /** Who sent it as the card shows them, for a sender this Orca has no record of (another computer's). */
-  senderSnapshot?: string
-  /** Its sender is an agent on a computer paired with this one, either side of the pairing. */
-  pairedSender?: PairedSender
-  /** Store images claimed for the receiving chat (`send --item --file`). */
-  images?: readonly string[]
-  /** Nudges the sender runs later instead of now. */
-  held?: (() => void)[]
-  /** Commits with the request's admission, before anyone is woken for it. */
-  onAdmitted?: () => void
 }
 
 /** Every refusal, from the first check to a blocked admission, leaves the owner's card. */
@@ -248,7 +218,14 @@ async function admitBotRequestMail(
   }
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request queues in, named to the sender. */
-  const admit = (address: string, reserved = false, held?: HeldChat | null) => {
+  /** `filesCurrent`: its files' chat still runs the session they were claimed for. */
+  const admit = (
+    address: string,
+    reserved = false,
+    held?: HeldChat | null,
+    filesCurrent?: () => void
+  ) => {
+    filesCurrent?.()
     const recipient =
       address.startsWith('run:') && receiving.via === 'address'
         ? { ok: true as const, to: address, runId: address.slice('run:'.length) }
@@ -300,6 +277,8 @@ async function admitBotRequestMail(
     }
     return { sent: true, receipt: sent.receipt }
   }
+  const claimFiles = (chatId: string | null, home = false) =>
+    claimMailFilesFor(runtime, target, chatId, args.claimFiles, home)
   /** `--chat new`: the request opens a chat the bot starts for it, shown in its tab bar. */
   const inNewChat = () => {
     // Held before the chat is made, so a competing send makes none.
@@ -313,20 +292,25 @@ async function admitBotRequestMail(
     })
   }
   if (groupScope) {
-    return admit(sessionAddress(groupScope.target.sessionId)).receipt
+    const filesCurrent = await claimFiles(groupScope.target.sessionId)
+    return admit(sessionAddress(groupScope.target.sessionId), false, undefined, filesCurrent)
+      .receipt
   }
   // Whoever the sending turn acts for, the request lands where it was addressed; its record says who asked.
   if (receiving.newChat) {
-    return inNewChat()
+    return args.claimFiles ? claimFiles(null) : inNewChat()
   }
   // A chat whose last turn failed queues it like its owner's own follow-ups; the sender is told.
   if (receiving.via === 'address') {
     const home = receiving.chat !== null && receiving.chat === target.chatSessionId
-    return admit(args.to, false, await failureHeldChat(runtime, receiving.chat, home)).receipt
+    const filesCurrent = await claimFiles(receiving.chat)
+    const held = await failureHeldChat(runtime, receiving.chat, home)
+    return admit(args.to, false, held, filesCurrent).receipt
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
   return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
+    const filesCurrent = await claimFiles(sessionId, true)
     const held = await failureHeldChat(runtime, sessionId, true)
-    return admit(sessionAddress(sessionId), false, held).receipt
+    return admit(sessionAddress(sessionId), false, held, filesCurrent).receipt
   })
 }

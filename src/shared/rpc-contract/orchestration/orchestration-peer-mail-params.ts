@@ -41,7 +41,8 @@ export const PeerMailDeliverParams = lazyZodSchema(() =>
     chat: OptionalString,
     /** With a `bot:` address: an item number of that bot's. */
     item: OptionalString,
-    /** With `item`: files the sender uploaded to this Orca's attachment store for the item's chat. */
+    /** Files the sender uploaded to this Orca's attachment store: for the item's chat with `item`,
+     *  else for the chat the mail lands in (`--chat`, or the bot's Home Chat). */
     attachments: z.array(z.string().min(1).max(4096)).max(30).optional(),
     sender: PeerMailSender.optional(),
     /** Whom the sending turn acts for, read by the receiver one by one so it drops a kind it doesn't

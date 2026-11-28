@@ -73,7 +73,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.',
       'For a long or multi-line body, write it to a file and pass --body-file <path> (or - for stdin); the CLI reads it on this computer, so no shell quoting applies.',
       '--on <server> mails a terminal or chat agent on a paired server (--to term_… or orca_session_id:…). Your own Orca carries it, and replies come back to your own check. From an agent, --environment runs the command on that server and delivers no mail.',
-      "Mail sent with --on carries text only: the other computer can't open paths on this one. To attach files, send to a bot there (--to bot:<name>) with --file: they go into the chat the mail lands in (its Home Chat, the --chat <id> you name, or the --item's chat). Paste text with --body-file.",
+      "Mail sent with --on carries its text, not the files its paths name: the other computer can't open paths on this one. Attach files with --file, sent to a bot there (--to bot:<name>): they go into the chat the mail lands in (its Home Chat, the --chat <id> you name, or the --item's chat). Paste text with --body-file.",
       "--on-client <computer> mails a bot on a computer paired to this Orca (--to bot:<id>), as `orca bot list` or its mention in your chat names it; its reply comes back to your own check. A bot that computer does not always let this Orca ask needs its owner's OK or declines. The send fails at once if Orca cannot identify that computer."
     ]
   },

@@ -75,7 +75,7 @@ A workspace under your home is yours, however it got there; moving it out only m
 
 - Mail one with `ORCA orchestration send --on <server> --to <term_…|orca_session_id:…> --subject <text> --body-file <file>`. Your own Orca carries it; replies arrive in your own `check`.
 - A bot there takes `--to bot:<name>` with `--on <server>`, and `--chat <id|new>` or `--item <n>` as on this computer. It treats the request as its owner's, and its answer comes back to your own `check` as a local bot's does.
-- Mail sent with `--on` carries text only: the other computer can't open paths on this one. To attach a file, send to a bot there with `--file <path>` (repeat it); it goes into the chat the mail lands in. Paste text with `--body-file`.
+- Mail sent with `--on` carries its text, not the files its paths name: the other computer can't open paths on this one. Attach files with `--file <path>` (one flag per file), sent to a bot there; they go into the chat the mail lands in. Paste text with `--body-file`.
 - Answer mail from another server with plain `ORCA orchestration reply --id <msg_id> --body-file <file>`; it goes back where it came from. `reply --on` is refused.
 - Your mail and workers stay on your own Orca. `send` and `worker-start` with `--environment` (or an inherited `ORCA_ENVIRONMENT`) are refused with the `--on` command to run instead. `check` takes no `--on` and no server: replies from other servers already arrive in it. With `--environment` (or `ORCA_ENVIRONMENT`) it is refused with `mailbox_is_local`; drop the server. Read-only `inbox`, `worker-list` and `run-list` with `--environment` show that server's records.
 - If an Orca is too old to carry mail between servers, the send fails with `server_mail_unsupported` and nothing is sent.
