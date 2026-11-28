@@ -3,13 +3,13 @@ import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
 } from './rate-limit-window-localized-label'
-import { antigravityBarProvider } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { antigravityBarProvider } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
 
@@ -71,8 +71,7 @@ function headlineSections(
   t: Translate | undefined,
   scope: UsageHeadlineScope
 ): UsageSection[] {
-  // The status bar draws Antigravity through its session and weekly windows; the menus list every pool.
-  return scope === 'all' ? usedSections(antigravityBarProvider(p), t) : primarySections(p, t)
+  return scope === 'all' ? usedSections(p, t) : primarySections(p, t)
 }
 
 /** Most-consumed window within the scope. */
@@ -92,6 +91,11 @@ export function getTightestUsageSection(
       : current
   )
   return { ...tightest, label: shortUsageLabel(p, tightest, true) }
+}
+
+/** The compact menu row's summary: the window the status bar draws for the same reading. */
+export function getCompactRowHeadline(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+  return getUsageHeadlineSection(antigravityBarProvider(p), t)
 }
 
 export function getUsageHeadlineSection(

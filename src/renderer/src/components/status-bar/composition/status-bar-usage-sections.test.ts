@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readAntigravityStatusLineQuota } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
+import { isUsageUrgent } from '../usage/StatusBarProviderSegment'
+import { getCompactRowHeadline } from '../usage/usage-headline-sections'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
 
 const NOW = Date.parse('2026-11-28T10:00:00Z')
@@ -35,5 +37,17 @@ describe('status bar sections for an Antigravity reading', () => {
   it('falls back to the third-party windows when Gemini reports none', () => {
     const sections = getStatusBarUsageSections(reading({ '3p-5h': gemini['3p-5h'] }), 'compact')
     expect(sections.map((section) => section.window.usedPercent)).toEqual([95])
+  })
+
+  it('summarizes the compact menu row with the window the bar shows, yet counts every pool as urgent', () => {
+    const nearlySpent = { ...gemini, '3p-5h': { ...gemini['3p-5h'], remaining_fraction: 0.05 } }
+    const stored = reading(nearlySpent)
+    const bar = getStatusBarUsageSections(stored, 'compact')
+    const menu = getCompactRowHeadline(stored)
+    expect(menu?.window.usedPercent).toBe(54)
+    expect(menu?.window).toBe(bar[0].window)
+    // The Claude · GPT pool at 95% is not drawn, but it still protects the chip from collapsing.
+    expect(isUsageUrgent(stored)).toBe(true)
+    expect(isUsageUrgent(reading({ 'gemini-5h': gemini['gemini-5h'] }))).toBe(false)
   })
 })
