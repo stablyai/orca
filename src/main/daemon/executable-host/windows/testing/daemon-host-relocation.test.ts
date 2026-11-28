@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Fs from 'node:fs'
 
 // Pass-through spy: counts synchronous content reads the hash cache makes on main.
-const syncReads = vi.hoisted(() => ({ paths: [] as string[] }))
+const syncReads = vi.hoisted((): { paths: string[] } => ({ paths: [] }))
 vi.mock('node:fs', async (original) => {
   const fs = await original<typeof Fs>()
   const readFileSync = (...args: Parameters<typeof fs.readFileSync>) => {
