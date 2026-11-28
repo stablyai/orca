@@ -47,6 +47,23 @@
   overflow-wrap: break-word;
 }
 
+/* Rows of uneven height read from the top line, not from the middle of the tallest cell. */
+.native-chat-markdown :is(th, td) {
+  vertical-align: top;
+}
+
+/* Tables already scroll sideways, so short labels and code chips stay whole instead of breaking
+   mid-word in a narrow column ("Wher / e", "x- / default"). */
+.native-chat-markdown th,
+.native-chat-markdown :is(th, td) code {
+  white-space: nowrap;
+}
+
+/* A leading index or key column (#, ID) sizes to its content rather than the 18-unit minimum. */
+.native-chat-markdown :is(th, td):first-child {
+  min-width: 0;
+}
+
 .native-chat-markdown code {
   border: 1px solid var(--chat-inline-code-border);
   border-radius: var(--radius-sm, 0.375rem);
