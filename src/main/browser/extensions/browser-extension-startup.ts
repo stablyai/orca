@@ -1,9 +1,9 @@
-import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { linkBrowserExtensionsToRouteSession } from './profile-sessions/browser-extension-route-sessions'
 import { browserExtensionSourceProfileId } from './profile-sessions/browser-extension-route-profiles'
-import { app, webContents } from 'electron'
+import { app, ipcMain, webContents } from 'electron'
 import { isHiddenHelperContents } from '../hidden-helper-window'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
+import { BROWSER_EXTENSION_WEB_STORE_CHANNEL } from '../../../shared/browser/extensions/browser-extension-webstore'
 import {
   installBrowserExtensionApiHost,
   getBrowserExtensionProfileIdForSession
@@ -13,8 +13,6 @@ import {
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
-import { detachBrowserExtensionsFromAllProfileSessions } from './profile-sessions/browser-extension-session-loader'
-import { forgetAllBrowserExtensionSessions } from './profile-sessions/browser-extension-idle-resume'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import {
   setBrowserExtensionGrantedPermissionsLookup,
@@ -28,8 +26,6 @@ import { observeBrowserExtensionCommands } from './api/commands'
 import { observeBrowserExtensionDnrContents } from './declarative-net-request/session/browser-extension-dnr-contents'
 import { installBrowserExtensionSessionServices } from './profile-sessions/browser-extension-session-services'
 import { installBrowserExtensionToolbarNotifications } from './actions/browser-extension-toolbar'
-import { installChromeWebStoreBridgeHost } from './web-store/browser-extension-webstore-bridge-host'
-import { startBrowserExtensionUpdateChecks } from './web-store/browser-extension-webstore-updater'
 import {
   notifyBrowserExtensionListChanged,
   setBrowserExtensionListChangedListener
@@ -46,6 +42,8 @@ import {
   type SavedBrowserTabsSource
 } from './tabs-and-windows/browser-extension-discarded-tabs'
 
+const FIRST_UPDATE_CHECK_DELAY_MS = 60_000
+
 let initialized = false
 let switching = Promise.resolve()
 let savedBrowserTabs: SavedBrowserTabsSource | null = null
@@ -56,9 +54,13 @@ export function initializeBrowserExtensionSupport(options: {
   /** The saved workspace session, which names browser pages not loaded yet (discarded tabs). */
   savedBrowserTabs?: SavedBrowserTabsSource
 }): void {
-  void removeRetiredBrowserExtensionProfileStorage().catch((error: unknown) => {
-    console.warn('[browser-extensions] Could not remove retired profile storage:', error)
-  })
+  void import('./profile-storage/browser-extension-retired-profile-storage')
+    .then(({ removeRetiredBrowserExtensionProfileStorage }) =>
+      removeRetiredBrowserExtensionProfileStorage()
+    )
+    .catch((error: unknown) => {
+      console.warn('[browser-extensions] Could not remove retired profile storage:', error)
+    })
   savedBrowserTabs = options.savedBrowserTabs ?? null
   setBrowserExtensionSupportEnabled(options.enabled)
   if (options.enabled) {
@@ -92,6 +94,13 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
           observeExtensionContents(contents)
         }
       } else {
+        const [
+          { detachBrowserExtensionsFromAllProfileSessions },
+          { forgetAllBrowserExtensionSessions }
+        ] = await Promise.all([
+          import('./profile-sessions/browser-extension-session-loader'),
+          import('./profile-sessions/browser-extension-idle-resume')
+        ])
         await detachBrowserExtensionsFromAllProfileSessions()
         forgetAllBrowserExtensionSessions()
       }
@@ -134,14 +143,27 @@ function installBrowserExtensionSupport(): void {
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()
   installBrowserExtensionToolbarNotifications()
-  installChromeWebStoreBridgeHost()
+  ipcMain.removeHandler(BROWSER_EXTENSION_WEB_STORE_CHANNEL)
+  ipcMain.handle(BROWSER_EXTENSION_WEB_STORE_CHANNEL, async (event, request: unknown) => {
+    const { handleChromeWebStoreBridgeRequest } =
+      await import('./web-store/browser-extension-webstore-bridge-host')
+    return handleChromeWebStoreBridgeRequest(event, request)
+  })
   setBrowserExtensionListChangedListener(() => {
     const window = getBrowserExtensionMainWindow()
     if (window && !window.isDestroyed()) {
       window.webContents.send(BROWSER_EXTENSIONS_CHANGED_CHANNEL)
     }
   })
-  startBrowserExtensionUpdateChecks()
+  setTimeout(() => {
+    void import('./web-store/browser-extension-webstore-updater')
+      .then(({ startBrowserExtensionUpdateChecks }) => {
+        startBrowserExtensionUpdateChecks({ runImmediately: true })
+      })
+      .catch((error: unknown) => {
+        console.warn('[browser-extensions] Could not start update checks:', error)
+      })
+  }, FIRST_UPDATE_CHECK_DELAY_MS).unref()
   installIdleBrowserExtensionProfiles(observeExtensionContents)
   // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
   app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
