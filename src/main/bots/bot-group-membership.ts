@@ -246,13 +246,13 @@ async function retireMembers(groups: BotGroupRuntime, next: BotGroup): Promise<B
         ...message,
         turns: message.turns.map((turn) => {
           const read = frozen.get(turn.sessionId)
-          return read
-            ? {
-                ...turn,
-                revoked: true,
-                frozenItems: read(turn.operationId, turn.workerDispatchIds)
-              }
-            : turn
+          if (!read) {
+            return turn
+          }
+          const items = read(turn.operationId, turn.workerDispatchIds)
+          return items === null
+            ? { ...turn, revoked: true, joinedTurn: true, reply: null, frozenItems: [] }
+            : { ...turn, revoked: true, frozenItems: items }
         })
       })
     }

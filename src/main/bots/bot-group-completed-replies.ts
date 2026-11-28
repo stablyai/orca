@@ -22,7 +22,7 @@ export async function completedGroupReplies(
     (turn) => turn.sessionId
   )
   const reads = botChatReads(groups.runtime)
-  const read = new Map<string, AgentJournalRenderItem[]>()
+  const read = new Map<string, AgentJournalRenderItem[] | null>()
   for (const [sessionId, sessionTurns] of unsaved) {
     for (const [operationId, items] of await reads.turnItems(sessionId, sessionTurns)) {
       read.set(operationId, items)
@@ -55,8 +55,8 @@ export async function completedGroupReplies(
   // for a turn that ended without one (stopped, failed). Saved on the message as it stands now.
   const settled = new Map<string, string | null>()
   for (const [operationId, items] of read) {
-    const ended = items.some((item) => item.body.kind === 'turn' && item.body.state !== 'running')
-    if (replies.has(operationId) || ended) {
+    const ended = items?.some((item) => item.body.kind === 'turn' && item.body.state !== 'running')
+    if (items === null || replies.has(operationId) || ended) {
       settled.set(operationId, replies.get(operationId) ?? null)
     }
   }

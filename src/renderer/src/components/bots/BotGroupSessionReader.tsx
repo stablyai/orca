@@ -47,7 +47,7 @@ export const BotGroupSessionReader = memo(function BotGroupSessionReader({
       // Page only for a turn the session admitted; queued or refused ones have no older rows to find.
       turn.operationIds.some(
         (id) =>
-          groupTurnItems(id).length === 0 &&
+          groupTurnItems(id)?.length === 0 &&
           botGroupOperationAdmitted(
             { items: controller.journalItems, submissions: controller.submissions },
             id
