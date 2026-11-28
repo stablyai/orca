@@ -235,7 +235,7 @@ export async function openCodexStructuredSession(
       ...(serviceTier ? { serviceTier } : {})
     },
     appliedTurnInputOptions: codexMessageInputOptions(input.options ?? {}, {
-      serviceTier: CODEX_DEFAULT_SERVICE_TIER,
+      serviceTier: serviceTier ?? CODEX_DEFAULT_SERVICE_TIER,
       interactionMode: 'default'
     }),
     appliedSettings: attempt.window.appliedSettings,
