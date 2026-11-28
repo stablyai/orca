@@ -128,7 +128,7 @@ export function useNativeChatSurface({
     (event: ReactKeyboardEvent<HTMLDivElement>) => {
       const shortcut =
         onSplit && !event.repeat
-          ? matchNativeChatPaneShortcut(event, getShortcutPlatform(), keybindings)
+          ? matchNativeChatPaneShortcut(event.nativeEvent, getShortcutPlatform(), keybindings)
           : null
       if (shortcut && onSplit?.(shortcut)) {
         event.preventDefault()
