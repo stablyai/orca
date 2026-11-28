@@ -68,13 +68,24 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
       // Spend activation even on popups so it cannot fund a later tab.
       const observed = gesture.consume()
       const request = { url, frameName, disposition, postBody }
+      const externalUrl = normalizeExternalBrowserUrl(url)
+      // The chord comes from browser-process input, not the page, so a page cannot fake it.
+      if (
+        externalUrl &&
+        !postBody &&
+        observed?.byAgent === false &&
+        observed.systemBrowserChord &&
+        disposition === 'foreground-tab'
+      ) {
+        this.openInSystemBrowser(guest, externalUrl)
+        return { action: 'deny' }
+      }
       if (this.openNewTabPopup(guest, request, observed)) {
         return { action: 'deny' }
       }
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = observed?.byAgent !== false
       const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
-      const externalUrl = normalizeExternalBrowserUrl(url)
 
       // A server page's popup reaches its viewers as a tab, never the server's own screen.
       // Hidden, not offscreen: Electron never sizes or paints an offscreen window.open child (electron/electron#55565).
@@ -118,12 +129,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
             })
         }
       } else if (externalUrl && !postBody && observed?.byAgent === false) {
-        // The OS browser takes the foreground, so only the desktop user's own click opens it. Redact Kagi's bearer token first.
-        void shell.openExternal(redactKagiSessionToken(externalUrl))
-        this.forwardOrQueuePopupEvent(guest.id, {
-          origin: safeOrigin(externalUrl),
-          action: 'opened-external'
-        })
+        this.openInSystemBrowser(guest, externalUrl)
       } else if (!this.requestExternalAppLaunch(guest, url, () => referrer.url || null)) {
         // Report only the origin: popup URLs can contain one-time tokens.
         this.forwardOrQueuePopupEvent(guest.id, {
@@ -142,6 +148,16 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         // guest may already be destroyed
       }
     }
+  }
+
+  /** The OS browser takes the foreground, so callers pass only the desktop user's own click. */
+  private openInSystemBrowser(guest: Electron.WebContents, externalUrl: string): void {
+    // Redact Kagi's bearer token first.
+    void shell.openExternal(redactKagiSessionToken(externalUrl))
+    this.forwardOrQueuePopupEvent(guest.id, {
+      origin: safeOrigin(externalUrl),
+      action: 'opened-external'
+    })
   }
 
   /**

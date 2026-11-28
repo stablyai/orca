@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import { BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL } from '../../../../shared/browser/guest-lifecycle/browser-guest-link-chord-click'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
@@ -51,6 +52,15 @@ export function onActivatingBrowserGuestInput(
   }
 }
 
+/** Shift+Cmd (Shift+Ctrl off macOS) on a click sends the link to the system browser, as elsewhere in Orca. */
+export function isSystemBrowserLinkChord(
+  payload: unknown,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  const key = platform === 'darwin' ? 'metaKey' : 'ctrlKey'
+  return typeof payload === 'object' && payload !== null && key in payload && payload[key] === true
+}
+
 export type LastBrowserGuestInput = { at: number; byAgent: boolean; guestWebContentsId: number }
 
 // Why per session: an extension reacts to its profile's pages without knowing which input set it off.
@@ -81,6 +91,8 @@ export type ObservedBrowserGuestGesture = {
   byAgent: boolean
   /** Its sender works with this desktop's windows: the user, or an agent's command on a page shown here, not a paired viewer. */
   fromThisDesktop: boolean
+  /** The page reported the system-browser chord for the click main observed. */
+  systemBrowserChord: boolean
 }
 
 const domActivationsByGuest = new WeakMap<WebContents, number>()
@@ -112,11 +124,13 @@ export function trackBrowserGuestInputGesture(
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
   let lastGestureFromThisDesktop = false
+  let lastGestureSystemBrowserChord = false
   let lastGestureDomActivations = 0
   let unsubscribe: (() => void) | null = null
   try {
     unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
+      lastGestureSystemBrowserChord = false
       lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
       lastGestureByAgent = isAgentInjectingInput(guest)
       lastGestureFromThisDesktop =
@@ -124,6 +138,22 @@ export function trackBrowserGuestInputGesture(
       noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
       onActivatingInput?.(lastGestureByAgent)
     })
+    // The page's click report follows main's mouseUp, so it can only qualify input main already saw.
+    const onChordClick = (_event: Electron.Event, channel: string, payload: unknown): void => {
+      if (channel === BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL && lastGestureAt !== null) {
+        lastGestureSystemBrowserChord = isSystemBrowserLinkChord(payload)
+      }
+    }
+    guest.on('ipc-message', onChordClick)
+    const stopInput = unsubscribe
+    unsubscribe = () => {
+      stopInput()
+      try {
+        guest.off('ipc-message', onChordClick)
+      } catch {
+        // Contents may already be destroyed.
+      }
+    }
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
   }
@@ -135,7 +165,11 @@ export function trackBrowserGuestInputGesture(
         observedAt !== null &&
         isRecentBrowserGuestInput(observedAt, now()) &&
         lastGestureDomActivations === (domActivationsByGuest.get(guest) ?? 0)
-        ? { byAgent: lastGestureByAgent, fromThisDesktop: lastGestureFromThisDesktop }
+        ? {
+            byAgent: lastGestureByAgent,
+            fromThisDesktop: lastGestureFromThisDesktop,
+            systemBrowserChord: lastGestureSystemBrowserChord
+          }
         : null
     },
     dispose: () => {
