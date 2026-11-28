@@ -6,7 +6,10 @@ import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-t
 import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { resolveKiroHomeDir } from '../../../shared/agent-launch/environment/kiro-home'
-import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
+import {
+  codexRootDirsForSessionsDir,
+  uniqueCodexSessionsDirs
+} from '../scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,
   kiroTranscriptPathForMetadata
@@ -124,12 +127,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     directoryPredicate: (name) => name !== SUBAGENT_DIR_NAME
   },
   codex: {
+    // Codex archives idle rollouts into a sibling `archived_sessions` folder (#51144); list both.
     rootDirs: (options, wslHomeDirs) =>
-      uniqueCodexSessionsDirs([
-        options.codexSessionsDir ?? codexHomeSessionsDir(),
-        ...wslHomeSessionDirs('codex', wslHomeDirs),
-        ...(options.additionalCodexSessionsDirs ?? [])
-      ]),
+      uniqueCodexSessionsDirs(
+        [
+          options.codexSessionsDir ?? codexHomeSessionsDir(),
+          ...wslHomeSessionDirs('codex', wslHomeDirs),
+          ...(options.additionalCodexSessionsDirs ?? [])
+        ].flatMap(codexRootDirsForSessionsDir)
+      ),
     // Codex archives rollouts idle 7+ days as .jsonl.zst (#40312); only rollout-named archives.
     extensions: ['.jsonl', '.zst'],
     filePredicate: (filePath) =>

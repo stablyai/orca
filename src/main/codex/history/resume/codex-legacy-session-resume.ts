@@ -20,7 +20,7 @@ import {
   copyCodexRolloutWithoutOverwrite
 } from '../rollouts/codex-rollout-copy'
 import { resolveCodexSessionBackfillPaths } from '../backfill/codex-session-backfill'
-import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
+import { codexDatedRolloutRelativePath, codexRolloutResumeTail } from './codex-session-resume-home'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import {
   settleLegacySessionCopyName,
@@ -83,7 +83,7 @@ export async function prepareLegacySharedCodexSessionResume(
   }
   const sourcePath = resolve(args.filePath)
   // Codex canonicalizes CODEX_HOME, so Windows transcripts can carry a \\?\ prefix (#27200).
-  const relativePath = codexDatedRolloutRelativePath(managedSessionsRoot, sourcePath)
+  const relativePath = codexRolloutResumeTail(managedSessionsRoot, sourcePath)
   if (relativePath && !options.leaveSwapToAccountRestart) {
     // Before Codex starts, so this resume can't be writing the copy as it's swapped.
     await swapLegacySessionCopyBeforeCodex({ managedHome: legacyCodexHomePath, relativePath })
@@ -145,7 +145,7 @@ export async function prepareCodexAccountRestartResume(args: {
   if (sameRuntimePath(args.sourceHome, args.targetHome)) {
     return args.targetHome
   }
-  const relativePath = codexDatedRolloutRelativePath(
+  const relativePath = codexRolloutResumeTail(
     join(args.sourceHome, 'sessions'),
     resolve(args.transcriptPath)
   )

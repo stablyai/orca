@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  codexRolloutResumeTail,
   findTrustedCodexSessionResume,
   resolveCodexSessionResumeProvenance,
   resolveTrustedCodexSessionResumeHome
@@ -177,6 +178,86 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).resolves.toBeNull()
     expect(listSessionFiles).not.toHaveBeenCalled()
   })
+
+  it('resumes a rollout Codex archived into the flat sibling folder', async () => {
+    const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-archive-'))
+    tempRoots.push(homePath)
+    const archivedPath = join(
+      homePath,
+      'archived_sessions',
+      'rollout-2026-07-20T12-00-00-session-a.jsonl.zst'
+    )
+    mkdirSync(join(archivedPath, '..'), { recursive: true })
+    writeFileSync(archivedPath, 'archived-rollout')
+
+    // An archived rollout is the same conversation, so it keeps the provenance of its home.
+    expect(
+      resolveTrustedCodexSessionResumeHome({
+        transcriptPath: archivedPath,
+        trustedCodexHomes: [homePath]
+      })
+    ).toBe(homePath)
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId: 'session-a',
+        transcriptPath: archivedPath,
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking
+      })
+    ).resolves.toEqual({ homePath, transcriptPath: archivedPath })
+  })
+
+  it('does not trust an archive folder that is not a direct sibling of the sessions tree', async () => {
+    const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-archive-'))
+    tempRoots.push(homePath)
+    const nestedArchive = join(
+      homePath,
+      'sessions',
+      '2026',
+      'archived_sessions',
+      'rollout-2026-07-20T12-00-00-session-a.jsonl'
+    )
+    mkdirSync(join(nestedArchive, '..'), { recursive: true })
+    writeFileSync(nestedArchive, 'rollout')
+    const flatArchive = join(homePath, 'archived_sessions', 'notes.jsonl')
+    mkdirSync(join(flatArchive, '..'), { recursive: true })
+    writeFileSync(flatArchive, 'not a rollout')
+
+    for (const transcriptPath of [nestedArchive, flatArchive]) {
+      expect(
+        resolveTrustedCodexSessionResumeHome({
+          transcriptPath,
+          trustedCodexHomes: [homePath],
+          fileIsRegular: () => true
+        })
+      ).toBeNull()
+    }
+  })
+})
+
+describe('codexRolloutResumeTail', () => {
+  it('maps an archived rollout back into the dated tree Codex resumes from', () => {
+    const home = '/home/example/.codex'
+    const sessionsRoot = join(home, 'sessions')
+
+    expect(
+      codexRolloutResumeTail(
+        sessionsRoot,
+        join(home, 'archived_sessions', 'rollout-2026-07-20T12-00-00-session-a.jsonl.zst')
+      )
+    ).toBe('2026/07/20/rollout-2026-07-20T12-00-00-session-a.jsonl.zst')
+    // A rollout still in the dated tree keeps its own tail.
+    expect(
+      codexRolloutResumeTail(
+        sessionsRoot,
+        join(sessionsRoot, '2026', '07', '20', 'rollout-2026-07-20T12-00-00-session-a.jsonl')
+      )
+    ).toBe('2026/07/20/rollout-2026-07-20T12-00-00-session-a.jsonl')
+    // An archived file whose name carries no start date cannot be placed.
+    expect(
+      codexRolloutResumeTail(sessionsRoot, join(home, 'archived_sessions', 'rollout-x.jsonl.zst'))
+    ).toBeNull()
+  })
 })
 
 describe('resolveCodexSessionResumeProvenance', () => {
@@ -206,6 +287,26 @@ describe('resolveCodexSessionResumeProvenance', () => {
       resolveCodexSessionResumeProvenance({
         sessionId,
         transcriptPath: removed.rolloutPath,
+        trustedCodexHomes: [trusted],
+        ...withoutHomeRanking
+      })
+    ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })
+  })
+
+  it('claims Codex provenance for an archived rollout, so a lost archive is reported', async () => {
+    const removed = writeRollout('019f81b9-19a9-7651-a8d1-352d9420bd11')
+    const archivedPath = join(
+      removed.homePath,
+      'archived_sessions',
+      'rollout-2026-07-20T12-00-00-019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl.zst'
+    )
+    const trusted = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
+    tempRoots.push(trusted)
+
+    await expect(
+      resolveCodexSessionResumeProvenance({
+        sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
+        transcriptPath: archivedPath,
         trustedCodexHomes: [trusted],
         ...withoutHomeRanking
       })
