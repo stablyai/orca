@@ -2512,6 +2512,12 @@
     "notificationDeliverySection": {
       "sound": "Som de notificação",
       "onlyWhenAgentNeedsInput": "Somente quando um agente precisa de mim"
+    },
+    "reply": {
+      "failed": "Resposta não enviada",
+      "unconfirmed": "Entrega não confirmada. Confira o chat antes de reenviar.",
+      "refused": "O host recusou a resposta. Confira o chat.",
+      "unreachable": "Não foi possível acessar o host. Sua resposta foi salva."
     }
   },
   "onboarding": {

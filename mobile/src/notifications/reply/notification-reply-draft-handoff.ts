@@ -8,6 +8,14 @@ import { runKeyedSerializedOperation } from '../../../../src/shared/concurrency/
 
 type DraftStore = Pick<PageDeviceStore, 'read' | 'write'>
 type ReplyDraft = { id: string; text: string }
+export function notificationReplyPaneDraftScope(
+  hostId: string,
+  workspace: string,
+  paneKey: string
+): string {
+  return `${hostId}\0${workspace}\0notification-pane:${paneKey}`
+}
+
 const queues = new Map<string, Promise<void>>()
 const pendingKey = (scope: string) => durableDraftRowKey('notification-reply', '', scope)
 const appliedKey = (id: string) => durableDraftRowKey('notification-reply-applied', '', id)
@@ -24,8 +32,7 @@ function readDrafts(raw: string | null): ReplyDraft[] {
             !('text' in item) ||
             typeof item.id !== 'string' ||
             item.id.length !== 64 ||
-            typeof item.text !== 'string' ||
-            item.text.length > 32_000
+            typeof item.text !== 'string'
           ) {
             return []
           }

@@ -2506,6 +2506,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Solo cuando un agente me necesite",
       "sound": "Sonido de notificación"
+    },
+    "reply": {
+      "failed": "Respuesta no enviada",
+      "unconfirmed": "Entrega sin confirmar. Revisa el chat antes de reenviar.",
+      "refused": "El equipo rechazó la respuesta. Revisa el chat.",
+      "unreachable": "No se pudo conectar con el equipo. Tu respuesta se guardó."
     }
   },
   "onboarding": {

@@ -1046,11 +1046,13 @@
   },
   "notifications": {
     "reply": {
+      "unconfirmed": "Delivery unconfirmed; check the chat before sending again",
+      "refused": "The host refused the reply. Check the chat before sending again.",
+      "unreachable": "The host could not be reached. Your reply was saved.",
       "action": "Reply",
       "send": "Send",
       "placeholder": "Message",
-      "failed": "Reply not sent",
-      "failedReason": "Reply not sent: {{reason}}"
+      "failed": "Reply not sent"
     },
     "notificationDeliverySection": {
       "sound": "Notification sound",

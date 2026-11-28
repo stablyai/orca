@@ -1,3 +1,4 @@
+import { NotificationReplyFailure } from './notification-reply-failure'
 import { loadHosts } from '../../host-catalog/host-store'
 import { openHostLogicalClient } from '../../transport/connection/host-logical-client'
 import { resolveHostIdForFingerprint } from '../payload-identity/push-host-fingerprint'
@@ -49,7 +50,6 @@ export async function sendNotificationReply(
       : pairedClient
   const deadline = Date.now() + 20_000
   try {
-    let reason = 'Host refused the reply'
     const target = payload.replyTarget
     if (target.type === 'group') {
       const group = groupRead.interpret(
@@ -114,7 +114,7 @@ export async function sendNotificationReply(
             clientMessageId: operationId,
             deadline,
             onError: (message) => {
-              reason = message
+              console.warn('[notification-reply] host refused the reply', message)
             }
           })
         : await sendMobileNativeChatMessageWithOutcome({
@@ -130,10 +130,10 @@ export async function sendNotificationReply(
             requireWriteSettlement: true
           })
     if (outcome === 'unknown') {
-      throw new Error('Delivery unconfirmed; check the chat before sending again')
+      throw new NotificationReplyFailure('unconfirmed')
     }
     if (outcome !== 'accepted' && outcome !== 'queued') {
-      throw new Error(reason)
+      throw new NotificationReplyFailure('refused')
     }
   } finally {
     pairedClient.close()

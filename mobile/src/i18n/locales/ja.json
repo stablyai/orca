@@ -2432,6 +2432,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Agent が対応を求めているときのみ",
       "sound": "通知音"
+    },
+    "reply": {
+      "failed": "返信は送信されませんでした",
+      "unconfirmed": "配信を確認できません。再送信する前にチャットを確認してください。",
+      "refused": "ホストが返信を拒否しました。チャットを確認してください。",
+      "unreachable": "ホストに接続できませんでした。返信は保存されました。"
     }
   },
   "onboarding": {
