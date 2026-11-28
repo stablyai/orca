@@ -1,4 +1,5 @@
 import type { PhrasingContent } from 'mdast'
+import { isInlineCodeHttpUrl } from '../../../../../src/shared/markdown/inline-code-http-url'
 import { Fragment, type ReactNode } from 'react'
 import type { TextProps } from 'react-native'
 import { openExternalLink } from '../../../platform/external-links/external-link'
@@ -23,8 +24,7 @@ export type MarkdownInlineContext = {
   tone: MarkdownTone
   styles: MarkdownStyles
   textScale: number
-  /** Chat text: desktop chat's math delimiters and sizes; otherwise GitHub's. */
-  chatMath: boolean
+  nativeChat: boolean
 }
 
 type SpanStyle = TextProps['style']
@@ -152,6 +152,11 @@ function renderPhrasing(
       )
     }
     case 'inlineCode':
+      if (ctx.nativeChat && isInlineCodeHttpUrl(node.value)) {
+        return renderInlineCode(key, node.value, ctx, outer, () =>
+          openMarkdownHref(node.value, ctx)
+        )
+      }
       return ctx.onOpenFile && !ctx.filePathsLinkedInTree && isFilePathCodeSpan(node.value)
         ? renderInlineCode(key, node.value, ctx, outer, () =>
             ctx.onOpenFile?.(normalizeFilePath(node.value.trim()))
@@ -186,7 +191,7 @@ function renderPhrasing(
           value={node.value}
           source={node.source}
           display={false}
-          githubSizes={!ctx.chatMath}
+          githubSizes={!ctx.nativeChat}
           style={outer}
         />
       )

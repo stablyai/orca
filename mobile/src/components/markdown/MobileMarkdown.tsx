@@ -46,9 +46,8 @@ type Props = {
   growing?: boolean
   /** The text may end mid-path: chat file links show only answers already known. */
   streaming?: boolean
-  /** Chat's math delimiters, `\(…\)` and `\[…\]` as well as `$`, as desktop chat reads them.
-   *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
-  chatMath?: boolean
+  /** Use the chat's math delimiters and link standalone web addresses in inline code. */
+  nativeChat?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: MarkdownToneName
   /** The content is a Slack message's drawn form: its mention links draw as mentions. */
@@ -74,7 +73,7 @@ function MobileMarkdownContent({
   renderImage,
   growing = false,
   streaming = false,
-  chatMath = false,
+  nativeChat = false,
   tone: toneName = 'default',
   slackMentions = false
 }: Props) {
@@ -97,7 +96,7 @@ function MobileMarkdownContent({
     text,
     renderVisual !== undefined,
     growing,
-    chatMath,
+    nativeChat,
     {
       fileLinkExists,
       githubRepo: links?.githubRepo,
@@ -116,7 +115,7 @@ function MobileMarkdownContent({
   const face = fontFamily ? { fontFamily } : null
   const ctx: MarkdownBlockContext = {
     growing,
-    chatMath,
+    nativeChat,
     onOpenFile,
     onOpenLink,
     filePathsLinkedInTree: fileLinkExists !== undefined,

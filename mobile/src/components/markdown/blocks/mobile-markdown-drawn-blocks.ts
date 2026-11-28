@@ -35,7 +35,7 @@ function sameStyle(a: unknown, b: unknown): boolean {
 function sameContext(a: MarkdownBlockContext, b: MarkdownBlockContext): boolean {
   return (
     a.growing === b.growing &&
-    a.chatMath === b.chatMath &&
+    a.nativeChat === b.nativeChat &&
     a.textScale === b.textScale &&
     a.lineSpacing === b.lineSpacing &&
     a.fontFamily === b.fontFamily &&
