@@ -276,6 +276,27 @@
       "editComputer": "Edit computer",
       "save": "Save",
       "removeComputer": "Remove computer"
+    },
+    "updates": {
+      "cliFailedTitle": "{{product}} update failed",
+      "copyCommand": "Copy {{command}}",
+      "printedNothing": "The command printed nothing.",
+      "cliFailedHelp": "Run it yourself on the computer, or fix what it printed and try again.",
+      "tryAgain": "Try again",
+      "updatedTo": "Updated to {{version}}",
+      "updated": "Updated",
+      "updating": "Updating…",
+      "queued": "Queued",
+      "updateFailed": "Update failed",
+      "versions": "{{installed}} → {{latest}}",
+      "addsModels": "{{versions}} · adds {{models}}",
+      "update": "Update",
+      "commandCopied": "Command copied",
+      "commandNotCopied": "Couldn’t copy the command",
+      "title": "Updates",
+      "updateAll": "Update all",
+      "doneNote": "Updated rows leave the list next time you open this screen.",
+      "orca": "Orca"
     }
   },
   "app": {

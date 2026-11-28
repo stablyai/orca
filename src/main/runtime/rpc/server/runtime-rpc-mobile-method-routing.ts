@@ -1,7 +1,9 @@
 import { MOBILE_AGENT_SESSION_RPC_METHODS } from './runtime-rpc-mobile-agent-session-methods'
 import { PAIRED_DESKTOP_METHODS } from './runtime-rpc-mobile-paired-desktop-methods'
 import { MOBILE_BOT_RPC_METHODS } from './runtime-rpc-mobile-bot-methods'
+import { MOBILE_HOST_UPDATE_RPC_METHODS } from './runtime-rpc-mobile-host-update-methods'
 import { MOBILE_MCP_SERVER_RPC_METHODS } from './runtime-rpc-mobile-mcp-server-methods'
+import { MOBILE_ORCA_ACCOUNT_RPC_METHODS } from './runtime-rpc-mobile-orca-account-methods'
 import { DEFAULT_SCOPE_HOST_METHODS } from './runtime-rpc-mobile-tracker-methods'
 
 // Execution-host routes follow the configured target; paired-desktop routes stay with the relaying Mac;
@@ -9,16 +11,7 @@ import { DEFAULT_SCOPE_HOST_METHODS } from './runtime-rpc-mobile-tracker-methods
 export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop' | 'default-scope-host'
 
 export const EXECUTION_HOST_METHODS = [
-  // Signing in/out needs the same power as running commands on the host (workspace).
-  'orcaAccount.selectOrg',
-  'orcaAccount.signIn.cancel',
-  'orcaAccount.signIn.complete',
-  'orcaAccount.signIn.start',
-  'orcaAccount.signIn.wait',
-  'orcaAccount.signOut',
-  'orcaAccount.status',
-  'orcaAccount.subscribe',
-  'orcaAccount.unsubscribe',
+  ...MOBILE_ORCA_ACCOUNT_RPC_METHODS,
   // A relayed phone asks the server itself for its own pairing; the server refuses any other caller.
   'pairing.delegatedMobileDevice.createOffer',
   'ui.getJiraQuickFilters',
@@ -41,6 +34,7 @@ export const EXECUTION_HOST_METHODS = [
   'agentTeams.tmuxCompat',
   ...MOBILE_BOT_RPC_METHODS,
   ...MOBILE_MCP_SERVER_RPC_METHODS,
+  ...MOBILE_HOST_UPDATE_RPC_METHODS,
   // A bot chat's Slack thread switch and its posts' Retry, Dismiss and Delete, on the bot's host.
   'connector.slackMirror.set',
   'connector.slackMirror.post',
