@@ -1,7 +1,4 @@
-// Bot items as this host serves them: the store per profile (its SQL in the bots DB worker), items as
-// the wire shows them (reads never write; worker and PR state come live from their own records), and
-// workers started for an item linked from orchestration's record. Changes owed to an item's chat go out
-// as orchestration mail; startup sends any a crash left owed.
+// Bot items as this host serves them: per-profile store, wire views and linked workers; startup sends any owed mail.
 import type { Bot } from '../../shared/bot-types'
 import { botItemEventId, type BotItem, type BotItemEvent } from '../../shared/bots/bot-items'
 import { botItemsNeedingOwnerByBot } from '../../shared/bots/bot-item-groups'
@@ -11,8 +8,9 @@ import {
   type BotChangeScope,
   type BotNeedsYouCounts
 } from '../../shared/bots/bot-change-scope'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { access } from 'node:fs/promises'
+import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { retainedItemAttachmentUploads } from './bot-item-attachment-retention'
 import { BotItemWorkerLinks } from './bot-item-worker-links'
 import { trackDispatchLinks, type TrackedBotItems } from './bot-item-dispatch-link-refs'
 import { dispatchStarter, dispatchStarterBotId } from './bot-item-dispatch-facts'
@@ -85,12 +83,14 @@ export class BotItemsHost {
   }
 
   /** Per profile: a profile switch reads that profile's items. */
-  store(): BotItemsRemote {
+  store(startUsageLimitWaits = true): BotItemsRemote {
     const path = botItemsStoreFile(getProfileUserDataPath())
     let store = this.stores.get(path)
     if (!store) {
       store = trackDispatchLinks((around) => this.deps.db.items(path, around))
       this.stores.set(path, store)
+    }
+    if (startUsageLimitWaits) {
       // With items to move: workers stopping on a usage limit move theirs to Waiting.
       this.usageLimitWaits.start()
     }
@@ -109,9 +109,16 @@ export class BotItemsHost {
   async owedCommentAttachmentUploads(
     stateDirectory: string,
     root: string
-  ): Promise<ReadonlySet<string>> {
-    const tracked = this.stores.get(botItemsStoreFile(stateDirectory))
-    return new Set(await tracked?.remote.owedCommentAttachmentUploads(root))
+  ): Promise<ReadonlySet<string> | null> {
+    const path = botItemsStoreFile(stateDirectory)
+    return retainedItemAttachmentUploads({
+      path,
+      root,
+      tracked: () => this.stores.get(path),
+      current: () => stateDirectory === getProfileUserDataPath(),
+      open: () => this.store(false),
+      warn
+    })
   }
 
   /** Once the runtime has its bot hooks: an existing items file sends what a crash left owed and
@@ -324,16 +331,13 @@ export class BotItemsHost {
       }
     })
   }
-
   async events(uid: string, afterId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().events(uid, afterId, limit)).map(eventViewOf)
   }
-
   /** The newest `limit` events before `beforeId` (0: the newest of all), oldest first. */
   async eventsBefore(uid: string, beforeId: number, limit: number): Promise<BotItemEvent[]> {
     return (await this.store().eventsBefore(uid, beforeId, limit)).map(eventViewOf)
   }
-
   /** A write to any Dispatch's rows (the database's notice), or a paired server's verdict on one. */
   workersWritten(dispatchIds: readonly string[] = [], deleted = false): void {
     this.join.workersWritten(dispatchIds, deleted)
