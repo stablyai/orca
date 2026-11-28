@@ -22,6 +22,7 @@ import {
   getTerminalHistoryQuarantineOwnerDir,
   hasTerminalHistoryRecoveryProtection
 } from '../terminal-history-recovery-quarantine'
+import { updateTerminalHistoryProbedCwd } from '../terminal-history-metadata'
 
 function createTestDir(): string {
   return mkdtempSync(join(tmpdir(), 'history-mgr-test-'))
@@ -333,6 +334,26 @@ describe('HistoryManager', () => {
       if (afterOsc7.status === 'restored') {
         expect(afterOsc7.restoreInfo.cwd).toBe('/alpha/osc7')
       }
+    })
+
+    it('preserves endedAt and exitCode when probed cwd updates race closeSession', async () => {
+      const sessionId = 'probed-cwd-close-race'
+      await mgr.openSession(sessionId, { cwd: '/alpha', cols: 80, rows: 24 })
+      const probePromise = mgr.recordProbedCwd(sessionId, '/alpha/sub')
+      const closePromise = mgr.closeSession(sessionId, 0)
+      await Promise.all([probePromise, closePromise])
+
+      const afterRace = mgr.readMeta(sessionId)
+      expect(afterRace?.endedAt).not.toBeNull()
+      expect(afterRace?.exitCode).toBe(0)
+      expect(afterRace?.lastProbedCwd).toBe('/alpha/sub')
+
+      const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+      await updateTerminalHistoryProbedCwd(sessionDir, '/alpha/late')
+      const afterLateProbe = mgr.readMeta(sessionId)
+      expect(afterLateProbe?.endedAt).not.toBeNull()
+      expect(afterLateProbe?.exitCode).toBe(0)
+      expect(afterLateProbe?.lastProbedCwd).toBe('/alpha/sub')
     })
   })
 })

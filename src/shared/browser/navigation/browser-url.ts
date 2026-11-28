@@ -11,7 +11,7 @@ const LOCAL_ADDRESS_PATTERN =
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
 // Single-label internal hosts with an explicit path, query, or fragment (e.g. intranet/docs?token=x, go/design) must navigate rather than leak to search.
 const SINGLE_LABEL_HOST_URL_PATTERN =
-  /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\/.*|\?[^\s]+|#[^\s]*)$/i
+  /^(?=[a-z0-9-]{0,62}[a-z])[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\/.*|\?[^\s]+|#[^\s]*)$/i
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
 const UNIX_ABSOLUTE_PATH_PATTERN = /^\/.*$/

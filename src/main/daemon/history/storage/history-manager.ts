@@ -263,6 +263,7 @@ export class HistoryManager {
     this.writers.delete(sessionId)
     // Normal exit must also release IDs disabled by transient write failures.
     this.disabledSessions.delete(sessionId)
+    await this.mutations.wait(sessionId)
     try {
       updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
@@ -301,19 +302,18 @@ export class HistoryManager {
   }
 
   async dispose(): Promise<void> {
+    const openWriters = [...this.writers.entries()]
+    this.writers.clear()
+    this.recoveryFreezes.releaseAll()
+    await Promise.all(openWriters.map(([sessionId]) => this.mutations.wait(sessionId)))
     // Mark orderly teardown clean so ended sessions cannot trigger cold restore.
-    for (const [sessionId, writer] of this.writers) {
+    for (const [sessionId, writer] of openWriters) {
       try {
-        updateTerminalHistoryMeta(writer.dir, {
-          endedAt: new Date().toISOString(),
-          exitCode: null
-        })
+        updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode: null })
       } catch {
         this.disabledSessions.add(sessionId)
       }
     }
-    this.writers.clear()
-    this.recoveryFreezes.releaseAll()
   }
 
   // Disable best-effort history on error instead of rejecting fire-and-forget callers.
