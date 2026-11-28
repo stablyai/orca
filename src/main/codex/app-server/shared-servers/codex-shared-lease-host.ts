@@ -60,6 +60,8 @@ export type CodexSharedLeaseRelay = {
   /** The chat left stopping nothing: its threads go unclaimed, and the requests it was handed but
    *  didn't answer wait for the thread's next chat. */
   leftQuietly: (lease: CodexSharedServerLease) => void
+  /** The server's thread-state reads, shared by every chat and its own cleanup (a few at once). */
+  metadataReads: () => Pick<CodexAppServerConnection, 'request'> | undefined
 }
 
 /** What a chat sees of the daemon running its shared server; absent when its run ends with this

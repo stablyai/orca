@@ -10,6 +10,9 @@ import type { CodexSharedLeaseHost } from './codex-shared-lease-host'
 
 const OPENS_THREAD = new Set(['thread/start', 'thread/resume', 'thread/fork'])
 const CARRIES_HISTORY = new Set(['thread/resume', 'thread/read', 'thread/turns/list'])
+/** Reads of thread state, held to the server's few at once: every chat reopening at app start
+ *  reads its threads, and together they mustn't burst into one Codex process. */
+const METADATA_READS = new Set(['thread/read', 'thread/turns/list', 'thread/loaded/list'])
 
 /** Codex sets this on every command a chat's threads run, so its leftovers are found by lease. */
 export const CODEX_SHARED_LEASE_ENV = 'ORCA_CODEX_SHARED_LEASE'
@@ -96,7 +99,8 @@ export async function sendCodexLeaseRequest(
   const turnThreadId =
     method === 'turn/start' && typeof params?.threadId === 'string' ? params.threadId : null
   let callerGone = false
-  const sent = host.connection.request(
+  const via = (METADATA_READS.has(method) && host.relay?.metadataReads()) || host.connection
+  const sent = via.request(
     method,
     opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,
     {

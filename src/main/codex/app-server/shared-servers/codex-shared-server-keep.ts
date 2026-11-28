@@ -69,6 +69,11 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     }
   }
 
+  metadataReads = (): Pick<CodexAppServerConnection, 'request'> | undefined => {
+    const connection = this.server.physicalConnection
+    return connection ? this.limited(connection) : undefined
+  }
+
   /** Nothing is held back from the ack: Codex has every chat's content. */
   floor = (): number | null => null
 
