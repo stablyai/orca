@@ -359,6 +359,34 @@ describe('tracked upstream snapshot concurrency', () => {
     await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
   })
 
+  it('takes the signed fallback when a joined host probe has no stored signature', async () => {
+    h.signature = undefined
+    const older = getTrackedUpstreamBranch(REPO, 'feature')
+    const olderRefs = await take('for-each-ref')
+    const waiter = getTrackedUpstreamBranch(REPO, 'feature')
+    h.holdSignatures = true
+    olderRefs.resolve({
+      stdout: 'refs/heads/feature\0refs/remotes/origin/unverified\n',
+      stderr: ''
+    })
+    await flush()
+
+    h.holdSignatures = false
+    h.signature = 'S1'
+    const forced = getTrackedUpstreamBranch(REPO, 'feature', null, {}, true)
+    const forcedRefs = await take('for-each-ref')
+    await releaseSignature(0, undefined)
+    await expect(older).resolves.toEqual({ remoteName: 'origin', branchName: 'unverified' })
+    expect(entryFor()).toBeUndefined()
+
+    forcedRefs.resolve({ stdout: 'refs/heads/feature\0refs/remotes/fork/current\n', stderr: '' })
+    await expect(forced).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    await expect(waiter).resolves.toEqual({ remoteName: 'fork', branchName: 'current' })
+    expect(entryFor()?.gitConfigSignature).toBe('S1')
+    expect(entryFor()?.rawUpstreamsByBranchName?.get('feature')).toBe('refs/remotes/fork/current')
+    expect(h.pending).toEqual([])
+  })
+
   it('re-probes when a second unsigned join is already expired', async () => {
     const now = 1_000_000
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
