@@ -31,16 +31,22 @@ export function patchSlicedSession(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: copies of saved sessions with absent maps made empty.
   const [from, to] = sides as unknown as [WorkspaceSessionState, WorkspaceSessionState]
-  const patched: Record<string, unknown> = { ...patchStoredSession(stored, from, to) }
+  const workspaces = [
+    ...new Set([...Object.keys(from.tabsByWorktree ?? {}), ...Object.keys(to.tabsByWorktree ?? {})])
+  ]
+  const patched = patchStoredSession(stored, from, to, undefined, workspaces)
   // The whole save drops an emptied map only once no workspace holds an entry.
-  for (const field of emptied) {
-    const map = patched[field]
-    if (isRecord(map) && Object.keys(map).length === 0) {
-      delete patched[field]
-    }
+  const dropped = emptied.filter((field) => {
+    const map: unknown = patched[field as keyof WorkspaceSessionState]
+    return isRecord(map) && Object.keys(map).length === 0
+  })
+  if (dropped.length === 0) {
+    return patched
   }
+  const trimmed: Record<string, unknown> = { ...patched }
+  dropped.forEach((field) => delete trimmed[field])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the patched session minus empty maps.
-  return patched as unknown as WorkspaceSessionState
+  return trimmed as unknown as WorkspaceSessionState
 }
 
 /** A sliced load patches what changed; a whole load in window-owned builds still rewrites the partition. */
