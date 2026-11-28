@@ -10,10 +10,6 @@ import type {
   RemoteServerUpdatePhase
 } from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { getRemoteServerNewerThanClientVersion } from '../../../../../../shared/remote-runtime/host-updates/remote-server-version-skew'
-import {
-  hasReachedAppVersion,
-  isValidAppVersion
-} from '../../../../../../shared/app-lifecycle/identity/app-version'
 import { getRuntimeServerConnectionLabel } from '../catalog/runtime-environment-host-details'
 
 import { getRemoteServerUpdatePhaseLabel } from '../updates/RemoteServerUpdateStatus'
@@ -28,58 +24,6 @@ const UPDATING_PHASES: ReadonlySet<RemoteServerUpdatePhase> = new Set([
 
 export function isRemoteServerUpdateInFlight(entry: RemoteServerUpdateEntry | undefined): boolean {
   return entry !== undefined && UPDATING_PHASES.has(entry.phase)
-}
-
-/** What the host reports right now: its verified status and when this desktop checked it. */
-export type RemoteServerLiveEvidence = {
-  appVersion: string | null | undefined
-  checkedAt: number
-}
-
-/** The build the update was heading to; null when the offer can't be compared. */
-function comparableUpdateTarget(entry: RemoteServerUpdateEntry): string | null {
-  // Only a missing offer means "this app's version"; a blank or malformed one stays uncertain.
-  const target = entry.targetVersion === null ? (entry.clientVersion ?? null) : entry.targetVersion
-  return target !== null && isValidAppVersion(target) ? target : null
-}
-
-/**
- * The update entry is a snapshot from the last check. A server that has since answered on another
- * build (Update anyway, a deferred update retried on reconnect, or one installed on the host) makes
- * it stale, so read it against what the server reports now. Only a verified status checked after
- * the entry was recorded counts: a retained or older one could clear a newer failure.
- */
-export function reconcileRemoteServerUpdateEntry(
-  entry: RemoteServerUpdateEntry | undefined,
-  live: RemoteServerLiveEvidence | null
-): RemoteServerUpdateEntry | undefined {
-  const version = live?.appVersion?.trim()
-  if (
-    !entry ||
-    !live ||
-    !version ||
-    // An unparsable report must not replace a usable version.
-    !isValidAppVersion(version) ||
-    version === entry.currentVersion ||
-    entry.observedAt === undefined ||
-    live.checkedAt <= entry.observedAt ||
-    entry.phase === 'checking' ||
-    isRemoteServerUpdateInFlight(entry)
-  ) {
-    return entry
-  }
-  const target = comparableUpdateTarget(entry)
-  if (target !== null && hasReachedAppVersion(version, target)) {
-    return {
-      ...entry,
-      phase: 'current',
-      currentVersion: version,
-      targetVersion: version,
-      error: null
-    }
-  }
-  // Short of the target, or no comparable target: the update state holds, with the host's version.
-  return { ...entry, currentVersion: version }
 }
 
 export type RuntimeServerStatusInput = {

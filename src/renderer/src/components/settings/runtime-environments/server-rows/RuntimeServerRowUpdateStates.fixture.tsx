@@ -9,11 +9,9 @@ import type { RuntimeHostDetails } from '../catalog/runtime-environment-host-det
 import type { ManagedServerLifecycle } from '../managed-servers/use-managed-server-lifecycle'
 import { RuntimeServerRow } from './runtime-server-row'
 
-// The last check saw 1.8.0; the rows differ in what the server reports now.
+// Each row's update entry as the store holds it once its host has answered.
 const CHECKED_VERSION = '1.8.0'
 const RELEASE = '1.9.0'
-// Each host answered after the update state was recorded.
-const CHECKED_AT = 1_000
 
 type Scene = {
   id: string
@@ -48,11 +46,11 @@ function managedStatus(id: string, deferred: boolean): OrcadManagedRuntimeStatus
 }
 
 const SCENES: Scene[] = [
-  // Update anyway finished and the server reconnected on the new release.
+  // Update anyway finished; the server came back on the new release and was re-checked.
   {
     id: 'example-updated',
     name: 'example-updated',
-    phase: 'manual',
+    phase: 'current',
     liveVersion: RELEASE,
     managed: managedStatus('example-updated', false)
   },
@@ -97,7 +95,7 @@ function snapshot(scene: Scene): RemoteServerUpdateEntry {
     environmentId: scene.id,
     name: scene.name,
     phase: scene.phase,
-    currentVersion: CHECKED_VERSION,
+    currentVersion: scene.liveVersion,
     targetVersion: RELEASE,
     progress: scene.phase === 'downloading' ? 40 : null,
     runtimeId: null,
@@ -106,14 +104,13 @@ function snapshot(scene: Scene): RemoteServerUpdateEntry {
     support: null,
     error: scene.phase === 'failed' ? 'Download failed' : null,
     managedOverSsh: Boolean(scene.managed),
-    clientVersion: RELEASE,
-    observedAt: CHECKED_AT
+    clientVersion: RELEASE
   }
 }
 
 function liveStatus(scene: Scene): RuntimeEnvironmentStatus {
   const { result } = createCompatibleRuntimeStatusResponse(`${scene.id}-runtime`)
-  return { status: { ...result, appVersion: scene.liveVersion }, checkedAt: CHECKED_AT + 1 }
+  return { status: { ...result, appVersion: scene.liveVersion }, checkedAt: 1 }
 }
 
 function lifecycle(status: OrcadManagedRuntimeStatus): ManagedServerLifecycle {

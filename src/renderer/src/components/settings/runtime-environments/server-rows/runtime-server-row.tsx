@@ -20,8 +20,7 @@ import {
   getRuntimeServerNewerThanAppText,
   getRuntimeServerStatusIndicator,
   getRuntimeServerVersionText,
-  isRemoteServerUpdateInFlight,
-  reconcileRemoteServerUpdateEntry
+  isRemoteServerUpdateInFlight
 } from './runtime-server-row-presentation'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { RuntimeServerRowDetails } from './runtime-server-row-details'
@@ -86,7 +85,7 @@ export function RuntimeServerRow({
   duplicateOfNames = NO_DUPLICATES,
   details,
   isActive,
-  remoteUpdate: remoteUpdateSnapshot,
+  remoteUpdate,
   remoteServerUpdatesRunning,
   connecting,
   switching,
@@ -113,10 +112,6 @@ export function RuntimeServerRow({
   const [sshDialogOpen, setSshDialogOpen] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const row = useRuntimeServerRowState(environment, details)
-  const remoteUpdate = reconcileRemoteServerUpdateEntry(
-    remoteUpdateSnapshot,
-    row.liveUpdateEvidence
-  )
   const managedForgettable = managed ? managedServerForgettable(managed, row.serverReplaced) : false
   const actionBusy = connecting || switching || disconnecting || removing
   const repairable = row.repairRoute === 'access-link'

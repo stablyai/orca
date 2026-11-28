@@ -51,8 +51,6 @@ export type RemoteServerUpdateEntry = {
   managedOverSsh?: boolean
   /** This app's version when it was compared; read through getRemoteServerNewerThanClientVersion. */
   clientVersion?: string | null
-  /** When this desktop recorded the entry; host status checked earlier cannot overrule it. */
-  observedAt?: number
 }
 
 export type RemoteServerUpdateTransport = {

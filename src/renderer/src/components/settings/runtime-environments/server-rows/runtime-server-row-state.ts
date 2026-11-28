@@ -23,7 +23,6 @@ import {
   getRuntimeServerConnectionState,
   type RuntimeHostDetails
 } from '../catalog/runtime-environment-host-details'
-import type { RemoteServerLiveEvidence } from './runtime-server-row-presentation'
 
 export type RuntimeServerRowState = {
   effectiveDetails: RuntimeHostDetails | undefined
@@ -39,8 +38,6 @@ export type RuntimeServerRowState = {
   serverReplaced: boolean
   /** Last answered status, kept across a lost probe. */
   descriptorStatus: RuntimeStatus | null | undefined
-  /** The host's currently verified answer; null when lost, revoked or replaced. */
-  liveUpdateEvidence: RemoteServerLiveEvidence | null
   hostDescriptorText: string | null
   title: string
 }
@@ -118,13 +115,6 @@ export function useRuntimeServerRowState(
     compatibilityBlocked,
     serverReplaced,
     descriptorStatus,
-    liveUpdateEvidence:
-      runtimeStatusEntry?.status && !accessRevoked && !serverReplaced
-        ? {
-            appVersion: runtimeStatusEntry.status.appVersion,
-            checkedAt: runtimeStatusEntry.checkedAt
-          }
-        : null,
     hostDescriptorText: hostDisplay.descriptorLine,
     title: hostDisplay.title
   }

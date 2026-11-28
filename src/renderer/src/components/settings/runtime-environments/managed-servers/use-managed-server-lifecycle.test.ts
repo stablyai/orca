@@ -5,17 +5,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadManagedRuntimeStatus } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { UNVERIFIABLE_ORCAD_TERMINAL_CENSUS } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
+import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { useAppStore } from '@/store/index'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { useManagedServerLifecycle } from './use-managed-server-lifecycle'
 
-const mocks = vi.hoisted(() => {
-  const state: { runtimeId: string | null } = { runtimeId: null }
-  return state
-})
+const ENVIRONMENT_ID = 'env-test'
 
-// The hook reads the last verified runtime ID; the row tests cover how status entries map to it.
-vi.mock('@/store/slices/runtime-status/views/use-runtime-status-view', () => ({
-  useRuntimeHostStatusSelector: () => mocks.runtimeId
-}))
+/** The host as the runtime status store records it: verified as a runtime, or unreachable. */
+function hostStatus(runtimeId: string | null): RuntimeEnvironmentStatus {
+  return {
+    status: runtimeId === null ? null : createCompatibleRuntimeStatusResponse(runtimeId).result,
+    checkedAt: 1
+  }
+}
+
+function publishHost(runtimeId: string | null): void {
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map([[ENVIRONMENT_ID, hostStatus(runtimeId)]])
+  })
+}
+
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 
 function managedStatus(version: 'old' | 'new', deferred: boolean): OrcadManagedRuntimeStatus {
@@ -68,7 +78,7 @@ function setup() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only getStatus and update here.
   const api = { getStatus, update } as unknown as ManagedOrcadPreloadApi
   const hook = renderHook(() =>
-    useManagedServerLifecycle({ api, environment: { id: 'env-test' }, onChanged: () => {} })
+    useManagedServerLifecycle({ api, environment: { id: ENVIRONMENT_ID }, onChanged: () => {} })
   )
   const settle = async (index: number, result: OrcadManagedRuntimeStatus | Error) => {
     await act(async () => {
@@ -81,9 +91,8 @@ function setup() {
     })
   }
   const rerenderWith = async (runtimeId: string | null) => {
-    mocks.runtimeId = runtimeId
     await act(async () => {
-      hook.rerender()
+      publishHost(runtimeId)
       await Promise.resolve()
     })
   }
@@ -92,7 +101,7 @@ function setup() {
 
 describe('useManagedServerLifecycle status reads', () => {
   beforeEach(() => {
-    mocks.runtimeId = 'runtime-old'
+    publishHost('runtime-old')
   })
   afterEach(() => {
     cleanup()
@@ -159,11 +168,47 @@ describe('useManagedServerLifecycle status reads', () => {
       expect(hook.result.current.busy).toBeNull()
       expect(hook.result.current.status).toBe(UPDATED)
     })
+
+    it('drops a read begun before the runtime changed during an action', async () => {
+      const { hook, reads, settle, rerenderWith, finishUpdate } = setup()
+      let running: Promise<void> = Promise.resolve()
+      act(() => {
+        running = hook.result.current.run('update')
+      })
+      // The mount read is still out when the server restarts under the Update.
+      await rerenderWith('runtime-new')
+      await settle(0, DEFERRED)
+      expect(hook.result.current.status).toBeNull()
+      expect(hook.result.current.busy).toBe('update')
+      await act(async () => {
+        finishUpdate()
+        await running
+      })
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
+      expect(hook.result.current.status).toBe(UPDATED)
+      expect(hook.result.current.busy).toBeNull()
+    })
+
+    it('does not read after an action that ends once the row is gone', async () => {
+      const { hook, reads, settle, finishUpdate } = setup()
+      await settle(0, DEFERRED)
+      let running: Promise<void> = Promise.resolve()
+      act(() => {
+        running = hook.result.current.run('update')
+      })
+      hook.unmount()
+      await act(async () => {
+        finishUpdate()
+        await running
+      })
+      expect(reads).toHaveLength(1)
+    })
   })
 
   describe('runtime coverage (RS-02)', () => {
     it('reads again on first contact when the mount read ran before it', async () => {
-      mocks.runtimeId = null
+      publishHost(null)
       const { hook, reads, settle, rerenderWith } = setup()
       await settle(0, DEFERRED)
       expect(hook.result.current.status?.deferredUpdate).not.toBeNull()
@@ -232,6 +277,33 @@ describe('useManagedServerLifecycle status reads', () => {
       expect(reads).toHaveLength(3)
       await settle(2, UPDATED)
       await settle(1, DEFERRED)
+      expect(hook.result.current.status).toBe(UPDATED)
+    })
+
+    it('reads again when a host recovers as the same runtime after a failed read', async () => {
+      const { hook, reads, settle, rerenderWith } = setup()
+      await settle(0, new Error('ssh: connection reset'))
+      expect(hook.result.current.statusError).toBe('ssh: connection reset')
+      // A re-render with no contact change does not retry.
+      await rerenderWith('runtime-old')
+      expect(reads).toHaveLength(1)
+      await rerenderWith(null)
+      expect(reads).toHaveLength(1)
+      await rerenderWith('runtime-old')
+      expect(reads).toHaveLength(2)
+      await settle(1, DEFERRED)
+      expect(hook.result.current.statusError).toBeNull()
+      expect(hook.result.current.status).toBe(DEFERRED)
+    })
+
+    it('reads again when the host is replaced by a different server', async () => {
+      const { hook, reads, settle, rerenderWith } = setup()
+      await settle(0, DEFERRED)
+      // Replaced: the old pairing stops verifying, then the new server answers.
+      await rerenderWith(null)
+      await rerenderWith('runtime-replacement')
+      expect(reads).toHaveLength(2)
+      await settle(1, UPDATED)
       expect(hook.result.current.status).toBe(UPDATED)
     })
   })
