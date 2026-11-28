@@ -115,30 +115,25 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   /**
    * No chat here is open on it, and Codex reports work still open (or can't say): it goes back to
-   * its daemon, which idle-stops it once that work ends. Requests wait there, never answered here.
-   * False when it couldn't be handed back.
+   * its daemon with that work (read by `fencedOpenWork`), which idle-stops it once the work ends.
+   * Requests wait there, never answered here. False when it couldn't be handed back.
    */
-  async handToDaemon(): Promise<boolean> {
+  async handToDaemon(open: Record<string, string[][]> | null): Promise<boolean> {
     this.toDaemon = true
-    const open = await this.fencedOpenWork()
     const handed = await detachProviderRelayToDaemon(this.server.relayed?.chatKey ?? '', () => open)
     this.toDaemon = handed
-    this.fenced &&= !handed
+    this.fenced &&= handed
     return handed
   }
 
-  /** Whether Codex reports nothing open on the server (false when it can't say). */
-  async idle(): Promise<boolean> {
-    const connection = this.server.physicalConnection
-    if (!connection || connection.closed) {
-      return false
-    }
-    const open = await readCodexSharedOpenWork(this.limited(connection))
-    return open !== null && Object.values(open).every((keys) => keys.length === 0)
+  /** The server stays with this app after all (stopped, or a chat opened on it): acks go on. */
+  unfence(): void {
+    this.fenced = false
   }
 
-  /** The open work for a detach, with the ack held from before the first read. */
-  private async fencedOpenWork(): Promise<Record<string, string[][]> | null> {
+  /** The open work Codex reports, for a detach, with the ack held from before the first read;
+   *  null when it can't say. */
+  async fencedOpenWork(): Promise<Record<string, string[][]> | null> {
     this.fenced = true
     const connection = this.server.physicalConnection
     if (!connection || connection.closed) {

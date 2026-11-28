@@ -33,7 +33,8 @@ class SettledRequestIds {
     if (this.has(id)) {
       return
     }
-    const ranges = [...this.ranges, [id, id] as [number, number]].sort((a, b) => a[0] - b[0])
+    const added: [number, number] = [id, id]
+    const ranges = [...this.ranges, added].sort((a, b) => a[0] - b[0])
     const merged: [number, number][] = []
     for (const range of ranges) {
       const last = merged.at(-1)

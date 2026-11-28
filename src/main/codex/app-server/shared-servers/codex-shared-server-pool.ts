@@ -230,21 +230,23 @@ export class CodexSharedServerPool {
   /** Stopped when Codex reports nothing open on it; otherwise its work, kept chats' too, goes on
    *  under its daemon. */
   private async retireRelayed(server: CodexSharedServer): Promise<void> {
-    const idle = await server.keep.idle()
+    const open = await server.keep.fencedOpenWork()
     if (server.leases.size > 0 || providerRelayQuitting() || server.exited) {
+      server.keep.unfence()
       return
     }
-    if (idle) {
+    if (open && Object.values(open).every((keys) => keys.length === 0)) {
+      server.keep.unfence()
       this.stop(server)
     } else {
-      this.handBack(server)
+      this.handBack(server, open)
     }
   }
 
   /** Its daemon idle-stops it once nothing runs; a later open of one of its chats reattaches it. */
-  private handBack(server: CodexSharedServer): void {
+  private handBack(server: CodexSharedServer, open: Record<string, string[][]> | null): void {
     this.remove(server)
-    void this.kept.handBack(server).then((handed) => {
+    void this.kept.handBack(server, open).then((handed) => {
       if (handed) {
         server.exitedWith(new Error('codex app-server handed back to its daemon'))
       } else if (!server.exited) {

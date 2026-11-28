@@ -87,8 +87,9 @@ export class CodexSharedServerRouter {
   /** `opened`: claimed by a thread open's reply, the only claim that can find its early frames
    *  dropped; a helper's lost frames don't cost its parent chat its running turn. */
   claim(threadId: string, lease: CodexSharedServerLease, opened = false, history = false): void {
-    // A chat that began closing takes no more threads, so its close covers every one it holds.
-    if (!lease.open) {
+    // Ended (a claim before it may have handed it back): the thread waits for the chat's reopen. A
+    // closing chat still takes the helpers it announces, so its close interrupts them too.
+    if (!lease.routable) {
       return
     }
     const previous = this.owners.get(threadId)

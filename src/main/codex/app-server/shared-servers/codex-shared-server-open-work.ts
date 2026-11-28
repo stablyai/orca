@@ -78,8 +78,15 @@ export async function readCodexSharedOpenWork(reads: Reads): Promise<CodexShared
     const loaded = (await readPages(reads, 'thread/loaded/list', {})).filter(
       (id): id is string => typeof id === 'string'
     )
+    // The first failure settles it (unknown), so a hung server never waits out every read.
+    let failed = false
     const read = await mapSettledWithConcurrency(loaded, CODEX_SHARED_METADATA_READS, (threadId) =>
-      readThreadWork(reads, threadId)
+      failed
+        ? Promise.reject(new Error('codex open work is unknown already'))
+        : readThreadWork(reads, threadId).catch((error: unknown) => {
+            failed = true
+            throw error
+          })
     )
     const turn: string[][] = []
     const command: string[][] = []

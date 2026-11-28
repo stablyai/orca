@@ -103,11 +103,12 @@ export class CodexKeptServers {
     return server
   }
 
-  /** No chat here is open on this kept server: it goes back to its daemon. False when it couldn't. */
-  handBack(server: CodexSharedServer): Promise<boolean> {
+  /** No chat here is open on this kept server: it goes back to its daemon with the open work Codex
+   *  reported. False when it couldn't. */
+  handBack(server: CodexSharedServer, open: Record<string, string[][]> | null): Promise<boolean> {
     const relayId = this.placements.get(server)?.relayId
     this.forget(server)
-    const handing = server.keep.handToDaemon()
+    const handing = server.keep.handToDaemon(open)
     if (relayId) {
       this.handing.set(relayId, handing)
       void handing.finally(() => this.handing.delete(relayId))
