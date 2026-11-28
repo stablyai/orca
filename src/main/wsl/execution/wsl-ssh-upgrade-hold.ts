@@ -30,7 +30,21 @@ export function isLoopbackSshHost(host: string): boolean {
   return LOOPBACK_HOSTS.has(normalized) || /^127(?:\.\d{1,3}){3}$/u.test(normalized)
 }
 
+/** Best effort: only the caller's abort fails the update; any other hold failure falls back to no hold. */
 export async function holdWslForSshUpgrade(
+  context: OrcadRemoteContext,
+  signal?: AbortSignal
+): Promise<WslSshUpgradeHold | null> {
+  try {
+    return await tryHoldWslForSshUpgrade(context, signal)
+  } catch (error) {
+    signal?.throwIfAborted()
+    console.warn('[wsl] could not keep WSL running for the Orca server update', error)
+    return null
+  }
+}
+
+async function tryHoldWslForSshUpgrade(
   { target, connection, host }: OrcadRemoteContext,
   signal?: AbortSignal
 ): Promise<WslSshUpgradeHold | null> {

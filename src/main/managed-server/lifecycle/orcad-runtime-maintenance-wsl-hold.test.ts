@@ -83,7 +83,9 @@ function fakeHoldChild() {
   return child
 }
 
-function contextFor(host: string): OrcadRemoteContext {
+type TargetOverrides = { jumpHost?: string; proxyCommand?: string }
+
+function contextFor(host: string, overrides: TargetOverrides): OrcadRemoteContext {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: runManagedOrcadUpdate reads only these fields once its collaborators are mocked.
   return {
     activationRecord: {},
@@ -91,19 +93,19 @@ function contextFor(host: string): OrcadRemoteContext {
     connection: {},
     host: { os: 'linux' },
     remoteHome: '/home/u',
-    target: { id: 't1', label: 'WSL', host, port: 22, username: 'u' },
+    target: { id: 't1', label: 'WSL', host, port: 22, username: 'u', ...overrides },
     userDataDir: '/home/u/.orca'
   } as unknown as OrcadRemoteContext
 }
 
-function runUpdate(host: string) {
+function runUpdate(host: string, overrides: TargetOverrides = {}, signal?: AbortSignal) {
   const managed = { environment: { id: 'env-1' }, deployment: { remotePort: 1 } }
   return runManagedOrcadUpdate(
     '/tmp/user-data',
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only environment.id and deployment.remotePort are read.
     managed as unknown as Parameters<typeof runManagedOrcadUpdate>[1],
-    contextFor(host),
-    { localOrcadDir: '/tmp/orcad' }
+    contextFor(host, overrides),
+    { localOrcadDir: '/tmp/orcad', signal }
   )
 }
 
@@ -156,5 +158,49 @@ describe('runManagedOrcadUpdate WSL keep-alive', () => {
 
     expect(mocks.execCommand).not.toHaveBeenCalled()
     expect(mocks.spawnProcess).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['a non-Windows desktop', 'linux', {}],
+    ['a jump host', 'win32', { jumpHost: 'bastion' }],
+    ['a proxy command', 'win32', { proxyCommand: 'nc %h %p' }]
+  ] as const)('does not probe or hold WSL through %s', async (_name, os, overrides) => {
+    Object.defineProperty(process, 'platform', { value: os })
+    mocks.deployOrcad.mockResolvedValue({ outcome: 'already-active', fullVersion: 'v2' })
+
+    await expect(runUpdate('localhost', overrides)).resolves.toMatchObject({
+      outcome: 'already-current'
+    })
+
+    expect(mocks.execCommand).not.toHaveBeenCalled()
+    expect(mocks.spawnProcess).not.toHaveBeenCalled()
+  })
+
+  it('still updates when the hold cannot be started', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.spawnProcess.mockImplementation(() => {
+      throw new Error('spawn EPERM')
+    })
+    mocks.deployOrcad.mockResolvedValue({ outcome: 'already-active', fullVersion: 'v2' })
+
+    await expect(runUpdate('localhost')).resolves.toMatchObject({ outcome: 'already-current' })
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('could not keep WSL'),
+      expect.anything()
+    )
+    warn.mockRestore()
+  })
+
+  it('fails the update when the user cancels while the hold starts', async () => {
+    const cancel = new AbortController()
+    mocks.execCommand.mockImplementation(async () => {
+      cancel.abort(new Error('canceled'))
+      throw new Error('aborted')
+    })
+
+    await expect(runUpdate('localhost', {}, cancel.signal)).rejects.toThrow('canceled')
+
+    expect(mocks.deployOrcad).not.toHaveBeenCalled()
   })
 })
