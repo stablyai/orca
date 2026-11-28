@@ -42,15 +42,17 @@ export class MenuBarReplyDeadline {
   private restart(): void {
     clearTimeout(this.timer ?? undefined)
     this.timer = setTimeout(() => {
-      // After a long main-thread stall timers run before I/O: let a reply already in the pipe land first.
-      setImmediate(() => {
+      // After a long main-thread stall timers run before I/O; a fresh timer runs only after the next
+      // I/O poll, so a reply already in the pipe lands first.
+      this.timer = setTimeout(() => {
         this.timer = null
         const expire = this.onExpire
         if (expire && !this.suspended) {
           this.onExpire = null
           expire()
         }
-      })
+      }, 0)
+      this.timer.unref()
     }, this.timeoutMs)
     this.timer.unref()
   }

@@ -138,7 +138,9 @@ export function installMainThreadHangWatchdog(options: {
   return {
     stop,
     worker,
-    setMenuBarIconSetting: (enabled) => postMessage({ type: 'menu-bar-setting', enabled }),
-    setMenuBarHost: (host) => postMessage({ type: 'menu-bar-host', host })
+    setMenuBarIconSetting: (enabled) =>
+      postMessage({ type: 'menu-bar-setting', state: { showMenuBarIcon: enabled } }),
+    setMenuBarHost: (host) =>
+      postMessage({ type: 'menu-bar-setting', state: { menuBarHost: host } })
   }
 }

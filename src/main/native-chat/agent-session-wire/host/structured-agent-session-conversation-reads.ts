@@ -26,7 +26,10 @@ import {
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
-import { quitKeepsStructuredAgent } from '../termination/structured-agent-session-quit-keeps-agent'
+import {
+  quitKeepsStartingStructuredAgent,
+  quitKeepsStructuredAgent
+} from '../termination/structured-agent-session-quit-keeps-agent'
 import { agentSessionRecordShownName } from '../../../runtime/agent-session/records/agent-session-record-shown-name'
 import type { RemoteServerUpdateStoppedChat } from '../../../../shared/remote-runtime/host-catalog/remote-server-update'
 
@@ -222,20 +225,25 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     },
     /** Chats whose running agent an app quit would stop rather than hand to the terminal daemon. */
     agentsStoppedByQuit: (): RemoteServerUpdateStoppedChat[] => {
-      const { sessions, deps } = context()
-      return [...sessions].flatMap(([sessionId, { child }]) => {
-        if (!child || quitKeepsStructuredAgent(sessionId, child)) {
-          return []
-        }
+      const { sessions, deps, runtimeState } = context()
+      const running = [...sessions].flatMap(([sessionId, { child }]) =>
+        child && !quitKeepsStructuredAgent(sessionId, child) ? [sessionId] : []
+      )
+      // Quit aborts every start still acquiring its agent (abort-acquires), so those stop too.
+      const starting = runtimeState.startFlights
+        .startingSessionIds()
+        .filter(
+          (sessionId) =>
+            !sessions.get(sessionId)?.child && !quitKeepsStartingStructuredAgent(sessionId)
+        )
+      return [...running, ...starting].map((sessionId) => {
         const record = deps.store.getConversation(sessionId)
-        return [
-          {
-            sessionId,
-            agent: record?.provider ?? null,
-            worktreeId: record?.location.workspaceId ?? null,
-            title: record ? agentSessionRecordShownName(deps.store, record) : null
-          }
-        ]
+        return {
+          sessionId,
+          agent: record?.provider ?? null,
+          worktreeId: record?.location.workspaceId ?? null,
+          title: record ? agentSessionRecordShownName(deps.store, record) : null
+        }
       })
     },
     /** A decided start's acquire is still out, and no later start's child is attached. */

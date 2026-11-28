@@ -1,4 +1,4 @@
-import type { MenuBarHost } from '../tray/mac-menu-bar-host'
+import type { MenuBarCaptureState } from './watchdog-hang-capture'
 export const HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS = 2_000
 export const HANG_WATCHDOG_TIMEOUT_MS = 45_000
 // Heartbeat age, so main itself was blocked for 6-8 s: a beachball that recovers long before the hang timeout.
@@ -20,8 +20,7 @@ export type HangWatchdogWorkerData = {
 export type MainToHangWatchdogWorkerMessage =
   | { type: 'heartbeat' }
   | { type: 'shutdown' }
-  | { type: 'menu-bar-setting'; enabled: boolean }
-  | { type: 'menu-bar-host'; host: MenuBarHost | null }
+  | { type: 'menu-bar-setting'; state: Partial<MenuBarCaptureState> }
   | { type: 'power-event'; event: HangPowerReceipt['event']; observedAt: number }
 import type { HangPowerReceipt } from './hang-observations'
 

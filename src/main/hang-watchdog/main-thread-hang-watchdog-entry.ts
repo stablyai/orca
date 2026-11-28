@@ -1,8 +1,7 @@
-import type { MenuBarHost } from '../tray/mac-menu-bar-host'
 import { isHangWatchdogWorkerData } from './hang-watchdog-worker-protocol'
 import { isMainThread, parentPort, workerData } from 'node:worker_threads'
 import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
-import { readAvailableHangDetectionMarker, writeHangDetectionMarker } from './hang-detection-marker'
+import * as hangMarker from './hang-detection-marker'
 import {
   asHangObservations,
   emptyHangObservations,
@@ -13,7 +12,7 @@ import {
   type HangPowerReceipt
 } from './hang-observations'
 import { captureHangSnapshot } from './hang-snapshot'
-import { createWatchdogHangCapture } from './watchdog-hang-capture'
+import { createWatchdogHangCapture, type MenuBarCaptureState } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
 import { sleepAssociation, type SleepPeriod } from './hang-sleep-association'
 import {
@@ -43,39 +42,35 @@ export function runWatchdog(
   if (!port) {
     return
   }
-  const initial = readAvailableHangDetectionMarker(config.markerPath)
+  const initial = hangMarker.readAvailableHangDetectionMarker(config.markerPath)
   let observations = asHangObservations(initial) ?? emptyHangObservations()
   let existingUnavailable = initial === undefined
   let sequence = 0
   let activeStallId: string | null = null
   let stopped = false
-  let showMenuBarIcon: boolean | null = null
-  let menuBarHost: MenuBarHost | null = null
+  const menuBar: MenuBarCaptureState = { showMenuBarIcon: null, menuBarHost: null }
   let collector: AbortController | null = null
   let recentPower: HangPowerReceipt[] = []
   let sleepPeriod: SleepPeriod | null = null
   let receiptWindow: { id: string; until: number; remaining: number } | null = null
+  const writer = config.markerPath
+    ? hangMarker.createHangMarkerWriter(config.markerPath, hangMarker.writeHangDetectionMarker)
+    : null
+  // Neither the read nor the queued async write throws, so a failure cannot stop the observer.
   const save = (): void => {
-    if (!config.markerPath) {
+    const existing =
+      existingUnavailable && config.markerPath
+        ? hangMarker.readAvailableHangDetectionMarker(config.markerPath)
+        : null
+    if (!writer || existing === undefined) {
       return
     }
-    try {
-      if (existingUnavailable) {
-        const existing = readAvailableHangDetectionMarker(config.markerPath)
-        if (existing === undefined) {
-          return
-        }
-        observations = mergeHangObservations(
-          asHangObservations(existing) ?? emptyHangObservations(),
-          observations,
-          activeStallId
-        )
-        existingUnavailable = false
-      }
-      writeHangDetectionMarker(config.markerPath, observations)
-    } catch {
-      // Optional diagnostics must not terminate the independent observer.
+    if (existingUnavailable) {
+      const stored = asHangObservations(existing) ?? emptyHangObservations()
+      observations = mergeHangObservations(stored, observations, activeStallId)
+      existingUnavailable = false
     }
+    writer.write(observations)
   }
   const find = (id: string): HangObservation | undefined =>
     observations.observations.find((item) => item.id === id)
@@ -113,7 +108,10 @@ export function runWatchdog(
           return
         }
         if (record.kind === 'heartbeat-stall') {
-          update(record.id, { completedSpans: incident.readCompletedHangContext(config.tracePath) })
+          const completedSpans = await incident.readCompletedHangContext(config.tracePath)
+          if (!controller.signal.aborted && !stopped) {
+            update(record.id, { completedSpans })
+          }
         }
         const machine = await incident.collectHangMachineSnapshot(controller.signal)
         if (!controller.signal.aborted && !stopped) {
@@ -171,10 +169,11 @@ export function runWatchdog(
       activeStallId = record.id
     }
     openReceiptWindow(record.id)
-    save()
+    // Spawn sample before the marker write: a disk stall that froze main can block the sync write too.
     if (!isMainThread && live && record.tier === 'hang' && find(record.id)) {
-      captures.capture(record, { showMenuBarIcon, menuBarHost })
+      captures.capture(record, { ...menuBar })
     }
+    save()
     enrich(record)
     return record.id
   }
@@ -200,11 +199,11 @@ export function runWatchdog(
         observe('heartbeat-stall', durationMs, Date.now() - durationMs, { tier: 'hang' })
         return
       }
+      if (!isMainThread) {
+        captures.capture(stall, { ...menuBar })
+      }
       // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
       update(stall.id, escalationFields(stall, durationMs))
-      if (!isMainThread) {
-        captures.capture(stall, { showMenuBarIcon, menuBarHost })
-      }
     },
     onHangResolved: (unresponsiveMs) => {
       const endedAt = Date.now()
@@ -219,8 +218,15 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs, endedAt)
     },
-    onStallEndedBySleep: () => {
+    onStallEndedBySleep: (durationMs) => {
+      const stall = activeStallId ? find(activeStallId) : undefined
       activeStallId = null
+      // Marks the stall as ended by the machine, so next launch does not treat it as an unrecovered hang.
+      if (stall && !stall.watchdogGap) {
+        update(stall.id, {
+          watchdogGap: { observedAt: Date.now(), durationMs, snapshot: captureHangSnapshot() }
+        })
+      }
     },
     onStallMissed: (durationMs, startedAt) => {
       const endedAt = Date.now()
@@ -246,7 +252,13 @@ export function runWatchdog(
       }
     }
   })
-  const checkTimer = setInterval(() => loop.tick(), config.checkIntervalMs)
+  const checkTimer = setInterval(() => {
+    loop.tick()
+    // A last tick that stops short of escalation shows the watchdog itself was blocked.
+    if (activeStallId && find(activeStallId)?.tier === 'stall') {
+      update(activeStallId, { watchdogTickAt: Date.now() })
+    }
+  }, config.checkIntervalMs)
   port.on('message', (message) => {
     if (stopped) {
       return
@@ -254,9 +266,7 @@ export function runWatchdog(
     if (message.type === 'heartbeat') {
       loop.recordHeartbeat()
     } else if (message.type === 'menu-bar-setting') {
-      showMenuBarIcon = message.enabled
-    } else if (message.type === 'menu-bar-host') {
-      menuBarHost = message.host
+      Object.assign(menuBar, message.state)
     } else if (message.type === 'power-event') {
       const receipt = parsePowerReceipt({ ...message, receivedAt: Date.now() })
       if (!receipt) {
@@ -280,6 +290,13 @@ export function runWatchdog(
         }
       }
     } else if (message.type === 'shutdown') {
+      // Main sent this, so it answered: a stall still open here ended in a clean quit.
+      if (activeStallId) {
+        update(activeStallId, { selfRecovered: true, resolution: captureHangSnapshot() })
+        activeStallId = null
+      }
+      // A recovery queued behind an async write would otherwise be lost at exit.
+      writer?.flushPending(observations)
       stopped = true
       receiptWindow = null
       clearInterval(checkTimer)

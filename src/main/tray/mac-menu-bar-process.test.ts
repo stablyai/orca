@@ -135,7 +135,7 @@ it('replaces a helper that misses a state reply, not while asleep', () => {
   vi.advanceTimersByTime(60_000)
   expect(helper.kill).not.toHaveBeenCalled()
   process.deadline.resume()
-  vi.advanceTimersByTime(15_000)
+  vi.advanceTimersByTime(16_000)
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
@@ -164,7 +164,7 @@ it('replaces a hung helper on the next probe and keeps no timer while idle', () 
   helper.send({ type: 'pong', id: ping.id })
   expect(vi.getTimerCount()).toBe(0)
   process.probe()
-  vi.advanceTimersByTime(15_000)
+  vi.advanceTimersByTime(16_000)
   expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
 })
 
@@ -203,7 +203,7 @@ it('turns the icon off, never in-process, when started helpers keep hanging', ()
   for (let attempt = 0; attempt < 3; attempt++) {
     const helper = helpers.at(-1)!
     helper.send({ type: 'ready' })
-    vi.advanceTimersByTime(15_000)
+    vi.advanceTimersByTime(16_000)
     expect(helper.kill).toHaveBeenCalledWith('SIGKILL')
     helper.exit()
     // Only the back-off delay: a helper that lived over a minute would count as healthy.
