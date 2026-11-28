@@ -19927,7 +19927,7 @@
           "runStatusDispatchFailed": "Fehlgeschlagen"
         },
         "runContent": {
-          "noOutput": "Keine Ausgabe verfügbar."
+          "noOutput": "Keine Ausgabe."
         },
         "runViewState": {
           "viewRun": "Ausführung anzeigen",
@@ -29692,7 +29692,7 @@
       "newThreadTab": "Neuer Thread",
       "items": {
         "orNames": "{{names}} oder {{last}}",
-        "emptyBotsNeedsYou": "Bei {{names}} ist nichts offen, das deine Aufmerksamkeit braucht",
+        "emptyBotsNeedsYou": "Bei {{names}} gibt es nichts für dich zu tun",
         "emptyBots": "Keine Elemente von {{names}}",
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
         "filterNamed": "Elemente filtern, gefiltert nach {{filter}}",

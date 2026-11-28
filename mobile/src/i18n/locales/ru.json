@@ -1580,7 +1580,7 @@
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
       "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
-      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
+      "tapToPairAgain": "Нажмите для повторного сопряжения"
     },
     "hostProtocolGate": {
       "checkingCompatibility": "Проверка совместимости сервера"
@@ -5468,7 +5468,7 @@
       "started": "Начало",
       "trigger": "Триггер",
       "output": "Вывод",
-      "noOutput": "Нет доступного содержимого вывода.",
+      "noOutput": "Нет доступного вывода.",
       "loadingRuns": "Загрузка запусков…",
       "loading": "Загрузка…",
       "hourly": "Каждый час",

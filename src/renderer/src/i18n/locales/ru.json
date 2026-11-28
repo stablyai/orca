@@ -20479,7 +20479,7 @@
           "runStatusDispatchFailed": "Ошибка"
         },
         "runContent": {
-          "noOutput": "Нет доступного содержимого вывода."
+          "noOutput": "Нет вывода."
         },
         "runViewState": {
           "viewRun": "Просмотреть запуск",
