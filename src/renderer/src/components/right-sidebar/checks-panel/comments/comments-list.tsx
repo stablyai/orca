@@ -1,5 +1,5 @@
 import React from 'react'
-import { MessageSquare, Plus, SendHorizontal, SlidersHorizontal, Sparkles, X } from 'lucide-react'
+import { MessageSquare, Plus, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -11,6 +11,10 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
+import {
+  SendNotesButton,
+  SendNotesSlot
+} from '@/components/editor/review-note-delivery/SendNotesButton'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
@@ -98,6 +102,23 @@ export function PRCommentsList(
           {comments.length > 0 && (
             <span className={presentation.sectionCount}>{comments.length}</span>
           )}
+          {canShowResolveWithAI && isSelectingForAI ? (
+            <SendNotesSlot>
+              {selectedCommentQueueCount > 0 ? (
+                <SendNotesButton
+                  count={selectedCommentQueueCount}
+                  noun="comments"
+                  chevron={false}
+                  flush
+                  disabled={commentsLoading || resolveCommentsWithAIDisabled}
+                  title={
+                    resolveCommentsWithAIDisabled ? resolveCommentsWithAIDisabledReason : undefined
+                  }
+                  onClick={() => onResolveSelectedCommentsWithAI?.(selectedGroups)}
+                />
+              ) : null}
+            </SendNotesSlot>
+          ) : null}
           <div className="-mr-1 ml-auto flex items-center gap-0.5">
             {canShowResolveWithAI && (
               <>
@@ -135,77 +156,29 @@ export function PRCommentsList(
                   </TooltipContent>
                 </Tooltip>
                 {isSelectingForAI && (
-                  <>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="default"
-                          size="icon-xs"
-                          className="relative"
-                          aria-label={t(
-                            'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
-                            'Send {{count}} queued comments to AI',
-                            {
-                              count: selectedCommentQueueCount,
-                              defaultValue_one: 'Send {{count}} queued comment to AI'
-                            }
-                          )}
-                          disabled={
-                            selectedCommentQueueCount === 0 ||
-                            commentsLoading ||
-                            resolveCommentsWithAIDisabled
-                          }
-                          title={
-                            resolveCommentsWithAIDisabled
-                              ? resolveCommentsWithAIDisabledReason
-                              : undefined
-                          }
-                          onClick={() => onResolveSelectedCommentsWithAI?.(selectedGroups)}
-                        >
-                          <SendHorizontal className="size-3" />
-                          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-background px-0.5 text-[9px] leading-none text-foreground tabular-nums">
-                            {selectedCommentQueueCount}
-                          </span>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {resolveCommentsWithAIDisabled && resolveCommentsWithAIDisabledReason
-                          ? resolveCommentsWithAIDisabledReason
-                          : t(
-                              'auto.components.right.sidebar.checks.panel.content.sendQueuedCommentsToAi',
-                              'Send {{count}} queued comments to AI',
-                              {
-                                count: selectedCommentQueueCount,
-                                defaultValue_one: 'Send {{count}} queued comment to AI'
-                              }
-                            )}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="text-muted-foreground hover:text-foreground"
-                          aria-label={t(
-                            'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
-                            'Clear queued comments'
-                          )}
-                          onClick={clearSelection}
-                        >
-                          <X className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={4}>
-                        {t(
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={t(
                           'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
                           'Clear queued comments'
                         )}
-                      </TooltipContent>
-                    </Tooltip>
-                  </>
+                        onClick={clearSelection}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={4}>
+                      {t(
+                        'auto.components.right.sidebar.checks.panel.content.a6de3e5a20',
+                        'Clear queued comments'
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
               </>
             )}

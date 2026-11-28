@@ -7,10 +7,21 @@ import {
   createFilesystemHandlerContext,
   type FilesystemHandlerContext
 } from './filesystem-handler-context'
-import { registerFilesystemReadHandlers } from './reads/filesystem-read-handlers'
 import { registerFilesystemGitStatusHandlers } from './source-control/filesystem-git-status-handlers'
 import { registerLazyFilesystemSecondaryHandlers } from './lazy-filesystem-secondary-handlers'
 
+const FILESYSTEM_READ_CHANNELS = [
+  'fs:readFileChunk',
+  'fs:readDir',
+  'fs:readFile',
+  'fs:readPreviewRange',
+  'fs:grantRuntimeFilePreview',
+  'fs:listMarkdownDocuments',
+  'fs:stat',
+  'fs:findSymlinkBelowRoot',
+  'fs:pathsExist',
+  'fs:pathExists'
+] as const
 const FILESYSTEM_WRITE_CHANNELS = ['fs:writeFile', 'fs:writeFileBytes', 'fs:deletePath'] as const
 const FILESYSTEM_SEARCH_CHANNELS = ['fs:listFiles', 'fs:cancelListFiles'] as const
 const FILESYSTEM_GIT_COMMIT_CHANNELS = [
@@ -66,7 +77,11 @@ export function registerFilesystemHandlers(
     createSenderScopedRequestCancellations()
   )
 
-  registerFilesystemReadHandlers(context)
+  clearChannels(FILESYSTEM_READ_CHANNELS)
+  registerLazyIpcHandleGroup(FILESYSTEM_READ_CHANNELS, async (ipc) => {
+    const { registerFilesystemReadHandlers } = await import('./reads/filesystem-read-handlers')
+    registerFilesystemReadHandlers(context, ipc)
+  })
   registerFilesystemGitStatusHandlers(context)
 
   clearChannels(FILESYSTEM_WRITE_CHANNELS)

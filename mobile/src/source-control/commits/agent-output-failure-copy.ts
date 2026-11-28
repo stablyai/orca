@@ -11,6 +11,24 @@ export const AGENT_OUTPUT_FAILURE_COPY: Record<
       'OpenCode returned invalid JSON events.',
       values
     ),
+  antigravityInvalidEvents: (values) =>
+    translate(
+      'sourceControl.textGenerationFailure.antigravityInvalidEvents',
+      'Antigravity returned invalid JSON events.',
+      values
+    ),
+  antigravityInvalidResult: (values) =>
+    translate(
+      'sourceControl.textGenerationFailure.antigravityInvalidResult',
+      'Antigravity returned an invalid result.',
+      values
+    ),
+  antigravityNoFinalResult: (values) =>
+    translate(
+      'sourceControl.textGenerationFailure.antigravityNoFinalResult',
+      'Antigravity returned no final result.',
+      values
+    ),
   kimiUnreadableOutput: (values) =>
     translate(
       'sourceControl.textGenerationFailure.kimiUnreadableOutput',

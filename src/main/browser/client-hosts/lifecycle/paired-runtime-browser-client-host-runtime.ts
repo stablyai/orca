@@ -52,14 +52,23 @@ import {
   browserRouteSessionRegistry,
   browserRouteWebContentsRegistry
 } from '../../routing/sessions/browser-route-session-runtime'
+import {
+  clientHostRouteIdentities,
+  configurePairedRuntimeBrowserClientHostsForOrcaProfile,
+  getActivePairedRuntimeBrowserOrcaProfileId,
+  getPairedRuntimeBrowserClientRouteIdentity,
+  pairedRuntimeBrowserClientHostId,
+  pairedRuntimeBrowserClientHostsPage,
+  registerPairedRuntimeBrowserClientHostPageQuery,
+  type ClientHostRouteIdentity
+} from './paired-runtime-browser-client-host-state'
 
-export type ClientHostRouteIdentity = BrowserClientPageAuthorityIdentity & {
-  orcaProfileId: string
-  /** Pairs with `authorityConnectionIdentity` and `pairingAuthorityConnectionIdentity`. */
-  executionHostIdentity: string
-  /** Pairs with `legacyAuthorityConnectionIdentity`, naming the partition an older build populated. */
-  legacyExecutionHostIdentity: string
-  storageScope: string
+export {
+  configurePairedRuntimeBrowserClientHostsForOrcaProfile,
+  getPairedRuntimeBrowserClientRouteIdentity,
+  pairedRuntimeBrowserClientHostId,
+  pairedRuntimeBrowserClientHostsPage,
+  type ClientHostRouteIdentity
 }
 
 type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart &
@@ -69,10 +78,6 @@ type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart &
     storageScope: string
     environmentLabel: string
   }
-
-let activeOrcaProfileId: string | null = null
-// Storage operations need a route identity even without an open page.
-const clientHostRouteIdentities = new Map<string, ClientHostRouteIdentity>()
 
 const browserClientHosts =
   new PairedRuntimeBrowserClientHostRegistry<ProductionBrowserClientHostStart>({
@@ -160,20 +165,15 @@ const browserClientHosts =
     }
   })
 
-export function configurePairedRuntimeBrowserClientHostsForOrcaProfile(options: {
-  orcaProfileId: string
-}): void {
-  if (activeOrcaProfileId && activeOrcaProfileId !== options.orcaProfileId) {
-    throw new Error('paired_runtime_browser_client_host_profile_conflict')
-  }
-  activeOrcaProfileId = options.orcaProfileId
-}
+registerPairedRuntimeBrowserClientHostPageQuery((environmentId, browserPageId) =>
+  browserClientHosts.hostsPage(environmentId, browserPageId)
+)
 
 export async function startPairedRuntimeBrowserClientHost(options: {
   environment: KnownRuntimeEnvironment
   authorityRuntimeId: string
 }): Promise<BrowserClientHostLeaseAuthority> {
-  const orcaProfileId = activeOrcaProfileId
+  const orcaProfileId = getActivePairedRuntimeBrowserOrcaProfileId()
   if (!orcaProfileId) {
     throw new Error('paired_runtime_browser_client_host_profile_unavailable')
   }
@@ -216,23 +216,6 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     notifyRouteProfilesChanged()
   }
   return authority
-}
-
-export function getPairedRuntimeBrowserClientRouteIdentity(
-  environmentId: string
-): ClientHostRouteIdentity | null {
-  return clientHostRouteIdentities.get(environmentId) ?? null
-}
-
-export function pairedRuntimeBrowserClientHostId(environmentId: string): string | null {
-  return clientHostRouteIdentities.has(environmentId) ? getBrowserClientHostId() : null
-}
-
-export function pairedRuntimeBrowserClientHostsPage(
-  environmentId: string,
-  browserPageId: string
-): boolean {
-  return browserClientHosts.hostsPage(environmentId, browserPageId)
 }
 
 export function closePairedRuntimeBrowserClientHostEnvironment(

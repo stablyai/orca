@@ -1,9 +1,5 @@
 import type { BrowserClientHostPlacementPreference } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import {
-  closePairedRuntimeBrowserClientHostEnvironment,
-  startPairedRuntimeBrowserClientHost
-} from '../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { prepareBrowserClientHostPlacement } from '../../../browser/client-hosts/lifecycle/browser-client-host-placement-preparation'
 import { isRuntimeEnvironmentManuallyDisconnected } from '../connectivity/runtime-environment-manual-disconnect'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
@@ -20,6 +16,8 @@ export async function prepareRuntimeEnvironmentBrowserPlacement(
 ) {
   const initialEnvironment = await resolveEnvironment(userDataPath, args.selector)
   requireConnected(initialEnvironment.id)
+  const { closePairedRuntimeBrowserClientHostEnvironment, startPairedRuntimeBrowserClientHost } =
+    await import('../../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime')
   const placement = await prepareBrowserClientHostPlacement({
     selector: initialEnvironment.id,
     expectedPairingRevision: args.expectedPairingRevision,

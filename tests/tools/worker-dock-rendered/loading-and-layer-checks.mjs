@@ -1,6 +1,6 @@
 // Checks for rows whose details load late, monitoring with no listed rows, dialogs a row opens,
 // and Jump to latest over the open card. Imported by run.mjs.
-import { card, events, expanded, focusedRow, rows, toggle } from './fixture-session.mjs'
+import { card, chip, events, expanded, focusedRow, rows, toggle } from './fixture-session.mjs'
 
 const rowOf = (id) => `[data-worker-dock-row="${id}"]`
 const focusedIs = (page, id) =>
@@ -18,30 +18,78 @@ const loaded = (page, id) =>
   }, rowOf(id))
 
 export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
-  for (const fit of ['', 'dock']) {
-    await check(`the folded chip hugs its label${fit ? ` (dock fit ${fit})` : ''}`, () =>
-      scene('threeFolded720', {}, async (page) => {
-        if (fit) {
-          await page
-            .locator('[data-native-chat-root]')
-            .evaluate((root, value) => root.setAttribute('data-native-chat-dock-fit', value), fit)
-          await page.waitForTimeout(100)
-        }
-        const { width, fitNow } = await toggle(page).evaluate((chip) => {
-          const label = chip.querySelector('[data-worker-dock-pill-title]')
-          return {
-            width: chip.getBoundingClientRect().width - label.getBoundingClientRect().width,
-            fitNow:
-              chip.closest('[data-native-chat-root]').getAttribute('data-native-chat-dock-fit') ??
-              ''
-          }
-        })
-        assert(fitNow === fit, `dock fit read "${fitNow}", not "${fit}"`)
-        // Glyph, gap, padding and border only.
-        assert(width <= 44, `the chip is ${width}px wider than its label`)
+  await check('the folded chip hugs its label', () =>
+    scene('threeFolded720', {}, async (page) => {
+      const width = await toggle(page).evaluate((chip) => {
+        const label = chip.querySelector('[data-worker-dock-pill-title]')
+        return chip.getBoundingClientRect().width - label.getBoundingClientRect().width
       })
-    )
-  }
+      // Glyph, gap, padding and border only.
+      assert(width <= 44, `the chip is ${width}px wider than its label`)
+    })
+  )
+
+  await check(
+    'a pane so short the dock takes the transcript floor: the chip clears the dock, the open card stays in the pane',
+    () =>
+      scene('both320', { width: 360, height: 260 }, async (page) => {
+        const fit = await page
+          .locator('[data-native-chat-root]')
+          .evaluate((root) => root.getAttribute('data-native-chat-dock-fit') ?? '')
+        assert(
+          fit.split(' ').includes('transcript'),
+          `dock fit "${fit}" never gave up the transcript`
+        )
+        const clear = async (when) => {
+          const [chipBox, dock] = await Promise.all([
+            card(page)
+              .count()
+              .then((open) => (open ? card(page) : chip(page)).boundingBox()),
+            page.locator('[data-native-chat-dock]').boundingBox()
+          ])
+          assert(chipBox.y + chipBox.height <= dock.y + 1, `${when}: the chip runs over the dock`)
+          // A press on the question card reaches the card, not the chip's frame.
+          const hit = await page.evaluate(() => {
+            const question = document.querySelector('[data-native-chat-question-card]')
+            const box = question.getBoundingClientRect()
+            const target = document.elementFromPoint(box.left + box.width / 2, box.top + 8)
+            return Boolean(target?.closest('[data-native-chat-question-card]'))
+          })
+          assert(hit, `${when}: a press on the question card lands on the chip`)
+        }
+        await clear('folded')
+        await toggle(page).click()
+        await page.waitForTimeout(400)
+        // No room above for a header and a row: it drops over the dock, whole, like a popover.
+        const [open, pane] = await Promise.all([
+          card(page).boundingBox(),
+          page.locator('[data-native-chat-root]').boundingBox()
+        ])
+        assert(open.y >= pane.y, `the open card starts ${pane.y - open.y}px above the pane`)
+        assert(open.y + open.height <= pane.y + pane.height, 'the open card runs off the pane')
+        // Folding, it slides back with the shape: no frame starts above the pane.
+        const highest = await page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              const pane = document.querySelector('[data-native-chat-root]').getBoundingClientRect()
+              const shape = document.querySelector('[data-worker-dock-morph]')
+              let worst = Infinity
+              document.querySelector('[data-worker-dock-pill]').click()
+              const start = performance.now()
+              const step = () => {
+                worst = Math.min(worst, shape.getBoundingClientRect().top - pane.top)
+                if (performance.now() - start < 400) {
+                  requestAnimationFrame(step)
+                } else {
+                  resolve(worst)
+                }
+              }
+              step()
+            })
+        )
+        assert(highest >= -1, `a folding frame starts ${-highest}px above the pane`)
+      })
+  )
 
   await check('a panel opened under a resting pointer keeps its row order as states change', () =>
     scene('twentyFolded720', {}, async (page) => {
@@ -160,7 +208,8 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
       scene('jumpFolded720', {}, async (page) => {
         await toggle(page).click()
         await card(page).waitFor()
-        await page.waitForTimeout(200)
+        // Jump goes straight to its place above the open card; the card reaches it after 280ms.
+        await page.waitForTimeout(400)
         const jump = page.getByRole('button', { name: 'Jump to latest' })
         const [a, c] = await Promise.all([jump.boundingBox(), card(page).boundingBox()])
         const gap = c.y - (a.y + a.height)
@@ -173,9 +222,11 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         assert(hit.includes('Jump to latest'), `the point over Jump hits "${hit}"`)
         await toggle(page).click()
         await page.waitForTimeout(200)
-        const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
+        // The fold takes 280ms; Jump returns to its rest once the chip has shrunk back.
+        await page.waitForTimeout(200)
+        const [b, p] = await Promise.all([jump.boundingBox(), chip(page).boundingBox()])
         const rest = p.y - (b.y + b.height)
-        assert(Math.abs(rest - 20) <= 1, `Jump settled ${rest}px above the chip, not 20px`)
+        assert(Math.abs(rest - 12) <= 1, `Jump settled ${rest}px above the chip, not 12px`)
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {
@@ -253,7 +304,8 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
     if (!(await jump.isVisible())) {
       await toggle(page).click()
       await card(page).waitFor({ state: 'detached' })
-      await page.waitForTimeout(200)
+      // Jump returns once the 280ms fold has finished.
+      await page.waitForTimeout(400)
     }
     const box = await jump.boundingBox()
     assert(box.y >= 0, `Jump to latest is off the pane at y=${box.y}`)
@@ -263,13 +315,13 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
   }
 
   await check(
-    'Jump to latest stays wholly reachable as the footer appears and the message box grows',
+    'Jump to latest stays wholly reachable as Clear failed appears and the message box grows',
     () =>
       scene('jumpFolded300', { width: 340, height: 250 }, async (page) => {
         await toggle(page).click()
         await card(page).waitFor()
         await page.evaluate(() => window.__workerDockHarness.fail('Another failure'))
-        await page.locator('[data-worker-dock-footer]').waitFor()
+        await page.getByRole('button', { name: /Clear all/ }).waitFor()
         await page.waitForTimeout(200)
         await shot?.(page, 'jump-short-pane-open')
         await jumpWorks(page)

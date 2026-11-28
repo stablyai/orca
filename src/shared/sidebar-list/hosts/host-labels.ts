@@ -211,14 +211,17 @@ export function getHostWorktreeCounts(
   if (worktrees.length === 0) {
     return undefined
   }
-  // Reuse the ID dedupe walk; same-ID workspaces on two hosts count under each host (STA-4343).
-  const idsByHost = getHostWorktreeIds(worktrees, repoOf, defaultHostId)
-  if (!idsByHost) {
-    return undefined
-  }
+  // Same-ID workspaces on two hosts count under each host (STA-4343).
   const counts = new Map<ExecutionHostId, number>()
-  for (const [hostId, ids] of idsByHost) {
-    counts.set(hostId, ids.length)
+  const seenIdentities = new Set<string>()
+  for (const worktree of worktrees) {
+    const identity = getWorktreeHostIdentity(worktree)
+    if (seenIdentities.has(identity)) {
+      continue
+    }
+    seenIdentities.add(identity)
+    const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
+    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
   }
   return counts
 }
@@ -240,9 +243,12 @@ export function getHostWorktreeIds(
     }
     seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoOf(worktree), defaultHostId)
-    const ids = idsByHost.get(hostId) ?? []
-    ids.push(worktree.id)
-    idsByHost.set(hostId, ids)
+    const ids = idsByHost.get(hostId)
+    if (ids) {
+      ids.push(worktree.id)
+    } else {
+      idsByHost.set(hostId, [worktree.id])
+    }
   }
   return idsByHost
 }
@@ -254,8 +260,15 @@ export function getLaneHostWorktreeCounts(
   repoOf: RepoOfWorktree,
   defaultHostId: ExecutionHostId
 ): Map<ExecutionHostId, number> | undefined {
-  return getLaneHostWorktreeScope(worktrees, folderWorkspaces, repoOf, defaultHostId)
-    .hostWorktreeCounts
+  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
+    return undefined
+  }
+  const counts = getHostWorktreeCounts(worktrees, repoOf, defaultHostId) ?? new Map()
+  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+  }
+  return counts
 }
 
 /** Folder hosts need explicit empty worktree-ID arrays; missing keys trigger global-ID fallbacks into that host section. */

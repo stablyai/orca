@@ -102,6 +102,21 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
   rowsByIdentity: ReadonlyMap<string, Row>,
   view: CrossStoreLineageView
 ): Map<string, Row> {
+  const parents = new Map<string, Row>()
+  let hasCrossStoreRecords = false
+  for (const store of view.values()) {
+    if (
+      store.installationId &&
+      store.crossStoreLineageByChildKey &&
+      Object.keys(store.crossStoreLineageByChildKey).length > 0
+    ) {
+      hasCrossStoreRecords = true
+      break
+    }
+  }
+  if (!hasCrossStoreRecords) {
+    return parents
+  }
   const childRowsByStoreAndKey = new Map<string, Map<WorkspaceKey, [string, Row][]>>()
   const rowsByStoreAndInstance = new Map<string, Map<string, Row[]>>()
   for (const [identity, row] of rowsByIdentity) {
@@ -131,7 +146,6 @@ export function resolveCrossStoreLineageParents<Row extends LineageResolutionRow
     }
   }
 
-  const parents = new Map<string, Row>()
   for (const [childStoreKey, store] of view) {
     // A store without a known identity cannot tell its own copies from a parent store.
     if (!store.installationId) {

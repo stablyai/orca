@@ -91,6 +91,8 @@ export type WorkerRequestError = {
   detail?: string
   /** The shared failure kind, when the failure was typed. */
   kind?: string
+  /** A usage limit's reset and, when Orca continues the worker by itself, when (epoch ms). */
+  usageLimit?: { resetsAt?: number; continuesAt?: number; continues?: boolean }
   /** A terminal's failure, held back like its other rests while it waits for mail; a chat's is not. */
   heldByWaits?: true
   /** What the coordinator's mail carries about the failed request. */

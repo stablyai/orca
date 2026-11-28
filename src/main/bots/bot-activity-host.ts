@@ -19,7 +19,6 @@ import type { ExternalConversationLink } from '../../shared/connectors/external-
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { latestLiveAgentStatusRowsByPaneKey } from '../../shared/agent-status/live-agent-status-rows'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
 import type { BotUpNext } from '../../shared/bots/bot-look-around'
 import { lookAroundUpNext } from './bot-look-around-state'
 import { lookAroundDueAt, lookAroundNextAt } from './bot-look-around-schedule'
@@ -278,6 +277,8 @@ export function runtimeBotActivityHost(runtime: OrcaRuntimeService): BotActivity
         .getOrchestrationDb()
         .listDispatchesCreatedByAny(creators, BOT_ACTIVITY_COMPLETED_LIMIT)
       const creatorById = new Map(created.map((dispatch) => [dispatch.id, dispatch]))
+      const { readDispatchWorkers } =
+        await import('../runtime/rpc/methods/orchestration/worker/session-workers-method')
       const workers = await readDispatchWorkers(
         runtime,
         created.map((dispatch) => dispatch.id),

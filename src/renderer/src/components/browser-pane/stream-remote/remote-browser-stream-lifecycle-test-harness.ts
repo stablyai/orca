@@ -3,6 +3,8 @@ import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserPageHandle, RemoteBrowserRpcCall } from './remote-browser-page-session'
 import type { RemoteBrowserScreencastSubscribe } from './remote-browser-screencast-subscription'
 import type { RemoteBrowserViewportSize } from './remote-browser-stream-tokens'
+import type { RemoteBrowserStreamLifecycleDeps } from './remote-browser-stream-lifecycle-deps'
+import { createGate, rpcError, type Gate } from './remote-browser-stream-lifecycle-test-support'
 import type {
   BrowserJavaScriptDialogAnswer,
   BrowserJavaScriptDialogPrompt
@@ -14,23 +16,7 @@ import {
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
 
-export type Gate = {
-  wait: Promise<void>
-  release: () => void
-  fail: (error: unknown) => void
-}
-
-export function createGate(): Gate {
-  let release!: () => void
-  let fail!: (error: unknown) => void
-  const wait = new Promise<void>((resolve, reject) => {
-    release = () => resolve()
-    fail = (error: unknown) => reject(error)
-  })
-  // Why: the gate is released by the test, not by this tick; an unhandled rejection would fail the run.
-  wait.catch(() => {})
-  return { wait, release, fail }
-}
+export { createGate, rpcError, type Gate } from './remote-browser-stream-lifecycle-test-support'
 
 export type FakeScreencastStream = {
   pageId: string
@@ -54,11 +40,10 @@ export type DialogAsk = {
   answer: (answer: BrowserJavaScriptDialogAnswer | null) => void
 }
 
-export function rpcError(code: string, message: string): Error {
-  return Object.assign(new Error(message), { code })
-}
-
-export function createHarness() {
+/** `transport` replaces the fake host calls, e.g. with a real dispatcher; the fakes stay the default. */
+export function createHarness(
+  transport: Partial<Pick<RemoteBrowserStreamLifecycleDeps, 'callRpc' | 'subscribeScreencast'>> = {}
+) {
   const identity = {
     mounted: true,
     active: true,
@@ -187,8 +172,8 @@ export function createHarness() {
       getEnvironmentId: () => identity.environmentId,
       browserPageExists: () => identity.pageExists
     },
-    callRpc,
-    subscribeScreencast,
+    callRpc: transport.callRpc ?? callRpc,
+    subscribeScreencast: transport.subscribeScreencast ?? subscribeScreencast,
     getWorktreeSelector: () => 'worktree:wt-1',
     readCurrentObservation: () => [],
     getCurrentUrl: () => 'https://example.test/',
@@ -236,6 +221,12 @@ export function createHarness() {
     rpcLog,
     dialogAsks,
     rpcParams: (method: string): unknown => rpcParams.get(method),
+    get storedHandle(): RemoteBrowserPageHandle | null {
+      return storedHandle
+    },
+    seedStoredHandle: (handle: RemoteBrowserPageHandle | null) => {
+      storedHandle = handle
+    },
     get subscribeAttempts(): number {
       return subscribeAttempts
     },

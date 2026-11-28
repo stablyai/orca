@@ -40,6 +40,8 @@ export const WORKTREE_CATALOG_METHODS = [
       )
       // Why: legacy callers keep exact activity; only snapshot pollers are coarsened.
       if (params.afterSnapshotId === undefined && params.acceptRowDelta !== true) {
+        // One-shot reads (CLI) backfill uncached linked PRs for the next read; snapshot pollers don't.
+        void context.runtime.hostPRCache?.backfill().catch(() => undefined)
         // A reader of several hosts joins their cross-machine parents by it (`worktree ps --since`).
         // The id only decorates rows; a host that can't read it still lists them.
         const installationId = await Promise.resolve()
