@@ -16,6 +16,8 @@ export class DeviceRegistryStore {
   protected registryUnreadable = false
   /** Parse failures prevent authoritative absence/revocation verdicts. */
   protected registryDoubtful = false
+  /** This launch's read lost rows, so its list misses devices that still exist. */
+  private registryLostRows = false
   private corruptFilePending = false
   protected pendingLastSeenFlush: NodeJS.Timeout | null = null
   private readonly writer: DeviceRegistryWriter
@@ -30,6 +32,12 @@ export class DeviceRegistryStore {
       minimumAgeMs: STALE_WRITE_TEMP_AGE_MS
     })
     this.load()
+  }
+
+  /** False when this launch's read failed or lost rows: the list is not the paired devices.
+   *  An old quarantined copy alone doesn't count; it stays until someone removes it. */
+  isReadable(): boolean {
+    return !this.registryUnreadable && !this.registryLostRows
   }
 
   /** Fires when a save or an adopted external edit changes a listed phone or runtime grant. */
@@ -73,6 +81,7 @@ export class DeviceRegistryStore {
     const read = this.writer.read()
     this.registryUnreadable = read.unreadable
     this.registryDoubtful = read.doubtful
+    this.registryLostRows = read.lostRows
     this.corruptFilePending = read.corruptFilePending
     this.devices = withoutEphemeralRows(read.devices)
     // Session-only browser keys died with the prior host; remove their registry rows.

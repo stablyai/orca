@@ -10,19 +10,34 @@ import type {
   DelegatedMobileDeviceSyncResult
 } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
+import { droppedDelegatedPhones } from './pairing/delegated-mobile-devices'
 import { settleRemovedPairedClient } from '../../orchestration/federation/client-asks/client-ask-queue'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
   private onPushUnregisterQueued?: () => void
+  private relayPhonesChangeQueued = false
 
   async revokeMobileDevice(deviceId: string): Promise<boolean> {
     const device = this.deviceRegistry?.getDevice(deviceId)
-    const revoked = device?.scope === 'mobile' && this.revokeDevicesNow([device])
-    if (revoked) {
-      this.mobileDesktopRelay?.phonesChanged()
+    return device?.scope === 'mobile' && this.revokeDevicesNow([device])
+  }
+
+  /** Every removal counts, a cascade or a disk edit too, so relayed servers drop that phone. */
+  protected announcePairedDevicesChanged(): void {
+    this.queueRelayPhonesChanged()
+    this.onPairedDevicesChanged?.()
+  }
+
+  // Deferred, so a save has taken the saved list, and once per cascade of saves.
+  protected queueRelayPhonesChanged(): void {
+    if (!this.relayPhonesChangeQueued) {
+      this.relayPhonesChangeQueued = true
+      queueMicrotask(() => {
+        this.relayPhonesChangeQueued = false
+        this.mobileDesktopRelay?.phonesChanged()
+      })
     }
-    return revoked
   }
 
   revokeRuntimeAccess(deviceId: string): boolean {
@@ -79,7 +94,6 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     return true
   }
 
-  /** Make the runtime device `parentDeviceId`'s phones exactly `phones`; dropped ones are fully revoked. */
   /** Who typed a paired device's message; see `pairedDeviceTypistOf`. */
   pairedDeviceTypist(
     deviceId: string,
@@ -117,23 +131,30 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     }
   }
 
-  /** The syncing socket's installation owns its phones: several desktops can share one row. */
+  /** Make the syncing installation's phones under `parentDeviceId` exactly `phones`; dropped ones are
+   *  fully revoked. Several desktops can share one row, so another installation's phones stay. */
   protected syncDelegatedMobileDevices(
     parentDeviceId: string,
     phones: readonly DelegatedPhone[],
-    connectionId?: string
+    caller: { connectionId?: string; clientInstanceId?: string } = {}
   ): DelegatedMobileDeviceSyncResult {
+    // The declaration is fire-and-forget, so an older desktop's first sync may arrive before it.
     const originClientInstanceId =
-      connectionId === undefined ? undefined : this.declaredDesktopClients.instanceOf(connectionId)
+      caller.clientInstanceId ??
+      (caller.connectionId === undefined
+        ? undefined
+        : this.declaredDesktopClients.instanceOf(caller.connectionId))
     const registry = this.deviceRegistry
     const parent = registry?.getDevice(parentDeviceId)
     if (!registry || parent?.scope !== 'runtime') {
       throw new Error('delegated_device_parent_unavailable')
     }
-    const wanted = new Set(phones.map((phone) => phone.phoneKey))
-    const dropped = registry
-      .listDelegatedMobileDevices(parentDeviceId)
-      .filter((child) => !child.phoneKey || !wanted.has(child.phoneKey))
+    const dropped = droppedDelegatedPhones(
+      registry.listDevices(),
+      parentDeviceId,
+      phones,
+      originClientInstanceId
+    )
     if (!this.revokeDevicesNow(dropped)) {
       throw new Error('delegated_device_revoke_failed')
     }

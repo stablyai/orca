@@ -6,11 +6,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
 import { parsePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import {
-  splitWorktreeId,
-  worktreeIdentityKey,
-  worktreeIdsEqual
-} from '../../../../shared/worktree/id'
+import { splitWorktreeId, worktreeIdentityKey } from '../../../../shared/worktree/id'
 import { normalizeLocalBranchName } from './runtime-worktree-selection'
 
 export type ResolvedWorktree = Worktree & {
@@ -56,21 +52,63 @@ export function createIncrementalResolvedWorktreeLookup(
   }
 }
 
+type TerminalSessionKeyedMaps = readonly (object | undefined)[]
+type TerminalSessionIdentityIndex = {
+  maps: TerminalSessionKeyedMaps
+  // null marks an identity two differently spelled keys share.
+  idByIdentity: Map<string, string | null>
+}
+const terminalSessionIdentityIndexes = new WeakMap<
+  WorkspaceSessionState,
+  TerminalSessionIdentityIndex
+>()
+
+function terminalSessionKeyedMaps(session: WorkspaceSessionState): TerminalSessionKeyedMaps {
+  return [
+    session.tabsByWorktree,
+    session.tabGroups,
+    session.tabGroupLayouts,
+    session.activeTabIdByWorktree,
+    session.activeGroupIdByWorktree
+  ]
+}
+
+// Cached: mobile snapshots ask per tab; writers replace these maps, never mutate them.
+function getTerminalSessionIdentityIndex(
+  session: WorkspaceSessionState
+): Map<string, string | null> {
+  const maps = terminalSessionKeyedMaps(session)
+  const cached = terminalSessionIdentityIndexes.get(session)
+  if (cached && cached.maps.every((map, index) => map === maps[index])) {
+    return cached.idByIdentity
+  }
+  const idByIdentity = new Map<string, string | null>()
+  const indexedIds = new Set<string>()
+  for (const map of maps) {
+    for (const worktreeId of Object.keys(map ?? {})) {
+      if (indexedIds.has(worktreeId)) {
+        continue
+      }
+      indexedIds.add(worktreeId)
+      const key = worktreeIdentityKey(worktreeId)
+      const existing = idByIdentity.get(key)
+      if (existing === undefined) {
+        idByIdentity.set(key, worktreeId)
+      } else {
+        idByIdentity.set(key, null)
+      }
+    }
+  }
+  terminalSessionIdentityIndexes.set(session, { maps, idByIdentity })
+  return idByIdentity
+}
+
 export function resolveTerminalSessionWorktreeId(
   session: WorkspaceSessionState,
   targetWorktreeId: string
 ): string | null {
-  const keyedWorktreeIds = new Set([
-    ...Object.keys(session.tabsByWorktree),
-    ...Object.keys(session.tabGroups ?? {}),
-    ...Object.keys(session.tabGroupLayouts ?? {}),
-    ...Object.keys(session.activeTabIdByWorktree ?? {}),
-    ...Object.keys(session.activeGroupIdByWorktree ?? {})
-  ])
-  const matches = [...keyedWorktreeIds].filter((worktreeId) =>
-    worktreeIdsEqual(worktreeId, targetWorktreeId)
-  )
-  return matches.length > 1 ? null : (matches[0] ?? targetWorktreeId)
+  const match = getTerminalSessionIdentityIndex(session).get(worktreeIdentityKey(targetWorktreeId))
+  return match === undefined ? targetWorktreeId : match
 }
 
 export function inferWorktreeIdFromPtyId(ptyId: string): string | null {

@@ -1,4 +1,4 @@
-import type { RemoteServerUpdateEntry } from './remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 
 export async function runRemoteServerUpdateBatch(
   entries: readonly RemoteServerUpdateEntry[],

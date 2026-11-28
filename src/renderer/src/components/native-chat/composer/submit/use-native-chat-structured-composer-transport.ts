@@ -136,7 +136,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     const mcpPanel = managesMcp
-      ? { ...mcpTray, agentLabel: structuredAgentLabel(props.agent) }
+      ? { ...mcpTray, agent: props.agent, agentLabel: structuredAgentLabel(props.agent) }
       : undefined
     // A held host takes no turn; pausing or clearing a goal starts none.
     const changeThreadGoal = threadGoal?.hostChanges

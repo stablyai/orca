@@ -18,12 +18,13 @@ import { isRootClaudeFrame } from './claude-turn-opening'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import type { ClaudeUsageLimits } from '../journal/claude-usage-limits'
 import type { ClaudeAssistantFailures } from '../journal/claude-assistant-failures'
+import { claudeCompactionIdentity } from '../journal/claude-journal-compactions'
 
 export type ClaudeCommandTurn = {
   identity: AgentJournalItemIdentity
   resultIdentity: AgentJournalItemIdentity
   sentUuid: string
-  compacted: boolean
+  compacted: AgentJournalItemIdentity | null
   interruptRequested: boolean
   failed: { detail?: ProviderDiagnostic } | null
   /** Limits that rejected this command while it ran; older account rejections cannot explain it. */
@@ -49,7 +50,7 @@ export function claudeCommandCurrentTurn(start: ClaudeCommandStart): ClaudeCurre
       identity: start.identity,
       resultIdentity: start.resultIdentity,
       sentUuid: start.sentUuid,
-      compacted: false,
+      compacted: null,
       interruptRequested: false,
       failed: null,
       rejections: new Set(),
@@ -66,10 +67,10 @@ export function observeClaudeCommandFrame(
   if (!command) {
     return false
   }
-  if (message.type === 'system') {
+  if (message.type === 'system' && isRootClaudeFrame(message)) {
     // A success status precedes compaction; only the boundary confirms history replacement.
     if (message.subtype === 'compact_boundary') {
-      command.compacted = true
+      command.compacted ??= claudeCompactionIdentity(message)
     } else if (message.compact_result === 'failed') {
       const words = claudeText(message.compact_error)
       const detail = words === null ? undefined : providerDiagnostic(words, 'person')
@@ -127,7 +128,7 @@ export function claudeCommandEnd(
   // Stopped and finished compactions can both return success; use compaction evidence.
   const shown = claudeResultFailure(message)
   const verdict = structuredCompactionOutcome({
-    compacted: command.compacted,
+    compacted: command.compacted !== null,
     interruptRequested: command.interruptRequested,
     failed: command.failed ?? (shown ? {} : null)
   })

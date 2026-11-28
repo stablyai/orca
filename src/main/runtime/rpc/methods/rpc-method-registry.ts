@@ -9,6 +9,7 @@ import { GOOGLE_WRITE_METHODS } from './google-write'
 import { SPEECH_METHODS } from './speech/speech'
 import { EMULATOR_METHODS } from './emulator/emulator'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
+import { BITBUCKET_METHODS } from './source-control/bitbucket/bitbucket'
 import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
 import { LINEAR_METHODS } from './integrations/linear/linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './integrations/linear/linear-agent-access'
@@ -74,6 +75,13 @@ import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
 import { AGENT_SESSION_METHODS } from './terminal/agent-session'
 import { STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS } from './structured-sessions/attachments/structured-agent-session-attachments'
 import { STRUCTURED_AGENT_SESSION_VISUAL_METHODS } from './structured-sessions/attachments/structured-agent-session-visual'
+import { STRUCTURED_AGENT_SESSION_AGENTS_METHODS } from './structured-sessions/catalog/structured-agent-session-agents'
+import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-sessions/structured-agent-session'
+import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
+import { TERMINAL_DAEMON_METHODS } from './terminal/terminal-daemon'
+import { CLIENT_UI_METHODS } from './client-state/client-ui'
+import { AGENT_LAUNCH_METHODS } from './agent-launch/agent-launch'
+import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 
 const CORE_RPC_METHODS = [
   ...EAGER_CORE_RPC_METHODS,
@@ -95,7 +103,11 @@ const CORE_RPC_METHODS = [
   ...WORKTREE_AUTO_NAME_METHODS,
   ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS,
-  ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS
+  ...STRUCTURED_AGENT_SESSION_VISUAL_METHODS,
+  ...STRUCTURED_AGENT_SESSION_AGENTS_METHODS,
+  ...STRUCTURED_AGENT_SESSION_METHODS,
+  ...AGENT_ACTIVITY_METHODS,
+  ...AGENT_LAUNCH_METHODS
 ] as const
 
 const SERVICE_RPC_METHODS = [
@@ -107,6 +119,7 @@ const SERVICE_RPC_METHODS = [
   ...SPEECH_METHODS,
   ...EMULATOR_METHODS,
   ...GITLAB_METHODS,
+  ...BITBUCKET_METHODS,
   ...HOSTED_REVIEW_METHODS,
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,
@@ -154,7 +167,10 @@ const SERVICE_RPC_METHODS = [
   ...FILE_METHODS,
   ...GIT_METHODS,
   ...CLIPBOARD_METHODS,
-  ...TERMINAL_ORPHAN_METHODS
+  ...TERMINAL_ORPHAN_METHODS,
+  ...TERMINAL_DAEMON_METHODS,
+  ...CLIENT_UI_METHODS,
+  ...NATIVE_CHAT_METHODS
 ] as const
 
 type ConcatMethods<A extends readonly unknown[], B extends readonly unknown[]> = readonly [

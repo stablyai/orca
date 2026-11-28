@@ -275,6 +275,11 @@ export function structuredAgentSessionAddressTabId(tabId: string, sessionId: str
   return isAgentSessionSlotTabId(tabId) ? structuredAgentSessionTabId(sessionId) : tabId
 }
 
+/** Chat status rows are addressed under the legacy tab id (see structuredAgentSessionPaneKey). */
+export function isStructuredAgentSessionAddressPaneKey(paneKey: string): boolean {
+  return paneKey.startsWith(structuredAgentSessionTabId(''))
+}
+
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
   return `${structuredAgentSessionAddressTabId(tabId, sessionId)}:${structuredAgentSessionPaneLeaf(sessionId)}`
 }
