@@ -22,6 +22,8 @@ type EditorPanelActionsMenuProps = {
   /** Diff-only whitespace preference; ignored for normal file tabs. */
   diffShowWhitespace: boolean
   editorWordWrap: boolean
+  canToggleEditorMinimap: boolean
+  editorMinimapEnabled: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
@@ -29,6 +31,7 @@ type EditorPanelActionsMenuProps = {
   onToggleDiffWordWrap: () => void
   onToggleDiffWhitespace: () => void
   onToggleEditorWordWrap: () => void
+  onToggleEditorMinimap: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
@@ -40,6 +43,8 @@ export function EditorPanelActionsMenu({
   diffWordWrap,
   diffShowWhitespace,
   editorWordWrap,
+  canToggleEditorMinimap,
+  editorMinimapEnabled,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
@@ -47,6 +52,7 @@ export function EditorPanelActionsMenu({
   onToggleDiffWordWrap,
   onToggleDiffWhitespace,
   onToggleEditorWordWrap,
+  onToggleEditorMinimap,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelActionsMenuProps): React.JSX.Element {
@@ -92,6 +98,14 @@ export function EditorPanelActionsMenu({
         <DropdownMenuCheckboxItem checked={wordWrapChecked} onCheckedChange={onToggleWordWrap}>
           {t('auto.components.editor.EditorPanelMarkdownActionsMenu.1eef809708', 'Word Wrap')}
         </DropdownMenuCheckboxItem>
+        {canToggleEditorMinimap ? (
+          <DropdownMenuCheckboxItem
+            checked={editorMinimapEnabled}
+            onCheckedChange={onToggleEditorMinimap}
+          >
+            {t('auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9', 'Minimap')}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {isDiffSurface ? (
           <DropdownMenuCheckboxItem
             checked={diffShowWhitespace}

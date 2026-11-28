@@ -25,6 +25,7 @@ import { useDiffNavigation } from '../../diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import type { ArtifactWriteRequest } from '../../../../../../shared/artifacts/artifacts'
+import { resolveFileEditorMinimapEnabled } from '../../../../../../shared/editor/editor-typography'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from '../editor-artifact-upload'
 import { useEditorHeaderReloadControls } from '../../external-changes/reload-from-disk/EditorHeaderReloadControls'
@@ -39,6 +40,7 @@ type EditorPanelHeaderProps = {
   copiedPathVisible: boolean
   isSingleDiff: boolean
   isDiffSurface: boolean
+  canToggleEditorMinimap: boolean
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
@@ -79,6 +81,7 @@ export function EditorPanelHeader({
   copiedPathVisible,
   isSingleDiff,
   isDiffSurface,
+  canToggleEditorMinimap,
   isMarkdown,
   isCsv,
   isNotebook,
@@ -129,6 +132,7 @@ export function EditorPanelHeader({
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
+  const editorMinimapEnabled = useAppStore((s) => resolveFileEditorMinimapEnabled(s.settings))
   const updateSettings = useAppStore((s) => s.updateSettings)
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
@@ -368,6 +372,8 @@ export function EditorPanelHeader({
         diffWordWrap={diffWordWrap}
         diffShowWhitespace={diffShowWhitespace}
         editorWordWrap={editorWordWrap}
+        canToggleEditorMinimap={canToggleEditorMinimap}
+        editorMinimapEnabled={editorMinimapEnabled}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
@@ -377,6 +383,9 @@ export function EditorPanelHeader({
           void updateSettings({ diffShowWhitespace: !diffShowWhitespace })
         }
         onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
+        onToggleEditorMinimap={() =>
+          void updateSettings({ editorMinimapEnabled: !editorMinimapEnabled })
+        }
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />
