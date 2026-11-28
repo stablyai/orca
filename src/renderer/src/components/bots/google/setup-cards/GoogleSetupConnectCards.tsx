@@ -126,7 +126,7 @@ export function GoogleSetupConnectCard({
             />
           </div>
         ) : picking && signedIn ? (
-          <GoogleSetupAccountsStep bot={bot} added={signedIn} />
+          <GoogleSetupAccountsStep bot={bot} added={signedIn} runId={run.id} />
         ) : stuck ? (
           <GoogleSetupBlockerPanel bot={bot} run={run} blocker={stuck} signIn={signIn} />
         ) : open ? (
@@ -155,13 +155,15 @@ export function GoogleSetupConnectCard({
 /** The sign-in's last step: which accounts the bot may use, then Add tells the bot it's done. */
 function GoogleSetupAccountsStep({
   bot,
-  added
+  added,
+  runId
 }: {
   bot: GoogleAccountChoiceBot
   added: string
+  runId: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const choice = useGoogleAccountChoice(bot, added)
+  const choice = useGoogleAccountChoice(bot, added, `setup:${runId}`)
   const add = async (): Promise<void> => {
     if (await choice.save()) {
       await answerGoogleSetup(bot, 'step', ['done', 'connect']).catch((error: unknown) =>
@@ -175,7 +177,12 @@ function GoogleSetupAccountsStep({
         {t('bots.google.picker.caption', 'Accounts {{bot}} can use', { bot: bot.name })}
       </p>
       <div className="-mx-2 mt-1">
-        <GoogleAccountPicker bot={bot} chosen={choice.chosen} onChosenChange={choice.setChosen} />
+        <GoogleAccountPicker
+          bot={bot}
+          chosen={choice.chosen}
+          onChosenChange={choice.setChosen}
+          signInMemoryKey={`picker:${runId}`}
+        />
       </div>
       <Button
         size="xs"

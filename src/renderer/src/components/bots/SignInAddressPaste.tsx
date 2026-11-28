@@ -12,16 +12,22 @@ import { useNativeChatViewGuard } from '../native-chat/pane/ownership/native-cha
 export function SignInAddressPaste({
   hint,
   onFinish,
-  describeError
+  describeError,
+  memoryKey
 }: {
   hint: string
+  /** The sign-in it finishes, for a card in a chat: it stays busy through a switch. */
+  memoryKey?: string
   onFinish: (address: string) => Promise<void>
   describeError: (error: unknown) => string
 }): React.JSX.Element {
   const t = useTranslate()
   const [address, setAddress] = useState('')
   // Kept with the chat tab when shown in a chat: a card released mid-finish returns still finishing.
-  const [busy, setBusy] = useNativeChatViewGuard(`sign-in-address:${hint}`, false)
+  const [busy, setBusy] = useNativeChatViewGuard(
+    memoryKey === undefined ? undefined : `sign-in-address:${memoryKey}`,
+    false
+  )
   const [refused, setRefused] = useState<string | null>(null)
   const finish = () => {
     setBusy(true)
