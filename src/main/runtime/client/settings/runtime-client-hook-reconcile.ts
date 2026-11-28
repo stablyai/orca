@@ -2,6 +2,7 @@ import {
   isAgentHookTarget,
   type AgentHookConsent
 } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
+import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { RuntimeClientSettingsUpdate } from './runtime-client-settings-shape'
@@ -25,18 +26,28 @@ export function runtimeClientUpdateTouchesHooks(
   )
 }
 
+// Declines from client updates not yet removed; kept across coalesced reconciles so none is lost.
+const pendingClientDeclines = new Set<AgentHookTarget>()
+
+/** Remembers the agents a client's update declines, for the next reconcile to remove. */
+export function noteClientDeclines(updates: RuntimeClientSettingsUpdate): void {
+  for (const [agent, decision] of Object.entries(updates.agentHookConsent ?? {})) {
+    if (decision === 'declined' && isAgentHookTarget(agent)) {
+      pendingClientDeclines.add(agent)
+    }
+  }
+}
+
 /**
- * Removes hooks for every agent the saved settings decline, as a desktop decline does. Read from the
- * store, not the update, so a reconcile that superseded an earlier decline still removes it.
+ * Removes hooks for agents a client declined, as a desktop decline does, if they are still declined.
+ * Only those agents: hooks are user-global, so other declines here may be another profile's hooks.
  */
-export async function removeHooksForDeclinedAgents(
+export async function removePendingClientDeclines(
   consent: AgentHookConsent | undefined,
   keepSharedEntries: boolean
 ): Promise<void> {
-  const declined = Object.entries(consent ?? {})
-    .filter(([, decision]) => decision === 'declined')
-    .map(([agent]) => agent)
-    .filter(isAgentHookTarget)
+  const declined = [...pendingClientDeclines].filter((agent) => consent?.[agent] === 'declined')
+  pendingClientDeclines.clear()
   if (declined.length === 0 || keepSharedEntries) {
     return
   }

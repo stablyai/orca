@@ -2,6 +2,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import type { RecordChanges } from '@/store/record-transitions/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 
 type NoticeAgent = 'codex' | 'claude'
@@ -70,44 +71,100 @@ export function whenAgentTerminalAppears(agent: NoticeAgent, onAppear: () => voi
   return unsubscribe
 }
 
-/** Wanted agent ids running in a terminal of an accepted workspace, from the same three sources as `hasAgentTerminal`. */
+/** What changed since the last arrival scan; `null` keys mean that whole source must be read. */
+type ArrivalDirt = {
+  worktrees: Set<string> | null
+  foregroundPanes: Set<string> | null
+  statusRows: boolean
+}
+
+function everything(): ArrivalDirt {
+  return { worktrees: null, foregroundPanes: null, statusRows: true }
+}
+
+function nothing(): ArrivalDirt {
+  return { worktrees: new Set(), foregroundPanes: new Set(), statusRows: false }
+}
+
+function addKeys(target: Set<string> | null, changes: RecordChanges | null): Set<string> | null {
+  if (target === null || changes === null) {
+    return target
+  }
+  if (changes.kind !== 'addressed') {
+    return null
+  }
+  changes.keys.forEach((key) => target.add(key))
+  return target
+}
+
+/** Records one store write's relevant changes; status rows count only when a pane gains or loses one. */
+function noteArrivalDirt(dirt: ArrivalDirt, state: AppState, previous: AppState): boolean {
+  let changed = false
+  if (state.tabsByWorktree !== previous.tabsByWorktree) {
+    dirt.worktrees = addKeys(
+      dirt.worktrees,
+      readRecordChanges(state.tabsByWorktree, previous.tabsByWorktree)
+    )
+    changed = true
+  }
+  if (state.paneForegroundAgentByPaneKey !== previous.paneForegroundAgentByPaneKey) {
+    dirt.foregroundPanes = addKeys(
+      dirt.foregroundPanes,
+      readRecordChanges(state.paneForegroundAgentByPaneKey, previous.paneForegroundAgentByPaneKey)
+    )
+    changed = true
+  }
+  // Why size only: per-hook status updates rewrite rows in place; a new agent pane adds a row.
+  if (state.agentStatusByPaneKey.size !== previous.agentStatusByPaneKey.size) {
+    dirt.statusRows = true
+    changed = true
+  }
+  return changed
+}
+
+/** Wanted agent ids running in a terminal of an accepted workspace, read only where `dirt` says. */
 function collectAgentTerminalIds(
   state: AppState,
   wanted: ReadonlySet<string>,
-  acceptWorktree: (state: AppState, worktreeId: string) => boolean
+  acceptWorktree: (state: AppState, worktreeId: string) => boolean,
+  dirt: ArrivalDirt
 ): Set<string> {
   const agents = new Set<string>()
   const acceptPane = (paneKey: string): boolean => {
     const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, paneKeyTabId(paneKey))
     return worktreeId !== null && acceptWorktree(state, worktreeId)
   }
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    for (const tab of tabs) {
+  for (const worktreeId of dirt.worktrees ?? Object.keys(state.tabsByWorktree)) {
+    for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
       if (tab.launchAgent && wanted.has(tab.launchAgent) && acceptWorktree(state, worktreeId)) {
         agents.add(tab.launchAgent)
       }
     }
   }
   // A pane key only counts when it belongs to a terminal tab; native chat tabs run no CLI.
-  for (const [paneKey, entry] of state.agentStatusByPaneKey.entries()) {
-    if (entry.agentType && wanted.has(entry.agentType) && acceptPane(paneKey)) {
-      agents.add(entry.agentType)
+  if (dirt.statusRows) {
+    for (const [paneKey, entry] of state.agentStatusByPaneKey.entries()) {
+      if (entry.agentType && wanted.has(entry.agentType) && acceptPane(paneKey)) {
+        agents.add(entry.agentType)
+      }
     }
   }
-  for (const [paneKey, entry] of Object.entries(state.paneForegroundAgentByPaneKey)) {
-    if (entry.agent && wanted.has(entry.agent) && acceptPane(paneKey)) {
-      agents.add(entry.agent)
+  for (const paneKey of dirt.foregroundPanes ?? Object.keys(state.paneForegroundAgentByPaneKey)) {
+    const agent = state.paneForegroundAgentByPaneKey[paneKey]?.agent
+    if (agent && wanted.has(agent) && acceptPane(paneKey)) {
+      agents.add(agent)
     }
   }
   return agents
 }
 
-// Why coalesced: status writes arrive per hook event and a scan walks every tab and pane.
+// Why coalesced: tab and pane writes can arrive in bursts; one read per window is enough for a card.
 const ARRIVAL_SCAN_MS = 1000
 
 /**
  * Calls `onAppear` once per wanted agent id, the first time a terminal running it exists.
- * Scans only while `wanted()` is non-empty, so a settled app does no fleet-sized work. Returns the unsubscribe.
+ * After one full read it reads only what changed (new tabs, panes' foreground agents, added status
+ * rows), and nothing once `wanted()` is satisfied. Returns the unsubscribe.
  */
 export function watchAgentTerminalArrivals(
   onAppear: (agent: string) => void,
@@ -115,23 +172,42 @@ export function watchAgentTerminalArrivals(
   acceptWorktree: (state: AppState, worktreeId: string) => boolean = () => true
 ): () => void {
   const seen = new Set<string>()
+  // Agents already read for in full; a newly wanted agent needs one full read of its own.
+  const fullyRead = new Set<string>()
+  let dirt = nothing()
   let timer: ReturnType<typeof setTimeout> | null = null
-  const hasPending = (): boolean => [...wanted()].some((agent) => !seen.has(agent))
+  const pendingAgents = (): Set<string> =>
+    new Set([...wanted()].filter((agent) => !seen.has(agent)))
   const report = (): void => {
     timer = null
-    const pending = new Set([...wanted()].filter((agent) => !seen.has(agent)))
+    const pending = pendingAgents()
+    const needsFullRead = [...pending].some((agent) => !fullyRead.has(agent))
+    const scope = needsFullRead ? everything() : dirt
+    dirt = nothing()
+    pending.forEach((agent) => fullyRead.add(agent))
     if (pending.size === 0) {
       return
     }
-    for (const agent of collectAgentTerminalIds(useAppStore.getState(), pending, acceptWorktree)) {
+    for (const agent of collectAgentTerminalIds(
+      useAppStore.getState(),
+      pending,
+      acceptWorktree,
+      scope
+    )) {
       seen.add(agent)
       onAppear(agent)
     }
   }
   report()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    // Why check wanted first: once nothing is left to find, a status write costs a catalog-sized check, not a timer.
-    if (timer === null && didSourcesChange(state, previous) && hasPending()) {
+    if (
+      !noteArrivalDirt(dirt, state, previous) &&
+      state.localDetectedAgentIdsByContext === previous.localDetectedAgentIdsByContext
+    ) {
+      return
+    }
+    // Why check wanted before arming: once nothing is left to find, a write costs a catalog-sized check.
+    if (timer === null && pendingAgents().size > 0) {
       timer = setTimeout(report, ARRIVAL_SCAN_MS)
     }
   })

@@ -24,10 +24,8 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-com
 import { recordManagedHookInstallFailure } from '../../../agent-hooks/installation/install-telemetry'
 import { isWslHostOrcadProcess } from '../../../wsl/filesystem/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import {
-  removeHooksForDeclinedAgents,
-  runtimeClientUpdateTouchesHooks
-} from './runtime-client-hook-reconcile'
+// oxfmt-ignore
+import { noteClientDeclines, removePendingClientDeclines, runtimeClientUpdateTouchesHooks } from './runtime-client-hook-reconcile'
 import { agentHookConsentPatch } from '../../../../shared/agent-hook-listener/configuration/agent-hook-consent'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
@@ -196,6 +194,7 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (runtimeClientUpdateTouchesHooks(updates, beforeSettings, settings)) {
+      noteClientDeclines(updates)
       await this.reconcileManagedAgentHooks()
     }
     return this.get()
@@ -315,7 +314,7 @@ export class RuntimeClientSettingsController {
           return current !== undefined && isAgentStatusHooksEnabledForAgent(current, agent)
         }
       })
-      await removeHooksForDeclinedAgents(settings.agentHookConsent, keepSharedEntries)
+      await removePendingClientDeclines(settings.agentHookConsent, keepSharedEntries)
     })
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation

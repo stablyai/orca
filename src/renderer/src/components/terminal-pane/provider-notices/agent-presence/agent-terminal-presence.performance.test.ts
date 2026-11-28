@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // Perf contract for #51262: the arrival watch must not walk every pane on each agent status write.
 type FakeState = {
   tabsByWorktree: Record<string, { id: string; launchAgent?: string }[]>
-  agentStatusByPaneKey: { entries: () => IterableIterator<[string, { agentType: string }]> }
+  agentStatusByPaneKey: {
+    size: number
+    entries: () => IterableIterator<[string, { agentType: string }]>
+  }
   paneForegroundAgentByPaneKey: Record<string, { agent: string }>
 }
 
@@ -42,6 +45,7 @@ function statusMap(panes: number): FakeState['agentStatusByPaneKey'] {
     Array.from({ length: panes }, (_, i) => [`tab-${i}:1`, { agentType: 'claude' }] as const)
   )
   return {
+    size: rows.size,
     entries: () => {
       store.scans++
       return rows.entries()
@@ -65,7 +69,8 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-function burst(panes: number): void {
+/** Per-hook status updates: rows rewritten in place, so the pane count never changes. */
+function statusBurst(panes: number): void {
   for (let write = 0; write < 1000; write++) {
     store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(panes) })
   }
@@ -73,30 +78,45 @@ function burst(panes: number): void {
 }
 
 describe('watchAgentTerminalArrivals', () => {
-  it.each([50, 500])('scans once per window, not per status write, with %i panes', (panes) => {
-    store.reset(stateWith(panes))
+  it.each([50, 500])(
+    'reads status rows once at start, never for in-place status updates, with %i panes',
+    (panes) => {
+      store.reset(stateWith(panes))
+      // Codex is wanted but never runs: the case that used to rescan every window.
+      const stop = watchAgentTerminalArrivals(
+        () => {},
+        () => new Set(['codex'])
+      )
+      statusBurst(panes)
+      statusBurst(panes)
+      statusBurst(panes)
+      stop()
+      expect(store.scans).toBe(1)
+    }
+  )
+
+  it('reads status rows again only when a pane gains a row', () => {
+    store.reset(stateWith(500))
     const stop = watchAgentTerminalArrivals(
       () => {},
       () => new Set(['codex'])
     )
-    burst(panes)
+    store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(501) })
+    vi.advanceTimersByTime(1000)
+    statusBurst(501)
     stop()
-    // One scan at start plus one for the whole burst.
     expect(store.scans).toBe(2)
   })
 
-  it('stops scanning once every wanted agent has been seen', () => {
+  it('arms no timer once every wanted agent has been seen', () => {
     store.reset(stateWith(500))
     const seen: string[] = []
     const stop = watchAgentTerminalArrivals(
       (agent) => seen.push(agent),
       () => new Set(['claude'])
     )
-    store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(500) })
-    // Nothing left to find, so a status write arms no timer at all.
+    store.setState({ ...store.getState(), agentStatusByPaneKey: statusMap(501) })
     expect(vi.getTimerCount()).toBe(0)
-    burst(500)
-    burst(500)
     stop()
     expect(seen).toEqual(['claude'])
     expect(store.scans).toBe(1)

@@ -1,4 +1,3 @@
-import { claudeHookService } from '../../../claude/hook-service'
 import { claudeAccountUsagePreparation } from './claude-account-usage-preparation'
 import { claudeProfileSelectionHomes } from './claude-profile-selection-homes'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
@@ -258,6 +257,8 @@ export class ClaudeProfileRouter {
     })
     // A Remove during setup already ran, so take back what the worker just wrote.
     if (hooks && !hooksOn()) {
+      // Lazy: the hook installer stays off the startup module graph (#51052).
+      const { claudeHookService } = await import('../../../claude/hook-service')
       claudeHookService.removeProfileHooks(profile.home)
     }
     if (report.outcome === 'prepared') {

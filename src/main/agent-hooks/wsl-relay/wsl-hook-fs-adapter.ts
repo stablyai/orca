@@ -74,6 +74,7 @@ export async function installWslGuestHooks(options: {
   )
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
+    shouldContinue: (agent) => isAgentHookConsentGranted(settings(), agent),
     ...(claudeVersion ? { claudeVersion } : {})
   })
   const failed = results.filter((r) => r.state === 'error').length

@@ -1,14 +1,5 @@
 import { useEffect, useState } from 'react'
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  CircleAlert,
-  CircleCheck,
-  CircleHelp,
-  Loader2,
-  X
-} from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, CircleHelp, Loader2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -24,6 +15,11 @@ import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/con
 import { formatAgentProductName } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { AgentHookConsentSlide, agentHookConsentSlides } from './AgentHookConsentSlides'
 import {
+  AgentHookConsentResult,
+  agentNames,
+  type AgentHookConsentResultView
+} from './AgentHookConsentResult'
+import {
   closeAgentHookConsentOffer,
   setAnsweringOnCard,
   startAgentHookConsentWatch,
@@ -36,11 +32,7 @@ const SLIDE_ADVANCE_MS = 5000
 const SPINNER_DELAY_MS = 200
 const SUCCESS_CLOSE_MS = 4000
 
-type View =
-  | { kind: 'ask' }
-  | { kind: 'installing' }
-  | { kind: 'done'; agents: AgentHookTarget[]; waiting: boolean }
-  | { kind: 'failed'; detail: string }
+type View = { kind: 'ask' } | { kind: 'installing' } | AgentHookConsentResultView
 
 /** Asks, the first time an agent runs in Orca, to install the hooks that make Orca's view of it complete. */
 export function AgentHookConsentCard(): React.JSX.Element | null {
@@ -53,10 +45,6 @@ export function AgentHookConsentCard(): React.JSX.Element | null {
     return startAgentHookConsentWatch()
   }, [])
   return offer ? <AgentHookConsentOfferCard key={offer.agent} offer={offer} /> : null
-}
-
-function agentNames(agents: readonly AgentHookTarget[]): string {
-  return agents.map((agent) => formatAgentProductName(agent)).join(', ')
 }
 
 function WhatHooksDo({
@@ -179,13 +167,22 @@ function AgentHookConsentOfferCard({
       const waiting = statuses.some(
         (status) => status.agent === offer.agent && status.state === 'skipped'
       )
+      if (failed) {
+        // A failure leaves the card open; answers from Settings must reach it again.
+        setAnsweringOnCard(false)
+      }
       setView(
         failed
-          ? { kind: 'failed', detail: failed.detail ?? failed.configPath }
+          ? { kind: 'failed', agent: failed.agent, detail: failed.detail ?? failed.configPath }
           : { kind: 'done', agents, waiting }
       )
     } catch (error) {
-      setView({ kind: 'failed', detail: error instanceof Error ? error.message : String(error) })
+      setAnsweringOnCard(false)
+      setView({
+        kind: 'failed',
+        agent: offer.agent,
+        detail: error instanceof Error ? error.message : String(error)
+      })
     }
   }
 
@@ -232,61 +229,15 @@ function AgentHookConsentOfferCard({
   )
 
   if (view.kind === 'done' || view.kind === 'failed') {
-    const done = view.kind === 'done'
     return (
-      <Card size="notice" role="complementary" className="overflow-hidden">
-        <div className="p-2">
-          <div className="flex items-center gap-2 px-2 py-1">
-            <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
-              {done ? (
-                <CircleCheck className="size-4 text-status-success" />
-              ) : (
-                <CircleAlert className="size-4 text-destructive" />
-              )}
-            </span>
-            <p role="status" className="min-w-0 flex-1 truncate text-[13px] font-semibold">
-              {done && view.waiting
-                ? t('agentHookConsent.approved', 'Hooks approved for {{agent}}', { agent: name })
-                : done
-                  ? view.agents.length > 1
-                    ? t('agentHookConsent.installedMany', 'Hooks installed for {{count}} agents', {
-                        count: view.agents.length
-                      })
-                    : t('agentHookConsent.installed', 'Hooks installed for {{agent}}', {
-                        agent: name
-                      })
-                  : t('agentHookConsent.failed', 'Couldn’t install hooks for {{agent}}', {
-                      agent: name
-                    })}
-            </p>
-            {closeButton}
-          </div>
-          <p className="pr-2 pl-9 text-xs text-muted-foreground">
-            {done && view.waiting
-              ? t(
-                  'agentHookConsent.approvedNext',
-                  'Orca adds them once it finds {{agent}} on this computer.',
-                  { agent: name }
-                )
-              : done
-                ? `${view.agents.length > 1 ? `${agentNames(view.agents)}. ` : ''}${t(
-                    'agentHookConsent.installedNext',
-                    'They apply the next time each one starts.'
-                  )}`
-                : view.detail}
-          </p>
-          {done ? null : (
-            <div className="flex items-center justify-end gap-1 px-2 pt-2">
-              <Button type="button" variant="ghost" size="sm" onClick={later}>
-                {t('agentHookConsent.later', 'Later')}
-              </Button>
-              <Button type="button" size="sm" onClick={() => void install()}>
-                {t('agentHookConsent.retry', 'Try again')}
-              </Button>
-            </div>
-          )}
-        </div>
-      </Card>
+      <AgentHookConsentResult
+        result={view}
+        name={name}
+        closeButton={closeButton}
+        onLater={later}
+        onRetry={() => void install()}
+        t={t}
+      />
     )
   }
 

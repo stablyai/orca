@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import type { AppState } from '@/store/types'
 import { resolveWorktreeResourceTarget } from '@/runtime/hosts/platform/execution-host-facts'
 import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
@@ -108,8 +109,10 @@ function isLocalWorktree(state: AppState, worktreeId: string): boolean {
  * those are answered or hooks are off, so the arrival watch stops scanning (a CLI that isn't here can't arrive).
  */
 function wantedAgents(): ReadonlySet<string> {
-  const { settings, detectedAgentIds } = useAppStore.getState()
-  if (!isAgentStatusHooksEnabled(settings) || !detectedAgentIds) {
+  const state = useAppStore.getState()
+  // This computer's CLIs, not the active workspace's (which can be a WSL or remote inventory).
+  const detectedAgentIds = readNativeDetectedAgents(state)
+  if (!isAgentStatusHooksEnabled(state.settings) || !detectedAgentIds) {
     return new Set()
   }
   return new Set(
