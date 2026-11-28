@@ -6,6 +6,7 @@ import {
 } from '../../../provider-relay/app-provider-relays'
 import type { CodexAppServerConnection } from '../codex-app-server-connection-types'
 import { PrioritySemaphore } from '../../../../shared/concurrency/priority-semaphore'
+import { CodexAppServerTimeoutError } from '../codex-app-server-request-error'
 import type { CodexSharedLeaseRelay } from './codex-shared-lease-host'
 import type { CodexSharedServerLease } from './codex-shared-server-lease'
 import type { CodexSharedServerRouter } from './codex-shared-server-router'
@@ -55,13 +56,33 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
 
   constructor(private readonly server: CodexKeptServer) {}
 
-  /** The server's connection with its reads limited to four at once, across every caller. */
-  limited(connection: CodexAppServerConnection): Pick<CodexAppServerConnection, 'request'> {
+  /**
+   * The server's connection with its reads limited to four at once, across every caller. A read's
+   * timeout runs from when it is asked, its wait for a permit included; one whose caller left
+   * (`live` false) by then is never sent. Lower `priority` goes first (a close's own reads).
+   */
+  limited(
+    connection: CodexAppServerConnection,
+    { priority = 0, live = () => true }: { priority?: number; live?: () => boolean } = {}
+  ): Pick<CodexAppServerConnection, 'request'> {
     return {
       request: async (method, params, options) => {
-        const release = await this.readPermits.acquire(0)
+        const timeoutMs = typeof options?.timeoutMs === 'number' ? options.timeoutMs : null
+        const askedAt = Date.now()
+        const release = await this.readPermits
+          .acquire(priority, timeoutMs === null ? undefined : AbortSignal.timeout(timeoutMs))
+          .catch(() => {
+            throw new CodexAppServerTimeoutError(
+              `codex app-server ${method} waited past its timeout`
+            )
+          })
         try {
-          return await connection.request(method, params, options)
+          if (!live()) {
+            throw new Error(`codex app-server connection is closed (${method})`)
+          }
+          const left =
+            timeoutMs === null ? {} : { timeoutMs: Math.max(1, timeoutMs - (Date.now() - askedAt)) }
+          return await connection.request(method, params, { ...options, ...left })
         } finally {
           release()
         }
@@ -69,9 +90,10 @@ export class CodexSharedServerKeep implements CodexSharedLeaseRelay, CodexShared
     }
   }
 
-  metadataReads = (): Pick<CodexAppServerConnection, 'request'> | undefined => {
+  /** A chat's thread-state reads on this server; `live` is whether the chat still waits on them. */
+  metadataReads = (live: () => boolean): Pick<CodexAppServerConnection, 'request'> | undefined => {
     const connection = this.server.physicalConnection
-    return connection ? this.limited(connection) : undefined
+    return connection ? this.limited(connection, { live }) : undefined
   }
 
   /** Nothing is held back from the ack: Codex has every chat's content. */

@@ -99,7 +99,8 @@ export async function sendCodexLeaseRequest(
   const turnThreadId =
     method === 'turn/start' && typeof params?.threadId === 'string' ? params.threadId : null
   let callerGone = false
-  const via = (METADATA_READS.has(method) && host.relay?.metadataReads()) || host.connection
+  const via =
+    (METADATA_READS.has(method) && host.relay?.metadataReads(() => owner.open)) || host.connection
   const sent = via.request(
     method,
     opensThread ? withLeaseTag(params, owner.id, owner.chatEnv) : params,

@@ -36,12 +36,13 @@ export async function seedRunningCodexTurns(
   return settled.every((read) => read.status === 'fulfilled')
 }
 
-/** Marks the chat's threads the server has loaded as live; on a failed listing, every one of them
- *  (true either way: the turn reads that follow decide). */
+/** Marks the chat's threads the server has loaded as live. A failed listing marks none and leaves
+ *  the chat's workload unproven (Stop reports it), rather than retrying reads that can't succeed. */
 async function markLoadedThreadsLive(reads: Reads, lease: CodexSharedServerLease): Promise<true> {
   const loaded = await listCodexLoadedThreads(reads).catch(() => null)
+  lease.helpersUnread = loaded === null
   for (const threadId of lease.threads) {
-    if (!loaded || loaded.has(threadId)) {
+    if (loaded?.has(threadId)) {
       lease.liveThreads.add(threadId)
     }
   }

@@ -55,7 +55,9 @@ export async function readCodexHistoryJournalView(
     const nativePromptKeys = new Set<string>()
     const lifecycles = new Set<string>()
     const assistants = new Set<string>()
-    const openTools = new Set<string>()
+    /** Running tool rows' turn rows (a command's own key names its item, its scope its turn). */
+    const openScopes = new Set<string>()
+    const turnOfRow = new Map<string, string>()
     let latest: string | null = null
     let latestPosition: AgentJournalPosition | null = null
     const positions = new Map<string, AgentJournalPosition>()
@@ -88,6 +90,10 @@ export async function readCodexHistoryJournalView(
           if (!isRootAgentJournalItem(attribution)) {
             return
           }
+          const scope = attribution.turnScope
+          if (body.kind === 'tool-call' && body.state === 'running' && scope?.kind === 'turn') {
+            openScopes.add(scope.turnItemId)
+          }
           if (
             identity?.provider === 'legacy' &&
             identity.agent === 'codex' &&
@@ -104,8 +110,8 @@ export async function readCodexHistoryJournalView(
             if (body.kind === 'message' && body.role === 'assistant') {
               assistants.add(turnId)
             }
-            if (body.kind === 'tool-call' && body.state === 'running') {
-              openTools.add(turnId)
+            if (body.kind === 'turn') {
+              turnOfRow.set(itemId, turnId)
             }
             const turn = readAgentJournalTurn(body)
             if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
@@ -162,7 +168,7 @@ export async function readCodexHistoryJournalView(
       known,
       terminal: lifecycles,
       assistants,
-      openTools,
+      openTools: new Set([...openScopes].flatMap((row) => turnOfRow.get(row) ?? [])),
       latest,
       latestPosition,
       hasRows,

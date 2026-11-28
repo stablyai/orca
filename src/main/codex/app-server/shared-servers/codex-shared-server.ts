@@ -204,7 +204,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
         lease,
         this.turns,
         RELEASE_REQUEST_TIMEOUT_MS,
-        this.keep.limited(this.physicalConnection)
+        this.keep.limited(this.physicalConnection, { priority: -1 })
       ))
     if (!writerStopped && !this.hasExited) {
       await this.stopIfAlone(lease)
@@ -241,7 +241,7 @@ export class CodexSharedServer implements CodexSharedLeaseHost {
       owned.filter((threadId) => !this.router.isClaimed(threadId)),
       RELEASE_REQUEST_TIMEOUT_MS
     )
-    const workloadGone = abandonedGone && commandsGone && unsubscribed
+    const workloadGone = abandonedGone && commandsGone && unsubscribed && !lease.helpersUnread
     if (!workloadGone && !this.hasExited) {
       await this.stopIfAlone(lease)
     }
