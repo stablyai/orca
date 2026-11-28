@@ -62,8 +62,14 @@ export function getWorkspaceAttachments(
   if (!meta) {
     return []
   }
+  const hasLinkedItems = Array.isArray(meta.linkedItems) && meta.linkedItems.length > 0
+  const legacyItems = legacyWorkspaceAttachments(meta)
+  if (!hasLinkedItems) {
+    return legacyItems
+  }
   const items = normalizeWorkspaceAttachments(meta.linkedItems)
-  for (const legacy of legacyWorkspaceAttachments(meta)) {
+  for (let i = 0; i < legacyItems.length; i += 1) {
+    const legacy = legacyItems[i]
     if (!items.some((item) => matchesLegacyWorkspaceAttachment(item, legacy))) {
       items.push(legacy)
     }

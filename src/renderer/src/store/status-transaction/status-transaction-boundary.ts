@@ -16,9 +16,9 @@ export function withStatusTransaction(
   return (set, get, api) => {
     const subscribe = api.subscribe
     api.subscribe = (listener) =>
-      subscribe((...args) => {
+      subscribe((state, prevState) => {
         try {
-          listener(...args)
+          listener(state, prevState)
         } catch (error) {
           console.error('Store observer failed', error)
         }
@@ -48,8 +48,17 @@ export function withStatusTransaction(
           if (requested === current && transaction.hostStatuses === undefined) {
             return
           }
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Zustand's replace overload requires a complete state; merged writes inherit all other fields.
-          next = { ...(args[1] === true ? {} : get()), ...requested } as AppState
+          if (args[1] === true) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Zustand's replace overload requires a complete state.
+            const fullRequested = requested as AppState
+            const needsMutateCopy =
+              transaction.hostStatuses !== undefined ||
+              !fullRequested.agentStatusByPaneKey.sharesOwner(current.agentStatusByPaneKey)
+            next = needsMutateCopy ? { ...fullRequested } : fullRequested
+          } else {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: merged writes inherit all other fields from current state.
+            next = { ...get(), ...requested } as AppState
+          }
           // Host statuses stage first: agent projection preparation reads the composed root write.
           stageHostStatusDraft(transaction, current, next)
           agentDraft = agentStatuses.stage(current, next)

@@ -27,10 +27,6 @@ on:
         description: Also merge every lane's slot into the desktop orcad template artifact
         type: boolean
         default: false
-      fast_runners:
-        description: Use Blacksmith where the platform and architecture are available
-        type: boolean
-        default: true
   # Release and dev builds qualify every platform for the template they ship.
   workflow_call:
     inputs:
@@ -42,10 +38,6 @@ on:
         description: Upload each lane's release slot and merge them into the orcad-template artifact
         type: boolean
         default: false
-      fast_runners:
-        description: Use Blacksmith where the platform and architecture are available
-        type: boolean
-        default: true
   # Requalify fresh builds daily; publish missing immutable Windows cache keys.
   schedule:
     - cron: '30 11 * * *'
@@ -63,7 +55,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event_name == 'pull_request' && github.event.pull_request.draft != true)
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       should_run: ${{ steps.scope.outputs.should_run || steps.graph.outputs.should_run }}
@@ -153,17 +145,14 @@ jobs:
       fail-fast: false
       matrix:
         os: ${{ fromJSON(needs.changes.outputs.runners || '["ubuntu-22.04","ubuntu-24.04-arm","macos-15","macos-15-intel","windows-2022","windows-11-arm"]') }}
-    # Keep platform keys stable for slot names and Windows cross-compilation. PR and scheduled runs use the
-    # free hosted label; only explicit fast_runners callers rent Blacksmith where it has the platform.
-    runs-on: >-
-      ${{ inputs.fast_runners && fromJSON('{"ubuntu-22.04":"blacksmith-8vcpu-ubuntu-2204","ubuntu-24.04-arm":"blacksmith-8vcpu-ubuntu-2404-arm","macos-15":"blacksmith-6vcpu-macos-15"}')[matrix.os] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
-      JOBS: ${{ (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && 'max' || '' }}
+      JOBS: ${{ (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'max' || '' }}
     steps:
       - name: Parallelize Windows checkout
-        if: (inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'schedule') && runner.os == 'Windows'
+        if: (github.event_name == 'pull_request' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && runner.os == 'Windows'
         shell: bash
         run: |
           git config --global checkout.workers 0
@@ -233,10 +222,10 @@ jobs:
         id: orcad-prebuild
         with:
           resolve-windows-cache: >-
-            ${{ inputs.fast_runners || (!inputs.build_template && inputs.ref == '' &&
+            ${{ !inputs.build_template && inputs.ref == '' &&
             (github.event_name == 'pull_request' ||
-            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)))) }}
-          restore-windows-cache: ${{ inputs.fast_runners || github.event_name == 'pull_request' || github.event_name == 'push' }}
+            (github.ref == 'refs/heads/main' && contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) }}
+          restore-windows-cache: ${{ github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
       # The template lane cross-compiles arm64 too, as it does for the process-table addon.
       - uses: ./.github/actions/prepare-windows-cli-launcher
         if: runner.os == 'Windows'
@@ -351,9 +340,8 @@ jobs:
       - name: Save the freshly qualified Windows server prebuild
         if: >-
           success() && runner.os == 'Windows' && (runner.arch == 'X64' || runner.arch == 'ARM64') &&
-          ((inputs.fast_runners && github.event_name == 'workflow_dispatch') ||
           (!inputs.build_template && inputs.ref == '' && github.ref == 'refs/heads/main' &&
-          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name))) &&
+          contains(fromJSON('["push","schedule","workflow_dispatch"]'), github.event_name)) &&
           steps.orcad-prebuild.outputs.cache-identity-outcome == 'success' &&
           steps.orcad-prebuild.outputs.cache-key != ''
         continue-on-error: true
@@ -380,7 +368,7 @@ jobs:
       ${{ !cancelled() && needs.changes.outputs.should_run != 'false' &&
       needs.changes.outputs.qualification != 'false' &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
@@ -423,7 +411,7 @@ jobs:
             image: quay.io/pypa/manylinux_2_28_x86_64@sha256:407f771c51a2c3e83ebe5a7970b4289ead3a6db21d9b9c089168775cad11d328
           - os: ubuntu-24.04-arm
             image: quay.io/pypa/manylinux_2_28_aarch64@sha256:c22ffd129ac99a8a42d1f2c2f4e88a9089288dd9ee987a7092da1c7dc48f27a9
-    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ matrix.os }}
     container: ${{ matrix.image }}
     timeout-minutes: 25
     env:
@@ -488,7 +476,7 @@ jobs:
       (github.event_name != 'pull_request' || github.event.pull_request.draft != true) &&
       (github.event_name != 'pull_request' || inputs.build_template || inputs.ref != '' ||
       needs.changes.outputs.native_compatibility != 'false') }}
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2204' || 'ubuntu-22.04' }}
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -550,7 +538,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04-arm]
-    runs-on: ${{ inputs.fast_runners && (matrix.os == 'ubuntu-22.04' && 'blacksmith-8vcpu-ubuntu-2204' || 'blacksmith-8vcpu-ubuntu-2404-arm') || matrix.os }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
@@ -616,7 +604,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

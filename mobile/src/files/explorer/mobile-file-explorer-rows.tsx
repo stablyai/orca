@@ -6,11 +6,14 @@ import {
   type Dispatch,
   type SetStateAction
 } from 'react'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { useMobileFileContentSearch } from './use-mobile-file-content-search'
 import {
   normalizeFileSearchQuery,
   type useMobileNativeChatFileSearch
 } from '../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
 import {
+  contentSearchRows,
   flattenDirectoryCache,
   getDirectoryCacheState,
   listedPathMatches,
@@ -35,6 +38,7 @@ export function useMobileFileExplorerRows({
   setExpanded,
   loadDirectory,
   search,
+  contentSearch,
   connected
 }: {
   scope: string
@@ -43,6 +47,8 @@ export function useMobileFileExplorerRows({
   setExpanded: Dispatch<SetStateAction<Set<string>>>
   loadDirectory: (relativePath: string) => Promise<unknown>
   search: WorkspaceFileSearch
+  /** Where hits inside files are searched for the same text; null where the host can't search contents. */
+  contentSearch: { client: RpcClient | null; worktreeId: string } | null
   /** A search that failed while offline asks again once connected. */
   connected: boolean
 }) {
@@ -82,11 +88,27 @@ export function useMobileFileExplorerRows({
     ]
   }, [answer, directoryCache, filter, filtering])
 
-  const rows = useMemo<FileExplorerRow[]>(
-    () =>
-      filtering ? searchResultRows(searchPaths) : flattenDirectoryCache(directoryCache, expanded),
-    [directoryCache, expanded, filtering, searchPaths]
-  )
+  const content = useMobileFileContentSearch({
+    client: contentSearch?.client ?? null,
+    worktreeId: contentSearch?.worktreeId ?? '',
+    query: filtering ? filter : '',
+    enabled: contentSearch !== null,
+    connected
+  })
+  const contentFiles = content.result?.files
+  const rows = useMemo<FileExplorerRow[]>(() => {
+    if (!filtering) {
+      return flattenDirectoryCache(directoryCache, expanded)
+    }
+    const hits = contentFiles ? contentSearchRows(contentFiles) : []
+    return [
+      ...searchResultRows(searchPaths),
+      ...(hits.length > 0
+        ? [{ id: 'section:content', relativePath: '', depth: 0 as const, kind: 'section' as const }]
+        : []),
+      ...hits
+    ]
+  }, [contentFiles, directoryCache, expanded, filtering, searchPaths])
 
   const toggleDirectory = useCallback(
     (relativePath: string) => {
@@ -132,6 +154,7 @@ export function useMobileFileExplorerRows({
     filtering,
     rows,
     searchPending,
+    contentPending: content.pending,
     onToggleDirectory: filtering ? revealDirectory : toggleDirectory
   }
 }

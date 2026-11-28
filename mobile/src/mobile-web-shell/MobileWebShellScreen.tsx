@@ -26,6 +26,7 @@ import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
+import { keepPairConfirmServerName } from '../pairing/pair-confirm-server-name'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
@@ -307,7 +308,7 @@ export function MobileWebShellScreen({
         documentFailed: () => reportShellFailure('document-load-failed')
       })
     },
-    onNavigate: openPageRoute,
+    onNavigate: (href, replace) => openPageRoute(keepPairConfirmServerName(href), replace),
     serveNativeVerb,
     onExternalLink: openUrlForPage,
     // Reuse the app’s platform haptics mapping; device failures are already swallowed there.

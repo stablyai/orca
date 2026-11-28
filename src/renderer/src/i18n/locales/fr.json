@@ -5820,9 +5820,8 @@
             "84c3b15dca": "Limites d'utilisation des agents",
             "d663430cf9": "Configurer le suivi d'utilisation",
             "remoteLabel": "Aucune utilisation sur {{host}}",
-            "remoteTitle": "Utilisation sur {{host}}",
-            "remoteBody": "Cet espace de travail s’exécute sur {{host}}, la barre affiche donc l’utilisation de cet hôte. Connectez-vous à un agent sur cet hôte, ou sélectionnez un espace de travail local pour voir l’utilisation de cet ordinateur.",
-            "remoteOpenAccounts": "Ouvrir les comptes de {{host}}"
+            "remoteNoUsageYet": "Aucune utilisation pour l’instant. Connectez-vous là-bas.",
+            "remoteAccounts": "Comptes"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Mise à jour des skills",
@@ -15622,7 +15621,10 @@
             "operationResolve": "Résoudre",
             "operationResolveLabel": "Résoudre les conflits avec l'IA",
             "operationMoreActions": "Plus d'actions",
-            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner"
+            "operationAbortConfirm": "Sélectionnez à nouveau pour abandonner",
+            "operationRunChangedTitle": "Rien n'a été abandonné",
+            "operationRunChangedDescription": "L'opération a changé après le choix d'Abandonner. Vérifiez son état actuel et réessayez.",
+            "operationRunUnknown": "Impossible de savoir quelle exécution est en pause : Abandonner est désactivé ici. Actualisez le contrôle de code source ou abandonnez-la dans un terminal."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -23927,6 +23929,9 @@
           "never": "Jamais"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "Paramètres de compatibilité bas niveau pour le dépannage. Ces paramètres sont enregistrés sur cet ordinateur, pas sur {{host}}."
+      },
       "repositoryHooks": {
         "availableEnvVars": "Variables d'environnement disponibles"
       },
@@ -29196,6 +29201,7 @@
       },
       "homeChat": "Home Chat",
       "row": {
+        "cancel": "Annuler",
         "done": "Marquer comme terminé",
         "more": "Plus",
         "select": "Sélectionner {{title}}"
@@ -29261,8 +29267,6 @@
         "automationEnded": "Terminée"
       },
       "menu": {
-        "cancel": "Annuler",
-        "done": "Marquer comme terminé",
         "waiting": "En attente…"
       },
       "pill": {

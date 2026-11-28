@@ -110,6 +110,8 @@ const DETAIL_COPY: Record<WslHostStatusDetailCode, (values: Values) => string | 
           defaultUser
         })
   },
+  serverIdentityReset: () =>
+    translate('sidebar.wslHosts.statusDetails.serverIdentityReset', DETAIL.serverIdentityReset),
   removalUnrecorded: ({ text }) => {
     const detail = text('detail')
     return detail === null

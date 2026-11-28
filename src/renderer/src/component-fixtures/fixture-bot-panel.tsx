@@ -25,9 +25,9 @@ import type {
   AgentStatusEntry,
   AgentStatusState
 } from '../../../shared/agent-status/contracts/agent-status-types'
-import { structuredAgentSessionStatusPaneKey } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { stubBots } from './fixture-bots'
+import { chatPaneKey } from '../../../shared/agent-session/view/structured-agent-session-projection'
 
 export const fixtureCos: Bot = {
   id: 'bot-cos',
@@ -164,7 +164,7 @@ export const fixtureSuggestion = (
   createdAt: 1
 })
 
-const CHAT_PANE_KEY = structuredAgentSessionStatusPaneKey('chat-cos')
+const CHAT_PANE_KEY = chatPaneKey('chat-cos')
 
 function chatStatus(state: AgentStatusState): AgentStatusEntry {
   return {

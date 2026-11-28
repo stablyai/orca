@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useNativeChatViewGuard } from '../pane/ownership/native-chat-view-memory'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
@@ -86,7 +87,8 @@ export function useNativeChatUsageLimitAutoContinue(
       )
   )
   useNow(60_000, capability === 'supported' && cutState !== undefined && schedulable)
-  const [cancelling, setCancelling] = useState(false)
+  // Kept with the chat tab: a view released mid-cancel returns still cancelling.
+  const [cancelling, setCancelling] = useNativeChatViewGuard('usage-auto-continue-cancel', false)
   const cancel = useCallback(() => {
     // Read the feed now: the schedule may have changed since this row last rendered.
     if (
@@ -112,7 +114,7 @@ export function useNativeChatUsageLimitAutoContinue(
         )
       })
       .finally(() => setCancelling(false))
-  }, [cancelling, readCutState, target, sessionId, turnItemId, resetsAt])
+  }, [cancelling, setCancelling, readCutState, target, sessionId, turnItemId, resetsAt])
   const auto = useMemo<NativeChatUsageLimitAutoContinueState | null>(() => {
     const kind =
       capability === 'supported'

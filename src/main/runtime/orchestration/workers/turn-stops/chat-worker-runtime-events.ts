@@ -5,7 +5,10 @@ import type {
   StructuredAgentSessionRequestFailure
 } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import type { AdmittedMessage } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
+import {
+  reportChatWorkerClosedByUser,
+  reportChatWorkerProviderDeath
+} from './chat-worker-provider-death'
 import { RuntimeStructuredAgentHost } from '../../../agent-session/installation/runtime-structured-agent-host'
 
 export abstract class RuntimeChatWorkerEvents extends RuntimeStructuredAgentHost {
@@ -33,5 +36,10 @@ export abstract class RuntimeChatWorkerEvents extends RuntimeStructuredAgentHost
   /** A chat worker whose provider died between turns tells the Run that dispatched it. */
   onStructuredIdleProviderDeathForMail(death: StructuredAgentSessionIdleDeath): void {
     reportChatWorkerProviderDeath(death, this.workerTurnStopReportDeps)
+  }
+
+  /** A chat worker a person closed mid-work fails its Dispatch and tells the Run, as a closed terminal does. */
+  onStructuredUserClosedProviderForMail(closed: { sessionId: string; fence: number }): void {
+    reportChatWorkerClosedByUser(closed, this.getRuntimeId(), this.workerTurnStopReportDeps)
   }
 }

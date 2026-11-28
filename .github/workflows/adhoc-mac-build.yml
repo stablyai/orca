@@ -35,7 +35,7 @@ jobs:
   # Resolve once before source execution so concurrent pushes cannot mix slot/template/desktop commits.
   resolve-ref:
     if: github.repository == 'stablyai/orca'
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -94,7 +94,7 @@ jobs:
   # Resolve shared build identity while detecting whether this ref ships a template.
   orcad-template-support:
     needs: resolve-ref
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -180,7 +180,6 @@ jobs:
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
-      fast_runners: true
 
   release-javascript:
     needs: [resolve-ref, orcad-template-support]
@@ -188,7 +187,6 @@ jobs:
     with:
       ref: ${{ needs.resolve-ref.outputs.sha }}
       dev_build: true
-      runner: blacksmith-8vcpu-ubuntu-2404
 
   prepare-adhoc-mac-release:
     needs: [resolve-ref, orcad-template-support, release-javascript]
@@ -197,7 +195,7 @@ jobs:
       needs.orcad-template-support.result == 'success' &&
       needs.release-javascript.result == 'success'
     environment: adhoc-mac-build
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -487,7 +485,7 @@ jobs:
     needs: [resolve-ref, orcad-template-support, prepare-adhoc-mac-release, build-adhoc-mac-arch]
     if: always() && needs.prepare-adhoc-mac-release.result == 'success'
     environment: adhoc-mac-build
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
       contents: read
@@ -654,7 +652,6 @@ jobs:
       version: ${{ needs.orcad-template-support.outputs.version }}
       orcad_template: ${{ needs.orcad-template-support.outputs.ships == 'true' }}
       stage_only: true
-      fast_release: true
       javascript_source_sha: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
 
   # Prefetch the installer during notarization; the publisher still waits for Mac success.

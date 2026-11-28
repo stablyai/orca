@@ -6133,9 +6133,8 @@
             "84c3b15dca": "Ajan kullanım sınırları",
             "d663430cf9": "Kullanım izlemeyi yapılandır",
             "remoteLabel": "{{host}} üzerinde kullanım yok",
-            "remoteTitle": "{{host}} üzerindeki kullanım",
-            "remoteBody": "Bu çalışma alanı {{host}} üzerinde çalıştığından çubuk o ana makinenin kullanımını gösterir. Oradaki bir ajanda oturum açın veya bu bilgisayarın kullanımını görmek için yerel bir çalışma alanına odaklanın.",
-            "remoteOpenAccounts": "{{host}} hesaplarını aç"
+            "remoteNoUsageYet": "Henüz kullanım yok. Orada oturum açın.",
+            "remoteAccounts": "Hesaplar"
           },
           "SkillUpdateStatusSegment": {
             "runningLabel": "Beceriler güncelleniyor",
@@ -15796,7 +15795,10 @@
             "operationResolve": "Çöz",
             "operationResolveLabel": "Conflict'leri AI ile çöz",
             "operationMoreActions": "Diğer işlemler",
-            "operationAbortConfirm": "İptal etmek için tekrar seçin"
+            "operationAbortConfirm": "İptal etmek için tekrar seçin",
+            "operationRunChangedTitle": "Hiçbir şey iptal edilmedi",
+            "operationRunChangedDescription": "İptal seçildikten sonra işlem değişti. Güncel durumunu kontrol edip tekrar deneyin.",
+            "operationRunUnknown": "Hangi çalıştırmanın duraklatıldığı anlaşılamıyor, bu yüzden İptal burada kapalı. Kaynak Denetimi’ni yenileyin veya bir terminalde iptal edin."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -23940,6 +23942,9 @@
           "removeLabel": "OpenAI uyumlu sağlayıcıyı kaldır",
           "setUp": "Kur"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "Sorun giderme için düşük seviyeli uyumluluk ayarları. Bu ayarlar {{host}} üzerinde değil, bu bilgisayarda saklanır."
       },
       "repositoryHooks": {
         "availableEnvVars": "Kullanılabilir ortam değişkenleri"
