@@ -187,7 +187,7 @@ const CASES: [string, (session: WorkspaceSessionState) => Run][] = [
         s,
         create(key(3), 'new-tab', {
           groupId: 'group-t8',
-          split: { besideGroupId: 'group-t3', direction: 'horizontal' }
+          split: { besideGroupId: 'group-t3', direction: 'right' }
         })
       )
   ],
