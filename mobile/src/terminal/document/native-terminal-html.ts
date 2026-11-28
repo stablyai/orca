@@ -25,7 +25,10 @@ export function xtermWebViewSource(start: {
     `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
   const fontCss = terminalBundledFontCss(start.fontStyle.font)
   const shell = fontCss
-    ? TERMINAL_HTML_DOCUMENT_SHELL.replace('</head>', () => `<style>${fontCss}</style>\n</head>`)
+    ? TERMINAL_HTML_DOCUMENT_SHELL.replace(
+        '</head>',
+        () => `<style data-orca-terminal-font="${start.fontStyle.font}">${fontCss}</style>\n</head>`
+      )
     : TERMINAL_HTML_DOCUMENT_SHELL
   return {
     html: [shell, startValues, TERMINAL_DOCUMENT_SCRIPT, TERMINAL_HTML_DOCUMENT_CLOSE].join('')
