@@ -1528,7 +1528,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost désigne l’ordinateur de ce bot.",
           "headers": "En-têtes",
-          "authHint": "Si le serveur exige une connexion via le navigateur, le bouton « Connecter » apparaît après sa vérification native.",
+          "authHint": "Si le serveur exige une connexion via le navigateur, le bouton « Se connecter » apparaît après sa vérification native.",
           "executable": "Exécutable",
           "commandPlaceholder": "npx",
           "args": "Arguments",

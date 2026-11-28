@@ -1688,7 +1688,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "可串流 HTTP · localhost 指的是這個機器人所在的電腦。",
           "headers": "標頭",
-          "authHint": "如果伺服器需要透過瀏覽器登入，原生檢查完成後會顯示「連線」。",
+          "authHint": "如果伺服器需要透過瀏覽器登入，原生檢查完成後會顯示「登入」。",
           "executable": "執行檔",
           "commandPlaceholder": "npx",
           "args": "引數",
