@@ -74,18 +74,17 @@ export function moveCheckedCopiesToTrash(
   }
   // Random too: two launches in the same millisecond must not pick the same names.
   const stamp = `${now.toString(36)}${randomBytes(2).toString('hex')}`
-  const moving = passing.map(({ copy, stats }, index) => ({
-    copy,
-    stats,
-    entry: {
+  const moving = passing.map(({ copy, stats }, index) => {
+    const entry: TrashEntry = {
       name: `${stamp}-${index}-${basename(copy.copy)}`,
       from: homePath(accountHome, copy.copy),
       original: copy.original,
       copyKey: copy.copyKey,
       originalKey: copy.originalKey,
       movedAt: now
-    } satisfies TrashEntry
-  }))
+    }
+    return { copy, stats, entry }
+  })
   const listName = newListName(now)
   // Listed before any move, so a copy in the trash always has its origin and checks on record.
   if (
