@@ -1,14 +1,24 @@
 import { groupedBy } from '../collections/grouped-by'
 import type { BotGroupMessage } from './bot-group-schema'
 
-type Line = Pick<BotGroupMessage, 'id' | 'sequence' | 'rootRequestId' | 'rootSequence'>
+type MailLine = Pick<BotGroupMessage, 'turns' | 'requester' | 'answeredBy'>
+type Line = MailLine &
+  Pick<BotGroupMessage, 'id' | 'sequence' | 'rootRequestId' | 'rootSequence' | 'mailReplyOrder'>
 
-/** A room page in reading order: every line that continues a person's post (peer mail, @Name
- *  hand-offs, the paused line) follows that post, in stored order. Lines whose post is on an
- *  earlier page lead the page, one post's lines together, oldest post first. */
+export function isBotGroupWorkerOrItemMail(line: MailLine): boolean {
+  return line.turns[0]?.mailbox === true && !line.requester && !line.answeredBy
+}
+
+/** A room page in reading order. Peer mail, @Name hand-offs and paused lines follow their
+ *  original post, or lead the page when that post is older. Worker and item replies use the
+ *  position reserved when they finished. */
 export function botGroupRoomOrder<T extends Line>(messages: readonly T[]): T[] {
   const rootOf = (line: T) =>
-    line.rootRequestId !== undefined && line.rootRequestId !== line.id ? line.rootRequestId : null
+    line.rootRequestId !== undefined &&
+    line.rootRequestId !== line.id &&
+    !isBotGroupWorkerOrItemMail(line)
+      ? line.rootRequestId
+      : null
   const loaded = new Set(messages.map((line) => line.id))
   const continuing = groupedBy(
     messages.filter((line) => rootOf(line) !== null),
@@ -24,8 +34,14 @@ export function botGroupRoomOrder<T extends Line>(messages: readonly T[]): T[] {
     .flatMap(([, lines]) => lines)
   return [
     ...earlier,
-    ...messages.flatMap((line) =>
-      rootOf(line) === null ? [line, ...(continuing.get(line.id) ?? [])] : []
-    )
+    ...messages
+      .filter((line) => rootOf(line) === null)
+      .sort(
+        (left, right) =>
+          (left.mailReplyOrder?.after ?? left.sequence) -
+            (right.mailReplyOrder?.after ?? right.sequence) ||
+          (left.mailReplyOrder?.reply ?? -1) - (right.mailReplyOrder?.reply ?? -1)
+      )
+      .flatMap((line) => [line, ...(continuing.get(line.id) ?? [])])
   ]
 }

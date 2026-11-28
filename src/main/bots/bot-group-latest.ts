@@ -5,6 +5,7 @@ import {
   botGroupTurnOperation,
   isBotGroupMemberSession
 } from '../../shared/bots/bot-group'
+import { isBotGroupWorkerOrItemMail } from '../../shared/bots/bot-group-room-order'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireStructuredHost } from './bot-chat-session'
 import { runtimeBotGroups } from './bot-group-runtime'
@@ -49,9 +50,12 @@ export async function noteBotGroupMemberReply(
   const finished = ended?.completed
     ? botGroupCompletedReply(botGroupTurnItems(snapshot, operationId, turn.workerDispatchIds))
     : null
+  const mailReplyOrder =
+    finished && isBotGroupWorkerOrItemMail(message) ? { after, reply } : undefined
   // Saved now, while the chat is open, so later posts never reopen it to quote this reply.
   groups.store.update({
     ...message,
+    ...(mailReplyOrder ? { mailReplyOrder } : {}),
     turns: message.turns.map((candidate) =>
       candidate === turn ? { ...candidate, reply: finished?.text ?? null } : candidate
     )
@@ -64,7 +68,7 @@ export async function noteBotGroupMemberReply(
     { authorName: turn.botName, text: finished.text, at: finished.completedAt ?? endedAt },
     { after, reply }
   )
-  if (kept) {
+  if (kept || mailReplyOrder) {
     groups.changed(owner.group.id)
   }
   await handOffGroupMentions(groups, message, turn, { full: finished.full, saved: finished.text })
