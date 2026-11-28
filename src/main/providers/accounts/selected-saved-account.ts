@@ -3,9 +3,10 @@
 
 import { AGY_HOST_SELECTION } from '../../antigravity/agy-account-selection'
 
-/** Undefined for an agent whose accounts are told apart by their homes, or none selected. */
+/** Undefined for an agent whose accounts are told apart by their homes, none selected, or one a
+ *  launch is known to fail to move to. */
 export function selectedSavedAccount(agent: string): string | undefined {
-  return agent === 'antigravity' ? AGY_HOST_SELECTION.current() || undefined : undefined
+  return agent === 'antigravity' ? AGY_HOST_SELECTION.target() || undefined : undefined
 }
 
 /** Called once each new selection is committed; returns the unsubscribe. */
