@@ -15,7 +15,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import {
   BOT_TAG_LIMIT,
   limitBotTagDraft,
-  normalizeBotTags
+  planBotTagAdds
 } from '../../../../../shared/bots/bot-tags'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { SettingsInsetGroup, SettingsInsetRow } from './BotSettingsRows'
@@ -24,10 +24,6 @@ function limitDraft(
   field: HTMLInputElement,
   suffixStart = field.selectionEnd ?? field.value.length
 ) {
-  // A pasted list restored after a failed save is limited per tag at submission.
-  if (field.value.includes(',')) {
-    return
-  }
   const limited = limitBotTagDraft(field.value, suffixStart)
   if (limited !== field.value) {
     const caret = limited.length - (field.value.length - suffixStart)
@@ -72,15 +68,14 @@ export function BotSettingsTags({
       return
     }
     const current = readTags()
-    const candidates = normalizeBotTags([...current, ...draft.split(',')], BOT_TAG_LIMIT + 1)
-    if (current.length >= BOT_TAG_LIMIT && candidates.length > BOT_TAG_LIMIT) {
+    const next = planBotTagAdds(current, draft.split(','))
+    if (!next) {
       toast.error(limitMessage)
       return
     }
     const revision = ++draftRevision.current
     field.value = ''
-    if (candidates.length > current.length) {
-      const next = candidates.slice(0, BOT_TAG_LIMIT)
+    if (next.length > current.length) {
       void update({ tags: supportsTagEdits ? { add: next.slice(current.length) } : next }).then(
         (saved) => {
           if (
@@ -120,19 +115,10 @@ export function BotSettingsTags({
       draftRevision.current++
       const start = field.selectionStart ?? field.value.length
       const end = field.selectionEnd ?? start
-      const suffixDelimiter = field.value.indexOf(',', end)
-      const suffix = field.value.slice(end, suffixDelimiter === -1 ? undefined : suffixDelimiter)
       field.setRangeText(text, start, end, 'end')
-      if (suffix) {
-        const lastTagStart = start + text.lastIndexOf(',') + 1
-        const lastTagEnd = start + text.length + suffix.length
-        field.value =
-          field.value.slice(0, lastTagStart) +
-          limitBotTagDraft(
-            field.value.slice(lastTagStart, lastTagEnd),
-            start + text.length - lastTagStart
-          ) +
-          field.value.slice(lastTagEnd)
+      const suffixStart = field.selectionEnd ?? field.value.length
+      if (suffixStart < field.value.length && field.value[suffixStart] !== ',') {
+        limitDraft(field, suffixStart)
       }
       commitDraft(field)
     }

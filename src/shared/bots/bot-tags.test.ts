@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { makeTestBot } from '../../main/bots/bot.test-fixture'
 import { normalizePersistedBots } from '../bot-types'
 import { applyBotUpdates, BotUpdate } from '../rpc-contract/bots-params'
-import { limitBotTagDraft } from './bot-tags'
+import { limitBotTagDraft, planBotTagAdds } from './bot-tags'
 
 it('loads every bot and keeps the first spelling of case-only duplicate tags', () => {
   const loaded = normalizePersistedBots([
@@ -29,4 +29,18 @@ it('preserves independent tag edits and the first spelling of each tag', () => {
 it('takes overflow from the inserted text and preserves the text after the caret', () => {
   const suffix = `${'😀'.repeat(29)}Z`
   expect(limitBotTagDraft(`aXYZ${suffix}`, 4)).toBe(`aX${suffix}`)
+})
+
+it('keeps the suffix and surrounding tags when editing a tag in a list', () => {
+  const suffix = `${'😀'.repeat(31)}Z`
+  const before = 'First, '
+  expect(limitBotTagDraft(`${before}X${suffix}, Last`, before.length + 1)).toBe(
+    `${before}${suffix}, Last`
+  )
+})
+
+it('only plans a complete batch of distinct additions that fits', () => {
+  const tags = Array.from({ length: 11 }, (_, index) => `Tag ${index + 1}`)
+  expect(planBotTagAdds(tags, ['tag 1', 'UI', 'ui', 'Ops'])).toBeNull()
+  expect(planBotTagAdds(tags, ['tag 1', 'UI', 'ui'])).toEqual([...tags, 'UI'])
 })
