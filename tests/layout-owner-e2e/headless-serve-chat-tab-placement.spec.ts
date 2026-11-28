@@ -1,7 +1,5 @@
 // L270: a layout-owner serve host must persist the paired client’s requested tabPlacement using server group/tab ids.
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { structuredAgentSessionCreateParams } from '../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view/structured-agent-session-projection'
@@ -10,13 +8,10 @@ import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { readServerLayout } from './helpers/paired-desktop-server-layout'
 import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 test.describe('a chat a paired client creates lands where it asked', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('between two terminals, after the one the client named', async ({ testRepoPath }) => {
     // Fails switch-on on the Linux lane (passes switch-off there, and on darwin).

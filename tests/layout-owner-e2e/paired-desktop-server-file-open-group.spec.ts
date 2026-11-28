@@ -3,11 +3,11 @@
  * workspace its frames draw (`layout.reportView`), so a file the CLI opens on the server lands in
  * that group, whichever of the workspace's groups the server's saved view names (H5c-v).
  *
- * Run (switch-on build: ORCA_LAYOUT_OWNER=main ... --mode e2e):
+ * Run (switch-on: ORCA_LAYOUT_OWNER=main ORCA_SERVER_LAYOUT_OWNER=main in the env):
  *   pnpm exec playwright test tests/e2e/paired-desktop-server-file-open-group.spec.ts \
  *     --config tests/playwright.config.ts --project electron-headless --workers=2
  */
-import { existsSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { HOST_TERMINAL_SURFACE_SEPARATOR } from '../../src/shared/workspace-layout/terminal-surface-id'
 import { LAYOUT_INTENTS_RUNTIME_CAPABILITY } from '../../src/shared/workspace-layout/published-layout/layout-intents-capability'
@@ -22,10 +22,7 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 function groupOfTab(layout: PublishedWorkspaceLayout | null, tabId: string): string | null {
   return layout?.groups.find((group) => group.tabIds.includes(tabId))?.id ?? null
@@ -121,7 +118,7 @@ async function showGroupOnDesktop(
 }
 
 test.describe('a file opened on a switch-on server lands in the group a paired desktop shows', () => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'Needs a layout-owner build (ORCA_LAYOUT_OWNER=main)')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'Needs the layout-owner path (ORCA_LAYOUT_OWNER=main)')
 
   test('each CLI open follows the group the desktop switched to', async ({
     testRepoPath

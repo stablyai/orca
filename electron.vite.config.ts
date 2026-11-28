@@ -8,6 +8,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { createInheritedOrcaIdentityFirstGuardPlugin } from './config/build-plugins/inherited-orca-identity-banner'
 import { createMainCjsEntryShimPlugin } from './config/build-plugins/main-cjs-entry-shim'
 import { createMainEntryPostBanner } from './config/build-plugins/main-entry-post-banner'
+import { createLayoutOwnerBannerGuardPlugin } from './config/build-plugins/layout-owner-banner'
 import {
   createSandboxedScriptBundlesPlugin,
   ONE_BYTE_UNMINIFIED_OUTPUT
@@ -218,6 +219,7 @@ export const electronViteConfig: UserConfig = {
         plugins: [
           createPlainNodeEntryGuardPlugin(),
           createInheritedOrcaIdentityFirstGuardPlugin(),
+          createLayoutOwnerBannerGuardPlugin(),
           createMainCjsEntryShimPlugin(),
           createProcessHostDevRebuildPlugin(),
           createDarkBuildMarkerPlugin(),

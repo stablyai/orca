@@ -105,7 +105,7 @@ const transforms = {
     ORCA_FEATURE_WALL_ENABLED: 'true',
     // Why: tests only interpolate it; they must not depend on the checkout's HEAD.
     ORCA_BUILD_COMMIT: JSON.stringify('0'.repeat(40)),
-    // A dark switch set to 'main' in the env (`ORCA_LAYOUT_OWNER=main pnpm vitest`) is on in tests.
+    // A dark switch set to 'main' in the env (`ORCA_SIDEBAR_INPUTS=main pnpm vitest`) is on in tests.
     ...createRequire(import.meta.url)('./dark-build-switches.cjs').turnedOnDarkBuildDefines()
   },
   resolve: {

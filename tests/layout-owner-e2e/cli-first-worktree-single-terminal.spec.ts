@@ -1,15 +1,10 @@
 // A CLI-created terminal in an unopened workspace must remain one tab on first visit and after relaunch (main-owned layout).
 
-import { existsSync } from 'node:fs'
-import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { switchToWorktree, waitForSessionReady } from './helpers/store'
-
-const LAYOUT_OWNER_BUILD = existsSync(
-  path.join(process.cwd(), 'out', 'main', 'ORCA_LAYOUT_OWNER_MAIN')
-)
+import { LAYOUT_OWNER_SWITCH_ON } from './helpers/layout-owner-build'
 
 type Tabs = { window: string[]; storedRows: string[]; storedTabBar: string[] }
 
@@ -87,7 +82,7 @@ async function expectSettledTabs(page: Page, worktreeId: string, expected: Tabs)
 test('a CLI-started terminal in a never-opened worktree shows as its one tab, before and after a relaunch', async ({
   testRepoPath
 }, testInfo) => {
-  test.skip(!LAYOUT_OWNER_BUILD, 'layout-owner build only')
+  test.skip(!LAYOUT_OWNER_SWITCH_ON, 'layout-owner path only')
   const session = createRestartSession(testInfo)
   let app: Awaited<ReturnType<typeof session.launch>>['app'] | undefined
   try {

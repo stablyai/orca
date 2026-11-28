@@ -24,7 +24,7 @@ on:
         type: string
         default: ''
       layout_owner:
-        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        description: Set to main to run the app, its servers and its specs on the main-owned layout path and record save-divergence reports
         required: false
         type: string
         default: ''
@@ -129,12 +129,7 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
           ORCA_CI_MAIN_SOURCEMAPS: '0'
-          LAYOUT_OWNER: ${{ inputs.layout_owner }}
-        run: |
-          if [ -n "$LAYOUT_OWNER" ]; then
-            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
-          fi
-          pnpm run build:electron-vite:parallel --mode e2e
+        run: pnpm run build:electron-vite:parallel --mode e2e
 
       # The CLI emits into out/main too; start only after Electron finishes clearing that tree.
       - name: Build shared E2E CLI
@@ -151,11 +146,6 @@ jobs:
         run: pnpm run build:web-from-renderer
 
       - wait: e2e-cli
-
-      # The switch-on specs skip, rather than fail, when the build left no marker.
-      - name: Check layout-owner build marker
-        if: inputs.layout_owner == 'main'
-        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
 
       - name: Check shared native runtime action
         id: native-runtime-action
@@ -287,7 +277,9 @@ jobs:
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
           E2E_PROJECT_ARGS=()
           if [ -n "$LAYOUT_OWNER" ]; then
-            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            # Desktop and servers each read their own startup setting; the app fixtures fail a spec whose app did not take it.
+            E2E_ENV+=(ORCA_LAYOUT_OWNER="$LAYOUT_OWNER" ORCA_SERVER_LAYOUT_OWNER="$LAYOUT_OWNER")
+            echo "ORCA_LAYOUT_OWNER=$LAYOUT_OWNER ORCA_SERVER_LAYOUT_OWNER=$LAYOUT_OWNER"
             mkdir -p layout-divergence
             E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
             E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
