@@ -36,8 +36,8 @@ export const QODER_LAUNCH_SPEC: AcpLaunchSpec = {
     process.platform === 'win32'
       ? [join(homePath, '.qoder', 'bin', 'qodercli')]
       : [join(homePath, '.local', 'bin')],
-  // 1.1.76 moved ACP onto the session manager with session delete, fork and resume.
-  minimumVersions: ['1.1.76'],
+  // 1.1.81 fixed switching an ACP session to yolo, which Full access sets at every start.
+  minimumVersions: ['1.1.81'],
   // Qoder enforces its own modes, and a new session starts in the user's default, so each start sets one.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'acceptEdits', auto: 'auto', 'full-access': 'yolo' }
