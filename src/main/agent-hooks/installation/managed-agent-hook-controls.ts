@@ -129,6 +129,10 @@ async function refreshExistingManagedScripts(
     if ((allowed !== null && !allowed.has(agent)) || !isAgentHookConsentGranted(settings, agent)) {
       continue
     }
+    // Live check: a decline can land while an earlier refresher awaits file I/O.
+    if (options.shouldContinue && !options.shouldContinue(agent)) {
+      continue
+    }
     try {
       await refresh()
     } catch (error) {
