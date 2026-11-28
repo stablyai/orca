@@ -4,6 +4,7 @@ import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchP
 import React from 'react'
 import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'
 import { OpenAgentSettingsMenuItem } from './OpenAgentSettingsMenuItem'
+import { AgentCopyMenuItems } from './AgentCopyMenuItems'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -193,6 +194,16 @@ export function ProjectedAgentMenuItems({
             </React.Fragment>
           )
         })
+      )}
+      {/* The picker lists each copy as its own entry, with the base agent's submenu. */}
+      {pickerInventory ? null : (
+        <AgentCopyMenuItems
+          rows={rows}
+          detectedIds={detectedIds}
+          disabled={disabled}
+          terminalPending={model.terminalPending}
+          runLaunch={runLaunch}
+        />
       )}
       <OpenAgentSettingsMenuItem />
     </>

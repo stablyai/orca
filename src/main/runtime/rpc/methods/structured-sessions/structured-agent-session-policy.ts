@@ -12,7 +12,7 @@ import type { RuntimeCapability } from '../../../../../shared/remote-runtime/pro
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../shared/agent-session/options/protocol/agent-session-optional-model-capability'
 import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { readAgentLaunchModeSettings } from '../../../../agent-launch/agent-launch-mode'
+import { readAgentLaunchModeSettings } from '../../../../agent-launch/agent-launch-mode-settings'
 import type { RpcContext } from '../../core'
 
 export function clientReadsOptionsWithoutModel(

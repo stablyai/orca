@@ -9,7 +9,8 @@ import type { AgentLaunchSettings } from '../../shared/agent-launch/choices/agen
 import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 
-type InstalledAgent = { id: TuiAgent; name: string; default: boolean }
+type InstalledAgent = { id: string; name: string; default: boolean; copyOf?: TuiAgent }
+type InstalledAgentCopy = { id: string; name: string; agent: TuiAgent }
 type InstalledAgentsResult = { agents: InstalledAgent[] }
 
 export const INSTALLED_AGENT_HANDLERS: Record<string, CommandHandler> = {
@@ -27,20 +28,30 @@ export const INSTALLED_AGENT_HANDLERS: Record<string, CommandHandler> = {
     const { settings } = response.result
     // Launch refuses agents turned off in Settings → Agents, so they are not offered here.
     const disabled = new Set(settings?.disabledTuiAgents ?? [])
-    const agents = response.result.agents
-      .filter((id) => !disabled.has(id))
-      .map((id) => ({
+    const installed = response.result.agents.filter((id) => !disabled.has(id))
+    // A copy runs its base agent's CLI, so it is offered wherever that agent is.
+    const copies = (response.result.copies ?? [])
+      .filter((copy) => installed.includes(copy.agent))
+      .map((copy) => ({ id: copy.id, name: copy.name, default: false, copyOf: copy.agent }))
+    const agents: InstalledAgent[] = [
+      ...installed.map((id) => ({
         id,
         name: TUI_AGENT_DISPLAY_NAMES[id] ?? id,
         default: settings?.defaultTuiAgent === id
-      }))
+      })),
+      ...copies
+    ]
     printResult<InstalledAgentsResult>({ ...response, result: { agents } }, json, formatInstalled)
   }
 }
 
 async function readInstalledAgents(client: RuntimeClient, worktree?: RuntimeWorktreeRecord) {
   try {
-    return await client.call<{ agents: TuiAgent[]; settings: AgentLaunchSettings | null }>(
+    return await client.call<{
+      agents: TuiAgent[]
+      settings: AgentLaunchSettings | null
+      copies?: InstalledAgentCopy[]
+    }>(
       'preflight.installedAgents',
       worktree ? { worktreeId: worktree.id, worktreeHostId: worktree.hostId } : {}
     )
@@ -80,6 +91,11 @@ function formatInstalled({ agents }: InstalledAgentsResult): string {
     return 'No enabled agent CLIs found on this host.'
   }
   return agents
-    .map((agent) => `${agent.id.padEnd(20)} ${agent.name}${agent.default ? ' (default)' : ''}`)
+    .map(
+      (agent) =>
+        `${agent.id.padEnd(20)} ${agent.name}${agent.default ? ' (default)' : ''}${
+          agent.copyOf ? ` (copy of ${TUI_AGENT_DISPLAY_NAMES[agent.copyOf] ?? agent.copyOf})` : ''
+        }`
+    )
     .join('\n')
 }

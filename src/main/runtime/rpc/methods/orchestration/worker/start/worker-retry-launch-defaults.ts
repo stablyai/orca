@@ -56,7 +56,8 @@ export function withRetryWorkerLaunchDefaults<
     return params
   }
   const prior = parseRecordedWorkerLaunchOptions(priorWorker.start_options)
-  const agent = params.agent ?? prior.agent
+  // A copy's retry runs that copy, never its base agent with the copy's setup dropped.
+  const agent = params.agent ?? prior.agentCopy ?? prior.agent
   const sameAgent = matchesRetriedAgent(runtime, Boolean(params.on), agent, prior)
   const callerSpecifiedPreferences = params.model !== undefined || params.effort !== undefined
   const inheritPreferences =
@@ -188,6 +189,9 @@ function matchesRetriedAgent(
 ): boolean {
   if (!effectiveAgent || !prior.agent) {
     return false
+  }
+  if (prior.agentCopy !== undefined) {
+    return effectiveAgent === prior.agentCopy
   }
   if (
     effectiveAgent === prior.agent ||

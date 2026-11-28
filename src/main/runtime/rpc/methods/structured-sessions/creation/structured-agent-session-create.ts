@@ -1,3 +1,4 @@
+import { findAgentCopy } from '../../../../../../shared/agent-launch/catalog/agent-copies'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { StructuredSessionSurface } from '../../../../agent-session/lifecycle/structured-agent-session-close'
 import { structuredAgentSessionTabId } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -69,6 +70,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   /** Explicit picks override seed keys at rest; acquired in-process launches replace the seed. */
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  /** The named agent copy the chat runs as; one this host lacks refuses before anything exists. */
+  agentCopy?: string
   /** Use the caller-reserved tab id at publication; absent, derive the legacy id. Keep it outside launch fingerprints. */
   tabId?: string
   firstMessage?: StructuredAgentSessionFirstMessage
@@ -77,6 +80,12 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   beforeDelivery?: () => boolean
 }): Promise<PreparedStructuredAgentSessionCreate> {
   const fork = args.forkFrom
+  if (
+    args.agentCopy &&
+    findAgentCopy(args.runtime.requireStore().getSettings(), args.agentCopy)?.agent !== args.agent
+  ) {
+    throw new Error(`Unknown agent copy "${args.agentCopy}"`)
+  }
   if (fork && (args.resumeFrom || args.options || args.optionsMode || args.atRest !== true)) {
     throw agentSessionRefusalError('agent_session_operation_invalid', {
       reason: 'requestMalformed'
@@ -100,12 +109,13 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     structuredAgentCliSourceEvidence,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
-    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {})
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
+    ...(args.agentCopy ? { agentCopy: args.agentCopy } : {})
   })
   const attachFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
+    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope }, args.agentCopy)
   })
   host ??= await args.ensureHost()
   const priorOperation =
@@ -148,6 +158,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     attachParams: {
       ...resolvedAttach,
       ...(picked ? { options: picked } : {}),
+      ...(args.agentCopy ? { agentCopy: args.agentCopy } : {}),
       ...(args.tabId ? { surfaceTabId: args.tabId } : {}),
       provider: resolved.provider,
       agent: resolved.agent,
@@ -279,6 +290,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   activate: boolean
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  agentCopy?: string
   tabId?: string
   /** Create without starting the agent; its first message starts it. */
   atRest?: true

@@ -12,19 +12,33 @@ import {
   type WorkerStartSelectorLabel
 } from '../worker-start-selector-refusal'
 import type { WorkerStartInput } from '../worker-start-input'
+import {
+  agentCopyBase,
+  selectsAgent
+} from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
 export async function probeWorkerOpenCodeModelLaunchSupport(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'resolveOrchestrationAgentLauncher' | 'probeOrchestrationOpenCodeModelLaunchSupport'
+  >,
   params: { agent?: string; model?: string },
   target: { worktree?: string }
 ): Promise<boolean> {
+  // An OpenCode copy is probed on the route it launches with: its own command and env.
+  const copyBase = params.agent ? agentCopyBase(params.agent) : null
+  const agent = copyBase ?? params.agent
   return Boolean(
     params.model &&
-    params.agent &&
-    runtime.resolveOrchestrationAgentLauncher(params.agent) === 'opencode' &&
-    (await runtime.probeOrchestrationOpenCodeModelLaunchSupport({ ...target, model: params.model }))
+    agent &&
+    runtime.resolveOrchestrationAgentLauncher(agent) === 'opencode' &&
+    (await runtime.probeOrchestrationOpenCodeModelLaunchSupport({
+      ...target,
+      model: params.model,
+      ...(copyBase ? { agentCopy: params.agent } : {})
+    }))
   )
 }
 
@@ -42,7 +56,7 @@ export async function resolveLocalWorkerStartLaunch(args: {
   )
   let openCodeModelLaunchSupported = false
   let probeDropWarning: string | undefined
-  if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
+  if (!createsWorktree && selectsAgent(launchParams.agent, 'opencode') && launchParams.model) {
     try {
       openCodeModelLaunchSupported = await refuseUnmatchedWorkerSelector(targetLabel, () =>
         probeWorkerOpenCodeModelLaunchSupport(runtime, launchParams, { worktree: existingWorktree })

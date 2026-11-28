@@ -4,6 +4,11 @@ import {
   TUI_AGENT_AUTO_PICK_ORDER
 } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  findAgentCopy,
+  isAgentCopyId,
+  type AgentCopy
+} from '../../../../../../../../shared/agent-launch/catalog/agent-copies'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from '../../../../../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
@@ -144,11 +149,14 @@ function resolveWorkerStartAgent(args: {
   inheritedLaunchPreferences?: boolean
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  const agent = args.agent
-    ? isTuiAgent(args.agent)
-      ? args.agent
-      : args.runtime.resolveOrchestrationAgentLauncher?.(args.agent)
-    : undefined
+  const copy = args.agent ? workerAgentCopy(args.runtime, args.agent) : undefined
+  const agent = copy
+    ? copy.agent
+    : args.agent
+      ? isTuiAgent(args.agent)
+        ? args.agent
+        : args.runtime.resolveOrchestrationAgentLauncher?.(args.agent)
+      : undefined
   if (!args.terminal && !agent) {
     const { disabledTuiAgents } = args.runtime.getClientSettings()
     const agents = TUI_AGENT_AUTO_PICK_ORDER.filter((id) =>
@@ -163,16 +171,19 @@ function resolveWorkerStartAgent(args: {
   }
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
+    const launch = resolveWorkerLaunchPreferences({
+      agent,
+      openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
+      createsWorktree: args.createsWorktree,
+      model: args.model,
+      effort: args.effort,
+      inheritedLaunchPreferences: args.inheritedLaunchPreferences
+    })
     return {
       agent,
-      launch: resolveWorkerLaunchPreferences({
-        agent,
-        openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
-        createsWorktree: args.createsWorktree,
-        model: args.model,
-        effort: args.effort,
-        inheritedLaunchPreferences: args.inheritedLaunchPreferences
-      })
+      launch: copy
+        ? { ...launch, preferences: { ...launch.preferences, agentCopy: copy.id } }
+        : launch
     }
   }
   return {
@@ -182,4 +193,16 @@ function resolveWorkerStartAgent(args: {
       receipt: createWorkerLaunchReceipt({ agent: null })
     }
   }
+}
+
+/** A copy id names a saved agent copy; one this host lacks refuses instead of starting its base agent. */
+function workerAgentCopy(runtime: OrcaRuntimeService, selector: string): AgentCopy | undefined {
+  if (!isAgentCopyId(selector)) {
+    return undefined
+  }
+  const copy = findAgentCopy(runtime.requireStore().getSettings(), selector)
+  if (!copy) {
+    throw new OrchestrationError('agent_unconfigured', `Unknown agent copy "${selector}".`)
+  }
+  return copy
 }

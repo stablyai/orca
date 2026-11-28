@@ -38,10 +38,11 @@ import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-c
 import { useAgentCatalogRowExpansion } from './agent-catalog-row-expansion'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
 import { AgentRowDetailsToggle } from './AgentRowDetailsToggle'
+import { AgentCopyBadge, AgentCopyMenuItems, type AgentCopyCardProps } from './AgentCopyCardParts'
 
 const OPENS_AS_PLACEHOLDER: AgentOpensAs = { value: 'chat', cliMissing: false, onChange: () => {} }
 
-export type AgentCatalogRowProps = {
+export type AgentCatalogRowProps = AgentCopyCardProps & {
   agentId: TuiAgent
   label: string
   homepageUrl: string
@@ -118,6 +119,8 @@ export function AgentCatalogRow({
   reserveOpensAsSlot = false,
   chatRuntime,
   cliUpdate,
+  onDuplicate,
+  copy,
   expanded: cmdOpen,
   onExpandedChange: setCmdOpen
 }: AgentCatalogRowViewProps): React.JSX.Element {
@@ -171,6 +174,7 @@ export function AgentCatalogRow({
             >
               {label}
             </button>
+            {copy && <AgentCopyBadge baseLabel={copy.baseLabel} />}
             {defaultMark && (
               <SettingsBadge className="max-w-full border-foreground/30 text-foreground">
                 <span className="truncate">
@@ -260,14 +264,17 @@ export function AgentCatalogRow({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-44">
-              <DropdownMenuItem
-                disabled={!isSavedDefault && !(isDetected && isEnabled)}
-                onSelect={() => onSetDefault(!isSavedDefault)}
-              >
-                {isSavedDefault
-                  ? t('settings.agents.clearDefault', 'Clear default agent')
-                  : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
-              </DropdownMenuItem>
+              {!copy && (
+                <DropdownMenuItem
+                  disabled={!isSavedDefault && !(isDetected && isEnabled)}
+                  onSelect={() => onSetDefault(!isSavedDefault)}
+                >
+                  {isSavedDefault
+                    ? t('settings.agents.clearDefault', 'Clear default agent')
+                    : t('auto.components.settings.AgentsPane.5f986a9b92', 'Set as default')}
+                </DropdownMenuItem>
+              )}
+              <AgentCopyMenuItems label={label} onDuplicate={onDuplicate} copy={copy} />
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <a
@@ -294,6 +301,7 @@ export function AgentCatalogRow({
       </div>
       {cmdOpen && (
         <div id={panelId} ref={panelRef} className="mt-3 space-y-3 pl-10">
+          {copy?.identity}
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>

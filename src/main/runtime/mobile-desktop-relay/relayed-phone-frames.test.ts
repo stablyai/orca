@@ -1,8 +1,6 @@
 import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
-import {
-  readAgentLaunchModeSettings,
-  decideAgentLaunchMode
-} from '../../agent-launch/agent-launch-mode'
+import { decideAgentLaunchMode } from '../../agent-launch/agent-launch-mode'
+import { readAgentLaunchModeSettings } from '../../agent-launch/agent-launch-mode-settings'
 import { describe, expect, it } from 'vitest'
 import {
   encodeTerminalStreamFrame,
@@ -106,7 +104,11 @@ describe('RelayedPhoneReplies', () => {
     expect(JSON.parse(relay.text(subscribed('s1', 1))!).result.streamId).toBe(100)
     expect(JSON.parse(relay.text(subscribed('s2', 2))!).result.streamId).toBe(101)
     const frame = decodeTerminalStreamFrame(relay.binary(output(2))!)
-    expect(frame).toMatchObject({ streamId: 101, seq: 7, opcode: TerminalStreamOpcode.Output })
+    expect(frame).toMatchObject({
+      streamId: 101,
+      seq: 7,
+      opcode: TerminalStreamOpcode.Output
+    })
     expect(new TextDecoder().decode(frame!.payload)).toBe('hi')
   })
 
@@ -132,7 +134,13 @@ describe('RelayedPhoneReplies', () => {
     expect(relay.text('{"_keepalive":true}')).toBe('{"_keepalive":true}')
     relay.text(subscribed('s1', 1))
     relay.text(
-      JSON.stringify({ id: 's1', ok: true, streaming: true, result: { type: 'end' }, _meta: {} })
+      JSON.stringify({
+        id: 's1',
+        ok: true,
+        streaming: true,
+        result: { type: 'end' },
+        _meta: {}
+      })
     )
     expect(relay.binary(output(1))).toBeNull()
     expect(relay.takeOpenRequestIds()).toEqual([])
@@ -203,7 +211,10 @@ it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
 })
 
 describe('withRelayedSourceControlAiSettings', () => {
-  const sourceControlAi = { ...getDefaultSourceControlAiSettings(), agentId: 'codex' as const }
+  const sourceControlAi = {
+    ...getDefaultSourceControlAiSettings(),
+    agentId: 'codex' as const
+  }
   const desktop = () => ({
     sourceControlAi,
     agentCmdOverrides: { codex: '/opt/codex' },

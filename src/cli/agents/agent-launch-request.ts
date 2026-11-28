@@ -16,13 +16,20 @@ import {
   AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
-  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
+  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_AGENT_COPY_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  agentCopyBase,
+  agentCopyIdFromOptions,
+  isAgentCopyId,
+  withAgentCopyOption
+} from '../../shared/agent-launch/catalog/agent-copies'
 import {
   getOptionalStringFlag,
   getRequiredStringFlag,
@@ -61,11 +68,13 @@ function readSurfaceFlag(flags: Flags): AgentLaunchSurface | undefined {
   return known
 }
 
+/** A copy's id names its base agent; the host checks the copy exists when it launches it. */
 export function parseCliAgent(value: string): TuiAgent {
-  if (!isTuiAgent(value)) {
+  const agent = isTuiAgent(value) ? value : agentCopyBase(value)
+  if (!agent) {
     throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${value}"`)
   }
-  return value
+  return agent
 }
 
 export function readCliAgentLaunch(
@@ -93,6 +102,11 @@ export function readCliAgentLaunch(
     throw new RuntimeClientError('invalid_argument', 'Malformed --retry-launch operation ID')
   }
   const surface = readSurfaceFlag(flags)
+  const copyId = flags.get('agent')
+  const sessionOptions = withAgentCopyOption(
+    checked.preferences ? { ...checked.preferences } : undefined,
+    isAgentCopyId(copyId) ? copyId : undefined
+  )
   return {
     agent,
     ...(surface ? { surface } : {}),
@@ -100,7 +114,7 @@ export function readCliAgentLaunch(
     ...(typeof prompt === 'string' && prompt.trim()
       ? { prompt: { text: prompt, delivery: 'submit' as const } }
       : {}),
-    ...(checked.preferences ? { sessionOptions: { ...checked.preferences } } : {})
+    ...(sessionOptions ? { sessionOptions: { ...sessionOptions } } : {})
   }
 }
 
@@ -151,6 +165,15 @@ export async function callAgentLaunch(
     throw new RuntimeClientError(
       'incompatible_runtime',
       'This Orca host cannot start Pi on a chosen model. Update Orca on the execution host, or omit --model.'
+    )
+  }
+  if (
+    agentCopyIdFromOptions(launch.sessionOptions) &&
+    !capabilities.includes(AGENT_LAUNCH_AGENT_COPY_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot start agent copies. Update Orca on the execution host, or pass the base agent to --agent.'
     )
   }
   if (!capabilities.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY)) {

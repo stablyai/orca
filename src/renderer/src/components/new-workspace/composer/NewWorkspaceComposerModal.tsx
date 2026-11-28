@@ -1,4 +1,4 @@
-import type { ComposerModalData } from './composer-modal-data'
+import { composerRecoveryPicks, type ComposerModalData } from './composer-modal-data'
 import { toast } from 'sonner'
 import {
   formatWorkspaceCreateError,
@@ -31,7 +31,8 @@ import { useComposerHostedAddProject } from '../project-selection/use-composer-h
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   composerLaunchWorkspace,
-  quickWorkspacePickerInputs
+  quickWorkspacePickerInputs,
+  withQuickWorkspaceAgentCopy
 } from '@/lib/workspace/creation/quick-workspace-agent-selection'
 import {
   pickQuickWorkspaceAgent,
@@ -204,14 +205,16 @@ function QuickTabBody({
     offeredAgentIds &&
     new Set([...offeredAgentIds, ...(quickAgent && choicePending(quickAgent) ? [quickAgent] : [])])
   // Why keyed by agent: a pick repaired to another agent must not carry the old one's surface.
-  const [quickAgentPick, setQuickAgentPick] = useState<
-    Omit<NonNullable<ComposerModalData['recovery']>, 'note'>
-  >(modalData.recovery ?? { agent: null })
+  const [recovered] = useState(() => composerRecoveryPicks(modalData.recovery))
+  const [quickAgentPick, setQuickAgentPick] = useState(recovered.pick)
   const pickerDraft =
     quickAgentPick.agent === quickAgent && quickAgentPick.contextKey === observation.contextKey
       ? quickAgentPick.draft
       : undefined
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
+  // A copy belongs to its agent, so picking another agent starts that agent itself.
+  const [agentCopyPick, setAgentCopyPick] = useState(recovered.copy)
+  const agentCopy = agentCopyPick?.agent === quickAgent ? agentCopyPick.copy : null
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready
 
@@ -254,7 +257,7 @@ function QuickTabBody({
                 }
               : modalData.initialWorkspaceTarget,
           linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
+          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note, agentCopy }
         }
         toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
           action: {
@@ -267,10 +270,13 @@ function QuickTabBody({
           }
         })
       },
-      ...quickWorkspacePickerInputs(
-        pickerDraft,
-        quickAgentPick.entry,
-        launchSelection.choice?.executionHostId
+      ...withQuickWorkspaceAgentCopy(
+        quickWorkspacePickerInputs(
+          pickerDraft,
+          quickAgentPick.entry,
+          launchSelection.choice?.executionHostId
+        ),
+        agentCopy
       )
     })
   }, [
@@ -280,6 +286,7 @@ function QuickTabBody({
     submitQuick,
     pickerDraft,
     quickAgentPick,
+    agentCopy,
     isSubmissionCancelled,
     modalData,
     cardProps
@@ -369,6 +376,10 @@ function QuickTabBody({
           observation.model.pickerContext?.executionHostId !== 'local'
         }
         onQuickAgentChange={handleQuickAgentChange}
+        agentCopy={agentCopy}
+        onAgentCopyChange={(copy) =>
+          setAgentCopyPick(copy && quickAgent ? { agent: quickAgent, copy } : null)
+        }
         {...cardProps}
         // Chips list offered agents, keeping a pick whose chat is still being learned.
         detectedAgentIds={chipAgentIds}

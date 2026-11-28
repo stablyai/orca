@@ -1,3 +1,4 @@
+import { agentCopyBase } from '../agent-launch/catalog/agent-copies'
 import { botTidyUp, patchTidyUp } from '../bots/bot-tidy-up'
 import * as z from 'zod'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
@@ -174,6 +175,7 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
   const {
     permissionMode,
     launch,
+    agentCopy,
     removeMember,
     removeMembers,
     addMembers,
@@ -246,6 +248,15 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     next.launch = launch
   } else if (launch === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
     delete next.launch
+  }
+  if (agentCopy) {
+    next.agentCopy = agentCopy
+  } else if (agentCopy === null || (rest.agent !== undefined && rest.agent !== bot.agent)) {
+    delete next.agentCopy
+  }
+  // A copy belongs to its agent; one of another agent would refuse every chat, so it is dropped.
+  if (next.agentCopy && agentCopyBase(next.agentCopy) !== next.agent) {
+    delete next.agentCopy
   }
   return next
 }

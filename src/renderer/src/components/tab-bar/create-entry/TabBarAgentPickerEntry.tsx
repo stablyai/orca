@@ -5,6 +5,8 @@ import {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from '../../agent/agent-picker-inventory-source'
+import { useAgentPickerEntriesWithCopies } from '../../agent/launch-menu/AgentCopyMenuItems'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewTabAgentMenuModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { buildBotNewChatSearchOptions } from '../../bots/bot-new-chat-search-options'
 import { useBotNewChatLaunch } from '../../bots/use-bot-new-chat-launch'
@@ -25,14 +27,20 @@ type PickerEntryProps = Omit<TabBarCreateEntryProps, 'agentPickerEntries' | 'age
 // Subscribe inside the menu so inventory updates do not re-render the tab bar.
 export function TabBarAgentPickerEntry({
   inventory,
+  detectedIds = null,
   hideAgents = false,
   botHome = null,
   ...props
 }: PickerEntryProps & {
+  /** Detected CLIs, for the copies listed after their base agents. */
+  detectedIds?: readonly TuiAgent[] | null
   /** In a bot's home its chats take the agents' place: typing an agent's name finds its side chat. */
   botHome?: { bot: Bot; agentMenu: NewTabAgentMenuModel } | null
 }): React.JSX.Element {
-  const entries = useAgentPickerInventoryEntries(inventory)
+  const entries = useAgentPickerEntriesWithCopies(
+    useAgentPickerInventoryEntries(inventory),
+    detectedIds
+  )
   const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const launchOptions = useMemo(
     () => buildAgentPickerLaunchOptions(entries, commandOverrides),

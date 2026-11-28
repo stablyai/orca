@@ -309,6 +309,7 @@ export async function startBotSession(
     },
     worktree: botWorkspaceSelector(bot),
     agent: bot.agent,
+    ...(bot.agentCopy ? { agentCopy: bot.agentCopy } : {}),
     // A picked model replaces the default selection, so a default effort for another model never rides along.
     // Background work always replaces it: the chat defaults hold the owner's last pick in any chat.
     ...(launch.model || input.background

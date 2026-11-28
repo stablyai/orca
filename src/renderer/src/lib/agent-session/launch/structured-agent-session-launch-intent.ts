@@ -1,3 +1,5 @@
+import { applyStructuredLaunchOptions } from './structured-agent-session-launch-copy'
+import { withAgentCopyOption } from '../../../../../shared/agent-launch/catalog/agent-copies'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { createOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type {
@@ -172,7 +174,7 @@ export function retryStructuredAgentSessionLaunchIntent(
       }
     }
   }
-  return {
+  const retried = {
     ...buildStructuredAgentSessionLaunchIntent(
       intent.worktreeId,
       intent,
@@ -186,6 +188,12 @@ export function retryStructuredAgentSessionLaunchIntent(
     forkRequiresInheritedOriginal: intent.forkRequiresInheritedOriginal,
     explicitLaunchOptions: intent.explicitLaunchOptions
   }
+  // A retried copy launch stays the copy; the host refuses one deleted since.
+  const copyOptions = withAgentCopyOption(intent.explicitLaunchOptions, intent.params.agentCopy)
+  if (intent.params.agentCopy) {
+    applyStructuredLaunchOptions(retried, copyOptions)
+  }
+  return retried
 }
 
 export function restoreStructuredAgentSessionLaunchIntent(args: {
@@ -206,6 +214,7 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
   firstMessage?: StructuredAgentSessionFirstMessage
   optionsMode?: 'replace-model-selection'
   options?: Readonly<Record<string, string>>
+  agentCopy?: string
   sendSelectionSupport?: boolean
   createMessageSupport?: boolean
 }): StructuredAgentSessionLaunchIntent {
@@ -231,7 +240,8 @@ export function restoreStructuredAgentSessionLaunchIntent(args: {
       ...(args.tabId ? { tabId: args.tabId } : {}),
       ...(args.firstMessage ? { firstMessage: args.firstMessage } : {}),
       ...(args.optionsMode ? { optionsMode: args.optionsMode } : {}),
-      ...(args.options ? { options: args.options } : {})
+      ...(args.options ? { options: args.options } : {}),
+      ...(args.agentCopy ? { agentCopy: args.agentCopy } : {})
     },
     ...(args.createMessageSupport === undefined
       ? {}

@@ -15,6 +15,7 @@ import {
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { RESTORE_SPAWN_INTENTS } from '../../terminal/pty/admission/spawn-admission-contract'
 import { AgentLaunchAccountEnv } from '../../agent-launch/startup/agent-launch-account-env'
+import { isAgentCopyId } from '../../agent-launch/catalog/agent-copies'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 
@@ -68,7 +69,11 @@ export const LaunchPreferences = lazyZodSchema(() =>
         MAX_LAUNCH_PREFERENCE_LENGTH,
         'Invalid effort preference'
       ).optional(),
-      mode: StrictNonEmptyString(MAX_LAUNCH_PREFERENCE_LENGTH, 'Invalid mode preference').optional()
+      mode: StrictNonEmptyString(
+        MAX_LAUNCH_PREFERENCE_LENGTH,
+        'Invalid mode preference'
+      ).optional(),
+      agentCopy: z.custom<string>(isAgentCopyId, { message: 'Invalid agent copy' }).optional()
     })
     .strict()
 )

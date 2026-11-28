@@ -3,16 +3,20 @@
 import {
   decideAgentLaunchMode,
   downgradeAgentLaunchModeForHost,
-  readAgentLaunchModeSettings,
   resolveAgentLaunchModeOnHost,
   type AgentLaunchModeSettings,
   type AgentLaunchSupportPlace,
   type AgentLaunchModeVocabulary
 } from '../../../../../agent-launch/agent-launch-mode'
+import { readAgentLaunchModeSettings } from '../../../../../agent-launch/agent-launch-mode-settings'
 
 import type { AgentLaunchModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import {
+  AGENT_COPY_OPTION_ID,
+  agentCopyBase
+} from '../../../../../../shared/agent-launch/catalog/agent-copies'
 
 type WorkerStartModeReceipt = AgentLaunchModeReceipt
 
@@ -42,8 +46,10 @@ export function decideWorkerStartMode(args: {
   /** The caller's lineage starts its workers as chats, whatever the settings say. */
   chatLineage?: boolean
 }): WorkerStartModeReceipt {
+  // `--agent <copy id>` is decided as its base agent, under the copy's own settings.
+  const base = args.params.agent ? agentCopyBase(args.params.agent) : null
   return decideAgentLaunchMode({
-    placement: args.params,
+    placement: base ? { ...args.params, agent: base } : args.params,
     settings: args.settings,
     chatLineage: args.chatLineage,
     vocabulary: WORKER_START_VOCABULARY
@@ -67,7 +73,13 @@ export function downgradeWorkerStartModeForHost(
 }
 
 export function readWorkerStartModeSettings(
-  runtime: Parameters<typeof readAgentLaunchModeSettings>[0]
+  runtime: Parameters<typeof readAgentLaunchModeSettings>[0],
+  agent?: string
 ): AgentLaunchModeSettings | null {
-  return readAgentLaunchModeSettings(runtime)
+  return readAgentLaunchModeSettings(
+    runtime,
+    agent && agentCopyBase(agent)
+      ? { sessionOptions: { [AGENT_COPY_OPTION_ID]: agent } }
+      : undefined
+  )
 }

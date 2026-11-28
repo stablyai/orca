@@ -284,6 +284,9 @@ export type AgentSessionStatusSummary = {
   /** The chat runs a program the host already has, so it needs no Orca-installed runtime.
    *  Absent from older hosts. */
   hostProgram?: true
+  /** The agent copy this chat runs as; a copy with its own Command needs no Orca-installed
+   *  runtime either. Absent from older hosts and for the agent itself. */
+  agentCopy?: string
   /** The chat runs on the host program's own login, which the sign-in method saved in Orca
    *  doesn't change (an Antigravity chat on agy's own home). Absent from older hosts. */
   ownLogin?: true

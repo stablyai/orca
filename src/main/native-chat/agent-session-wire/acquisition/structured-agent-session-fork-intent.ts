@@ -1,3 +1,4 @@
+import type { AgentCopySettings } from '../../../../shared/agent-launch/catalog/agent-copies'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -12,6 +13,7 @@ export async function resolveStructuredAgentSessionForkIntent(input: {
   location: AgentSessionExecutionLocation
   envelope: { sessionId: string; clientOperationId: string }
   callerKey?: string
+  readAgentCopySettings?: () => AgentCopySettings
 }): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
   const { host } = input
   if (!host) {

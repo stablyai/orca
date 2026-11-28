@@ -1,4 +1,5 @@
 import * as z from 'zod'
+import { isAgentCopyId } from '../../agent-launch/catalog/agent-copies'
 import { AgentSessionSelectionSchema } from '../../agent-session/options/protocol/agent-session-execution-options'
 import {
   SendBody,
@@ -128,7 +129,9 @@ export const CreateIntentParams = lazyZodSchema(() =>
         .strict()
         .optional(),
       options: AgentSessionOptions.optional(),
-      optionsMode: z.literal('replace-model-selection').optional()
+      optionsMode: z.literal('replace-model-selection').optional(),
+      /** A named agent copy the chat runs as; hosts without copies refuse the strict payload. */
+      agentCopy: z.custom<string>(isAgentCopyId, { message: 'Invalid agent copy' }).optional()
     })
     .strict()
 )

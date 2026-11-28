@@ -1,5 +1,6 @@
 import { TIDY_UP_EVERY_CHOICES } from '../bots/bot-tidy-up'
 import * as z from 'zod'
+import { isAgentCopyId } from '../agent-launch/catalog/agent-copies'
 import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import { BOT_IMPORT_REPLY_MAX, BotImportFromSchema } from '../bots/bot-import'
 import { AGENT_CHAT_PERMISSION_MODES } from '../agent-launch/permissions/agent-chat-permission-mode'
@@ -129,6 +130,8 @@ export const BotUpdate = lazyZodSchema(() =>
       .object({
         name: BotNameSchema.optional(),
         agent: z.enum(BOT_AGENTS).optional(),
+        /** null runs the agent itself; a new agent clears it, since a copy belongs to its agent. */
+        agentCopy: z.string().refine(isAgentCopyId).nullable().optional(),
         avatar: SettableBotAvatar.optional(),
         /** The mascot revision visible when its color or outfit was picked. */
         lookAtEpoch: z.uuid().optional(),

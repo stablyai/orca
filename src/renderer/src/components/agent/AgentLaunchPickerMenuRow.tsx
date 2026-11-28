@@ -15,6 +15,7 @@ import { chatUnavailableLabel, entrySetupLabel } from './launch-menu/agent-menu-
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   agentPickerDraft,
+  agentPickerEntryKey,
   type AgentPickerDraft,
   type AgentPickerEntry,
   type AgentPickerSurface
@@ -25,7 +26,8 @@ function pickerLaunchRow(entry: AgentPickerEntry, surface: AgentPickerSurface): 
   return {
     agent: entry.agent,
     kind: surface === 'chat' ? 'chat' : 'cli',
-    executionHostId: entry.rows[0]?.executionHostId
+    executionHostId: entry.rows[0]?.executionHostId,
+    ...(entry.copy ? { copy: entry.copy } : {})
   }
 }
 
@@ -68,6 +70,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     setup: {
       id: string
       agent: AgentPickerEntry['agent']
+      entryKey: string
       preset?: AgentPickerSetupIdentity
       label: string
     } | null
@@ -144,7 +147,8 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
   return (
     <AgentLaunchSetupButton
       draftScope={draftScope}
-      draftId={draftId}
+      // A copy keeps its own panel state, apart from its base agent's.
+      draftId={draftId ?? entry.copy?.id}
       preset={preset}
       entry={entry}
       initial={source}
@@ -154,7 +158,17 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
       disabled={disabled || setupDisabled || !entry.surfaces.length}
       onOpenChange={(next) => {
         if (next || openSetup === setupId) {
-          onSetupOpenChange(next ? { id: setupId, agent: entry.agent, preset, label } : null)
+          onSetupOpenChange(
+            next
+              ? {
+                  id: setupId,
+                  agent: entry.agent,
+                  entryKey: agentPickerEntryKey(entry),
+                  preset,
+                  label
+                }
+              : null
+          )
         }
         if (next && openSetup !== setupId) {
           onSelectAgent?.(entry.agent)

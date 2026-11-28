@@ -1,3 +1,7 @@
+import {
+  agentCopyIdFromLaunchOptions,
+  withoutAgentCopyOption
+} from '../../../../../shared/agent-launch/catalog/agent-copies'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 /** Use ordinary user-facing terminal/chat creation; worker factories add redrive, mailbox and background-tab behavior.
  * The executor selects surface and prompt delivery; this factory supplies the wire-shaped runtime calls. */
@@ -61,11 +65,15 @@ export function agentLaunchSurfaceFactory(
       signal
     }) => {
       const sessionId = requested ?? createOrcaSessionId(randomUUID)
+      const agentCopy = agentCopyIdFromLaunchOptions(options, chatOptions)
       const supported = supportedStructuredSeedOptions(
         agent,
         narrowStructuredLaunchSeedOptions(options)
       )
-      const seeded = chatOptions ?? (Object.keys(supported).length > 0 ? supported : undefined)
+      // The copy rides in its own create field; as an option a host would refuse it.
+      const seeded =
+        withoutAgentCopyOption(chatOptions) ??
+        (Object.keys(supported).length > 0 ? supported : undefined)
       // A client that creates chats without starting them starts this one on its first message.
       const atRest =
         firstMessage !== undefined ||
@@ -93,6 +101,7 @@ export function agentLaunchSurfaceFactory(
         agent,
         ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
         ...(seeded ? { options: seeded } : {}),
+        ...(agentCopy ? { agentCopy } : {}),
         ...(tabId ? { tabId } : {}),
         ...(atRest ? { atRest: true as const } : {}),
         ...(firstMessage ? { firstMessage } : {}),

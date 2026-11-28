@@ -22,6 +22,8 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
+import { agentLaunchPreferenceOptions } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { applyAgentCopy, findAgentCopy } from '../../../../shared/agent-launch/catalog/agent-copies'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
@@ -79,15 +81,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
   protected toAgentSessionOptions(
     preferences: AgentLaunchPreferences | undefined
   ): Record<string, string> | undefined {
-    if (!preferences) {
-      return undefined
-    }
-    const options = {
-      ...(preferences.model ? { model: preferences.model } : {}),
-      ...(preferences.effort ? { effort: preferences.effort } : {}),
-      ...(preferences.mode ? { mode: preferences.mode } : {})
-    }
-    return Object.keys(options).length > 0 ? options : undefined
+    return agentLaunchPreferenceOptions(preferences)
   }
 
   /** A saved restore replays the source pane as this host ran it; History and other user resumes keep current settings. */
@@ -159,10 +153,17 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       identity,
       canonicalWorktreeId: workspace.id
     })
-    const settings = this.store.getSettings()
-    if (!isTuiAgentEnabled(request.agent, settings.disabledTuiAgents)) {
+    const savedSettings = this.store.getSettings()
+    if (!isTuiAgentEnabled(request.agent, savedSettings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before resuming.')
     }
+    // A copy resumes with its own launch setup; one deleted since refuses before any terminal exists.
+    const copyId = request.launchPreferences?.agentCopy
+    const copy = copyId ? findAgentCopy(savedSettings, copyId) : undefined
+    if (copyId && copy?.agent !== request.agent) {
+      throw new Error(`Unknown agent copy "${copyId}"`)
+    }
+    const settings = copy ? applyAgentCopy(savedSettings, copy) : savedSettings
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, request.agent)
     const { platform } = launchRuntime
     const shell = agentLaunchQuotingShell(launchRuntime)

@@ -15,7 +15,13 @@ import {
   useAntigravityChatSignInStrip,
   type NativeChatSignInStripState
 } from './NativeChatSignInStrip'
-import { useStructuredAgentSessionOwnLogin } from '../session/status/structured-agent-session-status-hooks'
+import {
+  useStructuredAgentSessionAgentCopy,
+  useStructuredAgentSessionOwnLogin
+} from '../session/status/structured-agent-session-status-hooks'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { findAgentCopy } from '../../../../../shared/agent-launch/catalog/agent-copies'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -51,8 +57,17 @@ export function useNativeChatInstallSlot(
   const t = useTranslate()
   const ownLogin = useStructuredAgentSessionOwnLogin(props.sessionId, props.target)
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
-  const slot = nativeChatInstallSlotState(observation, layout)
-  const antigravity = props.agent === 'antigravity' && props.isVisible
+  const ownCommand = useAgentCopyOwnCommand(
+    props.agent,
+    useStructuredAgentSessionAgentCopy(props.sessionId, props.target),
+    props.target
+  )
+  const slot = ownCommand ? NONE : nativeChatInstallSlotState(observation, layout)
+  const antigravity = chatTakesAntigravitySignIn({
+    agent: props.agent,
+    visible: props.isVisible,
+    ownCommand
+  })
   // Advisory, as the host's other verdicts: a login agy gets elsewhere isn't seen at once.
   const signIn = useAntigravityChatSignInStrip(
     antigravity && slot.kind === 'none' ? props.target : null,
@@ -69,6 +84,30 @@ export function useNativeChatInstallSlot(
     unavailableHint,
     antigravityAuth: antigravity ? { host: props.target, ownLogin } : null
   }
+}
+
+/** Only a chat that runs agy signs in to Antigravity: never a copy with its own Command, which
+ *  runs neither Orca's agy nor the host's. */
+export function chatTakesAntigravitySignIn(args: {
+  agent: string
+  visible: boolean
+  ownCommand: boolean
+}): boolean {
+  return args.agent === 'antigravity' && args.visible && !args.ownCommand
+}
+
+/** Whether this computer's chat runs as an agent copy with a Command of its own, which the host
+ *  starts as it does an agent's own Command, so Orca's runtime is not needed. */
+export function useAgentCopyOwnCommand(
+  agent: string,
+  copyId: string | null,
+  target: RuntimeClientTarget
+): boolean {
+  return useAppStateValue((state) => {
+    const copy =
+      copyId && target.kind === 'local' ? findAgentCopy(state.settings, copyId) : undefined
+    return Boolean(copy?.command && copy.agent === agent)
+  })
 }
 
 /** An agent Orca downloads needs an install until the host reports one. */

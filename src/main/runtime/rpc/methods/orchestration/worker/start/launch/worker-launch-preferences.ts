@@ -235,6 +235,7 @@ export function resolveFederatedWorkerLaunchReceipt(
 const RecordedStartOptions = lazyZodSchema(() =>
   z.looseObject({
     agent: z.string().nullish(),
+    agentCopy: z.string().nullish(),
     launch: z
       .looseObject({
         requested: z
@@ -252,6 +253,8 @@ const RecordedStartOptions = lazyZodSchema(() =>
 export type RecordedWorkerLaunchOptions = {
   agent?: string
   requestedAgent?: string
+  /** The agent copy the prior attempt ran as; the base agent sits in `agent`. */
+  agentCopy?: string
   model?: string
   effort?: string
 }
@@ -277,6 +280,7 @@ export function parseRecordedWorkerLaunchOptions(raw: string): RecordedWorkerLau
   return {
     agent: nonEmptyOption(parsed.data.agent) ?? requestedAgent,
     requestedAgent,
+    agentCopy: nonEmptyOption(parsed.data.agentCopy),
     model: nonEmptyOption(requested?.model),
     effort: nonEmptyOption(requested?.effort)
   }

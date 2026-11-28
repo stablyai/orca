@@ -63,6 +63,8 @@ export type AgentSessionAttachParams = {
   /** Exclude tab placement from conversation identity/fingerprints. */
   surfaceTabId?: string
   launchArgs?: string[]
+  /** Host-only: the named agent copy a new chat runs as. */
+  agentCopy?: string
   /** Omit only for create intent; fingerprint the client wire form before adapter proof. */
   providerHandle?: AgentSessionWireProviderHandle
   /** Host-only adoption seeds resume/import. Ordinary ensure handles must not imply adoption. */
@@ -87,7 +89,10 @@ export type AgentSessionAttachAuthority = {
 }
 
 /** Exclude transient spawn/probe evidence and re-resolved defaults so unknown-outcome retries still replay. */
-export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
+export function attachFingerprintFields(
+  params: AgentSessionAttachParams,
+  agentCopy = params.agentCopy
+): Record<string, unknown> {
   return {
     location: params.location,
     provider: params.provider,
@@ -97,6 +102,8 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     providerHandle: params.providerHandle,
     // Adoption changes identity; transcript location is transient and excluded.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    // A replay that names another copy is a different create.
+    ...(agentCopy ? { agentCopy } : {}),
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -218,6 +225,7 @@ export function reserveRequestFor(input: {
       ? { surfaceTabId: params.surfaceTabId }
       : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
+    ...(params.agentCopy ? { agentCopy: params.agentCopy } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(authority.launchDirectory ? { launchDirectory: authority.launchDirectory } : {}),
     ...(params.adopt

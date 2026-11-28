@@ -38,6 +38,8 @@ export type StructuredAgentSessionCreateIntentInput = {
   forkFrom?: { sessionId: string; throughItemId: string }
   resumeFrom?: StructuredAgentSessionResumeSource
   structuredAgentCliSourceEvidence?: StructuredAgentCliSourceEvidence
+  /** The agent copy whose own model, options and permission seed the chat. */
+  agentCopy?: string
 }
 
 export function resolveCommittedStructuredAgentSessionAdoptionIntent(input: {

@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+import { ComposerAgentCopyChoice } from './ComposerAgentCopyChoice'
 
 type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -16,6 +17,8 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   | 'agentSetupDisabled'
   | 'onQuickAgentChange'
   | 'agentRows'
+  | 'agentCopy'
+  | 'onAgentCopyChange'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -36,6 +39,8 @@ export function NewWorkspaceComposerAgentSection({
   agentPickerDraft,
   agentSetupDisabled,
   onQuickAgentChange,
+  agentCopy,
+  onAgentCopyChange,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -88,6 +93,13 @@ export function NewWorkspaceComposerAgentSection({
           onSelectBlankTerminal={() => onQuickAgentChange(null)}
           onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
         />
+        {quickAgent && onAgentCopyChange ? (
+          <ComposerAgentCopyChoice
+            agent={quickAgent}
+            value={agentCopy ?? null}
+            onChange={onAgentCopyChange}
+          />
+        ) : null}
       </div>
 
       <div className="!mb-2">

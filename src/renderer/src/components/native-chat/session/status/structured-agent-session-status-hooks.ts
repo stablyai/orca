@@ -111,6 +111,19 @@ export function useStructuredAgentSessionsStarting(
   return useMemo(() => new Set(key ? key.split('\n') : []), [key])
 }
 
+/** The agent copy this chat runs as, from its host; null for the agent itself or an older host. */
+export function useStructuredAgentSessionAgentCopy(
+  sessionId: string,
+  target: RuntimeClientTarget
+): string | null {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.agentCopy ?? null,
+    () => null
+  )
+}
+
 /** Whether the host says this chat runs on its program's own login; an older host never does. */
 export function useStructuredAgentSessionOwnLogin(
   sessionId: string,

@@ -1,8 +1,9 @@
 import { terminalPendingReason } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { searchAgentPickerSetups } from '../../../../../shared/agent-launch/picker/agent-launch-picker-search'
-import type {
-  AgentPickerDraft,
-  AgentPickerEntry
+import {
+  agentPickerEntryKey,
+  type AgentPickerDraft,
+  type AgentPickerEntry
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSetupIdentity } from '../../agent/agent-launch-picker-drafts'
 import {
@@ -221,11 +222,12 @@ export function matchingAgentPickerLaunchOptions(
       agent: setup.entry.agent,
       label: setup.label,
       aliases: [],
-      id: `setup:${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}:${surface}`,
+      id: `setup:${agentPickerEntryKey(setup.entry)}:${setup.model.id}:${setup.choices.options?.effort ?? ''}:${surface}`,
       row: {
         agent: setup.entry.agent,
         kind: surface === 'chat' ? 'chat' : 'cli',
-        executionHostId: setup.entry.rows[0]?.executionHostId
+        executionHostId: setup.entry.rows[0]?.executionHostId,
+        ...(setup.entry.copy ? { copy: setup.entry.copy } : {})
       },
       ...(surface === 'chat' ? { reason: entrySetupLabel(setup.entry) } : {}),
       preset: { model: setup.model.id, effort: setup.choices.options?.effort },
@@ -246,7 +248,9 @@ export function configuredAgentPickerLaunchOption(
       row: {
         agent: draft.agent,
         kind: draft.surface === 'chat' ? 'chat' : 'cli',
-        executionHostId: option.row?.executionHostId
+        executionHostId: option.row?.executionHostId,
+        // A copy's panel launches the copy, not its base agent.
+        ...(option.row?.copy ? { copy: option.row.copy } : {})
       },
       setup: draft
     },
