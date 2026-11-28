@@ -7,6 +7,11 @@ import {
 } from '../../../../shared/file-access/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
+import {
+  archivedCodexRolloutResumeTail,
+  claimsArchivedCodexRolloutLayout,
+  isArchivedCodexRolloutPath
+} from './codex-archived-rollout'
 
 // Only the dated rollout layout may establish credential provenance.
 const CLAIMED_CODEX_ROLLOUT_TAIL = String.raw`\d{4}/\d{2}/\d{2}/rollout-[^/]+\.jsonl(?:\.zst)?`
@@ -46,8 +51,20 @@ export function codexDatedRolloutRelativePath(
   return relativePath && ROLLOUT_RELATIVE_PATH.test(relativePath) ? relativePath : null
 }
 
+/** True for any rollout file this home owns: the dated tree or its flat `archived_sessions` sibling. */
 function isCodexRolloutInsideSessionsRoot(sessionsRoot: string, filePath: string): boolean {
-  return codexDatedRolloutRelativePath(sessionsRoot, filePath) !== null
+  return (
+    codexDatedRolloutRelativePath(sessionsRoot, filePath) !== null ||
+    isArchivedCodexRolloutPath(sessionsRoot, filePath)
+  )
+}
+
+/** The tail a resume targets for a rollout in either the dated tree or its flat archive. */
+export function codexRolloutResumeTail(sessionsRoot: string, filePath: string): string | null {
+  return (
+    codexDatedRolloutRelativePath(sessionsRoot, filePath) ??
+    archivedCodexRolloutResumeTail(sessionsRoot, filePath)
+  )
 }
 
 function isRegularFile(filePath: string): boolean {
@@ -125,7 +142,8 @@ export function claimsCodexRolloutLayout(transcriptPath: string | undefined): bo
   if (!persistedPath) {
     return false
   }
-  return CODEX_ROLLOUT_LAYOUT_PATH.test(persistedPath.replace(/\\/g, '/'))
+  const slashPath = persistedPath.replace(/\\/g, '/')
+  return CODEX_ROLLOUT_LAYOUT_PATH.test(slashPath) || claimsArchivedCodexRolloutLayout(slashPath)
 }
 
 export async function resolveCodexSessionResumeProvenance(args: {
