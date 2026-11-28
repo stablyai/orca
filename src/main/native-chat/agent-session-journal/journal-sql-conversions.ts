@@ -236,7 +236,9 @@ export class JournalSqlConversions {
     cancellation?.throwIfAborted()
     if (!promotion.aborted) {
       try {
-        await this.waitForIdle(cancellation ? AbortSignal.any([promotion, cancellation]) : promotion)
+        await this.waitForIdle(
+          cancellation ? AbortSignal.any([promotion, cancellation]) : promotion
+        )
       } catch (error) {
         cancellation?.throwIfAborted()
         if (!promotion.aborted) {
@@ -328,7 +330,10 @@ export class JournalSqlConversions {
           break
         }
         // A chat already ready keeps its rows; the frozen source never replaces them.
-        const imported = await this.writer.maintain({ kind: 'import-page', target: header, page }, permit)
+        const imported = await this.writer.maintain(
+          { kind: 'import-page', target: header, page },
+          permit
+        )
         cancellation?.throwIfAborted()
         if (!imported) {
           break

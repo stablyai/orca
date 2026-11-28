@@ -354,7 +354,10 @@ describe('instance lock heartbeat', () => {
       const outer = acquireOrcadInstanceLock(parent, hooks())
       const onExclusivityLost = vi.fn()
       const lock = acquireOrcadInstanceLock(root, hooks({ onExclusivityLost }))
-      const service = acquireOrcadInstanceLock(join(root, 'backend-service'), hooks({ scope: 'service' }))
+      const service = acquireOrcadInstanceLock(
+        join(root, 'backend-service'),
+        hooks({ scope: 'service' })
+      )
       mkdirSync(directory)
       const held = findOrcadProfileLock(directory)!
       const permit = new Int32Array(new SharedArrayBuffer(4))
@@ -369,14 +372,19 @@ describe('instance lock heartbeat', () => {
       // A subscriber throwing cannot delay a second permit or the lock's loss hook.
       const second = new Int32Array(new SharedArrayBuffer(4))
       second[0] = 1
-      held.onEnd(second, () => { throw new Error('listener failed') })
+      held.onEnd(second, () => {
+        throw new Error('listener failed')
+      })
       const last = vi.fn()
       held.onEnd(second, last)
       let successor: ReturnType<typeof acquireOrcadInstanceLock> | undefined
       try {
         expect(held.ownsProfile()).toBe(true)
         expect(findOrcadProfileLock(join(root, 'backend-service'))).toBe(held)
-        writeFileSync(service.path, JSON.stringify({ ...service.record, nonce: 'service-successor' }))
+        writeFileSync(
+          service.path,
+          JSON.stringify({ ...service.record, nonce: 'service-successor' })
+        )
         vi.advanceTimersByTime(60_000)
         expect(Atomics.load(permit, 0)).toBe(1)
         writeFileSync(lock.path, JSON.stringify({ ...lock.record, nonce: 'profile-successor' }))

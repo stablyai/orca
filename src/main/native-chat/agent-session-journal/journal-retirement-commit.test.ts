@@ -88,7 +88,11 @@ async function profile(withOriginal: boolean) {
         { present: () => {}, check: async () => {} },
         '1.0.1'
       )
-      cleanup.push(() => conversions.close(), () => retirement.stop(), barrier.release)
+      cleanup.push(
+        () => conversions.close(),
+        () => retirement.stop(),
+        barrier.release
+      )
       return { retirement, conversions, guardedWrite: () => write }
     },
     replaceLock: () => {
@@ -101,8 +105,10 @@ async function profile(withOriginal: boolean) {
 it('rolls back a report acknowledgement already applied when the profile lock is lost', async () => {
   const store = await profile(false)
   const marker = () =>
-    store.db.prepare(`SELECT value FROM agent_session_store_meta
-      WHERE key='journal.legacy-retirement-reported.v1'`).get()?.value
+    store.db
+      .prepare(`SELECT value FROM agent_session_store_meta
+      WHERE key='journal.legacy-retirement-reported.v1'`)
+      .get()?.value
   // Control: the same retirement and writer commit while ownership is live.
   let accepting = true
   const report = vi.fn(async () => accepting)
@@ -141,9 +147,12 @@ it('rolls back a retirement import page and lets a foreground open recover', asy
   const store = await profile(true)
   const { retirement, conversions, guardedWrite } = store.start('import-page')
   const items = () =>
-    store.db.prepare("SELECT count(*) AS count FROM journal_items WHERE session_id='unopened'").get()?.count
+    store.db
+      .prepare("SELECT count(*) AS count FROM journal_items WHERE session_id='unopened'")
+      .get()?.count
   const imported = () =>
-    store.db.prepare("SELECT epoch FROM journal_chat_state WHERE session_id='unopened'").get()?.epoch
+    store.db.prepare("SELECT epoch FROM journal_chat_state WHERE session_id='unopened'").get()
+      ?.epoch
   const before = items()
   expect(before).toBe(0)
   const walk = retirement.run()
@@ -176,7 +185,9 @@ it('defers retirement-state work after failed records installation until ordinar
   const { retirement, guardedWrite } = store.start('legacy-retirement-state')
   store.release()
   await retirement.run()
-  await expect(guardedWrite()).rejects.toMatchObject({ name: 'JournalRetirementRecordsPendingError' })
+  await expect(guardedWrite()).rejects.toMatchObject({
+    name: 'JournalRetirementRecordsPendingError'
+  })
   expect(store.writer.recordsPending).toBe(true)
   await store.writer.maintain({ kind: 'compaction-complete', now: 1234 })
   expect(store.writer.recordsPending).toBe(false)

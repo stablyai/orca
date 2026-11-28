@@ -36,9 +36,9 @@ function canonicalDirectory(directory: string): string | undefined {
   }
 }
 
-export function findOrcadProfileLock(directory: string):
-  | Pick<OrcadProfileLock, 'ownsProfile' | 'onEnd'>
-  | undefined {
+export function findOrcadProfileLock(
+  directory: string
+): Pick<OrcadProfileLock, 'ownsProfile' | 'onEnd'> | undefined {
   if (ownedProfileLocks.size === 0) {
     return undefined
   }

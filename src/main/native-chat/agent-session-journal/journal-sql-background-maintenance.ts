@@ -109,7 +109,9 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   async boundary(cancellation?: AbortSignal): Promise<boolean> {
-    const stop = cancellation ? AbortSignal.any([this.stopped.signal, cancellation]) : this.stopped.signal
+    const stop = cancellation
+      ? AbortSignal.any([this.stopped.signal, cancellation])
+      : this.stopped.signal
     while (!stop.aborted) {
       await this.runOrdinaryWork()
       if (this.periodic) {
@@ -268,7 +270,9 @@ export class JournalSqlBackgroundMaintenance {
   async rest(started: number, cancellation?: AbortSignal): Promise<void> {
     this.work += performance.now() - started
     if (this.work >= 25) {
-      const stop = cancellation ? AbortSignal.any([this.stopped.signal, cancellation]) : this.stopped.signal
+      const stop = cancellation
+        ? AbortSignal.any([this.stopped.signal, cancellation])
+        : this.stopped.signal
       try {
         await delay(this.work * 9, undefined, { signal: stop, ref: false })
       } catch (error) {

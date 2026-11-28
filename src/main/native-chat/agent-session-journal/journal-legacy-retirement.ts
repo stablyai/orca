@@ -116,7 +116,9 @@ export class JournalLegacyRetirement {
       this.writer,
       readers,
       // A conversion can wait for idle inside, so active time leaves conversions out entirely.
-      { ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground, authority)) },
+      {
+        ensure: this.waits.timed((id, foreground) => conversions.ensure(id, foreground, authority))
+      },
       this.waits.timed(() => boundary(signal)),
       signal,
       this.waits.timed((started) => rest(started, signal))
@@ -177,7 +179,9 @@ export class JournalLegacyRetirement {
     // Unsupported storage or file identity doesn't change while this process runs.
     if (error instanceof JournalLegacyIneligibleError && !this.done) {
       this.done = true
-      await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }, deliver).catch(() => {})
+      await this.outcome({ outcome: 'deferred', defer: 'unsupported_storage' }, deliver).catch(
+        () => {}
+      )
     } else if (this.leftovers) {
       await this.outcome({ outcome: 'deferred', defer: 'leftover_files' }, deliver).catch(() => {})
     } else {
@@ -235,7 +239,11 @@ export class JournalLegacyRetirement {
       return this.outcome({ outcome: deletedBefore(retirement) ? 'deleted_before' : 'absent' })
     }
     if (this.version === null) {
-      return this.launchReport.defer('no_version', this.deletes, () => Atomics.load(this.permit, 0) === 1)
+      return this.launchReport.defer(
+        'no_version',
+        this.deletes,
+        () => Atomics.load(this.permit, 0) === 1
+      )
     }
     this.startedAt ??= performance.now()
     const saved = await readRetirementState(this.writer)

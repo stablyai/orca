@@ -31,27 +31,31 @@ function recordEvents(): LegacyJournalRetirementEvent[] {
   return events
 }
 
-it.each([true, false])('keeps pre-admission file errors local unless ownership is proven (%s)', async (owner) => {
-  const events = recordEvents()
-  const held = await profile()
-  const key = 'journal.legacy-retirement-reported.v1'
-  const marker = () => held.db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
-  const fileError = Object.assign(new Error('permission denied'), { code: 'EACCES' })
-  const stat = vi.spyOn(retirementFiles, 'legacyFilePresent').mockRejectedValue(fileError)
-  cleanup.push(() => stat.mockRestore())
-  const owns = vi.fn(() => owner)
-  const launch = held.launch('1.0.1', owns, undefined, undefined, false)
-  await launch.run()
-  await launch.run()
-  expect(owns).toHaveBeenCalledOnce()
-  expect(events).toHaveLength(owner ? 1 : 0)
-  expect(held.errors).toEqual([fileError])
-  if (owner) {
-    expect(marker()).toEqual(expect.stringContaining('proving'))
-  } else {
-    expect(marker()).toBeUndefined()
+it.each([true, false])(
+  'keeps pre-admission file errors local unless ownership is proven (%s)',
+  async (owner) => {
+    const events = recordEvents()
+    const held = await profile()
+    const key = 'journal.legacy-retirement-reported.v1'
+    const marker = () =>
+      held.db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
+    const fileError = Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    const stat = vi.spyOn(retirementFiles, 'legacyFilePresent').mockRejectedValue(fileError)
+    cleanup.push(() => stat.mockRestore())
+    const owns = vi.fn(() => owner)
+    const launch = held.launch('1.0.1', owns, undefined, undefined, false)
+    await launch.run()
+    await launch.run()
+    expect(owns).toHaveBeenCalledOnce()
+    expect(events).toHaveLength(owner ? 1 : 0)
+    expect(held.errors).toEqual([fileError])
+    if (owner) {
+      expect(marker()).toEqual(expect.stringContaining('proving'))
+    } else {
+      expect(marker()).toBeUndefined()
+    }
   }
-})
+)
 
 it('a build that keeps the file proves once and keeps it; a build that deletes proves again in full', async () => {
   const events = recordEvents()
