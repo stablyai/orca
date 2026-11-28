@@ -1561,7 +1561,10 @@
       "connectHint": "Orca masaüstü uygulamasında Ayarlar → Entegrasyonlar bölümüne Jira sitenizi ekleyin, ardından yeniden kontrol edin.",
       "connectOnDesktop": "Bilgisayarınızda Jira'yı bağlayın",
       "credentialUnreadable": "Jira bağlantısı kayıtlı ancak okunamıyor: {{credentialError}}",
-      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin"
+      "updateDesktop": "Bu sunucudaki Orca'yı güncelleyin",
+      "connectTitle": "Jira hesabını bağla",
+      "connectMessage": "Sana atanan Jira kayıtlarına göz at ve doğrudan Görevler’den çalışmaya başla.",
+      "connect": "Jira’yı bağla"
     },
     "markdownBlocks": {
       "copyCode": "Kodu kopyala",
@@ -5304,6 +5307,16 @@
       "checkSkipped": "Atlandı",
       "checkPending": "Beklemede",
       "checkNeutral": "Nötr"
+    },
+    "jiraConnect": {
+      "title": "Jira’yı bağla",
+      "siteUrl": "ekibin.atlassian.net",
+      "email": "Atlassian e-postası",
+      "apiToken": "API belirteci",
+      "storageHint": "Belirtecin bu ana bilgisayarda saklanır, işletim sistemi destekliyorsa şifrelenir.",
+      "createToken": "API belirteci oluştur",
+      "failed": "Bağlantı başarısız",
+      "serverNeedsUpdate": "Bu sunucunun önce Orca güncellemesi alması gerekiyor. Bunun yerine Jira’yı Orca masaüstünden bağla."
     }
   },
   "terminal": {

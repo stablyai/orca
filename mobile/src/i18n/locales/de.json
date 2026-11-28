@@ -1438,7 +1438,10 @@
       "connectHint": "Die Jira-Site in Orca auf dem Computer unter Einstellungen → Integrationen hinzufügen und anschließend erneut prüfen.",
       "connectOnDesktop": "Jira auf dem Computer verbinden",
       "credentialUnreadable": "Die Jira-Zugangsdaten sind gespeichert, können aber nicht gelesen werden: {{credentialError}}",
-      "updateDesktop": "Orca auf diesem Host aktualisieren"
+      "updateDesktop": "Orca auf diesem Host aktualisieren",
+      "connectTitle": "Jira-Konto verbinden",
+      "connectMessage": "Durchsuche deine zugewiesenen Jira-Vorgänge und beginne die Arbeit direkt in Aufgaben.",
+      "connect": "Jira verbinden"
     },
     "markdownBlocks": {
       "copyCode": "Code kopieren",
@@ -4964,6 +4967,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Arbeitsbereich konnte nicht erstellt werden."
+    },
+    "jiraConnect": {
+      "title": "Jira verbinden",
+      "siteUrl": "dein-team.atlassian.net",
+      "email": "Atlassian-E-Mail",
+      "apiToken": "API-Token",
+      "storageHint": "Dein Token wird auf diesem Host gespeichert und verschlüsselt, sofern das Betriebssystem es unterstützt.",
+      "createToken": "API-Token erstellen",
+      "failed": "Verbindung fehlgeschlagen",
+      "serverNeedsUpdate": "Dieser Server braucht zuerst ein Orca-Update. Verbinde Jira stattdessen in Orca Desktop."
     }
   },
   "terminal": {
