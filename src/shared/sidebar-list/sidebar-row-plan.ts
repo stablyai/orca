@@ -6,7 +6,8 @@ import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ExecutionHostId } from '../execution-host/execution-host'
-import type { HiddenProjects } from '../project/catalog/hidden-projects'
+import { withoutHiddenProjectGroups, type HiddenProjects } from '../project/catalog/hidden-projects'
+import { groupedBy } from '../collections/grouped-by'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 
@@ -78,6 +79,8 @@ export type SidebarRowPlanInputs = {
   worktreeMap: Map<string, Worktree>
   nestLineage: boolean
   projectGroups: readonly ProjectGroup[]
+  /** The listed hosts' project registrations; a group whose projects are all hidden is left out. Omitted, every group stays. */
+  repos?: readonly Repo[]
   placeholderRepoIds: ReadonlySet<string>
   importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate>
   newExternalWorktreesInboxByRepo: ReadonlyMap<string, NewExternalWorktreesInboxCandidate>
@@ -108,7 +111,6 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     lineageParentIdentities,
     worktreeMap,
     nestLineage,
-    projectGroups,
     placeholderRepoIds,
     importedWorktreesByRepo,
     newExternalWorktreesInboxByRepo,
@@ -120,16 +122,12 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
     pinnedDisplayPolicy,
     filterRepoIds
   } = inputs
+  const projectGroups = withoutHiddenProjectGroups(inputs)
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   const repoOf = repoOfWorktree ?? ((worktree: Worktree) => repoMap.get(worktree.repoId))
   // Resolve folder membership before groupBy; every mode renders the same set (#15362).
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
-  const pendingByRepo = new Map<string, PendingCreationRef[]>()
-  for (const creation of pendingCreations) {
-    const list = pendingByRepo.get(creation.repoId) ?? []
-    list.push(creation)
-    pendingByRepo.set(creation.repoId, list)
-  }
+  const pendingByRepo = groupedBy(pendingCreations, (creation) => creation.repoId)
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
   // Folder rows are occurrences too, so a folder parent nests its children like any other row.
