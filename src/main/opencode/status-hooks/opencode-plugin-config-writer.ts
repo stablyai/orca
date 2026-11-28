@@ -13,6 +13,17 @@ import {
   writeOpenCodeTuiPluginDirectory
 } from '../../../shared/agent-launch/plugins/opencode/opencode-tui-plugin-install'
 
+let cachedSourceBytes: { source: string; bytes: Buffer } | null = null
+
+function encodePluginSource(source: string): Buffer {
+  if (cachedSourceBytes?.source === source) {
+    return cachedSourceBytes.bytes
+  }
+  const bytes = Buffer.from(source, 'utf8')
+  cachedSourceBytes = { source, bytes }
+  return bytes
+}
+
 export function writeOpenCodePluginConfig(options: {
   configDir: string
   pluginFileName: string
@@ -33,9 +44,10 @@ export function writeOpenCodePluginConfig(options: {
     writeOpenCodeTuiPlugin(pluginsDir, options.pluginFileName, source, options.ownership)
   }
   const overlay = options.ownership === 'overlay'
+  const sourceBytes = encodePluginSource(source)
   const current = overlay
-    ? isOverlayOpenCodePluginCurrent(pluginPath, source)
-    : isInstalledOpenCodePluginCurrent(pluginPath, source)
+    ? isOverlayOpenCodePluginCurrent(pluginPath, sourceBytes)
+    : isInstalledOpenCodePluginCurrent(pluginPath, sourceBytes)
   if (!current) {
     const write = overlay
       ? writeOverlayOpenCodePluginAtomically

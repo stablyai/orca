@@ -8,7 +8,6 @@ import {
   type WorkerFollowUpReceipt
 } from '../workers/worker-start-agent-view'
 import { withResolvedNextCommands } from '../recovery/orchestration-mutation-recovery'
-import { resolve } from 'node:path'
 import {
   getOptionalStringFlag,
   getRepeatedStringFlag,
@@ -26,6 +25,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
+import { resolveCallerFilePath } from '../../arguments/caller-file-path'
 
 const WORKER_DONE_RETRY_MS = 120_000
 
@@ -246,6 +246,6 @@ function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }
 
 /** `--file`, each by its full path from the caller's folder. */
 function attachedFiles(flags: Map<string, string | boolean>, cwd: string): { files?: string[] } {
-  const files = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
+  const files = getRepeatedStringFlag(flags, 'file').map((path) => resolveCallerFilePath(path, cwd))
   return files.length > 0 ? { files } : {}
 }

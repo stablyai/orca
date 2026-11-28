@@ -1742,7 +1742,8 @@
         "add": "為此存放庫新增伺服器",
         "files": "來自此存放庫的檔案",
         "open": "開啟 {{file}}"
-      }
+      },
+      "unreadable": "無法在這台電腦上開啟已儲存的登入或金鑰"
     },
     "navigation": {
       "accounts": {
@@ -13039,8 +13040,11 @@
           "restarting": "正在重新啟動…",
           "updated": "已更新",
           "failed": "更新失敗",
-          "serviceManagerHelp": "在伺服器主機上更新 Orca — 如果是從 .deb 或 .rpm 安裝的，則透過其系統套件管理程式，否則透過啟動它的服務管理程式。",
-          "unpackedHelp": "開發版本必須從檢出的原始碼更新。",
+          "nodeServerHelp": "遠端更新已關閉：此伺服器執行 Orca 時沒有內建更新程式，Orca 的 Node 伺服器（orcad）就是如此。請在伺服器上安裝較新的 Orca 版本，然後重新啟動 orca serve。",
+          "updaterNotStartedHelp": "遠端更新已關閉：此伺服器上的 Orca 尚未啟動更新程式。請在伺服器上重新啟動 Orca 後再檢查一次，或直接在伺服器上更新。",
+          "headlessServeHelp": "遠端更新已關閉：此伺服器執行 orca serve 時沒有更新監督程式，因此無法自行以新版本重新啟動。請在伺服器上更新 Orca，然後重新啟動其服務。",
+          "systemPackageHelp": "遠端更新已關閉：此伺服器上的 Orca 是透過系統套件或其他安裝程式安裝的，必須由它來更新。請用安裝時的方式更新，例如 .deb 或 .rpm 使用 apt 或 dnf。",
+          "devBuildHelp": "遠端更新已關閉：此伺服器執行的是開發版本。請從其原始碼目錄更新。",
           "legacyHelp": "此伺服器無法遠端更新。請在伺服器主機上更新 Orca。",
           "managedOverSshHelp": "這臺電腦會透過 SSH 更新此伺服器。請在「遠端 Orca 伺服器」中，點選此伺服器所在列的「更新」。"
         },
@@ -19949,8 +19953,7 @@
           "more": "更多成品操作"
         },
         "ArtifactCollection": {
-          "loadMore": "載入更多",
-          "noMatches": "沒有符合項"
+          "loadMore": "載入更多"
         },
         "ArtifactDetailHeader": {
           "publicLink": "任何取得此連結的人都能檢視",
@@ -22385,7 +22388,9 @@
           "needsAuth": "需要登入",
           "needsAuthAfterSend": "需要登入。傳送訊息後即可在此登入。",
           "pending": "正在連線…",
-          "tools_other": "{{count}} 個工具"
+          "tools_other": "{{count}} 個工具",
+          "orcaRemoved": "已移除：下一則訊息時重新啟動",
+          "orcaChanged": "已變更：下一則訊息時重新啟動"
         },
         "signIn": {
           "external": "請在開啟的頁面完成",
@@ -22425,7 +22430,8 @@
           "user": "使用者",
           "plugin": "外掛",
           "session": "工作階段"
-        }
+        },
+        "stillFailing": "重新連線後仍然失敗。"
       }
     },
     "tab": {
@@ -24994,6 +25000,7 @@
       "errors": {
         "ownerSilent": "發起這次登入的裝置已停止回應。",
         "superseded": "此主機上的帳戶變更中斷了登入。請重新開始。",
+        "noPrompt": "伺服器的登入指令在一分鐘內沒有顯示登入連結。請更新伺服器上的 Orca，然後再試一次。",
         "failed": "登入失敗。請再試一次。"
       }
     },
@@ -25279,8 +25286,7 @@
         "failing": "失敗",
         "running": "待處理",
         "cancelled": "已取消",
-        "passing": "通過",
-        "more": "另有 {{count}} 個"
+        "passing": "通過"
       }
     },
     "attachments": {

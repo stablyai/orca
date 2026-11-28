@@ -1,11 +1,12 @@
 // A comment's images, fitted to the card: one at its own size, two side by side, more in rows of three,
-// read from the bot's host. One or two carry their file names, except in chat, where images go unnamed.
+// read from the bot's host. One or two carry user-supplied filenames outside chat.
 // Past six, five show with a "+N" tile that shows the rest. A click opens chat's viewer over all of the
 // comment's images.
 import { useContext, useMemo, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotItemCommentImage } from '../../../../../shared/bots/bot-items'
+import { isNativeChatPastedImagePath } from '../../../../../shared/native-chat/attachments/native-chat-image-label'
 import {
   NativeChatImageTile,
   NativeChatImageViewer
@@ -44,7 +45,12 @@ export function BotItemCommentImages({
   const [all, setAll] = useState(false)
   const [viewing, setViewing] = useState<number | null>(null)
   const blocks = useMemo(
-    () => images.map(({ path, name }) => ({ type: 'image-ref' as const, path, alt: name })),
+    () =>
+      images.map(({ path, name }) => ({
+        type: 'image-ref' as const,
+        path,
+        alt: isNativeChatPastedImagePath(name) ? undefined : name
+      })),
     [images]
   )
   if (images.length === 0) {
@@ -69,7 +75,7 @@ export function BotItemCommentImages({
             className={layout.tile}
             imageClassName={layout.image}
           />
-          {captioned ? (
+          {captioned && block.alt ? (
             <span className="truncate text-2xs text-muted-foreground">{block.alt}</span>
           ) : null}
         </div>

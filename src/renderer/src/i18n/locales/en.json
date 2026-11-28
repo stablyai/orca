@@ -2252,7 +2252,8 @@
         "add": "Add a server for this repo",
         "files": "From this repo’s files",
         "open": "Open {{file}}"
-      }
+      },
+      "unreadable": "Saved sign-in or key can’t be opened on this computer"
     }
   },
   "menu": {
@@ -13540,8 +13541,11 @@
           "restarting": "Restarting…",
           "updated": "Updated",
           "failed": "Update failed",
-          "serviceManagerHelp": "Update Orca on the server host — through its system package manager if it was installed from a .deb or .rpm, otherwise through the service manager that starts it.",
-          "unpackedHelp": "Development builds must be updated from their source checkout.",
+          "nodeServerHelp": "Remote updates are off: this server runs Orca without its built-in updater, as Orca’s Node server (orcad) does. Install the newer Orca release on the server, then restart orca serve.",
+          "updaterNotStartedHelp": "Remote updates are off: Orca on this server has not started its updater. Restart Orca there and check again, or update it on the server.",
+          "headlessServeHelp": "Remote updates are off: this server runs orca serve without an update supervisor, so it cannot restart itself into a new version. Update Orca on the server, then restart its service.",
+          "systemPackageHelp": "Remote updates are off: Orca on this server was installed by a system package or another installer that has to update it. Update it the way it was installed, for example with apt or dnf for a .deb or .rpm.",
+          "devBuildHelp": "Remote updates are off: this server runs a development build. Update it from its source checkout.",
           "legacyHelp": "Remote updates are unavailable for this server. Update Orca on the server host.",
           "managedOverSshHelp": "This desktop updates this server over SSH. Use Update on its row in Remote Orca Servers."
         },
@@ -20521,7 +20525,12 @@
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
           "signInAgainAction": "Sign in again",
           "unconfiguredCopy": "Orca account sign-in is not configured on this machine yet.",
-          "openAccountSettings": "Open account settings"
+          "openAccountSettings": "Open account settings",
+          "deleteManyDescription_one": "{{count}} artifact will no longer be available at its public link.",
+          "deleteManyDescription_other": "{{count}} artifacts will no longer be available at their public links.",
+          "deleteNamedFailed": "Could not delete “{{name}}”.",
+          "deleteBatchStopped_one": "Could not delete “{{name}}”. {{count}} more was not deleted.",
+          "deleteBatchStopped_other": "Could not delete “{{name}}”. {{count}} more were not deleted."
         },
         "copySuccess": "Artifact link copied",
         "copyFailed": "Could not copy artifact link",
@@ -20536,7 +20545,7 @@
         },
         "ArtifactCollection": {
           "loadMore": "Load more",
-          "noMatches": "No matches"
+          "noMatchingArtifacts": "No matching artifacts"
         },
         "ArtifactDetailHeader": {
           "publicLink": "Anyone with this link can view it",
@@ -20598,14 +20607,34 @@
           "size": "Size",
           "updated": "Updated",
           "expires": "Expires",
-          "actions": "Actions"
+          "actions": "Actions",
+          "selectAll": "Select all"
         },
         "ArtifactsPageSkeleton": {
           "loading": "Loading artifacts"
         },
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
-        "typeHtml": "HTML"
+        "typeHtml": "HTML",
+        "ArtifactListFilterMenu": {
+          "clearFilters": "Clear filters",
+          "any": "Any time",
+          "today": "Today",
+          "pastWeek": "Past 7 days",
+          "pastMonth": "Past 30 days",
+          "anyExpiry": "Any",
+          "withinWeek": "Within 7 days",
+          "expired": "Expired"
+        },
+        "ArtifactListRow": {
+          "select": "Select {{name}}"
+        },
+        "ArtifactListSelectionBar": {
+          "delete": "Delete",
+          "clear": "Clear",
+          "selected_one": "{{count}} selected",
+          "selected_other": "{{count}} selected"
+        }
       },
       "BrowserCookieImportMachineNotice": {
         "remoteLabel": "Browsers on {{value0}}",
@@ -22745,7 +22774,9 @@
           "failedReason": "Failed: {{error}}",
           "disabled": "Disabled",
           "notStarted": "Not started",
-          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here."
+          "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+          "orcaRemoved": "Removed: restarts on next message",
+          "orcaChanged": "Changed: restarts on next message"
         },
         "signIn": {
           "action": "Sign in",
@@ -22760,7 +22791,8 @@
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
         },
-        "manage": "Manage MCP servers"
+        "manage": "Manage MCP servers",
+        "stillFailing": "Still failing after reconnecting."
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -25769,6 +25801,7 @@
       "errors": {
         "ownerSilent": "The device that started this sign-in stopped answering.",
         "superseded": "An account change on this host stopped the sign-in. Start it again.",
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
         "failed": "Sign-in failed. Try again."
       }
     },
@@ -26057,8 +26090,7 @@
         "failing": "failing",
         "running": "running",
         "cancelled": "cancelled",
-        "passing": "passing",
-        "more": "+{{count}} more"
+        "passing": "passing"
       }
     },
     "attachments": {
@@ -26536,10 +26568,12 @@
     "orchestrator": {
       "showTerminal": "Show terminal",
       "moveAgain": "Move again",
+      "move": "Move",
       "checkAgain": "Check again",
       "deferred": "Finishing your move to the {{distro}} host: some terminals are still busy.",
       "stuck": "An earlier move to the {{distro}} host hasn't finished settling.",
       "declined": "Moving is paused because you brought these projects back to this computer.",
+      "stateLost": "Orca lost your earlier choice for {{distro}}, so it won't move these projects on its own.",
       "doneToast": "Projects moved to the {{distro}} host",
       "terminalGone": "That terminal isn't open in this window any more. Check again to refresh.",
       "blocker": "{{title}}. {{hint}}",
@@ -28120,6 +28154,9 @@
       "unreachable": "Couldn't reach {{hosts}}. The bot may be there; open the link again once it's back.",
       "pick": "More than one computer has a bot for this link: {{hosts}}. Open it from the sidebar.",
       "updateNeeded": "Update Orca on {{hosts}} to open this bot here."
+    },
+    "chatOpen": {
+      "homeDidNotLoad": "Bot's Home didn't load."
     },
     "activity": {
       "title": "Activity",

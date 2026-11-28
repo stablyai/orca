@@ -33,6 +33,39 @@ export function writeOpenCodeTuiPlugin(
   )
 }
 
+let cachedTuiSource: {
+  source: string
+  directoryName: string
+  tuiSource: string
+  tuiBytes: Buffer
+  isDerived: boolean
+} | null = null
+
+function resolveOpenCodeTuiSource(source: string, directoryName: string) {
+  if (
+    cachedTuiSource &&
+    cachedTuiSource.source === source &&
+    cachedTuiSource.directoryName === directoryName
+  ) {
+    return cachedTuiSource
+  }
+  // The 1.x TUI loader rejects a default object that also exposes server().
+  const isDerived =
+    source.includes('const ORCA_STATUS_AGENT = "opencode";') &&
+    source.includes('async function setupLegacyOpenCodeTui(')
+  const tuiSource = isDerived
+    ? `${source.replace(/^export default /m, 'const orcaServerPlugin = ')}\nconst { server: _orcaServerOnly, ...orcaTuiPlugin } = orcaServerPlugin;\nexport default { id: ${JSON.stringify(directoryName.replace(/-tui$/, ''))}, setup: setupOpenCode2Status, ...orcaTuiPlugin, tui: setupLegacyOpenCodeTui };\n`
+    : source
+  cachedTuiSource = {
+    source,
+    directoryName,
+    tuiSource,
+    tuiBytes: Buffer.from(tuiSource, 'utf8'),
+    isDerived
+  }
+  return cachedTuiSource
+}
+
 export function writeOpenCodeTuiPluginDirectory(
   pluginsDir: string,
   directoryName: string,
@@ -41,16 +74,11 @@ export function writeOpenCodeTuiPluginDirectory(
 ): void {
   const dir = join(pluginsDir, directoryName)
   const entry = join(dir, 'tui.js')
-  // The 1.x TUI loader rejects a default object that also exposes server().
-  const tuiSource =
-    source.includes('const ORCA_STATUS_AGENT = "opencode";') &&
-    source.includes('async function setupLegacyOpenCodeTui(')
-      ? `${source.replace(/^export default /m, 'const orcaServerPlugin = ')}\nconst { server: _orcaServerOnly, ...orcaTuiPlugin } = orcaServerPlugin;\nexport default { id: ${JSON.stringify(directoryName.replace(/-tui$/, ''))}, setup: setupOpenCode2Status, ...orcaTuiPlugin, tui: setupLegacyOpenCodeTui };\n`
-      : source
+  const { tuiSource, tuiBytes, isDerived } = resolveOpenCodeTuiSource(source, directoryName)
   const isCurrent =
     ownership === 'canonical' ? isInstalledOpenCodePluginCurrent : isOverlayOpenCodePluginCurrent
-  if (isCurrent(entry, tuiSource)) {
-    if (tuiSource !== source) {
+  if (isCurrent(entry, tuiBytes)) {
+    if (isDerived) {
       registerTuiPlugin(pluginsDir, entry, ownership)
     }
     return
@@ -61,7 +89,7 @@ export function writeOpenCodeTuiPluginDirectory(
       ? writeCanonicalOpenCodePluginAtomically
       : writeOverlayOpenCodePluginAtomically
   write(entry, tuiSource)
-  if (tuiSource !== source) {
+  if (isDerived) {
     registerTuiPlugin(pluginsDir, entry, ownership)
   }
 }
