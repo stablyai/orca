@@ -20,11 +20,12 @@ const LEGACY_ATTACHMENT_REFUSAL_CODES: readonly string[] = [
 export function legacyAttachmentRefusal(
   db: OrchestrationDb,
   terminalHandle: string,
-  livePaneKey: string | null | undefined
+  livePaneKey: string | null | undefined,
+  byRetainedHandle = true
 ): LegacyAttachmentRefusal | undefined {
   const attachment =
     (livePaneKey ? db.findActiveRemoteAttachmentForPane(livePaneKey) : undefined) ??
-    retainedLiveAttachment(db, terminalHandle)
+    (byRetainedHandle ? retainedLiveAttachment(db, terminalHandle) : undefined)
   if (!attachment) {
     return undefined
   }
@@ -100,12 +101,18 @@ export function refuseLegacyAttachedRecipient(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
   to: string,
-  nothingDone: string
+  nothingDone: string,
+  byRetainedHandle = true
 ): void {
   if (to.startsWith('run:') || to.startsWith('dispatch:')) {
     return
   }
-  const refusal = legacyAttachmentRefusal(db, to, runtime.getLiveTerminalPaneKey(to))
+  const refusal = legacyAttachmentRefusal(
+    db,
+    to,
+    runtime.getLiveTerminalPaneKey(to),
+    byRetainedHandle
+  )
   if (refusal) {
     throw legacyAttachmentError(refusal, nothingDone)
   }

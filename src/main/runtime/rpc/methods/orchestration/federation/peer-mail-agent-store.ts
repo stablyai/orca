@@ -66,8 +66,16 @@ export async function storePeerMailForAgent<R>(
     )
     return null
   }
-  // Its mailbox is its Dispatch, which only its Run home writes to.
-  refuseLegacyAttachedRecipient(runtime, db, recipient.to, 'Nothing was delivered.')
+  // Its mailbox is its Dispatch, which only its Run home writes to. A reply coming home keeps
+  // main's check: the live pane only.
+  const byRetainedHandle = !params.keepLegacyAttachedRouting
+  refuseLegacyAttachedRecipient(
+    runtime,
+    db,
+    recipient.to,
+    'Nothing was delivered.',
+    byRetainedHandle
+  )
   // Before storing, as a local send does: a waiter the arrival resolves is gone by the time the receipt reads.
   const takenByWaiter = runtime.hasMessageWaiterFor(recipient.to, params.type ?? 'status')
   const stored = db.insertPeerMailMessage({
