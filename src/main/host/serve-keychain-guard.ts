@@ -2,7 +2,10 @@ import {
   describeKeychainUnavailable,
   probeMacosKeychainReachability
 } from './macos-keychain-reachability'
-import { probeMacosKeychainAccess } from './macos-keychain-access-probe'
+import {
+  confirmMacosKeychainPersistentGrant,
+  probeMacosKeychainAccess
+} from './macos-keychain-access-probe'
 import { releaseSafeStorageWithhold, withholdSafeStorage } from './safe-storage-availability'
 
 const KEYCHAIN_PROMPT_REASON = 'the macOS keychain is showing an access prompt for this Orca build'
@@ -37,34 +40,67 @@ export async function withholdUnreachableKeychainForServe(
   )
 }
 
+const KEYCHAIN_GRANTED_LOG =
+  '[secrets] macOS keychain access granted; secrets are available again. Restart orca serve to apply sealed settings read at startup.'
+const KEYCHAIN_ONCE_LOG =
+  '[secrets] macOS keychain access was allowed once, not always; secrets stay unavailable until orca serve restarts.'
+
 /** A reachable keychain can still block safeStorage on an ACL dialog after an Electron upgrade; keep serve answering meanwhile. */
 async function withholdPromptingKeychainForServe(
   options: { electronPath: string; appName: string },
   warn: (message: string) => void
 ): Promise<void> {
   const first = probeMacosKeychainAccess(options)
-  if ((await first.answer) !== 'prompting') {
+  const firstAnswer = await first.answer
+  if (firstAnswer === 'unavailable' || firstAnswer === 'unknown') {
     return
   }
-  withholdSafeStorage(KEYCHAIN_PROMPT_REASON)
-  warn(
-    `[secrets] Secrets are unavailable for now: ${KEYCHAIN_PROMPT_REASON}. Choose "Always Allow" in the "${options.appName} Safe Storage" dialog; sealed settings such as the Orca account sign-in are skipped until then.`
-  )
+  if (firstAnswer === 'available') {
+    // Allow once inside the first window also reports available. Require a persistent grant.
+    if (await confirmMacosKeychainPersistentGrant(options)) {
+      return
+    }
+    withholdForKeychainPrompt(options, warn)
+    void releaseIfLaterGrantIsPersistent(options, warn)
+    return
+  }
+  withholdForKeychainPrompt(options, warn)
   void first.settled.then(async (outcome) => {
     if (outcome !== 'available') {
       warn(`[secrets] The macOS keychain access prompt ended without access (${outcome}).`)
       return
     }
-    // "Allow" once grants only the probe; a second silent answer proves "Always Allow" covers this binary.
-    if ((await probeMacosKeychainAccess(options).answer) === 'available') {
+    if (await confirmMacosKeychainPersistentGrant(options)) {
       releaseSafeStorageWithhold(KEYCHAIN_PROMPT_REASON)
-      warn(
-        '[secrets] macOS keychain access granted; secrets are available again. Restart orca serve to apply sealed settings read at startup.'
-      )
-    } else {
-      warn(
-        '[secrets] macOS keychain access was allowed once, not always; secrets stay unavailable until orca serve restarts.'
-      )
+      warn(KEYCHAIN_GRANTED_LOG)
+      return
     }
+    await releaseIfLaterGrantIsPersistent(options, warn)
   })
+}
+
+function withholdForKeychainPrompt(
+  options: { appName: string },
+  warn: (message: string) => void
+): void {
+  withholdSafeStorage(KEYCHAIN_PROMPT_REASON)
+  warn(
+    `[secrets] Secrets are unavailable for now: ${KEYCHAIN_PROMPT_REASON}. Choose "Always Allow" in the "${options.appName} Safe Storage" dialog; sealed settings such as the Orca account sign-in are skipped until then.`
+  )
+}
+
+/** A dialog answered after the confirmation window. Its own available result can still be Allow once. */
+async function releaseIfLaterGrantIsPersistent(
+  options: { electronPath: string; appName: string },
+  warn: (message: string) => void
+): Promise<void> {
+  const retry = probeMacosKeychainAccess(options)
+  const answer = await retry.answer
+  const outcome = answer === 'prompting' ? await retry.settled : answer
+  if (outcome === 'available' && (await confirmMacosKeychainPersistentGrant(options))) {
+    releaseSafeStorageWithhold(KEYCHAIN_PROMPT_REASON)
+    warn(KEYCHAIN_GRANTED_LOG)
+    return
+  }
+  warn(KEYCHAIN_ONCE_LOG)
 }

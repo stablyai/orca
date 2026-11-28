@@ -12,6 +12,14 @@ export type KeychainAccessProbe = {
 
 export const KEYCHAIN_ACCESS_ANSWER_MS = 20_000
 const KEYCHAIN_DIALOG_WAIT_MS = 30 * 60_000
+/** Fallback kill for a confirmation child. The grace below aborts it first. */
+const KEYCHAIN_CONFIRM_WAIT_MS = 60_000
+/**
+ * After a child that never touches Safe Storage is ready, a persistent grant has already
+ * returned. A dialog still open cannot be clicked once this elapses: the child is aborted.
+ * Electron's safeStorage API cannot ask the keychain to fail instead of prompting.
+ */
+const KEYCHAIN_PERSISTENT_GRANT_GRACE_MS = 1_000
 
 // Same binary and app name as this run, so the Safe Storage item's ACL answers the child exactly as it would answer us.
 const PROBE_SCRIPT = `const { app, safeStorage } = require('electron')
@@ -19,9 +27,14 @@ app.setName(process.env.ORCA_KEYCHAIN_PROBE_APP_NAME)
 app.setPath('userData', process.env.ORCA_KEYCHAIN_PROBE_USER_DATA)
 app.dock?.hide()
 app.whenReady().then(() => {
-  let available = false
-  try { available = safeStorage.isEncryptionAvailable() } catch {}
-  process.stdout.write(available ? 'keychain-probe:available\\n' : 'keychain-probe:unavailable\\n')
+  const touch = process.env.ORCA_KEYCHAIN_PROBE_TOUCH !== '0'
+  let marker = touch ? 'keychain-probe:unavailable' : 'keychain-probe:ready'
+  if (touch) {
+    try {
+      if (safeStorage.isEncryptionAvailable()) marker = 'keychain-probe:available'
+    } catch {}
+  }
+  process.stdout.write(marker + '\\n')
   app.exit(0)
 })
 `
@@ -32,6 +45,9 @@ export function probeMacosKeychainAccess(options: {
   appName: string
   answerMs?: number
   dialogWaitMs?: number
+  /** False proves only that Electron started. The child must not touch Safe Storage. */
+  touchSafeStorage?: boolean
+  signal?: AbortSignal
   run?: typeof runProcess
 }): KeychainAccessProbe {
   const settled = runAccessProbe(options)
@@ -49,12 +65,86 @@ export function probeMacosKeychainAccess(options: {
   return { answer, settled }
 }
 
-async function runAccessProbe(options: {
+type KeychainProbeRun = {
   electronPath: string
   appName: string
+  answerMs?: number
   dialogWaitMs?: number
+  touchSafeStorage?: boolean
+  signal?: AbortSignal
   run?: typeof runProcess
-}): Promise<'available' | 'unavailable' | 'unknown'> {
+}
+
+/**
+ * True when Safe Storage answers without waiting on a person.
+ * The grant child has to finish within a second of a twin that never touches the keychain;
+ * otherwise it is aborted, so a later Allow once click cannot authorize it.
+ */
+export async function confirmMacosKeychainPersistentGrant(options: {
+  electronPath: string
+  appName: string
+  run?: typeof runProcess
+}): Promise<boolean> {
+  const abort = new AbortController()
+  const grant = probeMacosKeychainAccess({
+    electronPath: options.electronPath,
+    appName: options.appName,
+    answerMs: KEYCHAIN_CONFIRM_WAIT_MS,
+    dialogWaitMs: KEYCHAIN_CONFIRM_WAIT_MS,
+    signal: abort.signal,
+    run: options.run
+  })
+  const startup = probeMacosKeychainAccess({
+    electronPath: options.electronPath,
+    appName: options.appName,
+    touchSafeStorage: false,
+    answerMs: KEYCHAIN_CONFIRM_WAIT_MS,
+    dialogWaitMs: KEYCHAIN_CONFIRM_WAIT_MS,
+    run: options.run
+  })
+  let persistent = false
+  try {
+    persistent = await persistentGrantWithinGrace(grant.settled, startup.settled)
+  } finally {
+    if (!persistent) {
+      abort.abort()
+    }
+  }
+  return persistent
+}
+
+async function persistentGrantWithinGrace(
+  grant: Promise<'available' | 'unavailable' | 'unknown'>,
+  startup: Promise<'available' | 'unavailable' | 'unknown'>
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    let done = false
+    let grace: ReturnType<typeof setTimeout> | undefined
+    const finish = (value: boolean) => {
+      if (done) {
+        return
+      }
+      done = true
+      if (grace) {
+        clearTimeout(grace)
+      }
+      resolve(value)
+    }
+    void grant.then((result) => finish(result === 'available'))
+    void startup.then((result) => {
+      if (result !== 'available') {
+        finish(false)
+        return
+      }
+      grace = setTimeout(() => finish(false), KEYCHAIN_PERSISTENT_GRANT_GRACE_MS)
+      grace.unref?.()
+    })
+  })
+}
+
+async function runAccessProbe(
+  options: KeychainProbeRun
+): Promise<'available' | 'unavailable' | 'unknown'> {
   let dir: string | null = null
   try {
     dir = await mkdtemp(join(tmpdir(), 'orca-keychain-probe-'))
@@ -64,14 +154,19 @@ async function runAccessProbe(options: {
     delete env.ELECTRON_RUN_AS_NODE
     env.ORCA_KEYCHAIN_PROBE_APP_NAME = options.appName
     env.ORCA_KEYCHAIN_PROBE_USER_DATA = join(dir, 'user-data')
+    env.ORCA_KEYCHAIN_PROBE_TOUCH = options.touchSafeStorage === false ? '0' : '1'
     const result = await (options.run ?? runProcess)({
       program: options.electronPath,
       args: [script, `--user-data-dir=${join(dir, 'user-data')}`],
       env,
       timeoutMs: options.dialogWaitMs ?? KEYCHAIN_DIALOG_WAIT_MS,
-      maxOutputBytes: 16 * 1024
+      maxOutputBytes: 16 * 1024,
+      signal: options.signal
     })
     if (result.stdout.includes('keychain-probe:available')) {
+      return 'available'
+    }
+    if (options.touchSafeStorage === false && result.stdout.includes('keychain-probe:ready')) {
       return 'available'
     }
     return result.stdout.includes('keychain-probe:unavailable') ? 'unavailable' : 'unknown'
