@@ -23,18 +23,20 @@ import type {
   ImportItemResult,
   ResolveDroppedPathsResult
 } from '../../../../shared/file-import/filesystem-import-result'
-import type {
-  StagedRuntimeUploadSource as StagedExternalImportSource,
-  RuntimeUploadFileStreamRequest
-} from '../../../../shared/file-import/runtime-upload-staging-contract'
-import { importOneSource } from '../imports/filesystem-import-local'
 import {
   stagedRuntimeUploadByteLength,
-  stageOneSourceForRuntimeUpload
-} from '../imports/filesystem-runtime-upload-staging'
+  type StagedRuntimeUploadSource as StagedExternalImportSource,
+  type RuntimeUploadFileStreamRequest
+} from '../../../../shared/file-import/runtime-upload-staging-contract'
+import { importOneSource } from '../imports/filesystem-import-local'
+import { stageOneSourceForRuntimeUpload } from '../imports/filesystem-runtime-upload-staging'
 import { streamExternalFileToRuntime } from '../../runtime-transfers/runtime-upload-file-stream'
 import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
 import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-transfers/runtime-upload-temp-sweep'
+import {
+  cancelRuntimeUpload,
+  trackRuntimeUpload
+} from '../../runtime-transfers/runtime-upload-tracking'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 
@@ -221,29 +223,48 @@ export function registerFilesystemMutationHandlers(
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
       const lifetime = abortWhenRendererGone(event.sender)
+      // Register before the first await so a cancel invoked right after this call finds it.
+      const tracking =
+        typeof args.uploadId === 'string' ? trackRuntimeUpload(event.sender, args.uploadId) : null
+      const signal = tracking
+        ? AbortSignal.any([lifetime.signal, tracking.signal])
+        : lifetime.signal
       let request: RuntimeUploadFileStreamRequest | undefined
       try {
         request = {
           ...args,
           environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id
         }
-        lifetime.signal.throwIfAborted()
+        signal.throwIfAborted()
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
-          signal: lifetime.signal
+          signal,
+          onProgress: tracking?.reportProgress
         })
       } catch (error) {
-        if (lifetime.signal.aborted && request) {
-          // The renderer cannot clean up its temp path after it disappears.
+        if (signal.aborted && request) {
+          // A gone renderer cannot clean up its temp path; after a cancel, an in-flight append can recreate it.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }
         throw error
       } finally {
+        tracking?.end()
         lifetime.dispose()
       }
     }
   )
+
+  ipcMain.handle('fs:cancelRuntimeUpload', (event, args: unknown): void => {
+    if (
+      typeof args === 'object' &&
+      args !== null &&
+      'uploadId' in args &&
+      typeof args.uploadId === 'string'
+    ) {
+      cancelRuntimeUpload(event.sender.id, args.uploadId)
+    }
+  })
 
   // Terminal drops reference local paths in place; explorer imports copy into a picked destination.
   ipc.handle(
