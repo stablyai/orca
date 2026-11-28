@@ -22,10 +22,10 @@ import {
 } from '../../../../shared/worktree/visibility/ownership'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'
 import {
   getFolderWorkspaceInstanceIdentity,
   getFolderWorkspaceRootId,
-  isFolderWorkspaceIdForRepo,
   mergeFolderWorkspace
 } from '../folder-workspace-model'
 
@@ -53,14 +53,11 @@ function folderMetaWriter(
 export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const writeMeta = folderMetaWriter(store, repo)
   const rootId = getFolderWorkspaceRootId(repo)
+  const instancePrefix = `${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
   const allMeta = store.getAllWorktreeMeta()
   const ids: string[] = [rootId]
   for (const worktreeId in allMeta) {
-    if (
-      worktreeId !== rootId &&
-      Object.hasOwn(allMeta, worktreeId) &&
-      isFolderWorkspaceIdForRepo(repo, worktreeId)
-    ) {
+    if (worktreeId.startsWith(instancePrefix) && Object.hasOwn(allMeta, worktreeId)) {
       ids.push(worktreeId)
     }
   }
