@@ -14,6 +14,7 @@ import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from '../commands/pending-editor-focus-request'
 import { installMonacoEditorInputBindings } from './monaco-editor-input-bindings'
+import { registerImportNavigationEditor } from '@/lib/editor/monaco/monaco-import-definitions'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import {
   installMonacoViewStateTracking,
@@ -186,6 +187,11 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         setSelectionAnnotationTarget
       })
 
+      const unregisterImportNavigation = registerImportNavigationEditor(
+        editorInstance,
+        () => fileIdRef.current
+      )
+
       const { cursorPositionSub, scrollStateSub } = installMonacoViewStateTracking({
         editorInstance,
         fileIdRef,
@@ -214,6 +220,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         cursorPositionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
+        unregisterImportNavigation()
         disposeInputBindings()
         autoHeightSub?.dispose()
         if (autoHeightFrame !== null) {
