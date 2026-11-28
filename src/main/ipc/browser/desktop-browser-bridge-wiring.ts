@@ -32,7 +32,10 @@ import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browse
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RpcDispatcher } from '../../runtime/rpc/dispatcher'
-import { createDesktopBrowserBridgeRpcDispatcher } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-rpc-dispatcher'
+import {
+  createDesktopBrowserBridgeRpcDispatcher,
+  dispatchDesktopBrowserBridgeRpc
+} from '../../browser/desktop-browser-bridge/desktop-browser-bridge-rpc-dispatcher'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
@@ -216,11 +219,7 @@ export function installDesktopBrowserBridge(options: {
           worktreeIdForPage: (browserPageId) =>
             browserManager.getWorktreeIdForTab(browserPageId) ?? null,
           dispatch: (method, params) =>
-            // Why: the SSH host's orca CLI is an agent caller; the cursor and tab badge key off it.
-            getDispatcher().dispatch(
-              { id: randomUUID(), authToken: '', method, params },
-              { caller: { kind: 'local-cli' } }
-            ),
+            dispatchDesktopBrowserBridgeRpc(getDispatcher(), method, params),
           hostFiles: hostFilesFor(candidate),
           audit: (entry) => log(`audit ${JSON.stringify(entry)}`)
         },

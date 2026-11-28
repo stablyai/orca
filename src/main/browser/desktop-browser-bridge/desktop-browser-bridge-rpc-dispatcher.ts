@@ -1,6 +1,9 @@
 import { isDesktopBrowserBridgeMethod } from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
+import { randomUUID } from 'node:crypto'
+import { captureRemoteCliBrowserRevocation } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
+import type { RpcResponse } from '../../runtime/rpc/core'
 import type { LazyRpcMethodGroup } from '../../runtime/rpc/lazy-rpc-method-group'
 import { DEFAULT_RPC_DISPATCH_CONFIG } from '../../runtime/rpc/methods/eager-rpc-method-registry'
 
@@ -23,4 +26,20 @@ export function createDesktopBrowserBridgeRpcDispatcher(
     lazyGroups: BRIDGE_LAZY_GROUPS,
     callerScope: { kind: 'runtime-paired', grants: [] }
   })
+}
+
+export async function dispatchDesktopBrowserBridgeRpc(
+  dispatcher: RpcDispatcher,
+  method: string,
+  params: Record<string, unknown>
+): Promise<RpcResponse> {
+  const assertNotRevoked = captureRemoteCliBrowserRevocation()
+  await dispatcher.ensureMethodLoaded(method)
+  // The bridge can be revoked while the lazy group loads; nothing may reach the renderer after that.
+  assertNotRevoked()
+  // Why: the SSH host's orca CLI is an agent caller; the cursor and tab badge key off it.
+  return dispatcher.dispatch(
+    { id: randomUUID(), authToken: '', method, params },
+    { caller: { kind: 'local-cli' } }
+  )
 }

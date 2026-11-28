@@ -8,7 +8,10 @@ import {
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { executeDesktopBrowserBridgeRequest } from './desktop-browser-bridge-executor'
 import { DesktopBrowserBridgeHostFiles } from './desktop-browser-bridge-host-files'
-import { createDesktopBrowserBridgeRpcDispatcher } from './desktop-browser-bridge-rpc-dispatcher'
+import {
+  createDesktopBrowserBridgeRpcDispatcher,
+  dispatchDesktopBrowserBridgeRpc
+} from './desktop-browser-bridge-rpc-dispatcher'
 
 function bridge() {
   const runtime = new OrcaRuntimeService(null)
@@ -17,11 +20,11 @@ function bridge() {
     .spyOn(runtime, 'browserCookieGet')
     .mockRejectedValue(new Error('unreachable'))
   const dispatcher = createDesktopBrowserBridgeRpcDispatcher(runtime)
+  const tabCreate = vi
+    .spyOn(runtime, 'browserTabCreate')
+    .mockRejectedValue(new Error('unreachable'))
   const dispatch = vi.fn((method: string, params: Record<string, unknown>) =>
-    dispatcher.dispatch(
-      { id: 'req', authToken: '', method, params },
-      { caller: { kind: 'local-cli' } }
-    )
+    dispatchDesktopBrowserBridgeRpc(dispatcher, method, params)
   )
   const hostFiles = new DesktopBrowserBridgeHostFiles({
     stagingRoot: path.join(tmpdir(), `orca-bridge-test-${process.pid}`),
@@ -45,7 +48,7 @@ function bridge() {
       },
       signal
     )
-  return { dispatcher, dispatch, execute, tabList, cookieGet }
+  return { dispatcher, dispatch, execute, tabList, cookieGet, tabCreate }
 }
 
 describe('desktop browser bridge restricted dispatcher', () => {
@@ -84,5 +87,24 @@ describe('desktop browser bridge restricted dispatcher', () => {
     })
     expect(dispatch).not.toHaveBeenCalled()
     expect(tabList).not.toHaveBeenCalled()
+  })
+
+  it('refuses a command whose bridge is revoked while its lazy group loads', async () => {
+    const { dispatcher, execute, tabCreate } = bridge()
+    const revoked = new AbortController()
+    const load = dispatcher.ensureMethodLoaded.bind(dispatcher)
+    vi.spyOn(dispatcher, 'ensureMethodLoaded').mockImplementation(async (method) => {
+      const loading = load(method)
+      revoked.abort()
+      await loading
+    })
+    const dispatchAfterLoad = vi.spyOn(dispatcher, 'dispatch')
+    const outcome = await execute('browser.tabCreate', revoked.signal)
+    expect(outcome).toMatchObject({
+      ok: false,
+      error: { code: DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE }
+    })
+    expect(dispatchAfterLoad).not.toHaveBeenCalled()
+    expect(tabCreate).not.toHaveBeenCalled()
   })
 })
