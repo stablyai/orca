@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { refreshBotHost, updateBot, useCardBot } from '@/lib/bot-catalog'
+import { publishBotOfferAnswer } from '@/lib/bot-offer-answer-publish'
 import { callBotRpc } from '@/lib/bot-hosts'
 import {
   BOTS_CONFIRMED_OFFER_ANSWER_RUNTIME_CAPABILITY,
@@ -42,16 +43,20 @@ export type NativeChatOffer = {
   confirm: (tell: () => Promise<BotOfferTold>) => void
 }
 
-/** Confirms a card answer, then reloads the host's bots whether or not it was taken. Kept out of the
- *  hook: React Compiler can't compile a try/finally. */
+/** Confirms a card answer and shows what the host saved, then reloads the host's bots whether or not
+ *  it was taken. Kept out of the hook: React Compiler can't compile a try/finally. */
 async function confirmAndRefresh(
   tell: () => Promise<BotOfferTold>,
-  hostId: Parameters<typeof refreshBotHost>[0]
+  ref: Parameters<typeof publishBotOfferAnswer>[0]
 ): Promise<BotOfferAnswerOutcome> {
   try {
-    return (await confirmBotOfferAnswer(tell)).sent ? 'sent' : 'refused'
+    const told = await confirmBotOfferAnswer(tell)
+    if (told.answer) {
+      publishBotOfferAnswer(ref, told.answer)
+    }
+    return told.sent ? 'sent' : 'refused'
   } finally {
-    await refreshBotHost(hostId)
+    await refreshBotHost(ref.hostId)
   }
 }
 
@@ -85,7 +90,7 @@ export function useNativeChatOffer(botId: string, cardId: string): NativeChatOff
     }
   }
   const confirm = (tell: () => Promise<BotOfferTold>): void => {
-    void run(() => confirmAndRefresh(tell, ref.hostId), true)
+    void run(() => confirmAndRefresh(tell, ref), true)
   }
   // Claimed on the host before the send, so a second window, device or press sends nothing; a refused send gives
   // the claim back and leaves the card to press again.

@@ -11,7 +11,8 @@ import {
   type BotOfferSelection,
   type BotOfferTold
 } from '../../../../shared/bots/bot-offer-answers'
-import type { PendingBotOfferAnswer } from '../../../bots/bot-offer-answer-writes'
+import { offerAnswerKey, type PendingBotOfferAnswer } from '../../../bots/bot-offer-answer-writes'
+import { mintAgentSessionOperationId } from '../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { botOfSession } from '../../../bots/bot-session-tabs'
@@ -21,6 +22,11 @@ import { ownerOnly } from './bots-caller-gates'
 
 type CardAnswer = { selection: BotOfferSelection; googleActionId?: string }
 type AnswerText = string | ((current?: BotOfferAnswer) => Promise<string | null>)
+/** Tells the bot under `operationId`; the same id again replays an admitted turn. */
+type TellCard = (
+  current: BotOfferAnswer | undefined,
+  operationId: string
+) => Promise<BotOfferTold | null>
 
 const queuesByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Promise<void>>>()
 
@@ -92,11 +98,12 @@ function confirmCardAnswer(
   runtime: OrcaRuntimeService,
   botId: string,
   card: CardAnswer,
-  tell: (current?: BotOfferAnswer) => Promise<BotOfferTold | null>
+  tell: TellCard
 ): Promise<BotOfferTold> {
   const { selection, googleActionId } = card
-  const key = JSON.stringify([botId, selection.cardId])
-  const { pending } = runtime.bots.offerAnswerWrites
+  const key = offerAnswerKey(botId, selection.cardId)
+  const writes = runtime.bots.offerAnswerWrites
+  const { pending, operations } = writes
   return runKeyedSerializedOperation(answerQueues(runtime), key, async () => {
     // A failed profile write can be retried without sending the already admitted turn again.
     const unsaved = pending.get(key)
@@ -105,6 +112,10 @@ function confirmCardAnswer(
       pending.delete(key)
     }
 
+    if (writes.claimInFlight(key)) {
+      // An older client claimed the card and hasn't said whether the bot took it.
+      throw new InvalidArgumentError('This card is still being answered. Try again in a moment.')
+    }
     const bot = runtime.bots.list().find((entry) => entry.id === botId)
     const current = bot?.offerAnswers?.find((entry) => entry.cardId === selection.cardId)
     let googleAction: PendingBotOfferAnswer['googleAction']
@@ -121,7 +132,17 @@ function confirmCardAnswer(
 
     const sameGoogleAccount =
       googleActionId && 'sent' in selection && current?.sent?.chosen[0] === selection.sent.chosen[0]
-    const told = sameGoogleAccount ? null : await tell(current)
+    let told: BotOfferTold | null = null
+    if (!sameGoogleAccount) {
+      // Kept through a failed or lost send, so the retry replays the turn the host may have admitted.
+      const operationId =
+        operations.get(key)?.operationId ?? mintAgentSessionOperationId(Date.now())
+      operations.set(key, { botId, operationId })
+      told = await tell(current, operationId)
+      if (!told?.sent) {
+        operations.delete(key)
+      }
+    }
     if (told && !told.sent) {
       return { sent: false }
     }
@@ -134,6 +155,7 @@ function confirmCardAnswer(
       selection: told ? selection : { cardId: selection.cardId }
     }
     pending.set(key, write)
+    operations.delete(key)
     const confirmed = await saveCardAnswer(runtime, write)
     pending.delete(key)
     return confirmed
@@ -155,15 +177,19 @@ export async function tellBotCardAnswer(
       throw new InvalidArgumentError("That chat isn't one of this bot's.")
     }
   }
-  const tell = async (current?: BotOfferAnswer): Promise<BotOfferTold | null> => {
+  const tell = async (
+    current?: BotOfferAnswer,
+    operationId?: string
+  ): Promise<BotOfferTold | null> => {
     const text = typeof line === 'string' ? line : await line(current)
     if (text === null) {
       return null
     }
     const chats = runtimeBotChats(runtime)
+    const run = operationId ? { messageId: operationId } : undefined
     const { outcome } = sessionId
-      ? await chats.sendToSession(botId, sessionId, text, undefined, 'card-answer')
-      : await chats.sendToChat(botId, text, 'card-answer')
+      ? await chats.sendToSession(botId, sessionId, text, run, 'card-answer')
+      : await chats.sendToChat(botId, text, 'card-answer', run)
     return { sent: outcome.kind !== 'refused' }
   }
   return card ? confirmCardAnswer(runtime, botId, card, tell) : ((await tell()) ?? { sent: true })

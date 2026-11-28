@@ -27,6 +27,7 @@ const host = vi.hoisted(
     refusedClaims: number
     toasts: number
     refreshes: number
+    published: BotOfferAnswer[]
   } => ({
     answers: [],
     told: [],
@@ -34,7 +35,8 @@ const host = vi.hoisted(
     confirms: false,
     refusedClaims: 0,
     toasts: 0,
-    refreshes: 0
+    refreshes: 0,
+    published: []
   })
 )
 vi.mock('@/lib/bot-catalog', () => ({
@@ -52,6 +54,11 @@ vi.mock('@/lib/bot-catalog', () => ({
   },
   refreshBotHost: async () => {
     host.refreshes++
+  }
+}))
+vi.mock('@/lib/bot-offer-answer-publish', () => ({
+  publishBotOfferAnswer: (_ref: unknown, answer: BotOfferAnswer) => {
+    host.published.push(answer)
   }
 }))
 vi.mock('@/lib/bot-hosts', () => ({
@@ -115,6 +122,7 @@ afterEach(() => {
   host.refusedClaims = 0
   host.toasts = 0
   host.refreshes = 0
+  host.published = []
 })
 
 function press(): void {
@@ -144,6 +152,8 @@ it('tells a confirming server once when the reply to a card answer is lost and t
   // The lost reply is asked again at once; the server returns the answer it already took.
   await vi.waitFor(() => expect(host.refreshes).toBe(1))
   expect(host.answers).toEqual([{ cardId: 'card', dismissed: true }])
+  // The card shows the saved answer even when the refresh is held back by another update.
+  expect(host.published).toEqual([{ cardId: 'card', dismissed: true }])
   expect(host.toasts).toBe(0)
   press()
   await vi.waitFor(() => expect(host.refreshes).toBe(2))

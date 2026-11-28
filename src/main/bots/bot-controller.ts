@@ -252,7 +252,7 @@ export class BotController {
       if (next.name !== bot.name) {
         store.updateFolderWorkspace(bot.folderWorkspaceId, { name: next.name })
       }
-      await this.offerAnswerWrites.save(store, bot, next, updates.offerAnswerConfirmation?.cardId)
+      await this.offerAnswerWrites.save(store, bot, next, updates)
       this.deps.notifyBotsWritten(next.name !== bot.name)
       if (next.agent !== bot.agent) {
         this.deps.botAgentChanged?.(next)

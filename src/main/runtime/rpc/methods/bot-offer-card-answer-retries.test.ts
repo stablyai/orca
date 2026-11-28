@@ -8,6 +8,7 @@ import {
   MAX_GOOGLE_OFFER_ACTIONS
 } from '../../../../shared/bots/bot-offer-answers'
 import { BotController } from '../../../bots/bot-controller'
+import { LEGACY_OFFER_CLAIM_SEND_MS } from '../../../bots/bot-offer-answer-writes'
 import { localBotHomeFilesystem } from '../../../bots/bot-home'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import {
@@ -22,11 +23,24 @@ import { RpcDispatcher } from '../dispatcher'
 import { BOT_OFFER_ANSWER_METHOD } from './bots-offer-answer'
 import { GOOGLE_METHODS } from './google'
 
-type Send = { envelope: { sessionId: string }; body: { blocks: { text: string }[] } }
+type Send = {
+  envelope: { sessionId: string; clientOperationId: string }
+  body: { blocks: { text: string }[] }
+}
 
 const { host, sends, chat } = vi.hoisted(() => {
   const sends: Send[] = []
-  const chat = { beforeNext: async (): Promise<boolean> => true }
+  // The host journal: an operation id it already admitted replays that turn.
+  const admitted = new Map<
+    string,
+    { ok: true; value: { clientMessageId: string; queued: object } }
+  >()
+  const chat = {
+    beforeNext: async (): Promise<boolean> => true,
+    /** The next admitted send reaches its caller as a rejection. */
+    failAfterAdmit: false,
+    admitted
+  }
   const host = {
     deps: {
       store: {
@@ -39,13 +53,26 @@ const { host, sends, chat } = vi.hoisted(() => {
       }
     },
     send: async (_caller: unknown, input: Send) => {
+      const replay = admitted.get(input.envelope.clientOperationId)
+      if (replay) {
+        return replay
+      }
       const admit = chat.beforeNext
       chat.beforeNext = async () => true
       if (!(await admit())) {
         return { ok: false, refusal: { code: 'agent_session_not_writable' } }
       }
       sends.push(input)
-      return { ok: true, value: { clientMessageId: `m${sends.length}`, queued: {} } }
+      const result = {
+        ok: true as const,
+        value: { clientMessageId: `m${sends.length}`, queued: {} }
+      }
+      admitted.set(input.envelope.clientOperationId, result)
+      if (chat.failAfterAdmit) {
+        chat.failAfterAdmit = false
+        throw new Error('The send failed after the host took it.')
+      }
+      return result
     },
     waitForSendSettlement: async () => undefined
   }
@@ -94,6 +121,8 @@ beforeEach(async () => {
   sends.length = 0
   actionIds.clear()
   chat.beforeNext = async () => true
+  chat.failAfterAdmit = false
+  chat.admitted.clear()
   testState.dir = await mkdtemp(join(tmpdir(), 'orca-bot-offer-'))
   store = createStore()
   store.saveBot(
@@ -221,6 +250,59 @@ const heardAccounts = () =>
   sends.map((send) => send.body.blocks[0]?.text.match(/account (\S+)/)?.[1])
 
 describe('host-confirmed offer answers', () => {
+  it('replays the admitted turn when the send fails after the host took it', async () => {
+    chat.failAfterAdmit = true
+    await expect(importItems(['1', '2'])).rejects.toThrow('failed after the host took it')
+    expect(bots.list()[0]?.offerAnswers).toBeUndefined()
+    await expect(importItems(['1', '2'])).resolves.toMatchObject({
+      sent: true,
+      answer: { sent: { chosen: ['1', '2'] } }
+    })
+    expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Import 1,2'])
+    expect(persistedCard('plan')).toMatchObject({ sent: { chosen: ['1', '2'] } })
+  })
+
+  it('mints a new turn id after a refused send', async () => {
+    chat.beforeNext = async () => false
+    await expect(importItems(['1'])).resolves.toEqual({ sent: false })
+    await expect(importItems(['1'])).resolves.toMatchObject({ sent: true })
+    expect(sends).toHaveLength(1)
+  })
+
+  it("waits out an older client's claim instead of confirming it", async () => {
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    await bots.update('b1', {
+      offerAnswer: { cardId: 'plan', sent: { chosen: ['1'] }, claim: true }
+    })
+    await expect(importItems(['2'])).rejects.toThrow('still being answered')
+    // The older client's send was refused: it gives the claim back, and this answer goes.
+    await bots.update('b1', { offerAnswer: { cardId: 'plan', release: 'sent' } })
+    await expect(importItems(['2'])).resolves.toMatchObject({
+      sent: true,
+      answer: { sent: { chosen: ['2'] } }
+    })
+    expect(sends.map((send) => send.body.blocks[0]?.text)).toEqual(['Import 2'])
+
+    // A claim never given back is taken as told once its send has had time to finish.
+    await bots.update('b1', { offerAnswer: { cardId: 'other', dismissed: true, claim: true } })
+    const other = () =>
+      request(
+        'bots.offer.answer',
+        {
+          botId: 'b1',
+          sessionId: 'chat-1',
+          text: 'Dismiss',
+          answer: { cardId: 'other', dismissed: true }
+        },
+        paired
+      )
+    await expect(other()).rejects.toThrow('still being answered')
+    vi.spyOn(Date, 'now').mockReturnValue(now + LEGACY_OFFER_CLAIM_SEND_MS)
+    await expect(other()).resolves.toMatchObject({ sent: true, answer: { dismissed: true } })
+    expect(sends).toHaveLength(1)
+  })
+
   it('returns the recorded import after a lost confirmation without queuing a second turn', async () => {
     const lostReply = importItems(['1', '2']).then(() => {
       throw new Error('The connection closed before the reply.')
