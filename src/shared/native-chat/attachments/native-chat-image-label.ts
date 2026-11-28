@@ -19,14 +19,12 @@ const PASTED_IMAGE_NAME = new RegExp(
 
 /** Use friendly UI labels for Orca clipboard-image temp filenames. */
 export function isNativeChatPastedImagePath(path: string): boolean {
-  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
-  return PASTED_IMAGE_NAME.test(base)
+  return PASTED_IMAGE_NAME.test(getRuntimePathBasename(path))
 }
 
 /** True for a long text paste Orca saved as a file (`orca-paste-<ts>-<uuid>.txt`). */
 export function isNativeChatPastedTextPath(path: string): boolean {
-  const base = path.split(/[\\/]/).findLast(Boolean) ?? path
-  return /^orca-paste-.+\.txt$/i.test(base)
+  return /^orca-paste-.+\.txt$/i.test(getRuntimePathBasename(path))
 }
 
 /** What a chat image is called where it is not drawn: its alt text, else its file's name. */

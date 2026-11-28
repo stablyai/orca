@@ -25,9 +25,15 @@ export function createPageBackConsumers(args: {
     }
   }
 
-  // Walk a copy so a handler disposing itself cannot skip the consumer beneath it.
+  // Snapshot, then walk newest first. Hermes has no toReversed, and disposing one consumer must not skip the one beneath it.
   function taken(): boolean {
-    return held.toReversed().some((entry) => entry.consumer())
+    const stack = held.slice()
+    for (let index = stack.length - 1; index >= 0; index--) {
+      if (stack[index].consumer()) {
+        return true
+      }
+    }
+    return false
   }
 
   return {
