@@ -9,10 +9,13 @@ const originalPlatform = process.platform
 const originalSystemDrive = process.env.SystemDrive
 
 function storeWith(...paths: string[]) {
-  const repos = paths.map(
-    (path, index) =>
-      ({ id: `r${index}`, path, displayName: 'p', badgeColor: '', addedAt: 0 }) as Repo
-  )
+  const repos: Repo[] = paths.map((path, index) => ({
+    id: `r${index}`,
+    path,
+    displayName: 'p',
+    badgeColor: '',
+    addedAt: 0
+  }))
   return { getRepos: () => repos, getFolderWorkspaces: () => [] }
 }
 
@@ -65,7 +68,7 @@ describe('isDistroInUse over last-known mapped drives', () => {
   })
 
   it('trusts a W: this launch read outside WSL', async () => {
-    ;(await lastKnown()).rememberWslMappedDriveRead('W', 'W:\\', Date.now())
+    ;(await lastKnown()).rememberWslMappedDriveRead('W', 'W:\\', 1)
     expect(await inUse(storeWith('W:\\proj'))).toBe(false)
   })
 
