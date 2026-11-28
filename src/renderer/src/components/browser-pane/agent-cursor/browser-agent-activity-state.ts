@@ -21,6 +21,19 @@ const lastCursorByPage = new Map<string, BrowserAgentCursorEvent>()
 const sinksByPage = new Map<string, BrowserAgentCursorSink>()
 const listeners = new Set<() => void>()
 
+const MAX_TRACKED_LAST_PAGES = 200
+
+function setBoundedLastPage(map: Map<string, string>, key: string, browserPageId: string): void {
+  map.delete(key)
+  map.set(key, browserPageId)
+  if (map.size > MAX_TRACKED_LAST_PAGES) {
+    const oldest = map.keys().next().value
+    if (oldest !== undefined) {
+      map.delete(oldest)
+    }
+  }
+}
+
 function notify(): void {
   for (const listener of listeners) {
     listener()
@@ -49,9 +62,9 @@ export function setBrowserAgentPageActive(
       controllerHostByPage.delete(browserPageId)
     }
     if (agentSessionId) {
-      lastPageIdByChatSession.set(agentSessionId, browserPageId)
+      setBoundedLastPage(lastPageIdByChatSession, agentSessionId, browserPageId)
     } else if (worktreeId) {
-      lastUnclaimedPageIdByWorktree.set(worktreeId, browserPageId)
+      setBoundedLastPage(lastUnclaimedPageIdByWorktree, worktreeId, browserPageId)
     }
   } else {
     activePageIds.delete(browserPageId)
@@ -147,4 +160,33 @@ export function useLastBrowserAgentPageId(
     (worktreeId ? lastUnclaimedPageIdByWorktree.get(worktreeId) : undefined) ??
     null
   return useSyncExternalStore(subscribe, read, read)
+}
+
+/** Drop cached activity state referencing a closed browser page. */
+export function forgetBrowserAgentPage(browserPageId: string): void {
+  let changed = activePageIds.delete(browserPageId)
+  changed = controllerHostByPage.delete(browserPageId) || changed
+  lastCursorByPage.delete(browserPageId)
+  for (const [sessionId, pageId] of lastPageIdByChatSession) {
+    if (pageId === browserPageId) {
+      lastPageIdByChatSession.delete(sessionId)
+      changed = true
+    }
+  }
+  for (const [worktreeId, pageId] of lastUnclaimedPageIdByWorktree) {
+    if (pageId === browserPageId) {
+      lastUnclaimedPageIdByWorktree.delete(worktreeId)
+      changed = true
+    }
+  }
+  if (changed) {
+    notify()
+  }
+}
+
+/** Drop unclaimed browser activity cached for a removed workspace. */
+export function forgetBrowserAgentWorktree(worktreeId: string): void {
+  if (lastUnclaimedPageIdByWorktree.delete(worktreeId)) {
+    notify()
+  }
 }
