@@ -121,7 +121,7 @@ describe('creator lineage', () => {
       setupState: 'not_applicable',
       effects: []
     })
-    const task = db.createTask({ runId: 'run_local', spec: 'work' })
+    const task = db.createTask({ runId: 'run_remote', spec: 'work' })
     const helper = db.createDispatchContext({
       taskId: task.id,
       assigneeHandle: 'term_helper',
