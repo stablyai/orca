@@ -174,11 +174,14 @@ export class OrchestrationMailboxDeliveryTarget {
           if (joined) {
             this.forcedRereads.add(ptyId)
           }
-          for (const [deferredMailbox, reserved] of deferral.mailboxes) {
-            redeliver(deferredMailbox, stale, reserved)
+          try {
+            for (const [deferredMailbox, reserved] of deferral.mailboxes) {
+              redeliver(deferredMailbox, stale, reserved)
+            }
+          } finally {
+            // The re-read took it synchronously, or no delivery reached a read.
+            this.forcedRereads.delete(ptyId)
           }
-          // The re-read took it synchronously, or no delivery reached a read.
-          this.forcedRereads.delete(ptyId)
         }, 0)
       })
       .catch(() => this.probeDeferrals.delete(ptyId))
