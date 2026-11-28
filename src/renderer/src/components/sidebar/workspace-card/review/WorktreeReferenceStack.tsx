@@ -190,15 +190,18 @@ function ReferencePeekRow({
   const detail = details[getWorkspaceAttachmentKey(item)]
   const status = referenceStatus(item, detail, t)
   return (
-    <li className="flex min-w-0 items-center gap-2 py-0.5 whitespace-nowrap">
+    // Why: rows too narrow for one line move the title under the key instead of hiding it.
+    <li className="flex min-w-0 items-center gap-x-2 py-0.5 whitespace-nowrap @max-[8rem]:flex-wrap">
       <span className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted-foreground [&>svg]:size-3.5">
         <ReferenceGlyph item={item} details={details} />
       </span>
-      {/* Why: caps the key at the row minus the title's 25% and the icon and gaps, at any width. */}
-      <span className="max-w-[calc(75%-2.375rem)] shrink-0 truncate font-medium tabular-nums">
+      {/* Why: caps the key at the row minus the title's 25% and the icon and gaps. */}
+      <span className="max-w-[calc(75%-2.375rem)] shrink-0 truncate font-medium tabular-nums @max-[8rem]:max-w-[calc(100%-1.375rem)] @max-[8rem]:shrink">
         {workspaceAttachmentReferenceLabel(item, PEEK_LABELS)}
       </span>
-      <span className="min-w-[25%] flex-1 truncate text-muted-foreground">{detail?.title}</span>
+      <span className="min-w-[25%] flex-1 truncate text-muted-foreground @max-[8rem]:order-last @max-[8rem]:basis-full @max-[8rem]:pl-[1.375rem]">
+        {detail?.title}
+      </span>
       {status ? (
         // Why: long keys or custom issue states must not squeeze the title away in a narrow peek.
         <span className="max-w-[40%] min-w-0 truncate text-muted-foreground">{status}</span>
@@ -276,7 +279,7 @@ const ReferencePeekList = React.memo(function ReferencePeekList({
     <ul
       ref={listRef}
       // Why: spans the padded card so the scrollbar sits on its edge; short windows shrink the cap.
-      className="scrollbar-sleek -m-3 flex max-h-[min(10.5rem,calc(var(--radix-tooltip-content-available-height)-2px))] flex-col overflow-x-hidden overflow-y-auto p-3"
+      className="scrollbar-sleek @container -m-3 flex max-h-[min(10.5rem,calc(var(--radix-tooltip-content-available-height)-2px))] flex-col overflow-x-hidden overflow-y-auto p-3"
     >
       {ordered.map((item) => (
         <ReferencePeekRow key={getWorkspaceAttachmentKey(item)} item={item} details={details} />
