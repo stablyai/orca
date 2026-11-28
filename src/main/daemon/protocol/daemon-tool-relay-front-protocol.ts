@@ -53,10 +53,14 @@ export const TOOL_RELAY_FRONT_REQUEST_TYPES: ReadonlySet<string> = new Set([
 ])
 
 /**
- * Sent on the serving client's stream: open a `tool-relay` connection naming `frontConnectionId`,
- * or `keptEnded`: that relay ended, so its agent's grants are gone here.
+ * Sent on the serving client's stream: open a `tool-relay` connection naming `frontConnectionId`;
+ * `keptEnded`: that relay ended, so its agent's grants are gone here; `keptChanged`: relays ended
+ * while the stream was backed up, so serve again to learn which grants are left.
  */
-export type ToolRelayFrontEventPayload = { frontConnectionId: string } | { keptEnded: string }
+export type ToolRelayFrontEventPayload =
+  | { frontConnectionId: string }
+  | { keptEnded: string }
+  | { keptChanged: true }
 
 export type ToolRelayFrontConnectionEvent = {
   type: 'event'

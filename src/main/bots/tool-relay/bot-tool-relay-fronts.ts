@@ -169,12 +169,17 @@ export class ToolRelayFronts {
       const payload = jsonProperty(event, 'payload')
       const id = jsonProperty(payload, 'frontConnectionId')
       const ended = jsonProperty(payload, 'keptEnded')
+      const watched = this.watched.get(client)
       if (typeof id === 'string') {
         void this.answer(client, id)
       } else if (typeof ended === 'string') {
         // Ends come on the stream and the serve reply on control, in either order.
-        this.watched.get(client)?.ended?.add(ended)
+        watched?.ended?.add(ended)
         this.keptEnded(client, ended)
+      } else if (jsonProperty(payload, 'keptChanged') === true && watched) {
+        // Ends it held back while this app's stream was backed up: a new reply has what's left.
+        watched.servedConnection = null
+        void this.serveOnce(client).catch(() => {})
       }
     })
     // Each hello (a reconnect, or a new daemon start under the same client) serves again.

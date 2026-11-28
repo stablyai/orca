@@ -28,9 +28,14 @@ afterEach(async () => {
   }
 })
 
-/** A connected socket whose far end never reads, so everything written to it stays queued. */
-async function unreadStream(): Promise<Socket> {
-  const server: Server = createServer((peer) => peer.pause())
+/** A connected socket whose far end doesn't read until `peer` resumes, so writes stay queued. */
+async function unreadStream(): Promise<Socket & { peer: Promise<Socket> }> {
+  let accepted: (peer: Socket) => void = () => {}
+  const peer = new Promise<Socket>((resolve) => (accepted = resolve))
+  const server: Server = createServer((socket) => {
+    socket.pause()
+    accepted(socket)
+  })
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   const port = address && typeof address === 'object' ? address.port : 0
@@ -40,7 +45,7 @@ async function unreadStream(): Promise<Socket> {
     socket.destroy()
     server.close()
   })
-  return socket
+  return Object.assign(socket, { peer })
 }
 
 describe.skipIf(process.platform === 'win32')('front notices on a stalled app stream', () => {
@@ -69,6 +74,19 @@ describe.skipIf(process.platform === 'win32')('front notices on a stalled app st
     }
     // At most one notice past the bound (the write that crossed it) is queued.
     expect(stream.writableLength).toBeLessThanOrEqual(MAX_UNREAD_STREAM_BYTES + 1024)
+    // Once the app reads again, the ends held back come as one notice to serve again.
+    const reader = await stream.peer
+    const changed = new Promise<void>((resolve) => {
+      let tail = ''
+      reader.on('data', (chunk) => {
+        tail = (tail + chunk.toString('utf8')).slice(-4096)
+        if (tail.includes('"keptChanged":true')) {
+          resolve()
+        }
+      })
+    })
+    reader.resume()
+    await changed
   })
 
   it("a tool call's daemon connection closing runs no idle check", async () => {

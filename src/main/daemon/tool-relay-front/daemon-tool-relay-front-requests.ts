@@ -6,13 +6,14 @@ import {
   TOOL_RELAY_FRONT_EVENT,
   TOOL_RELAY_FRONT_REQUEST_TYPES,
   type ToolRelayFrontConnectionEvent,
+  type ToolRelayFrontEventPayload,
   type ToolRelayFrontOpenResult,
   type ToolRelayFrontServeResult
 } from '../protocol/daemon-tool-relay-front-protocol'
 import { streamFramesFor } from '../transport/framing/daemon-stream-data-split'
 import type { DaemonToolRelayFront } from './daemon-tool-relay-front'
 
-/** Past this much unread on the app's stream, front notices are dropped rather than queued. */
+/** Past this much unread on the app's stream, front notices wait for it to drain. */
 export const MAX_UNREAD_STREAM_BYTES = 1024 * 1024
 
 /** Undefined leaves every other request to the router. */
@@ -40,21 +41,67 @@ export function answerToolRelayFrontRequest(
     front.kept.revoke(owner)
     return Promise.resolve({})
   }
-  const port = front.serve(client.clientId, socket, (payload) => {
-    const stream = client.streamSocket
-    // An app that stopped reading gets no more: a held connection it never hears of gets the 503
-    // when its hold runs out, and a relay end it misses is settled by its next serve.
-    if (!stream || stream.destroyed || stream.writableLength > MAX_UNREAD_STREAM_BYTES) {
-      return
-    }
+  const port = front.serve(client.clientId, socket, noticesTo(client, front))
+  // Only to this authenticated control connection: the tokens of the agents this start keeps.
+  return Promise.resolve({ port, daemonInstance, kept: front.kept.list() })
+}
+
+/**
+ * The serving app's notices, written to its stream. While it has more than the bound unread, they
+ * wait instead, bounded: the held connections not yet announced (only those still held), and one
+ * mark for any relay ends, sent on drain as `keptChanged` so the app serves again and reconciles.
+ */
+function noticesTo(
+  client: ConnectedDaemonClient,
+  front: DaemonToolRelayFront
+): (payload: ToolRelayFrontEventPayload) => void {
+  const waitingHeld = new Set<string>()
+  let keptChanged = false
+  let draining = false
+  const write = (payload: ToolRelayFrontEventPayload): void => {
     const event: ToolRelayFrontConnectionEvent = {
       type: 'event',
       event: TOOL_RELAY_FRONT_EVENT,
       sessionId: 'tool-relay-front',
       payload
     }
-    stream.write(streamFramesFor(client.streamFraming).control(event))
-  })
-  // Only to this authenticated control connection: the tokens of the agents this start keeps.
-  return Promise.resolve({ port, daemonInstance, kept: front.kept.list() })
+    client.streamSocket?.write(streamFramesFor(client.streamFraming).control(event))
+  }
+  const flush = (): void => {
+    draining = false
+    for (const frontConnectionId of waitingHeld) {
+      if (front.holds(frontConnectionId)) {
+        write({ frontConnectionId })
+      }
+    }
+    waitingHeld.clear()
+    if (keptChanged) {
+      keptChanged = false
+      write({ keptChanged: true })
+    }
+  }
+  return (payload) => {
+    const stream = client.streamSocket
+    if (!stream || stream.destroyed) {
+      return
+    }
+    if (stream.writableLength <= MAX_UNREAD_STREAM_BYTES) {
+      write(payload)
+      return
+    }
+    for (const frontConnectionId of waitingHeld) {
+      if (!front.holds(frontConnectionId)) {
+        waitingHeld.delete(frontConnectionId)
+      }
+    }
+    if ('frontConnectionId' in payload) {
+      waitingHeld.add(payload.frontConnectionId)
+    } else {
+      keptChanged = true
+    }
+    if (!draining) {
+      draining = true
+      stream.once('drain', flush)
+    }
+  }
 }

@@ -130,6 +130,11 @@ export class DaemonToolRelayFront {
     return this.port
   }
 
+  /** Whether the connection is still held, waiting for the app. */
+  holds(frontConnectionId: string): boolean {
+    return this.held.has(frontConnectionId)
+  }
+
   /** A kept agent's relay ended: its grants go, and the app serving the front hears so. */
   forgetKept(relayId: string): void {
     if (this.kept.forget(relayId)) {
