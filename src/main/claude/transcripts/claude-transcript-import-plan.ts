@@ -63,10 +63,7 @@ export function createClaudeTranscriptImportPlan(input: {
   let workAt: number | undefined
   const compactions = createTranscriptCompactionRecovery()
   const matchSource = (identities: AgentJournalItemIdentity[]) => {
-    const matches = identities.flatMap((identity) => {
-      const item = saved(agentJournalItemKey(identity))
-      return item ? [item] : []
-    })
+    const matches = identities.flatMap((identity) => saved(agentJournalItemKey(identity)) ?? [])
     if (new Set(matches.map((item) => item.itemId)).size > 1) {
       throw new Error('ambiguous-history-identity')
     }
