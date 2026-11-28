@@ -22,7 +22,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
   private readonly orchestrationReply = new AgentOrchestrationGraphRevision(
     this.agentOrchestrationProjection
   )
-  private publisherGraphs = 0
+  private windowGraphs = 0
 
   /** A serve or orcad host: no owner window here ever answers a card. */
   servesWithoutWindow = (): boolean => this.servesHeadlessGraph
@@ -302,12 +302,10 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
     }
 
     // Main reinstalling its own panes under the same publisher does not supersede that publisher's graph.
-    const publisherGraph = options?.republishedByMain
-      ? this.publisherGraphs
-      : ++this.publisherGraphs
+    const windowGraph = options?.republishedByMain ? this.windowGraphs : ++this.windowGraphs
     const consume = () => {
       if (
-        this.publisherGraphs !== publisherGraph ||
+        this.windowGraphs !== windowGraph ||
         this.authoritativeWindowId !== windowId ||
         this.graphStatus !== 'ready'
       ) {

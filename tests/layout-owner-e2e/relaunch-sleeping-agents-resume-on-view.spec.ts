@@ -14,7 +14,6 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
 import { createHostRendererTerminalTab } from './helpers/host-created-terminal-retention-oracle'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
-import { knownSwitchOnFailure } from './helpers/layout-owner-known-failure'
 
 // Long enough for every mounted pane's restore to have started on a build that resumes eagerly.
 const SETTLE_MS = 8_000
@@ -248,7 +247,6 @@ async function relaunchWithSleepingAgents(
 
 test('resumes only the visible sleeping agent, then each tab as it is opened, and all on a phone wake', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
-  knownSwitchOnFailure('B2 (L308)')
   await relaunchWithSleepingAgents(
     testInfo,
     { tabCount: 3 },

@@ -474,9 +474,6 @@ for (const scenario of SCENARIOS) {
       if (scenario.id === 'live-daemon-restart') {
         knownSwitchOnFailure('B4 (L314)')
       }
-      if (scenario.id === 'sleep-quit-resume') {
-        knownSwitchOnFailure('B3 (L309)')
-      }
       const repoPath = seededRepoPathOrSkip()
       const findings = await runOracleScenario(testInfo, scenario.id, async (run) => {
         let cleanup: (() => void) | undefined

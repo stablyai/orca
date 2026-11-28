@@ -44,7 +44,12 @@ class MainSurfacePublisher {
     this.index.start()
     this.lastWindowGraph = { windowId, graph }
     this.installed = this.index.surfaces()
-    const composed = composeMainTerminalSurfaces(graph, this.installed, this.host.registered)
+    const composed = composeMainTerminalSurfaces(
+      graph,
+      this.installed,
+      this.host.registered,
+      this.host.exited
+    )
     return graph.mobileSessionTabs
       ? {
           ...composed,
