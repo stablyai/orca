@@ -1,8 +1,8 @@
-import { runWithFinally } from '@/lib/run-with-finally'
 // Where the owner picks a bot's Google accounts: a step of Add to <bot> (or its own dialog when
 // Google is added from elsewhere), and a popover on the Google row's ⋯ to change them later.
 import React, { useState } from 'react'
 import { toast } from 'sonner'
+import { runWithFinally } from '@/lib/run-with-finally'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { PopoverContent } from '@/components/ui/popover'
@@ -22,6 +22,7 @@ import { refreshGoogle, useGoogleHost } from './google-connect-client'
 import { googleBotRead, setBotGoogle, type GoogleBotRead } from './set-bot-google'
 import { GoogleAccountPicker, type GoogleAccountPickerBot } from './GoogleAccountPicker'
 import {
+  KEPT_PROMPT_VIEWS,
   useNativeChatViewGuard,
   useNativeChatViewState
 } from '../../native-chat/pane/ownership/native-chat-view-memory'
@@ -40,6 +41,8 @@ export function useGoogleAccountChoice(
   /** The host's accounts are read; until then nothing is ticked, and saving would remove them all. */
   ready: boolean
   saving: boolean
+  /** Ends a kept choice once its step is done, so a later run starts fresh. */
+  reset: () => void
   save: () => Promise<boolean>
 } {
   const view = useGoogleHost(botTarget(bot))
@@ -52,12 +55,17 @@ export function useGoogleAccountChoice(
       : bot
   // When the owner started ticking: the bot's Google, so saving can't undo a newer edit, and the
   // accounts shown, so an older host's every-account save still covers one declined then signed out.
-  // Kept with the chat tab for a setup card, so an unfinished choice survives a switch; a save clears it.
+  // Kept with the chat tab for a setup card, so an unfinished choice survives a switch; `reset` ends it, and abandoned runs
+  // beyond the newest few are dropped.
   const [picked, setPicked] = useNativeChatViewState<{
     chosen: string[]
     basedOn: GoogleBotRead
     shown: string[]
-  } | null>(memoryKey === undefined ? undefined : `google-accounts-picked:${memoryKey}`, null)
+  } | null>(
+    memoryKey === undefined ? undefined : `google-accounts-picked:${memoryKey}`,
+    null,
+    KEPT_PROMPT_VIEWS
+  )
   // Kept with the chat tab: a card released mid-save returns still saving.
   const [saving, setSaving] = useNativeChatViewGuard(`google-accounts-save:${bot.id}`, false)
   const initial =
@@ -106,10 +114,7 @@ export function useGoogleAccountChoice(
               }
             : {}
         ).then(
-          () => {
-            setPicked(null)
-            return true
-          },
+          () => true,
           async (error: unknown) => {
             toast.error(botErrorMessage(error))
             if (botFailureOf(error)?.code === 'googleAccountsChanged') {
@@ -121,7 +126,14 @@ export function useGoogleAccountChoice(
       () => setSaving(false)
     )
   }
-  return { chosen, setChosen, ready: view.status === 'ready', saving, save }
+  return {
+    chosen,
+    setChosen,
+    ready: view.status === 'ready',
+    saving,
+    save,
+    reset: () => setPicked(null)
+  }
 }
 
 function GoogleAccountsCaption({ bot }: { bot: Pick<Bot, 'name'> }): React.JSX.Element {

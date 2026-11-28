@@ -166,8 +166,10 @@ function GoogleSetupAccountsStep({
   const choice = useGoogleAccountChoice(bot, added, `setup:${runId}`)
   const add = async (): Promise<void> => {
     if (await choice.save()) {
-      await answerGoogleSetup(bot, 'step', ['done', 'connect']).catch((error: unknown) =>
-        toast.error(botErrorMessage(error))
+      // Picks end only once setup took the answer; a failed answer keeps them for the next Add.
+      await answerGoogleSetup(bot, 'step', ['done', 'connect']).then(
+        choice.reset,
+        (error: unknown) => toast.error(botErrorMessage(error))
       )
     }
   }

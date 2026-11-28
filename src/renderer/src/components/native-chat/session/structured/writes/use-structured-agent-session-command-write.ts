@@ -20,7 +20,7 @@ import type {
 import { holdStructuredAgentSessionSends } from '../delivery/structured-agent-session-pending-sends'
 
 type ClearHold = { sessionId: string; release: () => void }
-// The tab-close release of a hold whose view was released, by the keptRef hold ref it belongs to.
+// The tab-close release of a hold whose view was released, by the kept hold ref it belongs to.
 const keptClearHoldRelease = new WeakMap<object, () => void>()
 
 /** A hold outliving its view ends when the tab closes, the page goes, or a view of another session mounts. */
@@ -43,7 +43,7 @@ function keepClearHoldPastView(
 
 /**
  * Holds sends during clear; an older host's replacement keeps the hold until the tab shows the new session. The
- * hold is keptRef with the chat tab, so a view released meanwhile returns still holding, and a clear that settles
+ * hold is kept with the chat tab, so a view released meanwhile returns still holding, and a clear that settles
  * after the release still keeps it.
  */
 export function useStructuredAgentSessionCommandWrite(
