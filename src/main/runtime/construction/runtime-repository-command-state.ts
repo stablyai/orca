@@ -1,6 +1,8 @@
-import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { Repo } from '../../../shared/repository/repo-types'
-import type { PRSnapshotReply } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Worktree } from '../../../shared/worktree/types'
+import { runtimeVisibleRepos } from '../workspaces/catalog/runtime-visible-catalog'
+import type { RuntimeTerminalAgentStatus } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { HostPRCache } from '../../github/pull-requests/refresh/host-pr-cache-backfill'
 import { RuntimeGitCommands } from '../integrations/git/orca-runtime-git'
 import {
   LazyRuntimeGitHubRepositoryQueryCommands,
@@ -115,12 +117,16 @@ export abstract class OrcaRuntimeWithRepositoryCommands extends OrcaRuntimeWithF
         meta: { prNumber: number, prUrl: url }
       })
     },
-    recordPROutcome: (repo, branch, outcome) => this.hostPROutcomeRecorder?.(repo, branch, outcome)
+    recordPROutcome: (...args) => this.hostPRCache?.record(...args)
   })
 
   /** Set only on a renderer-less host (orcad), whose served PR reads must fill its own cache. */
-  hostPROutcomeRecorder: ((repo: Repo, branch: string, outcome: PRSnapshotReply) => void) | null =
-    null
+  hostPRCache: HostPRCache | null = null
+
+  /** The rows orcad's PR cache backfill reads; the resolved snapshot is shared with worktree.ps. */
+  async listHostPRCacheWorktrees(): Promise<{ worktrees: readonly Worktree[]; repos: Repo[] }> {
+    return { worktrees: await this.listResolvedWorktrees(), repos: runtimeVisibleRepos(this.store) }
+  }
 
   protected readonly gitHubRepositoryQueries = new LazyRuntimeGitHubRepositoryQueryCommands({
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
