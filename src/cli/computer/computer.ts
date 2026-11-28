@@ -100,7 +100,21 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const maxElements = getOptionalPositiveIntegerFlag(flags, 'max-elements')
     const rootElementIndex = getOptionalNonNegativeIntegerFlag(flags, 'element-index')
     const target = await getComputerCommandTarget(flags, cwd, client)
+    const selectScreenshotWindow = flags.get('select-screenshot-window') === true
+    if (selectScreenshotWindow) {
+      const capabilities = await client.call<ComputerProviderCapabilities>(
+        'computer.capabilities',
+        {}
+      )
+      if (!capabilities.result.supports.observation.userSelectedWindowScreenshot) {
+        throw new RuntimeClientError(
+          'unsupported_capability',
+          'This Orca runtime does not support user-selected window screenshots on GNOME Wayland'
+        )
+      }
+    }
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
+      ...(selectScreenshotWindow ? { selectScreenshotWindow: true } : {}),
       ...target,
       ...observeFlags,
       ...(rootElementIndex === undefined ? {} : { rootElementIndex })

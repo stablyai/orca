@@ -233,6 +233,9 @@ function formatComputerScreenshotStatus(result: ComputerSnapshotResult): string 
       ? formatBase64PayloadByteCount(result.screenshot.data)
       : `saved to ${result.screenshot.path ?? 'temporary file'}`
     const dimensions = `${result.screenshot.width}x${result.screenshot.height}`
+    if (result.screenshot.scope === 'user-selected-window') {
+      return `User-selected window screenshot (${result.screenshot.format}, ${bytes}, ${dimensions}); not matched to the accessibility target. Do not use its pixels as action coordinates.`
+    }
     const scale = result.screenshot.scale
     const scaleDetail =
       Number.isFinite(scale) && scale > 0 && scale !== 1

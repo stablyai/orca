@@ -21,7 +21,8 @@ export function renderSnapshot(
         format: snapshot.screenshotFormat === 'jpeg' ? ('jpeg' as const) : ('png' as const),
         width: screenshotWidth,
         height: screenshotHeight,
-        scale: screenshotScale
+        scale: screenshotScale,
+        ...(snapshot.screenshotScope ? { scope: snapshot.screenshotScope } : {})
       }
     : null
   return {
@@ -70,7 +71,10 @@ export function renderSnapshot(
     screenshotStatus: screenshot
       ? {
           state: 'captured',
-          metadata: { engine: 'unknown', windowId: snapshot.windowId ?? null }
+          metadata: {
+            engine: 'unknown',
+            windowId: snapshot.screenshotScope ? null : (snapshot.windowId ?? null)
+          }
         }
       : noScreenshot
         ? { state: 'skipped', reason: 'no_screenshot_flag' }

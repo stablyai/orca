@@ -55,5 +55,14 @@ class PortalFileTest(unittest.TestCase):
         self.assertTrue(link.is_symlink() and self.file.exists())
 
 
+class PortalStreamScopeTest(unittest.TestCase):
+    def test_only_one_explicit_window_stream_is_accepted(self):
+        self.assertEqual(runtime.require_single_window_stream([(18, {"source_type": 2})]), 18)
+        for streams in ([], [(18, {})], [(18, {"source_type": 1})],
+                        [(18, {"source_type": 2}), (19, {"source_type": 2})]):
+            with self.subTest(streams=streams), self.assertRaises(ValueError):
+                runtime.require_single_window_stream(streams)
+
+
 if __name__ == "__main__":
     unittest.main()
