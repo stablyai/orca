@@ -16,6 +16,8 @@ const env = process.env
 const OUT = env.ORCA_LAYOUT_LATENCY_OUT ?? path.resolve('layout-latency-census')
 const SAMPLES = Number(env.ORCA_LAYOUT_LATENCY_SAMPLES ?? 13)
 const WARMUP = 3
+/** Production by default: development turns on per-frame checks that release builds skip. */
+const NODE_ENV = env.ORCA_LAYOUT_LATENCY_NODE_ENV ?? 'production'
 const RELAUNCHES = Number(env.ORCA_LAYOUT_LATENCY_RELAUNCHES ?? 10)
 /** A repo with many git worktrees, for the long-used-profile case; each becomes a workspace. */
 const FLEET_REPO = env.ORCA_LAYOUT_LATENCY_FLEET_REPO
@@ -28,7 +30,7 @@ test('layout latency per action', async (// oxlint-disable-next-line no-empty-pa
 {}, testInfo) => {
   test.setTimeout(3_600_000)
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
-  const session = createRestartSession(testInfo)
+  const session = createRestartSession(testInfo, { NODE_ENV })
   const build = LAYOUT_OWNER_BUILD ? 'on' : 'off'
   const samples: Record<string, number[]> = {}
   let launchMs = 0
@@ -266,6 +268,7 @@ test('layout latency per action', async (// oxlint-disable-next-line no-empty-pa
           build,
           workspaces: worktreeCount,
           seededTabWorkspaces: SEEDED_TAB_WORKSPACES,
+          nodeEnv: NODE_ENV,
           launchMs,
           seedMs,
           loop,

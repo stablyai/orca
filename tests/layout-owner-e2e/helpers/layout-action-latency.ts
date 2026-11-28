@@ -23,18 +23,26 @@ export function percentile(samples: readonly number[], p: number): number {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))]
 }
 
-/** Times `action` until `done` holds, then one more frame so the change is drawn. */
+/** Times `action` until its change is in the store and the page, then one more frame so it is drawn.
+ *  With `drawn: false` (a window that draws no frames) it stops at the change, polled per task. */
 export async function timeLayoutAction(
   page: Page,
   name: LayoutAction,
-  arg: unknown = null
+  arg: unknown = null,
+  { drawn = true }: { drawn?: boolean } = {}
 ): Promise<number> {
   return page.evaluate(
-    async ({ name, arg, splitEvent, closeEvent }) => {
+    async ({ name, arg, drawn, splitEvent, closeEvent }) => {
       const S = window.__store!
       const st = () => S.getState()
       const wt = st().activeWorktreeId as string
-      const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()))
+      const tick = () =>
+        new Promise<void>((r) => {
+          const channel = new MessageChannel()
+          channel.port1.onmessage = () => r()
+          channel.port2.postMessage(null)
+        })
+      const frame = drawn ? () => new Promise<void>((r) => requestAnimationFrame(() => r())) : tick
       const until = async (done: () => boolean) => {
         const deadline = performance.now() + 15_000
         while (!done()) {
@@ -45,7 +53,9 @@ export async function timeLayoutAction(
           }
           await frame()
         }
-        await frame()
+        if (drawn) {
+          await frame()
+        }
       }
       const tabs = () => (st().tabsByWorktree[wt] ?? []) as { id: string }[]
       const panes = () => window.__paneManagers?.get(st().activeTabId)?.getPanes().length ?? 0
@@ -172,6 +182,7 @@ export async function timeLayoutAction(
     {
       name,
       arg,
+      drawn,
       splitEvent: REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
       closeEvent: REQUEST_ACTIVE_TERMINAL_PANE_CLOSE_EVENT
     }
