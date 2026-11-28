@@ -15444,7 +15444,10 @@
             "operationResolve": "Lösen",
             "operationResolveLabel": "Konflikte mit KI lösen",
             "operationMoreActions": "Weitere Aktionen",
-            "operationAbortConfirm": "Zum Abbrechen erneut auswählen"
+            "operationAbortConfirm": "Zum Abbrechen erneut auswählen",
+            "operationRunChangedTitle": "Nichts wurde abgebrochen",
+            "operationRunChangedDescription": "Der Vorgang hat sich geändert, nachdem „Abbrechen“ gewählt wurde. Prüfe den aktuellen Stand und versuche es erneut.",
+            "operationRunUnknown": "Es ist nicht erkennbar, welcher Lauf angehalten ist, daher ist „Abbrechen“ hier deaktiviert. Aktualisiere die Quellcodeverwaltung oder brich ihn im Terminal ab."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Der ausgewählte Agent konnte nicht gestartet werden.",
@@ -23497,6 +23500,9 @@
           "always": "Immer",
           "never": "Nie"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "Systemnahe Kompatibilitätseinstellungen zur Fehlerbehebung. Diese Einstellungen werden auf diesem Computer gespeichert, nicht auf {{host}}."
       },
       "repositoryHooks": {
         "availableEnvVars": "Verfügbare Umgebungsvariablen"

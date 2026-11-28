@@ -14893,7 +14893,10 @@
             "operationResolve": "解决",
             "operationResolveLabel": "用 AI 解决冲突",
             "operationMoreActions": "更多操作",
-            "operationAbortConfirm": "再次选择以中止"
+            "operationAbortConfirm": "再次选择以中止",
+            "operationRunChangedTitle": "没有中止任何操作",
+            "operationRunChangedDescription": "选择中止后，操作已更改。请检查当前状态后重试。",
+            "operationRunUnknown": "无法判断哪一次运行已暂停，因此这里无法中止。请刷新源代码管理，或在终端中中止。"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -22894,6 +22897,9 @@
           "correctionWordOff": "无"
         },
         "localOnlyNotice": "在任意面板中用说话代替打字。这些设置仅对此电脑生效，{{host}} 会保留自己的设置"
+      },
+      "advanced": {
+        "localOnlyNotice": "排查问题用的底层兼容性设置。这些设置保存在此电脑上，而不是 {{host}}"
       },
       "repositoryHooks": {
         "availableEnvVars": "可用的环境变量"

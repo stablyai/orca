@@ -51,34 +51,39 @@ export function pickWorkspaceAttachmentFields(
 export function legacyWorkspaceAttachments(
   meta: WorkspaceAttachmentMetadata
 ): WorkspaceAttachment[] {
-  const items: unknown[] = WORKSPACE_ATTACHMENT_NUMBER_SLOTS.map(([slot, provider, type]) => ({
-    provider,
-    type,
-    number: meta[slot]
-  }))
+  let items: unknown[] | undefined
   // Rich identities carry the task source before their compatibility slots are folded in.
   if (meta.linkedWorkItem) {
-    items.unshift({
-      ...meta.linkedWorkItem,
-      taskSourceContext: meta.linkedTaskSourceContext,
-      ...(meta.linkedWorkItem.provider === 'linear'
-        ? {
-            linearWorkspaceId: meta.linkedLinearIssueWorkspaceId,
-            linearOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey
-          }
-        : {})
-    })
+    items = [
+      {
+        ...meta.linkedWorkItem,
+        taskSourceContext: meta.linkedTaskSourceContext,
+        ...(meta.linkedWorkItem.provider === 'linear'
+          ? {
+              linearWorkspaceId: meta.linkedLinearIssueWorkspaceId,
+              linearOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey
+            }
+          : {})
+      }
+    ]
+  }
+  for (let i = 0; i < WORKSPACE_ATTACHMENT_NUMBER_SLOTS.length; i += 1) {
+    const [slot, provider, type] = WORKSPACE_ATTACHMENT_NUMBER_SLOTS[i]
+    const number = meta[slot]
+    if (typeof number === 'number' && Number.isSafeInteger(number) && number > 0) {
+      ;(items ??= []).push({ provider, type, number })
+    }
   }
   if (meta.linkedLinearIssue?.trim()) {
-    items.push({
+    ;(items ??= []).push({
       provider: 'linear',
       type: 'issue',
       number: 0,
-      identifier: meta.linkedLinearIssue ?? undefined,
-      linearIdentifier: meta.linkedLinearIssue ?? undefined,
+      identifier: meta.linkedLinearIssue,
+      linearIdentifier: meta.linkedLinearIssue,
       linearWorkspaceId: meta.linkedLinearIssueWorkspaceId ?? undefined,
       linearOrganizationUrlKey: meta.linkedLinearIssueOrganizationUrlKey ?? undefined
     })
   }
-  return normalizeWorkspaceAttachments(items)
+  return items ? normalizeWorkspaceAttachments(items) : []
 }

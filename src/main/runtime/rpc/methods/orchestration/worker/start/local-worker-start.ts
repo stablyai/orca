@@ -21,6 +21,7 @@ import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-st
 import { resolveExistingWorkerWorkspace } from './placement/folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-input'
+import type { CoordinatorChatPermission } from './worker-chat-permission'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage
@@ -62,6 +63,7 @@ export async function startLocalWorker(args: {
   orchestrationMutation?: WorkerStartMutation
   /** Settings-driven; the executing host still gets to refuse below. */
   mode: WorkerStartModeReceipt
+  parentPermission: CoordinatorChatPermission | undefined
   /** Stamped on the Dispatch so the workers this one starts start as chats too. */
   chatLineage?: boolean
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
@@ -191,6 +193,7 @@ export async function startLocalWorker(args: {
       orchestrationRunId: run.id,
       resolvedWorktree,
       mode,
+      parentPermission: args.parentPermission,
       agent,
       launch,
       effects,

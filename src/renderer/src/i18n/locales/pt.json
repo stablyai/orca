@@ -11894,7 +11894,10 @@
             "operationResolve": "Resolver",
             "operationResolveLabel": "Resolver conflitos com IA",
             "operationMoreActions": "Mais ações",
-            "operationAbortConfirm": "Selecione novamente para abortar"
+            "operationAbortConfirm": "Selecione novamente para abortar",
+            "operationRunChangedTitle": "Nada foi abortado",
+            "operationRunChangedDescription": "A operação mudou depois que Abortar foi escolhido. Verifique o estado atual e tente novamente.",
+            "operationRunUnknown": "Não é possível saber qual execução está pausada, então Abortar está desativado aqui. Atualize o controle de código-fonte ou aborte-a em um terminal."
           },
           "checks": {
             "panel": {
@@ -25083,6 +25086,9 @@
           "always": "Sempre",
           "never": "Nunca"
         }
+      },
+      "advanced": {
+        "localOnlyNotice": "Configurações de compatibilidade de baixo nível para solução de problemas. Estas configurações ficam salvas neste computador, não em {{host}}."
       },
       "repositoryHooks": {
         "availableEnvVars": "Variáveis de ambiente disponíveis"

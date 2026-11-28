@@ -52,6 +52,11 @@ export class RpcDispatcher {
     this.orchestrationRouting = new OrchestrationDispatchRouting(runtime)
   }
 
+  /** Loads the lazy group serving `methodName`, if any, so a caller can recheck state before dispatching. */
+  async ensureMethodLoaded(methodName: string): Promise<void> {
+    await this.lazyLoader.ensureMethodLoaded(methodName)
+  }
+
   async dispatch(request: RpcRequest, options?: RpcDispatchStreamingOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const pendingAdmission = this.admit(

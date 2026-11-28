@@ -9,6 +9,7 @@ import type {
   GitForkSyncResult
 } from '../../../shared/git/remotes/git-fork-sync'
 import type {
+  GitAbortOperationRequest,
   ContinueRebaseAction,
   ContinueRebaseRequest,
   ContinueRebaseResult,
@@ -26,6 +27,8 @@ import type {
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../../api-types'
+
+type AbortArgs = { worktreePath: string; connectionId?: string } & GitAbortOperationRequest
 
 export const gitApi = {
   status: (args: {
@@ -86,10 +89,8 @@ export const gitApi = {
     ipcRenderer.invoke('git:conflictOperation', args),
   mutationInFlight: (args: { worktreePath: string; connectionId?: string }) =>
     ipcRenderer.invoke('git:mutationInFlight', args),
-  abortMerge: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('git:abortMerge', args),
-  abortRebase: (args: { worktreePath: string; connectionId?: string }): Promise<void> =>
-    ipcRenderer.invoke('git:abortRebase', args),
+  abortMerge: (args: AbortArgs): Promise<void> => ipcRenderer.invoke('git:abortMerge', args),
+  abortRebase: (args: AbortArgs): Promise<void> => ipcRenderer.invoke('git:abortRebase', args),
   continueRebase: (
     args: {
       worktreePath: string
@@ -191,11 +192,13 @@ export const gitApi = {
     commitId: string
     connectionId?: string
   }): Promise<GitCommitActionResult> => ipcRenderer.invoke('git:revert', args),
-  sequencerAbort: (args: {
-    worktreePath: string
-    operation: GitCommitAction
-    connectionId?: string
-  }): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
+  sequencerAbort: (
+    args: {
+      worktreePath: string
+      operation: GitCommitAction
+      connectionId?: string
+    } & GitAbortOperationRequest
+  ): Promise<void> => ipcRenderer.invoke('git:sequencerAbort', args),
   sequencerContinue: (args: {
     worktreePath: string
     operation: GitCommitAction

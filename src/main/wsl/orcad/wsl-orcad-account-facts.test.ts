@@ -11,7 +11,7 @@ import {
 } from './wsl-orcad-account-facts'
 import {
   readWslHostFacts,
-  refuseUnpairedDefaultAccount,
+  refuseUnpairedHostAccount,
   WSL_HOST_FACTS_COMMAND
 } from './wsl-orcad-held-context'
 import { withWslHostLinuxUser } from './wsl-orcad-host-user'
@@ -74,14 +74,27 @@ describe('WSL account facts parsing', () => {
 describe('an unpinned host whose default account lacks the paired key', () => {
   const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
   it('is refused before deploy unless that account holds the key or the host is pinned', async () => {
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).toThrow(/qauser/)
-    expect(() =>
-      refuseUnpairedDefaultAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')
-    ).toThrow(/qauser/)
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
-    expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, undefined)).not.toThrow()
-    await withWslHostLinuxUser('Ubuntu', 'root', async () =>
-      expect(() => refuseUnpairedDefaultAccount('Ubuntu', qauser, 'RRRR')).not.toThrow()
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).toThrow(/qauser/)
+    expect(() => refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')).toThrow(
+      /qauser/
     )
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).not.toThrow()
+    expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, undefined)).not.toThrow()
+    await withWslHostLinuxUser('Ubuntu', 'root', async () =>
+      expect(() => refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).not.toThrow()
+    )
+  })
+})
+
+// A pinned account's changed key is only a hint before deploy: the server may still prove the
+// paired key, so only the handshake's refusal seals (wsl-orcad-pairing-identity.test.ts).
+describe('a pinned host whose account now holds another key', () => {
+  const qauser = { account: { uid: '1001', name: 'qauser' }, ownKey: 'QQQQ' }
+  it('flags a readable mismatch of the pinned account without refusing the deploy', async () => {
+    await withWslHostLinuxUser('Ubuntu', 'qauser', async () => {
+      expect(refuseUnpairedHostAccount('Ubuntu', qauser, 'RRRR')).toBe(true)
+      expect(refuseUnpairedHostAccount('Ubuntu', { ...qauser, ownKey: null }, 'RRRR')).toBe(false)
+      expect(refuseUnpairedHostAccount('Ubuntu', qauser, 'QQQQ')).toBe(false)
+    })
   })
 })

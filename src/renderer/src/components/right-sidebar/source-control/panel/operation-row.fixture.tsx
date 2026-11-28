@@ -55,7 +55,8 @@ function Row({
       kind: 'rebase_paused',
       unresolvedCount: conflicts,
       continueState,
-      inspectFailureMessage: null
+      inspectFailureMessage:
+        continueState === 'unreadable' ? 'fatal: could not read .git/rebase-merge/done' : null
     } as const
     const actions: BaseRebaseActions = {
       state: paused,
@@ -91,7 +92,8 @@ function Row({
             : { kind: 'continue', busy: busy === 'continue', onPress: () => {} }
       }
       abort={{
-        unavailable: busy === 'abort' || busy === 'host-unsupported',
+        // As in the panel: Abort waits while Continue runs or an abort is in flight.
+        unavailable: busy === 'continue' || busy === 'abort' || busy === 'host-unsupported',
         busy: busy === 'abort',
         reason:
           busy === 'host-unsupported'
@@ -190,4 +192,21 @@ export const cherryPickHostUnsupported = defineFixture({
       ?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
     await new Promise((resolve) => setTimeout(resolve, 150))
   }
+})
+
+// A long translated detail beside a long Retry label at the narrowest width truncates, never blanks.
+export const longDetail220 = defineFixture({
+  width: 220 + 32,
+  render: () => (
+    <div className="flex flex-col bg-sidebar px-3 py-1 text-foreground">
+      <OperationRow
+        operation="rebase"
+        branch={LONG_BRANCH}
+        detail="Prüfung fehlgeschlagen"
+        primary={{ kind: 'retry', busy: false, onPress: () => {} }}
+        abort={{ unavailable: false, busy: false, onAbort: () => {} }}
+        abortTargetKey="fixture|long-detail"
+      />
+    </div>
+  )
 })

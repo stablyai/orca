@@ -297,12 +297,13 @@ export function useMobileTasksGithubReplyMergeActions<
     },
     [client, captureTaskListRefresh, tryBeginMutation, taskUiReady]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     replySendNotice: commentSendNotice,
     replyToGitHubComment,
     mergeHostedReview,
     setLinearStatus
-  })
+  }
 }
 
 export type GithubReplyMergeActionsModel = GithubCheckFileActionsModel &
