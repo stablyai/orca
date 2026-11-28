@@ -1,7 +1,7 @@
 // The waiting ask of several questions, every open line at once, a hairline between them. A quick reply
 // picks the line's answer (solid, with a check) and folds it to "✓ Question… → answer", which reopens
-// on click: the box then answers it, and its pick again folds it back. Nothing posts until Send, which
-// posts the picks as one comment. A line answered, or sent and on its way, folds the same and stays.
+// on click: the box then answers it, and its pick again folds it back. The answer that fills the last
+// open line posts them all as one comment; Send posts a partial set. A line answered, or sent and on its way, folds the same and stays.
 // The comment box below is the one place to type: its Enter holds the words, with their images, files
 // and skills, as the answer of the line its "Replying to" names, like a pick.
 import { Check, LoaderCircle, Pencil } from 'lucide-react'

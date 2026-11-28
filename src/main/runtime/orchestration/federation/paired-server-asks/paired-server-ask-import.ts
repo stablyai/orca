@@ -3,6 +3,7 @@
 // the acknowledgment, one they introduced waits for a person, anything else is declined.
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { isGeneratedId } from '../../db/generated-id'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   ClientAskPayload,
@@ -204,6 +205,13 @@ export async function importPairedServerItem(
   asks: PairedServerAsks,
   item: PulledItem
 ): Promise<{ card: boolean }> {
+  // Replies wait in the relay keyed by conversation; any other id could name a dispatch there.
+  if (!isGeneratedId(item.conversationId, 'peerconv')) {
+    console.warn(
+      `[orchestration] Dropped ${item.kind ?? 'item'} ${item.messageId} from a paired server: invalid conversation ID`
+    )
+    return { card: false }
+  }
   const json = safeJson(item.payload)
   if (item.kind === 'client_ask_withdraw') {
     const withdrawn = Withdrawn.safeParse(json)

@@ -38,6 +38,7 @@ const HUMAN_VIEWER_BROWSER_RPC_METHODS = new Set<string>([
   'browser.saveImage',
   'browser.readImage',
   'browser.tabCreate',
+  'browser.tabShow',
   'browser.tabClose',
   'browser.screencast',
   'browser.screencast.ack',

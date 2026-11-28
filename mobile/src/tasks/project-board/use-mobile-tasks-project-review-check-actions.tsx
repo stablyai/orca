@@ -227,12 +227,13 @@ export function useMobileTasksProjectReviewCheckActions(model: ProjectMetadataAc
     },
     [activeGitHubProjectHost, client, findProjectRowRepo, projectMutating, projectRowDetail]
   )
-  return Object.assign(model, {
+  return {
+    ...model,
     requestProjectGitHubReviewers,
     refreshProjectGitHubChecks,
     rerunProjectGitHubChecks,
     toggleProjectGitHubFileViewed
-  })
+  }
 }
 
 export type ProjectReviewCheckActionsModel = ReturnType<

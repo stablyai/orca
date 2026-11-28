@@ -7,7 +7,8 @@ import {
 
 const FAILURE_COPY: Record<HostAccountSignInFailureCode, () => string> = {
   ownerSilent: () => translate('accounts.hostSignIn.errors.ownerSilent', FAILURE_EN.ownerSilent),
-  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded)
+  superseded: () => translate('accounts.hostSignIn.errors.superseded', FAILURE_EN.superseded),
+  noPrompt: () => translate('accounts.hostSignIn.errors.noPrompt', FAILURE_EN.noPrompt)
 }
 
 function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignInFailureCode {
@@ -22,4 +23,15 @@ export function hostAccountSignInFailureText(status: HostAccountSignInStatus): s
   return (
     status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
   )
+}
+
+/** After this client stops waiting for a link: a sign-in the host finished meanwhile still wins. */
+export function noPromptOutcome(
+  latest: HostAccountSignInStatus | null,
+  unprompted: HostAccountSignInStatus
+): HostAccountSignInStatus {
+  if (latest?.phase === 'signedIn') {
+    return latest
+  }
+  throw new Error(hostAccountSignInFailureText({ ...unprompted, errorCode: 'noPrompt' }))
 }

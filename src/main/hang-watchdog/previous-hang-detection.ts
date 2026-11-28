@@ -5,6 +5,8 @@ import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { hangCaptureDetails } from './hang-capture-details'
+import { findUnrecoveredStall } from './unrecovered-stall-selection'
+import { finalHangMarkerPath, mergeFinalHangMarker } from './hang-final-marker'
 import {
   consumeHangDetectionMarker,
   hangDetectionMarkerPath,
@@ -32,13 +34,17 @@ export function preservePreviousHangDetection(userDataPath: string): void {
   }
   try {
     const currentPath = hangDetectionMarkerPath(userDataPath)
+    const finalPath = finalHangMarkerPath(currentPath)
     const pendingPath = previousMarkerPath(userDataPath)
-    const current = asHangObservations(readAvailableHangDetectionMarker(currentPath))
-    if (!current) {
+    const [currentMarker, finalMarker, pending] = [currentPath, finalPath, pendingPath].map(
+      (path) => readAvailableHangDetectionMarker(path)
+    )
+    // An unreadable .final may hold the clean-quit state: keep every file and retry next launch.
+    if (finalMarker === undefined || pending === undefined) {
       return
     }
-    const pending = readAvailableHangDetectionMarker(pendingPath)
-    if (pending === undefined) {
+    const current = mergeFinalHangMarker(asHangObservations(currentMarker), finalMarker)
+    if (!current) {
       return
     }
     const merged = mergeHangObservations(
@@ -46,7 +52,9 @@ export function preservePreviousHangDetection(userDataPath: string): void {
       current
     )
     writeHangDetectionMarker(pendingPath, merged)
-    rmSync(currentPath, { force: true })
+    for (const path of [currentPath, finalPath]) {
+      rmSync(path, { force: true })
+    }
   } catch {
     // Missing or inaccessible markers must not prevent startup; retain any earlier pending note.
   }
@@ -66,6 +74,7 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
     cause: 'unknown',
     cpuScope: 'process-all-threads',
     machineEvidence: record.machine ? 'sampled' : 'unknown',
+    watchdogTickAt: record.watchdogTickAt ?? null,
     ...(record.appVersion ? { observedAppVersion: record.appVersion } : {})
   }
   if (record.mainJs) {
@@ -146,15 +155,20 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
   return details
 }
 
-export function reportPreviousHangDetection(userDataPath: string): HangDetectionMarker | null {
+export type PreviousHangDetection = {
+  marker: HangDetectionMarker | null
+  unrecoveredStall: HangObservation | null
+}
+
+export function reportPreviousHangDetection(userDataPath: string): PreviousHangDetection {
   reportPreviousRendererHangs(userDataPath)
   if (!resolveObservabilityConsent().localFileEnabled || !hasActiveTraceSink()) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   const marker = consumeHangDetectionMarker(previousMarkerPath(userDataPath))
   const collection = asHangObservations(marker)
   if (!collection) {
-    return null
+    return { marker: null, unrecoveredStall: null }
   }
   for (const record of collection.observations) {
     recordDurableCrashBreadcrumb(
@@ -166,5 +180,8 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
       observationDetails(record, collection.omitted)
     )
   }
-  return latestHangMarker(collection)
+  return {
+    marker: latestHangMarker(collection),
+    unrecoveredStall: findUnrecoveredStall(collection.observations)
+  }
 }

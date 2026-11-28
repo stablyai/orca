@@ -30,12 +30,8 @@ import { withKeepOpenDefault } from './start/worker-keep-open-default'
 import { withRetryWorkerLaunchDefaults } from './start/worker-retry-launch-defaults'
 import type { WorkerStartInput } from './start/worker-start-input'
 import { withTerminalUsage } from './start/worker-start-terminal-usage'
-import {
-  linkWorkerToQuestion,
-  openQuestionReminder,
-  withOpenQuestion,
-  withQuestionLink
-} from './start/worker-question-link'
+import { snapshotCoordinatorChatPermission } from './start/worker-chat-permission'
+import { prepareWorkerQuestionLink } from './start/worker-question-link'
 
 type WorkerStartContext = Pick<
   RpcContext,
@@ -80,6 +76,11 @@ export async function startWorker(
       { effectsApplied: false }
     )
   }
+  // A permission switch during preflight must not change the choice this start inherits.
+  const parentPermission =
+    startParams.on || startParams.terminal
+      ? undefined
+      : snapshotCoordinatorChatPermission(orchestrationCaller)
   const checked =
     startParams.origin !== undefined
       ? await checkedWorkerOrigin(startParams.origin, ctx, startFollowUp?.of)
@@ -92,16 +93,7 @@ export async function startWorker(
   const { params, followUp, coordinator, bindRun, helperCreator, taskDeps, existingTask, withRun } =
     prepared
   const db = runtime.getOrchestrationDb()
-  const questionLink =
-    params.forQuestion !== undefined
-      ? linkWorkerToQuestion(db, params.forQuestion, coordinator, params.on !== undefined)
-      : undefined
-  const linkedParams =
-    questionLink && !questionLink.linked ? { ...params, forQuestion: undefined } : params
-  const reminder =
-    params.forQuestion === undefined ? openQuestionReminder(db, coordinator) : undefined
-  const withLink = <T>(started: T): T =>
-    withOpenQuestion(reminder, withQuestionLink(questionLink, started))
+  const { linkedParams, withLink } = prepareWorkerQuestionLink(db, params, coordinator)
   const { mode, chatLineage } = decideStartMode(runtime, db, params, orchestrationCaller, followUp)
   if (params.on) {
     // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
@@ -133,6 +125,7 @@ export async function startWorker(
     existingTask,
     orchestrationMutation,
     mode,
+    parentPermission,
     chatLineage,
     helperCreator,
     followUp

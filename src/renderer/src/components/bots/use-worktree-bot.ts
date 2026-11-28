@@ -52,8 +52,11 @@ export function selectFolderAncestors(
   )
 }
 
+const EMPTY_FOLDER_ANCESTORS: ReadonlyMap<string, readonly FolderWorkspace[]> = new Map()
+
 let lastFolderAncestors: {
-  inputs: readonly unknown[]
+  parents: ReturnType<typeof selectSidebarLineageParentIdentities>
+  folders: readonly FolderWorkspace[] | undefined
   result: ReadonlyMap<string, readonly FolderWorkspace[]>
 } | null = null
 
@@ -63,17 +66,19 @@ function selectFolderAncestorsByIdentity(
   statuses: RuntimeStatuses
 ): ReadonlyMap<string, readonly FolderWorkspace[]> {
   const parents = selectSidebarLineageParentIdentities(state, statuses)
-  const inputs = [parents, selectFolderWorkspaces(state)]
+  const folders = selectFolderWorkspaces(state)
   const previous = lastFolderAncestors
-  if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
+  if (previous && previous.parents === parents && previous.folders === folders) {
     return previous.result
   }
-  const folderByIdentity = new Map(
-    (selectFolderWorkspaces(state) ?? []).map((folder) => [
-      getFolderWorkspaceHostIdentity(folder),
-      folder
-    ])
-  )
+  if (!parents || parents.size === 0 || !folders || folders.length === 0) {
+    lastFolderAncestors = { parents, folders, result: EMPTY_FOLDER_ANCESTORS }
+    return EMPTY_FOLDER_ANCESTORS
+  }
+  const folderByIdentity = new Map<string, FolderWorkspace>()
+  for (const folder of folders) {
+    folderByIdentity.set(getFolderWorkspaceHostIdentity(folder), folder)
+  }
   const result = new Map<string, readonly FolderWorkspace[]>()
   // The sidebar's parents carry no loops, so each chain ends.
   const ancestorsOf = (identity: string): readonly FolderWorkspace[] => {
@@ -81,16 +86,16 @@ function selectFolderAncestorsByIdentity(
     if (known) {
       return known
     }
-    const parent = parents?.get(identity)
+    const parent = parents.get(identity)
     const folder = parent === undefined ? undefined : folderByIdentity.get(parent)
     const ancestors =
       parent === undefined ? NO_FOLDERS : [...(folder ? [folder] : []), ...ancestorsOf(parent)]
     result.set(identity, ancestors)
     return ancestors
   }
-  for (const identity of parents?.keys() ?? []) {
+  for (const identity of parents.keys()) {
     ancestorsOf(identity)
   }
-  lastFolderAncestors = { inputs, result }
+  lastFolderAncestors = { parents, folders, result }
   return result
 }

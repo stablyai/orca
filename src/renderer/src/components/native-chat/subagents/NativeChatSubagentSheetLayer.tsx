@@ -134,8 +134,8 @@ export function NativeChatSubagentSheetLayer({
   waiting,
   children
 }: Pick<NativeChatSubagentSheetHostValue, 'paneKey' | 'stop' | 'waiting'> & {
-  /** Changes when the pane switches sessions, which closes the sheet. */
-  sessionKey: string
+  /** Changes when the pane switches sessions, which closes the sheet; null while not yet known. */
+  sessionKey: string | null
   children: React.ReactNode
 }): React.JSX.Element {
   const [element, setElement] = useState<HTMLDivElement | null>(null)
@@ -147,10 +147,13 @@ export function NativeChatSubagentSheetLayer({
   )
   const sessionRef = useRef(sessionKey)
   useEffect(() => {
-    if (sessionRef.current !== sessionKey) {
-      sessionRef.current = sessionKey
+    if (sessionKey === null || sessionRef.current === sessionKey) {
+      return
+    }
+    if (sessionRef.current !== null) {
       openNativeChatSubagent(paneKey, null)
     }
+    sessionRef.current = sessionKey
   }, [paneKey, sessionKey])
   return (
     <NativeChatSubagentSheetHost value={host}>

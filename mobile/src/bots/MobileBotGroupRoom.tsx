@@ -352,7 +352,7 @@ export function MobileBotGroupRoom({
             onPress: () => void startThread()
           },
           onManageMembers: () => setMenu('members'),
-          onDelete: group ? () => setMenu('delete') : null
+          onDelete: group && connected ? () => setMenu('delete') : null
         })}
         onClose={() => setMenu(null)}
       />

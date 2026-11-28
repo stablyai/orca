@@ -78,11 +78,12 @@ export function flushDaemonStreamSession(
   sessionId: string,
   maxLineBytes: number,
   frames: StreamFrames,
-  write: (line: StreamWriteChunk) => void
+  // False for control frames: they carry no output, so they earn no delivery credit.
+  write: (line: StreamWriteChunk, carriesSessionOutput?: boolean) => void
 ): void {
   for (const entry of takeDaemonStreamSession(batch, sessionId)) {
     if (entry.control) {
-      write(frames.control(entry.control))
+      write(frames.control(entry.control), false)
     } else {
       frames.data(
         { write },

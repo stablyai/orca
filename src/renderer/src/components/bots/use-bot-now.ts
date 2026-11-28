@@ -11,10 +11,10 @@ import {
 } from '../../../../shared/bots/bot-now'
 import { useListedBotItemsNeedingOwner } from '@/lib/bot-catalog'
 import { usePublishBotNeedsYou } from './bot-needs-you-published'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import { useBotActivity } from './use-bot-activity'
 import { useBotChatTree } from './use-bot-chat-tree'
 import { useBotConnectorEntries, type BotConnectorEntry } from './bot-connector-entries'
+import { chatPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { usePairedServerAsks } from './use-paired-server-asks'
 
 export type BotNowView = BotNow<BotConnectorEntry, HostAccessRequest>
@@ -25,8 +25,7 @@ export function useBotNow(bot: Bot | null): BotNowView {
   const activity = useBotActivity(bot)
   const chatState = useAppStore((s) =>
     bot?.chatSessionId
-      ? (s.agentStatusByPaneKey.get(structuredAgentSessionStatusPaneKey(bot.chatSessionId))
-          ?.state ?? null)
+      ? (s.agentStatusByPaneKey.get(chatPaneKey(bot.chatSessionId))?.state ?? null)
       : null
   )
   const { chats } = useBotChatTree(bot)

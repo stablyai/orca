@@ -35,6 +35,8 @@ export type DiagnosticsUploadPayload =
 
 export type MemoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
+  /** Bytes held by Orca's own app processes; null where there is no local app (web client). */
+  getAppMemoryTotal: () => Promise<number | null>
   readPerfNoticeSignals: () => Promise<PerfNoticeSignals | null>
   countHiddenBrowserPages: (hiddenForMs: number) => Promise<number>
   resourceWindowVisible: () => Promise<boolean>

@@ -1,12 +1,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import {
-  agentJournalItemKey,
-  agentJournalSubmissionKey
-} from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS } from '../../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
@@ -24,6 +19,7 @@ import {
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
+import { appendUsageLimitedTurn } from './structured-agent-session-usage-limited-turn.test-fixture'
 
 const RESET = NOW + 60_000
 let rig: QueuedMessageTestRig | undefined
@@ -90,34 +86,7 @@ async function relaunchedChat(reset: number | null = RESET) {
   await store.setSessionTabVisibility(SESSION, true)
   const journal = (await host.conversation(SESSION)).journal
   const cutFence = fence()
-  const turn = { provider: 'orca' as const, clientMessageId: 'usage-limited' }
-  const turnItemId = agentJournalItemKey(turn)
-  await journal.appendItem(
-    turn,
-    {
-      kind: 'turn',
-      turnId: 'usage-limited',
-      providerTurnId: 'usage-limited',
-      state: 'completed',
-      outcome: 'failure',
-      startedAt: NOW,
-      completedAt: NOW
-    },
-    { fence: cutFence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await journal.appendItem(
-    { provider: 'orca', clientMessageId: 'limit' },
-    {
-      kind: 'status',
-      ...agentSessionFailureWords(
-        agentSessionFailureFact('usageLimitReached', {
-          usageLimit: reset === null ? {} : { resetsAt: reset }
-        }),
-        { surface: 'row' }
-      )
-    },
-    { fence: cutFence, turnScope: { kind: 'turn', turnItemId } }
-  )
+  await appendUsageLimitedTurn(journal, { fence: cutFence, resetsAt: reset })
 
   const rest = () => {
     const { lifetime } = host.collaboratorsForTests()

@@ -21,6 +21,23 @@ const SHELL_READY_TIMEOUT_MS = 15_000
 // The leading space keeps the cursor off column 0, where bash rings the bell on ^U (e.g. on an already empty line).
 const KILL_TYPED_LINE = ' \x15'
 
+/** True when `data` leaves unsubmitted typed text on the current line after any line-submit/clear control. */
+function hasTrailingTypedLine(data: string): boolean {
+  let tailStart = 0
+  for (let i = 0; i < data.length; i++) {
+    const code = data.charCodeAt(i)
+    // CR, LF, Ctrl-C, Ctrl-D, Ctrl-U submit or clear the active line (e.g. an answered rc-file read prompt).
+    if (code === 0x0d || code === 0x0a || code === 0x03 || code === 0x04 || code === 0x15) {
+      tailStart = i + 1
+    }
+  }
+  if (tailStart === 0) {
+    return true
+  }
+  const tail = data.slice(tailStart)
+  return tail.length > 0 && !extractOnlyTerminalQueryReplies(tail)
+}
+
 export type SessionShellReadyBarrierDeps = {
   sessionId: string
   subprocess: SubprocessHandle
@@ -93,11 +110,12 @@ export class SessionShellReadyBarrier {
     return true
   }
 
-  /** Track input typed while a startup command is held, so the flush can clear the line first. */
+  /** Track unsubmitted input typed while a startup command is held, so the flush can clear the line first. */
   observeTypedInput(data: string): void {
-    if (this.preReadyStdinQueue.length > 0 && !extractOnlyTerminalQueryReplies(data)) {
-      this.typedAhead = true
+    if (this.preReadyStdinQueue.length === 0 || !data || extractOnlyTerminalQueryReplies(data)) {
+      return
     }
+    this.typedAhead = hasTrailingTypedLine(data)
   }
 
   ingestSubprocessData(data: string): void {
@@ -146,6 +164,7 @@ export class SessionShellReadyBarrier {
 
   clearPendingWrites(): void {
     this.preReadyStdinQueue = []
+    this.typedAhead = false
     this.postReadyFlushGate.clear()
   }
 
@@ -200,7 +219,8 @@ export class SessionShellReadyBarrier {
   private flushPreReadyQueue(): void {
     const queued = this.preReadyStdinQueue
     this.preReadyStdinQueue = []
-    if (this.typedAhead) {
+    // Only clear a partial prompt line when the shell reached its line editor; on timeout an rc-file reader may still own stdin.
+    if (this._state === 'ready' && this.typedAhead) {
       this.deps.subprocess.write(KILL_TYPED_LINE)
     }
     this.typedAhead = false

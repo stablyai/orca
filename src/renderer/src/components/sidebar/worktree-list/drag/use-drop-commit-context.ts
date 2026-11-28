@@ -32,8 +32,8 @@ export function useWorktreeDropCommitContext(args: {
     return {
       scrollRef,
       workspaceStatuses,
-      worktreeDragGroups: session.worktreeDragGroups,
-      worktreeDragUnitGroups: session.worktreeDragUnitGroups,
+      getWorktreeDragGroups: session.getWorktreeDragGroups,
+      getWorktreeDragUnitGroups: session.getWorktreeDragUnitGroups,
       computeWorktreeDrop: session.computeWorktreeDrop,
       computeWorktreeStatusDrop: session.computeWorktreeStatusDrop,
       refreshWorktreeDragSession: session.refreshWorktreeDragSession,
@@ -64,8 +64,8 @@ export function useWorktreeDropCommitContext(args: {
     session.computeWorktreeDrop,
     session.computeWorktreeStatusDrop,
     session.refreshWorktreeDragSession,
-    session.worktreeDragGroups,
-    session.worktreeDragUnitGroups,
+    session.getWorktreeDragGroups,
+    session.getWorktreeDragUnitGroups,
     workspaceStatuses,
     worktreeDragSessionRef,
     worktreePointerDragRef

@@ -12,34 +12,54 @@ export function reuseEqualCatalogRows<T extends CatalogRow>(
   if (!current) {
     return [...incoming]
   }
-  const currentById = new Map<string, T[]>()
+  const singleById = new Map<string, T>()
+  let duplicatesById: Map<string, T[]> | undefined
   for (const row of current) {
-    const candidates = currentById.get(row.id)
-    if (candidates) {
-      candidates.push(row)
+    const duplicates = duplicatesById?.get(row.id)
+    if (duplicates) {
+      duplicates.push(row)
+      continue
+    }
+    const existing = singleById.get(row.id)
+    if (existing !== undefined) {
+      singleById.delete(row.id)
+      duplicatesById ??= new Map()
+      duplicatesById.set(row.id, [existing, row])
     } else {
-      currentById.set(row.id, [row])
+      singleById.set(row.id, row)
     }
   }
-  const reconciled = incoming.map((row) => {
-    const candidates = currentById.get(row.id)
-    if (!candidates) {
-      return row
-    }
-    const scanLimit = Math.min(candidates.length, MAX_DUPLICATE_ID_SCAN)
-    for (let index = 0; index < scanLimit; index++) {
-      const candidate = candidates[index]
-      if (candidate !== undefined && structuralValuesEqualIgnoringUndefined(candidate, row)) {
-        candidates.splice(index, 1)
-        return candidate
+  let allSame = current.length === incoming.length
+  const reconciled: T[] = []
+  for (let i = 0; i < incoming.length; i++) {
+    const row = incoming[i]
+    let matched: T = row
+    const single = singleById.get(row.id)
+    if (single !== undefined) {
+      if (structuralValuesEqualIgnoringUndefined(single, row)) {
+        singleById.delete(row.id)
+        matched = single
+      }
+    } else {
+      const candidates = duplicatesById?.get(row.id)
+      if (candidates) {
+        const scanLimit = Math.min(candidates.length, MAX_DUPLICATE_ID_SCAN)
+        for (let index = 0; index < scanLimit; index++) {
+          const candidate = candidates[index]
+          if (candidate !== undefined && structuralValuesEqualIgnoringUndefined(candidate, row)) {
+            candidates.splice(index, 1)
+            matched = candidate
+            break
+          }
+        }
       }
     }
-    return row
-  })
-  return current.length === reconciled.length &&
-    current.every((row, index) => row === reconciled[index])
-    ? (current as T[])
-    : reconciled
+    reconciled.push(matched)
+    if (allSame && current[i] !== matched) {
+      allSame = false
+    }
+  }
+  return allSame ? (current as T[]) : reconciled
 }
 
 export function catalogRowsEqual<T extends CatalogRow>(
@@ -49,5 +69,18 @@ export function catalogRowsEqual<T extends CatalogRow>(
   if (current === incoming) {
     return true
   }
-  return reuseEqualCatalogRows(current, incoming) === current
+  if (!current || current.length !== incoming.length) {
+    return false
+  }
+  for (let index = 0; index < current.length; index++) {
+    const row = current[index]
+    const next = incoming[index]
+    if (
+      row !== next &&
+      (row.id !== next.id || !structuralValuesEqualIgnoringUndefined(row, next))
+    ) {
+      return false
+    }
+  }
+  return true
 }

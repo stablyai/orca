@@ -1,5 +1,8 @@
 import type { BridgeTerminalToolbar } from '../bridge/native-capabilities/bridge-terminal-key'
-import { readBridgeExternalLinkUrl } from '../bridge/protocol/bridge-caps'
+import {
+  BRIDGE_MAX_EXTERNAL_LINK_CHARS,
+  readBridgeExternalLinkUrl
+} from '../bridge/protocol/bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
@@ -91,7 +94,7 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_EXTERNAL_LINK_GRANT) {
       // Pass the same normalized URL the envelope checked to the device handler; raw spelling could otherwise differ from the parsed target. Both use the same rule, so null is unreachable.
-      const target = readBridgeExternalLinkUrl(message.url)
+      const target = readBridgeExternalLinkUrl(message.url, BRIDGE_MAX_EXTERNAL_LINK_CHARS)
       if (target !== null) {
         options.onExternalLink(target)
       }

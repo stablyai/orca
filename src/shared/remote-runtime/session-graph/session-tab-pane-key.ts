@@ -1,8 +1,5 @@
 import { makePaneKey } from '../../workspace-layout/stable-pane-id'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 
 type PaneKeyedTab =
   | { type: 'terminal'; id: string; parentTabId?: string; leafId?: string }
@@ -28,7 +25,7 @@ export function terminalTabPaneKey(tab: {
 /** The agent pane a session tab shows, as agent status and the desktop Agents list key it. */
 export function sessionTabPaneKey(tab: PaneKeyedTab | null | undefined): string | undefined {
   if (tab?.type === 'agent-session' && 'sessionId' in tab) {
-    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.sessionId), tab.sessionId)
+    return chatPaneKey(tab.sessionId)
   }
   return tab?.type === 'terminal' && 'id' in tab ? terminalTabPaneKey(tab) : undefined
 }

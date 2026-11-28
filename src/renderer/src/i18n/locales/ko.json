@@ -1085,7 +1085,7 @@
           "urlPlaceholder": "https://example.com/mcp",
           "transport": "Streamable HTTP · localhost는 이 봇의 컴퓨터를 뜻합니다.",
           "headers": "헤더",
-          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “연결” 버튼이 표시됩니다.",
+          "authHint": "서버에 브라우저 로그인이 필요하면 도구 확인이 끝난 뒤 “로그인” 버튼이 표시됩니다.",
           "executable": "실행 파일",
           "commandPlaceholder": "npx",
           "args": "인수",
@@ -5366,9 +5366,8 @@
             "84c3b15dca": "에이전트 사용량 한도",
             "d663430cf9": "사용량 추적 설정",
             "remoteLabel": "{{host}}에 사용량 없음",
-            "remoteTitle": "{{host}}의 사용량",
-            "remoteBody": "이 워크스페이스는 {{host}}에서 실행되므로 상태 표시줄에는 해당 호스트의 사용량이 표시됩니다. 그 호스트에서 에이전트에 로그인하거나, 로컬 워크스페이스로 전환하면 이 컴퓨터의 사용량을 볼 수 있습니다.",
-            "remoteOpenAccounts": "{{host}} 계정 열기"
+            "remoteNoUsageYet": "아직 사용량이 없습니다. 해당 호스트에서 로그인하세요.",
+            "remoteAccounts": "계정"
           },
           "UpdateStatusSegment": {
             "5cd13105a3": "업데이트에 실패했습니다. 확장하려면 클릭하세요.",
@@ -12803,8 +12802,11 @@
           "restarting": "다시 시작 중…",
           "updated": "업데이트됨",
           "failed": "업데이트 실패",
-          "serviceManagerHelp": "서버 호스트에서 Orca를 업데이트하세요. .deb 또는 .rpm으로 설치했다면 시스템 패키지 관리자를, 그 외에는 Orca를 시작하는 서비스 관리자를 사용하세요.",
-          "unpackedHelp": "개발 빌드는 소스 체크아웃에서 업데이트해야 합니다.",
+          "nodeServerHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 Orca의 Node 서버(orcad)처럼 기본 제공 업데이터 없이 Orca를 실행합니다. 서버에 최신 Orca 릴리스를 설치한 다음 orca serve를 다시 시작하세요.",
+          "updaterNotStartedHelp": "원격 업데이트가 꺼져 있습니다: 이 서버의 Orca가 업데이터를 시작하지 않았습니다. 서버에서 Orca를 다시 시작한 후 다시 확인하거나 서버에서 업데이트하세요.",
+          "headlessServeHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 업데이트 감독 프로세스 없이 orca serve를 실행하므로 새 버전으로 스스로 다시 시작할 수 없습니다. 서버에서 Orca를 업데이트한 다음 서비스를 다시 시작하세요.",
+          "systemPackageHelp": "원격 업데이트가 꺼져 있습니다: 이 서버의 Orca는 시스템 패키지나 다른 설치 프로그램으로 설치되어 그 방법으로 업데이트해야 합니다. 설치한 방법대로 업데이트하세요(예: .deb 또는 .rpm이면 apt나 dnf).",
+          "devBuildHelp": "원격 업데이트가 꺼져 있습니다: 이 서버는 개발 빌드를 실행합니다. 소스 체크아웃에서 업데이트하세요.",
           "legacyHelp": "이 서버에서는 원격 업데이트를 사용할 수 없습니다. 서버에서 Orca를 업데이트하세요.",
           "managedOverSshHelp": "이 데스크톱이 SSH로 이 서버를 업데이트합니다. 원격 Orca 서버의 해당 행에서 업데이트를 사용하세요."
         },
@@ -15018,7 +15020,10 @@
             "operationResolve": "해결",
             "operationResolveLabel": "AI로 충돌 해결",
             "operationMoreActions": "추가 작업",
-            "operationAbortConfirm": "다시 선택하면 중단됩니다"
+            "operationAbortConfirm": "다시 선택하면 중단됩니다",
+            "operationRunChangedTitle": "중단된 작업이 없습니다",
+            "operationRunChangedDescription": "중단을 선택한 후 작업이 바뀌었습니다. 현재 상태를 확인하고 다시 시도하세요.",
+            "operationRunUnknown": "일시 중지된 실행을 확인할 수 없어 여기서는 중단할 수 없습니다. 소스 제어를 새로 고치거나 터미널에서 중단하세요."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 에이전트를 시작할 수 없습니다.",
@@ -19789,8 +19794,7 @@
           "more": "더 많은 아티팩트 작업"
         },
         "ArtifactCollection": {
-          "loadMore": "더 로드하기",
-          "noMatches": "일치하는 항목 없음"
+          "loadMore": "더 로드하기"
         },
         "ArtifactDetailHeader": {
           "publicLink": "이 링크가 있는 사람은 누구나 볼 수 있습니다.",
@@ -23148,6 +23152,9 @@
           "never": "안 함"
         }
       },
+      "advanced": {
+        "localOnlyNotice": "문제 해결을 위한 낮은 수준의 호환성 설정입니다. 이 설정은 {{host}}이(가) 아닌 이 컴퓨터에 저장됩니다."
+      },
       "repositoryHooks": {
         "availableEnvVars": "사용 가능한 환경 변수"
       },
@@ -23219,6 +23226,7 @@
           "deleted": "삭제됨",
           "kept": "유지됨 · {{count}}개",
           "showMore": "{{count}}개 더 보기",
+          "showFewer": "간략히 표시",
           "waiting": "{{after}}일 중 {{elapsed}}일 비활성",
           "title": "활동",
           "notListed_one": "유지된 워크스페이스 1개가 더 있지만 표시하지 않았습니다.",
@@ -23384,7 +23392,6 @@
           "dialog": {
             "createToken": "만들기",
             "environmentManagedLine": "ORCA_BITBUCKET_* 환경 변수로 설정되어 있습니다. 여기에 저장하려면 해제하세요.",
-            "savedLocallyOnly": "이 컴퓨터에만 저장됩니다.",
             "accessTokenNeeds": "풀 리퀘스트 읽기 권한이 필요합니다.",
             "atlassianEmail": "Atlassian 이메일",
             "requiredScopes": "필요한 범위",
@@ -24626,6 +24633,26 @@
       "statusAriaLabel": "Git Blame: {{summary}}",
       "openCommitHint": "클릭하여 커밋 열기",
       "statusBarItem": "Git Blame"
+    },
+    "reloadFromDisk": {
+      "tooltipPaused": "디스크에서 다시 불러오기 · 자동 다시 불러오기 일시 중지됨",
+      "ariaLabelPaused": "디스크에서 다시 불러오기, 자동 다시 불러오기 일시 중지됨",
+      "noChanges": "디스크에 변경 사항 없음",
+      "readFailed": "{{value0}}을(를) 읽을 수 없습니다",
+      "retry": "다시 시도",
+      "fileDeleted": "디스크에서 파일이 삭제됨",
+      "cannotCheckDirty": "저장하지 않은 편집이 있어 디스크와 비교할 수 없습니다",
+      "changedOnDisk": "디스크에서 변경됨",
+      "editsKept": "{{value0}}의 저장하지 않은 편집은 유지됩니다",
+      "openTab": "탭 열기",
+      "paletteTitle": "디스크에서 파일 다시 불러오기",
+      "paletteDescription": "활성 파일을 디스크에서 읽고 변경된 경우 다시 불러옵니다.",
+      "verbs": {
+        "reloadFile": "파일 다시 불러오기",
+        "reloadFromDisk": "디스크에서 다시 불러오기",
+        "refreshFile": "파일 새로 고침",
+        "revertFile": "파일 되돌리기"
+      }
     }
   },
   "featureTips": {
@@ -25456,7 +25483,10 @@
       "chatPasteCode": "코드를 붙여넣으세요",
       "chatPasteCodeLabel": "로그인 후 Google이 보여 주는 코드 또는 그 페이지의 주소",
       "launchesUse": "새로 실행하는 agy는 이 계정을 사용합니다",
-      "loginNow": "현재 agy 로그인"
+      "loginNow": "현재 agy 로그인",
+      "signedInUnread": "agy에 로그인되어 있습니다",
+      "unreadDetail": "어떤 계정인지 보려면 계정을 표시하세요. macOS가 키체인 접근 허용을 요청할 수 있습니다.",
+      "showAccount": "계정 표시"
     },
     "claude": {
       "added": "계정이 추가되었습니다. 다음에 시작하는 Claude에 사용하려면 이 계정을 선택하세요.",
@@ -25556,6 +25586,7 @@
       "errors": {
         "ownerSilent": "이 로그인을 시작한 기기가 더 이상 응답하지 않습니다.",
         "superseded": "이 호스트에서 계정이 변경되어 로그인이 중단되었습니다. 다시 시작하세요.",
+        "noPrompt": "서버의 로그인 명령이 1분 안에 로그인 링크를 표시하지 않았습니다. 서버의 Orca를 업데이트한 후 다시 시도하세요.",
         "failed": "로그인하지 못했습니다. 다시 시도하세요."
       }
     },
@@ -29274,8 +29305,6 @@
         "automationEnded": "종료됨"
       },
       "menu": {
-        "cancel": "취소",
-        "done": "완료",
         "waiting": "대기 중…"
       },
       "pill": {
@@ -29284,6 +29313,7 @@
         "moveTo": "이동"
       },
       "row": {
+        "cancel": "취소",
         "done": "완료",
         "more": "더 보기",
         "select": "{{title}} 선택"
