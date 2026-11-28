@@ -136,7 +136,9 @@ export const AutomationCreate = lazyZodSchema(() =>
       // No --runs-in was given: it runs in the calling chat when that is one of the bot's own.
       runsInDefault: z.literal(true).optional(),
       // What a CLI from before runsInDefault sends for a wait given no --runs-in.
-      waitInCallerChat: z.literal(true).optional()
+      waitInCallerChat: z.literal(true).optional(),
+      // No --results-to was given, so a thread that answers it overrode nothing the caller chose.
+      resultsToDefault: z.literal(true).optional()
     })
     .superRefine(refuseUnknownNamedZone)
 )

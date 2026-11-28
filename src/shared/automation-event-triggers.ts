@@ -282,11 +282,15 @@ export function withFoldedEvent<Run extends Pick<AutomationRun, 'event' | 'event
   }
 }
 
+/** Why a schedule or wait can't send results to a thread, and what does work. */
+export const THREAD_RESULTS_NEED_EVENTS =
+  "Results go to the event's thread only when events alone start the automation. To answer the Slack thread you're in, make it from that thread's chat and leave out --runs-in and --results-to: it answers there. Otherwise send results to chat, channel:<channel> or linear:<issue>."
+
 // A thread is only an event's: a schedule, a webhook call or the bot's Chat has none to answer in.
 function assertThreadResults(automation: Automation): void {
   const triggers = automation.on ?? []
   if (hasAutomationSchedule(automation) || triggers.length === 0) {
-    throw new Error("Results can go to the event's thread only when events alone start it.")
+    throw new Error(THREAD_RESULTS_NEED_EVENTS)
   }
   if (triggers.some(isWebhookTrigger)) {
     throw new Error('A webhook call has no thread; send its results somewhere else.')

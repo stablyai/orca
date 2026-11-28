@@ -16,6 +16,13 @@ import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wai
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
 import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
+import { creatorThreadOf } from './creator-thread'
+import {
+  originThreadNote,
+  type GivenFlags
+} from '../../../../automations/bot-automation-origin-thread'
+import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
+import { sameSession } from '../../../../bots/bot-turn-for'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
 
@@ -58,6 +65,25 @@ function firedWaits(
   } catch {
     // Unreadable run history must not fail the list; its waits read as before.
     return []
+  }
+}
+
+/** What the host changed about the target the caller asked for, as the CLI prints it. */
+function notesOf(
+  asked: Automation['bot'],
+  saved: Automation['bot'],
+  given: GivenFlags
+): { notes?: string[] } {
+  const note = asked ? originThreadNote(asked, saved, given) : null
+  return note ? { notes: [note] } : {}
+}
+
+/** The bot target saved before an edit, to tell which choices the edit made; undefined if unread. */
+function savedBotTarget(context: RpcContext, id: string): Automation['bot'] {
+  try {
+    return context.runtime.showAutomation(id).bot
+  } catch {
+    return undefined
   }
 }
 
@@ -108,13 +134,29 @@ export const AUTOMATION_METHODS = [
     name: 'automation.create',
     permission: 'workspace',
     params: AutomationCreate,
-    handler: async ({ callerSessionId, runsInDefault, waitInCallerChat, ...params }, context) => {
+    handler: async (
+      { callerSessionId, runsInDefault, waitInCallerChat, resultsToDefault, ...params },
+      context
+    ) => {
       refuseFromLookAround(callerSessionId, context)
       const caller = chatOfCaller(callerSessionId, context)
-      const bot =
-        params.bot && (runsInDefault || (waitInCallerChat && params.once))
+      const runsInDefaulted = Boolean(runsInDefault || (waitInCallerChat && params.once))
+      const inCaller =
+        params.bot && runsInDefaulted
           ? await targetInCallerChat(context.runtime, caller, params.bot, Boolean(params.once))
           : params.bot
+      // Made with no events by a Slack thread's turn: the host routes it to answer there once its
+      // places are refs. Only the chat Orca verified sent the request gives it that thread.
+      const verified = sessionCallerOf(context.orchestrationCaller)?.sessionId
+      const originThread =
+        inCaller &&
+        caller &&
+        !params.on?.length &&
+        verified !== undefined &&
+        sameSession(verified, caller)
+          ? await creatorThreadOf(context.runtime, caller, inCaller.botId)
+          : null
+      const bot = inCaller && originThread ? { ...inCaller, originThread } : inCaller
       const { plugin } = context
       const input = { ...params, bot }
       const automation = plugin
@@ -127,7 +169,14 @@ export const AUTOMATION_METHODS = [
           )
         : await context.runtime.createAutomation(input)
       recordAutomationSavedCard(caller, 'created', automation)
-      return { automation: automationForClient(automation, context) }
+      return {
+        automation: automationForClient(automation, context),
+        // Older clients ignore it; the CLI prints it under the saved automation.
+        ...notesOf(params.bot, automation.bot, {
+          runsIn: !runsInDefaulted,
+          resultsTo: !resultsToDefault
+        })
+      }
     }
   }),
   defineMethod({
@@ -136,6 +185,7 @@ export const AUTOMATION_METHODS = [
     params: AutomationUpdate,
     handler: async (params, context) => {
       refuseFromLookAround(params.callerSessionId, context)
+      const before = params.updates.bot ? savedBotTarget(context, params.id) : undefined
       const automation = await context.runtime.updateAutomation(params.id, params.updates, {
         expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
         destination: params.destination,
@@ -143,7 +193,19 @@ export const AUTOMATION_METHODS = [
       })
       const caller = chatOfCaller(params.callerSessionId, context)
       recordAutomationSavedCard(caller, 'updated', automation)
-      return { automation: automationForClient(automation, context) }
+      return {
+        automation: automationForClient(automation, context),
+        // An edit sends the whole target back: only what it changed was asked for.
+        ...(params.updates.bot
+          ? notesOf(params.updates.bot, automation.bot, {
+              runsIn:
+                params.updates.bot.runsIn !== before?.runsIn ||
+                params.updates.bot.chat?.sessionId !== before?.chat?.sessionId,
+              resultsTo:
+                JSON.stringify(params.updates.bot.resultsTo) !== JSON.stringify(before?.resultsTo)
+            })
+          : {})
+      }
     }
   }),
   defineMethod({

@@ -97,7 +97,7 @@ function filtersFlag(flags: Map<string, string | boolean>): WebhookFilters | und
 
 /** Prints a saved automation, then, when the save made its webhook, where the owner copies its URL. */
 export function printSavedAutomation(
-  saved: RuntimeRpcSuccess<{ automation: Automation }>,
+  saved: RuntimeRpcSuccess<{ automation: Automation; notes?: string[] }>,
   json: boolean,
   on: readonly AutomationEventTrigger[] | undefined,
   before?: Automation
@@ -109,8 +109,10 @@ export function printSavedAutomation(
     rule !== undefined &&
     rule.id !== (before && automationWebhookTrigger(before)?.id)
   const note = made ? webhookNote(saved.result.automation) : null
+  // What the host changed about the request, such as a thread's automation answering there.
+  const hostNotes = saved.result.notes ?? []
   printAutomationResult(saved, json, (value) =>
-    [formatAutomationShow(value), ...(note ? [note] : [])].join('\n')
+    [formatAutomationShow(value), ...(note ? [note] : []), ...hostNotes].join('\n')
   )
 }
 

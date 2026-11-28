@@ -23,6 +23,7 @@ import { captureAutomationRunMessage } from './automation-run-message-capture'
 import type { BotRunFields } from '../bots/bot-chat-session'
 import type { AgentJournalAutomationRunNotStartedItem } from '../../shared/agent-journal-orca-card-items'
 import { BotSessionRefusedError } from '../bots/bot-session-refused-error'
+import { automationResultsSentence } from '../../shared/automations/automation-results-place'
 
 /** Where a bot run's prompt goes; each resolves to the structured session and message that took it. */
 export type BotAutomationSessions = {
@@ -169,7 +170,7 @@ export function createBotAutomationDispatcher(
   return async ({ automation, run, target }) => {
     const turns = await results.watch()
     const asker = run.event ? automationEventAsker(run.event, target.bot.members) : null
-    const text =
+    const prompt =
       automation.once?.by !== undefined && run.trigger === 'scheduled'
         ? automationDeadlinePrompt(
             automation.prompt,
@@ -177,6 +178,10 @@ export function createBotAutomationDispatcher(
             Boolean(automation.on?.length)
           )
         : automationRunPrompt(automation.prompt, run.event, asker)
+    // Its last line says where its final message goes, so the bot writes it for there.
+    const text = automation.bot
+      ? [prompt, '', `[Orca: ${automationResultsSentence(automation.bot, run.trigger)}]`].join('\n')
+      : prompt
     const automationRun = captureAutomationRunMessage(automation, run, text, asker)
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),

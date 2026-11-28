@@ -306,22 +306,26 @@ export async function createBotAutomation(
     throw new RuntimeClientError('invalid_argument', refusal)
   }
   const item = await automationItemFlag(client, flags, bot.id)
-  const saved = await client.call<{ automation: Automation }>('automation.create', {
-    name: getRequiredStringFlag(flags, 'name'),
-    prompt: getRequiredStringFlag(flags, 'prompt'),
-    precheck: getPrecheckFlag(flags),
-    agentId: botAutomationSetup(target, bot).agent,
-    bot: target,
-    workspaceMode: 'existing',
-    ...getTimezoneFlags(flags),
-    enabled: getEnabledFlag(flags),
-    missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
-    ...schedule,
-    ...(on?.length ? { on } : {}),
-    ...(once ? { once } : {}),
-    ...callerChat(),
-    ...(flags.has('runs-in') ? {} : { runsInDefault: true })
-  })
+  const saved = await client.call<{ automation: Automation; notes?: string[] }>(
+    'automation.create',
+    {
+      name: getRequiredStringFlag(flags, 'name'),
+      prompt: getRequiredStringFlag(flags, 'prompt'),
+      precheck: getPrecheckFlag(flags),
+      agentId: botAutomationSetup(target, bot).agent,
+      bot: target,
+      workspaceMode: 'existing',
+      ...getTimezoneFlags(flags),
+      enabled: getEnabledFlag(flags),
+      missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
+      ...schedule,
+      ...(on?.length ? { on } : {}),
+      ...(once ? { once } : {}),
+      ...callerChat(),
+      ...(flags.has('runs-in') ? {} : { runsInDefault: true }),
+      ...(flags.has('results-to') ? {} : { resultsToDefault: true })
+    }
+  )
   if (item !== undefined) {
     await linkAutomationToItem(client, item, saved.result.automation.id)
   }

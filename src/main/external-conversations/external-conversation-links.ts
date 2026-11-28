@@ -116,6 +116,20 @@ export function chatMailPlace(
   return { place: conversationPlaceText(linked.link), answersThere: isConversationReport(mail) }
 }
 
+/** The conversation a chat is bound to, and where it is as people name it; null when unlinked. */
+export function chatConversation(
+  store: ExternalConversationLinkStore,
+  sessionId: string
+): { key: ConversationKey; place?: string } | null {
+  const link = findLinkForSession(store, sessionId)?.link
+  return link
+    ? {
+        key: { source: link.source, externalId: link.externalId },
+        ...(link.place ? { place: link.place } : {})
+      }
+    : null
+}
+
 export function findConversationChat(
   store: ExternalConversationLinkStore,
   key: ConversationKey,
