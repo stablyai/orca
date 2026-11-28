@@ -7,6 +7,8 @@ import {
   Copy,
   Pause,
   Pencil,
+  Pin,
+  PinOff,
   Play,
   Settings,
   Trash2
@@ -81,6 +83,13 @@ export function BotRowMenuItems({
   }
   return (
     <>
+      <ContextMenuItem
+        disabled={offline}
+        onSelect={() => run(updateBot(bot, { pinned: bot.pinned !== true }))}
+      >
+        {bot.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+        {bot.pinned ? t('bots.row.unpin', 'Unpin') : t('bots.row.pin', 'Pin')}
+      </ContextMenuItem>
       <ContextMenuItem onSelect={() => openBotSettings(bot.id)}>
         <Settings className="size-3.5" />
         {t('bots.row.settings', 'Bot settings…')}

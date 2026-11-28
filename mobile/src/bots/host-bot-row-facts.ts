@@ -53,6 +53,8 @@ export type MobileBotRowFacts = {
    *  and not its name. */
   searchPurpose?: { text: string; ranges: readonly BotSearchRange[] }
   paused: boolean
+  /** Kept at the top of the list. */
+  pinned?: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }
 }

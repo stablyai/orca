@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
 import {
   splitBotSearchText,
@@ -130,6 +130,13 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
+          {bot.pinned ? (
+            <Pin
+              size={12}
+              color={colors.textMuted}
+              accessibilityLabel={t('hostScreen.hostScreenOverlays.pin', 'Pin')}
+            />
+          ) : null}
           {/* The line already says "N need you": the count once. */}
           {needsYou > 0 && !(asking && limitText === null) ? (
             <MobileBotNeedsYouCount count={needsYou} />

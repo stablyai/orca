@@ -190,6 +190,8 @@ export const BotSchema = lazyZodSchema(() =>
     skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
     /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
     sidebarOrder: z.number().int().nonnegative().optional(),
+    /** Stays at the top of every Bots list that shows it. Absent is unpinned. Older hosts drop it. */
+    pinned: z.boolean().optional(),
     /** The bot's Chat, its one ongoing conversation; null until first opened. */
     chatSessionId: z.string().min(1).nullable().default(null),
     /** Look around, once changed; absent is on with the defaults. Older hosts drop it. */

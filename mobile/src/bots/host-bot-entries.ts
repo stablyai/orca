@@ -69,7 +69,7 @@ export type HostBotSectionInputs = {
 /** One bot or group of one host, drawn, before the one list arranges them. */
 export type DrawnBotEntry = {
   entry:
-    | { kind: 'bot'; bot: { name: string; paused: boolean } }
+    | { kind: 'bot'; bot: { name: string; paused: boolean; pinned?: boolean } }
     | { kind: 'group'; group: { name: string } }
   items: WorkspaceListItem[]
   preview?: NonNullable<Section['botPreview']>[number]
@@ -276,6 +276,7 @@ export function drawHostBotEntries(
       statusLine: botStatusLine(dot, bot.paused, inputs.t),
       ...(purposeMatch ? { searchPurpose: purposeMatch } : {}),
       paused: bot.paused,
+      ...(bot.pinned ? { pinned: true as const } : {}),
       ...(host ? { host } : {})
     }
     const botRow: WorkspaceListItem = {

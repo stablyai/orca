@@ -66,9 +66,14 @@ export type HomeBotRowsInput = {
   t: Translate
 }
 
-/** Needs you first, then the most recent; name and key keep equal rows in place. */
+function homeRowPinned(row: HomeBotRow): boolean {
+  return row.kind === 'bot' && row.bot.pinned === true
+}
+
+/** Pinned bots first, then needs you, then the most recent; name and key keep equal rows in place. */
 export function compareHomeBotRows(a: HomeBotRow, b: HomeBotRow): number {
   return (
+    Number(homeRowPinned(b)) - Number(homeRowPinned(a)) ||
     Number(b.needsYou > 0) - Number(a.needsYou > 0) ||
     b.activityAt - a.activityAt ||
     a.title.localeCompare(b.title) ||

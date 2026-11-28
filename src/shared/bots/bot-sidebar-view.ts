@@ -46,8 +46,16 @@ export function countActiveBotSidebarFilters(view: BotSidebarView): number {
 }
 
 type ArrangedEntry =
-  | { kind: 'bot'; bot: { name: string; paused: boolean; createdAt?: unknown } }
+  | {
+      kind: 'bot'
+      bot: { name: string; paused: boolean; createdAt?: unknown; pinned?: boolean }
+    }
   | { kind: 'group'; group: { name: string; createdAt?: unknown } }
+
+/** A pin holds a bot above every sort; a group room is not a bot and cannot be pinned. */
+function entryPinned(entry: ArrangedEntry): boolean {
+  return entry.kind === 'bot' && entry.bot.pinned === true
+}
 
 export type BotSidebarEntryActivity = {
   /** It or one of its workers waits on the owner. */
@@ -73,7 +81,7 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
     ? entries.filter((entry) => entry.kind !== 'bot' || !entry.bot.paused)
     : [...entries]
   if (view.sortBy === 'manual') {
-    return shown
+    return [...shown.filter(entryPinned), ...shown.filter((entry) => !entryPinned(entry))]
   }
   const name = (entry: E): string => (entry.kind === 'bot' ? entry.bot.name : entry.group.name)
   if (view.sortBy === 'name') {
@@ -82,7 +90,9 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
       .map((entry, index) => ({ entry, index }))
       .sort(
         (left, right) =>
-          collator.compare(name(left.entry), name(right.entry)) || left.index - right.index
+          Number(entryPinned(right.entry)) - Number(entryPinned(left.entry)) ||
+          collator.compare(name(left.entry), name(right.entry)) ||
+          left.index - right.index
       )
       .map(({ entry }) => entry)
   }
@@ -93,6 +103,7 @@ export function arrangeBotSidebarEntries<E extends ArrangedEntry>(
   return ranked
     .sort(
       (left, right) =>
+        Number(entryPinned(right.entry)) - Number(entryPinned(left.entry)) ||
         (view.sortBy === 'smart' ? Number(right.needsYou) - Number(left.needsYou) : 0) ||
         right.activityAt - left.activityAt ||
         left.index - right.index

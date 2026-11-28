@@ -186,6 +186,10 @@ export function applyBotUpdates(bot: Bot, updates: BotHostUpdates): Bot {
     ...rest
   } = updates
   const next: Bot = { ...bot, ...rest }
+  // Absent means unpinned, so a cleared pin is not stored as false.
+  if (updates.pinned === false) {
+    delete next.pinned
+  }
   if (
     bot.generatedOverMascot &&
     lookAtRevision !== undefined &&
