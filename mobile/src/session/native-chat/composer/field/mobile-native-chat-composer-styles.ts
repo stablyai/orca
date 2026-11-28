@@ -24,8 +24,22 @@ export const mobileNativeChatComposerStylesSheet = themedStyleSheet((_colors, sc
     paddingTop: COMPOSER_INSET_TOP,
     paddingBottom: spacing.sm
   },
+  // Bottom margin matches the sides, so the box sits evenly in the screen's corners.
+  composerInsetCornerFit: {
+    paddingHorizontal: 10,
+    paddingTop: COMPOSER_INSET_TOP,
+    paddingBottom: 10
+  },
   // The box draws its look and holds its height; the content inside sets the padding.
   bar: { ...composerInputStylesSheet.resolve(scheme).box, padding: 0, justifyContent: 'flex-end' },
+  // Wider bottom corners stay concentric with the rounded screen instead of poking into it.
+  barCornerFit: {
+    ...composerInputStylesSheet.resolve(scheme).box,
+    padding: 0,
+    justifyContent: 'flex-end',
+    borderBottomLeftRadius: 34,
+    borderBottomRightRadius: 34
+  },
   barContent: { flexShrink: 0, padding: spacing.md },
   // Idle and empty: one row of +, the field and the send slot.
   barContentPill: { padding: COMPOSER_PILL_GAP },
