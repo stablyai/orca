@@ -42,6 +42,10 @@ export const LAZY_INTEGRATION_RPC_METHOD_GROUPS: readonly LazyRpcMethodGroup[] =
     async () => (await import('./source-control/gitlab/gitlab')).GITLAB_METHODS
   ),
   prefixRpcMethodGroup(
+    ['gitea.'],
+    async () => (await import('./source-control/gitea/gitea')).GITEA_METHODS
+  ),
+  prefixRpcMethodGroup(
     ['bitbucket.'],
     async () => (await import('./source-control/bitbucket/bitbucket')).BITBUCKET_METHODS
   ),
