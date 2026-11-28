@@ -17,7 +17,7 @@ type SheetHeaderProps = {
   /** "Cancel" or "Reset"; omit for a plain list sheet. */
   leading?: SheetTextAction
   /** A back chevron instead of a leading text action, on a page pushed inside the sheet. */
-  onBack?: { label: string; onPress: () => void }
+  onBack?: { label: string; onPress: () => void; size?: number }
   /** One NavBarButton in the leading slot, for a sheet with no back or text action there. */
   leadingButton?: ReactNode
   /** "Done" or the sheet's commit, in bold. */
@@ -79,6 +79,7 @@ export function SheetHeader({
                 icon={ChevronLeft}
                 accessibilityLabel={onBack.label}
                 onPress={onBack.onPress}
+                size={onBack.size}
               />
             ) : (
               (leadingButton ?? null)

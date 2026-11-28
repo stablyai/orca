@@ -40,6 +40,8 @@ type Props<Value extends string> = {
   disabled?: boolean
   /** The segments switch the content below, so screen readers hear tabs instead of radio buttons. */
   tabs?: boolean
+  /** Give each segment a 44 pt target within the track, including in a clipped scroll view. */
+  largeTargets?: boolean
 }
 
 /** A pick-one pill control; each segment reads as a radio button, or as a tab with `tabs`. */
@@ -105,12 +107,13 @@ export function MobileSegmentedControl<Value extends string>(props: Props<Value>
           props.onSelect(segment.value)
         }}
         // Stretches the 34 pt segment to a 44 pt touch box.
-        hitSlop={{ top: 5, bottom: 5 }}
+        hitSlop={props.largeTargets ? undefined : { top: 5, bottom: 5 }}
         style={({ pressed }) => [
           styles.segment,
           props.fill && !props.scrollWhenCrowded && styles.segmentFill,
           props.scrollWhenCrowded && styles.segmentCrowdable,
           equalShare,
+          props.largeTargets && styles.largeTarget,
           active && (props.onSheet ? styles.segmentActiveOnSheet : styles.segmentActive),
           pressed && !active && styles.segmentPressed
         ]}
@@ -206,6 +209,7 @@ const stylesSheet = themedStyleSheet((colors) => ({
   segmentRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   segmentFill: { flex: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
   segmentCrowdable: { flexGrow: 1, alignItems: 'center', paddingHorizontal: spacing.xs },
+  largeTarget: { minHeight: 44, minWidth: 44 },
   // The inset sits on the content, so segments scroll out under the track's rounded edge.
   scrollTrack: { flexGrow: 0, backgroundColor: colors.bgBase, borderRadius: radii.control },
   scrollContent: { flexGrow: 1, alignItems: 'center', padding: TRACK_INSET },
