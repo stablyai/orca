@@ -12,8 +12,11 @@ import {
 } from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
   MobileFileTooLargeError,
+  MobilePickedFileGoneError,
+  MobilePickedFilesBusyError,
   type MediaPicker,
   type MobileImageSource,
+  type StagedMobileFile,
   type PickedMobileFile,
   type PickedMobileImage
 } from './media-picker-contract'
@@ -100,6 +103,41 @@ async function* readPickedFiles(
   }
 }
 
+function goneWhenUnknown(error: unknown): never {
+  throw error instanceof NativeVerbError && error.reason === 'native_media_handle_unknown'
+    ? new MobilePickedFileGoneError()
+    : error
+}
+
+// Names are read before returning so the caller can show every row at once; any failure frees every handle.
+async function stagedFiles(verbs: NativeVerbs): Promise<readonly StagedMobileFile[]> {
+  const items = await pickFileItems(verbs).catch((error: unknown) => {
+    throw error instanceof NativeVerbError && error.reason === 'native_media_handle_cap'
+      ? new MobilePickedFilesBusyError()
+      : error
+  })
+  try {
+    const files: StagedMobileFile[] = []
+    for (const [index, item] of items.entries()) {
+      files.push({
+        name: await pickedFileName(verbs, item, index + 1),
+        byteLength: item.byteLength,
+        read: (offset, length) =>
+          verbs.readMedia(item.handle, offset, length).catch(goneWhenUnknown),
+        // Any read refreshes the shell's idle clock; one byte is the cheapest.
+        keepAlive: async () => {
+          await verbs.readMedia(item.handle, 0, 1).catch(goneWhenUnknown)
+        },
+        release: () => releaseStagedMedia(verbs, item.handle)
+      })
+    }
+    return files
+  } catch (error) {
+    await releaseAllStagedMedia(verbs, items)
+    throw error
+  }
+}
+
 export function useMediaPicker(): MediaPicker {
   const verbs = useNativeVerbs()
 
@@ -120,7 +158,8 @@ export function useMediaPicker(): MediaPicker {
         [Symbol.asyncIterator]: async function* () {
           yield* readPickedFiles(verbs, await pickFileItems(verbs))
         }
-      })
+      }),
+      ...(verbs.canPickMedia ? { pickStagedFiles: () => stagedFiles(verbs) } : {})
     }),
     [verbs]
   )

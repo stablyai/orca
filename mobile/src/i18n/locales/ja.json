@@ -2078,8 +2078,8 @@
       "loadFailed": "ファイルを読み込めませんでした。",
       "title": "ファイル",
       "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
-      "more": "その他",
-      "newEntry": "新規"
+      "newEntry": "新規",
+      "add": "追加"
     },
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
@@ -2115,7 +2115,33 @@
       "share": "共有",
       "shareFailed": "{{name}} を共有できませんでした",
       "shareTooLarge": "256 MB を超えるファイルはスマートフォンから共有できません",
-      "shareHostOutdated": "ファイルを共有するには、このワークスペースを実行している Orca を更新してください"
+      "shareHostOutdated": "ファイルを共有するには、このワークスペースを実行している Orca を更新してください",
+      "uploadHere": "ここにアップロード",
+      "uploadFiles": "ファイルをアップロード"
+    },
+    "fileExplorerUpload": {
+      "waiting": "待機中",
+      "waitingForConnection": "接続を待っています",
+      "failed": "{{reason}} · タップして再試行",
+      "failedReason": "アップロードに失敗しました",
+      "dismiss": "{{name}} をアップロードしない",
+      "tooLarge": "{{max}} MB を超えるファイルは、まだスマートフォンからアップロードできません。",
+      "busy": "一度にアップロードできるのは {{max}} 件までです。",
+      "pickFailed": "ファイルを開けませんでした。{{reason}}",
+      "clashMessage": "{{folder}} に既にあります",
+      "keepBoth": "両方残す",
+      "keepBothAs": "{{name}} として保存",
+      "keepBothCopies": "それぞれコピーとして保存",
+      "skip": "スキップ",
+      "skipAll": "すべてスキップ",
+      "uploaded_one": "{{count}} 件のファイルを {{folder}} にアップロードしました",
+      "uploaded_other": "{{count}} 件のファイルを {{folder}} にアップロードしました",
+      "clashTitleSeveral_one": "{{count}} 件のファイルが {{folder}} に既にあります",
+      "clashTitleSeveral_other": "{{count}} 件のファイルが {{folder}} に既にあります",
+      "lost_one": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
+      "lost_other": "{{count}} 件のファイルはアップロードされませんでした。スマートフォンが保持を終了しました。もう一度選んでください。",
+      "nameTaken": "同じ名前があります · タップして選択",
+      "workspaceRoot": "ワークスペースのルート"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "読み込み済みの Markdown ソースをコピー",

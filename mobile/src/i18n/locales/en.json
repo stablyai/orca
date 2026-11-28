@@ -2256,8 +2256,8 @@
       "searching": "Searching…",
       "searchPlaceholder": "Search files",
       "inFiles": "In files",
-      "more": "More",
-      "newEntry": "New"
+      "newEntry": "New",
+      "add": "Add"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2358,7 +2358,36 @@
       "share": "Share",
       "shareFailed": "Couldn't share {{name}}",
       "shareTooLarge": "Files larger than 256 MB can’t be shared from the phone",
-      "shareHostOutdated": "Update Orca where this workspace runs to share files"
+      "shareHostOutdated": "Update Orca where this workspace runs to share files",
+      "uploadHere": "Upload Here",
+      "uploadFiles": "Upload Files"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Waiting",
+      "waitingForConnection": "Waiting for connection",
+      "failed": "{{reason}} · Tap to retry",
+      "failedReason": "Upload failed",
+      "dismiss": "Don't upload {{name}}",
+      "tooLarge": "Files over {{max}} MB can't be uploaded from the phone yet.",
+      "busy": "You can upload up to {{max}} files at a time.",
+      "pickFailed": "Couldn't open your files. {{reason}}",
+      "clashMessage": "Already in {{folder}}",
+      "keepBoth": "Keep Both",
+      "keepBothAs": "Saves as {{name}}",
+      "keepBothCopies": "Saves each as a copy",
+      "skip": "Skip",
+      "skipAll": "Skip All",
+      "uploaded_one": "Uploaded {{count}} file to {{folder}}",
+      "uploaded_other": "Uploaded {{count}} files to {{folder}}",
+      "clashTitleSeveral_one": "{{count}} file is already in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} files are already in {{folder}}",
+      "lost_one": "{{count}} file wasn't uploaded: the phone let go of it. Pick it again.",
+      "lost_other": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "nameTaken": "Name taken · Tap to choose",
+      "workspaceRoot": "the workspace root",
+      "lost": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "uploaded": "Uploaded {{count}} files to {{folder}}",
+      "clashTitleSeveral": "{{count}} files are already in {{folder}}"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."

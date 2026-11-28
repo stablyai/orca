@@ -1,5 +1,5 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { Ellipsis, FilePlus2, FolderPlus, Plus } from 'lucide-react-native'
+import { FilePlus2, FolderPlus, Plus, Upload } from 'lucide-react-native'
 import { FILE_MOBILE_EXPLORER_MUTATIONS_RUNTIME_CAPABILITY } from '../../../../src/shared/file-access/files-runtime-capabilities'
 import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
@@ -16,6 +16,7 @@ import {
   parentPathOf,
   type ExplorerTarget
 } from './mobile-file-explorer-mutations'
+import { useMobileFileExplorerUploads } from './use-mobile-file-explorer-uploads'
 
 // The folder and every folder above it, so a row made inside it shows.
 function withFolderOpen(expanded: Set<string>, folder: string): Set<string> {
@@ -37,10 +38,12 @@ function withFolderMoved(expanded: Set<string>, from: string, to: string | null)
   )
 }
 
-/** The explorer's writes: each row's long-press sheet, the root's New File/New Folder menu, and a toast for failures. */
+/** The explorer's writes: each row's long-press sheet, the root's Upload/New File/New Folder menu, uploads, and a toast. */
 export function useMobileFileExplorerActions(args: {
   hostId: string
   client: RpcClient | null
+  /** The panel's scope, which its rows read uploads under. */
+  scope: string
   target: ExplorerTarget
   /** False for an older host's whole-tree listing, whose host predates the phone's file writes. */
   pagedListing: boolean
@@ -57,6 +60,16 @@ export function useMobileFileExplorerActions(args: {
   const { message, showToast } = useTransientToast()
   const menuAnchor = useRef(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const { startUpload, clashSheet } = useMobileFileExplorerUploads({
+    hostId: args.hostId,
+    client: args.client,
+    scope: args.scope,
+    target: args.target,
+    pagedListing: args.pagedListing,
+    setExpanded,
+    showToast
+  })
+  const upload = startUpload ? (parent: string) => void startUpload(parent) : null
   const { openRowActions, openCreate, openNewChoice, rowActionsSheet } =
     useMobileFileExplorerRowActions({
       hostId: args.hostId,
@@ -64,6 +77,7 @@ export function useMobileFileExplorerActions(args: {
       target: args.target,
       canMutate,
       showToast,
+      upload,
       onCreated: (relativePath, kind, shown) => {
         const parent = parentPathOf(relativePath)
         if (parent) {
@@ -80,6 +94,35 @@ export function useMobileFileExplorerActions(args: {
     })
 
   const newLabel = t('files.fileExplorerPanel.newEntry', 'New')
+  // iOS can't present the next sheet or the file picker while the menu's Modal is still up.
+  const rootMenu = [
+    ...(upload
+      ? [
+          {
+            label: t('files.fileExplorerRowActions.uploadFiles', 'Upload Files'),
+            icon: Upload,
+            closeBeforePress: true,
+            onPress: () => upload('')
+          }
+        ]
+      : []),
+    ...(openCreate
+      ? [
+          {
+            label: t('files.fileExplorerRowActions.newFile', 'New File'),
+            icon: FilePlus2,
+            closeBeforePress: true,
+            onPress: () => openCreate('file', '')
+          },
+          {
+            label: t('files.fileExplorerRowActions.newFolder', 'New Folder'),
+            icon: FolderPlus,
+            closeBeforePress: true,
+            onPress: () => openCreate('folder', '')
+          }
+        ]
+      : [])
+  ]
   return {
     openRowActions,
     // An empty workspace has no row to long-press, and a panel without a header has no ⋯ menu:
@@ -91,44 +134,30 @@ export function useMobileFileExplorerActions(args: {
           ? { icon: Plus, accessibilityLabel: newLabel, onPress: openNewChoice }
           : undefined
     },
-    rootMenuButton: openCreate ? (
-      <NavBarButton
-        ref={menuAnchor}
-        icon={Ellipsis}
-        accessibilityLabel={t('files.fileExplorerPanel.more', 'More')}
-        onPress={() => {
-          void preloadNameSheet()
-          setMenuOpen(true)
-        }}
-      />
-    ) : undefined,
+    rootMenuButton:
+      rootMenu.length > 0 ? (
+        <NavBarButton
+          ref={menuAnchor}
+          icon={Plus}
+          accessibilityLabel={t('files.fileExplorerPanel.add', 'Add')}
+          onPress={() => {
+            void preloadNameSheet()
+            setMenuOpen(true)
+          }}
+        />
+      ) : undefined,
     overlays: (toastBottomInset: number) => (
       <>
-        {openCreate ? (
+        {rootMenu.length > 0 ? (
           <PullDownMenu
             visible={menuOpen}
             anchorRef={menuAnchor}
             onClose={() => setMenuOpen(false)}
-            groups={[
-              [
-                {
-                  label: t('files.fileExplorerRowActions.newFile', 'New File'),
-                  icon: FilePlus2,
-                  // iOS can't present the name sheet while the menu's Modal is still up.
-                  closeBeforePress: true,
-                  onPress: () => openCreate('file', '')
-                },
-                {
-                  label: t('files.fileExplorerRowActions.newFolder', 'New Folder'),
-                  icon: FolderPlus,
-                  closeBeforePress: true,
-                  onPress: () => openCreate('folder', '')
-                }
-              ]
-            ]}
+            groups={[rootMenu]}
           />
         ) : null}
         {rowActionsSheet}
+        {clashSheet}
         <TransientToast message={message} bottomInset={toastBottomInset} />
       </>
     )

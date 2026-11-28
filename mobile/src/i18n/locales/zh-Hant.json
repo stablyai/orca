@@ -2079,8 +2079,8 @@
       "loadFailed": "無法載入檔案",
       "title": "檔案",
       "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
-      "more": "更多",
-      "newEntry": "新增"
+      "newEntry": "新增",
+      "add": "新增"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 無法在行動版使用",
@@ -2116,7 +2116,33 @@
       "share": "分享",
       "shareFailed": "無法分享 {{name}}",
       "shareTooLarge": "大於 256 MB 的檔案無法從手機分享",
-      "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案"
+      "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案",
+      "uploadHere": "上傳到這裡",
+      "uploadFiles": "上傳檔案"
+    },
+    "fileExplorerUpload": {
+      "waiting": "等待中",
+      "waitingForConnection": "等待連線",
+      "failed": "{{reason}} · 點一下以重試",
+      "failedReason": "上傳失敗",
+      "dismiss": "不上傳 {{name}}",
+      "tooLarge": "暫不支援從手機上傳超過 {{max}} MB 的檔案。",
+      "busy": "一次最多可上傳 {{max}} 個檔案。",
+      "pickFailed": "無法開啟你的檔案。{{reason}}",
+      "clashMessage": "{{folder}} 中已存在",
+      "keepBoth": "保留兩者",
+      "keepBothAs": "另存為 {{name}}",
+      "keepBothCopies": "各自另存為副本",
+      "skip": "略過",
+      "skipAll": "全部略過",
+      "uploaded_one": "已將 {{count}} 個檔案上傳到 {{folder}}",
+      "uploaded_other": "已將 {{count}} 個檔案上傳到 {{folder}}",
+      "clashTitleSeveral_one": "{{count}} 個檔案已在 {{folder}} 中",
+      "clashTitleSeveral_other": "{{count}} 個檔案已在 {{folder}} 中",
+      "lost_one": "有 {{count}} 個檔案未上傳：手機已釋放它。請重新選擇。",
+      "lost_other": "有 {{count}} 個檔案未上傳：手機已釋放它們。請重新選擇。",
+      "nameTaken": "名稱已被使用 · 點一下以選擇",
+      "workspaceRoot": "工作區根目錄"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",

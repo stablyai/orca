@@ -53,7 +53,7 @@ function foldersGainingRow(base: string, relativePath: string): string[] {
   ]
 }
 
-function selector(target: ExplorerTarget): string {
+export function explorerWorktreeSelector(target: ExplorerTarget): string {
   return `id:${target.worktree}`
 }
 
@@ -91,7 +91,7 @@ async function pathsExist(
   const answers = explorerPathsExistRead.interpret(
     await explorerPathsExistRead.request(
       client,
-      { worktree: selector(target), relativePaths },
+      { worktree: explorerWorktreeSelector(target), relativePaths },
       { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
     )
   )
@@ -108,7 +108,7 @@ async function pathsExist(
 
 // Every write names the host it expects, so a workspace that moved hosts refuses it instead of writing elsewhere.
 function ownership(client: RpcClient, target: ExplorerTarget) {
-  return captureMobileFileMutationOwnership(client, selector(target))
+  return captureMobileFileMutationOwnership(client, explorerWorktreeSelector(target))
 }
 
 export type CreateVars = {
@@ -121,7 +121,7 @@ export type CreateVars = {
 async function sendCreate(client: RpcClient, vars: CreateVars): Promise<void> {
   const operation = vars.kind === 'file' ? explorerFileCreate : explorerFolderCreate
   const params = {
-    worktree: selector(vars.target),
+    worktree: explorerWorktreeSelector(vars.target),
     relativePath: childPathOf(vars.parent, vars.name),
     ...(await ownership(client, vars.target))
   }
@@ -153,7 +153,7 @@ export type RenameVars = { target: ExplorerTarget; from: string; to: string }
 
 async function sendRename(client: RpcClient, vars: RenameVars): Promise<void> {
   const params = {
-    worktree: selector(vars.target),
+    worktree: explorerWorktreeSelector(vars.target),
     oldRelativePath: vars.from,
     newRelativePath: vars.to,
     ...(await ownership(client, vars.target))
@@ -188,7 +188,7 @@ type CopyVars = { target: ExplorerTarget; source: string; destination: string }
 
 async function sendCopy(client: RpcClient, vars: CopyVars): Promise<void> {
   const params = {
-    worktree: selector(vars.target),
+    worktree: explorerWorktreeSelector(vars.target),
     sourceRelativePath: vars.source,
     destinationRelativePath: vars.destination,
     ...(await ownership(client, vars.target))
@@ -213,7 +213,7 @@ export const explorerCopy = defineHostMutation({
         explorerPathStat.interpret(
           await explorerPathStat.request(
             client,
-            { worktree: selector(vars.target), relativePath },
+            { worktree: explorerWorktreeSelector(vars.target), relativePath },
             { timeoutMs: FILE_MUTATION_TIMEOUT_MS }
           )
         )
@@ -233,6 +233,22 @@ export const explorerCopy = defineHostMutation({
   ]
 })
 
+/** Free names for a copy of `name` in `parent`, in desktop's order ("a copy.txt", "a copy 2.txt"), checked ten at a time. */
+export async function* freeCopyPaths(
+  client: RpcClient,
+  target: ExplorerTarget,
+  parent: string,
+  name: string
+): AsyncGenerator<string> {
+  for (let first = 1; first <= MAX_DUPLICATE_NAMES; first += DUPLICATE_NAMES_PER_CHECK) {
+    const names = Array.from({ length: DUPLICATE_NAMES_PER_CHECK }, (_, index) =>
+      childPathOf(parent, copyNameCandidate(name, first + index))
+    )
+    const taken = await pathsExist(client, target, names)
+    yield* names.filter((_, index) => !taken[index])
+  }
+}
+
 /** Copies a file beside itself as desktop's Duplicate names it ("a copy.txt", "a copy 2.txt"); resolves to the copy's path. */
 export async function duplicateExplorerFile(
   client: RpcClient,
@@ -240,24 +256,22 @@ export async function duplicateExplorerFile(
   target: ExplorerTarget,
   source: { relativePath: string; name: string }
 ): Promise<string> {
-  const parent = parentPathOf(source.relativePath)
-  for (let first = 1; first <= MAX_DUPLICATE_NAMES; first += DUPLICATE_NAMES_PER_CHECK) {
-    const names = Array.from({ length: DUPLICATE_NAMES_PER_CHECK }, (_, index) =>
-      childPathOf(parent, copyNameCandidate(source.name, first + index))
-    )
-    // Free names are found before copying, as desktop checks; each copy is still no-clobber.
-    const taken = await pathsExist(client, target, names)
-    for (const destination of names.filter((_, index) => !taken[index])) {
-      try {
-        await copy({ target, source: source.relativePath, destination })
-        return destination
-      } catch (error) {
-        // Someone took the name since the check; the next free one is tried.
-        if (error instanceof Error && isFileExistsErrorMessage(error.message)) {
-          continue
-        }
-        throw error
+  // Free names are found before copying, as desktop checks; each copy is still no-clobber.
+  for await (const destination of freeCopyPaths(
+    client,
+    target,
+    parentPathOf(source.relativePath),
+    source.name
+  )) {
+    try {
+      await copy({ target, source: source.relativePath, destination })
+      return destination
+    } catch (error) {
+      // Someone took the name since the check; the next free one is tried.
+      if (error instanceof Error && isFileExistsErrorMessage(error.message)) {
+        continue
       }
+      throw error
     }
   }
   throw new Error(`No free name for a copy of ${source.name}`)
@@ -267,7 +281,7 @@ type DeleteVars = { target: ExplorerTarget; relativePath: string; isDirectory: b
 
 async function sendDelete(client: RpcClient, vars: DeleteVars): Promise<void> {
   const params = {
-    worktree: selector(vars.target),
+    worktree: explorerWorktreeSelector(vars.target),
     relativePath: vars.relativePath,
     recursive: vars.isDirectory,
     ...(await ownership(client, vars.target))

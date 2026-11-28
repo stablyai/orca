@@ -2142,8 +2142,8 @@
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
       "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
-      "more": "Plus",
-      "newEntry": "Nouveau"
+      "newEntry": "Nouveau",
+      "add": "Ajouter"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponible sur mobile",
@@ -2179,7 +2179,36 @@
       "share": "Partager",
       "shareFailed": "Impossible de partager {{name}}",
       "shareTooLarge": "Les fichiers de plus de 256 Mo ne peuvent pas être partagés depuis le téléphone",
-      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers"
+      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers",
+      "uploadHere": "Importer ici",
+      "uploadFiles": "Importer des fichiers"
+    },
+    "fileExplorerUpload": {
+      "waiting": "En attente",
+      "waitingForConnection": "En attente de connexion",
+      "failed": "{{reason}} · Touchez pour réessayer",
+      "failedReason": "Échec de l'importation",
+      "dismiss": "Ne pas importer {{name}}",
+      "tooLarge": "Les fichiers de plus de {{max}} Mo ne peuvent pas encore être importés depuis le téléphone.",
+      "busy": "Vous pouvez importer jusqu'à {{max}} fichiers à la fois.",
+      "pickFailed": "Impossible d'ouvrir vos fichiers. {{reason}}",
+      "clashMessage": "Déjà dans {{folder}}",
+      "keepBoth": "Garder les deux",
+      "keepBothAs": "Enregistré sous {{name}}",
+      "keepBothCopies": "Enregistre chacun comme copie",
+      "skip": "Ignorer",
+      "skipAll": "Tout ignorer",
+      "uploaded_many": "{{count}} fichiers importés dans {{folder}}",
+      "uploaded_one": "{{count}} fichier importé dans {{folder}}",
+      "uploaded_other": "{{count}} fichiers importés dans {{folder}}",
+      "clashTitleSeveral_many": "{{count}} fichiers sont déjà dans {{folder}}",
+      "clashTitleSeveral_one": "{{count}} fichier est déjà dans {{folder}}",
+      "clashTitleSeveral_other": "{{count}} fichiers sont déjà dans {{folder}}",
+      "lost_many": "{{count}} fichiers n'ont pas été importés : le téléphone les a libérés. Choisissez-les à nouveau.",
+      "lost_one": "{{count}} fichier n'a pas été importé : le téléphone l'a libéré. Choisissez-le à nouveau.",
+      "lost_other": "{{count}} fichiers n'ont pas été importés : le téléphone les a libérés. Choisissez-les à nouveau.",
+      "nameTaken": "Nom déjà pris · Touchez pour choisir",
+      "workspaceRoot": "la racine de l’espace de travail"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",

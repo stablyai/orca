@@ -37,6 +37,7 @@ import { intlLocaleFor } from '../../i18n/ui-intl-locale'
 import { fileExplorerStylesSheet } from './mobile-file-explorer-styles'
 import { canPreviewMobileFileRow } from '../preview/mobile-file-preview-navigation'
 import { TailClippedText } from '../../components/list/TailClippedText'
+import { MobileFileExplorerUploadRow } from './mobile-file-explorer-upload-row'
 import { useThemedStyles } from '../../theme/themed-styles'
 import {
   MobileFileExplorerContentHitRow,
@@ -112,6 +113,10 @@ export function MobileFileExplorerRow(props: Props) {
         </Pressable>
       </View>
     )
+  }
+
+  if (item.kind === 'upload') {
+    return <MobileFileExplorerUploadRow item={item} paddingLeft={paddingLeft} />
   }
 
   if (item.kind === 'more') {
