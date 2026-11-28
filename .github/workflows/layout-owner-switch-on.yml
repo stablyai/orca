@@ -72,7 +72,7 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       ref: ${{ github.event.pull_request.head.sha || github.sha }}
-      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle.spec.ts","tests/layout-owner-e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/layout-owner-e2e/terminal-cli-split-closed-before-mount.spec.ts"]'
+      test_files: '["tests/layout-owner-e2e/workspace-layout-oracle.spec.ts","tests/layout-owner-e2e/relaunch-sleeping-agents-resume-on-view.spec.ts","tests/layout-owner-e2e/terminal-cli-split-closed-before-mount.spec.ts","tests/layout-owner-e2e/layout-latency-budget.spec.ts"]'
       playwright_config: tests/layout-owner-playwright.config.ts
       artifact_suffix: -layout-owner-window
       layout_owner: main
