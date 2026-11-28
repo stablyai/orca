@@ -255,9 +255,15 @@ function codexRowAddress(itemId: string): [string, string] | null {
 export async function savedRunningCodexRows(
   reads: Pick<StructuredAgentSessionHistoryJournal['reads'], 'visitItems'> | undefined,
   primaryThreadId: string
-): Promise<{ helpers: string[]; commands: string[][] }> {
+): Promise<{
+  helpers: string[]
+  commands: string[][]
+  historyRows: Map<string, AgentJournalItemIdentity>
+}> {
   const helpers = new Set<string>()
   const commands: string[][] = []
+  const historyRows = new Map<string, AgentJournalItemIdentity>()
+  const live = new Set<string>()
   await reads?.visitItems({ kinds: ['tool-call'] }, (itemId, _sequence, body) => {
     const address = body.kind === 'tool-call' && body.state === 'running' && codexRowAddress(itemId)
     if (!address) {
@@ -268,7 +274,36 @@ export async function savedRunningCodexRows(
     }
     if (body.kind === 'tool-call' && Object.hasOwn(jsonObject(body.input) ?? {}, 'command')) {
       commands.push([...address, itemId])
+      const at = `${address[0]}\u0000${address[1]}`
+      const identity = parseAgentJournalItemKey(itemId)
+      if (
+        identity?.provider === 'orca' &&
+        identity.clientMessageId.startsWith('codex-history-item:')
+      ) {
+        historyRows.set(at, identity)
+      } else {
+        live.add(at)
+      }
     }
   })
-  return { helpers: [...helpers], commands }
+  // A command with a live row streams there; only a history-only one keeps its imported row.
+  live.forEach((at) => historyRows.delete(at))
+  return { helpers: [...helpers], commands, historyRows }
+}
+
+/** The saved running commands still open: on a thread Codex just read (an older row it can't
+ *  vouch for isn't restated as running), and not reported ended there. */
+export function openSavedCodexCommands(
+  turns: readonly KeptCodexTurn[],
+  commands: readonly string[][]
+): string[][] {
+  const read = new Set(turns.map(({ threadId }) => threadId))
+  const ended = new Set(
+    turns.flatMap(({ threadId, items }) =>
+      items.flatMap((item) => (item.status === 'inProgress' ? [] : [`${threadId}\u0000${item.id}`]))
+    )
+  )
+  return commands.filter(
+    ([threadId, itemId]) => read.has(threadId ?? '') && !ended.has(`${threadId}\u0000${itemId}`)
+  )
 }
