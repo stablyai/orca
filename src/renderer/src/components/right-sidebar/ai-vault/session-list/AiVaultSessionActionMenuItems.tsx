@@ -5,6 +5,8 @@ import {
   LocateFixed,
   MessageSquarePlus,
   PanelTopOpen,
+  Pin,
+  PinOff,
   Play,
   Trash2
 } from 'lucide-react'
@@ -29,6 +31,8 @@ export function SessionActionMenuItems({
   jumpWorkspaceId,
   onJumpToWorktree,
   onCopyResume,
+  onTogglePin,
+  pinned = false,
   onCopyId,
   onCopyPath,
   onOpenLog,
@@ -53,6 +57,9 @@ export function SessionActionMenuItems({
   onJumpToWorktree?: () => void
   // Hide resume-command copy for zero-turn sessions; it would reopen an empty conversation despite not-saved status.
   onCopyResume?: () => void
+  // Whether the session sits in the panel's Pinned group; pinning keeps a closed conversation reachable.
+  pinned?: boolean
+  onTogglePin?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
   onOpenLog?: () => void
@@ -169,6 +176,14 @@ export function SessionActionMenuItems({
         </>
       ) : null}
       <Separator />
+      {onTogglePin ? (
+        <Item onSelect={onTogglePin}>
+          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {pinned
+            ? t('auto.components.right.sidebar.AiVaultSessionRow.unpinSession', 'Unpin session')
+            : t('auto.components.right.sidebar.AiVaultSessionRow.pinSession', 'Pin session')}
+        </Item>
+      ) : null}
       <Item onSelect={onCopyId}>
         {t('auto.components.right.sidebar.AiVaultSessionRow.copySessionId', 'Copy Session ID')}
       </Item>

@@ -16564,7 +16564,9 @@
             "resumeInNewCliHostTooOld": "Update Orca on the host that runs this chat to resume it in a new CLI.",
             "folderWorkspaceUnavailable": "Folder workspace is no longer available.",
             "transcriptsSkippedCount_one": "{{count}} transcript skipped",
-            "transcriptsSkippedCount_other": "{{count}} transcripts skipped"
+            "transcriptsSkippedCount_other": "{{count}} transcripts skipped",
+            "pinnedOutsideHistory": "{{count}} pinned sessions are older than the loaded history",
+            "loadFullHistory": "Load full history"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -16668,7 +16670,9 @@
             "resumeInNewNativeChat": "Resume in New Chat",
             "resumeInNewCli": "Resume in New Terminal",
             "resumeInNewCliTooltipFork": "Start a new terminal agent session with a copy of this conversation.",
-            "resumeInNewCliTooltipChat": "This chat stays unchanged."
+            "resumeInNewCliTooltipChat": "This chat stays unchanged.",
+            "unpinSession": "Unpin session",
+            "pinSession": "Pin session"
           },
           "AiVaultSessionDeleteDialog": {
             "description": "\"{{value0}}\" will be deleted. Once deleted, it will no longer be resumable from {{value1}}'s own command line either.",
@@ -16886,6 +16890,9 @@
             "createInProgress": "Create PR in progress...",
             "workspaceHostUnresolved": "The workspace host is unresolved. Refresh the workspace and retry.",
             "branchDiscoveryFailed": "Branch discovery failed."
+          },
+          "AiVaultSessionList": {
+            "pinnedSessions": "Pinned"
           }
         }
       },

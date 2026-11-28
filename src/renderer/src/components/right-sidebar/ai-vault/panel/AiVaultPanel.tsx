@@ -1,10 +1,11 @@
-import { useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { useRepos } from '@/store/repos/use-repository-catalog'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
+import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   deriveAiVaultScopeSessionPaths,
   deriveAiVaultWorkspaceScopePaths
@@ -41,6 +42,7 @@ import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
 import { useAiVaultResumeCatalogs } from '../session-actions/use-ai-vault-resume-catalogs'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
+import { AiVaultPinnedOutsideHistoryNotice } from './AiVaultPinnedOutsideHistoryNotice'
 import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store'
 import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
@@ -99,11 +101,13 @@ export default function AiVaultPanel({
     group,
     hideEmptySessions,
     sessionLimit,
+    pinnedSessions,
     setSort,
     setSearchSort,
     setGroup,
     setHideEmptySessions,
     setSessionLimit,
+    togglePinnedSession,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions
@@ -237,7 +241,8 @@ export default function AiVaultPanel({
     projectLabelByKey,
     hideEmptySessions,
     // A group room's member rows list once, in the group's home.
-    roomRows: useAiVaultGroupRoomRows()
+    roomRows: useAiVaultGroupRoomRows(),
+    pinnedSessions
   })
   const searchHitHostLabels = useMemo(
     () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
@@ -255,6 +260,18 @@ export default function AiVaultPanel({
     refresh,
     onDeleted: search.onDeleted
   })
+  const onTogglePin = useCallback(
+    (session: AiVaultSession) => togglePinnedSession(session.id),
+    [togglePinnedSession]
+  )
+  // Pins older than the loaded history have no row: offer the full history instead of silently hiding them.
+  const pinnedOutsideHistory = useMemo(() => {
+    if (listMode !== 'browse' || pinnedSessions.length === 0) {
+      return 0
+    }
+    const loaded = new Set(sessions.map((session) => session.id))
+    return pinnedSessions.filter((id) => !loaded.has(id)).length
+  }, [listMode, sessions, pinnedSessions])
   const rowHandlers = useAiVaultSessionRowHandlers({
     jumpToOriginalPane: paneActions.jumpToOriginalPane,
     onSessionOpened,
@@ -308,6 +325,12 @@ export default function AiVaultPanel({
       ) : null}
 
       {!searching && <AiVaultScanIssueBanners scanResult={scanResult} />}
+      {!searching && pinnedOutsideHistory > 0 ? (
+        <AiVaultPinnedOutsideHistoryNotice
+          count={pinnedOutsideHistory}
+          onLoadFullHistory={() => setSessionLimit('unlimited')}
+        />
+      ) : null}
       <AiVaultPanelSearch
         search={search}
         noAgents={agents.length === 0}
@@ -365,6 +388,8 @@ export default function AiVaultPanel({
             onContinueInNewSession={launchActions.handleContinueInNewSession}
             onResumeInNewChat={launchActions.handleResumeInNewChat}
             onResumeInNewCli={launchActions.handleResumeInNewCli}
+            pinnedSessions={pinnedSessions}
+            onTogglePin={onTogglePin}
             {...rowHandlers}
           />
         )}

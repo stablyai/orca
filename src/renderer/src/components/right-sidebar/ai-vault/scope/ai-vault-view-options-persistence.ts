@@ -20,6 +20,8 @@ import {
 
 export const AI_VAULT_VIEW_OPTIONS_STORAGE_KEY = 'orca.aiVault.viewOptions.v1'
 
+export const AI_VAULT_PINNED_SESSIONS_MAX = 200
+
 export type AiVaultViewOptions = {
   disabledAgents: AiVaultAgent[]
   sort: AiVaultSort
@@ -27,6 +29,7 @@ export type AiVaultViewOptions = {
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  pinnedSessions: string[]
 }
 
 type AiVaultViewOptionsStorage = {
@@ -41,7 +44,8 @@ export function createDefaultAiVaultViewOptions(): AiVaultViewOptions {
     searchSort: DEFAULT_AI_VAULT_SEARCH_SORT,
     group: DEFAULT_AI_VAULT_GROUP,
     hideEmptySessions: DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT
+    sessionLimit: DEFAULT_AI_VAULT_SESSION_LIMIT,
+    pinnedSessions: []
   }
 }
 
@@ -60,6 +64,15 @@ function isAiVaultSearchSort(value: unknown): value is AiVaultSearchSort {
 
 function isAiVaultGroup(value: unknown): value is AiVaultGroup {
   return value === 'project' || value === 'folder' || value === 'agent'
+}
+
+// Newest pins first; the cap drops the oldest when a long list survives normalization.
+function normalizeAiVaultPinnedSessions(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value)]
+        .filter((id): id is string => typeof id === 'string')
+        .slice(0, AI_VAULT_PINNED_SESSIONS_MAX)
+    : []
 }
 
 export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions {
@@ -83,7 +96,8 @@ export function normalizeAiVaultViewOptions(value: unknown): AiVaultViewOptions 
       typeof record.hideEmptySessions === 'boolean'
         ? record.hideEmptySessions
         : DEFAULT_AI_VAULT_HIDE_EMPTY_SESSIONS,
-    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit)
+    sessionLimit: normalizeAiVaultSessionLimit(record.sessionLimit),
+    pinnedSessions: normalizeAiVaultPinnedSessions(record.pinnedSessions)
   }
 }
 

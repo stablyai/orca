@@ -76,6 +76,8 @@ export function AiVaultSessionVirtualList({
   onResumeInNewCli,
   onCopyResume,
   onCopyId,
+  pinnedSessions,
+  onTogglePin,
   onCopyPath,
   onOpenLog,
   onRevealLog,
@@ -120,6 +122,8 @@ export function AiVaultSessionVirtualList({
   onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
+  pinnedSessions: readonly string[]
+  onTogglePin: (session: AiVaultSession) => void
   onCopyPath: (session: AiVaultSession) => void
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
@@ -389,6 +393,8 @@ export function AiVaultSessionVirtualList({
                   onResumeInNewCli={onResumeInNewCli}
                   onCopyResume={onCopyResume}
                   onCopyId={onCopyId}
+                  pinnedSessions={pinnedSessions}
+                  onTogglePin={onTogglePin}
                   onCopyPath={onCopyPath}
                   onOpenLog={onOpenLog}
                   onRevealLog={onRevealLog}
