@@ -1154,7 +1154,9 @@
         "pending": "正在連線…",
         "tools_other": "{{count}} 個工具",
         "waitingForSignIn": "正在等待登入…",
-        "tools_one": "{{count}} 個工具"
+        "tools_one": "{{count}} 個工具",
+        "orcaRemoved": "已移除：下一則訊息時重新啟動",
+        "orcaChanged": "已變更：下一則訊息時重新啟動"
       },
       "source": {
         "project": "專案",
@@ -1186,7 +1188,8 @@
         "failed": "失敗：{{count}}"
       },
       "pasteHint": "當瀏覽器前往無法載入的頁面時，請複製網址並貼到這裡。",
-      "manage": "管理 MCP 伺服器"
+      "manage": "管理 MCP 伺服器",
+      "stillFailing": "重新連線後仍然失敗。"
     }
   },
   "common": {
@@ -7248,6 +7251,7 @@
     "workspacesCount": "{{count}} 個工作區",
     "workspacesAllButCount": "全部（排除 {{count}} 個）",
     "headerMissing": "請填寫 {{header}} 才能新增此伺服器。",
-    "servers": "伺服器"
+    "servers": "伺服器",
+    "unreadable": "無法開啟已儲存的登入或金鑰。請重新登入。"
   }
 }

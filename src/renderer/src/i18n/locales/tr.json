@@ -2252,7 +2252,8 @@
         "add": "Bu repo için sunucu ekle",
         "files": "Bu reponun dosyalarından",
         "open": "{{file}} dosyasını aç"
-      }
+      },
+      "unreadable": "Kayıtlı oturum açma bilgisi veya anahtar bu bilgisayarda açılamıyor"
     }
   },
   "menu": {
@@ -23078,7 +23079,9 @@
           "needsAuthAfterSend": "Oturum açılmalı. Burada oturum açmak için bir mesaj gönderin.",
           "pending": "Bağlanıyor…",
           "tools_one": "{{count}} araç",
-          "tools_other": "{{count}} araç"
+          "tools_other": "{{count}} araç",
+          "orcaRemoved": "Kaldırıldı: sonraki mesajda yeniden başlar",
+          "orcaChanged": "Değiştirildi: sonraki mesajda yeniden başlar"
         },
         "signIn": {
           "external": "Açılan sayfada tamamlayın",
@@ -23120,7 +23123,8 @@
           "user": "Kullanıcı",
           "plugin": "Eklenti",
           "session": "Oturum"
-        }
+        },
+        "stillFailing": "Yeniden bağlandıktan sonra hâlâ başarısız."
       },
       "loadEarlierFailed": "Önceki mesajlar yüklenemedi.",
       "loadEarlierRetry": "Yeniden dene",
@@ -26039,8 +26043,7 @@
         "failing": "başarısız",
         "running": "beklemede",
         "cancelled": "iptal edildi",
-        "passing": "başarılı",
-        "more": "+{{count}} tane daha"
+        "passing": "başarılı"
       },
       "addEmoji": "Emoji ekle",
       "addEmojiTooltip": "Emoji ekle (veya : yaz)",

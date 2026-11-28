@@ -1273,7 +1273,8 @@
         "add": "Agregar un servidor para este repositorio",
         "files": "De los archivos de este repositorio",
         "open": "Abrir {{file}}"
-      }
+      },
+      "unreadable": "El inicio de sesión o la clave guardados no se pueden abrir en este equipo"
     }
   },
   "menu": {
@@ -22229,7 +22230,9 @@
           "pending": "Conectando…",
           "tools_many": "{{count}} herramientas",
           "tools_one": "{{count}} herramienta",
-          "tools_other": "{{count}} herramientas"
+          "tools_other": "{{count}} herramientas",
+          "orcaRemoved": "Eliminado: se reinicia con el próximo mensaje",
+          "orcaChanged": "Cambiado: se reinicia con el próximo mensaje"
         },
         "signIn": {
           "external": "Completa el proceso en la página que se abrió",
@@ -22271,7 +22274,8 @@
           "user": "Usuario",
           "plugin": "Plugin",
           "session": "Sesión"
-        }
+        },
+        "stillFailing": "Sigue fallando tras reconectar."
       }
     },
     "tab": {
@@ -26118,8 +26122,7 @@
         "failing": "fallando",
         "running": "en curso",
         "cancelled": "cancelado",
-        "passing": "superado",
-        "more": "+{{count}} más"
+        "passing": "superado"
       }
     },
     "attachments": {
