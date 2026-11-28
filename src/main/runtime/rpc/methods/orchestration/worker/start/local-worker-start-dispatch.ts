@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent'
+import { isAgentCopyId } from '../../../../../../../shared/agent-launch/catalog/agent-copies'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import {
   reusedWorkerLaunchReceipt,
@@ -93,6 +94,8 @@ export function createLocalWorkerStartDispatch(
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
     agent: agent ?? null,
+    // A retry without --agent starts this copy again, or refuses once the copy is gone.
+    ...(params.agent && isAgentCopyId(params.agent) ? { agentCopy: params.agent } : {}),
     // Mail from a reuse start that never binds still names the agent already running there.
     launch: params.terminal
       ? reusedWorkerLaunchReceipt(
