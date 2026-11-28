@@ -26,6 +26,7 @@ import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { SSH_PANE_RECOVERY_GRACE_MS } from '../../terminal/recovery/ssh-pane-recovery-window'
 import { findTerminalTabIdForLeaf } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import { isServeMintedPtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession {
   protected abstract getAcceptedRendererIdentityKeysForMobileSessionSnapshot(
@@ -73,9 +74,10 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
     }
     const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
-    const rendererBrowserTabs = this.hasAuthoritativeWindow()
-      ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
-      : []
+    const rendererBrowserTabs =
+      windowOwns(worktreeId) && this.hasAuthoritativeWindow()
+        ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
+        : []
     // Deduplicate overlapping sources by id; newly built rows replace retained rows.
     const liveById = new Map(
       [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
@@ -107,6 +109,7 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
   ): void {
     // An attached renderer's unaccepted epoch cannot acquire offscreen rows.
     if (
+      windowOwns(worktreeId) &&
       this.hasAuthoritativeWindow() &&
       !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch) &&
       !this.getAcceptedRendererIdentityKeysForMobileSessionSnapshot(existing)

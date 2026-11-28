@@ -14,7 +14,7 @@ type RuntimeNativeChatDraftResolutionsDeps = {
   setMobileSnapshot: (worktreeId: string, snapshot: RuntimeMobileSessionTabsSnapshot) => void
   scheduleMobileSnapshot: (worktreeId: string) => void
   notifyResolved: (
-    tabId: string,
+    owner: { tabId: string; worktreeId: string },
     resolution: { text: string; createdAt: number },
     event: RuntimeClientEvent
   ) => void
@@ -54,7 +54,7 @@ export class RuntimeNativeChatDraftResolutions {
       this.byTabId.delete(oldestTabId)
     }
     this.retireFromMobileSnapshot(tombstone)
-    this.deps.notifyResolved(owner.tabId, resolution, {
+    this.deps.notifyResolved(owner, resolution, {
       type: 'nativeChatLaunchDraftResolved',
       tabId: owner.tabId,
       ...resolution

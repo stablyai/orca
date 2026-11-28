@@ -62,11 +62,27 @@ const inertDesktopSurface: RuntimeDesktopSurface = {
 }
 
 let current: RuntimeDesktopSurface = inertDesktopSurface
+let gate: ((surface: RuntimeDesktopSurface) => RuntimeDesktopSurface) | null = null
+let gated: { raw: RuntimeDesktopSurface; surface: RuntimeDesktopSurface } | null = null
 
 export function setRuntimeDesktopSurface(surface: RuntimeDesktopSurface | null): void {
   current = surface ?? inertDesktopSurface
 }
 
+/** The runtime holding the window puts its sends behind its window-relay guard. */
+export function setRuntimeDesktopSurfaceGate(
+  next: ((surface: RuntimeDesktopSurface) => RuntimeDesktopSurface) | null
+): void {
+  gate = next
+  gated = null
+}
+
 export function getRuntimeDesktopSurface(): RuntimeDesktopSurface {
-  return current
+  if (!gate) {
+    return current
+  }
+  if (gated?.raw !== current) {
+    gated = { raw: current, surface: gate(current) }
+  }
+  return gated.surface
 }

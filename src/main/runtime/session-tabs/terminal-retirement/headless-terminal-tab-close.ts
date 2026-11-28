@@ -17,6 +17,7 @@ import { appendRetiredTerminalSurfaceProofs } from '../../../../shared/workspace
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalRename } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends OrcaRuntimeWithMainLayoutTabMoves {
   protected abstract applyHeadlessTerminalPaneLayoutToSnapshot(
@@ -160,7 +161,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
     if (movedInMain) {
       return movedInMain
     }
-    if (!this.notifier?.moveSessionTab) {
+    if (!windowOwns(worktreeId) || !this.notifier?.moveSessionTab) {
       return this.moveHeadlessMobileSessionTab(worktreeId, snapshot, move)
     }
     const hostTabId = this.resolveMobileSessionHostTabId(snapshot, move.tabId)
@@ -218,7 +219,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
       args = await this.nameMainPanes(worktreeId, hostTabId, args)
     }
     // Attached renderers own geometry; forward only explicitly renamed panes so stale resent maps cannot overwrite host names.
-    if (this.hasAuthoritativeWindow()) {
+    if (windowOwns(worktreeId) && this.hasAuthoritativeWindow()) {
       // Why: only panes the client says it renamed; a resent map may predate the host's names.
       const renamed = new Set(args.renamedLeafIds)
       if (args.titlesByLeafId && renamed.size > 0 && this.notifier?.setPaneTitle) {
@@ -229,7 +230,7 @@ export abstract class OrcaRuntimeWithCloseHeadlessMobileTerminalTab extends Orca
         const forwarded = paneTitlesForDesktopWindow({ root, titlesByLeafId, tab })
         for (const { leafId, title } of forwarded.filter(({ leafId }) => renamed.has(leafId))) {
           // A failed send must fail the call, so the client retries rather than dropping it.
-          if (!this.notifier.setPaneTitle(hostTabId, leafId, title)) {
+          if (!this.notifier.setPaneTitle(hostTabId, leafId, title, worktreeId)) {
             throw new Error('runtime_unavailable')
           }
         }

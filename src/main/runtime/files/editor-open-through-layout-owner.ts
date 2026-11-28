@@ -12,6 +12,7 @@ import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract
 import type { RuntimeFileCommandHost } from './file-command-host'
 import { isChatScratchWorktreeId } from './chat-scratch-file-root'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
+import { windowOwns } from '../session-tabs/person/person-workspace-target'
 
 export type EditorFileOpen = RuntimeEditorFileOpen
 
@@ -32,7 +33,8 @@ export function createRuntimeEditorFileOpener(
     if (isChatScratchWorktreeId(worktreeId)) {
       throw new Error('chat_scratch_not_openable')
     }
-    const notifier = host.getNotifier()
+    // A teammate's own workspace opens headless, through main's layout, as on a paired server.
+    const notifier = windowOwns(worktreeId) ? host.getNotifier() : null
     const open = { worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }
     if (ORCA_LAYOUT_OWNER_IS_MAIN || !notifier?.openFile) {
       await openEditorFileThroughLayoutOwner(

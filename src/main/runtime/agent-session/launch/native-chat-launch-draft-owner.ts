@@ -2,6 +2,7 @@ import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id
 import { RuntimeNotifierBinding } from '../../client/events/runtime-notifier-binding'
 
 export abstract class NativeChatLaunchDraftOwner extends RuntimeNotifierBinding {
+  /** The tab holding a launch draft and its workspace: a teammate's terminal's is their own list. */
   protected resolveNativeChatLaunchDraftOwner(
     handle: string
   ): { tabId: string; worktreeId: string } | null {
@@ -9,10 +10,10 @@ export abstract class NativeChatLaunchDraftOwner extends RuntimeNotifierBinding 
     if (!record) {
       return null
     }
-    if (!record.tabId.startsWith('pty:')) {
-      return { tabId: record.tabId, worktreeId: record.worktreeId }
-    }
     const pty = record.ptyId ? this.ptysById.get(record.ptyId) : null
+    if (!record.tabId.startsWith('pty:')) {
+      return { tabId: record.tabId, worktreeId: pty ? this.tabWorkspaceOf(pty) : record.worktreeId }
+    }
     const pane = this.paneOfPty(pty)
     const tabId =
       pane.tabId && !pane.tabId.startsWith('pty:')
@@ -21,6 +22,6 @@ export abstract class NativeChatLaunchDraftOwner extends RuntimeNotifierBinding 
     if (!pty || !tabId || tabId.startsWith('pty:')) {
       return null
     }
-    return { tabId, worktreeId: pty.worktreeId }
+    return { tabId, worktreeId: this.tabWorkspaceOf(pty) }
   }
 }

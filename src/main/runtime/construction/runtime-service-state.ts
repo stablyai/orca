@@ -87,8 +87,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     setMobileSnapshot: (worktreeId, snapshot) =>
       this.storeMobileSessionSnapshot(worktreeId, snapshot),
     scheduleMobileSnapshot: (worktreeId) => this.scheduleMobileSessionTabsChanged(worktreeId),
-    notifyResolved: (tabId, resolution, event) => {
-      this.notifier?.nativeChatLaunchDraftResolved?.(tabId, resolution)
+    notifyResolved: (owner, resolution, event) => {
+      this.notifier?.nativeChatLaunchDraftResolved?.(owner.tabId, resolution, owner.worktreeId)
       this.emitClientEvent(event)
     }
   })

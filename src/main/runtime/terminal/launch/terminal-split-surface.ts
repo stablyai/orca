@@ -16,6 +16,7 @@ import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
 import type { TerminalCreateOptions } from './terminal-create-options'
+import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
@@ -143,7 +144,12 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
       )
     }
 
+    // A teammate's own terminal splits in their workspace alone, which no window shows.
+    const windowShowsSource = windowOwns(tabListOfPty(pty))
     const revealSplit = async (): Promise<void> => {
+      if (!windowShowsSource) {
+        return
+      }
       await this.notifier?.revealTerminalSession?.(workspace.id, {
         ptyId: result.id,
         title: null,

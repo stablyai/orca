@@ -1,5 +1,6 @@
 import { OrcaRuntimeWithStopTerminalsForProject } from '../../terminal/stop/project-terminal-stop'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { windowOwns } from '../person/person-workspace-target'
 
 export type SessionTitlePublisher = {
   windowId: number
@@ -25,6 +26,7 @@ export abstract class OrcaRuntimeWithSessionTitleAuthority extends OrcaRuntimeWi
 
   protected isSessionTitlePublisher(worktreeId: string, surfaceId: string): boolean {
     return !!(
+      windowOwns(worktreeId) &&
       this.hasAuthoritativeWindow() &&
       this.currentSessionTitlePublisher(worktreeId)?.surfaceIds.has(surfaceId)
     )

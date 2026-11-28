@@ -30,6 +30,7 @@ import {
 } from '../../session-lifecycle/projection/mobile-session-tab-merge'
 import { appendBrowserTabOrder } from '../../session-lifecycle/projection/mobile-session-browser-group-projection'
 import { headlessMobileSnapshotContentUnchanged } from '../publication/mobile-session-snapshot-equality'
+import { windowOwns } from '../person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspaceSession extends RuntimeSessionTabsInventoryPublication {
   protected abstract buildHeadlessMobileSessionBrowserTabs(
@@ -119,7 +120,9 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
   ): Set<string> {
     // Report in-place reconciliations so callers avoid repeating them.
     const reconciledWorktreeIds = new Set<string>()
-    const hasAuthoritativeWindow = this.hasAuthoritativeWindow()
+    // A teammate's own workspace is headless beside the owner's window, as on a paired server.
+    const hasAuthoritativeWindow =
+      (worktreeId === undefined || windowOwns(worktreeId)) && this.hasAuthoritativeWindow()
     if (hasAuthoritativeWindow && options.allowAttachedWindow !== true) {
       return reconciledWorktreeIds
     }

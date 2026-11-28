@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { RuntimeWorkspaceArchive } from '../../workspaces/archive/runtime-workspace-archive'
+import { tabListOfPty, windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
@@ -21,9 +22,14 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       pty.pty.manualTitle = customTitle
       const recordedTabId = (): string | null => this.paneOfPty(pty.pty).tabId
       this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
-      if (pty.pty.holder) {
-        // A teammate's own terminal: their list re-reads its name; no host window or layout has it.
-        return { handle, tabId: pty.record.tabId, title }
+      const list = tabListOfPty(pty.pty)
+      if (!windowOwns(list)) {
+        // A teammate's own terminal is named in their workspace, headless as on a paired server.
+        const tabId = recordedTabId() ?? pty.record.tabId
+        if (tabId) {
+          this.publishUnrenderedTerminalTitle(list, tabId, customTitle)
+        }
+        return { handle, tabId, title }
       }
       const tabIdForTitle = !this.notifier?.renameTerminal ? recordedTabId() : null
       if (tabIdForTitle) {
@@ -31,7 +37,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       }
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
-          this.notifier?.renameTerminal(leaf.tabId, title)
+          this.notifier?.renameTerminal(leaf.tabId, title, leaf.worktreeId)
           return { handle, tabId: leaf.tabId, title }
         }
       }
@@ -39,13 +45,13 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       // A window without this pane cannot publish the rename for paired clients.
       if (this.notifier?.renameTerminal && tabId) {
         this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabId, customTitle)
-        this.notifier.renameTerminal(tabId, title)
+        this.notifier.renameTerminal(tabId, title, list)
       }
       return { handle, tabId, title }
     }
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
-    this.notifier?.renameTerminal(leaf.tabId, title)
+    this.notifier?.renameTerminal(leaf.tabId, title, leaf.worktreeId)
     return { handle, tabId: leaf.tabId, title }
   }
 
@@ -77,7 +83,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       throw new Error('Pane titles require a running Orca desktop with set-pane-title support')
     }
     const normalizedTitle = title?.trim() || null
-    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle)) {
+    if (!this.notifier.setPaneTitle(leaf.tabId, leaf.leafId, normalizedTitle, leaf.worktreeId)) {
       throw new Error('runtime_unavailable')
     }
     return { handle, tabId: leaf.tabId, leafId: leaf.leafId, title: normalizedTitle }

@@ -18,6 +18,7 @@ import {
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
 import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
+import { windowOwns } from '../../session-tabs/person/person-workspace-target'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
   protected abstract resolveMobileSessionTerminalCommand(
@@ -144,7 +145,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         }
       )
     }
-    const windowId = this.getAvailableAuthoritativeWindowId()
+    const windowId = windowOwns(worktreeId) ? this.getAvailableAuthoritativeWindowId() : null
     if (windowId === null) {
       return await this.createRuntimeOwnedMobileSessionTerminal(
         worktreeId,
@@ -302,7 +303,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           throw error
         }
         // A real spawn/handle failure left no live backing PTY; remove the ghost tab.
-        this.notifier?.closeTerminal(reply.tabId)
+        this.notifier?.closeTerminal(reply.tabId, worktreeId)
         throw error
       } finally {
         this.pendingMobileTerminalCreatesByKey.delete(pendingCreateKey)

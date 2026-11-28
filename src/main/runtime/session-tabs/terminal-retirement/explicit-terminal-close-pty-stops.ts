@@ -184,4 +184,13 @@ export abstract class OrcaRuntimeWithExplicitCloseTabPtyStops extends OrcaRuntim
     }
     return addressedPtyStop
   }
+
+  /** The window closes its tab of an explicitly closed terminal whose processes main stops itself. */
+  protected closeWindowTabStoppedByMain(tabId: string, worktreeId: string): Promise<void> {
+    return (
+      this.notifier?.closeTerminalTab?.(tabId, worktreeId, {
+        localPtyTeardownOwnedExternally: true
+      }) ?? Promise.resolve()
+    )
+  }
 }

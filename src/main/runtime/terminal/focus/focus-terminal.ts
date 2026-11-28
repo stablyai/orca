@@ -85,7 +85,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
           }
           const recorded = this.paneOfPty(live.pty)
           const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
-          const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
+          const revealed = await notifier.revealTerminalSession(this.tabWorkspaceOf(live.pty), {
             ptyId: live.pty.ptyId,
             title:
               this.getPtyManualTitle(live.pty, false) ??
@@ -205,7 +205,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
     // One lookup captured on first use: per-PTY `paneOfPty` would scan every main leaf for each PTY.
     let paneOf: PtyPaneOf | undefined
     for (const pty of this.ptysById.values()) {
-      if (pty.connected && pty.worktreeId === worktreeId) {
+      if (pty.connected && this.tabWorkspaceOf(pty) === worktreeId) {
         paneOf ??= this.captureTerminalPaneReader()
         add(paneOf(pty).tabId, pty.ptyId)
       }
