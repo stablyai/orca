@@ -26,7 +26,7 @@ import {
 } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { folderWorkspaceOwnerTarget } from './folder-workspace-routing'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { forgetNativeChatCliForkOriginsForWorktree } from '@/components/tab-bar/session-actions/native-chat-cli-fork-run'
+import { forgetNativeChatCliForkOriginsForWorktree } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-origins'
 
 export function createFolderWorkspaceDeleteAction(
   set: Parameters<StateCreator<AppState>>[0],
