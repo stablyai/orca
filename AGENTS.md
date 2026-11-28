@@ -58,3 +58,7 @@ Every change must consider these areas:
 ## Git / GitHub
 
 If changing code around `git`, `gh`, source-control, or review behavior read [`docs/agents-md-refs/git-workflow.md`](./docs/agents-md-refs/git-workflow.md).
+
+## Persisted stores
+
+If changing a SQLite schema, a persisted format, a cleanup sweep or the terminal daemon protocol, read [`docs/agents-md-refs/store-compatibility.md`](./docs/agents-md-refs/store-compatibility.md): users downgrade one release and come back.
