@@ -236,11 +236,7 @@ async function composedPart<L>(
       const tools =
         readOnly || !sources.resolveToolServers
           ? SessionMcpTools.none
-          : await sources.resolveToolServers(
-              record,
-              await launchDirectory(),
-              relays && mayFront
-            )
+          : await sources.resolveToolServers(record, await launchDirectory(), relays && mayFront)
       // An agent given a daemon start's tool front may only run under that start.
       pin(tools.front)
       return tools
