@@ -5,7 +5,7 @@ import { retireNativeChatDraftPosition } from '../drafts/native-chat-composer-dr
 import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
 import { structuredAgentSessionDraftScopeKey } from '../drafts/native-chat-draft-scope'
 import { retireNativeChatSubagentViews } from '../subagents/native-chat-open-subagent'
-import { releaseRemovedChatTabs } from '../pane/routing/native-chat-closed-tab-release'
+import { releaseRemovedChatTabsLater } from './native-chat-removed-tab-releaser'
 
 /** A chat tab's death retires its pane-only UI: the draft's unsatisfied position (never the draft), any open
  *  subagent view, and once the change commits, the state kept for its released view. */
@@ -37,5 +37,5 @@ export function retireRemovedNativeChatTabs(before: readonly Tab[], after: reado
       }
     }
   }
-  releaseRemovedChatTabs(removed)
+  releaseRemovedChatTabsLater(removed)
 }

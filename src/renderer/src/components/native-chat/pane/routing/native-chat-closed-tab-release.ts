@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { releaseNativeChatViewTabs } from '../ownership/native-chat-view-memory'
 import { chatViewRetention } from './native-chat-view-retention'
 import { forgetNativeChatAsyncSkipsForTabs } from '../../prompts/use-native-chat-async-questions'
+import { setRemovedChatTabsReleaser } from '../../session/native-chat-removed-tab-releaser'
 
 /** A closed chat tab's place, view state and kept skips end with it. */
 export function releaseClosedChatTabs(closed: ReadonlySet<string>): void {
@@ -199,3 +200,5 @@ function releaseGone(
     releaseClosedChatTabs(closed)
   }
 }
+
+setRemovedChatTabsReleaser(releaseRemovedChatTabs)
