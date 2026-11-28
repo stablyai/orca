@@ -4,6 +4,7 @@ import { settleRelayedReplay } from '../../provider-relay/relayed-provider-repla
 
 export type { AcpRelayedProcess }
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
+import { AcpAuthRequiredError, AcpConnectionClosedError } from '../transport/acp-errors'
 import type { AcpPendingCalls } from '../transport/acp-pending-calls'
 import {
   PromptResponseSchema,
@@ -138,18 +139,49 @@ export class AcpKeptSession {
     return this.kept.earlierPromptWhole
   }
 
-  /** The answer to the earlier app's prompt, by its id; none listed means it never reached the
+  /** The answer to the earlier app's prompt(s), by id; none listed means it never reached the
    *  agent (the earlier app quit before writing it), so its turn fails instead of hanging. */
-  earlierPrompt(): Promise<PromptResponse> {
-    const id = this.kept.earlierPromptId
-    if (id === null) {
+  earlierPrompt(isSessionLost?: (error: unknown) => boolean): Promise<PromptResponse> {
+    const ids = this.kept.earlierPromptIds
+    if (ids.length === 0) {
       return Promise.reject(new Error('The message did not reach the agent before Orca restarted'))
     }
     const settle = settleAcpSessionCall('session/prompt', PromptResponseSchema, undefined)
-    return this.relayed.turns.track((onId) => {
-      onId(id)
-      return this.calls.adoptEarlier(id, 'session/prompt', settle)
-    }, true)
+    const adopted = ids.map((id, index) =>
+      this.relayed.turns.track(
+        (onId) => {
+          onId(id)
+          return this.calls.adoptEarlier(id, 'session/prompt', settle)
+        },
+        true,
+        index > 0
+      )
+    )
+    if (adopted.length === 1) {
+      return adopted[0]
+    }
+    return Promise.allSettled(adopted).then((outcomes) => {
+      for (const outcome of outcomes) {
+        if (
+          outcome.status === 'rejected' &&
+          (isSessionLost?.(outcome.reason) ||
+            outcome.reason instanceof AcpAuthRequiredError ||
+            outcome.reason instanceof AcpConnectionClosedError)
+        ) {
+          throw outcome.reason
+        }
+      }
+      for (let i = outcomes.length - 1; i >= 0; i -= 1) {
+        const outcome = outcomes[i]
+        if (outcome?.status === 'fulfilled') {
+          return outcome.value
+        }
+      }
+      const last = outcomes.at(-1)
+      throw last?.status === 'rejected'
+        ? last.reason
+        : new Error('The earlier prompt did not settle')
+    })
   }
 
   /** Background work the daemon still counted open at this attach, or saw end while no app was

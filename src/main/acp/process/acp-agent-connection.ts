@@ -23,11 +23,10 @@ import {
   AcpSignInPromptError
 } from '../transport/acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from '../transport/acp-peer-limits'
-import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
+import { AcpSessionRuntime, type AcpSessionCallOptions } from '../protocol/acp-session-runtime'
 import { redactString, redactTextTail } from '../../../shared/observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 import { keptAcpSession, type AcpKeptSession, type AcpRelayedProcess } from './acp-kept-session'
-import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 export type AcpSignInWatch = {
   /** Returns a valid link, null for a malformed sign-in line, or undefined for other output. */
@@ -236,21 +235,22 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     })
   }
 
-  override initialize(): Promise<InitializeResponse> {
-    return this.kept?.initialize() ?? super.initialize()
-  }
+  override initialize = () => this.kept?.initialize() ?? super.initialize()
 
   protected override call<T>(
     method: string,
     params: unknown,
     schema: z.ZodType<T>,
     received?: (response: T) => void,
-    timeoutMs: number | null = null
+    timeoutMs: number | null = null,
+    options?: AcpSessionCallOptions
   ): Promise<T> {
     const send = (onId?: (id: number) => void): Promise<T> =>
       this.kept?.answerStart(method, params, schema, received) ??
-      super.call(method, params, schema, received, timeoutMs, onId)
-    return method === 'session/prompt' && this.relayTurns ? this.relayTurns.track(send) : send()
+      super.call(method, params, schema, received, timeoutMs, onId ? { ...options, onId } : options)
+    return method === 'session/prompt' && this.relayTurns
+      ? this.relayTurns.track(send, false, this.options.concurrentPrompts === true)
+      : send()
   }
 
   get pid(): number | undefined {

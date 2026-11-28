@@ -276,6 +276,8 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
+  // agy acp yields an active prompt on a concurrent session/prompt without cancelling background work.
+  promptSteers: true,
   familyEfforts,
   listedSelection: antigravityListedFamilySelection
 }

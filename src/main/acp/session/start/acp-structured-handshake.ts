@@ -298,6 +298,7 @@ export async function initializeAcpStructuredSession(
     withdrawRequests: () => prompts.withdrawAll(),
     lane: liveLane,
     agentName,
+    dialect: spec.dialect,
     compactCommand: spec.dialect.compactCommand,
     now,
     settle: onSettled,

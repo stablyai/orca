@@ -35,13 +35,46 @@ afterEach(async () => {
   }
 })
 
-async function openChat(meta: unknown, provider: 'omp' | 'cursor' = 'omp') {
-  const spec = provider === 'omp' ? acpLaunchSpecFor('omp')! : CURSOR_LAUNCH_SPEC
+async function openChat(meta: unknown, provider: 'omp' | 'cursor' | 'antigravity' = 'omp') {
+  const baseSpec = provider === 'cursor' ? CURSOR_LAUNCH_SPEC : acpLaunchSpecFor(provider)!
+  const spec =
+    provider === 'antigravity'
+      ? { ...baseSpec, account: { ...baseSpec.account, prepare: undefined } }
+      : baseSpec
+  const modeOptions = [
+    { value: 'default', name: 'Ask' },
+    { value: 'accept-edits', name: 'Accept Edits' }
+  ]
+  const modeConfig = (currentValue: string) => [
+    {
+      id: 'mode',
+      name: 'Mode',
+      category: 'mode',
+      type: 'select',
+      currentValue,
+      options: modeOptions
+    }
+  ]
   const agent = new AcpScriptedAgent()
   agent.on('initialize', (request) =>
     agent.reply(request, { protocolVersion: 1, ...(meta === undefined ? {} : { _meta: meta }) })
   )
-  agent.on('session/new', (request) => agent.reply(request, { sessionId: SESSION }))
+  agent.on('session/new', (request) =>
+    agent.reply(request, {
+      sessionId: SESSION,
+      ...(provider === 'antigravity' ? { configOptions: modeConfig('default') } : {})
+    })
+  )
+  agent.on('session/set_config_option', (request) => {
+    const value =
+      typeof request.params === 'object' &&
+      request.params !== null &&
+      'value' in request.params &&
+      typeof request.params.value === 'string'
+        ? request.params.value
+        : 'default'
+    agent.reply(request, { configOptions: modeConfig(value) })
+  })
   const launch = async () => ({
     spec,
     command: spec.command,
@@ -75,7 +108,12 @@ async function openChat(meta: unknown, provider: 'omp' | 'cursor' = 'omp') {
       agent: provider,
       providerHandle: undefined,
       accountHome: {
-        variable: provider === 'omp' ? 'PI_CODING_AGENT_DIR' : 'CURSOR_CONFIG_DIR',
+        variable:
+          provider === 'omp'
+            ? 'PI_CODING_AGENT_DIR'
+            : provider === 'antigravity'
+              ? 'GEMINI_HOME'
+              : 'CURSOR_CONFIG_DIR',
         path: join(tmpdir(), 'agent-account')
       }
     },
@@ -118,9 +156,8 @@ async function openChat(meta: unknown, provider: 'omp' | 'cursor' = 'omp') {
       })
     })
   }
-  const mail = async () => {
-    const result = await rig.send(MAIL_TEXT, 'queue-if-active', { internal: true, from: MAIL })
-      .result
+  const mail = async (text = MAIL_TEXT) => {
+    const result = await rig.send(text, 'queue-if-active', { internal: true, from: MAIL }).result
     if (!result.ok || !('queued' in result.value)) {
       throw new Error(`Expected a mail card: ${JSON.stringify(result)}`)
     }
@@ -298,5 +335,84 @@ describe('ACP orchestration mail steering', () => {
       })
       expect(chat.methods()).toEqual([PROMPT, PROMPT])
     }
+  })
+
+  it('injects Antigravity orchestration mail via concurrent session/prompt without cancel and gates a second mail until promotion', async () => {
+    const chat = await openChat(undefined, 'antigravity')
+    const firstMail = await chat.mail()
+    const steer1 = await chat.request(PROMPT, 1)
+    expect(steer1.params).toEqual({
+      sessionId: SESSION,
+      prompt: [{ type: 'text', text: MAIL_TEXT }]
+    })
+    expect(chat.methods()).toEqual([PROMPT, PROMPT])
+
+    // A second mail waits in the host queue while the first concurrent steer is still in flight.
+    const secondMailText = 'Follow-up coordinator instructions.'
+    const secondMail = await chat.mail(secondMailText)
+    expect(await chat.submissions(secondMail)).toEqual([])
+    expect(chat.methods()).toEqual([PROMPT, PROMPT])
+
+    // When the first turn yields, steer 1 promotes and the host immediately injects steer 2.
+    await chat.finish()
+    const steer2 = await chat.request(PROMPT, 2)
+    expect(steer2.params).toEqual({
+      sessionId: SESSION,
+      prompt: [{ type: 'text', text: secondMailText }]
+    })
+    expect(chat.methods()).toEqual([PROMPT, PROMPT, PROMPT])
+
+    chat.agent.reply(steer1, { stopReason: 'end_turn' })
+    chat.agent.reply(steer2, { stopReason: 'end_turn' })
+    await eventually(async () => {
+      expect(await chat.submissions(firstMail)).toMatchObject([{ dispatchState: 'accepted' }])
+      expect(await chat.submissions(secondMail)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, PROMPT, PROMPT])
+  })
+
+  it('steers a queued Antigravity user message via concurrent session/prompt without cancel', async () => {
+    const chat = await openChat(undefined, 'antigravity')
+    const queued = await chat.rig.send('Switch to step 2.', 'queue-if-active').result
+    if (!queued.ok || !('queued' in queued.value)) {
+      throw new Error(`Expected queued user message: ${JSON.stringify(queued)}`)
+    }
+    const messageId = queued.value.queued.messageId
+    expect(chat.methods()).toEqual([PROMPT])
+
+    expect(await chat.rig.sendNow(messageId)).toMatchObject({ ok: true })
+    const steer = await chat.request(PROMPT, 1)
+    expect(steer.params).toEqual({
+      sessionId: SESSION,
+      prompt: [{ type: 'text', text: 'Switch to step 2.' }]
+    })
+    expect(chat.methods()).toEqual([PROMPT, PROMPT])
+
+    await chat.finish()
+    chat.agent.reply(steer, { stopReason: 'end_turn' })
+    await eventually(async () => {
+      expect(await chat.submissions(messageId)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, PROMPT])
+  })
+
+  it('refuses to switch permissions while an Antigravity child still holds an in-flight concurrent steer', async () => {
+    const chat = await openChat(undefined, 'antigravity')
+    const draft = await chat.mail()
+    const steer = await chat.request(PROMPT, 1)
+
+    expect(
+      await chat.adapter.settlePermissionTransition({
+        sessionId: HOST_TEST_SESSION,
+        fence: 1,
+        mode: 'full-access'
+      })
+    ).toBe(false)
+
+    await chat.finish('cancelled')
+    chat.agent.reply(steer, { stopReason: 'cancelled' })
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
   })
 })

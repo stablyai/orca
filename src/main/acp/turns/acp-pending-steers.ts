@@ -29,7 +29,7 @@ export class AcpPendingSteers {
   constructor(
     private readonly deps: Pick<
       AcpStructuredTurnsDeps,
-      'connection' | 'steeringSessionId' | 'settle' | 'agentName'
+      'connection' | 'steeringSessionId' | 'dialect' | 'settle' | 'agentName'
     >,
     private readonly turns: {
       /** A prompt runs, or a model command owns the prompt slot. */
@@ -37,6 +37,8 @@ export class AcpPendingSteers {
       joinableTurn: () => AgentJournalItemIdentity | null
       start: (send: AcpTurnSend) => void
       cancel: () => void
+      canPromptSteer?: () => boolean
+      launchPromptSteer?: (send: AcpTurnSend) => void
       onSettled: () => void
     }
   ) {}
@@ -46,8 +48,13 @@ export class AcpPendingSteers {
   }
 
   submit(send: AcpTurnSend, steer: AcpSteerMode): void {
-    // Without the extension a mid-turn send keeps the cancel steer the host chose it for.
-    const mode = this.deps.steeringSessionId === undefined ? 'cancel' : steer
+    // Concurrent-prompt dialects steer via session/prompt without cancelling the active turn.
+    const mode =
+      this.deps.dialect?.promptSteers === true
+        ? 'wait'
+        : this.deps.steeringSessionId === undefined
+          ? 'cancel'
+          : steer
     this.queue.push({ send, mode })
     if (mode === 'cancel' && this.turns.busy()) {
       this.turns.cancel()
@@ -64,6 +71,9 @@ export class AcpPendingSteers {
     if (!this.turns.busy()) {
       this.queue.shift()
       this.turns.start(next.send)
+    } else if (this.turns.canPromptSteer?.()) {
+      this.queue.shift()
+      this.turns.launchPromptSteer?.(next.send)
     } else if (next.mode === 'cancel') {
       this.turns.cancel()
     } else if (next.mode !== 'wait') {

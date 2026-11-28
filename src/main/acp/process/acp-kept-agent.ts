@@ -75,6 +75,8 @@ export type AcpKeptAgent = {
   updates: AcpKeptUpdate[]
   /** The earlier app's latest prompt the agent still owes or answers in the replay; null: none. */
   earlierPromptId: number | null
+  /** Every prompt the earlier app still owes or answers in the replay, oldest first. */
+  earlierPromptIds: readonly number[]
   /** Every line the agent sent for that prompt is in the replay, so its turn reads as live. */
   earlierPromptWhole: boolean
   /** The model picked since that start; null: the start's own. */
@@ -153,7 +155,11 @@ function readKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
     }
   }
   const startSeq = sessionStart?.seq ?? Number.POSITIVE_INFINITY
-  const prompt = (attach?.outstanding ?? []).findLast((request) => request.method === PROMPT)
+  const prompts = (attach?.outstanding ?? []).filter(
+    (request): request is typeof request & { id: number } =>
+      request.method === PROMPT && typeof request.id === 'number'
+  )
+  const prompt = prompts.at(-1)
   const initialize = InitializeResponseSchema.safeParse(jsonRpcResultOf(child.initializeLine))
   return {
     requestFloor: attach?.maxClientRequestId ?? 0,
@@ -168,8 +174,10 @@ function readKeptAgent(child: RelayedProviderChild): AcpKeptAgent {
       .filter((entry) => entry.seq > startSeq || entry.update.sessionId !== undefined)
       .sort((a, b) => a.seq - b.seq)
       .map((entry) => entry.update),
-    earlierPromptId: typeof prompt?.id === 'number' ? prompt.id : null,
-    earlierPromptWhole: prompt?.replayedWhole === true,
+    earlierPromptId: prompt?.id ?? null,
+    earlierPromptIds: prompts.map((entry) => entry.id),
+    earlierPromptWhole:
+      prompts.length > 0 && prompts.every((entry) => entry.replayedWhole === true),
     modelId: model && model.seq > startSeq ? model.id : null
   }
 }

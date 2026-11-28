@@ -1,6 +1,7 @@
 import type { SubmissionRejectionFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalDispatchRejection } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpAgentError } from '../transport/acp-errors'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredLane } from '../journal/acp-structured-lane'
@@ -31,7 +32,7 @@ export type AcpStructuredTurnsDeps = {
   withdrawRequests: () => void
   lane: AcpStructuredLane
   agentName: string
-  /** The agent's own command for /compact. */
+  dialect?: AcpDialect
   compactCommand?: string
   now: () => number
   settle: (settlement: AcpDispatchSettlement) => void

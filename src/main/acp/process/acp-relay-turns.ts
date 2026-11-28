@@ -1,4 +1,3 @@
-import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
 import { AcpRelayAckFloor, type AcpInheritedCut } from './acp-relay-ack-floor'
 import { AcpRelayItemContinuation } from './acp-relay-item-continuation'
 
@@ -13,6 +12,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export class AcpRelayTurns {
   private running = false
   private serial = 0
+  /** FIFO map of in-flight prompts (front is the active turn; later entries are concurrent steers). */
+  private readonly active = new Map<number, number | null>()
   private current: AcpRelayAckFloor | null = null
   /** The running prompt's request id. */
   private promptId: number | null = null
@@ -20,32 +21,78 @@ export class AcpRelayTurns {
   onAgentTurnOver: (() => void) | null = null
 
   /** A fresh floor for each attach, holding a prompt that runs across it. */
-  readonly ackFloor = (): ProviderRelayAckFloor => {
+  readonly ackFloor = (): AcpRelayAckFloor => {
     this.current = new AcpRelayAckFloor(this.running)
     if (this.running && this.promptId !== null) {
       this.current.promptId = this.promptId
+    }
+    for (const id of this.active.values()) {
+      if (id !== null) {
+        this.current.watchPrompt(id)
+      }
     }
     return this.current
   }
 
   /** A prompt sent by `send` (or an earlier app's one, `adopted`) runs until its answer or failure;
    *  `send` names its request id, so the floor knows the answer line that ends it. */
-  track<T>(send: (onId: (id: number) => void) => Promise<T>, adopted = false): Promise<T> {
+  track<T>(
+    send: (onId: (id: number) => void) => Promise<T>,
+    adopted = false,
+    concurrent = false
+  ): Promise<T> {
     const serial = ++this.serial
-    this.running = true
-    this.current?.startTurn(adopted)
-    if (!adopted) {
-      this.onAgentTurnOver?.()
+    if (!concurrent) {
+      this.active.clear()
+    }
+    const firstActive = this.active.size === 0
+    this.active.set(serial, null)
+    if (firstActive) {
+      this.running = true
+      this.current?.startTurn(adopted)
+      if (!adopted) {
+        this.onAgentTurnOver?.()
+      }
     }
     const end = (): void => {
-      if (serial === this.serial && this.running) {
+      if (!this.active.has(serial)) {
+        return
+      }
+      const endedId = this.active.get(serial) ?? null
+      const wasFront = this.active.keys().next().value === serial
+      this.active.delete(serial)
+      if (!wasFront) {
+        if (endedId !== null) {
+          this.current?.forgetPrompt(endedId)
+        }
+        return
+      }
+      const next = this.active.entries().next().value
+      if (next !== undefined) {
+        this.current?.endTurn(true, true, endedId)
+        this.promptId = next[1]
+        if (this.current) {
+          this.current.promptId = next[1]
+        }
+        return
+      }
+      if (this.running) {
         this.running = false
-        this.current?.endTurn(true)
+        this.promptId = null
+        this.current?.endTurn(true, false, endedId)
+        if (this.current) {
+          this.current.promptId = null
+        }
         this.onAgentTurnOver?.()
       }
     }
     const answered = send((id) => {
-      if (serial === this.serial) {
+      if (!this.active.has(serial)) {
+        return
+      }
+      this.active.set(serial, id)
+      this.current?.watchPrompt(id)
+      if (this.active.keys().next().value === serial) {
         this.promptId = id
         if (this.current) {
           this.current.promptId = id

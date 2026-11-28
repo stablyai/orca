@@ -1,7 +1,6 @@
 // Publish and track the child before handshaking so startup cancellation can reach it.
 
 import { initializeAcpStructuredSession } from './start/acp-structured-handshake'
-import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type {
   AgentSessionAcquisition,
@@ -118,6 +117,7 @@ export async function acquireAcpStructuredSession(input: {
     // Only a chat can show a URL request's card, so other connections never advertise it.
     clientCapabilities: withAcpUrlElicitation(spec.dialect.clientCapabilities),
     retryBusyPrompts: spec.agent === 'omp',
+    concurrentPrompts: spec.dialect.promptSteers === true,
     ...(spec.signIn ? { signIn: spec.signIn } : {}),
     ...acpRunRequests(launch, () => session, prompts),
     onExtensionNotification: (method, params) =>
