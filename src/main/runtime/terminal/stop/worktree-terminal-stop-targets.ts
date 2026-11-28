@@ -46,7 +46,15 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
     if (!refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
-    const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
+    // A shared agent's Home keeps each person's terminals in their own list: exact within that list.
+    const holder = this.ptysById.get([...expected][0]!)?.holder
+    const liveInList = (fresh: ReadonlySet<string>) =>
+      new Set(
+        [...this.getLivePtyIdsForWorktree(worktree.id, fresh)].filter(
+          (ptyId) => this.ptysById.get(ptyId)?.holder === holder
+        )
+      )
+    const livePtyIds = liveInList(refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
     if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
@@ -97,7 +105,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
         postStopFailure: 'terminal_liveness_unavailable'
       }
     }
-    const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
+    const remainingLivePtyIds = liveInList(postStopLiveness)
     const stoppedTargetsStillLive = [...expected].filter((ptyId) => remainingLivePtyIds.has(ptyId))
     if (targetOnly ? stoppedTargetsStillLive.length > 0 : remainingLivePtyIds.size > 0) {
       return {

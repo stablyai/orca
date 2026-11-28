@@ -202,5 +202,10 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
     )) {
       this.touchMobileSessionTabsForWorktree(worktreeId, options)
     }
+    // A teammate's own terminal redraws in their list alone.
+    const pty = this.ptysById.get(ptyId)
+    if (pty?.holder) {
+      this.schedulePersonListRedraw(pty.holder, pty.worktreeId)
+    }
   }
 }

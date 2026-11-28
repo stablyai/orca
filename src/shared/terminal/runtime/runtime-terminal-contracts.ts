@@ -19,6 +19,8 @@ export type RuntimeTerminalSummary = {
   orphaned?: boolean
   /** Orphaned PTY’s last recorded pane may survive in its owning renderer despite graph omission; absent if unknown/old host. */
   recordedPaneKey?: string
+  /** A teammate's own terminal in a shared agent's Home: their list shows it, never a host window. */
+  heldByTeammate?: true
   worktreeId: string
   worktreePath: string
   branch: string

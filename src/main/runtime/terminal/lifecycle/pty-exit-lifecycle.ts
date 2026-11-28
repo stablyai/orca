@@ -255,7 +255,15 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimeTerminalWorkerMode
         this.resolvePtyExitWaiters(pty, ptyId)
         this.pruneDisconnectedPtyTranscript(pty)
       }
-      if (
+      if (pty?.holder) {
+        // A teammate's terminal is in their own list alone, so its exit leaves that list (a sleep's
+        // too) and no host list; a recoverable loss keeps it there for the reconnect.
+        if (!preservesAbnormalSshSurface && options.hostLost !== true) {
+          this.forgetPersonSurface(
+            (surface) => surface.kind === 'terminal' && surface.ptyId === ptyId
+          )
+        }
+      } else if (
         preservesIntentionallyStoppedSurface ||
         preservesAbnormalSshSurface ||
         options.hostLost === true

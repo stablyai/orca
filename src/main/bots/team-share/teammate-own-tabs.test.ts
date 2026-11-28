@@ -181,9 +181,7 @@ it('never returns to a closed tab when it opens again, after a restart too (#502
 
 it('refuses a host-list tab write in a teammate’s own Home', async () => {
   const r = await rig()
-  const refused = await r.send('mate-desk', 'session.tabs.createTerminal', {
-    worktree: `id:${r.workspace}`
-  })
+  const refused = await r.send('mate-desk', 'terminal.create', { worktree: `id:${r.workspace}` })
   expect(refused).toMatchObject({ ok: false, error: { code: 'not_found' } })
   expect(await r.hostChats()).toEqual([])
 })

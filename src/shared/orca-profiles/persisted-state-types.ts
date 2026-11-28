@@ -8,6 +8,7 @@ import type {
 import type { Automation } from '../automations/automation-definition'
 import type { AutomationRun } from '../automations/history/automation-run'
 import type { Bot } from '../bot-types'
+import type { PersistedPersonTab } from './persisted-person-tab'
 import type { MigrationUnsupportedPtyEntry } from '../agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from '../feature-education/interactions/feature-interactions'
 import type { CodexResetCreditAttemptLedger } from '../agent-accounts/codex/codex-reset-credit-attempt-ledger'
@@ -54,6 +55,9 @@ export type PersistedMobileClientTabSelection = {
   recentTabIds?: string[]
   /** Under a teammate's tab list key only: the chats of their own list there, in order. */
   personTabs?: string[]
+  /** Under a teammate's tab list key only: their whole list there (chats, terminals, pages, files),
+   *  in order. Rows saved before it have `personTabs` alone. */
+  personTabList?: PersistedPersonTab[]
 }
 
 /** deviceId (or a teammate's tab list key) → worktreeId → selection. */

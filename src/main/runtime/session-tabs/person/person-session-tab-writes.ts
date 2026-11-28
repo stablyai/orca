@@ -17,8 +17,13 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveChatTabActivation } from '../chat/agent-session-tab-identity'
 import type { StructuredSessionTabPublicationInput } from '../chat/structured-session-tab-publication'
-import { personChatTabId } from './person-session-tab-lists'
-import { OrcaRuntimeWithPersonSessionTabs } from './person-session-tab-publication'
+import { randomUUID } from 'node:crypto'
+import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-command-controller'
+import { personChatTabId, personTabId, type PersonSurface } from './person-tab-list-snapshot'
+import { createMobileSessionTabsNotifyCoalescer } from '../../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
+import { isSafeMobileRelativePath } from '../../files/mobile-file-kind'
+import { joinWorktreeRelativePath } from '../../files/paths/runtime-relative-paths'
+import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
 
 /** A chat tab write: the publication, and the person it is for. */
 export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
@@ -27,6 +32,100 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
   abstract listAutomationRuns(): AutomationRun[]
   abstract showAutomation(id: string): Automation
   abstract restoreStructuredAgentSessionTabs(): Promise<void>
+
+  declare readonly browserTabCreate: RuntimeEdgeCommandSurface['browserTabCreate']
+  declare readonly browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
+
+  /** A browser tab create, for the person who opens it: a teammate's in their agent's Home is stamped
+   *  into their own list before its page exists, so no host list ever shows it. */
+  async createSessionBrowserTab(
+    params: Parameters<RuntimeEdgeCommandSurface['browserTabCreate']>[0],
+    caller: Parameters<RuntimeEdgeCommandSurface['browserTabCreate']>[1],
+    { person }: { person: TabPerson }
+  ): Promise<{ browserPageId: string }> {
+    const worktreeId =
+      person === 'owner' || !params.worktree
+        ? null
+        : (this.getExplicitSessionWorktreeIdSelector(params.worktree) ??
+          (await this.resolveWorkspaceSelector(params.worktree).then(
+            (workspace) => workspace.id,
+            () => null
+          )))
+    const list = worktreeId ? this.homeTabListOf(person, worktreeId) : 'host'
+    if (!worktreeId || !isTeammateTabList(list)) {
+      return this.browserTabCreate(params, caller)
+    }
+    const surface = { kind: 'browser' as const, browserPageId: params.page ?? randomUUID() }
+    const activate = params.activate !== false
+    // Held before its page is published, so the page's record takes the stamp (`holder`).
+    this.personSessionTabs.openSurface(list, worktreeId, surface, activate)
+    try {
+      const created = await this.browserTabCreate(
+        { ...params, page: surface.browserPageId },
+        caller
+      )
+      this.showPersonSurface(list, worktreeId, surface, {
+        activate,
+        clientNavigationId: caller?.pairedDeviceId
+      })
+      return created
+    } catch (error) {
+      this.dropPersonTab(list, worktreeId, personTabId(surface))
+      throw error
+    }
+  }
+
+  /** A teammate opens a file in their agent's Home: a tab of their own list, read from disk wherever
+   *  it shows, so it is the same file for everyone; unsaved edits stay on the computer making them. */
+  async openPersonFile(
+    worktreeSelector: string,
+    file: { relativePath: string; mode: 'edit' | 'diff'; staged?: boolean; oldPath?: string },
+    caller: { person: TabPerson; clientNavigationId?: string; activate?: boolean }
+  ): Promise<RuntimeMobileSessionTabsResult> {
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
+    const list = this.homeTabListOf(caller.person, worktree.id)
+    if (!isTeammateTabList(list)) {
+      // Everyone else opens files in the host's window (`files.open`).
+      throw new Error('file_tab_needs_own_list')
+    }
+    for (const path of [file.relativePath, file.oldPath]) {
+      if (path !== undefined && !isSafeMobileRelativePath(path)) {
+        throw new Error('invalid_relative_path')
+      }
+    }
+    const surface: PersonSurface = {
+      kind: 'file',
+      relativePath: file.relativePath,
+      filePath: joinWorktreeRelativePath(worktree.path, file.relativePath),
+      mode: file.mode,
+      ...(file.mode === 'diff' ? { diffSource: file.staged ? 'staged' : 'unstaged' } : {}),
+      ...(file.mode === 'diff' && file.oldPath ? { oldPath: file.oldPath } : {})
+    }
+    const activate = caller.activate !== false
+    this.personSessionTabs.openSurface(list, worktree.id, surface, activate)
+    return this.showPersonSurface(list, worktree.id, surface, {
+      activate,
+      clientNavigationId: caller.clientNavigationId
+    })
+  }
+
+  /** A tab a teammate just opened in their list: their devices redraw, and the device that opened it
+   *  shows it, as a chat they open does. Nothing reaches the host's window or anyone else's screen. */
+  protected showPersonSurface(
+    person: TeammateTabListKey,
+    worktreeId: string,
+    surface: PersonSurface,
+    opts: { activate: boolean; clientNavigationId?: string }
+  ): RuntimeMobileSessionTabsResult {
+    const shown =
+      opts.activate && opts.clientNavigationId
+        ? this.activatePersonSessionTab(person, worktreeId, personTabId(surface), {
+            clientNavigationId: opts.clientNavigationId
+          })
+        : this.personSessionTabsFrame(person, worktreeId, false)
+    this.publishPersonSessionTabs(person, worktreeId)
+    return shown
+  }
 
   /** The chat's stamp: whom it was created for. A chat in an agent's Home that acts for one of its
    *  teammates alone is theirs (their Home Chat, a New chat they started); every other chat is the
@@ -69,6 +168,24 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
       this.personSessionTabs.touch(person, worktreeId)
       this.publishPersonSessionTabs(person, worktreeId)
     }
+  }
+
+  private readonly personListsToRedraw = new Map<string, OwnList>()
+  private readonly personListRedraws = createMobileSessionTabsNotifyCoalescer((key) => {
+    const list = this.personListsToRedraw.get(key)
+    this.personListsToRedraw.delete(key)
+    if (list) {
+      this.personSessionTabs.touch(list.person, list.worktreeId)
+      this.publishPersonSessionTabs(list.person, list.worktreeId)
+    }
+  })
+
+  /** A teammate's terminal or page reads differently (a title, an address): their list redraws at a
+   *  new version, coalesced as the host's do; no other list wakes. */
+  protected schedulePersonListRedraw(person: TeammateTabListKey, worktreeId: string): void {
+    const key = `${person}\0${worktreeId}`
+    this.personListsToRedraw.set(key, { person, worktreeId })
+    this.personListRedraws.schedule(key)
   }
 
   /** The chat tab write (reveal, create, Fork, publish) for the person it names: true when that is a
@@ -128,11 +245,18 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
   ): RuntimeMobileSessionTabsResult {
     const frame = this.personSessionTabsFrame(person, worktreeId, false)
     const resolved = resolveChatTabActivation(frame.tabs, tabId)
-    const tab = frame.tabs.find((candidate) => candidate.id === resolved)
-    if (!tab || tab.type !== 'agent-session' || !opts.clientNavigationId) {
+    const tab = frame.tabs.find(
+      (candidate) =>
+        candidate.id === resolved ||
+        (candidate.type === 'terminal' && candidate.parentTabId === tabId)
+    )
+    if (!tab || !opts.clientNavigationId) {
       throw new Error('tab_not_found')
     }
-    opts.beforeActivate?.({ sessionId: tab.sessionId, worktreeId })
+    opts.beforeActivate?.({
+      ...(tab.type === 'agent-session' ? { sessionId: tab.sessionId } : {}),
+      worktreeId
+    })
     const projected = this.clientSessionTabSelections.activate(
       frame,
       opts.clientNavigationId,
@@ -170,21 +294,53 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     return { hostList }
   }
 
-  /** Closes a tab of a teammate's own list, if it is there. The chat keeps running, as a closed tab's
-   *  chat does. */
+  /** Closes a tab of a teammate's own list, if it is there. A chat keeps running, as a closed tab's
+   *  chat does; a terminal or page they opened ends with its tab, as the host's own do. */
   protected closePersonSessionTab(
     person: TeammateTabListKey,
     worktreeId: string,
     tabId: string
   ): void {
-    if (!this.personSessionTabs.close(person, worktreeId, tabId)) {
-      return
+    const closed = this.dropPersonTab(person, worktreeId, tabId)
+    if (closed && closed.kind !== 'chat') {
+      this.endPersonSurface(worktreeId, closed)
     }
-    this.clientSessionTabSelections.forgetTabs(worktreeId, [tabId], person)
+  }
+
+  /** A teammate's terminal exited or their page retired: its tab leaves their list. */
+  protected forgetPersonSurface(matches: (surface: PersonSurface) => boolean): void {
+    const held = this.personSessionTabs.holderOfSurface(matches)
+    if (held) {
+      this.dropPersonTab(held.person, held.worktreeId, held.tabId)
+    }
+  }
+
+  /** A file tab holds nothing on the host; a terminal stops, a page closes. */
+  protected endPersonSurface(worktreeId: string, surface: PersonSurface): void {
+    if (surface.kind === 'terminal' && surface.ptyId) {
+      this.ptyController?.kill(surface.ptyId)
+    } else if (surface.kind === 'browser') {
+      void this.browserTabClose({
+        worktree: `id:${worktreeId}`,
+        page: surface.browserPageId
+      }).catch((error: unknown) =>
+        console.warn('[session-tabs] closing a teammate’s page failed:', error)
+      )
+    }
+  }
+
+  protected dropPersonTab(person: TeammateTabListKey, worktreeId: string, tabId: string) {
+    const closed = this.personSessionTabs.close(person, worktreeId, tabId)
+    if (!closed) {
+      return null
+    }
+    const closedId = personTabId(closed)
+    this.clientSessionTabSelections.forgetTabs(worktreeId, [closedId], person)
     this.clientSessionTabSelections.settleClosedTabs(
       this.personSessionTabsFrame(person, worktreeId, false),
       person
     )
     this.publishPersonSessionTabs(person, worktreeId)
+    return closed
   }
 }

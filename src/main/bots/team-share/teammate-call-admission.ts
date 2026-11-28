@@ -35,9 +35,10 @@ function namedWorktree(params: unknown): { worktree: string } | 'new' | 'none' {
   return worktree !== undefined ? { worktree } : named?.target ? 'new' : 'none'
 }
 
-/** Rule 4: in their own Home a teammate's list holds their chats, so nothing they call opens, moves or
- *  reshapes a tab of the host's list there; and a teammate never opens one in whatever workspace the
- *  host's window shows, so a call naming none is refused. */
+/** Rule 4: in their own Home a teammate's list is their own (their terminals, pages and files open
+ *  there through it), so nothing they call opens, moves or reshapes a tab of the host's list there;
+ *  and a teammate never opens one in whatever workspace the host's window shows, so a call naming none
+ *  is refused. */
 async function writesHostTabsInOwnHome(
   context: RpcContext,
   scope: BotShareCallerScope,

@@ -7,7 +7,7 @@ import type { PtyPane } from './pty-pane-query'
 
 export type RecordedPtySurface = Pick<
   RuntimePtyWorktreeRecord,
-  'ptyId' | 'tabId' | 'paneKey' | 'surfaceRecordedAtGraphSequence'
+  'ptyId' | 'tabId' | 'paneKey' | 'surfaceRecordedAtGraphSequence' | 'holder'
 >
 
 /** Restored claims cannot overrule a witnessed graph drop; default them to no standing (#18191). */
@@ -50,7 +50,8 @@ export function recordPtySurface(
 ): void {
   // A pane is a binding, so worktree stops and sleep act on it even if a cwd guess filed it (#36716).
   source.confirmPtyWorktree(pty)
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+  // A teammate's own terminal has no host pane.
+  if (ORCA_LAYOUT_OWNER_IS_MAIN || pty.holder) {
     return
   }
   const standing =

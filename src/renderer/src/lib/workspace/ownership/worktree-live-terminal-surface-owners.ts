@@ -22,8 +22,15 @@ export type LiveTerminalSurfaceOwner = {
 /** Host-observed live PTY with no surface. recorded names its former pane, which this renderer may retain despite its absence from the mounted/live host graph. */
 export type UnownedLiveTerminal = { unowned: true; recorded: LiveTerminalSurfaceOwner | null }
 
+/** A teammate's own terminal in a shared agent's Home, which no host window shows. */
+export type TeammateHeldTerminal = { heldByTeammate: true }
+
 /** Host PTY ownership is authoritative; renderer projections can be empty during hydration, multiwindow or client-created tabs. Only UnownedLiveTerminal proves a live unowned PTY; null/missing entries are unverifiable, and earlier inventories may name retired PTYs. */
-type LiveTerminalSurfaceOwnership = LiveTerminalSurfaceOwner | UnownedLiveTerminal | null
+type LiveTerminalSurfaceOwnership =
+  | LiveTerminalSurfaceOwner
+  | UnownedLiveTerminal
+  | TeammateHeldTerminal
+  | null
 export type LiveTerminalSurfaceOwnerIndex = ReadonlyMap<string, LiveTerminalSurfaceOwnership>
 
 const OWNER_LISTING_LIMIT = 200
@@ -72,7 +79,11 @@ function ownershipPaneKey(ownership: LiveTerminalSurfaceOwnership | undefined): 
   if (!ownership) {
     return null
   }
-  return 'unowned' in ownership ? 'unowned' : ownership.paneKey
+  return 'unowned' in ownership
+    ? 'unowned'
+    : 'heldByTeammate' in ownership
+      ? 'teammate'
+      : ownership.paneKey
 }
 
 export function indexLiveTerminalSurfaceOwners(
@@ -84,8 +95,9 @@ export function indexLiveTerminalSurfaceOwners(
     if (!worktreeIdsEqual(terminal.worktreeId, worktreeId) || !terminal.ptyId) {
       continue
     }
-    const owner: LiveTerminalSurfaceOwnership =
-      terminal.orphaned === true
+    const owner: LiveTerminalSurfaceOwnership = terminal.heldByTeammate
+      ? { heldByTeammate: true }
+      : terminal.orphaned === true
         ? terminal.connected === true
           ? { unowned: true, recorded: toRecordedSurface(terminal) }
           : null

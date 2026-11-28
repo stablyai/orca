@@ -16,6 +16,16 @@ import {
   navigationTargetsHost
 } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
+import {
+  isTeammateTabList,
+  type TabPerson,
+  type TeammateTabListKey
+} from '../../../bots/team-share/teammate-rules'
+import { randomUUID } from 'node:crypto'
+import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { MobileTerminalCommand } from './mobile-terminal-startup'
+import { personTabId } from '../../session-tabs/person/person-tab-list-snapshot'
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
@@ -42,6 +52,8 @@ export type MobileTerminalCreateOptions = {
   clientNavigationId?: string
   clientMutationId?: string
   supportsSplitGroupPlacement?: boolean
+  /** A teammate's create in their agent's Home: their own list holds it, never the host's. */
+  personList?: TeammateTabListKey
   signal?: AbortSignal
 }
 
@@ -122,14 +134,24 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       // Older mobile clients optimistically append; preserve that placement until they advertise
       // split-group ordering support.
       supportsSplitGroupPlacement?: boolean
+      /** Who opens it: a teammate's in their agent's Home goes to their own list. */
+      person: TabPerson
       signal?: AbortSignal
-    } = {}
+    }
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
+    const resolveWorktreeId = async () =>
+      this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
+      (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    const list =
+      opts.person === 'owner' ? 'host' : this.homeTabListOf(opts.person, await resolveWorktreeId())
+    const personList = isTeammateTabList(list) ? list : undefined
     const runOpts = {
       ...opts,
-      activate: select && navigationTargetsHost(navigation)
+      // A teammate's own list picks it for their devices alone; nothing reaches the host's window.
+      activate: personList ? select : select && navigationTargetsHost(navigation),
+      ...(personList ? { personList } : {})
     }
     const mutationId = opts.clientMutationId
     const startRun = async (): Promise<RuntimeMobileSessionCreateTerminalResult> => {
@@ -159,10 +181,8 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       }
       result = await run
     }
-    if (select) {
-      const worktreeId =
-        this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
-        (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    if (select && !personList) {
+      const worktreeId = await resolveWorktreeId()
       this.applyMobileSessionTabNavigation(
         await this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
           includeAgentSenders: false
@@ -173,6 +193,73 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       )
     }
     return result
+  }
+
+  /** A teammate's terminal in their agent's Home: it runs on the host, held by their own list from
+   *  before it starts. Its PTY binds to that tab as it registers, so its record is stamped (`holder`)
+   *  and no host list or window ever places it. */
+  protected async createPersonTerminal(
+    person: TeammateTabListKey,
+    workspace: TerminalWorkspaceLaunchScope,
+    cwd: string | undefined,
+    startup: MobileTerminalCommand,
+    opts: MobileTerminalCreateOptions
+  ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    // Local daemons reattach it after a restart by this id; SSH hosts name their own. Their tab holds
+    // it before it starts, so whichever path records the process first stamps it as theirs.
+    const sessionId = workspace.connectionId
+      ? null
+      : mintServePtySessionId(workspace.id, randomUUID())
+    const surface = {
+      kind: 'terminal' as const,
+      parentTabId: randomUUID(),
+      leafId: randomUUID(),
+      ptyId: sessionId
+    }
+    const tabId = personTabId(surface)
+    const activate = opts.activate !== false
+    this.personSessionTabs.openSurface(person, workspace.id, surface, activate)
+    try {
+      const created = await this.createTerminal(`id:${workspace.id}`, {
+        focus: false,
+        presentation: 'background',
+        deferMobileSessionPublish: true,
+        wslUserAct: true,
+        tabId: surface.parentTabId,
+        leafId: surface.leafId,
+        holder: person,
+        ...(sessionId ? { sessionId, isNewSession: true } : {}),
+        command: startup.command,
+        ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
+        cwd,
+        env: startup.env,
+        envToDelete: startup.envToDelete,
+        startupCommandDelivery: startup.startupCommandDelivery,
+        ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+        ...(startup.launchAgent ? { launchAgent: startup.launchAgent } : {}),
+        ...(startup.launchRuntime ? { launchRuntime: startup.launchRuntime } : {}),
+        ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+        signal: opts.signal
+      })
+      if (!created.ptyId) {
+        throw new Error('terminal_handle_stale')
+      }
+    } catch (error) {
+      // Closing the tab stops its process when it registered; one that never did never started here.
+      this.closePersonSessionTab(person, workspace.id, tabId)
+      throw error
+    }
+    const shown = this.showPersonSurface(person, workspace.id, surface, {
+      activate,
+      clientNavigationId: opts.clientNavigationId
+    })
+    const tab = shown.tabs.find((candidate) => candidate.id === tabId)
+    // It exited before it could show: its exit already took it off their list.
+    if (tab?.type !== 'terminal') {
+      throw new Error('terminal_handle_stale')
+    }
+    return { tab, publicationEpoch: shown.publicationEpoch, snapshotVersion: shown.snapshotVersion }
   }
 
   /** A client-typed resume (phone Session History) names its conversation before the agent does. */

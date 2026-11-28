@@ -21,6 +21,7 @@ import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirro
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { TeammateTabListKey } from '../../../bots/team-share/teammate-rules'
 import type { HostTerminalUsage } from '../../../../shared/terminal/runtime-policy/terminal-limit-policy'
 
 type RuntimeTerminalTailState = {
@@ -75,6 +76,9 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   /** Set only when no binding named the workspace; worktree-scoped stops never act on a cwd guess (#36716). */
   readonly worktreeInferredFromCwd?: true
   readonly connectionId: string | null
+  /** The teammate whose own list in a shared agent's Home holds this terminal; no host list or window
+   *  places it (teammate-rules.ts, rule 4). Stamped once, when the record is made (`recordPtyWorktree`). */
+  readonly holder?: TeammateTabListKey
   runtimeSessionOwned: boolean
   readonly isWsl: boolean | null
   readonly wslDistro: string | null

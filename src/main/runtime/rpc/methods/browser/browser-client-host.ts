@@ -271,7 +271,8 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         throw new Error('browser_runtime_page_required')
       }
       const accepted = pages.updatePageMetadata(params.browserPageId, placement, params)
-      if (accepted) {
+      // A teammate's own page redraws in their list alone (the registry's change listener).
+      if (accepted && !page.holder) {
         runtime.notifyMobileSessionTabsChanged(page.workspaceId)
       }
       return { accepted }

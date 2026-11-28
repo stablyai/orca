@@ -20,11 +20,15 @@
 //     the chat's stamp (`chatTabPerson`: whom it acts for, written once when it starts), the host's
 //     own terminals and saved tabs `HOST_STATE_PERSON`. `homeTabListOf` names the list it lands in:
 //     a teammate's own in their agent's Home, the host's everywhere else, so the owner's list only
-//     ever takes owner writes. A teammate's Home list holds chats; `homeTabs.hostList` methods are
-//     refused at admission when they name the teammate's Home. Reads and streams use the device's
-//     list (`tabOwnerOf`), or the list a read names (`viewedTabListOf`): anyone may watch anyone's
-//     list in the Home; watching writes nothing, and closing a tab there names that list's person.
-//     The census test checks every write's person source.
+//     ever takes owner writes. A teammate's Home list holds their chats and the terminals, pages and
+//     files they open there. Their list holds each before it starts; a terminal's PTY record and a
+//     page's record take the stamp (`holder`) when made, and every door that places a tab in a host
+//     list or window reads it (the host's snapshot store, pane admission, orphan adoption, restored
+//     placement, exit retirement, the page selection). Other `homeTabs.hostList` methods are refused
+//     at admission when they name the teammate's Home.
+//     Reads and streams use the device's list (`tabOwnerOf`), or the list a read names
+//     (`viewedTabListOf`): anyone may watch anyone's list in the Home; watching writes nothing, and
+//     closing a tab there names that list's person. The census test checks every write's person source.
 //  5. Name and asker. A teammate is named by their share row's `name`, and every chat or turn they start
 //     acts for them (`botShareAsker`).
 //  6. Read marks. The host's read marks (a chat's unread, notification attention, a workspace's unread,
