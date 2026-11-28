@@ -61,7 +61,7 @@ export function writeNativeChatViewMemory(
     if (!record?.delete(key)) {
       return
     }
-  } else if (record?.get(key) === value || !isNativeChatViewTabLive(tab)) {
+  } else if (record?.get(key) === value) {
     return
   } else if (record) {
     record.delete(key)
@@ -69,8 +69,11 @@ export function writeNativeChatViewMemory(
     if (keepNewest !== undefined) {
       dropOldestBeyond(record, key, keepNewest)
     }
-  } else {
+  } else if (isNativeChatViewTabLive(tab)) {
+    // Only a tab's first record checks the tab store; a record exists only until its tab's release.
     records.set(tab.tabId, new Map([[key, value]]))
+  } else {
+    return
   }
   listeners.get(tab.tabId)?.forEach((listener) => listener())
 }

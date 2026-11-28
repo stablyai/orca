@@ -160,10 +160,13 @@ export function createAgentSessionRewindHook(
       sequence?: number
       isCurrent: () => boolean
     } | null>('awaiting', null)
+    // A view that remounted before history arrived knows no epoch yet: it holds until the reset is readable.
     const awaitingReset =
       awaiting?.sessionId === input.sessionId &&
-      awaiting.epoch === input.state.epoch &&
-      (awaiting.sequence === undefined || (input.state.cursor?.sequence ?? 0) < awaiting.sequence)
+      (input.state.epoch === null ||
+        (awaiting.epoch === input.state.epoch &&
+          (awaiting.sequence === undefined ||
+            (input.state.cursor?.sequence ?? 0) < awaiting.sequence)))
     // Hidden views stop reading; missing reset evidence while hidden is not a failure.
     const hiddenWhileAwaiting = useRef(false)
     const visible = input.isVisible !== false

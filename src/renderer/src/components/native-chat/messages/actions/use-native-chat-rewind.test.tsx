@@ -11,6 +11,8 @@ import {
   releaseNativeChatViewTabs
 } from '../../pane/ownership/native-chat-view-memory'
 import { useNativeChatRewind } from './use-native-chat-rewind'
+import type { StructuredAgentSessionWriteOutcome } from '../../session/structured/writes/use-structured-agent-session-mutate'
+import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
 
@@ -33,7 +35,8 @@ afterEach(() => {
   releaseNativeChatViewTabs([TAB.tabId])
 })
 
-it('a chat released mid-rewind returns still refusing sends', async () => {
+it('a chat released mid-rewind keeps refusing sends until the rewound conversation loads', async () => {
+  const sent = Promise.withResolvers<StructuredAgentSessionWriteOutcome<AgentSessionRewindResult>>()
   const input = {
     sessionId: 'session',
     capturePresentation: () => () => true,
@@ -54,7 +57,7 @@ it('a chat released mid-rewind returns still refusing sends', async () => {
     },
     support: { supported: true as const },
     blocked: false,
-    send: () => new Promise<never>(() => {})
+    send: () => sent.promise
   }
   const first = renderHook(() => useNativeChatRewind(input), { wrapper: inTab })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rewind only awaits the confirm's answer.
@@ -67,6 +70,15 @@ it('a chat released mid-rewind returns still refusing sends', async () => {
   })
   expect(first.result.current.admitsSend()).toBe(false)
   first.unmount()
-  const again = renderHook(() => useNativeChatRewind(input), { wrapper: inTab })
+  // Remounted before history arrived: no epoch yet.
+  const cold = { ...input, state: { ...input.state, epoch: null } }
+  const again = renderHook(() => useNativeChatRewind(cold), { wrapper: inTab })
+  expect(again.result.current.admitsSend()).toBe(false)
+  await act(async () => {
+    sent.resolve({ kind: 'done', value: { itemId: 'user-1', epoch: 'e2', sequence: 5 } })
+    for (let tick = 0; tick < 5; tick++) {
+      await Promise.resolve()
+    }
+  })
   expect(again.result.current.admitsSend()).toBe(false)
 })

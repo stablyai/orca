@@ -1,15 +1,21 @@
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   NativeChatViewTabContext,
   readNativeChatViewMemory,
-  releaseNativeChatViewTabs
+  releaseNativeChatViewTabs,
+  writeNativeChatViewMemory
 } from '../../pane/ownership/native-chat-view-memory'
 import { useNativeChatNewRowsMarker } from './native-chat-new-rows-marker'
+
+// The window holds focus, so a shown transcript is being watched.
+vi.mock('@/attention/use-orca-window-foreground-focused', () => ({
+  useOrcaWindowForegroundFocused: () => true
+}))
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
 
@@ -42,3 +48,27 @@ it('keeps no new-message place while marking new messages is off', () => {
   renderHook(() => useNativeChatNewRowsMarker([], [], false, 'on'), { wrapper: inTab })
   expect(readNativeChatViewMemory(TAB, 'new-rows:on')).toBeDefined()
 })
+
+it("switching transcripts in one view keeps each transcript's own place", () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the marker reads only this setting.
+  useAppStore.setState({ settings: { nativeChatMarkNewMessages: true } as never })
+  const position = { sequence: 1, index: 0 }
+  const subagentMissed = { key: 'row-x', after: position, through: position }
+  writeNativeChatViewMemory(TAB, 'new-rows:sub', {
+    watching: true,
+    left: null,
+    missed: subagentMissed,
+    arriving: true
+  })
+  const view = renderHook(
+    ({ transcript }: { transcript: string }) =>
+      useNativeChatNewRowsMarker([], [], true, transcript),
+    { wrapper: inTab, initialProps: { transcript: 'main' } }
+  )
+  view.rerender({ transcript: 'sub' })
+  expect(readNativeChatViewMemory<{ missed: unknown }>(TAB, 'new-rows:main')?.missed).toBeNull()
+  expect(readNativeChatViewMemory<{ missed: unknown }>(TAB, 'new-rows:sub')?.missed).toEqual(
+    subagentMissed
+  )
+})
+

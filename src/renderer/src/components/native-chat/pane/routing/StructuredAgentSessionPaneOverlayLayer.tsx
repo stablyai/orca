@@ -197,7 +197,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       reportChatLayerTabs(layerId, worktreeId, ownedTabIds)
     }, [layerId, ownedTabIds, worktreeId])
     // A removed workspace unmounts its layer without a tab-set change.
-    useLayoutEffect(() => () => forgetChatLayer(layerId), [layerId])
+    useLayoutEffect(() => () => forgetChatLayer(layerId, worktreeId), [layerId, worktreeId])
     // Why: only shown chats and a few recently shown ones stay mounted, so memory doesn't grow with chats visited.
     const retainedKey = useRetainedChatViewKey(ownedTabIds)
     const mountedTabs = [...new Set([...shownKey.split('\n'), ...retainedKey.split('\n')])]

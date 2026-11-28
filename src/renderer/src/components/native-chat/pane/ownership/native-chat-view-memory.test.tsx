@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
@@ -11,6 +11,7 @@ import {
   writeNativeChatViewMemory
 } from './native-chat-view-memory'
 import { useNativeChatConversationKey } from '../../conversation/projection/use-native-chat-conversation-key'
+import { useNativeChatReadingPosition } from '../../viewport/navigation/use-native-chat-reading-position'
 
 const TAB = { tabId: 'tab-1', worktreeId: 'wt-1' }
 
@@ -53,3 +54,48 @@ it('a chat remounted after a /clear finds its conversation once its epoch loads'
   again.rerender({ epoch: 'e1', clears: 0 })
   expect(again.result.current).toBe('e1:1')
 })
+
+it('typing into kept state reads the tab store once, not on every keystroke', () => {
+  const read = vi.spyOn(useAppStore, 'getState')
+  for (let keystroke = 0; keystroke < 100; keystroke++) {
+    writeNativeChatViewMemory(TAB, 'find-query', `q${keystroke}`)
+  }
+  expect(read).toHaveBeenCalledTimes(1)
+  read.mockRestore()
+})
+
+it('a restore that never reads history keeps its bookmark through the next hide', async () => {
+  const bookmark = { messageId: 'row-30', offset: 12 }
+  writeNativeChatViewMemory(TAB, 'reading-position:t', bookmark)
+  const jumpTo = vi.fn((_position: unknown, settled: (result: 'superseded') => void) =>
+    settled('superseded')
+  )
+  const props = { isVisible: true }
+  const view = renderHook(
+    ({ isVisible }: { isVisible: boolean }) =>
+      useNativeChatReadingPosition({
+        positionKey: 't',
+        isVisible,
+        ready: true,
+        scrollRef: { current: document.createElement('div') },
+        readerAtEnd: () => true,
+        messageIdAt: () => null,
+        waitingMessageIdAt: () => null,
+        jumpTo,
+        onGiveUp: () => {}
+      }),
+    { wrapper: inTab, initialProps: props }
+  )
+  await act(async () => {
+    for (let frame = 0; frame < 10; frame++) {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    }
+  })
+  const tries = jumpTo.mock.calls.length
+  view.rerender({ isVisible: false })
+  expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
+  view.rerender({ isVisible: true })
+  expect(jumpTo.mock.calls.length).toBe(tries)
+  expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
+})
+

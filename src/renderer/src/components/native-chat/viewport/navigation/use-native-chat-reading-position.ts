@@ -83,6 +83,8 @@ export function useNativeChatReadingPosition({
   const freshMountRef = useRef(true)
   // The restore in flight; an effect replay (StrictMode, a hide mid-restore) keeps the bookmark and retries it.
   const restoringRef = useRef<NativeChatReadingPosition | null>(null)
+  // A restore that never read history: its bookmark waits for a later remount unless the reader moves on.
+  const gaveUpRef = useRef(false)
   const latest = useRef({ readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt, onGiveUp })
   useLayoutEffect(() => {
     latest.current = { readerAtEnd, jumpTo, messageIdAt, waitingMessageIdAt, onGiveUp }
@@ -106,10 +108,11 @@ export function useNativeChatReadingPosition({
               latest.current.waitingMessageIdAt
             )
           : null
-      if (next === null && freshMountRef.current) {
+      if (next === null && (freshMountRef.current || gaveUpRef.current)) {
         return
       }
       freshMountRef.current = false
+      gaveUpRef.current = false
       writeNativeChatViewMemory(tab, key, next ?? undefined, KEPT_TRANSCRIPTS_PER_TAB)
     }
   }, [isVisible, ready, tab, key, scrollRef])
@@ -125,7 +128,9 @@ export function useNativeChatReadingPosition({
       : undefined
     if (position === undefined) {
       freshMountRef.current = false
-      writeNativeChatViewMemory(tab, key, undefined)
+      if (!gaveUpRef.current) {
+        writeNativeChatViewMemory(tab, key, undefined)
+      }
     } else {
       restoringRef.current = position
       const attempt = (tries: number): void => {
@@ -143,6 +148,7 @@ export function useNativeChatReadingPosition({
             if (result === 'superseded') {
               // Kept for a later remount; this view is past restoring, so a reveal won't pull the reader back.
               freshMountRef.current = false
+              gaveUpRef.current = true
               latest.current.onGiveUp()
             }
             return

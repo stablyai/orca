@@ -227,7 +227,9 @@ export function useNativeChatNavigation({
     readerAtEnd,
     messageIdAt: (index) => nativeChatSlotKeyAt(slots, index),
     waitingMessageIdAt: (index) => nativeChatSlotKeyAt(waitingSlots, index),
-    jumpTo: ({ messageId, offset }, settled) =>
+    jumpTo: ({ messageId, offset }, settled) => {
+      // Away from the end first, or the transcript would follow its tail back down as rows measure.
+      readerLeavesEnd()
       startHistoryJump({ kind: 'item', id: messageId, offset }, (result) => {
         if (result === 'missing' || result === 'failed') {
           releaseHistory()
@@ -238,9 +240,13 @@ export function useNativeChatNavigation({
           }
         }
         settled(result)
-      }),
+      })
+    },
     onGiveUp: () => {
-      if (subagentId !== null) {
+      // The restore marked the reader away from the end; give the view back as an unbookmarked one opens.
+      if (subagentId === null) {
+        scrollToBottom()
+      } else {
         startHistoryJump({ kind: 'subagent', agentId: subagentId })
       }
     }
