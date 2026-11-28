@@ -135,12 +135,17 @@ function followSettingsAnswers(): () => void {
     ) {
       return
     }
-    if (!isUndecided(current.agent)) {
+    // Only a new answer counts: a settings refresh (or the card's own earlier Install) must not close it.
+    const answeredNow = (agent: AgentHookTarget): boolean => {
+      const next = readAgentHookConsent(state.settings, agent)
+      return next !== null && next !== readAgentHookConsent(previous.settings, agent)
+    }
+    if (answeredNow(current.agent)) {
       publish(null)
       void showNext()
       return
     }
-    const agents = current.agents.filter((agent) => agent === current?.agent || isUndecided(agent))
+    const agents = current.agents.filter((agent) => agent === current?.agent || !answeredNow(agent))
     if (agents.length !== current.agents.length) {
       publish({ ...current, agents })
     }

@@ -7,7 +7,13 @@ function enabled(settings: ManagedHookDetectionSettings, agent: 'opencode' | 'op
 }
 
 export function openCodePluginSettingsKey(settings: ManagedHookDetectionSettings): string {
-  return `${enabled(settings, 'opencode')}:${enabled(settings, 'opencode2')}:${isAgentStatusHooksEnabledForAgent(settings, 'claude') && settings?.claudeSubagentNavigationEnabled !== false}`
+  // Granted agents too: a new approval must let the WSL relay's next pass install without waiting out its throttle.
+  const granted = Object.entries(settings?.agentHookConsent ?? {})
+    .filter(([, decision]) => decision === 'granted')
+    .map(([agent]) => agent)
+    .sort()
+    .join(',')
+  return `${enabled(settings, 'opencode')}:${enabled(settings, 'opencode2')}:${isAgentStatusHooksEnabledForAgent(settings, 'claude') && settings?.claudeSubagentNavigationEnabled !== false}:${granted}`
 }
 
 export function selectOpenCodePluginSources(
