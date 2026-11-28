@@ -17,9 +17,16 @@ export async function pruneOldDaemonHosts(
     return
   }
   // Decide on version dirs first: awaiting staging cleanup before them would let the pid evidence go stale.
-  await pruneSupersededVersions(evidence, recheck)
+  // A prune already running owns the same dirs; joining it avoids a second whole-tree walk.
+  inFlightVersionPrune ??= pruneSupersededVersions(evidence, recheck).finally(() => {
+    inFlightVersionPrune = null
+  })
+  await inFlightVersionPrune
   await pruneDaemonHostStaging()
 }
+
+let inFlightVersionPrune: Promise<void> | null = null
+let inFlightStagingPrune: Promise<void> | null = null
 
 function exitedIn(evidence: PinnedDaemonVersionsEvidence, version: string): boolean {
   // Only a complete runtime-directory listing permits treating unrecorded versions as unowned.
@@ -60,9 +67,14 @@ async function pruneSupersededVersions(
 
 /** Reclaim only copies whose writer positively exited, independently of daemon pid publication. */
 export async function pruneDaemonHostStaging(): Promise<void> {
-  if (isPackagedElectronWin32()) {
-    await reclaimAbandonedDaemonHostStaging(
-      join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
-    )
+  if (!isPackagedElectronWin32()) {
+    return
   }
+  // The launcher and provider init both start this; one walk serves both.
+  inFlightStagingPrune ??= reclaimAbandonedDaemonHostStaging(
+    join(getDaemonHostRootDir(), getAppEnvironment().getVersion())
+  ).finally(() => {
+    inFlightStagingPrune = null
+  })
+  await inFlightStagingPrune
 }

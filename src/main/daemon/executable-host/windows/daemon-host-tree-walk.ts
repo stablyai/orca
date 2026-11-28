@@ -1,4 +1,4 @@
-import { lstat, readdir, rmdir, stat, unlink } from 'node:fs/promises'
+import { chmod, lstat, readdir, rmdir, stat, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { mapWithConcurrencyUntilFailure } from '../../../../shared/concurrency/map-with-concurrency'
 
@@ -56,6 +56,17 @@ export async function listDaemonHostTree(
   return listing
 }
 
+// Windows refuses unlink on a directory junction (rmdir removes the link, not its target) and on a
+// read-only file, which copyFile keeps from a read-only install; rmSync cleared that flag, so do too.
+async function removeStubbornEntry(path: string): Promise<void> {
+  if ((await lstat(path)).isSymbolicLink()) {
+    await rmdir(path)
+    return
+  }
+  await chmod(path, 0o666)
+  await unlink(path)
+}
+
 /** Delete a tree under the same bound; recursive fs.promises.rm has no limit on in-flight ops. */
 export async function removeDaemonHostTree(root: string): Promise<void> {
   const { files, dirs } = await listDaemonHostTree(
@@ -63,9 +74,8 @@ export async function removeDaemonHostTree(root: string): Promise<void> {
     DAEMON_HOST_FS_CONCURRENCY,
     { followLinks: false }
   )
-  // Windows refuses unlink on a directory junction; rmdir removes the link, not its target.
   await mapWithConcurrencyUntilFailure(files, DAEMON_HOST_FS_CONCURRENCY, (file) =>
-    unlink(file.sourcePath).catch(() => rmdir(file.sourcePath))
+    unlink(file.sourcePath).catch(() => removeStubbornEntry(file.sourcePath))
   )
   // Breadth-first order reversed removes children before their parents.
   for (let index = dirs.length - 1; index >= 0; index -= 1) {

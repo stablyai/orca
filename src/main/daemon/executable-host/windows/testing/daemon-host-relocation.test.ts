@@ -365,6 +365,16 @@ describe('removeDaemonHostTree', () => {
     expect(readFileSync(join(outsideDir, 'inner.txt'), 'utf8')).toBe('keep')
   })
 
+  // POSIX unlinks read-only files anyway; only Windows refuses them.
+  it.runIf(process.platform === 'win32')('removes a copy holding a read-only file', async () => {
+    const host = hostWithCopy()
+    chmodSync(join(host, 'nested', 'file.txt'), 0o444)
+
+    await removeDaemonHostTree(host)
+
+    expect(existsSync(host)).toBe(false)
+  })
+
   // File symlinks need Developer Mode or SeCreateSymbolicLinkPrivilege on Windows; junctions don't.
   it.skipIf(process.platform === 'win32')(
     'removes a copy without following a file link out of it',
