@@ -306,11 +306,15 @@ export function usePhoneToolSignIn(args: {
     }
   }, [attempt])
 
-  const copyFailed = useCallback(
-    () => setError(t('bots.tools.signIn.copyFailed', 'Couldn’t copy the link.')),
+  // A copy that worked clears only the last copy's failure, never a refused paste's.
+  const onCopy = useCallback(
+    (copied: boolean) => {
+      const failed = t('bots.tools.signIn.copyFailed', 'Couldn’t copy the link.')
+      setError((shown) => (copied ? (shown === failed ? null : shown) : failed))
+    },
     [t]
   )
-  const linkCopy = useSignInLinkCopy(attempt?.url ?? null, copyFailed)
+  const linkCopy = useSignInLinkCopy(attempt?.url ?? null, onCopy)
 
   return { attempt, failure, error, starting, start, finish, openAgain, cancel, ...linkCopy }
 }

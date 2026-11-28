@@ -12,15 +12,28 @@ export type SignInLinkCopy = {
   copied: boolean
 }
 
-export function useSignInLinkCopy(url: string | null, onCopyFailed: () => void): SignInLinkCopy {
+export function useSignInLinkCopy(
+  url: string | null,
+  /** Each copy's outcome, for the page's error line. */
+  onCopy: (copied: boolean) => void
+): SignInLinkCopy {
   const opensHere = useMemo(() => url === null || canOpenExternalLink(url), [url])
   const clipboard = useClipboardWriter()
-  // The link last copied: a new attempt's link shows Copy again.
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null)
+  // The copied link goes with its attempt, including one a late copy reported after it ended.
+  if (copiedUrl !== null && copiedUrl !== url) {
+    setCopiedUrl(null)
+  }
   const copyLink = useCallback(() => {
     if (url) {
-      void clipboard.writeText(url).then(() => setCopiedUrl(url), onCopyFailed)
+      void clipboard.writeText(url).then(
+        () => {
+          setCopiedUrl(url)
+          onCopy(true)
+        },
+        () => onCopy(false)
+      )
     }
-  }, [clipboard, url, onCopyFailed])
+  }, [clipboard, url, onCopy])
   return { opensHere, copyLink, copied: url !== null && copiedUrl === url }
 }
