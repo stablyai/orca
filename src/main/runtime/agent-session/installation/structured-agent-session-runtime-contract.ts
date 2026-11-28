@@ -141,4 +141,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
     record: AgentSessionRecord,
     launchDirectory: string
   ) => Promise<AgentSessionAccountHome | null>
-} & Pick<StructuredAgentSessionHostDeps, 'onRequestFailure' | 'onIdleProviderDeath' | 'statusSink'>
+} & Pick<
+    StructuredAgentSessionHostDeps,
+    'onRequestFailure' | 'onIdleProviderDeath' | 'onPersonClosedProvider' | 'statusSink'
+  >

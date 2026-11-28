@@ -113,6 +113,8 @@ export type TabsSlice = {
       preserveAgentSession?: boolean
       /** closeFile/close-all already own content cleanup and reopen capture. */
       editorRetirementHandled?: boolean
+      /** Main asked for this close and closes the tab's chat on this machine's host itself. */
+      hostRetirementHandled?: boolean
     }
   ) => { closedTabId: string; wasLastTab: boolean; worktreeId: string } | null
   reorderUnifiedTabs: (

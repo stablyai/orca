@@ -50,6 +50,8 @@ export type WorkerTurnStop = {
   cause?: string
   /** An exited chat: mail starts it again, keeping its history. */
   restartsOnMail?: true
+  /** An `exited` worker a person closed: who closed it, and where. */
+  closedBy?: string
   /** What the worker left behind, such as the workspace of a start that failed. */
   leftover?: string
   /** A start that never got a terminal has no output to read. */
@@ -62,7 +64,7 @@ export type WorkerTurnStop = {
   /** For `start-unconfirmed`: when the brief and its Enter went in, and what the terminal showed since. */
   startEvidence?: UnconfirmedStartEvidence
   /** How its going away settled the Dispatch; absent while the Dispatch stays open. */
-  settled?: 'failed' | 'circuit_broken'
+  settled?: 'failed' | 'circuit_broken' | 'stopped'
   /** A chat request that failed, reported in the chat's own error words. */
   requestError?: WorkerRequestError
   /** For `background-wait`: when the turn ended, what its background tasks run, and the pane whose
@@ -173,7 +175,9 @@ export function sendWorkerReport(
         ? "Worker's mailbox notice may not have been submitted"
         : stop.startEvidence?.continuePrompt
           ? "Worker's continue prompt may not have been submitted"
-          : WORKER_STOP_SUBJECTS[stop.reason]
+          : stop.closedBy
+            ? 'Worker was closed before it finished'
+            : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,

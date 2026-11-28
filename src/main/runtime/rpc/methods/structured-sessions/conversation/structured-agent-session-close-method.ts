@@ -15,6 +15,7 @@ import {
   captureStructuredSessionSurface,
   retireCapturedStructuredSessionSurface
 } from '../../../../agent-session/lifecycle/structured-agent-session-close'
+import { describeRpcCaller } from '../../../callers/rpc-caller-identity'
 
 export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
   // Close only provider/in-memory state, preserving record/journal for future attachment.
@@ -48,7 +49,12 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
       }
     } finally {
       if (!keepRunning) {
-        await host.close(params.sessionId, 'user-close')
+        await host.close(
+          params.sessionId,
+          'user-close',
+          undefined,
+          describeRpcCaller(ctx.caller, ctx.clientKind)
+        )
       }
     }
     return { ok: true as const }

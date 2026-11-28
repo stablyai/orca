@@ -21,9 +21,14 @@ export function retireStructuredAgentSessionTab(args: {
   worktreeId: string
   sessionId: string
   onError?: (error: unknown) => void
+  /** Main closed the chat on its host before asking this window to drop the tab. */
+  hostClosed?: true
 }): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
   forgetStructuredSessionSelection(args.sessionId, args.target)
+  if (args.hostClosed) {
+    return Promise.resolve(true)
+  }
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
   const existing = inFlightRetirements.get(key)
   if (existing) {

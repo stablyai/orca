@@ -15,6 +15,7 @@ import type { UnsentSendHold } from '../../agent-session-journal/queued-messages
 import type { AgentSessionStopOutcome } from '../providers/structured-agent-session-adapter-stop'
 import type {
   StructuredAgentSessionIdleDeath,
+  StructuredAgentSessionPersonClose,
   StructuredAgentSessionRequestFailure
 } from '../observations/structured-agent-session-request-failures'
 import type { StructuredAgentSessionCommandHandoverContext } from '../operations/structured-agent-session-command-turn'
@@ -232,6 +233,8 @@ export type StructuredAgentSessionHostDeps = {
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
   /** A provider died on its own with no running or failed request to carry the news. */
   onIdleProviderDeath?: (death: StructuredAgentSessionIdleDeath) => void
+  /** A person's close ended a running provider; must not throw. */
+  onPersonClosedProvider?: (closed: StructuredAgentSessionPersonClose) => void
   /** Every committed journal batch, after request-failure observation; must not throw. */
   observeCommittedRows?: (
     sessionId: string,

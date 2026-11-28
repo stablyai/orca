@@ -55,3 +55,22 @@ export function rpcCallerOperationKey(caller: RpcCallerIdentity): string {
       return caller.deviceId
   }
 }
+
+/** Who made a call, in words a trace or a coordinator's report can carry. */
+export function describeRpcCaller(
+  caller: RpcCallerIdentity | undefined,
+  clientKind: 'mobile' | 'runtime' | undefined
+): string {
+  switch (caller?.kind) {
+    case 'desktop':
+      return 'a person in the desktop app'
+    case 'local-cli':
+      return 'the orca CLI on this host'
+    case 'paired-device':
+      return caller.agent
+        ? `an agent using paired device ${caller.deviceId}`
+        : `a person on ${clientKind === 'mobile' ? 'a paired phone' : 'paired device'} ${caller.deviceId}`
+    case undefined:
+      return 'an unidentified client'
+  }
+}

@@ -28,7 +28,12 @@ import {
 } from '../../terminal-authority/structured-sessions/structured-worker-identity'
 import { createSessionWorkerLivenessReader } from '../lifecycle/session-worker-liveness'
 import { escalateChatWorkerError } from './chat-worker-error-escalation'
-import { reportChatWorkerProviderDeath } from './chat-worker-provider-death'
+import {
+  reportChatWorkerClosedByPerson,
+  reportChatWorkerProviderDeath
+} from './chat-worker-provider-death'
+import { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } from '../../../rpc/methods/structured-sessions/conversation/structured-agent-session-close-method'
+import type { RpcContext } from '../../../rpc/core'
 import { observeChatWorkerWorking } from './chat-worker-turn-stops'
 
 const SESSION = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')
@@ -96,7 +101,9 @@ async function startWorker({
           : failure
         reports.push(escalateChatWorkerError(request, deps))
       },
-      onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps)
+      onIdleProviderDeath: (death) => reportChatWorkerProviderDeath(death, deps),
+      onPersonClosedProvider: (closed) =>
+        reportChatWorkerClosedByPerson(closed, 'test-runtime', deps)
     }
   })
   rig = current
@@ -214,6 +221,7 @@ async function startWorker({
     deps,
     current,
     database,
+    run,
     task,
     dispatch,
     journal,
@@ -344,4 +352,39 @@ it('escalates a usage limit once while Orca keeps continuing the worker, and aga
   expect(reports).toHaveLength(2)
   expect(reports[1]).toMatchObject({ failureKind: 'usageLimitReached', resetsAt })
   expect(reports[1]).not.toHaveProperty('orcaContinues')
+})
+
+it('stops a working chat worker a person closes from a phone and tells its coordinator who closed it', async () => {
+  const worker = await startWorker()
+  const exits = vi.spyOn(console, 'info')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the close handler reads only these runtime members and the caller identity.
+  const phone = {
+    runtime: {
+      bots: { list: () => [] },
+      currentLocalStructuredSessionPresentation: () => null,
+      captureStructuredAgentSessionPresentation: () => ({ raw: null, saved: [] }),
+      retireStructuredAgentSessionTabFromSnapshot: () => false,
+      removeCapturedStructuredSessionSavedTabs: () => {}
+    },
+    caller: { kind: 'paired-device', deviceId: 'phone-7' },
+    clientKind: undefined
+  } as unknown as RpcContext
+  await STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler({ sessionId: SESSION }, phone)
+
+  expect(worker.database.getWorkerDispatch(worker.dispatch.id)?.state).toBe('stopped')
+  expect(worker.database.getDispatchContextById(worker.dispatch.id)?.status).toBe('failed')
+  const mail = worker.database.getUnreadRunMailbox(worker.run.id, 20, ['escalation'])
+  expect(mail).toHaveLength(1)
+  expect(mail[0]).toMatchObject({ subject: 'Worker was closed before it finished' })
+  expect(mail[0]?.body).toContain(
+    'was closed by a person on paired device phone-7 before it finished'
+  )
+  expect(exits).toHaveBeenCalledWith(
+    expect.stringContaining('provider-exit'),
+    expect.objectContaining({
+      closeCause: 'user-close',
+      closeReason: 'a person on paired device phone-7'
+    })
+  )
+  exits.mockRestore()
 })

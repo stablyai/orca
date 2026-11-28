@@ -67,7 +67,8 @@ export function beginWorkerStop(
   | { disposition: 'stopping'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
   | ({ disposition: 'context_only' } & ContextOnlyDispatchReleaseResult) {
-  this.db.exec('BEGIN IMMEDIATE')
+  // Nests in a caller's transaction: a stop observed elsewhere settles with that edge's report.
+  const transaction = beginLifecycleWriteTransaction(this.db, 'begin_worker_stop')
   try {
     const dispatch = this.getDispatchContextById(dispatchId)
     const worker = this.getWorkerDispatch(dispatchId)
@@ -79,11 +80,11 @@ export function beginWorkerStop(
       if (!released.alreadySettled) {
         this.closeQuestionsForDispatch(dispatchId)
       }
-      this.db.exec('COMMIT')
+      commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'context_only', ...released }
     }
     if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
-      this.db.exec('COMMIT')
+      commitLifecycleWriteTransaction(this.db, transaction)
       return { disposition: 'already_settled', worker, dispatch }
     }
     refuseStopWhileKeptOpen(this, dispatchId)
@@ -116,20 +117,20 @@ export function beginWorkerStop(
     })
     reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
     this.closeQuestionsForDispatch(dispatchId)
-    this.db.exec('COMMIT')
+    commitLifecycleWriteTransaction(this.db, transaction)
     return {
       disposition: 'stopping',
       worker: this.getWorkerDispatch(dispatchId) as WorkerDispatchRow,
       dispatch: this.getDispatchContextById(dispatchId) as DispatchContextRow
     }
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
 }
 
 export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): WorkerDispatchRow {
-  this.db.exec('BEGIN IMMEDIATE')
+  const transaction = beginLifecycleWriteTransaction(this.db, 'settle_worker_stop')
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
@@ -159,10 +160,10 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
     markUnreadFollowUpMail(this, dispatchId)
     // Callers settle only after proving the process gone, so its terminal no longer pins the Run.
     releaseExitedWorkerTerminalInTransaction(this, dispatchId)
-    this.db.exec('COMMIT')
+    commitLifecycleWriteTransaction(this.db, transaction)
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    rollbackLifecycleWriteTransaction(this.db, transaction)
     throw error
   }
 }

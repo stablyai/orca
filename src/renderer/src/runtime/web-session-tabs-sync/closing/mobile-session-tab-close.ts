@@ -22,7 +22,8 @@ export function closeMobileSessionTabInStore(
   }
   const exactTab = workspaceTabs.find((tab) => tab.id === tabId)
   if (exactTab) {
-    return store.closeUnifiedTab(exactTab.id) !== null
+    // Main asked for this close and closes the chat on its host itself.
+    return store.closeUnifiedTab(exactTab.id, { hostRetirementHandled: true }) !== null
   }
   const fileTabs = workspaceTabs.filter(
     (tab) => tab.entityId === tabId && EDITOR_SESSION_CONTENT_TYPES.has(tab.contentType)

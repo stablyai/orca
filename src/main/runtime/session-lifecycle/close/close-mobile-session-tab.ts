@@ -290,6 +290,7 @@ export abstract class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWi
         tab,
         worktreeId,
         reason: options.reason,
+        ...(options.closedBy ? { closedBy: options.closedBy } : {}),
         local: () => this.workspaceSessions.tryGetHostId(worktreeId) === LOCAL_EXECUTION_HOST_ID,
         rows: () => this.mobileSessionTabsByWorktree.get(worktreeId)?.tabs,
         notifier: this.notifier,

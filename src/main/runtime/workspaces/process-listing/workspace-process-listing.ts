@@ -233,6 +233,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
         this.onStructuredRequestFailureForErrorMail(failure),
       onStructuredIdleProviderDeathForMail: (death) =>
         this.onStructuredIdleProviderDeathForMail(death),
+      onStructuredPersonClosedProviderForMail: (closed) =>
+        this.onStructuredPersonClosedProviderForMail(closed),
       notifyCrewChanges: (change) => this.crewChanges.notify(change),
       onStructuredSessionStatusForMail: (summary) => this.onStructuredSessionStatusForMail(summary),
       observeWorkerAutoReleaseChat: (summary) =>

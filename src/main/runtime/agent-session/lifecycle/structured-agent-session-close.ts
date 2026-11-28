@@ -271,7 +271,8 @@ export async function closeCapturedStructuredSession(
   sessionId: string,
   cause: StructuredAgentSessionCloseCause,
   surface: StructuredSessionSurface | null,
-  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>
+  runtime: StructuredSessionSurfaceRuntime & Partial<Pick<OrcaRuntimeService, 'bots'>>,
+  closedBy?: string
 ): Promise<boolean> {
   if (surface && !structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime)) {
     return false
@@ -293,7 +294,7 @@ export async function closeCapturedStructuredSession(
     return false
   }
   if (!keepRunning) {
-    await host.close(sessionId, cause)
+    await host.close(sessionId, cause, undefined, closedBy)
   }
   return result.committed
 }

@@ -95,6 +95,7 @@ export async function closeMobileStructuredSessionPresentation(input: {
   tab: RuntimeMobileSessionAgentTab
   worktreeId: string
   reason?: RuntimeSessionTabCloseReason
+  closedBy?: string
   local: () => boolean
   rows: () => RuntimeMobileSessionTabsSnapshot['tabs'] | undefined
   notifier: Parameters<typeof closeRenderedStructuredSessionTab>[0]
@@ -130,7 +131,8 @@ export async function closeMobileStructuredSessionPresentation(input: {
         input.tab.sessionId,
         structuredAgentSessionTabCloseCause(input.reason),
         surface,
-        input.runtime
+        input.runtime,
+        input.closedBy
       )
     : false
 }

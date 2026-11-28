@@ -13,6 +13,8 @@ export type MobileSessionTabCloseOptions = {
   localPtyTeardownOwnedExternally?: boolean
   expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
   force?: boolean
+  /** Who asked for the close, for a stopped chat's exit record. */
+  closedBy?: string
 }
 
 // Tombstones hide tabs until activation; only proven host retirement may hide a still-published tab.

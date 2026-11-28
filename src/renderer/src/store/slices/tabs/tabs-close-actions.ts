@@ -104,6 +104,9 @@ export function createTabsCloseActions(
             sessionId: tab.entityId,
             provisional,
             layoutOwner: state,
+            ...(opts?.hostRetirementHandled && target.kind === 'local'
+              ? { hostClosed: true as const }
+              : {}),
             // Switch point: main's frames draw this machine's chats, so main opens it again.
             ...(ORCA_LAYOUT_OWNER_IS_MAIN &&
             target.kind === 'local' &&

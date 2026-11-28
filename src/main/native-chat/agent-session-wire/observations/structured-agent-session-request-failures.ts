@@ -26,6 +26,13 @@ export type StructuredAgentSessionIdleDeath = {
   reason: string | null
 }
 
+/** A person closed the chat while its provider ran; `closedBy` names who and where, when known. */
+export type StructuredAgentSessionPersonClose = {
+  sessionId: string
+  fence: number
+  closedBy: string | null
+}
+
 type Death = {
   ended: NonNullable<StructuredAgentSessionHostSession['lastEndedChild']>
   /** A request failure carries this death to its readers. */

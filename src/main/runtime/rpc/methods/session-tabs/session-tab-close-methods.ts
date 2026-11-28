@@ -9,6 +9,7 @@ import {
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
+import { describeRpcCaller } from '../../callers/rpc-caller-identity'
 
 export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
@@ -58,6 +59,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
             params.tabId,
             {
               reason: 'user',
+              closedBy: describeRpcCaller(context.caller, context.clientKind),
               // Only explicit reasons prove confirmation; legacy reasonless closes do not.
               ...(params.force && params.reason !== undefined ? { force: true } : {}),
               ...(params.terminal ? { expectedTerminalHandle: params.terminal } : {}),

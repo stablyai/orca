@@ -71,6 +71,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   onError?: (error: unknown) => void
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
+  hostClosed?: true
 }): void {
   cancelPendingBotThreadChatClose({
     executionHostId: executionHostIdForStructuredTarget(args.target),
