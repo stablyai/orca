@@ -1,4 +1,4 @@
-import { CopyX, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { CopyX, ExternalLink, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -16,6 +16,11 @@ import type { NativeChatTabSession } from '../session-actions/tab-session-histor
 import { CopyTabIdMenuItem } from '../pane-actions/CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
+import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
+import {
+  getFloatingWorkspaceOperationRoute,
+  resolveWorktreeOperationRoute
+} from '@/lib/workspace/ownership/worktree-operation-route'
 
 const TAB_COLORS = [
   {
@@ -143,6 +148,20 @@ export function SortableTabContextMenu({
   nativeChat
 }: SortableTabContextMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const workspaceHostId = useAppStore((state) => {
+    if (!open) {
+      return null
+    }
+    const hostId =
+      state.unifiedTabsByWorktree[tab.worktreeId]?.find((item) => item.id === unifiedTabId)
+        ?.executionHostId ??
+      getFloatingWorkspaceOperationRoute(tab.worktreeId)?.executionHostId ??
+      resolveWorktreeOperationRoute(
+        { ...state, activeWorktreeId: null, activeWorkspaceExecutionHostId: null },
+        tab.worktreeId
+      )?.executionHostId
+    return hostId && state.getKnownWorktreeById(tab.worktreeId, hostId) ? hostId : null
+  })
   const keybindings = useAppStore((state) => state.keybindings)
   const canClose = closable && !isPinned
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
@@ -166,6 +185,22 @@ export function SortableTabContextMenu({
       animation="none"
       className="min-w-[13rem] max-w-[calc(100vw-1rem)] whitespace-nowrap"
     >
+      {workspaceHostId ? (
+        <>
+          <ContextMenuItem
+            onSelect={() =>
+              jumpToWorktreeFromSidebar(tab.worktreeId, { executionHostId: workspaceHostId })
+            }
+          >
+            <ExternalLink className="size-3.5 shrink-0" />
+            {t(
+              'auto.components.activity.ActivityThreadContextMenu.goToWorkspace',
+              'Go to Workspace'
+            )}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+        </>
+      ) : null}
       <TerminalTabSplitMenuSection
         unifiedTabId={unifiedTabId}
         groupId={groupId}
