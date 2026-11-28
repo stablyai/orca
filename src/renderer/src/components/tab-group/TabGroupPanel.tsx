@@ -248,11 +248,7 @@ export default function TabGroupPanel({
       ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY }
       : undefined
   const holdTabStripPointerGesture = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
-    if (
-      event.button !== 0 ||
-      !(event.target instanceof Element) ||
-      !event.target.closest('[data-tab-id]')
-    ) {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-tab-id]')) {
       return
     }
     const targetWindow = event.currentTarget.ownerDocument.defaultView
