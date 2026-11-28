@@ -127,35 +127,31 @@ function steps(uid: string, own = asking, shown = item) {
   return { hook, posted }
 }
 
-it('holds answers until the last open line has one, then posts them all as one comment', () => {
-  for (const last of ['pick', 'box'] as const) {
+it.each(['pick', 'box'] as const)(
+  'holds answers until the last open line has one, then posts them all as one comment (%s)',
+  (last) => {
     const { hook, posted } = steps(`picks-${last}`)
     act(() => hook.result.current.steps!.pick(2, 'Yes'))
     act(() => hook.result.current.steps!.pick(0, 'Yes'))
     expect(posted).toEqual([])
-    if (last === 'pick') {
-      act(() => hook.result.current.steps!.pick(1, 'No'))
-    } else {
-      act(() => hook.result.current.fromBox('No', [], hook.result.current.waitingLine!.id))
-    }
+    const answer = {
+      pick: () => hook.result.current.steps!.pick(1, 'No'),
+      box: () => void hook.result.current.fromBox('No', [], hook.result.current.waitingLine!.id)
+    }[last]
+    act(answer)
     expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No\n${PLAN} → Yes`])
     expect(posted[0]!.intent?.answers).toEqual(['Yes', 'No', 'Yes'])
     expect(posted[0]!.skipped).toBeUndefined()
   }
-})
+)
 
-it('posts a partial set only on Send, skipping the open lines', () => {
-  const { hook, posted } = steps('partial')
-  act(() => hook.result.current.steps!.pick(0, 'Yes'))
-  act(() => hook.result.current.steps!.pick(1, 'No'))
+it("waits for a reopened line's new answer before posting on the last open line", () => {
+  const words = 'only the internal ones'
+  const { hook, posted } = reopenedDraft('reopen-then-last', words)
+  act(() => hook.result.current.steps!.pick(2, 'Yes'))
   expect(posted).toEqual([])
-  let outcome = ''
-  act(() => {
-    outcome = hook.result.current.steps!.send()
-  })
-  expect(outcome).toBe('sent')
-  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → Yes\n${GO} → No`])
-  expect(posted[0]!.skipped).toEqual([2])
+  enter(hook, words)
+  expect(posted.map(({ text }) => text)).toEqual([`${HOSTS} → ${words}\n${GO} → No\n${PLAN} → Yes`])
 })
 
 it('swaps a pick for another, and keeps it when picked again', () => {
@@ -321,7 +317,7 @@ it('posts a plain comment typed after a reopened line folds back, its pick kept'
   for (const restart of [false, true]) {
     const uid = `reopen-folded-${restart}`
     let run = steps(uid)
-    // Every line picked posts at once; the host refused it, so the picks stay held.
+    // Every line picked posts at once; with no send on its way (as after a refusal), the picks stay held.
     act(() => run.hook.result.current.steps!.pick(0, 'Yes'))
     act(() => run.hook.result.current.steps!.pick(1, 'No'))
     act(() => run.hook.result.current.steps!.pick(2, 'Yes'))
