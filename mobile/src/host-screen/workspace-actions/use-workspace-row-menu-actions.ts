@@ -13,6 +13,7 @@ import {
 } from 'lucide-react-native'
 import { DELEGATED_PHONE_SERVER_OFFER_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/pairing/delegated-phone-server-offer-contract'
 import { useServerOwnPairingRequest } from './server-own-pairing'
+import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../../mobile-web-shell/bridge/protocol/bridge-caps'
 import { buildWorktreeNavigationActions } from '../../agent-history/worktree-navigation-actions'
 import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -251,11 +252,12 @@ function serverOwnPairingAction(args: {
     {
       id: 'keepServerReachable',
       group: 'change',
-      label: t(
-        'hostScreen.serverOwnPairing.keepReachable',
-        'Keep reachable when {{desktop}} sleeps',
-        { desktop: desktopName }
-      ),
+      label: t('hostScreen.serverOwnPairing.keepReachable', 'Keep {{server}} reachable', {
+        server: serverName
+      }),
+      hint: t('hostScreen.serverOwnPairing.evenWhenAsleep', 'Even when {{desktop}} sleeps', {
+        desktop: desktopName
+      }),
       icon: Smartphone,
       navigates: true,
       // Minting can wait on the server's Relay; the sheet stays up until it answers.
@@ -268,8 +270,11 @@ function serverOwnPairingAction(args: {
         request.start({ serverClient, serverName, desktopName, t }, (answer) => {
           close()
           if (answer.kind === 'pair') {
+            const confirm = `/pair-confirm?code=${encodeURIComponent(answer.code)}`
+            const named = `${confirm}&server=${encodeURIComponent(serverName)}`
+            // The name is a nicety: a long one must not push the link past the bridge's cap.
             controller.actions.navigateFromHostList(
-              `/pair-confirm?code=${encodeURIComponent(answer.code)}`
+              named.length <= BRIDGE_MAX_ROUTE_HREF_CHARS ? named : confirm
             )
           } else {
             controller.state.setActionError(answer.message)
