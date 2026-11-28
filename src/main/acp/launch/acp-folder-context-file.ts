@@ -34,7 +34,9 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
   if (range) {
     return existing.slice(0, range.start) + block + existing.slice(range.end)
   }
-  return `${existing.trimEnd()}\n\n${block}\n`
+  // An empty file gets the block alone, so removal can give the empty file back byte-for-byte.
+  const base = existing.trimEnd()
+  return `${base === '' ? '' : `${base}\n\n`}${block}\n`
 }
 
 function orcaBlockRange(existing: string): { start: number; end: number } | null {
@@ -100,6 +102,31 @@ export async function acquireFolderContextSlot(cwd: string, path: string): Promi
     release()
     if (folderContextSlots.get(target) === tail) {
       folderContextSlots.delete(target)
+    }
+  }
+}
+
+/** Serializes a folder-context file across the whole chain of folders an agent walking up from
+ *  `cwd` would read it in: holds the slot for `path` in `cwd` and in every ancestor, acquired
+ *  deepest first so concurrent chains cannot deadlock. Release runs the releases in reverse. */
+export async function acquireFolderContextSlotChain(
+  cwd: string,
+  path: string
+): Promise<() => void> {
+  const realCwd = await realpath(cwd).catch(() => cwd)
+  const releases: (() => void)[] = []
+  let dir = realCwd
+  for (;;) {
+    releases.push(await acquireFolderContextSlot(dir, path))
+    const parent = dirname(dir)
+    if (parent === dir) {
+      break
+    }
+    dir = parent
+  }
+  return () => {
+    for (const release of releases.toReversed()) {
+      release()
     }
   }
 }

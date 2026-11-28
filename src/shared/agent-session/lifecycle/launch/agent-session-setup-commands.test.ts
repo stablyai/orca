@@ -13,9 +13,17 @@ describe('agentSessionInstallCommand', () => {
   })
 
   it('encodes a windowsInstallCommand so any Windows shell can run it', () => {
+    // Hardcoded UTF-16LE base64 of VIBE_WINDOWS_INSTALL, so a wrong encoder cannot pass this test.
     expect(agentSessionInstallCommand('mistral-vibe', 'win32')).toBe(
-      `powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(VIBE_WINDOWS_INSTALL)}`
+      'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ' +
+        'aQByAG0AIABoAHQAdABwAHMAOgAvAC8AYQBzAHQAcgBhAGwALgBzAGgALwB1AHYALwBpAG4AcwB0AGEAbABsAC4AcABzADEAIAB8ACAAaQBlAHgAOwAgACYAIAAiACQAZQBuAHYAOgBVAFMARQBSAFAAUgBPAEYASQBMAEUALwAuAGwAbwBjAGEAbAAvAGIAaQBuAC8AdQB2AC4AZQB4AGUAIgAgAHQAbwBvAGwAIABpAG4AcwB0AGEAbABsACAALQAtAHAAeQB0AGgAbwBuACAAMwAuADEAMgAgAG0AaQBzAHQAcgBhAGwALQB2AGkAYgBlAA=='
     )
+  })
+
+  it('encodes PowerShell commands as UTF-16LE base64', () => {
+    // Independently computed vector: base64 of the UTF-16LE bytes of 'irm x'.
+    expect(encodePowerShellCommand('irm x')).toBe('aQByAG0AIAB4AA==')
+    expect(encodePowerShellCommand(VIBE_WINDOWS_INSTALL)).not.toBe(btoa(VIBE_WINDOWS_INSTALL))
   })
 
   it('returns null on win32 when the agent has no Windows install action', () => {

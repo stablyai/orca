@@ -70,14 +70,28 @@ describe('Vibe dialect', () => {
   })
 
   it('promptFailure maps cancelled and canceled errors to a cancelled turn', () => {
-    for (const message of ['Cancelled by user', 'canceled by user']) {
+    for (const message of ['Cancelled by user', 'canceled by the user']) {
       const result = VIBE_ACP_DIALECT.promptFailure?.(new AcpAgentError(-32000, message), 0)
       expect(result?.stopReason).toBe('cancelled')
     }
   })
 
+  it('promptFailure maps the JSON-RPC cancel code to a cancelled turn', () => {
+    const result = VIBE_ACP_DIALECT.promptFailure?.(
+      new AcpAgentError(-32800, 'Request cancelled'),
+      0
+    )
+    expect(result?.stopReason).toBe('cancelled')
+  })
+
   it('promptFailure leaves other errors to the default handling', () => {
-    const result = VIBE_ACP_DIALECT.promptFailure?.(new AcpAgentError(-32000, 'rate limited'), 0)
-    expect(result).toBeUndefined()
+    for (const message of [
+      'rate limited',
+      'cannot cancel: rate limit exceeded',
+      'task cancelled by hook'
+    ]) {
+      const result = VIBE_ACP_DIALECT.promptFailure?.(new AcpAgentError(-32000, message), 0)
+      expect(result).toBeUndefined()
+    }
   })
 })

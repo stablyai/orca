@@ -23,6 +23,19 @@ describe('VIBE_SESSION_HISTORY.parseResumeArgs', () => {
     expect(VIBE_SESSION_HISTORY.parseResumeArgs(['vibe', '--continue'])).toEqual({ target: null })
   })
 
+  it('prefers the --resume target when a targetless flag is also present', () => {
+    expect(
+      VIBE_SESSION_HISTORY.parseResumeArgs(['vibe', '--resume', 'abc123', '--continue'])
+    ).toEqual({
+      target: 'abc123'
+    })
+    expect(VIBE_SESSION_HISTORY.parseResumeArgs(['vibe', '--continue', '--resume=abc123'])).toEqual(
+      {
+        target: 'abc123'
+      }
+    )
+  })
+
   it('returns null for a plain start', () => {
     expect(VIBE_SESSION_HISTORY.parseResumeArgs(['vibe', 'hello'])).toBeNull()
   })

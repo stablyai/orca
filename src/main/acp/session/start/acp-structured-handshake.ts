@@ -121,17 +121,21 @@ export async function initializeAcpStructuredSession(
           input.lanes.clear()
           const attaching = input.lanes.create(resume.sessionId, true)
           liveLane = attaching
-          const opened = await withAcpSessionOpen(launch, cwd, () =>
-            connection.start(
-              {
-                cwd,
-                mcpServers: launch.mcpServers ?? [],
-                sessionId: resume.sessionId,
-                ...acpSessionStartMeta(spec, meta, reopenMeta),
-                ...setup
-              },
-              acceptSession
-            )
+          const opened = await withAcpSessionOpen(
+            launch,
+            cwd,
+            () =>
+              connection.start(
+                {
+                  cwd,
+                  mcpServers: launch.mcpServers ?? [],
+                  sessionId: resume.sessionId,
+                  ...acpSessionStartMeta(spec, meta, reopenMeta),
+                  ...setup
+                },
+                acceptSession
+              ),
+            input.signal
           )
           assertStarting()
           const frames = input.lanes.finishLoad()
@@ -188,16 +192,20 @@ export async function initializeAcpStructuredSession(
   if (!started || !liveLane) {
     liveLane?.dispose()
     input.lanes.clear()
-    started = await withAcpSessionOpen(launch, launch.cwd, () =>
-      connection.start(
-        {
-          cwd: launch.cwd,
-          mcpServers: launch.mcpServers ?? [],
-          ...acpSessionStartMeta(spec, meta, sessionMeta),
-          ...setup
-        },
-        acceptSession
-      )
+    started = await withAcpSessionOpen(
+      launch,
+      launch.cwd,
+      () =>
+        connection.start(
+          {
+            cwd: launch.cwd,
+            mcpServers: launch.mcpServers ?? [],
+            ...acpSessionStartMeta(spec, meta, sessionMeta),
+            ...setup
+          },
+          acceptSession
+        ),
+      input.signal
     )
     assertStarting()
   }

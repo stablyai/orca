@@ -4,7 +4,11 @@ import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
-const home = vi.hoisted(() => ({ dir: '' }))
+const home = vi.hoisted(() => {
+  // The vibe session root derives from VIBE_HOME when set; keep it under the mocked home.
+  delete process.env.VIBE_HOME
+  return { dir: '' }
+})
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeOs>()
   return { ...actual, homedir: () => home.dir }
@@ -71,5 +75,29 @@ describe('aiVault.deleteSession', () => {
       result: { outcome: 'rejected', reason: 'path-outside-known-roots' }
     })
     expect(existsSync(outside)).toBe(true)
+  })
+
+  it('deletes a vibe session directory whole, meta.json included', async () => {
+    const sessionDir = join(
+      home.dir,
+      '.vibe',
+      'logs',
+      'session',
+      'session_20260101_120000_abcd1234'
+    )
+    mkdirSync(sessionDir, { recursive: true })
+    const filePath = join(sessionDir, 'messages.jsonl')
+    writeFileSync(filePath, '{}')
+    writeFileSync(join(sessionDir, 'meta.json'), '{}')
+
+    const response = await dispatcher().dispatch({
+      id: 'req-3',
+      authToken: 'tok',
+      method: 'aiVault.deleteSession',
+      params: { agent: 'mistral-vibe', sessionId: 'abcd1234', filePath }
+    })
+
+    expect(response).toMatchObject({ ok: true, result: { outcome: 'deleted' } })
+    expect(existsSync(sessionDir)).toBe(false)
   })
 })

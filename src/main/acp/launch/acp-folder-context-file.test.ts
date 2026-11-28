@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   acquireFolderContextSlot,
+  acquireFolderContextSlotChain,
   removeFolderContextFile,
   writeFolderContextFile
 } from './acp-folder-context-file'
@@ -49,6 +50,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   process.umask(previousUmask)
+  saveAfterNextRead = null
   await rm(dir, { recursive: true, force: true })
 })
 
@@ -180,6 +182,15 @@ it('reports false when a save lands on every pass so Orca block stays', async ()
   saveAfterNextRead = null
 })
 
+it('gives an empty user file back byte-for-byte after Orca text is taken out', async () => {
+  const path = join(dir, 'GEMINI.md')
+  await writeFile(path, '')
+  await writeFolderContextFile(dir, 'GEMINI.md', 'Gemini', 'bot preamble')
+  expect(await readFile(path, 'utf8')).toContain('bot preamble')
+  await removeFolderContextFile(dir, 'GEMINI.md', 'Gemini')
+  expect(await readFile(path, 'utf8')).toBe('')
+})
+
 it("leaves every byte around Orca's block as the user wrote it", async () => {
   const path = join(dir, 'GEMINI.md')
   const user = '# Rules\r\n\n```\n    indented code\n```\n  \n'
@@ -234,5 +245,37 @@ describe('acquireFolderContextSlot', () => {
     const second = await acquireFolderContextSlot(dir, '.hermes.md')
     first()
     second()
+  })
+})
+
+describe('acquireFolderContextSlotChain', () => {
+  it('holds the slot for the file in every ancestor folder, so a nested chat cannot read a parent write', async () => {
+    const nested = join(dir, 'repo', 'sub')
+    await mkdir(nested, { recursive: true })
+    const release = await acquireFolderContextSlotChain(nested, 'AGENTS.md')
+    // A chat in the parent folder must wait on the same AGENTS.md slot the chain holds.
+    let parentAcquired = false
+    const parent = acquireFolderContextSlot(join(dir, 'repo'), 'AGENTS.md').then((r) => {
+      parentAcquired = true
+      return r
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(parentAcquired).toBe(false)
+    release()
+    const parentRelease = await parent
+    expect(parentAcquired).toBe(true)
+    parentRelease()
+  })
+
+  it('releases every slot in the chain', async () => {
+    const nested = join(dir, 'a', 'b')
+    await mkdir(nested, { recursive: true })
+    const release = await acquireFolderContextSlotChain(nested, 'AGENTS.md')
+    release()
+    // After release, both the nested and the ancestor slot are free again.
+    const nestedAgain = await acquireFolderContextSlot(nested, 'AGENTS.md')
+    const rootAgain = await acquireFolderContextSlot(dir, 'AGENTS.md')
+    nestedAgain()
+    rootAgain()
   })
 })

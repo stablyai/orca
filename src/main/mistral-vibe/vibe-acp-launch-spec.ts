@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { VIBE_ACP_DIALECT } from '../acp/acp-dialects/vibe-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
-import { deliverVibeInstructions } from '../acp/launch/acp-instructions'
+import { deliverVibeInstructions } from '../acp/launch/acp-instructions-vibe'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { VIBE_SESSION_HISTORY } from './vibe-session-history'
 

@@ -1,23 +1,19 @@
 import type { AcpAgentError } from '../transport/acp-errors'
-import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
-import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
+import { approvalNameFromToolCall, approvalRequestPresentation } from './acp-approval-presentation'
 import type { AcpDialect, AcpRequestPresentation, AcpTurnEnding } from './acp-dialect'
 
 const APPROVAL_NAME = /^Requesting (?:approval|permission) to (.+)$/iu
-const REQUEST_MAX_CHARS = 512
 
-function approvalRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
-  const request =
-    method === 'session/request_permission' ? readAcpPermissionRequest(params, () => {}) : null
-  const name = request?.toolCall.content
-    ?.map((block) =>
-      block.type === 'content' && block.content.type === 'text'
-        ? APPROVAL_NAME.exec(block.content.text)?.[1]?.trim()
-        : undefined
-    )
-    .find(Boolean)
-  return name ? acpPermissionPresentation(params, name.slice(0, REQUEST_MAX_CHARS)) : undefined
-}
+// The command or path is only in this action line of the tool call's text.
+const approvalRequest = (method: string, params: unknown): AcpRequestPresentation | undefined =>
+  approvalRequestPresentation(method, params, (request) =>
+    approvalNameFromToolCall(APPROVAL_NAME, request)
+  )
+
+// JSON-RPC's reserved cancel code, or the user-stop wording, marks a cancelled turn. A provider
+// failure that merely mentions "cancel" stays an error.
+const CANCELLED_BY_USER = /cancell?ed by (?:the )?user/i
+const CANCELLED_ERROR_CODE = -32800
 
 function promptFailure(
   error: AcpAgentError,
@@ -25,7 +21,10 @@ function promptFailure(
 ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit' | 'providerFailure'> | undefined {
   // A user stop during a pending approval surfaces as a cancel error; report it as a cancelled
   // turn, not an error. Match both spellings ("cancelled"/"canceled").
-  if (error.message && /cancel/i.test(error.message)) {
+  if (
+    error.code === CANCELLED_ERROR_CODE ||
+    (error.message && CANCELLED_BY_USER.test(error.message))
+  ) {
     return { stopReason: 'cancelled' }
   }
   return undefined

@@ -21,6 +21,8 @@ import { arrayValue, asRecord } from '../../parsing/session-record-fields'
 import { isMissingTranscriptPathError } from '../../discovery/session-path-absence'
 import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
+import { AiVaultScanIssueError } from '../../parsing/session-scan-issues'
+import { aiVaultScanIssueText } from '../../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 
@@ -77,7 +79,12 @@ export async function parseVibeSessionFile(
     ),
     signal
   )
+  // A sidecar that exists but does not parse would silently degrade to the short directory id,
+  // which vibe --resume may not resolve; record an issue instead of caching that session.
   const meta = metaContent === null ? null : parseJsonObject(metaContent)
+  if (metaContent !== null && meta === null) {
+    throw new AiVaultScanIssueError(aiVaultScanIssueText('sessionMetadataUnreadable'))
+  }
   const sessionId = extractString(meta?.session_id) ?? vibeSessionIdFromDirectory(file.path)
   if (!sessionId) {
     return null

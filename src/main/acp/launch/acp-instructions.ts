@@ -10,11 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import {
-  acquireFolderContextSlot,
-  removeFolderContextFile,
-  writeFolderContextFile
-} from './acp-folder-context-file'
+import { removeFolderContextFile, writeFolderContextFile } from './acp-folder-context-file'
 import { clearEarlierRunsOnce } from './acp-instructions-earlier-runs'
 import {
   openCodeSourceConfigDirectory,
@@ -43,15 +39,29 @@ export type AcpInstructionsLaunch = {
 }
 
 /** Opens a session with what `aroundSessionOpen` places there for the open. A failed undo never
- *  fails the open: an accepted reopen must not be replaced by a new session over it. */
+ *  fails the open: an accepted reopen must not be replaced by a new session over it. On `signal`
+ *  abort the open is abandoned and the undo still runs, so a wedged start releases its folder
+ *  slot instead of blocking later opens in the same folder. */
 export async function withAcpSessionOpen<T>(
   launch: Pick<AcpInstructionsLaunch, 'aroundSessionOpen'>,
   cwd: string,
-  open: () => Promise<T>
+  open: () => Promise<T>,
+  signal?: AbortSignal
 ): Promise<T> {
   const undo = await launch.aroundSessionOpen?.(cwd)
+  const opening = open()
+  // Keep a rejection of the abandoned open from surfacing as unhandled.
+  opening.catch(() => undefined)
   try {
-    return await open()
+    if (!signal) {
+      return await opening
+    }
+    const aborted = new Promise<never>((_, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason ?? new Error('aborted')), {
+        once: true
+      })
+    })
+    return await Promise.race([opening, aborted])
   } finally {
     await undo?.().catch((error: unknown) => {
       console.warn('[acp] removing what a session open placed failed', error)
@@ -253,43 +263,6 @@ export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, 
   const inherited = env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS?.trim()
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 })
-
-// Vibe builds its system prompt from AGENTS.md files at session open (walk-up from the cwd plus
-// $VIBE_HOME/AGENTS.md) and keeps it with the session; new_session discards extra kwargs, so
-// sessionMeta cannot carry the text. Every open takes the per-file slot — even one with no text —
-// and holds it until the open returns, so two chats starting in one folder cannot read each
-// other's instructions. An open with no text first clears a block an earlier open's failed cleanup
-// left behind, and no open proceeds while one remains: Vibe reads AGENTS.md now, so it would become
-// this chat's instructions.
-export const deliverVibeInstructions: AcpInstructionsDelivery = {
-  eachStart: false,
-  runsWithoutText: true,
-  launch: async ({ text }) => ({
-    aroundSessionOpen: async (cwd) => {
-      const release = await acquireFolderContextSlot(cwd, 'AGENTS.md')
-      try {
-        if (text) {
-          await writeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe', text)
-        }
-        if (!text && !(await removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe'))) {
-          throw new Error('a stale Mistral Vibe block in AGENTS.md could not be removed')
-        }
-      } catch (error) {
-        release()
-        throw error
-      }
-      return async () => {
-        try {
-          if (text && !(await removeFolderContextFile(cwd, 'AGENTS.md', 'Mistral Vibe'))) {
-            throw new Error('the Mistral Vibe block in AGENTS.md could not be removed')
-          }
-        } finally {
-          release()
-        }
-      }
-    }
-  })
-}
 
 async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
