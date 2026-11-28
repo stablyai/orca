@@ -22,6 +22,7 @@ import {
   type NativeChatQuestionCardProps
 } from './NativeChatQuestionCardParts'
 import { useNativeChatDockRefit } from '../pane/dock/use-native-chat-dock-fit'
+import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
@@ -37,8 +38,18 @@ export type { NativeChatQuestionCardProps } from './NativeChatQuestionCardParts'
 // Reserve a non-option index so single-select holds either an option or typed text.
 const TYPED_ANSWER = -1
 
+/** A replaced prompt must not keep the previous prompt's answers, step or pending advance. */
+export function NativeChatQuestionCard(
+  props: NativeChatQuestionCardProps
+): React.JSX.Element | null {
+  if (props.prompt.questions.length === 0) {
+    return null
+  }
+  return <NativeChatQuestionCardState key={nativeChatAskDismissKey(props.prompt)} {...props} />
+}
+
 /** Single-select advances after a pick; multi-select confirms explicitly, and multi-question prompts retain earlier answers. */
-export function NativeChatQuestionCard({
+function NativeChatQuestionCardState({
   prompt,
   isSubmitting = false,
   isCancelling = false,

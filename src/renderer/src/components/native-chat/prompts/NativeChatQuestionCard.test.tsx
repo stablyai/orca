@@ -398,6 +398,34 @@ describe('NativeChatQuestionCard', () => {
     pressKey({ key: 'Enter' }, field())
     expect(onAnswer).toHaveBeenCalledTimes(1)
   })
+
+  it('starts a replaced prompt clean and drops the old pending advance', () => {
+    vi.useFakeTimers()
+    const onAnswer = vi.fn()
+    renderCard({ prompt: { questions: [question('One'), question('Two')] }, onAnswer })
+    act(() => optionRows()[1]!.click())
+    renderCard({ prompt: { questions: [question('One'), question('Three')] }, onAnswer })
+    expect(container.textContent).toContain('1 of 2')
+    expect(optionRows().map((row) => row.getAttribute('aria-pressed'))).toEqual(['false', 'false'])
+    act(() => vi.runAllTimers())
+    expect(container.textContent).toContain('1 of 2')
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('keeps the answer and the scheduled step of an equivalent prompt', () => {
+    vi.useFakeTimers()
+    const twoSteps = [question('One'), question('Two')]
+    renderCard({ prompt: { questions: twoSteps } })
+    act(() => optionRows()[1]!.click())
+    renderCard({ prompt: { questions: twoSteps.map((step) => ({ ...step })) } })
+    act(() => vi.runAllTimers())
+    expect(container.textContent).toContain('2 of 2')
+  })
+
+  it('renders nothing for a prompt without questions', () => {
+    renderCard({ prompt: { questions: [] } })
+    expect(container.querySelector('[role="group"]')).toBeNull()
+  })
 })
 
 function question(header: string): AskPrompt['questions'][number] {
