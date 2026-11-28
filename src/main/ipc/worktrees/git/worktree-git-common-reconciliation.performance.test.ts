@@ -104,6 +104,7 @@ function hide(): void {
 }
 let visible = true
 let events: WorktreeBasePollEvent[] = []
+let repoIds = ['repo']
 
 async function startReconciliation(): Promise<
   ReturnType<typeof createGitCommonWatchReconciliation>
@@ -132,7 +133,7 @@ async function startReconciliation(): Promise<
     onRootReplacement: () => {},
     onEvents: (next) => events.push(...next),
     subscribeRepoActivity: onRepoActivity,
-    getRepoIds: () => ['repo']
+    getRepoIds: () => repoIds
   })
   await reconciliation.ensureStarted()
   reveal = () => {
@@ -278,6 +279,22 @@ it('runs only the reveal sweep when focus lands before show/restore', async () =
   await vi.advanceTimersByTimeAsync(0)
   expect(fs.stats).toBeLessThanOrEqual(FLEET * 7 + 1)
   await stop()
+})
+
+it('routes activity to a repo that joins this git directory on watcher sync', async () => {
+  const reconciliation = await startReconciliation()
+  await vi.advanceTimersByTimeAsync(30_000)
+  const added = addWorktreeEntry('joined-repo-command')
+  notifyWorktreeActivity('joined::/w')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).not.toContainEqual({ type: 'create', path: added })
+  repoIds = ['repo', 'joined']
+  reconciliation.syncRepoIds()
+  notifyWorktreeActivity('joined::/w')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(events).toContainEqual({ type: 'create', path: added })
+  repoIds = ['repo']
+  await reconciliation.unsubscribe()
 })
 
 it('re-checks on agent turns and shell commands in this repo, never above the old cadence', async () => {
