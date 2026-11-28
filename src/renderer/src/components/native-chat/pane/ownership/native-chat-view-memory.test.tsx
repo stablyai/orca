@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -34,10 +34,12 @@ afterEach(() => {
   releaseNativeChatViewTabs([TAB.tabId])
 })
 
-it('keeps a write made before any layer registered the tab, and drops writes once it closed', () => {
+it('keeps a write made before any layer registered the tab, and drops writes after its release', () => {
   writeNativeChatViewMemory(TAB, 'first', 1)
   expect(readNativeChatViewMemory(TAB, 'first')).toBe(1)
+  // The tab closes and its state is released, as the closed-tab sweep does.
   setTabs([])
+  releaseNativeChatViewTabs([TAB.tabId])
   writeNativeChatViewMemory(TAB, 'late', 2)
   expect(readNativeChatViewMemory(TAB, 'late')).toBeUndefined()
 })
@@ -64,7 +66,12 @@ it('typing into kept state reads the tab store once, not on every keystroke', ()
   read.mockRestore()
 })
 
-it('a restore that never reads history keeps its bookmark through the next hide', async () => {
+it('a restore that never reads history keeps its bookmark through the next hide', () => {
+  // Each retry waits a frame; run them at once.
+  vi.stubGlobal('requestAnimationFrame', (frame: FrameRequestCallback) => {
+    frame(0)
+    return 0
+  })
   const bookmark = { messageId: 'row-30', offset: 12 }
   writeNativeChatViewMemory(TAB, 'reading-position:t', bookmark)
   const jumpTo = vi.fn((_position: unknown, settled: (result: 'superseded') => void) =>
@@ -86,16 +93,13 @@ it('a restore that never reads history keeps its bookmark through the next hide'
       }),
     { wrapper: inTab, initialProps: props }
   )
-  await act(async () => {
-    for (let frame = 0; frame < 10; frame++) {
-      await new Promise((resolve) => setTimeout(resolve, 20))
-    }
-  })
   const tries = jumpTo.mock.calls.length
+  expect(tries).toBe(5)
   view.rerender({ isVisible: false })
   expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
   view.rerender({ isVisible: true })
   expect(jumpTo.mock.calls.length).toBe(tries)
   expect(readNativeChatViewMemory(TAB, 'reading-position:t')).toEqual(bookmark)
+  vi.unstubAllGlobals()
 })
 
