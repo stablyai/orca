@@ -5,7 +5,7 @@
 // first one caused (`cause: 'answer'`) is not shown while the question is loaded. Answers recorded by
 // older hosts are replies like any other.
 import { botItemCommentFiles } from './bot-item-comment-files'
-import { botItemNamedAnswers } from './bot-item-answer-lines'
+import { botItemNamedAnswers, botItemWordsBesideAnswers } from './bot-item-answer-lines'
 import {
   botItemCommentImages,
   botItemLinksOnePerChain,
@@ -13,7 +13,11 @@ import {
   type BotItemEvent,
   type BotItemLinkView
 } from './bot-items'
-import { botItemQuestionPairing, type BotItemQuestionPairing } from './bot-item-question-answers'
+import {
+  botItemQuestionPairing,
+  type BotItemAskEnd,
+  type BotItemQuestionPairing
+} from './bot-item-question-answers'
 
 type DispatchLink = Extract<BotItemLinkView, { kind: 'dispatch' }>
 
@@ -30,12 +34,23 @@ export type BotItemActivityEntry =
       answers?: (BotItemEvent | null)[]
       /** On an ask: per line, answered only by order (a comment naming no line). */
       byOrder?: boolean[]
+      /** On an ask a later one replaced, or answered with the rest skipped: its open lines take no answer. */
+      ended?: BotItemAskEnd
       /** On the owner's reply to a question: the question it answers, by its first line. */
       replyTo?: { eventId: string; text: string }
+      /** The owner's words sent with answers to several questions: the answers read on the ask's lines,
+       *  so the card shows only these, quoting no question. */
+      beside?: string
       /** The owner's answer reads in full on its ask's lines ("Question → answer"): no card of its own. */
       onAsk?: true
     }
   | { kind: 'worker'; key: string; at: number; phase: 'started' | 'finished'; link: DispatchLink }
+
+/** Why a worker stopped without a report, worded as the chat's worker strip words it. */
+export function botItemWorkerStopReason(link: DispatchLink): string | null {
+  const stopped = link.state === 'failed' || link.state === 'stopped'
+  return stopped && !link.report && link.reason?.trim() ? link.reason.trim() : null
+}
 
 /** The question an owner's comment answers (`answers`), or null for any other event. */
 function answeredQuestion(event: BotItemEvent): string | null {
@@ -70,6 +85,26 @@ function readsOnAsk(event: BotItemEvent, pairing: BotItemQuestionPairing): boole
     !Array.isArray(event.data.decisions) &&
     botItemCommentImages(event.data).length === 0 &&
     botItemCommentFiles(text).files.length === 0
+  )
+}
+
+/** The owner's words beside the answers a comment gave an ask of several questions by name. */
+function besideAnswers(event: BotItemEvent, pairing: BotItemQuestionPairing): string | null {
+  const paired = pairing.replies.get(event.id)
+  const ask = paired ? pairing.questions.get(paired.questionId) : undefined
+  // A recorded answer's free-text lines show only on its card (botItemAnswerWords reads them as null).
+  if (
+    !ask ||
+    ask.shape.decisions.length < 2 ||
+    typeof event.data.text !== 'string' ||
+    Array.isArray(event.data.decisions)
+  ) {
+    return null
+  }
+  return botItemWordsBesideAnswers(
+    ask.shape,
+    event.data.text,
+    ask.answers.map((answer, index) => answer?.id === event.id && !ask.byOrder[index])
   )
 }
 
@@ -126,7 +161,7 @@ function replyQuote(
 }
 
 function eventEntries(
-  item: Pick<BotItem, 'question' | 'status'>,
+  item: Pick<BotItem, 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries: BotItemActivityEntry[] = []
@@ -137,6 +172,10 @@ function eventEntries(
     }
   }
   const pairing = botItemQuestionPairing(item, events)
+  // An ask waits, read or still on an earlier page.
+  const askWaiting =
+    [...pairing.questions.values()].some(({ waiting }) => waiting) ||
+    (item.waitingAsk !== undefined && !pairing.questions.has(item.waitingAsk))
   const kept = events.filter((event) => !isSnoozeMark(event))
   const place = new Map(kept.map((event, index) => [event, index]))
   const prev = (event: BotItemEvent): BotItemEvent | undefined => {
@@ -162,19 +201,22 @@ function eventEntries(
       entries.push({ kind: 'event', key: event.id, at: event.at, event })
       continue
     }
-    const replyTo = replyQuote(event, comments, pairing)
+    const beside = besideAnswers(event, pairing)
+    const replyTo = beside === null ? replyQuote(event, comments, pairing) : undefined
     const asked = pairing.questions.get(event.id)
     entries.push({
       kind: 'comment',
       key: event.id,
       at: event.at,
       event,
-      // A question asked in prose waits while it is the item's question.
+      // A question asked in prose waits while it is the item's question and no ask waits before it.
       waiting: asked
         ? asked.waiting
-        : event.id === item.question?.eventId && event.actor.kind !== 'owner',
+        : event.id === item.question?.eventId && event.actor.kind !== 'owner' && !askWaiting,
       ...(asked ? { answers: asked.answers, byOrder: asked.byOrder } : {}),
+      ...(asked?.ended ? { ended: asked.ended } : {}),
       ...(replyTo ? { replyTo } : {}),
+      ...(beside !== null ? { beside } : {}),
       ...(readsOnAsk(event, pairing) ? { onAsk: true as const } : {})
     })
   }
@@ -182,7 +224,7 @@ function eventEntries(
 }
 
 export function botItemActivity(
-  item: Pick<BotItem, 'links' | 'question' | 'status'>,
+  item: Pick<BotItem, 'links' | 'question' | 'status' | 'waitingAsk'>,
   events: readonly BotItemEvent[]
 ): BotItemActivityEntry[] {
   const entries = eventEntries(item, events)
@@ -223,4 +265,11 @@ export function botItemWaitEntryKey(
   }
   const last = entries.findLast((entry) => entry.kind === 'event' && entry.event.kind === 'status')
   return last?.kind === 'event' && last.event.data.to === 'waiting' ? last.key : null
+}
+
+/** The ask the item waits on now, as its comment entry: where a replaced ask leads. */
+export function botItemLiveAskKey(entries: readonly BotItemActivityEntry[]): string | null {
+  return (
+    entries.find((entry) => entry.kind === 'comment' && entry.waiting && !entry.onAsk)?.key ?? null
+  )
 }

@@ -16,8 +16,11 @@ type InstallLink = { authorizeUrl: string; expiresAt: number | null }
 
 export type PhoneSlackSetupStep =
   | { kind: 'checking' }
-  /** `teamId`: the workspace whose token lapsed. */
-  | { kind: 'token'; reconnect: boolean; error: string | null; teamId?: string }
+  /** Workspaces the host's other bots are in, as the desktop asks when there is more than one. */
+  | { kind: 'pick'; teamIds: readonly string[] }
+  /** `teamId`: the workspace whose token lapsed. `unsure`: Slack refused, yet this bot's app was never
+   *  made there, so no token may ever have been saved. */
+  | { kind: 'token'; reconnect: boolean; error: string | null; teamId?: string; unsure?: true }
   | { kind: 'setting-up' }
   /** The app is made; `opened` once Slack's page was opened, so the install is watched for. */
   | { kind: 'ready'; teamId: string; link: InstallLink; opened: boolean }
@@ -84,8 +87,8 @@ export function usePhoneSlackSetup(props: {
   teamId: string | undefined
   /** The bot is already in a Slack workspace, so none means another. */
   inSlack: boolean
-  /** The workspace another bot on this host is in, whose token Orca Cloud already keeps. */
-  knownTeam: string | null
+  /** Workspaces other bots on this host are in (most recent first), whose tokens Orca Cloud keeps. */
+  knownTeams: readonly string[]
   slack: { view: PhoneSlackView; refresh: () => Promise<PhoneSlackView> }
   hostName: string
   t: Translate
@@ -93,6 +96,8 @@ export function usePhoneSlackSetup(props: {
   step: PhoneSlackSetupStep
   retry: () => void
   setUp: (teamId: string) => void
+  /** A workspace none of the host's bots is in: its token first. */
+  pasteToken: () => void
   submitToken: (token: string) => void
   approve: () => void
 } {
@@ -124,11 +129,21 @@ export function usePhoneSlackSetup(props: {
         slackSetUpApp.interpret
       )
       if (!result.ok) {
-        show(
-          result.error === 'grant_expired'
-            ? { kind: 'token', reconnect: true, error: null, teamId }
-            : { kind: 'failed', code: result.error }
-        )
+        if (result.error !== 'grant_expired') {
+          show({ kind: 'failed', code: result.error })
+          return
+        }
+        // A token lapsed only where this bot's app was made with one, as its latest read says.
+        const view = await slack.refresh()
+        const made =
+          view.status === 'ready' && slackTeamState(view.slack, teamId).state !== 'not_created'
+        show({
+          kind: 'token',
+          reconnect: true,
+          error: null,
+          teamId,
+          ...(made ? {} : { unsure: true })
+        })
         return
       }
       // The wait reads this attempt's state, never the last one's refusal.
@@ -148,7 +163,11 @@ export function usePhoneSlackSetup(props: {
     }
     // Opened from Add a connector on a bot already in Slack: another workspace.
     if (props.teamId === undefined && props.inSlack) {
-      show({ kind: 'token', reconnect: false, error: null })
+      show(
+        props.knownTeams.length > 0
+          ? { kind: 'pick', teamIds: props.knownTeams }
+          : { kind: 'token', reconnect: false, error: null }
+      )
       return
     }
     const state = slackTeamState(view.slack, props.teamId)
@@ -165,11 +184,17 @@ export function usePhoneSlackSetup(props: {
       case 'grant_expired':
         return show({ kind: 'token', reconnect: true, error: null, teamId: state.teamId })
       case 'not_created': {
-        const known = props.teamId ?? props.knownTeam
-        return known ? await setUp(known) : show({ kind: 'token', reconnect: false, error: null })
+        const known = props.teamId ? [props.teamId] : props.knownTeams
+        // More than one workspace on this host: the owner picks, never the latest by default.
+        if (known.length > 1) {
+          return show({ kind: 'pick', teamIds: known })
+        }
+        return known[0]
+          ? await setUp(known[0])
+          : show({ kind: 'token', reconnect: false, error: null })
       }
     }
-  }, [slack, props.teamId, props.inSlack, props.knownTeam, setUp])
+  }, [slack, props.teamId, props.inSlack, props.knownTeams, setUp])
 
   // Once per open: the bot's re-reads make a new `start`, and running it again would set up again.
   const started = useRef(false)
@@ -185,7 +210,7 @@ export function usePhoneSlackSetup(props: {
       if (step.kind !== 'token' || !client) {
         return
       }
-      const { reconnect, teamId } = step
+      const { reconnect, teamId, unsure } = step
       show({ kind: 'setting-up' })
       const grant = await slackCall(
         () => slackSaveGrant.request(client, { refreshToken }, { failWhenDisconnected: true }),
@@ -196,7 +221,8 @@ export function usePhoneSlackSetup(props: {
           kind: 'token',
           reconnect,
           error: slackErrorMessage(grant.error, hostName, t),
-          ...(teamId ? { teamId } : {})
+          ...(teamId ? { teamId } : {}),
+          ...(unsure ? { unsure } : {})
         })
         return
       }
@@ -249,6 +275,7 @@ export function usePhoneSlackSetup(props: {
     step: shown,
     retry: () => void start(),
     setUp: (teamId) => void setUp(teamId),
+    pasteToken: () => show({ kind: 'token', reconnect: false, error: null }),
     submitToken: (token) => void submitToken(token),
     approve
   }

@@ -15,10 +15,13 @@ import type {
 import { BrowserError } from '../browser-error'
 import { parseShellArgs } from '../../../shared/shell-args'
 import { assertAgentBrowserPassthroughStaysOnPage } from './protocol/agent-browser-passthrough-arguments'
+import {
+  resolveCallerPassthroughPaths,
+  type AgentBrowserPassthroughCaller
+} from './protocol/agent-browser-passthrough-paths'
 import { agentBrowserCookieSetArguments } from './protocol/agent-browser-cookie-set-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
-import { deleteCookieByName } from '../cookies/browser-cookie-delete-by-name'
 import {
   toBrowserConsoleResult,
   toBrowserNetworkLogResult,
@@ -62,6 +65,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.requireTargetWebContents(target)
       // agent-browser's `cookies clear` ignores filters and wipes the profile's whole cookie jar.
+      const { deleteCookieByName } = await import('../cookies/browser-cookie-delete-by-name')
       return deleteCookieByName((method, params) => sendGuestCdpCommand(wc, method, params), name, {
         domain,
         url,
@@ -252,9 +256,15 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     })
   }
 
-  async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    const args = parseShellArgs(command.trim())
-    assertAgentBrowserPassthroughStaysOnPage(args)
+  async exec(
+    command: string,
+    worktreeId?: string,
+    browserPageId?: string,
+    caller?: AgentBrowserPassthroughCaller
+  ): Promise<unknown> {
+    const parsed = parseShellArgs(command.trim())
+    assertAgentBrowserPassthroughStaysOnPage(parsed)
+    const args = resolveCallerPassthroughPaths(parsed, caller)
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,

@@ -60,25 +60,14 @@ export function portsPanelHostForOwnerKey(key: HostAuthorityKey | null): PortsPa
   return { kind: 'host-scoped', route, executionHostId: authority.at }
 }
 
-/** The Ports tab shows for a workspace on an SSH host, dialed directly or through its managed server. */
-export function portsPanelReachesSshHost(
-  host: PortsPanelHost,
-  environments: readonly { id: string; orcadDeployment?: unknown }[]
-): boolean {
+/** The Ports tab shows for a workspace on an SSH host (dialed directly or through its managed server) or a paired server. */
+export function portsPanelReachesRemoteHost(host: PortsPanelHost): boolean {
   switch (host.kind) {
     case 'direct-ssh':
     case 'host-scoped':
       return true
-    case 'endpoint': {
-      const { target } = host
-      return (
-        target.kind === 'environment' &&
-        environments.some(
-          (environment) =>
-            environment.id === target.environmentId && environment.orcadDeployment !== undefined
-        )
-      )
-    }
+    case 'endpoint':
+      return host.target.kind === 'environment'
     case 'unknown':
       return false
   }
@@ -95,4 +84,14 @@ export function portsPanelForwardTargetId(
   const { environmentId } = host.target
   const environment = environments.find((candidate) => candidate.id === environmentId)
   return (environment && getOrcadSshDeployment(environment)?.sshTargetId) || null
+}
+
+/** Any other paired server forwards over the connection Orca already keeps to it. */
+export function portsPanelForwardEnvironmentId(
+  host: PortsPanelHost,
+  sshForwardTargetId: string | null
+): string | null {
+  return host.kind === 'endpoint' && host.target.kind === 'environment' && !sshForwardTargetId
+    ? host.target.environmentId
+    : null
 }

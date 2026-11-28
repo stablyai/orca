@@ -1,5 +1,5 @@
 import {
-  resolveSourceControlCommitAreaPrimaryActionDecision,
+  resolveSourceControlDesktopCommitAreaPrimaryActionDecision,
   resolveSourceControlPrimaryActionDecision
 } from '../../../../../../shared/source-control/decisions/source-control-primary-action-decision'
 import type { SourceControlPrimaryActionDecision } from '../../../../../../shared/source-control/decisions/source-control-primary-action-decision-types'
@@ -29,7 +29,7 @@ export function resolveCommitAreaPrimaryAction(
   t?: Translate
 ): PrimaryAction {
   return toRendererPrimaryAction(
-    resolveSourceControlCommitAreaPrimaryActionDecision(inputs),
+    resolveSourceControlDesktopCommitAreaPrimaryActionDecision(inputs),
     inputs,
     t
   )
@@ -246,6 +246,11 @@ function resolvePrimaryActionTitle(
       return t(
         'auto.components.right.sidebar.source.control.primary.action.8f9a0b1c2d',
         'Nothing to commit. Branch is up to date.'
+      )
+    case 'nothing_to_commit':
+      return t(
+        'auto.components.right.sidebar.source.control.primary.action.nothingToCommit',
+        'Nothing to commit'
       )
     case 'checking_review_creation':
       return t(

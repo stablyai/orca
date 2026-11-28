@@ -6,7 +6,9 @@ import type { StructuredAgentSessionReadOwner } from './structured-agent-session
 /** Transient work and consent holders belong to the existing read owner, independently of its view transport. */
 export function createStructuredAgentSessionReadActivity(
   alive: () => boolean,
-  readState: () => StructuredAgentSessionState
+  readState: () => StructuredAgentSessionState,
+  /** The last send or admission settled: an owner no view holds can now be forgotten. */
+  onIdle: () => void = () => {}
 ) {
   const operations = new Map<string, boolean>()
   let revision = 0
@@ -16,9 +18,13 @@ export function createStructuredAgentSessionReadActivity(
     current: () => boolean
     cancel: () => void
   } | null = null
+  const isRetained = (): boolean => operations.size > 0 || admission !== null
   const settle = (id: string): void => {
     if (operations.delete(id)) {
       revision += 1
+      if (alive() && !isRetained()) {
+        onIdle()
+      }
     }
   }
   const observe = (state: StructuredAgentSessionState): void => {
@@ -75,6 +81,9 @@ export function createStructuredAgentSessionReadActivity(
         resolve()
         if (admission === active) {
           admission = null
+          if (alive() && !isRetained()) {
+            onIdle()
+          }
         }
       }
     }
@@ -92,7 +101,7 @@ export function createStructuredAgentSessionReadActivity(
     trackSend,
     admit,
     settle,
-    retained: () => operations.size > 0 || admission !== null,
+    retained: isRetained,
     dispose: () => {
       operations.clear()
       admission?.cancel()

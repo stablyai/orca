@@ -29,12 +29,38 @@ export type WebRuntimeSubscribeOptions = {
   signal?: AbortSignal
   timeoutMs?: number
   assertCurrent?: () => void
-  buildUnsubscribe?: (params: unknown) => { method: string; params: unknown } | null
+  buildUnsubscribe?: (
+    params: unknown,
+    subscriptionId: string
+  ) => { method: string; params: unknown } | null
 }
 
 export type WebRuntimeTransportSubscriptionHandle = {
   unsubscribe: () => void
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
+}
+
+// Streams whose host teardown keys by the opening request id, so they share the main socket.
+const SHARED_REQUEST_SUBSCRIPTION_UNSUBSCRIBES: Readonly<Record<string, string>> = {
+  'orchestration.workerApprovalsSubscribe': 'orchestration.workerApprovalsUnsubscribe',
+  'orchestration.workerDockSubscribe': 'orchestration.workerApprovalsUnsubscribe'
+}
+
+export function sharedRequestSubscriptionOptions(
+  method: string,
+  options?: WebRuntimeSubscribeOptions
+): WebRuntimeSubscribeOptions | null {
+  const unsubscribeMethod = SHARED_REQUEST_SUBSCRIPTION_UNSUBSCRIBES[method]
+  if (!unsubscribeMethod) {
+    return null
+  }
+  return {
+    ...options,
+    buildUnsubscribe: (_params, subscriptionId) => ({
+      method: unsubscribeMethod,
+      params: { subscriptionId }
+    })
+  }
 }
 
 export async function pinWebRuntimeSubscription(

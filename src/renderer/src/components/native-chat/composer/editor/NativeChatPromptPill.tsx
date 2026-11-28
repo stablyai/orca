@@ -27,6 +27,7 @@ export function NativeChatPromptPill({
   detail?: ReactNode
   /** A control at the pill's end, such as a bot pill's ⌄. */
   trailing?: ReactNode
+  className?: string
 }): React.JSX.Element {
   // Hidden text, not aria-label: a plain span can't carry an accessible name.
   const hidden = spokenLabel ? true : undefined

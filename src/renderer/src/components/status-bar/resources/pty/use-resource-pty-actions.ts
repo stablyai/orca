@@ -52,7 +52,9 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
     active: 0
   })
   const mounted = useMountedRef()
-  const { removeSessions, invalidate, sessionsError } = inventory
+  const { removeSessions, invalidate } = inventory
+  // An outdated list being read again can't back an end any more than a failed one.
+  const sessionsError = inventory.sessionsError || inventory.rereading
   const flushCompletions = useCallback(() => {
     if (flushTimer.current !== null) {
       clearTimeout(flushTimer.current)

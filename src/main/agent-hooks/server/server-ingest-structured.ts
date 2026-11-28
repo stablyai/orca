@@ -7,8 +7,8 @@ import {
   type AgentStatusStructuredSessionSubject
 } from '../../../shared/agent-status/contracts/agent-status-subject'
 import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
+  structuredAgentSessionTabId,
+  chatPaneKey
 } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   continueMainAgentStatus,
@@ -98,7 +98,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       childWork,
       turnOutcome: summary.turnOutcome,
       ...(summary.stopping ? { stopping: summary.stopping } : {}),
-      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {})
+      ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {}),
+      ...(summary.attentionAsksOnlyQuestions
+        ? { attentionAsksOnlyQuestions: summary.attentionAsksOnlyQuestions }
+        : {})
     })
     const { state, workingMode } = agentStatus
     // Journal dates preserve main-agent continuity across republishing after restart.
@@ -108,7 +111,7 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
       summary.updatedAt
     )
     const tabId = structuredAgentSessionTabId(parsed.sessionId)
-    const paneKey = structuredAgentSessionPaneKey(tabId, parsed.sessionId)
+    const paneKey = chatPaneKey(parsed.sessionId)
     if (this.state.lastStatusByPaneKey.has(paneKey)) {
       throw new Error('Structured status address conflicts with legacy evidence')
     }

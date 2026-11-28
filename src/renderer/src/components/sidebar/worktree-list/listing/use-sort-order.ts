@@ -51,7 +51,12 @@ function useSettledSidebarWorktreeSortOrder(args: {
       repoMap,
       now: Date.now(),
       sources: {
-        ...state,
+        tabsByWorktree: state.tabsByWorktree,
+        agentStatusByPaneKey: state.agentStatusByPaneKey,
+        runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,
+        ptyIdsByTabId: state.ptyIdsByTabId,
+        migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
+        terminalLayoutsByTabId: state.terminalLayoutsByTabId,
         attentionForWorktree: (worktree, now) =>
           state.agentStatusByPaneKey.projection.attention(
             worktree.id,

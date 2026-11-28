@@ -22,7 +22,19 @@ export type ProcessMonitorState = {
   pollTrackingStarted: boolean
   pollTimer: ReturnType<typeof setTimeout> | null
   pollTimerTier: PollCadenceTier | null
+  /** May lie in the future: a hidden-output notice stands for output until its window ends. */
   lastPaneActivityAt: number | null
+  /** Activity other than input: input that prints nothing must not lift a pane off main's 15 s pace. */
+  lastPacingActivityAt: number | null
+  /** Earliest event no read has answered yet; null means no read is due. */
+  readDueSince: number | null
+  /** Only input that printed nothing is unanswered: main's 15 s re-check paced that, so reads keep its pace. */
+  inputOnlyReadDue: boolean
+  unresolvedFollowUps: number
+  /** No host proof that the shell is alone in front: a command may start an agent with no OS event, so a slow re-check stands in (never above main's). */
+  idleShellUnproven: boolean
+  /** The last local read named a program that is neither a shell nor an agent; its quiet re-check already paces input. */
+  foregroundIsCommand: boolean
   hasAgentRunEvidence: boolean
   pendingProcessExit: PendingProcessExit | null
   lastForegroundAgent: RecognizedAgentProcess | null

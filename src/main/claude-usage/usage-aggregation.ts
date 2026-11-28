@@ -7,6 +7,21 @@ import type {
 import { addLongContext } from './claude-billable-tokens'
 import { longContextTurnTokens } from './claude-model-pricing'
 
+function cloneClaudeLocationBreakdown(
+  location: ClaudeUsageLocationBreakdown
+): ClaudeUsageLocationBreakdown {
+  return location.longContext
+    ? { ...location, longContext: { ...location.longContext } }
+    : { ...location }
+}
+
+function cloneClaudeSession(session: ClaudeUsageSession): ClaudeUsageSession {
+  return {
+    ...session,
+    locationBreakdown: session.locationBreakdown.map(cloneClaudeLocationBreakdown)
+  }
+}
+
 export function mergeClaudeSessions(
   target: Map<string, ClaudeUsageSession>,
   sessions: ClaudeUsageSession[]
@@ -14,7 +29,7 @@ export function mergeClaudeSessions(
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
     if (!existing) {
-      target.set(session.sessionId, structuredClone(session))
+      target.set(session.sessionId, cloneClaudeSession(session))
       continue
     }
 
@@ -47,7 +62,7 @@ export function mergeClaudeSessions(
         existingLocation.cacheWrite1hTokens += location.cacheWrite1hTokens
         addLongContext(existingLocation, location.longContext)
       } else {
-        existing.locationBreakdown.push({ ...location })
+        existing.locationBreakdown.push(cloneClaudeLocationBreakdown(location))
       }
     }
   }
@@ -58,10 +73,15 @@ export function mergeClaudeDailyAggregates(
   dailyAggregates: ClaudeUsageDailyAggregate[]
 ): void {
   for (const aggregate of dailyAggregates) {
-    const key = [aggregate.day, aggregate.model ?? 'unknown', aggregate.projectKey].join('::')
+    const key = `${aggregate.day}::${aggregate.model ?? 'unknown'}::${aggregate.projectKey}`
     const existing = target.get(key)
     if (!existing) {
-      target.set(key, { ...aggregate })
+      target.set(
+        key,
+        aggregate.longContext
+          ? { ...aggregate, longContext: { ...aggregate.longContext } }
+          : { ...aggregate }
+      )
       continue
     }
     existing.turnCount += aggregate.turnCount
@@ -169,7 +189,7 @@ export function aggregateClaudeUsage(turns: ClaudeUsageAttributedTurn[]): {
       })
     }
 
-    const dailyKey = [turn.day, turn.model ?? 'unknown', turn.projectKey].join('::')
+    const dailyKey = `${turn.day}::${turn.model ?? 'unknown'}::${turn.projectKey}`
     const existingDaily = dailyByKey.get(dailyKey)
     if (existingDaily) {
       existingDaily.turnCount++

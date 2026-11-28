@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react'
 import { View, Text } from 'react-native'
-import { translate } from '../../i18n/mobile-i18n'
+import type { Translate } from '../../i18n/mobile-i18n'
 import { gitLabTodoTargetLabel } from './mobile-tasks-item-mapping'
 import { COMMENT_REACTION_EMOJI } from '../task-list/mobile-tasks-options'
 import type { DetailCommentGroup } from '../mobile-tasks-view-state-types'
 import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import type { DetailComment } from '../mobile-tasks-provider-detail-types'
-import { styles } from '../mobile-tasks-legacy-styles'
+import type { MobileTasksStyles } from '../mobile-tasks-legacy-styles'
 
 export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'github') {
@@ -142,18 +142,21 @@ export function isResolvedDetailCommentGroup(group: DetailCommentGroup): boolean
   return detailCommentGroupRoot(group).isResolved === true
 }
 
-export function discussionSummary(count: number): string {
+export function discussionSummary(t: Translate, count: number): string {
   if (count === 0) {
-    return translate('tasks.itemComments.noComments', 'No comments yet')
+    return t('tasks.itemComments.noComments', 'No comments yet')
   }
   return count === 1
-    ? translate('tasks.itemComments.oneComment', '1 comment')
-    : translate('tasks.itemComments.commentCount', '{{commentCount}} comments', {
+    ? t('tasks.itemComments.oneComment', '1 comment')
+    : t('tasks.itemComments.commentCount', '{{commentCount}} comments', {
         commentCount: count
       })
 }
 
-export function renderCommentReactions(comment: DetailComment): ReactNode {
+export function renderCommentReactions(
+  styles: MobileTasksStyles,
+  comment: DetailComment
+): ReactNode {
   const reactions = (comment.reactions ?? []).filter((reaction) => reaction.count > 0)
   if (reactions.length === 0) {
     return null

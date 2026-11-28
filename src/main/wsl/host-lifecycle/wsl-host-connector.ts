@@ -1,4 +1,5 @@
 import { WslOrcadBridgeActivity, wslHostBridgeEvents } from '../orcad/wsl-orcad-bridge-activity'
+import { waitForIdleStoppedOrcadExit } from './wsl-host-idle-stop'
 import { listenWslOrcadStdioBridge } from '../orcad/wsl-orcad-stdio-bridge'
 import { createWslOrcadPairingRecovery } from '../orcad/wsl-orcad-pairing-repair'
 import {
@@ -189,11 +190,14 @@ export function createWslHostConnector(options: {
           ? manager.ensure(distro, options)
           : Promise.resolve(manager.get(distro) ?? manager.ensure(distro, options))
       }
-      const connected = liveness.connect(distro, options).finally(() => {
-        if (livenessConnects.get(key)?.promise === connected) {
-          livenessConnects.delete(key)
-        }
-      })
+      // Start, a due automation and a wake all wait out an idle-stopped orcad's exit (#46567).
+      const connected = waitForIdleStoppedOrcadExit(defaultWslOrcadEnvironmentId(distro))
+        .then(() => liveness.connect(distro, options))
+        .finally(() => {
+          if (livenessConnects.get(key)?.promise === connected) {
+            livenessConnects.delete(key)
+          }
+        })
       livenessConnects.set(key, {
         promise: connected,
         noBoot: Boolean(noBoot),

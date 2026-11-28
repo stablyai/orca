@@ -9,11 +9,9 @@ export function useBotItemStatusName(): (status: BotItemStatus) => string {
   return (status) => botItemStatusName(status, t)
 }
 
-/** A status as a picker offers it: the ones that ask for a line first end in an ellipsis. */
+/** A status as a picker offers it: Waiting, which asks what it waits on first, ends in an ellipsis. */
 export function botItemPickName(status: BotItemStatus, t: Translate): string {
-  return status === 'canceled'
-    ? t('bots.items.menu.canceled', 'Canceled…')
-    : status === 'waiting'
-      ? t('bots.items.menu.waiting', 'Waiting…')
-      : botItemStatusName(status, t)
+  return status === 'waiting'
+    ? t('bots.items.menu.waiting', 'Waiting…')
+    : botItemStatusName(status, t)
 }

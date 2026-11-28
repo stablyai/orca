@@ -67,26 +67,35 @@ export async function moveItemsOnUsageLimits(
   cuts: ReadonlyMap<string, BotUsageLimitCut>,
   moved: (items: readonly BotItemRecord[]) => void
 ): Promise<void> {
-  const refs = await store.linkedDispatchRefs()
-  const workers = refs.length > 0 ? await join.readLinkedWorkers(refs) : new Map()
-  // Orca's own waits too, so one whose stopped worker was unlinked goes back.
-  const uids = [
-    ...new Set([
-      ...(await store.linksTo('dispatch', refs)).map((link) => link.itemUid),
-      ...(await store.usageLimitWaitUids())
-    ])
-  ]
-  if (uids.length === 0) {
+  const savedWaits = new Set(await store.usageLimitWaitUids())
+  const uids = new Set(savedWaits)
+  if (cuts.size > 0) {
+    const links = await store.linksTo('dispatch', await store.linkedDispatchRefs())
+    for (const link of links) {
+      uids.add(link.itemUid)
+    }
+  }
+  if (uids.size === 0) {
     return
   }
-  const rows = await store.viewRows(uids)
+  const rows = await store.viewRows([...uids])
+  const items = rows.items.filter(
+    (item) => item.status === 'working' || (item.status === 'waiting' && savedWaits.has(item.uid))
+  )
+  const links: typeof rows.links = cuts.size > 0 ? rows.links : {}
+  const refs = [
+    ...new Set(
+      items.flatMap((item) =>
+        (links[item.uid] ?? []).flatMap((link) => (link.kind === 'dispatch' ? [link.ref] : []))
+      )
+    )
+  ]
+  const workers =
+    refs.length > 0 ? await join.readLinkedWorkers(refs, { pullRequests: false }) : new Map()
   const done: BotItemRecord[] = []
   let failure: unknown = null
-  for (const item of rows.items) {
-    if (item.status !== 'working' && item.status !== 'waiting') {
-      continue
-    }
-    const live = (rows.links[item.uid] ?? []).flatMap((link) => {
+  for (const item of items) {
+    const live = (links[item.uid] ?? []).flatMap((link) => {
       const read = workers.get(link.ref)
       const view = link.kind === 'dispatch' ? join.linkView(link, read) : null
       return view?.kind === 'dispatch' && isLiveBotItemWorker(view.state)

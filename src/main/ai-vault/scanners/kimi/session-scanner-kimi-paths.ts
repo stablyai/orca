@@ -56,6 +56,21 @@ export function kimiPrimaryAgentWirePath(
   return join(dirname(statePath), 'agents', primaryId, 'wire.jsonl')
 }
 
+/** The session folder a wire transcript belongs to: `<session dir>/agents/<agent>/wire.jsonl`. */
+export function kimiSessionDirFromWirePath(wirePath: string): string {
+  return dirname(dirname(dirname(wirePath)))
+}
+
+/** The folder Kimi's session index records for the session a wire transcript belongs to: the
+ *  folder Session History lists it under. */
+export async function readKimiWireSessionWorkDir(wirePath: string): Promise<string | null> {
+  const sessionDir = kimiSessionDirFromWirePath(wirePath)
+  const workDirs = await readKimiWorkDirBySessionId(
+    kimiSessionIndexPathFromStatePath(join(sessionDir, 'state.json'))
+  )
+  return workDirs.get(basename(sessionDir)) ?? null
+}
+
 // Share parsed indexes by path and file identity; one home can hold many sessions.
 const workDirCacheByIndexPath = new KimiSessionIndexCache()
 

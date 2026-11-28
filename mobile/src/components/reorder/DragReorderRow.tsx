@@ -14,9 +14,9 @@ import Animated, {
   type DerivedValue,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { spacing } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { triggerMediumImpact } from '../../platform/haptics/haptics'
 import {
@@ -82,7 +82,8 @@ export function DragReorderRow({
   onAccessibilityMove: (key: string, delta: number) => void
   renderContent: (handle: ReactNode) => ReactNode
 }): React.JSX.Element {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const {
     layout,
@@ -266,7 +267,7 @@ export function DragReorderRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   row: {
     position: 'absolute',
     left: 0,

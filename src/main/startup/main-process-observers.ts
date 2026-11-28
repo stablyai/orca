@@ -1,4 +1,4 @@
-import { app, powerMonitor, powerSaveBlocker } from 'electron'
+import { app, powerMonitor } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
@@ -11,13 +11,13 @@ import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
-import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
 import { initObservability } from '../observability/index'
@@ -51,14 +51,7 @@ export function initializeMainProcessObservers(store: Store): void {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }
   // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
-  installBackgroundRunAwakeHold(() => {
-    const id = powerSaveBlocker.start('prevent-app-suspension')
-    return () => {
-      if (powerSaveBlocker.isStarted(id)) {
-        powerSaveBlocker.stop(id)
-      }
-    }
-  })
+  installBackgroundRunAwakeHold(() => holdPowerSaveBlocker('prevent-app-suspension'))
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -85,11 +78,27 @@ export function initializeMainProcessObservers(store: Store): void {
   // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
   const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
-  // WSL-host agents never reach the hook server; their host's own stream reports them.
-  const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
+  // WSL-host agents never reach the hook server; their host's own stream reports them on Windows.
+  let stopWslHostAgentAwake: (() => void) | null = null
+  let wslAwakeDisposed = false
+  if (process.platform === 'win32') {
+    const awakeService = state.agentAwakeService
+    void import('../ipc/wsl/wsl-host-agent-awake-wiring')
+      .then(({ startWslHostAgentAwake }) => {
+        if (wslAwakeDisposed) {
+          return
+        }
+        stopWslHostAgentAwake = startWslHostAgentAwake(awakeService)
+      })
+      .catch((error: unknown) =>
+        console.warn('[power] Could not load WSL host agent-awake wiring:', error)
+      )
+  }
   state.unsubscribeAgentAwakeStatusChanges = () => {
+    wslAwakeDisposed = true
     unsubscribeHookStatus()
-    stopWslHostAgentAwake()
+    stopWslHostAgentAwake?.()
+    stopWslHostAgentAwake = null
   }
   // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
   // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
@@ -123,13 +132,37 @@ export function initializeMainProcessObservers(store: Store): void {
     packaged: app.isPackaged,
     platform: process.platform
   })
-  state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
+  const previousHang = reportPreviousHangDetection(getCanonicalUserDataPath())
+  state.hangDetection = previousHang.marker
+  const { unrecoveredStall } = previousHang
+  if (unrecoveredStall && state.crashReports) {
+    const store = state.crashReports
+    void import('../hang-watchdog/previous-unrecovered-stall-import')
+      .then(({ trackUnrecoveredStallImport }) => {
+        trackUnrecoveredStallImport(
+          import('../hang-watchdog/unrecovered-stall-report')
+            .then(async ({ importUnrecoveredStallReport }) =>
+              (await importUnrecoveredStallReport(store, unrecoveredStall))
+                ? unrecoveredStall.detectedAt
+                : null
+            )
+            .catch((error) => {
+              console.warn('[hang-watchdog] Failed to record unrecovered stall:', error)
+              return null
+            })
+        )
+      })
+      .catch((error) => {
+        console.warn('[hang-watchdog] Failed to load unrecovered stall tracker:', error)
+      })
+  }
   if (state.hangDetection) {
     const marker = state.hangDetection
     const report = (details: NativeHangTelemetry): void => {
       track('main_thread_hang_detected', {
         unresponsive_ms: Math.round(marker.unresponsiveMs),
         self_recovered: marker.selfRecovered,
+        ...(marker.appVersion ? { detected_app_version: marker.appVersion } : {}),
         ...details
       })
     }

@@ -80,7 +80,7 @@ export function useMobileStructuredSessionOpening(
       }
       if (result.kind === 'opened') {
         if (result.target.worktreeId !== worktreeId) {
-          router.push(mobileStructuredSessionHref(hostId, result.target, result.tab))
+          router.push(mobileStructuredSessionHref(hostId, result.target))
         } else if (isStructuredAgentId(result.tab.agent)) {
           const existing = scope.sessionTabsRef.current.find((tab) => tab.id === result.tab.id)
           const tab: MobileSessionTab = existing ?? {
@@ -105,17 +105,6 @@ export function useMobileStructuredSessionOpening(
         )
       }
     },
-    [
-      owner,
-      client,
-      connState,
-      worktreeId,
-      hostId,
-      executionHost,
-      router,
-      scope,
-      showToast,
-      switchSessionTab
-    ]
+    [owner, client, connState, worktreeId, hostId, router, scope, showToast, switchSessionTab]
   )
 }

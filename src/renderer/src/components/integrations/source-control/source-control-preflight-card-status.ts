@@ -4,6 +4,7 @@ import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-prefli
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { useAppStore } from '@/store/index'
 import { getPreflightIntegrationStatuses } from './integrations-pane-status'
+import type { PreflightStatusHost } from '@/store/slices/preflight/preflight'
 import type {
   PreflightIntegrationStatuses,
   PreflightRefreshProvider
@@ -48,6 +49,8 @@ export function deriveCliProviderCardState(input: {
 export type PreflightCardStatuses = {
   statuses: PreflightIntegrationStatuses
   unavailable: boolean
+  /** The host the shown status came from; null until a current answer exists. */
+  host: PreflightStatusHost | null
   refresh: () => void
 }
 
@@ -60,6 +63,7 @@ export function usePreflightCardStatuses(
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+  const preflightStatusHost = useAppStore((s) => s.preflightStatusHost)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
@@ -91,6 +95,8 @@ export function usePreflightCardStatuses(
   return {
     statuses: getPreflightIntegrationStatuses(statusInput, refreshingProviders),
     unavailable,
+    // Why not cleared while loading: a same-host Re-check must not remount the card mid-edit.
+    host: preflightStatusChecked && preflightCurrent ? preflightStatusHost : null,
     refresh
   }
 }

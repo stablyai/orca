@@ -39,6 +39,7 @@ type PluginInstallConsentProps = {
   installed: PluginHostListEntry | null
   official: boolean
   publisher: string
+  managedByTeams?: string[] | undefined
   source?: PluginConsentSource
   /** The plugin changed since it was last approved, or since this page was opened. */
   changed: boolean
@@ -73,6 +74,7 @@ export function PluginInstallConsent({
   installed,
   official,
   publisher,
+  managedByTeams,
   source,
   changed,
   error
@@ -230,7 +232,12 @@ export function PluginInstallConsent({
             </span>
           )}
           <div className="ml-auto">
-            <PluginConsentProvenance official={official} publisher={publisher} source={source} />
+            <PluginConsentProvenance
+              official={official}
+              publisher={publisher}
+              managedByTeams={managedByTeams}
+              source={source}
+            />
           </div>
         </div>
       </section>

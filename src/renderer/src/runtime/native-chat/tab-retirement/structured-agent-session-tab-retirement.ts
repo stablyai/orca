@@ -4,6 +4,7 @@ import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agen
 import { markStructuredAgentSessionLaunchCancelled } from '@/lib/agent-session/launch/structured-agent-session-launch-cancel'
 import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
+import { cancelPendingBotThreadChatClose } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { stopStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   executionHostIdForStructuredTarget,
@@ -15,6 +16,7 @@ import {
 } from '../../web-session-tabs-sync/closing/web-session-close-intent'
 import type { WebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-session-intent-owner'
 import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { forgetDirectlyOpenedChat } from '../../web-session-tabs-sync/tracking/directly-opened-chat-tabs'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { retireStructuredAgentSessionTab } from './structured-agent-session-host-tab-retirement'
 
@@ -70,6 +72,14 @@ export function beginStructuredAgentSessionTabClose(args: {
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
 }): void {
+  cancelPendingBotThreadChatClose({
+    executionHostId: executionHostIdForStructuredTarget(args.target),
+    worktreeId: args.worktreeId,
+    sessionId: args.sessionId
+  })
+  if (args.target.kind === 'environment') {
+    forgetDirectlyOpenedChat(args.target.environmentId, args.worktreeId, args.sessionId)
+  }
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
     markStructuredAgentSessionLaunchCancelled(
@@ -109,21 +119,31 @@ export function beginStructuredAgentSessionTabClose(args: {
   })
 }
 
+export function collectCancelledStructuredSessionIds(
+  snapshot: RuntimeMobileSessionTabsResult,
+  visitChat?: (sessionId: string) => void
+): ReadonlySet<string> {
+  const cancelledSessionIds = new Set<string>()
+  const isCancelled = visitChat
+    ? (worktreeId: string, sessionId: string): boolean => {
+        visitChat(sessionId)
+        return hasStructuredAgentSessionLaunchCancellationTombstone(worktreeId, sessionId)
+      }
+    : hasStructuredAgentSessionLaunchCancellationTombstone
+  for (const tab of snapshot.tabs) {
+    if (tab.type === 'agent-session' && isCancelled(snapshot.worktree, tab.sessionId)) {
+      cancelledSessionIds.add(tab.sessionId)
+    }
+  }
+  return cancelledSessionIds
+}
+
 /** A host snapshot containing a cancelled session is suppressed and retired again idempotently. */
 export function suppressCancelledStructuredSessionTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   target: RuntimeClientTarget,
-  onError?: (error: unknown) => void
+  cancelledSessionIds = collectCancelledStructuredSessionIds(snapshot)
 ): RuntimeMobileSessionTabsResult {
-  const cancelledSessionIds = new Set<string>()
-  for (const tab of snapshot.tabs) {
-    if (
-      tab.type === 'agent-session' &&
-      hasStructuredAgentSessionLaunchCancellationTombstone(snapshot.worktree, tab.sessionId)
-    ) {
-      cancelledSessionIds.add(tab.sessionId)
-    }
-  }
   if (cancelledSessionIds.size === 0) {
     return snapshot
   }
@@ -131,8 +151,7 @@ export function suppressCancelledStructuredSessionTabs(
     void retireStructuredAgentSessionTab({
       target,
       worktreeId: snapshot.worktree,
-      sessionId,
-      onError
+      sessionId
     })
   }
   const tabs = snapshot.tabs.filter(

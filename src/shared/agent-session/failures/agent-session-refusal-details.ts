@@ -154,6 +154,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'journalCorrupt',
     /** Any other failed open, which can clear. */
     'journalUnavailable',
+    /** The disk refused the chat's write; it opens once space is freed. */
+    'journalStorageFull',
     /** A newer Orca wrote the journal, or this chat's rows; only an update writes past it. */
     'journalWrittenByNewerOrca'
   ],

@@ -10,6 +10,7 @@ import type { StructuredAgentSessionPendingSend } from './structured-agent-sessi
 import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
+import { rowsBesideStreamedText } from '../../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
@@ -26,7 +27,8 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
-    hasRejected && args.startFailures === undefined
+    hasRejected && args.startFailures === undefined,
+    submissions
   )
   const startFailures = args.startFailures ?? loadedFailures
   const commandItemIds = useCommandItemIds(args.journalItems, hasRejected)
@@ -57,18 +59,25 @@ function useCommandItemIds(
   items: readonly AgentJournalRenderItem[],
   enabled: boolean
 ): ReadonlySet<string> {
+  const rows = rowsBesideStreamedText(items)
   const ids = useMemo(
-    () => (enabled ? structuredAgentSessionCommandItemIds(items) : NO_COMMANDS),
-    [enabled, items]
+    () => (enabled ? structuredAgentSessionCommandItemIds(rows) : NO_COMMANDS),
+    [enabled, rows]
   )
   const previousRef = useRef(ids)
   const previous = previousRef.current
-  const stable =
-    previous.size === ids.size && [...ids].every((id) => previous.has(id)) ? previous : ids
+  const stable = sameIds(previous, ids) ? previous : ids
   useEffect(() => {
     previousRef.current = stable
   }, [stable])
   return stable
+}
+
+// The memo holds while only a reply streams, so the same set skips comparing its ids.
+function sameIds(previous: ReadonlySet<string>, ids: ReadonlySet<string>): boolean {
+  return (
+    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
+  )
 }
 
 /** Reuse equivalent prior notices and the whole prior map when every entry matches. */

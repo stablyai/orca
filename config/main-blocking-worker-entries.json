@@ -23,6 +23,7 @@
   "src/main/computer/computer-sidecar.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/ai-vault/scan-service/session-scanner-service-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
+  "src/main/codex/configuration/settings/codex-config-sync-wsl-entry.ts": "WSL guest program (build-wsl-guest.mjs) run on Orca's pinned Node inside the distro; never loaded by Electron main.",
   "src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/orcad/orcad-local-serve-selection-entry.ts": "Dedicated utility/child-process entry; blocking work stays off Electron main.",
   "src/main/bots/db-worker/bots-db-worker-entry.ts": "Dedicated worker-thread entry; bot store SQL stays off Electron main and orcad's loop.",
@@ -30,6 +31,8 @@
   "src/main/bots/bot-items-schema.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-items-tables.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/bots/bot-items-store.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
+  "src/main/bots/bot-item-waiting-ask-keep.ts": "Bots DB worker; bot store SQL runs only inside this worker thread.",
   "src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
-  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main."
+  "src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts": "Dedicated worker-thread entry; blocking work stays off Electron main.",
+  "src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-process-entry.ts": "WSL guest program (build-wsl-guest.mjs) run on Orca's pinned Node inside the distro; its SQLite reads run in a worker thread it spawns, never in Electron main."
 }

@@ -17,12 +17,10 @@ const commands = {
   ) => useAppStore.getState().allocatePullRequestGenerationRequestId(...args),
   beginGitBranchCompareRequest: (...args: Parameters<AppState['beginGitBranchCompareRequest']>) =>
     useAppStore.getState().beginGitBranchCompareRequest(...args),
-  clearDiffComments: (...args: Parameters<AppState['clearDiffComments']>) =>
-    useAppStore.getState().clearDiffComments(...args),
-  clearDiffCommentsForFile: (...args: Parameters<AppState['clearDiffCommentsForFile']>) =>
-    useAppStore.getState().clearDiffCommentsForFile(...args),
   deleteDiffComment: (...args: Parameters<AppState['deleteDiffComment']>) =>
     useAppStore.getState().deleteDiffComment(...args),
+  deleteDiffCommentsByIds: (...args: Parameters<AppState['deleteDiffCommentsByIds']>) =>
+    useAppStore.getState().deleteDiffCommentsByIds(...args),
   enqueueGitHubPRRefresh: (...args: Parameters<AppState['enqueueGitHubPRRefresh']>) =>
     useAppStore.getState().enqueueGitHubPRRefresh(...args),
   ensureHostedReviewPushTarget: (...args: Parameters<AppState['ensureHostedReviewPushTarget']>) =>
@@ -115,8 +113,10 @@ export function useSourceControlStoreActions() {
         ...args,
         ...(executionHostId ? { repoOwnerExecutionHostId: executionHostId } : {})
       })
-    const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries) =>
-      useAppStore.getState().openAllDiffs(id, path, alternate, filter, entries, options)
+    const openAllDiffs: AppState['openAllDiffs'] = (id, path, alternate, filter, entries, extra) =>
+      useAppStore
+        .getState()
+        .openAllDiffs(id, path, alternate, filter, entries, { ...options, ...extra })
     const openBranchAllDiffs: AppState['openBranchAllDiffs'] = (id, path, compare, alternate) =>
       useAppStore.getState().openBranchAllDiffs(id, path, compare, alternate, options)
     const openConflictReview: AppState['openConflictReview'] = (id, path, entries, source) =>
@@ -159,11 +159,10 @@ export function useSourceControlStoreActions() {
       allocateCommitMessageGenerationRequestId: commands.allocateCommitMessageGenerationRequestId,
       allocatePullRequestGenerationRequestId: commands.allocatePullRequestGenerationRequestId,
       beginGitBranchCompareRequest: commands.beginGitBranchCompareRequest,
-      clearDiffComments: commands.clearDiffComments,
-      clearDiffCommentsForFile: commands.clearDiffCommentsForFile,
       createHostedReview,
       createStackedHostedReview,
       deleteDiffComment: commands.deleteDiffComment,
+      deleteDiffCommentsByIds: commands.deleteDiffCommentsByIds,
       enqueueGitHubPRRefresh: commands.enqueueGitHubPRRefresh,
       ensureHostedReviewPushTarget: commands.ensureHostedReviewPushTarget,
       fastForwardBranch: commands.fastForwardBranch,

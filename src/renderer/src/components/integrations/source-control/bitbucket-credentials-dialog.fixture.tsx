@@ -11,6 +11,7 @@ function credentialsFixture(initialAuthMode: BitbucketAuthMode) {
           open
           onOpenChange={() => {}}
           initialAuthMode={initialAuthMode}
+          target={{ kind: 'local' }}
         />
       </div>
     )

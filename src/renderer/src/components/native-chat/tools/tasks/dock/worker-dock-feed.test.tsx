@@ -33,7 +33,69 @@ vi.mock('@/lib/window-activity/window-park-visibility', () => ({
   getWindowParkVisible: () => true,
   subscribeWindowParkVisibility: () => () => {}
 }))
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
+
+it('filters settled workers from the roster returned by an older host', async () => {
+  const presence = { revision: 'feed-legacy:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '33333333-3333-4333-8333-333333333333', true, presence)
+  )
+  const states = ['running', 'needs-you', 'failed', 'unexpected', 'saving'] as const
+  const identities = states.map((state) => ({
+    id: state,
+    dispatchId: state,
+    state,
+    changedAt: null,
+    ownerActionsAvailable: true,
+    settlement: null,
+    hasModel: false
+  }))
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities, rows: [], anchor: null })
+  })
+  expect(hook.result.current.snapshot?.identities.map((row) => row.state)).toEqual([
+    'running',
+    'needs-you'
+  ])
+})
+
+it("keeps an older host's recent failures, newest four, and drops the stale ones", async () => {
+  const presence = { revision: 'feed-legacy-failures:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '44444444-4444-4444-8444-444444444444', true, presence)
+  )
+  const now = Date.parse('2026-11-23T12:00:00Z')
+  vi.useFakeTimers({ now, toFake: ['Date'] })
+  const failure = (id: string, minutesAgo: number) => ({
+    id,
+    dispatchId: id,
+    state: 'failed' as const,
+    changedAt: now - minutesAgo * 60_000,
+    ownerActionsAvailable: true,
+    settlement: `settled:${id}`,
+    hasModel: false
+  })
+  const identities = [
+    failure('old', 5 * 60),
+    failure('f1', 1),
+    failure('f2', 2),
+    failure('f3', 3),
+    failure('f4', 4),
+    failure('f5', 5)
+  ]
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities, rows: [], anchor: null })
+  })
+  expect(hook.result.current.snapshot?.identities.map((row) => row.id)).toEqual([
+    'f1',
+    'f2',
+    'f3',
+    'f4'
+  ])
+})
 
 it('keeps a newer streamed settlement when an older detail window arrives later', async () => {
   const target = { kind: 'local' } as const
@@ -46,7 +108,6 @@ it('keeps a newer streamed settlement when an older detail window arrives later'
     expired: false,
     identities: [],
     rows: [],
-    results: [],
     anchor: null
   })
   await act(async () => {
@@ -65,6 +126,30 @@ it('keeps a newer streamed settlement when an older detail window arrives later'
   })
   expect(hook.result.current.snapshot?.revision).toBe(3)
   expect(hook.result.current.available).toBe(true)
+})
+
+it('asks the host once for a window already being read, and hands the second caller that read', async () => {
+  const target = { kind: 'local' } as const
+  const presence = { revision: 'feed-test:2', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed(target, '33333333-3333-4333-8333-333333333333', true, presence)
+  )
+  await act(async () => {
+    rpc.event({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+  })
+  const before = rpc.calls
+  let first: Promise<void> | undefined
+  let second: Promise<void> | undefined
+  act(() => {
+    first = hook.result.current.loadWindow?.('tail-worker')
+    second = hook.result.current.loadWindow?.('tail-worker')
+  })
+  expect(rpc.calls).toBe(before + 1)
+  expect(second).toBe(first)
+  await act(async () => {
+    rpc.resolve({ revision: 1, expired: false, identities: [], rows: [], anchor: null })
+    await first
+  })
 })
 
 it('seeds a source again after a failed cold read, and never after one that succeeded', async () => {
@@ -86,4 +171,24 @@ it('seeds a source again after a failed cold read, and never after one that succ
   hook.unmount()
   mount()
   expect(rpc.calls).toBe(2)
+})
+
+it('counts a feed loss that recovers before React renders, read live', async () => {
+  const presence = { revision: 'feed-losses:1', open: true }
+  const hook = renderHook(() =>
+    useWorkerDockFeed({ kind: 'local' }, '55555555-5555-4555-8555-555555555555', true, presence)
+  )
+  const snapshot = { revision: 1, expired: false, identities: [], rows: [], anchor: null }
+  await act(async () => {
+    rpc.event(snapshot)
+  })
+  const { readLosses } = hook.result.current
+  expect(readLosses()).toBe(0)
+  // A loss and its recovery published back to back, with no render between them.
+  rpc.event({ ...snapshot, revision: 2, unavailable: true })
+  rpc.event({ ...snapshot, revision: 3 })
+  expect(readLosses()).toBe(1)
+  await act(async () => {})
+  expect(hook.result.current.available).toBe(true)
+  expect(hook.result.current.readLosses()).toBe(1)
 })

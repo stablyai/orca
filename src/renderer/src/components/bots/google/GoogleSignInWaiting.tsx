@@ -5,16 +5,20 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { ConnectWaiting } from '../connector-connect-parts'
 import { SignInAddressPaste } from '../SignInAddressPaste'
+import { GoogleAccessBlockedLine } from './GoogleSignInTrouble'
 import type { GoogleSignInState } from './use-google-sign-in'
 
-/** Connect Google waits on Google's page: what to do there, Open again, the paste-back, and Cancel. */
+/** Connect Google waits on Google's page: what to do there, Open again, the paste-back, Cancel, and
+ *  (given `onNewApp`) the way out of Google's Access blocked page. */
 export function GoogleSignInWaiting({
   state,
   onCancel,
+  onNewApp,
   personal
 }: {
   state: Extract<GoogleSignInState, { kind: 'waiting' }>
   onCancel: () => void
+  onNewApp?: () => void
   personal?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -41,6 +45,7 @@ export function GoogleSignInWaiting({
       ) : null}
       {state.way === 'paste' ? (
         <SignInAddressPaste
+          memoryKey="google"
           hint={t(
             'bots.google.pasteHint',
             'After you click Allow, the page won’t load. Paste its address here.'
@@ -49,6 +54,7 @@ export function GoogleSignInWaiting({
           describeError={(error) => (error instanceof Error ? error.message : String(error))}
         />
       ) : null}
+      {onNewApp ? <GoogleAccessBlockedLine onNewApp={onNewApp} /> : null}
     </div>
   )
 }

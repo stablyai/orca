@@ -45,8 +45,25 @@ let onPersistedChange: ((atom: OrcaAtom<unknown>) => void) | null = null
 let onMemoryChange: ((atom: OrcaAtom<unknown>) => void) | null = null
 let onStorageAtom: ((key: string) => void) | null = null
 
-/** Plugin-written atoms, so a new runtime starts them from their initial values. */
-const writableAtoms = new Set<AtomState<unknown>>()
+/**
+ * Plugin-written atoms, held weakly so discarded anonymous atoms and their payloads can be
+ * collected while live atoms still reset and snapshot cleanly.
+ */
+const writableAtoms = new Set<WeakRef<OrcaAtom<unknown>>>()
+const writableAtomCleanup = new FinalizationRegistry<WeakRef<OrcaAtom<unknown>>>((ref) => {
+  writableAtoms.delete(ref)
+})
+
+function* liveWritableAtomStates(): Generator<AtomState<unknown>> {
+  for (const ref of writableAtoms) {
+    const target = ref.deref()
+    if (!target) {
+      writableAtoms.delete(ref)
+      continue
+    }
+    yield target[ATOM]
+  }
+}
 
 function create<T>(initial: T, fields: Partial<AtomState<T>> = {}): OrcaAtom<T> {
   const created = Object.freeze({
@@ -61,7 +78,9 @@ function create<T>(initial: T, fields: Partial<AtomState<T>> = {}): OrcaAtom<T> 
     }
   })
   if (!created[ATOM].readonly) {
-    writableAtoms.add(created[ATOM])
+    const ref = new WeakRef<OrcaAtom<unknown>>(created)
+    writableAtoms.add(ref)
+    writableAtomCleanup.register(created, ref)
   }
   return created
 }
@@ -74,7 +93,7 @@ function create<T>(initial: T, fields: Partial<AtomState<T>> = {}): OrcaAtom<T> 
 export function resetAtoms(): void {
   snapshot.plugin = new Map()
   snapshot.workspace = new Map()
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     inner.value = inner.initial
   }
 }
@@ -286,7 +305,7 @@ export function applyStorageValue(key: string, value: unknown): void {
  */
 export function captureAtomValues(): () => void {
   const values = new Map<AtomState<unknown>, unknown>()
-  for (const inner of writableAtoms) {
+  for (const inner of liveWritableAtomStates()) {
     values.set(inner, inner.value)
   }
   return () => {

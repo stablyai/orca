@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../../../shared/schema/lazy-zod-schema'
 import { isInBotHome } from '../../../../../../bots/bot-home-membership'
 import {
   sessionCallerOf,
@@ -17,11 +18,15 @@ import {
 export function startsInChatLineage(
   runtime: Pick<OrcaRuntimeService, 'bots'> & Parameters<typeof resolveDispatchCreator>[0],
   db: OrchestrationDb,
-  params: { from?: string; retryOf?: string },
+  params: { from?: string; retryOf?: string; chatLineage?: true },
   caller: OrchestrationEntryCaller | undefined,
   followUpOf?: string
 ): boolean {
   if (isInBotHome(runtime.bots, sessionCallerOf(caller))) {
+    return true
+  }
+  // A paired Orca's start continues its lineage here; nobody else can claim one.
+  if (params.chatLineage === true && caller?.kind === 'peer') {
     return true
   }
   // A retry or follow-up of a lineage worker stays in it, whoever sends it.
@@ -99,8 +104,10 @@ export async function noteTerminalFallbackOnItem(
 }
 
 // A failed start reports a terminal mode too, but started nothing to note.
-const TerminalFallbackReceipt = z.object({
-  dispatchId: z.string(),
-  state: z.enum(['ready', 'starting']),
-  mode: z.object({ mode: z.string(), detail: z.string() })
-})
+const TerminalFallbackReceipt = lazyZodSchema(() =>
+  z.object({
+    dispatchId: z.string(),
+    state: z.enum(['ready', 'starting']),
+    mode: z.object({ mode: z.string(), detail: z.string() })
+  })
+)

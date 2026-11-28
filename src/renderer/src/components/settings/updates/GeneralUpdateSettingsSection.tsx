@@ -1,7 +1,7 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Download, Loader2, RefreshCw } from 'lucide-react'
+import { Download, Loader2, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { Button } from '../../ui/button'
@@ -44,6 +44,15 @@ export function GeneralUpdateSettingsSection({
   }
 
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const installTarget = useAppStore((s) => s.retainedUpdateTarget)
+  const [failedRestartTarget, setFailedRestartTarget] = useState<typeof installTarget>(null)
+  const showManualRestart =
+    updateStatus.installOnQuit === true &&
+    (updateStatus.state === 'error' ||
+      (updateStatus.state === 'downloaded' &&
+        !updateStatus.installing &&
+        installTarget !== null &&
+        failedRestartTarget === installTarget))
   const now = useNow(
     60_000,
     updateStatus.state === 'not-available' && Boolean(updateStatus.delayedUpdate)
@@ -65,8 +74,18 @@ export function GeneralUpdateSettingsSection({
   }, [])
 
   const handleRestartToUpdate = (): void => {
-    // quitAndInstall schedules quitting and resolves early; only broken IPC can reject here.
-    void window.api.updater.quitAndInstall().catch(console.error)
+    void window.api.updater.quitAndInstall().catch((error: unknown) => {
+      setFailedRestartTarget(installTarget)
+      if (!updateStatus.installOnQuit) {
+        toast.error(
+          t(
+            'auto.components.UpdateCard.restartToInstallFailed',
+            'Could not restart to install the update.'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
+        )
+      }
+    })
   }
 
   return (
@@ -148,14 +167,16 @@ export function GeneralUpdateSettingsSection({
                 'Download update'
               )}
             </Button>
-          ) : updateStatus.state === 'error' &&
+          ) : !showManualRestart &&
+            updateStatus.state === 'error' &&
             updateStatus.retryAction === 'install' &&
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : updateStatus.state === 'downloaded' &&
+          ) : !showManualRestart &&
+            updateStatus.state === 'downloaded' &&
             !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
@@ -173,7 +194,27 @@ export function GeneralUpdateSettingsSection({
           ) : null}
         </div>
 
-        <p className="text-xs text-muted-foreground">
+        {showManualRestart && (
+          // The action follows its copy and wraps below it, end-aligned, when narrow.
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="block font-medium text-foreground">
+                {t('updates.installOnQuit.title', 'Update ready to install')}
+              </span>
+              {t('updates.installOnQuit.summary', 'Quit Orca. Reopen after installation.')}
+            </p>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void window.api.app.quit().catch(console.error)}
+              className="ms-auto"
+            >
+              <Power className="size-3.5" />
+              {t('updates.installOnQuit.quit', 'Quit Orca')}
+            </Button>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground empty:hidden">
           {updateStatus.state === 'idle' &&
             t(
               'auto.components.settings.GeneralUpdateSettingsSection.d69a09b672',
@@ -251,7 +292,7 @@ export function GeneralUpdateSettingsSection({
               'Downloading version {{version}} ({{percent}}%)…',
               { version: updateStatus.version, percent: updateStatus.percent }
             )}
-          {updateStatus.state === 'downloaded' && (
+          {updateStatus.state === 'downloaded' && !showManualRestart && (
             <>
               {updateStatus.installing
                 ? t(
@@ -283,6 +324,7 @@ export function GeneralUpdateSettingsSection({
             </>
           )}
           {updateStatus.state === 'error' &&
+            !showManualRestart &&
             (updateStatus.installBlock
               ? getUpdateInstallBlockGuidance(updateStatus.installBlock, t).explainer
               : updateStatus.recovery?.kind === 'linux-package-install'

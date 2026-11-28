@@ -1,5 +1,4 @@
 import { dirname, join } from 'node:path'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { applyCodexDaemonOverride } from '../shared-server/codex-daemon-socket-path-guard'
 import { normalizeDeprecatedCodexHookFeatureFlag } from '../toml/config-toml-deprecated-hook-flag'
 import { stripRuntimeOwnedTomlSections } from '../toml/config-toml-runtime-owned-sections'
@@ -10,15 +9,8 @@ import {
 
 // How ~/.codex/config.toml is prepared before the managed mirror merges it.
 
-export function resolveCodexConfigMirrorSourceDirectory(
-  systemHomePath: string,
-  systemConfigDir?: string
-): string {
-  return (
-    systemConfigDir ??
-    parseWslUncPath(systemHomePath)?.linuxPath ??
-    dirname(join(systemHomePath, 'config.toml'))
-  )
+export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {
+  return dirname(join(systemHomePath, 'config.toml'))
 }
 
 export function prepareSystemConfigForRuntimeMirror(
@@ -30,14 +22,13 @@ export function prepareSystemConfigForRuntimeMirror(
     normalizeDeprecatedCodexHookFeatureFlag(config),
     systemConfigDir
   )
-  // WSL guest homes do not receive host resource links.
-  return runtimeHomePath && !parseWslUncPath(runtimeHomePath)
+  // WSL guest homes (passed without a runtime home) do not receive host resource links.
+  return runtimeHomePath
     ? rebaseBundledMarketplaceSources(prepared, systemConfigDir, runtimeHomePath)
     : prepared
 }
 
 // Install re-keys user-hook trust; plugin/project trust carries unchanged.
-// WSL systemConfigDir must name the Linux-side config directory.
 export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
   systemConfigDir: string,

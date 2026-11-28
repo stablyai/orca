@@ -17,6 +17,10 @@ export function useMarkViewedAgentRead(
   const unread =
     (activeTab?.type === 'terminal' || activeTab?.type === 'agent-session') &&
     activeTab.unread === true
+  const unreadAt =
+    activeTab?.type === 'terminal' || activeTab?.type === 'agent-session'
+      ? activeTab.unreadAt
+      : undefined
   useFocusEffect(
     useCallback(() => {
       if (!unread || !client || !paneKey || connState !== 'connected') {
@@ -36,7 +40,7 @@ export function useMarkViewedAgentRead(
           client,
           [paneKey],
           { unread: false },
-          { signal: attempt.signal, failWhenDisconnected: true }
+          { signal: attempt.signal, failWhenDisconnected: true, upToTimestamp: unreadAt }
         )
           .then(
             () => {
@@ -62,6 +66,6 @@ export function useMarkViewedAgentRead(
         appStateSubscription.remove()
         stopViewing()
       }
-    }, [client, connState, paneKey, unread])
+    }, [client, connState, paneKey, unread, unreadAt])
   )
 }

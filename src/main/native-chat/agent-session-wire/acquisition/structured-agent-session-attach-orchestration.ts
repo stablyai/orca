@@ -1,4 +1,8 @@
 import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
+import {
+  keptProviderRelaySpawnToken,
+  providerRelayReattached
+} from '../../../provider-relay/app-provider-relays'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
@@ -195,7 +199,9 @@ async function runAttachUnderAbort(
       },
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),
-        spawnToken: () => context.deps.mintSpawnToken?.() ?? randomUUID(),
+        // A kept agent's reattach records the token its process already carries.
+        spawnToken: () =>
+          keptProviderRelaySpawnToken(sessionId) ?? context.deps.mintSpawnToken?.() ?? randomUUID(),
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
         probe,
@@ -241,7 +247,8 @@ async function runAttachUnderAbort(
           owner === 'acquired'
             ? attemptSink
             : (context.runtimeState.currentEventSink(sessionId) ?? attemptSink)
-        if (owner === 'acquired') {
+        // A reattached kept agent is the same writer: its running turn is not old work.
+        if (owner === 'acquired' && !providerRelayReattached(sessionId)) {
           // Sweep old work before draining the new child’s buffered events.
           await settleStaleStructuredAgentSessionState({
             journal: attached.journal,
@@ -259,9 +266,10 @@ async function runAttachUnderAbort(
           publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
           publishPromptSuggestion: (suggestion) =>
             context.subscribers.promptSuggestions.publish(sessionId, suggestion),
-          publishLiveText: (items) => {
+          liveTextReaders: () => context.subscribers.liveTextReaders(sessionId),
+          publishLiveText: (read) => {
             if (context.sessions.get(sessionId)?.journal === attached.journal) {
-              context.subscribers.publishLiveText(sessionId, attached.journal, fence, items)
+              context.subscribers.publishLiveText(sessionId, attached.journal, fence, read)
             }
           },
           observeSettledTurns: (listener) =>

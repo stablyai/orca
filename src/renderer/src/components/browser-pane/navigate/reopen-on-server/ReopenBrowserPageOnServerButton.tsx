@@ -5,33 +5,45 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { reopenBrowserPageOnServer } from './browser-reopen-on-server'
+import { moveBrowserPageAcrossDevices } from '../device-move/browser-page-device-move'
+import {
+  browserPageMoveFailureText,
+  browserPageMoveOutcomeText
+} from '../device-move/browser-page-device-move-copy'
 
 /** Deferred so a fast local round-trip never flashes a spinner. */
 const REOPEN_PENDING_FEEDBACK_DELAY_MS = 200
 
 export function reopenOnServerLabel(t: Translate = translate): string {
-  return t('browser.reopenOnServer.action', 'Reopen on server')
+  return t('browser.reopenOnServer.action', 'Open on server')
 }
 
 /** Honest about what a new page cannot carry over: it is not a migration. */
 export function reopenOnServerCaveat(t: Translate = translate): string {
   return t(
     'browser.reopenOnServer.caveat',
-    'This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.'
+    'Opens on the server at this page’s last address. Sign-in state may differ.'
   )
 }
 
+/** Moves the page that can't load here to the server, closing this tab (unless pinned) once the new one opens. */
 export function ReopenBrowserPageOnServerButton({
+  browserPageId,
   environmentId,
   worktreeId,
   reopenUrl,
-  className
+  className,
+  variant = 'secondary',
+  caveatTooltip = true
 }: {
+  browserPageId: string
   environmentId: string
   worktreeId: string
   reopenUrl: string | null | undefined
   className?: string
+  variant?: 'default' | 'secondary'
+  /** Off where the caveat already sits behind its own disclosure. */
+  caveatTooltip?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [pending, setPending] = useState(false)
@@ -54,35 +66,38 @@ export function ReopenBrowserPageOnServerButton({
       pendingTimerRef.current = null
       setShowPending(true)
     }, REOPEN_PENDING_FEEDBACK_DELAY_MS)
-    void reopenBrowserPageOnServer({ environmentId, worktreeId, reopenUrl })
-      .then((created) => {
-        if (!created) {
-          toast.error(
-            translate(
-              'browser.reopenOnServer.failed',
-              "Couldn't open this page on the remote host. Check the connection and try again."
-            )
-          )
+    void moveBrowserPageAcrossDevices({
+      browserPageId,
+      environmentId,
+      worktreeId,
+      destination: 'server',
+      url: reopenUrl
+    })
+      .then((outcome) => {
+        const text = browserPageMoveOutcomeText(outcome, 'server')
+        if (text) {
+          toast.error(text)
         }
       })
       .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : String(error))
+        console.warn('[browser-device-move] reopen on server failed:', error)
+        toast.error(browserPageMoveFailureText('server'))
       })
       .finally(() => {
         clearPendingTimer()
         setShowPending(false)
         setPending(false)
       })
-  }, [clearPendingTimer, environmentId, reopenUrl, worktreeId])
+  }, [browserPageId, clearPendingTimer, environmentId, reopenUrl, worktreeId])
 
   return (
     <Button
       size="sm"
-      variant="secondary"
+      variant={variant}
       className={className}
       disabled={pending}
       aria-busy={pending}
-      title={reopenOnServerCaveat(t)}
+      title={caveatTooltip ? reopenOnServerCaveat(t) : undefined}
       onClick={reopen}
     >
       {/* Both labels share one grid cell, so the swap cannot resize the button mid-action. */}
@@ -102,7 +117,7 @@ export function ReopenBrowserPageOnServerButton({
         >
           {/* Spin only while shown: the hidden copy just reserves width. */}
           <Loader2 className={cn('size-3.5', showPending && 'animate-spin')} />
-          {t('browser.reopenOnServer.pending', 'Reopening…')}
+          {t('browser.reopenOnServer.pending', 'Opening…')}
         </span>
       </span>
     </Button>

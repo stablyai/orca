@@ -5,7 +5,6 @@ import type { WorkspaceCleanupFacetRows } from './use-workspace-cleanup-facet-ro
 import { listActiveWorkspaceCleanupFacetGroups } from './workspace-cleanup-active-facets'
 import { WorkspaceCleanupEmptyState } from '../dialog/workspace-cleanup-dialog-notices'
 import { WorkspaceCleanupFilterBar } from './workspace-cleanup-filter-bar'
-import { WorkspaceCleanupSortHeader } from './workspace-cleanup-sort-header'
 import type { WorkspaceSpaceScanProgress } from '../../../../../shared/workspace-disk-space/workspace-space-types'
 
 export function WorkspaceCleanupBrowseToolbar({
@@ -13,33 +12,21 @@ export function WorkspaceCleanupBrowseToolbar({
   facetRows,
   facetPanelOpen,
   onFacetPanelOpenChange,
-  selectableCount,
-  selectedSelectableCount,
-  selectedCount,
-  deleteDisabled,
   spaceScanning,
   spaceProgress,
   gitPendingCount,
   gitCheckedTotal,
-  onRunSpaceScan,
-  onToggleSelectAll,
-  onDeleteSelected
+  onRunSpaceScan
 }: {
   browse: WorkspaceCleanupBrowseController
   facetRows: WorkspaceCleanupFacetRows
   facetPanelOpen: boolean
   onFacetPanelOpenChange: (open: boolean) => void
-  selectableCount: number
-  selectedSelectableCount: number
-  selectedCount: number
-  deleteDisabled: boolean
   spaceScanning: boolean
   spaceProgress: WorkspaceSpaceScanProgress | null
   gitPendingCount: number
   gitCheckedTotal: number
   onRunSpaceScan: () => void
-  onToggleSelectAll: (selectAll: boolean) => void
-  onDeleteSelected: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   // Filter-group comparisons must ignore keystroke/stream rerenders until filters themselves change.
@@ -73,19 +60,11 @@ export function WorkspaceCleanupBrowseToolbar({
               }
             : null
         }
+        sort={browse.sort}
+        onToggleSortField={browse.toggleSortField}
         onQueryChange={(query) => browse.patchFilters('query', query)}
         onClearFilters={browse.clearFilters}
         onClearAppliedFilter={(filter) => browse.replaceFilters(filter.clear)}
-      />
-      <WorkspaceCleanupSortHeader
-        sort={browse.sort}
-        selectableCount={selectableCount}
-        selectedSelectableCount={selectedSelectableCount}
-        selectedCount={selectedCount}
-        deleteDisabled={deleteDisabled}
-        onToggleSortField={browse.toggleSortField}
-        onToggleSelectAll={onToggleSelectAll}
-        onDeleteSelected={onDeleteSelected}
       />
       {browse.sort.field === 'size' && facetRows.measuredSizeCount === 0 && !spaceScanning ? (
         <WorkspaceCleanupEmptyState

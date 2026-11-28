@@ -33,11 +33,20 @@ import {
   titleStructuredConversationTabs
 } from '../../session-tabs/chat/structured-conversation-tab-title'
 import { structuredConversationTabNamer } from '../../session-tabs/chat/structured-conversation-tab-namer'
-import { hostMobileTerminalTheme } from './host-mobile-terminal-theme'
+import {
+  hostMobileTerminalTheme,
+  notifyHostMobileTerminalThemeSnapshots
+} from './host-mobile-terminal-theme'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithSavedConversationTitlePublication {
   private readonly hostMobileTerminalTheme = hostMobileTerminalTheme(this.store, () =>
-    this.notifyMobileSessionTabSnapshots()
+    notifyHostMobileTerminalThemeSnapshots(
+      this.mobileSessionTabListeners.size > 0,
+      this.mobileSessionTabsByWorktree.values(),
+      () => this.createMobileSessionTabsDelivery(),
+      (s) => this.toMobileSessionTabsResult(s),
+      () => ++this.mobileSessionTabsChangeSequence
+    )
   )
 
   protected pruneMobileSessionTabGroupLayout(
@@ -68,19 +77,9 @@ export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends Or
   }
 
   protected buildHeadlessMobileSessionTabGroups(
-    worktreeId: string,
-    tabs: readonly RuntimeMobileSessionSnapshotTab[],
-    activeTab: RuntimeMobileSessionSnapshotTab | null,
-    existingGroups?: readonly RuntimeMobileSessionTabGroup[],
-    newTabAssignment?: { tabId: string; groupId: string }
-  ): RuntimeMobileSessionTabGroup[] {
-    return buildHeadlessMobileSessionTabGroups(
-      worktreeId,
-      tabs,
-      activeTab,
-      existingGroups,
-      newTabAssignment
-    )
+    ...args: Parameters<typeof buildHeadlessMobileSessionTabGroups>
+  ): ReturnType<typeof buildHeadlessMobileSessionTabGroups> {
+    return buildHeadlessMobileSessionTabGroups(...args)
   }
 
   /** Transforms an internal mobile session tab snapshot into a sanitized client payload, resolving launch-agent ownership and normalizing titles. */

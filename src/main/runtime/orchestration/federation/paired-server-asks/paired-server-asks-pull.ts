@@ -3,6 +3,7 @@
 // loop names itself on every pull of a session.
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -18,10 +19,12 @@ import {
 
 const STATUS_TIMEOUT_MS = 15_000
 
-const ServerStatus = z.object({
-  capabilities: z.array(z.string()).optional(),
-  hostDescriptor: z.looseObject({ installationId: z.string() }).nullish()
-})
+const ServerStatus = lazyZodSchema(() =>
+  z.object({
+    capabilities: z.array(z.string()).optional(),
+    hostDescriptor: z.looseObject({ installationId: z.string() }).nullish()
+  })
+)
 
 export type PairedServerAsks = {
   environmentId: string

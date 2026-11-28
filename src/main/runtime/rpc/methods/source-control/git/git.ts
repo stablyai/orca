@@ -5,6 +5,7 @@ import { GIT_COMMIT_MESSAGE_GENERATION_METHODS } from './git-commit-message-gene
 import { GIT_BRANCH_METHODS } from './git-branch-methods'
 import { GIT_DIFF_METHODS } from './git-diff-methods'
 import {
+  GitAbortOperation,
   GitBranchCompare,
   GitBulkPaths,
   GitBulkStage,
@@ -12,6 +13,7 @@ import {
   GitCheckout,
   GitCommit,
   GitCommitCompare,
+  GitContinueRebase,
   GitFilePath,
   GitResolveConflict,
   GitForkSync,
@@ -49,6 +51,7 @@ export const GIT_METHODS = [
         limit: params.limit,
         baseRef: params.baseRef,
         branchOnly: params.branchOnly,
+        branchListOnly: params.branchListOnly,
         refs: params.refs,
         historyToken: params.historyToken,
         skip: params.skip
@@ -63,8 +66,11 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.abortMerge',
     permission: 'workspace',
-    params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
+    params: GitAbortOperation,
+    handler: async (params, { runtime }) =>
+      runtime.abortRuntimeGitMerge(params.worktree, {
+        expectedRunIdentity: params.expectedRunIdentity
+      })
   }),
   defineMethod({
     name: 'git.completeMerge',
@@ -75,8 +81,26 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.abortRebase',
     permission: 'workspace',
+    params: GitAbortOperation,
+    handler: async (params, { runtime }) =>
+      runtime.abortRuntimeGitRebase(params.worktree, {
+        expectedRunIdentity: params.expectedRunIdentity
+      })
+  }),
+  defineMethod({
+    name: 'git.continueRebase',
+    permission: 'workspace',
+    params: GitContinueRebase,
+    handler: async (params, { runtime }) =>
+      runtime.continueRuntimeGitRebase(params.worktree, params.action, {
+        expected: params.expected
+      })
+  }),
+  defineMethod({
+    name: 'git.rebaseAutoStash',
+    permission: 'workspace',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+    handler: async (params, { runtime }) => runtime.readRuntimeGitRebaseAutoStash(params.worktree)
   }),
   ...GIT_COMMIT_ACTION_METHODS,
   defineMethod({

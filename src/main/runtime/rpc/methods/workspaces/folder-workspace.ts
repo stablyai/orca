@@ -1,6 +1,7 @@
 import { defineMethod } from '../../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
+import { assertNotBotGroupHomeFolderWorkspace } from '../../../../bots/bot-group-runtime'
 import {
   FolderWorkspaceCreate,
   FolderWorkspaceDelete,
@@ -47,12 +48,14 @@ export const FOLDER_WORKSPACE_METHODS = [
     name: 'folderWorkspace.delete',
     permission: 'workspace',
     params: FolderWorkspaceDelete,
-    handler: async (params, { runtime }) =>
-      runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
+    handler: async (params, { runtime }) => {
+      assertNotBotGroupHomeFolderWorkspace(runtime, params.folderWorkspaceId)
+      return runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
         requireUniqueId: params.requireUniqueId,
         runHooks: params.runHooks,
         allowFailedArchiveHook: params.allowFailedArchiveHook
       })
+    }
   }),
   defineMethod({
     name: 'folderWorkspace.getPathStatus',

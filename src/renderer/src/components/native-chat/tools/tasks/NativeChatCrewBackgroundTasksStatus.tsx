@@ -237,11 +237,10 @@ export function NativeChatCrewBackgroundTasksStatus(props: {
       data-native-chat-background-tasks="true"
       className="group/tasks shrink-0 bg-chat-pane px-3 pt-2 sm:px-4"
     >
-      {/* When the goal tab is the next sibling, take its width and share its top edge. */}
-      <div className="mx-auto w-full max-w-(--chat-content-max-width) [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:px-2">
+      <div className="mx-auto w-full max-w-(--chat-content-max-width)">
         <div
           ref={stripRef}
-          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:rounded-b-none [[data-native-chat-background-tasks]:has(+[data-native-chat-composer-tab-strip])_&]:shadow-none"
+          className="overflow-hidden rounded-lg border border-border bg-muted/50 text-xs text-muted-foreground shadow-xs"
         >
           <div className="flex h-8 items-center px-1.5">
             <NarrowHeaderTip text={crewHeader && narrow ? headerText : null}>

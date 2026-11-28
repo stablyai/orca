@@ -2,19 +2,22 @@
 // linking, and checking who may write.
 import type SyncDatabase from '../sqlite/sync-database'
 import {
-  BOT_ITEM_LIMITS,
   isOpenBotItemStatus,
   type BotItemActor,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemError } from './bot-item-error'
-import { linkWords, type BotItemLinkInput } from './bot-items-input'
+import { assertBotItemLinkRoom, linkWords, type BotItemLinkInput } from './bot-items-input'
+import { hasKeptWaitingAsks, waitingAskOf } from './bot-item-waiting-ask-keep'
 import { eventRecordOf, itemRecordOf, linkRecordOf } from './bot-items-rows'
 import type { BotItemEventRecord, BotItemLinkRecord, BotItemRecord } from './bot-items-schema'
 
 export class BotItemsTables {
   /** The current write's first event, while one runs. */
   private action: number | null = null
+  /** A write is running: reads in it don't keep waiting asks, so a keep can never fail or slow it. */
+  private writing = false
+  private keeps: boolean | null = null
 
   constructor(
     protected readonly db: SyncDatabase,
@@ -35,6 +38,7 @@ export class BotItemsTables {
     }
     this.db.exec('BEGIN IMMEDIATE')
     this.action = null
+    this.writing = true
     try {
       const result = write()
       this.db.exec('COMMIT')
@@ -44,6 +48,7 @@ export class BotItemsTables {
       throw error
     } finally {
       this.action = null
+      this.writing = false
     }
   }
 
@@ -118,6 +123,19 @@ export class BotItemsTables {
       )
       .run(id, now, now, Number(actor.kind !== 'owner'), id, uid)
     return id
+  }
+
+  /** The item's ask waiting on the owner, which can differ from its question (a later Needs you comment
+   *  that asks nothing, or a move an answer made): the kept one while the events since it can't have
+   *  changed it, else worked out from all its events. */
+  protected waitingAsk(item: Pick<BotItemRecord, 'uid'>): number | null {
+    return waitingAskOf(this.db, item.uid, this.keepsWaitingAsks(), !this.writing)
+  }
+
+  /** This file keeps each item's waiting ask, and this build may write it. */
+  protected keepsWaitingAsks(): boolean {
+    this.keeps ??= !this.readOnly && hasKeptWaitingAsks(this.db)
+    return this.keeps
   }
 
   protected requireItem(uid: string): BotItemRecord {
@@ -228,26 +246,22 @@ export class BotItemsTables {
     }
   }
 
-  /** Adds the links not there yet, each once; up to 50 per item. */
+  /** Adds the links not there yet, each once, within the item's link bound. */
   protected insertLinks(uid: string, links: readonly BotItemLinkInput[], eventId: number): void {
     const held = new Set(this.links(uid).map(linkWords))
+    const fresh = new Map<string, BotItemLinkInput>()
     for (const link of links) {
-      if (held.has(linkWords(link))) {
-        continue
+      if (!held.has(linkWords(link))) {
+        fresh.set(linkWords(link), link)
       }
-      if (held.size >= BOT_ITEM_LIMITS.links) {
-        throw new BotItemError(
-          'invalid_argument',
-          `An item takes up to ${BOT_ITEM_LIMITS.links} links.`
-        )
-      }
-      held.add(linkWords(link))
-      this.db
-        .prepare(
-          `INSERT INTO item_links (item_uid, kind, ref, added_event) VALUES (?, ?, ?, ?)
-           ON CONFLICT (item_uid, kind, ref) DO NOTHING`
-        )
-        .run(uid, link.kind, link.ref, eventId)
+    }
+    assertBotItemLinkRoom(held.size, fresh.size)
+    const insert = this.db.prepare(
+      `INSERT INTO item_links (item_uid, kind, ref, added_event) VALUES (?, ?, ?, ?)
+       ON CONFLICT (item_uid, kind, ref) DO NOTHING`
+    )
+    for (const link of fresh.values()) {
+      insert.run(uid, link.kind, link.ref, eventId)
     }
   }
 }

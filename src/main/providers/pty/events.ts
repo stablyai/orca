@@ -17,6 +17,7 @@ export type PtyTransientFact =
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }
   | { kind: '2031-unsubscribe' }
+  | { kind: 'foreground-changed' }
 
 export type PtyBackgroundStreamEvent =
   | {

@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
+import { Suspense, useCallback, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import type { PtyTransport } from '../../pty-transport-types'
 import { useWslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import {
@@ -13,8 +14,6 @@ import {
   usePublishRemoteServerNoticeShowing,
   useRemoteServerNoticeClaim
 } from '../../recovery/server-outage/remote-server-notice-claims'
-import { RemoteServerOutageNotice } from '../../recovery/server-outage/RemoteServerOutageNotice'
-import { WslHostStoppedCard } from '../../recovery/wsl/WslHostStoppedCard'
 import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/runtime/hosts/connections/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
@@ -22,6 +21,17 @@ import { paneShowsWslHostStoppedCard } from '@/runtime/hosts/wsl/wsl-host-stoppe
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
 import type { TerminalPaneController } from '../../../controller/use-terminal-pane-controller'
+
+const RemoteServerOutageNotice = lazy(() =>
+  import('../../recovery/server-outage/RemoteServerOutageNotice').then((module) => ({
+    default: module.RemoteServerOutageNotice
+  }))
+)
+const WslHostStoppedCard = lazy(() =>
+  import('../../recovery/wsl/WslHostStoppedCard').then((module) => ({
+    default: module.WslHostStoppedCard
+  }))
+)
 
 /** Reconnect pairs refused servers, signs in SSH hosts awaiting credentials, or otherwise retries the pane. */
 export function createPaneRecoveryReconnect(
@@ -146,11 +156,13 @@ export function TerminalPaneRecoveryPortals({
   return (
     <>
       {noticeEnvironmentId ? (
-        <RemoteServerOutageNotice
-          key={noticeEnvironmentId}
-          environmentId={noticeEnvironmentId}
-          reveal={noticeReveal}
-        />
+        <Suspense fallback={null}>
+          <RemoteServerOutageNotice
+            key={noticeEnvironmentId}
+            environmentId={noticeEnvironmentId}
+            reveal={noticeReveal}
+          />
+        </Suspense>
       ) : null}
       {managedPanes.map((pane) => {
         const recoveryState = ptyRecoveryStatesByPaneId[pane.id]
@@ -177,11 +189,13 @@ export function TerminalPaneRecoveryPortals({
           })
         ) {
           return createPortal(
-            <WslHostStoppedCard
-              environmentId={ownerEnvironmentId}
-              distro={stoppedWslDistro}
-              onStarted={onReconnect}
-            />,
+            <Suspense fallback={null}>
+              <WslHostStoppedCard
+                environmentId={ownerEnvironmentId}
+                distro={stoppedWslDistro}
+                onStarted={onReconnect}
+              />
+            </Suspense>,
             pane.container,
             `wsl-host-stopped-${pane.id}`
           )

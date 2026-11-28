@@ -1,19 +1,24 @@
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../../shared/schema/lazy-zod-schema'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { AGENT_TYPE_MAX_LENGTH } from '../../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { salvagedOptional } from '../../../../../shared/validation/zod-salvage'
 
-const object = z.record(z.string(), z.unknown())
-const selection = z.object({
-  agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH).nullable()),
-  model: salvagedOptional('model', z.string().nullable()),
-  effort: salvagedOptional('effort', z.string().nullable())
-})
-const launch = z.object({
-  requested: salvagedOptional('requested', selection),
-  effective: salvagedOptional('effective', selection)
-})
+const object = lazyZodSchema(() => z.record(z.string(), z.unknown()))
+const selection = lazyZodSchema(() =>
+  z.object({
+    agent: salvagedOptional('agent', z.string().min(1).max(AGENT_TYPE_MAX_LENGTH).nullable()),
+    model: salvagedOptional('model', z.string().nullable()),
+    effort: salvagedOptional('effort', z.string().nullable())
+  })
+)
+const launch = lazyZodSchema(() =>
+  z.object({
+    requested: salvagedOptional('requested', selection),
+    effective: salvagedOptional('effective', selection)
+  })
+)
 
 /** Display knowledge is independent of executable launch choices and independently salvageable. */
 export function workerLaunchAgent(value: unknown): string | null {
@@ -36,9 +41,17 @@ function startOptions(json: string): Record<string, unknown> {
   }
 }
 
-export function workerStartOptionsAgent(json: string): string | null {
-  const options = startOptions(json)
+export function workerStartOptionsAgentValue(value: unknown): string | null {
+  const parsed = object.safeParse(value)
+  if (!parsed.success) {
+    return null
+  }
+  const options = parsed.data
   return workerLaunchAgent(options.launch) || (isTuiAgent(options.agent) ? options.agent : null)
+}
+
+export function workerStartOptionsAgent(json: string): string | null {
+  return workerStartOptionsAgentValue(startOptions(json))
 }
 
 /** Enrich the existing launch concept without rewriting the person's selector or preferences. */

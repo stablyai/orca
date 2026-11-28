@@ -4,7 +4,7 @@ import type {
 } from '../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 import type { OnDeviceSpeech } from '../platform/speech/on-device-speech-contract'
 import { DICTATION_CAPTURE_DRAIN_INTERVAL_MS } from '../platform/audio-capture/dictation-capture-contract'
-import { translate } from '../i18n/mobile-i18n'
+import { translate, type Translate } from '../i18n/mobile-i18n'
 
 // Which engine hears this dictation. fallback: a failed phone session may replay its audio to the computer (Automatic only).
 export type MobileDictationEngine =
@@ -117,8 +117,8 @@ export function phoneDictationBusyMessage(): string {
   )
 }
 
-export function phoneDictationFailedMessage(): string {
-  return translate(
+export function phoneDictationFailedMessage(t: Translate): string {
+  return t(
     'hooks.useMobileDictation.phoneFailed',
     'Dictation on this phone stopped working. Try again.'
   )

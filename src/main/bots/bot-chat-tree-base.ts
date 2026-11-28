@@ -4,7 +4,6 @@
 import { botChatPreviewText } from '../../shared/bots/bot-chat-preview-text'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { defaultAgentChatLabel } from '../../shared/agent-session/conversation-naming/agent-session-chat-label'
-import { structuredAgentSessionStatusPaneKey } from '../../shared/agent-session/view/structured-agent-session-tab'
 import type { Automation } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { Bot } from '../../shared/bot-types'
@@ -36,6 +35,7 @@ import { botChatRecordEmpty, botChatRecordRow } from '../runtime/rpc/methods/bot
 import { automationRuns, type BotActivityHost } from './bot-activity-host'
 import { isBotBackgroundRun, type BotBackgroundRuns } from './bot-background-run-records'
 import { BotDispatchPlacement } from './bot-chat-dispatches'
+import { chatPaneKey } from '../../shared/agent-session/view/structured-agent-session-projection'
 import { terminalRunChatId } from './bot-chat-tree-rows'
 
 // As the chat tabs name an unnamed chat; a host string, like the tab titles it stands beside.
@@ -189,7 +189,7 @@ function botChatBaseChatOfRow(
     ...(origin && 'label' in origin && origin.label ? { originLabel: origin.label } : {}),
     lastActiveAt: row.lastActivityAt,
     ...(preview ? { preview } : {}),
-    paneKey: structuredAgentSessionStatusPaneKey(live?.sessionId ?? row.id),
+    paneKey: chatPaneKey(live?.sessionId ?? row.id),
     ...(live && live.sessionId !== row.id ? { liveSessionId: live.sessionId } : {}),
     closed,
     empty: !origin && record.sessionId === row.id && botChatRecordEmpty(record)
@@ -276,7 +276,7 @@ export function buildBotChatBase(
     ])
   ]
   const sessionByPaneKey = new Map(
-    sessionIds.map((sessionId) => [structuredAgentSessionStatusPaneKey(sessionId), sessionId])
+    sessionIds.map((sessionId) => [chatPaneKey(sessionId), sessionId])
   )
   // A terminal run's workers go under its own row.
   const runByPaneKey = new Map(

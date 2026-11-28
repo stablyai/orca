@@ -14,11 +14,13 @@ import {
   BotGroupDelete,
   BotGroupNewThread,
   BotGroupRead,
+  BotGroupRenameThread,
   BotGroupReorder,
   BotGroupSend,
   BotGroupStop,
   BotGroupUpdate
 } from '../bots/bot-group'
+import { BotOfferAnswerParams } from '../bots/bot-offer-answers'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelBeginParams,
@@ -35,6 +37,11 @@ import { BrowserClientHostRequestResultParams } from '../browser/client-hosting/
 import { BrowserClientPageMetadataParams } from '../browser/client-hosting/browser-client-page-metadata-protocol'
 import { BrowserPageInitializationActionParams } from '../browser/client-hosting/browser-page-initialization-action'
 import {
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import {
   DesktopBrowserBridgeAttachParams,
   DesktopBrowserBridgeResultChunkParams,
   DesktopBrowserBridgeResultParams
@@ -47,7 +54,6 @@ import {
   WorkerDockAcknowledge,
   WorkerDockRead,
   WorkerDockResultRead,
-  WorkerDockResultsRead,
   WorkerDockStop,
   WorkerDockSubscribe
 } from '../orchestration/dock/worker-dock'
@@ -63,9 +69,11 @@ import {
 } from '../remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { OrcadTerminalCensusParamsSchema } from '../remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { DelegatedMobileDeviceSyncParamsSchema } from '../remote-runtime/pairing/delegated-mobile-device-contract'
+import { DelegatedPhoneServerOfferParamsSchema } from '../remote-runtime/pairing/delegated-phone-server-offer-contract'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
 import { DeclareOrcaAccountParamsSchema } from '../remote-runtime/pairing/paired-desktop-account-contract'
 import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { PairingGetDirectEndpointsParamsSchema } from '../remote-runtime/pairing/pairing-direct-endpoints-contract'
 import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
@@ -108,6 +116,7 @@ import {
 } from './accounts/usage-credentials-params'
 import {
   AgentActivityClearParams,
+  AgentActivityOrchestrationParams,
   AgentActivitySetReadParams
 } from './agent-activity/agent-activity-params'
 import { AgentListParams, AgentReadParams, AgentShowParams } from './agent-conversation-params'
@@ -134,6 +143,12 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
+import {
+  BotAvatarRead,
+  BotAvatarUpload,
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -187,6 +202,16 @@ import {
   BotItemsShow
 } from './bots-items-params'
 import {
+  BotAccessDecide,
+  BotAccessRedeem,
+  BotCreate,
+  BotCreateOfferRequest,
+  BotDelete,
+  BotSkillProjectsScan,
+  BotUpdate,
+  WorktreeReleaseBotHome
+} from './bots-lifecycle-params'
+import {
   BotConnectorOffer,
   BotConnectors,
   BotLookAroundSet,
@@ -199,11 +224,7 @@ import {
   BotUpNextSeen
 } from './bots-look-around-params'
 import {
-  BotAccessDecide,
-  BotAccessRedeem,
   BotActivityRead,
-  BotAvatarRead,
-  BotAvatarUpload,
   BotChat,
   BotChatReset,
   BotChatSearch,
@@ -211,19 +232,13 @@ import {
   BotChats,
   BotChatsOwn,
   BotChatsSeen,
-  BotCreate,
-  BotCreateOfferRequest,
-  BotDelete,
   BotMemoryEdit,
   BotMemoryForget,
   BotMemoryUndo,
   BotRoster,
   BotRunSendAgainParams,
   BotSessionStart,
-  BotSkillProjectsScan,
-  BotTakeOverParams,
-  BotUpdate,
-  WorktreeReleaseBotHome
+  BotTakeOverParams
 } from './bots-params'
 import {
   BotSharePartView,
@@ -243,7 +258,8 @@ import {
   BotToolSignInWait,
   BotToolTarget,
   BotToolUpdate,
-  BotToolsList
+  BotToolsList,
+  BotToolsSetHostMcpServers
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
@@ -261,19 +277,15 @@ import { ExtensionList, ExtensionReload } from './browser/browser-extension-para
 import { DropFiles, MouseClick } from './browser/browser-extras-params'
 import {
   GrabAwait,
+  GrabCancel,
   GrabCaptureSelection,
+  GrabPickedPresent,
   GrabSetMode,
   GrabViewportBridge
 } from './browser/browser-grab-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
-import { Screenshot, Snapshot } from './browser/browser-observation-params'
 import {
   Check,
-  ClipboardWrite,
-  CookieDelete,
-  CookieGet,
-  CookieSet,
-  DialogAccept,
   Drag,
   Element,
   Eval,
@@ -281,32 +293,19 @@ import {
   Fill,
   Find,
   FullScreenshot,
-  Geolocation,
   Get,
   Goto,
   Highlight,
-  InterceptEnable,
   Is,
   KeyboardInsert,
   Keypress,
   LimitParam,
-  MouseButton,
-  MouseWheel,
-  MouseXY,
-  ProfileClearGoogleCookies,
+  ProfileClearCookies,
   ProfileDelete,
   ProfileImportFromBrowser,
-  Screencast,
   Scroll,
   Select,
   SelectorPath,
-  SetCredentials,
-  SetDevice,
-  SetHeaders,
-  SetMedia,
-  SetOffline,
-  StorageKey,
-  StorageKeyValue,
   TabClose,
   TabCurrent,
   TabList,
@@ -316,12 +315,37 @@ import {
   TabSwitch,
   Type,
   Upload,
-  Viewport,
   Wait
+} from './browser/browser-interaction-params'
+import { Screenshot, Snapshot } from './browser/browser-observation-params'
+import {
+  ClipboardWrite,
+  CookieDelete,
+  CookieGet,
+  CookieSet,
+  DialogAccept,
+  Geolocation,
+  InterceptEnable,
+  MouseButton,
+  MouseWheel,
+  MouseXY,
+  SetCredentials,
+  SetDevice,
+  SetHeaders,
+  SetMedia,
+  SetOffline,
+  StorageKey,
+  StorageKeyValue,
+  Viewport
 } from './browser/browser-params'
 import {
+  DownloadCopyStream,
   FileChooserAnswer,
   PagePromptAnswer,
+  ReadPrintPdf,
+  ReleaseDownloadCopy,
+  ReleasePrintPdf,
+  Screencast,
   ScreencastAck,
   ScreencastReclaimForDesktop,
   ScreencastUnsubscribe
@@ -368,11 +392,13 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
   ConnectorSlackMirrorSet,
-  ConnectorSlackMirrorStatus
+  ConnectorSlackMirrorStatus,
+  ConnectorWakeReplyPlace
 } from './connectors/connector-params'
 import {
   AttachParams as AttachParamsOfEmulatorParams,
@@ -428,7 +454,8 @@ import {
   FileSaveAbort,
   FileSaveBegin,
   FileSaveChunk,
-  FileSaveCommit
+  FileSaveCommit,
+  FileUploadCommit
 } from './filesystem/files-staged-save-params'
 import { FileOpen, FileWatch, WorktreeSelector } from './filesystem/files-target-params'
 import {
@@ -517,6 +544,7 @@ import {
 } from './google-files-params'
 import {
   GoogleBotAccessSetParams,
+  GoogleBotConnectedParams,
   GoogleClientExportParams,
   GoogleClientImportParams,
   GoogleDefaultSetParams,
@@ -639,6 +667,28 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import {
+  McpServerAdd,
+  McpServerAgentFilesAllow,
+  McpServerConnect,
+  McpServerDiscover,
+  McpServerImport,
+  McpServerMove,
+  McpServerPreviewPaste,
+  McpServerProblems,
+  McpServerProblemsCancel,
+  McpServerSessions,
+  McpServerSetAgentEnabled,
+  McpServerSetSharedProcess,
+  McpServerSetWorkspaces,
+  McpServerSignInFinish,
+  McpServerSignInFlow,
+  McpServerSignInStart,
+  McpServerSignInWait,
+  McpServerTarget,
+  McpServerUpdate,
+  McpServersList
+} from './mcp-servers-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -795,7 +845,10 @@ import {
 } from './projects/repo-params'
 import { ReferenceFind, ReferenceList } from './references/reference-params'
 import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
-import { SessionTabsUnsubscribeAllParams } from './session-tabs/session-tabs-params'
+import {
+  SessionTabsSubscribeAllParams,
+  SessionTabsUnsubscribeAllParams
+} from './session-tabs/session-tabs-params'
 import {
   ActivateTab,
   BotLinkActivateTab,
@@ -816,38 +869,43 @@ import {
   SkillsDiscoverParams,
   SkillsGetInstallProgressParams
 } from './skills/skills-params'
+import { BitbucketConnectParams } from './source-control/bitbucket-params'
 import {
+  GitAbortOperation,
   GitBlame,
   GitBranchCompare,
   GitBranchDiff,
-  GitBulkPaths,
-  GitBulkStage,
   GitCheckIgnored,
-  GitCheckout,
   GitCommit,
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
   GitCreateBranch,
   GitDiff,
-  GitDiscoverCommitMessageModels,
   GitFilePath,
-  GitForkSync,
-  GitGenerateCommitMessage,
-  GitGeneratePullRequestFields,
   GitHistory,
-  GitPush,
-  GitRebaseFromBase,
   GitRefs,
-  GitRemoteCommitUrl,
-  GitRemoteFileUrl,
   GitResolveConflict,
   GitSequencer,
   GitStatusParams,
   GitSubmoduleStatus,
+  WorktreeSelector as WorktreeSelectorOfGitCoreParams
+} from './source-control/git-core-params'
+import {
+  GitBulkPaths,
+  GitBulkStage,
+  GitCheckout,
+  GitContinueRebase,
+  GitDiscoverCommitMessageModels,
+  GitForkSync,
+  GitGenerateCommitMessage,
+  GitGeneratePullRequestFields,
+  GitPush,
+  GitRebaseFromBase,
+  GitRemoteCommitUrl,
+  GitRemoteFileUrl,
   GitSwitchBranch,
-  GitTargetedRemote,
-  WorktreeSelector as WorktreeSelectorOfGitParams
+  GitTargetedRemote
 } from './source-control/git-params'
 import {
   AddIssueComment,
@@ -905,33 +963,35 @@ import { ReadVisualParams } from './structured-agent-session/agent-session-visua
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import {
+  AttachParams,
+  CancelParams,
+  CreateParams,
+  CreateSupportParams,
+  OptionsParams,
+  QueuedMessageActionParams,
+  QueuedMessagesResumeParams,
+  RespondParams,
+  SendParams,
+  SetOptionParams
+} from './structured-agent-session/structured-agent-session-core-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
   AcknowledgeAttentionParams,
   AgentsParams,
-  AttachParams,
   AvailabilityParams,
-  CancelParams,
   ConversationCommandParams,
-  CreateParams,
-  CreateSupportParams,
   HandoffStatusParams,
   HistoryParams,
   HoldParams,
   ItemParams,
   ModelCatalogParams,
-  OptionsParams,
-  QueuedMessageActionParams,
-  QueuedMessagesResumeParams,
-  RespondParams,
   RestartLaunchSettledParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
   RewindParams,
-  SendParams,
-  SetOptionParams,
   SleepWorkspaceParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
@@ -946,26 +1006,16 @@ import {
 } from './structured-agent-session/structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session/structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
-import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
+import {
+  LiveTextShownParams,
+  SubscribeParams
+} from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
-import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
-import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
-import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
 import {
-  TerminalAckOutput,
-  TerminalMultiplex,
-  TerminalResizeForClient,
-  TerminalSubscribe
-} from './terminal/terminal-stream-params'
-import {
-  AgentTeamsPrepareLaunch,
-  AgentTeamsTmuxCompat,
   TerminalAgentId,
-  TerminalCloseAll,
-  TerminalCreateParams,
   TerminalFocus,
   TerminalHandle,
   TerminalInspectProcess,
@@ -980,11 +1030,26 @@ import {
   TerminalReveal,
   TerminalSend,
   TerminalSetPaneTitle,
-  TerminalSetViewerColors,
-  TerminalSplit,
-  TerminalStopExact,
   TerminalViewClaudeAgent,
   TerminalWait
+} from './terminal/terminal-handle-params'
+import { TerminalLimitUpdateParams } from './terminal/terminal-limit-params'
+import { TerminalAdoptOrphans } from './terminal/terminal-orphan-params'
+import { TerminalQuickCommandsUpdate } from './terminal/terminal-quick-command-params'
+import { TerminalSplit } from './terminal/terminal-split-params'
+import {
+  TerminalAckOutput,
+  TerminalMultiplex,
+  TerminalResizeForClient,
+  TerminalSubscribe
+} from './terminal/terminal-stream-params'
+import {
+  AgentTeamsPrepareLaunch,
+  AgentTeamsTmuxCompat,
+  TerminalCloseAll,
+  TerminalCreateParams,
+  TerminalSetViewerColors,
+  TerminalStopExact
 } from './terminal/terminal-unary-params'
 import { TerminalGetAutoRestoreFitParams } from './terminal/terminal-viewport-methods-params'
 import {
@@ -1040,6 +1105,8 @@ import { WorktreeCreate, WorktreePrefetchCreateBase } from './workspaces/worktre
 import {
   WorktreeActivate,
   WorktreeArchive,
+  WorktreeAutoNameParams,
+  WorktreeAutoNameWaitParams,
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
@@ -1078,6 +1145,7 @@ import {
   SkillUploadChunkRequestSchema,
   SkillUploadCommitRequestSchema
 } from '../skills/sharing/skill-upload-session-contract'
+import { NetworkPortForwardAttachParams } from '../workspace/ports/port-forward-loopback-host'
 
 // Why: the host parses params with these schemas, so a client that matches this map
 // matches the dispatcher. Clients must import it for types only — parsing a params
@@ -1098,6 +1166,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.antigravityChatSignInStart': AntigravityChatSignInStartParams,
   'accounts.antigravityChatSignInSubscribe': null,
   'accounts.antigravityList': AntigravityAccountTargetParams,
+  'accounts.antigravityReadCurrent': AntigravityAccountTargetParams,
   'accounts.antigravityRemove': AntigravityAccountMutationParams,
   'accounts.antigravitySelect': AntigravityAccountMutationParams,
   'accounts.beginClaudeSignIn': BeginClaudeSignInParams,
@@ -1136,6 +1205,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.read': AgentReadParams,
   'agent.show': AgentShowParams,
   'agentActivity.clear': AgentActivityClearParams,
+  'agentActivity.orchestration': AgentActivityOrchestrationParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
   'agentCliUpdate.check': AgentCliUpdateCheckParams,
   'agentCliUpdate.run': AgentCliUpdateRunParams,
@@ -1162,6 +1232,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
   'agentSession.item': ItemParams,
+  'agentSession.liveTextShown': LiveTextShownParams,
   'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
@@ -1227,12 +1298,17 @@ export const RPC_PARAMS_BY_METHOD = {
   'automation.runs': AutomationRuns,
   'automation.show': AutomationId,
   'automation.update': AutomationUpdate,
+  'bitbucket.connect': BitbucketConnectParams,
+  'bitbucket.disconnect': null,
+  'bitbucket.status': null,
   'bots.access.decide': BotAccessDecide,
   'bots.access.list': null,
   'bots.access.redeem': BotAccessRedeem,
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
@@ -1285,6 +1361,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.groups.list': null,
   'bots.groups.newThread': BotGroupNewThread,
   'bots.groups.read': BotGroupRead,
+  'bots.groups.renameThread': BotGroupRenameThread,
   'bots.groups.reorder': BotGroupReorder,
   'bots.groups.send': BotGroupSend,
   'bots.groups.stop': BotGroupStop,
@@ -1318,6 +1395,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.memory.forget': BotMemoryForget,
   'bots.memory.history': BotChat,
   'bots.memory.undo': BotMemoryUndo,
+  'bots.offer.answer': BotOfferAnswerParams,
   'bots.request.outcome': BotRequestOutcomeParams,
   'bots.roster': BotRoster,
   'bots.sendRunAgain': BotRunSendAgainParams,
@@ -1356,6 +1434,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.tools.list': BotToolsList,
   'bots.tools.problems': BotToolProblems,
   'bots.tools.remove': BotToolTarget,
+  'bots.tools.setHostMcpServers': BotToolsSetHostMcpServers,
   'bots.tools.signIn.cancel': BotToolSignInFlow,
   'bots.tools.signIn.finish': BotToolSignInFinish,
   'bots.tools.signIn.start': BotToolSignInStart,
@@ -1395,6 +1474,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.dialogAccept': DialogAccept,
   'browser.dialogDismiss': ExpectUrlBrowserTarget,
   'browser.download': SelectorPath,
+  'browser.downloadCopyStream': DownloadCopyStream,
   'browser.drag': Drag,
   'browser.dropFiles': DropFiles,
   'browser.eval': Eval,
@@ -1412,9 +1492,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.get': Get,
   'browser.goto': Goto,
   'browser.grab.await': GrabAwait,
-  'browser.grab.cancel': BrowserTarget,
+  'browser.grab.cancel': GrabCancel,
   'browser.grab.captureSelection': GrabCaptureSelection,
   'browser.grab.extractHover': BrowserTarget,
+  'browser.grab.pickedPresent': GrabPickedPresent,
   'browser.grab.setMode': GrabSetMode,
   'browser.grab.viewportBridge': GrabViewportBridge,
   'browser.grab.watch': BrowserTarget,
@@ -1437,14 +1518,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.openUrl': BrowserOpenUrlParams,
   'browser.pagePromptAnswer': PagePromptAnswer,
   'browser.pdf': BrowserTarget,
+  'browser.profileClearCookies': ProfileClearCookies,
   'browser.profileClearDefaultCookies': null,
-  'browser.profileClearGoogleCookies': ProfileClearGoogleCookies,
+  'browser.profileClearGoogleCookies': ProfileClearCookies,
   'browser.profileCreate': ProfileCreate,
   'browser.profileDelete': ProfileDelete,
   'browser.profileDetectBrowsers': null,
   'browser.profileImportFromBrowser': ProfileImportFromBrowser,
   'browser.profileList': null,
   'browser.readImage': ReadImage,
+  'browser.readPrintPdf': ReadPrintPdf,
+  'browser.releaseDownloadCopy': ReleaseDownloadCopy,
+  'browser.releasePrintPdf': ReleasePrintPdf,
   'browser.reload': Reload,
   'browser.replaceMisspelling': PageMenuWord,
   'browser.saveImage': PageMenuImage,
@@ -1511,13 +1596,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
   'connector.slackMirror.set': ConnectorSlackMirrorSet,
   'connector.slackMirror.status': ConnectorSlackMirrorStatus,
+  'connector.wakeReplyPlace': ConnectorWakeReplyPlace,
   'desktop.openWindowInBackground': null,
   'desktopBrowserBridge.attach': DesktopBrowserBridgeAttachParams,
+  'desktopBrowserBridge.downloadAbort': DesktopBrowserBridgeDownloadAbortParams,
+  'desktopBrowserBridge.downloadWrite': DesktopBrowserBridgeDownloadWriteParams,
+  'desktopBrowserBridge.fileRead': DesktopBrowserBridgeFileReadParams,
   'desktopBrowserBridge.result': DesktopBrowserBridgeResultParams,
   'desktopBrowserBridge.resultChunk': DesktopBrowserBridgeResultChunkParams,
   'diagnostics.memory': null,
@@ -1578,6 +1668,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.stat': FileTreePath,
   'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
+  'files.uploadBegin': FileSaveBegin,
+  'files.uploadCommit': FileUploadCommit,
   'files.watch': FileWatch,
   'files.write': FileWrite,
   'files.writeBase64': FileWriteBase64,
@@ -1589,25 +1681,26 @@ export const RPC_PARAMS_BY_METHOD = {
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,
-  'git.abortMerge': WorktreeSelectorOfGitParams,
-  'git.abortRebase': WorktreeSelectorOfGitParams,
-  'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
+  'git.abortMerge': GitAbortOperation,
+  'git.abortRebase': GitAbortOperation,
+  'git.atRiskLocalFiles': WorktreeSelectorOfGitCoreParams,
   'git.blame': GitBlame,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,
   'git.bulkStage': GitBulkStage,
   'git.bulkUnstage': GitBulkPaths,
-  'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitParams,
-  'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitParams,
+  'git.cancelGenerateCommitMessage': WorktreeSelectorOfGitCoreParams,
+  'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitCoreParams,
   'git.checkIgnored': GitCheckIgnored,
   'git.checkout': GitCheckout,
   'git.cherryPick': GitCommitAction,
   'git.commit': GitCommit,
   'git.commitCompare': GitCommitCompare,
   'git.commitDiff': GitCommitDiff,
-  'git.completeMerge': WorktreeSelectorOfGitParams,
-  'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.completeMerge': WorktreeSelectorOfGitCoreParams,
+  'git.conflictOperation': WorktreeSelectorOfGitCoreParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1618,10 +1711,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.generateCommitMessage': GitGenerateCommitMessage,
   'git.generatePullRequestFields': GitGeneratePullRequestFields,
   'git.history': GitHistory,
-  'git.localBranches': WorktreeSelectorOfGitParams,
-  'git.mutationInFlight': WorktreeSelectorOfGitParams,
+  'git.localBranches': WorktreeSelectorOfGitCoreParams,
+  'git.mutationInFlight': WorktreeSelectorOfGitCoreParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitCoreParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
@@ -1712,6 +1806,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'gitlab.updateMRState': UpdateMrState,
   'gitlab.workItemByPath': WorkItemByPath,
   'gitlab.workItemDetails': WorkItemDetailsOfGitlabParams,
+  'google.bot.connected': GoogleBotConnectedParams,
   'google.bot.set': GoogleBotAccessSetParams,
   'google.calendar.calendars': CalendarCalendarsParams,
   'google.calendar.create': CalendarCreateParams,
@@ -1859,7 +1954,31 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mcpServers.add': McpServerAdd,
+  'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
+  'mcpServers.cancelProblems': McpServerProblemsCancel,
+  'mcpServers.connect': McpServerConnect,
+  'mcpServers.copy': McpServerImport,
+  'mcpServers.details': McpServerTarget,
+  'mcpServers.discover': McpServerDiscover,
+  'mcpServers.list': McpServersList,
+  'mcpServers.move': McpServerMove,
+  'mcpServers.previewPaste': McpServerPreviewPaste,
+  'mcpServers.problems': McpServerProblems,
+  'mcpServers.remove': McpServerTarget,
+  'mcpServers.sessions.restart': McpServerSessions,
+  'mcpServers.sessions.stale': McpServerSessions,
+  'mcpServers.setAgentEnabled': McpServerSetAgentEnabled,
+  'mcpServers.setSharedProcess': McpServerSetSharedProcess,
+  'mcpServers.setWorkspaces': McpServerSetWorkspaces,
+  'mcpServers.signIn.cancel': McpServerSignInFlow,
+  'mcpServers.signIn.finish': McpServerSignInFinish,
+  'mcpServers.signIn.start': McpServerSignInStart,
+  'mcpServers.signIn.wait': McpServerSignInWait,
+  'mcpServers.signOut': McpServerTarget,
+  'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
+  'mobileRelay.hosts.unwatchRows': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,
   'mobileWeb.bundle.brotliRange': MobileWebBundleChunkParamsSchema,
@@ -1871,6 +1990,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.subscribe': NativeChatSession,
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.portForward': NetworkPortForwardAttachParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.pushCoverage': NotificationPushCoverageParams,
   'notifications.registerPush': NotificationRegisterPushParams,
@@ -1947,7 +2067,6 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerDockAcknowledge': WorkerDockAcknowledge,
   'orchestration.workerDockRead': WorkerDockRead,
   'orchestration.workerDockResult': WorkerDockResultRead,
-  'orchestration.workerDockResultsRead': WorkerDockResultsRead,
   'orchestration.workerDockStop': WorkerDockStop,
   'orchestration.workerDockSubscribe': WorkerDockSubscribe,
   'orchestration.workerKeepOpen': OrchestrationWorkerKeepOpenParams,
@@ -1967,8 +2086,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'pairedServerAsks.introduce': PairedServerAskIntroduceParams,
   'pairedServerAsks.list': PairedServerAskListParams,
   'pairing.createOffer': PairingCreateOfferParamsSchema,
+  'pairing.delegatedMobileDevice.createOffer': DelegatedPhoneServerOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
   'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
+  'pairing.getDirectEndpoints': PairingGetDirectEndpointsParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
@@ -2066,7 +2187,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.movePaneToNewTab': MovePaneToNewTab,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': WorktreeTabSelector,
-  'session.tabs.subscribeAll': null,
+  'session.tabs.subscribeAll': SessionTabsSubscribeAllParams,
   'session.tabs.terminalShellChoices': WorktreeTabSelector,
   'session.tabs.unsubscribe': SessionTabsUnsubscribe,
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,
@@ -2194,6 +2315,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'updater.download': null,
   'updater.getStatus': null,
   'updater.install': null,
+  'updater.restartImpact': null,
   'usage.call': UsageCallParams,
   'webhooks.call': WebhookCallShow,
   'webhooks.calls': WebhookCalls,
@@ -2222,6 +2344,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.archive': WorktreeArchive,
+  'worktree.autoName.availability': WorktreeAutoNameParams,
+  'worktree.autoName.dismiss': WorktreeAutoNameParams,
+  'worktree.autoName.retry': WorktreeAutoNameParams,
+  'worktree.autoName.wait': WorktreeAutoNameWaitParams,
   'worktree.create': WorktreeCreate,
   'worktree.detectedList': WorktreeDetectedListParams,
   'worktree.forceDeleteBranch': WorktreeForceDeleteBranch,

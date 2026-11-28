@@ -1,4 +1,4 @@
-import { basename, extname, resolve } from 'node:path'
+import { basename, extname } from 'node:path'
 import type {
   ArtifactCloudOperation,
   ArtifactCloudOptions,
@@ -22,6 +22,7 @@ import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-re
 import { RuntimeClientError } from '../runtime/connection/types'
 import { formatArtifactListPage, formatArtifactShared } from './artifact-format'
 import { printResult } from '../output/command-result-output'
+import { resolveCallerFilePath } from '../arguments/caller-file-path'
 
 function stringFlag(ctx: HandlerContext, name: string): string | undefined {
   const value = ctx.flags.get(name)
@@ -100,7 +101,8 @@ async function preflightPublishCapability(ctx: HandlerContext): Promise<void> {
 
 async function readArtifactRequest(ctx: HandlerContext): Promise<ArtifactWriteRequest> {
   const remoteInput = parseRemoteArtifactInput(process.env[REMOTE_ARTIFACT_INPUT_ENV])
-  const sourceKey = remoteInput?.sourceKey ?? resolve(ctx.cwd, requireStringFlag(ctx, 'file'))
+  const sourceKey =
+    remoteInput?.sourceKey ?? resolveCallerFilePath(requireStringFlag(ctx, 'file'), ctx.cwd)
   const contentType = remoteInput?.contentType ?? artifactContentType(sourceKey)
   if (!contentType) {
     throw new RuntimeClientError('invalid_argument', 'Artifacts must be HTML or Markdown files.')
@@ -190,7 +192,8 @@ export const ARTIFACT_HANDLERS: Record<string, CommandHandler> = {
   'artifacts unshare': async (ctx) => {
     rejectArtifactRemoteSelectionFlags(ctx)
     const remoteInput = parseRemoteArtifactInput(process.env[REMOTE_ARTIFACT_INPUT_ENV])
-    const sourceKey = remoteInput?.sourceKey ?? resolve(ctx.cwd, requireStringFlag(ctx, 'file'))
+    const sourceKey =
+      remoteInput?.sourceKey ?? resolveCallerFilePath(requireStringFlag(ctx, 'file'), ctx.cwd)
     const response = await ctx.client.call<ArtifactCloudOperation<void>>('artifacts.unshare', {
       sourceKey,
       ...cloudOptions(ctx)

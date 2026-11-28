@@ -14,9 +14,11 @@ import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from './runtime-client/d
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/callers/rpc-caller-identity'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/orchestration/orchestration-runtime-capabilities'
-import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
+import {
+  DEFAULT_LAZY_RPC_METHOD_GROUPS,
+  EAGER_RPC_METHODS
+} from '../runtime/rpc/methods/eager-rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './runtime-client/desktop-runtime-sender-lifecycle'
-import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
@@ -40,16 +42,20 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
-  ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
-    toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
-  )
+  ipcMain.handle('ephemeralVm:resumeWorkspace', async (_event, args: { workspaceId: string }) => {
+    const { toWorkspaceLifecycleResult } =
+      await import('../ephemeral-vm/workspace-lifecycle-result')
+    return toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
+  })
   // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
-  ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
-    toWorkspaceLifecycleResult(async () => {
+  ipcMain.handle('ephemeralVm:suspendWorkspace', async (_event, args: { workspaceId: string }) => {
+    const { toWorkspaceLifecycleResult } =
+      await import('../ephemeral-vm/workspace-lifecycle-result')
+    return toWorkspaceLifecycleResult(async () => {
       await runtime.suspendWorkspaceVm(args.workspaceId)
       return null
     })
-  )
+  })
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
@@ -97,6 +103,13 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
     return runtime.getStatus()
   })
 
+  // Registry build walks every method; do it once, not per IPC call.
+  const dispatcher = new RpcDispatcher({
+    runtime,
+    methods: EAGER_RPC_METHODS,
+    lazyGroups: DEFAULT_LAZY_RPC_METHOD_GROUPS
+  })
+
   ipcMain.handle(
     'runtime:call',
     async (
@@ -110,7 +123,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (event.senderFrame !== event.sender.mainFrame) {
         throw new Error('Runtime RPC call must originate from the current main frame')
       }
-      return new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatch(
+      return dispatcher.dispatch(
         {
           id: 'desktop-ipc',
           authToken: 'desktop-ipc',
@@ -153,7 +166,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       senderSubscriptions.set(args.subscriptionId, controller)
       const channel = `runtime:subscription:${args.subscriptionId}`
       // Streaming outlives dispatch setup; unsubscribe or sender retirement owns cancellation.
-      void new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS }).dispatchStreamingObjects(
+      void dispatcher.dispatchStreamingObjects(
         {
           id: args.subscriptionId,
           authToken: 'desktop-ipc',

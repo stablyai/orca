@@ -86,7 +86,7 @@ export function dashboardPreviewHttpActions(
     (owner.kind === 'local' || canOpenRemoteLinkInWorkspaceBrowser(state, source.worktreeId, owner))
   )
   const destinations = canOpen
-    ? httpLinkActionDestinationsFor(state.settings, owner, true, url)
+    ? httpLinkActionDestinationsFor(state.settings, owner, true, url, source.worktreeId)
     : { primary: 'system' as const }
   const open = (destination: HttpLinkDestination | undefined, inSourceGroup = false): void => {
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)

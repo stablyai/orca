@@ -199,6 +199,11 @@ export type RuntimePtyController = {
       targetOwnerOnly?: boolean
     }
   ): Promise<PtyProcessInfo[]>
+  /** Local inventory from the provider that owns local PTYs, after startup; `inProcessOwner` marks this process's own provider. */
+  listLocalProcessesForExitProof?(): Promise<{
+    processes: PtyProcessInfo[]
+    inProcessOwner: boolean
+  }>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean
@@ -224,6 +229,7 @@ export type RuntimePtyController = {
     opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null>
   supportsVisibleProjectionSnapshot?(ptyId: string): boolean
+  canProvideAuthoritativeBufferSnapshot?(ptyId: string): boolean
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number

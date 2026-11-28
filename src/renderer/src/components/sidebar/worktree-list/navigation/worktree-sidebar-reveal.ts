@@ -28,7 +28,10 @@ type SidebarRevealBounds = {
   end: number
 }
 
-function getElementScrollBounds(container: HTMLElement, element: Element): SidebarRevealBounds {
+export function getElementScrollBounds(
+  container: HTMLElement,
+  element: Element
+): SidebarRevealBounds {
   const containerRect = container.getBoundingClientRect()
   const elementRect = element.getBoundingClientRect()
   return {

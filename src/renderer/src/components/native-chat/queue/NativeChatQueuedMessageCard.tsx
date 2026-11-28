@@ -33,6 +33,8 @@ import type { QueuedMessagesPendingAction } from '@/components/native-chat/queue
 import { useNativeChatClippedLine } from '@/components/native-chat/queue/use-native-chat-clipped-line'
 import {
   QUEUED_ROW_REVEAL,
+  QUEUED_ROW_INSET_VAR,
+  QUEUED_ROW_TARGET,
   QueuedMessageRowTool,
   queuedRowToolsMask
 } from '@/components/native-chat/queue/NativeChatQueuedMessageRowTools'
@@ -85,10 +87,9 @@ export function queuedMessageCardCaption(
       return null
   }
 }
-
 /** Steer's or Send's label and tooltip: Steer only into a turn that is running (`queuedMessageCardSteers`). */
 export function queuedMessageCardSendNow(
-  card: QueuedMessageCard,
+  card: Pick<QueuedMessageCard, 'hold' | 'command'>,
   agentWorking: boolean,
   t: Translate = translate
 ): {
@@ -187,14 +188,20 @@ export function NativeChatQueuedMessageCard({
       </li>
     )
   }
-  // Nothing acts on a send still on its way: the host holds no card for it yet.
-  const actionable = card.hold !== 'sending'
-  // The host refuses these edits: a command would become a message, a run the owner's words.
-  const editable = actionable && !card.notEditable && onEdit !== undefined
-  // Edit and Delete wait for hover or keyboard focus; Steer stays on every row.
-  const toolCount = actionable ? (editable ? 2 : 1) : 0
-  const maskStyle: (React.CSSProperties & { '--queued-tools-mask': string }) | undefined =
-    toolCount > 0 ? { '--queued-tools-mask': queuedRowToolsMask(toolCount) } : undefined
+  const editable = card.hold !== 'sending' && !card.notEditable && onEdit !== undefined
+  const toolCount = card.hold === 'sending' ? 0 : editable ? 2 : 1
+  const toolStyle:
+    | (React.CSSProperties & { '--queued-tools-mask': string; '--queued-tools-width': string })
+    | undefined =
+    toolCount > 0
+      ? {
+          '--queued-tools-mask': queuedRowToolsMask(toolCount),
+          '--queued-tools-width':
+            toolCount === 1
+              ? 'max(24px, calc(var(--spacing) * 6))'
+              : 'calc(max(24px, calc(var(--spacing) * 6)) + max(24px, calc(var(--spacing) * 6)) + 1px)'
+        }
+      : undefined
   return (
     <li
       ref={drag?.rowRef}
@@ -219,7 +226,7 @@ export function NativeChatQueuedMessageCard({
           )}
         />
       ) : null}
-      <div className="flex items-center gap-1">
+      <div className={cn('flex gap-1', expanded ? 'items-start' : 'items-center')}>
         <span className="relative flex size-3.5 shrink-0 items-center justify-center">
           {attention && !drag?.grip ? (
             <AlertCircle className="size-3.5 text-destructive" aria-hidden />
@@ -240,14 +247,24 @@ export function NativeChatQueuedMessageCard({
             'min-w-0 flex-1',
             // The line fades out under the revealed tools; shown while acting, so a pressed tool never vanishes.
             toolCount > 0 &&
-              (busy
-                ? '[mask-image:var(--queued-tools-mask)]'
-                : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
+              (expanded
+                ? '[padding-right:var(--queued-tools-width)]'
+                : busy
+                  ? '[mask-image:var(--queued-tools-mask)]'
+                  : 'group-hover/queued:[mask-image:var(--queued-tools-mask)] group-has-[:focus-visible]/queued:[mask-image:var(--queued-tools-mask)] [@media(hover:none)]:group-focus-within/queued:[mask-image:var(--queued-tools-mask)]')
           )}
-          style={maskStyle}
+          style={toolStyle}
         >
           {sender}
-          {expanded ? null : (
+          {expanded ? (
+            <p
+              id={textId}
+              className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words text-sm text-foreground"
+              style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+            >
+              {line}
+            </p>
+          ) : (
             <p ref={measureLine} className="truncate text-sm text-foreground" title={line}>
               {line}
             </p>
@@ -270,11 +287,14 @@ export function NativeChatQueuedMessageCard({
             </p>
           ) : null}
         </div>
-        <div className="relative flex shrink-0 items-center gap-1">
+        {/* Each glyph's own box spacing (an icon button's 5px, the image count's padding) sets the even
+            rhythm. A 1px seam separates every target, the hover-revealed tools included: at a fractional x
+            the browser hit-tests a point up to 1px left of a box, so flush targets each lose a sliver. */}
+        <div className={cn('relative flex shrink-0 items-center gap-px', QUEUED_ROW_INSET_VAR)}>
           {toolCount > 0 ? (
             <div
               className={cn(
-                'absolute inset-y-0 right-full flex items-center transition-opacity motion-reduce:transition-none',
+                'absolute inset-y-0 right-[calc(100%+1px)] flex items-center gap-px transition-opacity motion-reduce:transition-none',
                 !busy && QUEUED_ROW_REVEAL
               )}
             >
@@ -298,7 +318,16 @@ export function NativeChatQueuedMessageCard({
               </QueuedMessageRowTool>
             </div>
           ) : null}
-          {card.images ? <QueuedMessageImageCount images={card.images} /> : null}
+          {card.images ? (
+            <QueuedMessageImageCount
+              images={card.images}
+              // 1px less after the digit, whose own side bearing already widens the gap to the chevron.
+              className={cn(
+                'h-6 rounded-md pr-[calc(var(--queued-row-inset)-1px)] pl-(--queued-row-inset)',
+                QUEUED_ROW_TARGET
+              )}
+            />
+          ) : null}
           {expanded || clipped ? (
             <QueuedMessageExpandToggle
               expanded={expanded}
@@ -308,24 +337,25 @@ export function NativeChatQueuedMessageCard({
           ) : null}
           {/* Every row keeps its own Steer at rest, since each sends that one message. A command never
               steers: its Send shows only while the agent is idle. */}
-          {actionable && !card.waitsForAgent ? (
+          {card.hold !== 'sending' && !card.waitsForAgent ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   type="button"
                   variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                   size="xs"
+                  className="min-h-[24px] min-w-[24px]"
                   data-queued-message-send
                   onClick={onSteer}
                   disabled={steerHeld || busy}
                 >
-                  <NativeChatPendingIcon pending={pending === 'send'} className="size-3">
+                  <NativeChatPendingIcon pending={pending === 'send'} className={STEER_GLYPH}>
                     {failed && drag?.grip ? (
-                      <AlertCircle className="size-3 text-destructive" />
+                      <AlertCircle className={cn(STEER_GLYPH, 'text-destructive')} />
                     ) : sendNow.steers ? (
-                      <CornerDownRight className="size-3" />
+                      <CornerDownRight className={STEER_GLYPH} />
                     ) : (
-                      <Send className="size-3" />
+                      <Send className={STEER_GLYPH} />
                     )}
                   </NativeChatPendingIcon>
                   {failed
@@ -345,18 +375,13 @@ export function NativeChatQueuedMessageCard({
           ) : null}
         </div>
       </div>
-      {expanded ? (
-        <p
-          id={textId}
-          className="scrollbar-sleek mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap break-words pl-5.5 text-sm text-foreground"
-          style={nativeChatTextHasUnkernedRun(line) ? NATIVE_CHAT_UNKERNED_CSS : undefined}
-        >
-          {line}
-        </p>
-      ) : null}
     </li>
   )
 }
+
+// Steer's glyphs start with their own blank edge: pulled in to the icon buttons' inset (from the
+// button's 6px), the gap before them matches the row's other gaps.
+const STEER_GLYPH = 'size-3 ml-[calc(var(--queued-row-inset)-var(--spacing)*1.5)]'
 
 function QueuedMessageExpandToggle({
   expanded,
@@ -379,14 +404,16 @@ function QueuedMessageExpandToggle({
           type="button"
           variant="ghost"
           size="icon-xs"
+          className="min-h-[24px] min-w-[24px]"
           aria-label={label}
           aria-expanded={expanded}
           aria-controls={controls}
           onClick={onToggle}
         >
+          {/* The row's narrowest glyph: at size-4 its full 24px box leaves the same gaps as its neighbors'. */}
           <ChevronDown
             className={cn(
-              'size-3.5 transition-transform motion-reduce:transition-none',
+              'size-4 transition-transform motion-reduce:transition-none',
               expanded && 'rotate-180'
             )}
           />

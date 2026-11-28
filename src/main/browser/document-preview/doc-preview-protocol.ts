@@ -6,10 +6,6 @@ import {
 } from '../../../shared/document-preview/doc-preview-scheme'
 import { installBrowserSessionPartitionPolicies } from '../sessions/partition-policies/browser-session-partition-policies'
 import { holdBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-owner'
-import { readDocPreviewFile } from './doc-preview-file-reader'
-import { publishDocPreviewFailure } from './doc-preview-failure-notice'
-import { getDocPreviewGrant } from './doc-preview-grant-registry'
-import { createMediaRangeResponse } from '../../media/media-range-response'
 import { MAX_FILE_RANGE_READ_BYTES } from '../../../shared/file-content/file-range-read'
 
 /** Register before Electron readiness freezes scheme privileges. */
@@ -81,6 +77,12 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
   if (!target) {
     return notFound('Not found')
   }
+  const [{ getDocPreviewGrant }, { publishDocPreviewFailure }, { readDocPreviewFile }] =
+    await Promise.all([
+      import('./doc-preview-grant-registry'),
+      import('./doc-preview-failure-notice'),
+      import('./doc-preview-file-reader')
+    ])
   const grant = getDocPreviewGrant(target.grantId)
   if (!grant) {
     // Keep missing and revoked grants indistinguishable; tell the shell to replace the error body.
@@ -108,6 +110,7 @@ export async function handleDocPreviewRequest(request: Request): Promise<Respons
   }
   if ('media' in outcome) {
     // Media streams by range, so seeking works and a long video never sits in memory.
+    const { createMediaRangeResponse } = await import('../../media/media-range-response')
     return createMediaRangeResponse(request, outcome.contentType, outcome.media)
   }
   const bytes = outcome.bytes

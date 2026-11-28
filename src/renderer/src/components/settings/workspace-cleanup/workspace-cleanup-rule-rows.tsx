@@ -14,10 +14,10 @@ import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace
 import { Switch } from '../../ui/switch'
 import {
   NumberField,
-  SettingsBadge,
   SettingsRow,
   SettingsSegmentedControl
 } from '../form-controls/SettingsFormControls'
+import { SettingsTitleWithBadge } from '../form-controls/SettingsTitleWithBadge'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -119,13 +119,7 @@ export function WorkspaceCleanupRuleRows({
     return (
       <SearchableSetting {...search[key]} forceVisible={forceVisible}>
         <SettingsRow
-          label={
-            // Inline, so a wrapping title carries its badge with it.
-            <span className="leading-snug">
-              {search[key].title}
-              {badge ? <SettingsBadge className="ml-2 align-middle">{badge}</SettingsBadge> : null}
-            </span>
-          }
+          label={<SettingsTitleWithBadge title={search[key].title} badge={badge} />}
           description={
             <>
               {description}
@@ -309,8 +303,14 @@ function RuleMatchesLine({
           'Matches {{count}} workspaces now',
           { count: matches.rows.length, defaultValue_one: 'Matches 1 workspace now' }
         )}
-        {matches.sizeBytes > 0 ? ` · ${formatBytes(matches.sizeBytes)}` : null}
-        {' · '}
+        {/* A no-break space keeps each "·" ending its line, so wrapped lines never start with one. */}
+        {matches.sizeBytes > 0 ? (
+          <>
+            {'\u00a0· '}
+            <span className="whitespace-nowrap">{formatBytes(matches.sizeBytes)}</span>
+          </>
+        ) : null}
+        {'\u00a0· '}
         <button
           type="button"
           aria-expanded={open}

@@ -24,6 +24,7 @@ import {
 } from '../save/queue/editor-save-disk-precondition'
 import { setModelExternalMutation } from '../save/queue/editor-save-rebaseline'
 import { notifyEditorFileCacheStale } from '../autosave/editor-autosave'
+import { EXTERNAL_CHANGE_BANNER_FILE_ATTR } from './reload-from-disk/editor-reload-from-disk-feedback'
 
 // External writes preserve unsaved drafts and mark a conflict; expose recovery before a later save can overwrite the newer disk content.
 
@@ -191,60 +192,67 @@ export function ExternalFileChangeBanner({
   }
 
   return (
-    // Announce asynchronous external-write conflicts to screen readers.
-    <div role="alert" className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          {/* Wrap the overwrite warning so truncation cannot hide it. */}
-          <span className="min-w-0 font-medium text-foreground">
-            {t(
-              'auto.components.editor.ExternalFileChangeBanner.7c41e90d12',
-              'This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.'
-            )}
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {binary ? null : (
-            <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
-              {t('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
-            </Button>
-          )}
-          <Button type="button" size="xs" variant="outline" onClick={handleReload}>
-            {t('auto.components.editor.ExternalFileChangeBanner.3fa2b8d417', 'Reload from Disk')}
-          </Button>
-          {/* Only unsaved model edits can overwrite newer disk content. */}
-          {(binary ? file.isDirty : isModelDirty) && (
-            <Button type="button" size="xs" variant="outline" onClick={handleOverwrite}>
-              {t('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}
-            </Button>
-          )}
-          {binary ? null : (
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              onClick={handleKeepEdits}
-              title={t(
-                'auto.components.editor.ExternalFileChangeBanner.keepHint',
-                'Keeps your version. Your next save replaces the version on disk.'
+    // Focus target for Reload from Disk when this conflict is already showing; never a button.
+    <div
+      tabIndex={-1}
+      {...{ [EXTERNAL_CHANGE_BANNER_FILE_ATTR]: file.id }}
+      className="outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring"
+    >
+      {/* Announce asynchronous external-write conflicts to screen readers. */}
+      <div role="alert" className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+            {/* Wrap the overwrite warning so truncation cannot hide it. */}
+            <span className="min-w-0 font-medium text-foreground">
+              {t(
+                'auto.components.editor.ExternalFileChangeBanner.7c41e90d12',
+                'This file changed on disk while you have unsaved edits. Overwrite replaces the newer disk content.'
               )}
-            >
-              {t('auto.components.editor.ExternalFileChangeBanner.a95d02c644', 'Keep My Edits')}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            {binary ? null : (
+              <Button type="button" size="xs" variant="outline" onClick={handleCompare}>
+                {t('auto.components.editor.ExternalFileChangeBanner.90b2ce7d43', 'Compare')}
+              </Button>
+            )}
+            <Button type="button" size="xs" variant="outline" onClick={handleReload}>
+              {t('auto.components.editor.ExternalFileChangeBanner.3fa2b8d417', 'Reload from Disk')}
             </Button>
-          )}
+            {/* Only unsaved model edits can overwrite newer disk content. */}
+            {(binary ? file.isDirty : isModelDirty) && (
+              <Button type="button" size="xs" variant="outline" onClick={handleOverwrite}>
+                {t('auto.components.editor.ExternalFileChangeBanner.overwrite', 'Overwrite')}
+              </Button>
+            )}
+            {binary ? null : (
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={handleKeepEdits}
+                title={t(
+                  'auto.components.editor.ExternalFileChangeBanner.keepHint',
+                  'Keeps your version. Your next save replaces the version on disk.'
+                )}
+              >
+                {t('auto.components.editor.ExternalFileChangeBanner.a95d02c644', 'Keep My Edits')}
+              </Button>
+            )}
+          </div>
         </div>
+        {compareOpen && (
+          <ExternalFileChangeCompareDialog
+            file={file}
+            currentContent={modelDraft ?? currentContent}
+            open={compareOpen}
+            onOpenChange={setCompareOpen}
+            onReload={handleReload}
+            onKeepEdits={handleKeepEdits}
+          />
+        )}
       </div>
-      {compareOpen && (
-        <ExternalFileChangeCompareDialog
-          file={file}
-          currentContent={modelDraft ?? currentContent}
-          open={compareOpen}
-          onOpenChange={setCompareOpen}
-          onReload={handleReload}
-          onKeepEdits={handleKeepEdits}
-        />
-      )}
     </div>
   )
 }

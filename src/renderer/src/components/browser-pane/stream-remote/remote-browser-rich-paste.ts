@@ -15,6 +15,9 @@ import {
 } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 
+// Not wired into the paste path: the parts staged here run in whatever document is current, so a page
+// that navigated mid-paste could receive them. Use only once the host binds delivery to the pasted document.
+
 /** What a paste carries beyond plain text; null when plain text is all there is. */
 export type RemoteBrowserRichPaste = {
   text: string

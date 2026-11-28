@@ -24,6 +24,7 @@ import {
   NATIVE_CHAT_ROW_SHARE
 } from '../messages/events/native-chat-inline-chip'
 import { NativeChatUserBubble } from '../messages/rows/NativeChatUserBubble'
+import { NativeChatUserMessageBody } from '../messages/rows/NativeChatUserMessageBody'
 import { useBotItemChipPreview } from './bot-item-chip-preview'
 import {
   botItemNoteLines,
@@ -276,9 +277,11 @@ function QuietLine({
 
 function CommentRow({
   line,
+  messageId,
   belowAnother
 }: {
   line: BotItemNoteLine & { kind: 'comment' }
+  messageId: string
   belowAnother: boolean
 }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
@@ -287,10 +290,10 @@ function CommentRow({
     <div className={cn('flex flex-col items-end gap-1', belowAnother && 'mt-3.5')}>
       {line.images ? <BotItemCommentImages images={line.images} inChat /> : null}
       {/* The item heads the bubble, as on the phone. */}
-      <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
+      <NativeChatUserBubble className="flex flex-col gap-1.5">
         {/* A bubble's head, not a row's share: it fits the bubble instead. */}
-        <ItemChip item={line.item} className="max-w-full flex-none" />
-        {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
+        <ItemChip item={line.item} className="max-w-full flex-none self-start" />
+        {text.trim() ? <NativeChatUserMessageBody messageId={messageId} markdown={text} /> : null}
       </NativeChatUserBubble>
     </div>
   )
@@ -302,7 +305,12 @@ function Lines({ note, at }: { note: BotItemNoteView; at?: number }): React.JSX.
     <>
       {botItemNoteLines(note, t).map((line, index) =>
         line.kind === 'comment' ? (
-          <CommentRow key={`comment:${line.item.uid}`} line={line} belowAnother={index > 0} />
+          <CommentRow
+            key={`comment:${line.item.uid}`}
+            line={line}
+            messageId={`item-comment:${note.noteId}:${line.item.uid}`}
+            belowAnother={index > 0}
+          />
         ) : (
           <QuietLine key={`line:${line.items[0]!.uid}`} line={line} at={at} />
         )

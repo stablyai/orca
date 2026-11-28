@@ -3,8 +3,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { triggerError } from '../../platform/haptics/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { getQuickCommandDisplayPreview } from './quick-commands'
@@ -12,7 +12,7 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand as isAgentQuickCommand
 } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
-import { themedStyleSheet } from '../../theme/themed-styles'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type QuickCommandRowProps = {
@@ -37,7 +37,8 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
-  useMobileColorScheme()
+  const colors = useMobileColors()
+  const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
@@ -184,7 +185,7 @@ export function QuickCommandRow({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   pressed: { backgroundColor: colors.borderSubtle },
   disabled: { opacity: 0.45 },
   row: { flexDirection: 'row', alignItems: 'center' },

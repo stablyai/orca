@@ -5,10 +5,15 @@ import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-lay
 export function resolveAgentRowPaneLiveTitle(
   layout: TerminalLayoutSnapshot | undefined,
   paneTitles: Record<number, string> | undefined,
-  leafId: string | null | undefined
+  leafId: string | null | undefined,
+  runtimePaneId: number | undefined
 ): string | null | undefined {
   if (layout?.root?.type !== 'split') {
     return undefined
+  }
+  // Sparse slots defeat replay-order lookup; a title row already knows its own slot.
+  if (runtimePaneId !== undefined) {
+    return paneTitles?.[runtimePaneId] ?? null
   }
   if (!leafId) {
     return null

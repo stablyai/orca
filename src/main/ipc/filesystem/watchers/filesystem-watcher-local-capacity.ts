@@ -11,10 +11,20 @@ import {
 } from './filesystem-watcher-listener-lifecycle'
 import { isWatcherRemovalInProgressError } from '../../../workspaces/removal/watcher-removal-gate'
 import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
+import { CRASH_FUSE_COOLDOWN_INITIAL_MS } from '../watcher-process/supervision/parcel-watcher-crash-fuse'
+import { publishLocalWatchPause, sendLocalWatchPauseTo } from './filesystem-watcher-pause-state'
+import { getLocalWatcherRoot } from './filesystem-watcher-paths'
 
 export type SubscribeLocalWatcher = (worktreePath: string, sender: WebContents) => Promise<void>
 /** Calls `retry` when installing may succeed again; returns a cancel. */
 export type WaitForLocalWatcherRetry = (retry: () => Promise<void>) => () => void
+
+// Why the base cooldown: the fuse settles lazily on the next subscribe, so an escalated fuse costs one failed attempt per interval.
+export const waitForWatcherCrashFuseCooldown: WaitForLocalWatcherRetry = (retry) => {
+  const timer = setTimeout(() => void retry(), CRASH_FUSE_COOLDOWN_INITIAL_MS)
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
 
 export function scheduleLocalCapacityRetry(
   rootKey: string,
@@ -25,9 +35,12 @@ export function scheduleLocalCapacityRetry(
 ): void {
   const existing = watcherLifecycleState.pendingLocalCapacityRetries.get(rootKey)
   if (existing) {
+    const rootPath = getLocalWatcherRoot(worktreePath).path
     for (const listener of listeners.values()) {
       if (!listener.isDestroyed()) {
         existing.listeners.set(listener.id, listener)
+        // Merging changes no pause input, so a publish would not reach the new listener.
+        sendLocalWatchPauseTo(rootKey, rootPath, listener)
       }
     }
     return
@@ -71,5 +84,8 @@ export function scheduleLocalCapacityRetry(
   }
   if (retry.listeners.size === 0) {
     clearLocalCapacityRetry(rootKey)
+    return
   }
+  // A root whose watch dropped after install (crash fuse) has no subscribe in flight to announce it.
+  publishLocalWatchPause(rootKey, getLocalWatcherRoot(worktreePath).path)
 }

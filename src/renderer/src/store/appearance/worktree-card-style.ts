@@ -4,8 +4,8 @@ export type DrawnWorktreeCardStyleState = Pick<AppState, 'settings' | 'worktreeC
 
 /**
  * Whether the sidebar draws the experimental cards. The intro note can preview them without
- * saving, so read this instead of the setting anywhere cards are laid out, drawn, or fed data.
- * Menus and Settings that show the saved choice keep reading the setting.
+ * saving, so read this instead of the setting anywhere cards are laid out, drawn, or fed data,
+ * or where a control only applies to the drawn style. Toggles for the saved choice read the setting.
  */
 export function selectDrawsNewWorktreeCards(state: DrawnWorktreeCardStyleState): boolean {
   return (

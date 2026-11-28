@@ -16,11 +16,8 @@ import {
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { nativeChatMarkdownImageSources } from '../../markdown/native-chat-markdown-image-sources'
-import {
-  estimateNativeChatRowHeight,
-  nativeChatRowContentMetrics,
-  NATIVE_CHAT_SUBAGENT_HEAD_PX
-} from '../../viewport/virtualization/native-chat-row-height-estimate'
+import { NATIVE_CHAT_SUBAGENT_HEAD_PX } from '../../viewport/virtualization/native-chat-row-height-estimate'
+import { nativeChatMessageSlotHeight } from './native-chat-message-slot-height'
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
@@ -248,16 +245,9 @@ export function buildNativeChatTranscript(
         ...(turnKey !== undefined && actingTurns.has(turnKey) && { inActingTurn: true }),
         turnDiff,
         openedPullRequests,
-        estimatedHeight: estimateNativeChatRowHeight(
-          nativeChatRowContentMetrics(message, typography),
-          {
-            hasReceipt: receipt !== undefined,
-            hasStatus: status !== undefined,
-            hasTurnDiff: turnDiff !== undefined,
-            turnDiffFileCount: turnDiff?.files.length,
-            hasOpenedPullRequests: (openedPullRequests?.length ?? 0) > 0,
-            folded
-          },
+        estimatedHeight: nativeChatMessageSlotHeight(
+          message,
+          { receipt, status: status ?? undefined, turnDiff, openedPullRequests, folded },
           typography
         )
       })

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { isCodexUsageSignInRequired } from '../../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   buildActiveCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
@@ -40,9 +41,17 @@ export function useCodexResetAction(
   } | null>(null)
   const [confirmedScope, setConfirmedScope] = useState<CodexResetCreditExpectedScope | null>(null)
   const mountedRef = useRef(true)
+  const resetConfirmationRevision = useRef(0)
   const skipResetConfirm = useAppStore((s) => s.settings?.skipCodexRateLimitResetConfirm === true)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const consumeLocalResetCredit = useAppStore((s) => s.consumeCodexRateLimitResetCredit)
+  const resetBlocked =
+    codex.status === 'fetching' || (codex.status === 'error' && isCodexUsageSignInRequired(codex))
+  const offerCount = codex.rateLimitResetCredits?.availableCount ?? 0
+  // Why: a confirmation names the offer it was opened for; a refresh that changes it must not spend.
+  const offerKey = `${offerCount}:${codex.rateLimitResetCredits?.nextExpiresAt ?? ''}`
+  const offerAvailable = !resetBlocked && offerCount > 0
+  const offerAvailableRef = useRef(offerAvailable)
 
   // Why: scope the host's spend to the account and offer this menu shows.
   const hostScope =
@@ -59,6 +68,29 @@ export function useCodexResetAction(
       mountedRef.current = false
     }
   }, [])
+
+  useLayoutEffect(() => {
+    if (resetBlocked) {
+      resetConfirmationRevision.current += 1
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }, [resetBlocked])
+
+  // Why: handlers and the post-write recheck run after commit, so they read the committed offer.
+  useLayoutEffect(() => {
+    offerAvailableRef.current = offerAvailable
+  }, [offerAvailable])
+
+  const confirmedOfferKey = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    if (confirmedOfferKey.current !== null && confirmedOfferKey.current !== offerKey) {
+      confirmedOfferKey.current = null
+      resetConfirmationRevision.current += 1
+      setResetConfirmOpen(false)
+      setSkipFutureResetConfirm(false)
+    }
+  }, [offerKey])
 
   useEffect(() => {
     if (!enabled || !menuOpen || !hostEnvironmentId) {
@@ -79,11 +111,12 @@ export function useCodexResetAction(
 
   const canRedeemCurrentReset = (): boolean =>
     enabled &&
+    offerAvailableRef.current &&
     mountedRef.current &&
     (hostEnvironmentId !== null || useAppStore.getState().rateLimits.codexTarget.runtime === 'host')
 
   const redeem = async (scope: CodexResetCreditExpectedScope | null): Promise<void> => {
-    if (isRedeemingReset || !canRedeemCurrentReset()) {
+    if (resetBlocked || isRedeemingReset || !canRedeemCurrentReset()) {
       return
     }
     setIsRedeemingReset(true)
@@ -98,7 +131,7 @@ export function useCodexResetAction(
   }
 
   const handleResetMenuSelect = (): void => {
-    if (!canRedeemCurrentReset()) {
+    if (resetBlocked || !canRedeemCurrentReset()) {
       return
     }
     if (
@@ -110,20 +143,26 @@ export function useCodexResetAction(
     }
     // Why: the confirmation names one account; a host switch while it is open must not spend another's credit.
     setConfirmedScope(hostScope)
+    confirmedOfferKey.current = offerKey
     setSkipFutureResetConfirm(false)
     setResetConfirmOpen(true)
   }
 
   const handleConfirmReset = async (): Promise<void> => {
-    if (isRedeemingReset || !canRedeemCurrentReset()) {
+    if (resetBlocked || isRedeemingReset || !canRedeemCurrentReset()) {
       return
     }
+    const revision = resetConfirmationRevision.current
     if (skipFutureResetConfirm) {
       try {
         await updateSettings({ skipCodexRateLimitResetConfirm: true })
       } catch (error) {
         console.error('Failed to save Codex reset confirmation preference:', error)
       }
+    }
+    // Why: the offer can change or run out while the preference write is in flight.
+    if (revision !== resetConfirmationRevision.current || !canRedeemCurrentReset()) {
+      return
     }
     await redeem(confirmedScope)
     if (mountedRef.current) {
@@ -144,7 +183,7 @@ export function useCodexResetAction(
     handleConfirmReset,
     handleResetMenuSelect,
     isRedeemingReset,
-    resetConfirmOpen,
+    resetConfirmOpen: resetConfirmOpen && !resetBlocked,
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm

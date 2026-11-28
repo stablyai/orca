@@ -211,8 +211,18 @@ export function keepFolderWorkspaceSiblings(
       .filter(({ evaluation }) => evaluation.action !== 'keep' || evaluation.cause === 'removing')
       .map((verdict) => verdict.identity)
   )
+  // Folder members share one array reference, so check each group's list once instead of K times.
+  const heldByList = new Map<readonly string[], boolean>()
+  const hasHeldSibling = (siblings: readonly string[]): boolean => {
+    let held = heldByList.get(siblings)
+    if (held === undefined) {
+      held = siblings.some((id) => !going.has(id))
+      heldByList.set(siblings, held)
+    }
+    return held
+  }
   return verdicts.map(({ folderSiblings, evaluation }) =>
-    evaluation.action !== 'keep' && folderSiblings.some((id) => !going.has(id))
+    evaluation.action !== 'keep' && hasHeldSibling(folderSiblings)
       ? { action: 'keep', cause: 'folder-workspace-sibling', reason: evaluation.reason }
       : evaluation
   )

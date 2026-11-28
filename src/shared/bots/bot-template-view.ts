@@ -1,4 +1,4 @@
-import { BOT_NAME_MAX_LENGTH } from '../bot-types'
+import { BOT_NAME_MAX_LENGTH, botFolderName } from '../bot-types'
 import {
   BOT_CONNECTOR_NAMES,
   BOT_TEMPLATE_CATEGORIES,
@@ -93,4 +93,21 @@ export function freeBotName(name: string, taken: readonly string[]): string {
       return candidate
     }
   }
+}
+
+/** The folder for a new bot. A template's bot still under the name the template proposed (`shownName`,
+ *  in the client's language, numbered as freeBotName numbers it) is filed under the template's English
+ *  name, so a translated name doesn't leave it in `bot`; any other name files under itself. */
+export function templateBotFolderName(
+  botName: string,
+  template: Pick<BotTemplate, 'name'> | null,
+  shownName: string | undefined
+): string {
+  const numbering =
+    shownName && botName.startsWith(shownName) ? botName.slice(shownName.length) : null
+  return botFolderName(
+    template && numbering !== null && /^( \d+)?$/.test(numbering)
+      ? template.name + numbering
+      : botName
+  )
 }

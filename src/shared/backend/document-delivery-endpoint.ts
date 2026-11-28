@@ -4,9 +4,12 @@ export type DocumentDeliveryEndpoint = {
   readonly hostId: number
   /** The view itself is gone (destroyed); a reload keeps it. */
   isGone(): boolean
-  /** The view still shows the document that asked, in its main frame. */
+  /** The view's main frame still hosts the document that asked (same frame host; a same-host
+   *  replacement such as a `javascript:` URL or XSLT document is not detected). */
   isCurrent(): boolean
+  /** Delivers only while `isCurrent()` holds; a replacement document receives nothing. */
   send(channel: string, payload: unknown): void
-  /** Aborts when the view is destroyed, crashes or commits a different document. */
+  /** Event-driven: aborts when the view is destroyed, crashes or navigates (did-navigate, unconditional),
+   *  or when a later load event (did-fail-load, dom-ready) finds a document in a new frame host. */
   watchRetirement(): { signal: AbortSignal; dispose(): void }
 }

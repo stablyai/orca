@@ -1,4 +1,5 @@
 import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
+import { takeProviderRelayRunPlacement } from '../../../provider-relay/app-provider-relays'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
@@ -18,6 +19,8 @@ import { journalIdentityFor } from './structured-agent-session-attach'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import '../startup/structured-agent-session-startup-attempt'
 import { mintStructuredAgentSessionStartupAttempt } from '../startup/structured-agent-session-startup-attempt-mint'
+import { noteAgentProcessChat } from '../../../memory/agent-process-registry'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 /** Runtime labels identify the holder, not process identity. */
 function sameOwnerProcess(
@@ -84,6 +87,7 @@ export async function acquireOwner(
           sessionId: record.sessionId,
           fence,
           process,
+          placement: takeProviderRelayRunPlacement(record.sessionId),
           now: input.now()
         })
       }
@@ -93,16 +97,25 @@ export async function acquireOwner(
         sessionId: record.sessionId,
         fence,
         process: acquired.process,
+        placement: takeProviderRelayRunPlacement(record.sessionId),
         now: input.now()
       })
     } else if (!sameOwnerProcess(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
+    }
+    // Only a provider on this machine's own process table can be sampled for its chat's row.
+    if (
+      record.location.executionHostId === LOCAL_EXECUTION_HOST_ID &&
+      record.location.wslDistro === null
+    ) {
+      noteAgentProcessChat(acquired.process.pid, record.sessionId)
     }
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
       ...(acquired.accountHome ? { launchedAccountHome: acquired.accountHome } : {}),
+      ...(acquired.movedAccountHome ? { movedAccountHome: acquired.movedAccountHome } : {}),
       ...(acquired.accountRecipe
         ? {
             accountAcquisition: {

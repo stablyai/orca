@@ -13,6 +13,8 @@ export type WorkerTurnStartObservation = {
   reason?: string
   /** Held as a card in a chat's queue; it runs when the chat's current turn ends. */
   queued?: boolean
+  /** Held by a structured worker whose agent is still starting; handed over when it attaches. */
+  agentStarting?: true
 }
 
 function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTurnStartVerdict {

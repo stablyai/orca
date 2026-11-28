@@ -155,8 +155,8 @@ function translatedSkillName(skill: BotTemplateSkill, t: Translate): string {
   }
 }
 
-/** A new bot's name from a template: the name the UI shows, free among `taken`. A non-Latin name
- *  still makes a valid folder (botFolderName falls back), so it is created once under this name. */
+/** A new bot's name from a template: the name the UI shows, free among `taken`. Kept as proposed,
+ *  its folder is still named from the template's English name (templateBotFolderName). */
 export function botTemplateBotName(
   template: BotTemplate,
   taken: readonly string[],

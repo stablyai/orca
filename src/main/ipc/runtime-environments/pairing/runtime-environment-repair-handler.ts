@@ -1,16 +1,20 @@
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
 
-export function registerRuntimeEnvironmentRepairHandler({
-  getUserDataPath,
-  invalidateTransport
-}: {
-  getUserDataPath: () => string
-  invalidateTransport: (environmentId: string) => Promise<void> | void
-}): void {
-  ipcMain.handle(
+export function registerRuntimeEnvironmentRepairHandler(
+  {
+    getUserDataPath,
+    invalidateTransport
+  }: {
+    getUserDataPath: () => string
+    invalidateTransport: (environmentId: string) => Promise<void> | void
+  },
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
+  ipc.handle(
     'runtimeEnvironments:repairFromPairingCode',
     async (
       _event,

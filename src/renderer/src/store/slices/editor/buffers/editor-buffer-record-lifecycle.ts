@@ -21,12 +21,53 @@ const NO_DRAFTS: Record<string, string> = {}
 const NO_DETACHMENTS = {}
 const NO_KEPT = {}
 
+function isEmptyRecord(record: Readonly<Record<string, unknown>> | undefined): boolean {
+  if (!record) {
+    return true
+  }
+  for (const key in record) {
+    if (Object.hasOwn(record, key)) {
+      return false
+    }
+  }
+  return true
+}
+
+function canSkipEditorBufferReconcile<TState extends EditorBufferStoreState>(
+  state: TState,
+  write: TState | Partial<TState>
+): boolean {
+  const openFiles = write.openFiles ?? state.openFiles
+  const records = write.editorBuffers ?? state.editorBuffers
+  const detachments = write.editorBufferDetached ?? state.editorBufferDetached
+  const kept = write.editorBufferKept ?? state.editorBufferKept
+  if (
+    openFiles !== state.openFiles ||
+    records !== state.editorBuffers ||
+    detachments !== state.editorBufferDetached ||
+    kept !== state.editorBufferKept
+  ) {
+    return false
+  }
+  if (
+    openFiles.length === 0 &&
+    isEmptyRecord(records) &&
+    isEmptyRecord(detachments) &&
+    isEmptyRecord(kept) &&
+    !Object.hasOwn(write, 'editorBufferIdentityRevision')
+  ) {
+    return true
+  }
+  return !editorBufferRouteInputsChanged(state, write)
+}
+
 /** Reconcile views/records atomically with openFiles identity/membership; same-file views join by identity rules and unreferenced records retire. Write fields via writeEditorBuffer; checkInvariant rejects mirror drift. */
 function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   state: TState,
   requested: TState | Partial<TState>,
   checkInvariant: boolean,
-  scheduleRejoin: () => void
+  scheduleRejoin: () => void,
+  replace?: boolean
 ): TState | Partial<TState> {
   const keepRequest = requested.editorBufferKeepRequest
   let write = requested
@@ -39,16 +80,11 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
   const drafts = write.editorDrafts ?? state.editorDrafts
   const detachments = write.editorBufferDetached ?? state.editorBufferDetached
   const kept = write.editorBufferKept ?? state.editorBufferKept
-  if (
-    openFiles === state.openFiles &&
-    records === state.editorBuffers &&
-    detachments === state.editorBufferDetached &&
-    kept === state.editorBufferKept &&
-    !editorBufferRouteInputsChanged(state, write)
-  ) {
+  if (canSkipEditorBufferReconcile(state, write)) {
     // Why only drafts: this runs per keystroke, and nothing else about the views changed.
     if (checkInvariant && drafts !== state.editorDrafts) {
-      assertEditorBufferDraftsAgree({ ...state, ...write }, drafts)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace writes already supply a complete state.
+      assertEditorBufferDraftsAgree(replace ? (write as TState) : { ...state, ...write }, drafts)
     }
     // Why: clearing a draft can make a detached side clean, which rejoins it.
     if (
@@ -68,7 +104,8 @@ function reconcileEditorBuffers<TState extends EditorBufferStoreState>(
     }
     return write
   }
-  const routeState: EditorBufferRouteState = { ...state, ...write }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: replace writes already supply a complete state.
+  const routeState: EditorBufferRouteState = replace ? (write as TState) : { ...state, ...write }
   const input = {
     openFiles,
     editorBuffers: records,
@@ -194,6 +231,20 @@ export function withEditorBufferRecords<TState extends EditorBufferStoreState>(
         partial: TState | Partial<TState> | ((state: TState) => TState | Partial<TState>),
         replace?: boolean
       ): void => {
+        if (typeof partial !== 'function' && !Object.hasOwn(partial, 'editorBufferKeepRequest')) {
+          const state = get()
+          if (
+            (partial.editorDrafts ?? state.editorDrafts) === state.editorDrafts &&
+            canSkipEditorBufferReconcile(state, partial)
+          ) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own partial/replace pair unchanged.
+            ;(write as (next: TState | Partial<TState>, replace?: boolean) => void)(
+              partial,
+              replace
+            )
+            return
+          }
+        }
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: forwards the caller's own partial/replace pair; with replace=true the updater still yields a full state.
         ;(write as (next: (state: TState) => TState | Partial<TState>, replace?: boolean) => void)(
           (state) =>
@@ -201,7 +252,8 @@ export function withEditorBufferRecords<TState extends EditorBufferStoreState>(
               state,
               typeof partial === 'function' ? partial(state) : partial,
               checkInvariant,
-              scheduleRejoin
+              scheduleRejoin,
+              replace
             ),
           replace
         )

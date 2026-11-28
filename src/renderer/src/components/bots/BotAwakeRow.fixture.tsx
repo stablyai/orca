@@ -6,8 +6,10 @@ import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { mascotAvatar } from '../../../../shared/bot-avatar'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
+import {
+  structuredAgentSessionTabId,
+  chatPaneKey
+} from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { BotRow } from './BotRow'
@@ -29,7 +31,7 @@ const awakeOwners = (
 }))
 const now = Date.now()
 const awakeStatuses: AgentStatusEntry[] = awakeOwners.slice(1).map((owner) => ({
-  paneKey: structuredAgentSessionStatusPaneKey(owner.chatSessionId),
+  paneKey: chatPaneKey(owner.chatSessionId),
   worktreeId: folderWorkspaceKey(owner.folderWorkspaceId),
   agentType: 'claude',
   prompt: '',
@@ -65,7 +67,7 @@ export const awakeRows = defineFixture({
       })
     ),
     structuredChatSleptAtByPaneKey: Object.fromEntries(
-      awakeOwners.map((owner) => [structuredAgentSessionStatusPaneKey(owner.chatSessionId), null])
+      awakeOwners.map((owner) => [chatPaneKey(owner.chatSessionId), null])
     )
   },
   setup: () => stubBots(awakeOwners),

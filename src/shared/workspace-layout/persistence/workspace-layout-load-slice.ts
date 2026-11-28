@@ -31,7 +31,7 @@ export function workspaceMembership(session: WorkspaceSessionState, key: string)
 export type StoredShareRefs = { refs: Set<string>; worktreeId: string }
 
 export const rowShareRef = (rowId: string): string => `row:${rowId}`
-const leafShareRef = (leafId: string): string => `leaf:${leafId}`
+export const leafShareRef = (leafId: string): string => `leaf:${leafId}`
 export const worktreeShareRef = (worktreeId: string): string => `worktree:${worktreeId}`
 
 /**

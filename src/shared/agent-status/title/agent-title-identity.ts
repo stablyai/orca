@@ -8,12 +8,7 @@ import {
   titleHasAgentName
 } from './agent-name-token-match'
 import { CLAUDE_IDLE, containsAgentSpinnerGlyph } from './agent-title-glyphs'
-import {
-  isClaudeManagementTitle,
-  isCursorAgentTitle,
-  isGeminiTerminalTitle,
-  isPiAgentTitle
-} from './agent-title-core'
+import { isClaudeManagementTitle, isCursorAgentTitle, isPiAgentTitle } from './agent-title-core'
 import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
@@ -83,9 +78,6 @@ function computeAgentLabel(title: string): string | null {
   // Why: the DSB matcher distinguishes native prefixes from glyphs inside task text.
   if (isDeepSeekBuildTerminalTitle(title)) {
     return 'DeepSeek Build'
-  }
-  if (isGeminiTerminalTitle(title)) {
-    return 'Gemini CLI'
   }
   // Resolve Pi-compatible synthetic titles before generic braille identity heuristics.
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)

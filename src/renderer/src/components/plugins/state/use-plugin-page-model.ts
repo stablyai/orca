@@ -21,6 +21,7 @@ import {
 import type { PluginPagePreview } from './use-plugin-catalog'
 import { useInstalledPluginManifest } from './use-plugin-contribution-source'
 import type { PluginFileMatch } from '../../../../../shared/plugins/contributions/plugin-file-match'
+import { pluginPreviewCatalogRevision } from './plugin-preview-cache'
 
 /** A shortcut a plugin binds, by the key as written and the command it runs. */
 export type PluginPageShortcut = { key: string; command: string }
@@ -35,7 +36,7 @@ export function previewMatchesListing(
   preview: PluginMarketplaceHostInstallPreview,
   listing: PluginMarketplaceHostListing
 ): boolean {
-  if (preview.marketplaceCommit !== listing.marketplaceCommit) {
+  if (pluginPreviewCatalogRevision(preview) !== pluginPreviewCatalogRevision(listing)) {
     return false
   }
   return (
@@ -51,7 +52,7 @@ function listingIdentity(listing: PluginMarketplaceHostListing): string {
   const release = listing.release
   return [
     listing.marketplaceSourceId,
-    listing.marketplaceCommit,
+    pluginPreviewCatalogRevision(listing),
     release?.commit ?? '',
     release?.contentHash ?? '',
     release?.execution ?? ''
