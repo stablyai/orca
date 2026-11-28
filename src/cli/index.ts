@@ -116,6 +116,11 @@ export async function main(
     validateCommandAndFlags(COMMAND_SPECS, parsed)
     configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
+    // Every client below uses the default profile; a foreign pane handle must not reach it.
+    const { dropForeignTerminalHandle } =
+      await import('./runtime/connection/runtime-source-fence.js')
+    const { getDefaultUserDataPath } = await import('./runtime/profile/metadata.js')
+    dropForeignTerminalHandle(process.env, getDefaultUserDataPath())
     // A local client only: the token names a session on this host.
     await adoptSessionToolCaller(process.env, async (token) =>
       tradeSessionToolToken(
