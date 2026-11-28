@@ -1171,6 +1171,15 @@
       "inProgress": "In progress",
       "closed": "Closed",
       "done": "Done"
+    },
+    "agentCarousel": {
+      "holdHint": "Touch and hold for details and sub-agents",
+      "openAgent": "Open agent",
+      "workspaceActions": "Workspace actions",
+      "showDetails": "Show details",
+      "subAgentCount": "Sub-agents: {{count}}",
+      "subAgents": "Sub-agents",
+      "subAgentState": "A sub-agent is {{state}}"
     }
   },
   "components": {
