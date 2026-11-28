@@ -22,6 +22,8 @@ const header = (agentName: string) =>
 
 const BLOCK_START = '<!-- orca:begin -->'
 const BLOCK_END = '<!-- orca:end -->'
+// Only markers alone on their lines count, so text that quotes them is left alone.
+const ORCA_MARK = /^<!-- orca:(begin|end) -->\r?$/gm
 
 /** Orca's own file is replaced whole; a file the user wrote keeps their text and gets Orca's block. */
 function withOrcaText(existing: string | null, rawText: string, agentName: string): string {
@@ -40,7 +42,7 @@ function withOrcaText(existing: string | null, rawText: string, agentName: strin
 function orcaBlockRange(existing: string): { start: number; end: number } | null {
   // Only markers alone on their lines count, so text that quotes them is left alone; the last
   // pair wins, so a stray one the user wrote earlier cannot swallow their text.
-  const marks = [...existing.matchAll(/^<!-- orca:(begin|end) -->\r?$/gm)]
+  const marks = [...existing.matchAll(ORCA_MARK)]
   // Take the last begin that is followed by an end with no other begin between them.
   const start = marks.findLast((mark, i) => mark[1] === 'begin' && marks[i + 1]?.[1] === 'end')
   const end = start && marks[marks.indexOf(start) + 1]
@@ -48,25 +50,27 @@ function orcaBlockRange(existing: string): { start: number; end: number } | null
 }
 
 /** Writes Orca's text into `cwd`'s `path` whole, so the agent never reads a half-written file.
- *  A symlink on the way, or a file that cannot be read as UTF-8, stays untouched. The result is readable
- *  only by this host's user, a file the user wrote included, since it now carries the bot's
- *  instructions. An inheritable ACL the user set on the folder still applies on top of that. */
+ *  A symlink on the way, or a file that cannot be read as UTF-8, stays untouched and is reported as
+ *  not written, so a launch that needs the text can refuse instead of starting without it. The
+ *  result is readable only by this host's user, a file the user wrote included, since it now carries
+ *  the bot's instructions. An inheritable ACL the user set on the folder still applies on top of
+ *  that. */
 export async function writeFolderContextFile(
   cwd: string,
   path: string,
   agentName: string,
   text: string
-): Promise<void> {
+): Promise<boolean> {
   const realCwd = await realpath(cwd).catch(() => cwd)
   const folders = dirname(path)
     .split(/[\\/]/)
     .filter((segment) => segment && segment !== '.')
   // A linked folder on the way would carry the bot's instructions somewhere else.
   if ((await realFolderUnderRoot(cwd, realCwd, folders)) === 'other') {
-    return
+    return false
   }
   const target = join(realCwd, path)
-  await replaceWhileUnchanged(
+  return await replaceWhileUnchanged(
     target,
     async () => {
       const info = await lstat(target).catch(() => null)
@@ -100,6 +104,8 @@ export async function removeFolderContextFile(
   )
 }
 
+export const removeFolderContextBlock = removeFolderContextFile
+
 /** Orca's own file goes whole (null). From a file the user wrote only Orca's block goes, with the
  *  line break after it and the one blank line Orca put before it, so the user's bytes stay; with no
  *  block there is nothing to do (undefined). */
@@ -118,7 +124,8 @@ function withoutOrcaText(existing: string, agentName: string): string | null | u
   if (blankBefore && (end === existing.length || blankAfter)) {
     start -= blankBefore[1].length
   }
-  return existing.slice(0, start) + existing.slice(end)
+  const next = existing.slice(0, start) + existing.slice(end)
+  return next.trim() ? next : null
 }
 
 const UPDATE_PASSES = 3
@@ -132,21 +139,22 @@ async function replaceWhileUnchanged(
   target: string,
   read: () => Promise<string | null | undefined>,
   next: (current: string | null) => string | null | undefined
-): Promise<void> {
+): Promise<boolean> {
   for (let pass = 0; pass < UPDATE_PASSES; pass++) {
     const current = await read()
     if (current === undefined) {
-      return
+      return false
     }
     // Rewritten even when equal, so a file made readable by others again goes back to 0600.
     const content = next(current)
     if (content === undefined) {
-      return
+      return false
     }
     if (await publishIfUnchanged(target, current, content)) {
-      return
+      return true
     }
   }
+  return false
 }
 
 /** False, changing nothing, when `target` no longer holds `expected`. The file never goes missing
