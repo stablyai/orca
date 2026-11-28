@@ -1,6 +1,6 @@
 // Where Tab stops inside an item row, for a long group that moves Tab on to the next row.
 import type { BotItem } from '../../../../../shared/bots/bot-items'
-import { BOT_ITEMS_SCROLLER_ATTR } from './bot-items-viewport'
+import { revealFocusBelowBotPanelHeader } from '../BotPanelStickyHeader'
 
 /** Which end of a row focus enters at: Tab forward lands on its first control, Shift+Tab on its last. */
 export type BotItemRowEdge = 'first' | 'last'
@@ -46,14 +46,8 @@ export function focusBotItemRow(
   quiet: boolean
 ): void {
   const control = rowFocusControl(row, edge, disabled)
-  const stickyHeader = quiet
-    ? row.closest(`[${BOT_ITEMS_SCROLLER_ATTR}]`)?.querySelector('[data-bot-panel-sticky-header]')
-    : null
-  if (
-    stickyHeader &&
-    row.getBoundingClientRect().top < stickyHeader.getBoundingClientRect().bottom
-  ) {
-    control?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  if (quiet && control) {
+    revealFocusBelowBotPanelHeader(control, row)
   }
   control?.focus({ preventScroll: quiet })
 }

@@ -10,6 +10,15 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
  *  which would scroll the list back to the top whenever a header control takes focus. */
 export const BOT_PANEL_STICKY_HEADER_CLEARANCE = '[&_*]:scroll-mt-[74px]'
 
+export function revealFocusBelowBotPanelHeader(control: HTMLElement, row = control): void {
+  const header = row
+    .closest('[data-bot-home-panel]')
+    ?.querySelector(':scope > [data-bot-panel-sticky-header]')
+  if (header && row.getBoundingClientRect().top < header.getBoundingClientRect().bottom) {
+    control.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }
+}
+
 export function BotPanelStickyHeader({ children }: { children: ReactNode }): React.JSX.Element {
   const sentinel = useRef<HTMLDivElement | null>(null)
   const [scrolledUnder, setScrolledUnder] = useState(false)
