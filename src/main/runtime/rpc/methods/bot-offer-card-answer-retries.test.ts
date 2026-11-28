@@ -180,7 +180,7 @@ function importItems(items: string[], sessionId: string | undefined = 'chat-1') 
     {
       botId: 'b1',
       sessionId,
-      text: `Import ${items}`,
+      text: `Import ${items.join(',')}`,
       answer: { cardId: 'plan', sent: { chosen: items } }
     },
     paired
