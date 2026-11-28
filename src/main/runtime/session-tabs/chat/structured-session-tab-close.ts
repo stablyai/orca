@@ -189,11 +189,10 @@ export abstract class OrcaRuntimeWithCloseStructuredAgentSessionTab extends Orca
       return
     }
     const { targetGroupId, focusesHost } = options
-    // Client-placed pages use the registry, not offscreen backing.
-    if (
-      !this.offscreenBrowserBackend &&
-      !getRuntimeBrowserPageRegistry(this).getPage(browserPageId)
-    ) {
+    // Client-placed pages use the registry, not offscreen backing. A teammate's page is picked in
+    // their own list (`showPersonSurface`), never the host's.
+    const clientPage = getRuntimeBrowserPageRegistry(this).getPage(browserPageId)
+    if (clientPage?.holder || (!this.offscreenBrowserBackend && !clientPage)) {
       return
     }
     // Hydrate first so the freshly created browser tab is present in the snapshot.

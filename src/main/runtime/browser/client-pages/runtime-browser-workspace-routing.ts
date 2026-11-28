@@ -64,7 +64,7 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
       action: params.action,
       explicitUrl: true,
       resolveExecutionHostKey: (id) => this.resolveBrowserExecutionHostKeyForWorkspace(id),
-      notifyWorkspace: (id) => this.notifyMobileSessionTabsChanged(id)
+      notifyPageList: (page) => this.notifyBrowserPageList(page)
     })
     // This UI action acknowledges accepted intent; the command owns load completion.
     void completion.catch(() => {})
@@ -104,7 +104,7 @@ export abstract class OrcaRuntimeWithBrowserWorkspaceRouting extends OrcaRuntime
       pages: getRuntimeBrowserPageRegistry(this),
       leases: getBrowserHostLeaseRegistry(this),
       resolveExecutionHostKey: (id) => this.resolveBrowserExecutionHostKeyForWorkspace(id),
-      notifyWorkspace: (id) => this.notifyMobileSessionTabsChanged(id),
+      notifyPageList: (page) => this.notifyBrowserPageList(page),
       resolveWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
     })

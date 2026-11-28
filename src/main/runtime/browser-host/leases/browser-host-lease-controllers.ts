@@ -19,7 +19,7 @@ export function createBrowserHostLeaseControllers(
   dependencies: {
     leases: Map<string, BrowserHostLeaseState>
     tunnels: BrowserHostTunnelRegistry
-    initializationChanged?: (workspaceId: string) => void
+    initializationChanged?: (page: { browserPageId: string; workspaceId: string }) => void
     reconnectGraceMs?: number
     fence(state: BrowserHostLeaseState, reason: BrowserHostFenceReason): void
   }

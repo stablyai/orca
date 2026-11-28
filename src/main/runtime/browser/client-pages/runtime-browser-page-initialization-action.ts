@@ -9,7 +9,8 @@ import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry
+  RuntimeBrowserPageRegistry,
+  PageListRef
 } from './runtime-browser-page-registry'
 import { admitRuntimeBrowserPageInitialization } from './runtime-browser-page-initialization'
 
@@ -48,7 +49,7 @@ export function actOnRuntimeBrowserInitialization(input: {
   action: BrowserPageInitializationAction
   explicitUrl?: boolean
   resolveExecutionHostKey(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyWorkspace(workspaceId: string): void
+  notifyPageList(page: PageListRef): void
 }): Promise<string | undefined> {
   const { pages, authority, page, action } = input
   const url = action.type === 'navigate' ? normalizeBrowserNavigationUrl(action.url) : undefined
@@ -101,7 +102,7 @@ export function actOnRuntimeBrowserInitialization(input: {
           agent: false
         }
   )
-  input.notifyWorkspace(page.workspaceId)
+  input.notifyPageList(page)
   return issued.result.then((result) => {
     if (result.status === 'failed') {
       throw new Error(result.errorCode)

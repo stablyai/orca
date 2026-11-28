@@ -141,16 +141,12 @@ export const BROWSER_CLIENT_HOST_METHODS = [
             emit
           )
         }
-        // A teammate's computer hosts only pages their own list opened, which redraw as they change.
-        const notifyHostList = handle.lease.teammate
-          ? () => {}
-          : (workspaceId: string) => runtime.notifyMobileSessionTabsChanged(workspaceId)
         // Adopt surviving client guests before recovery, which only reconciles records the runtime already knows.
         const adoption = await adoptRuntimeBrowserClientPagesFromInventory({
           lease: handle.lease,
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
-          notifyWorkspace: notifyHostList,
+          notifyPageList: (page) => runtime.notifyBrowserPageList(page),
           resolveExecutionHostKey: (workspaceId) =>
             runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
           signal: initializationSignal
@@ -169,7 +165,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
           authority: registry,
           pages: getRuntimeBrowserPageRegistry(runtime),
           pagePlacementsAtAttach,
-          notifyWorkspace: notifyHostList,
+          notifyPageList: (page) => runtime.notifyBrowserPageList(page),
           releaseUnrecoverablePage: (page) =>
             releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
           resolveExecutionHostKey: (workspaceId) =>
@@ -284,9 +280,8 @@ export const BROWSER_CLIENT_HOST_METHODS = [
         throw new Error('browser_runtime_page_required')
       }
       const accepted = pages.updatePageMetadata(params.browserPageId, placement, params)
-      // A teammate's own page redraws in their list alone (the registry's change listener).
-      if (accepted && !page.holder) {
-        runtime.notifyMobileSessionTabsChanged(page.workspaceId)
+      if (accepted) {
+        runtime.notifyBrowserPageList(page)
       }
       return { accepted }
     }

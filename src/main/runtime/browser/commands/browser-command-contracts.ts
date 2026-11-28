@@ -2,7 +2,10 @@ import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-br
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
-import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
+import type {
+  PageListRef,
+  RuntimeBrowserPageRegistry
+} from '../client-pages/runtime-browser-page-registry'
 import type { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 import type { BrowserBackend } from '../../../browser/browser-backend'
 import type { BrowserSessionTabSelectionOptions } from '../tabs/browser-tab-create-publication'
@@ -63,9 +66,10 @@ export type RuntimeBrowserCommandHost = {
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
   ): Promise<void>
-  /** The host's list changed in a workspace; naming the page whose change it was lets a teammate's
-   *  page notify only its own list (`notifiesHostList`). */
-  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string, browserPageId?: string): void
+  /** A workspace's engine tabs changed; a client page's change goes through `notifyBrowserPageList`. */
+  notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  /** A client page changed: only the list that holds it hears (`notifyBrowserPageList`). */
+  notifyBrowserPageList?(page: PageListRef): void
   /** A page's unsent notes; see readSavedBrowserPageAnnotations. */
   readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]
   /** The tab bar's browser tabs, loaded or not, from the published session snapshot. */

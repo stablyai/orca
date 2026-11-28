@@ -27,6 +27,10 @@ export function pageListOf(page: Pick<RuntimeBrowserClientPage, 'holder'>): Page
   return page.holder ?? 'host'
 }
 
+/** A page change is announced with the page (`notifyBrowserPageList`), never its workspace, so only
+ *  the list that holds it hears. */
+export type PageListRef = Pick<RuntimeBrowserClientPage, 'workspaceId' | 'holder'>
+
 export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
   private globalActivePageId: string | null = null
@@ -51,7 +55,7 @@ export class RuntimeBrowserPageRegistry {
   }
 
   /** Who holds a page as it is published (a teammate's own list that opened it, or none), and who
-   *  redraws when a held page changes. */
+   *  hears when a held page changes (`notifyBrowserPageList`: their list redraws and is saved). */
   setHolders(
     holderOf: (browserPageId: string) => TeammateTabListKey | null,
     onHeldPageChanged: (page: RuntimeBrowserClientPage) => void
@@ -253,12 +257,6 @@ export class RuntimeBrowserPageRegistry {
 
   getPage(browserPageId: string): RuntimeBrowserClientPage | undefined {
     return this.pages.get(browserPageId)
-  }
-
-  /** Whether a change to this page (or an engine tab, which has no record) is the host list's to
-   *  announce. A held page's own list redraws as its record is stored, never the host's. */
-  notifiesHostList(browserPageId: string | undefined): boolean {
-    return !(browserPageId && this.pages.get(browserPageId)?.holder)
   }
 
   /** The pages one list holds: the host's are those no teammate's own list holds. The only way to

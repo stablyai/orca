@@ -11,7 +11,7 @@ import {
   type AdoptableClientHostedPage
 } from '../../browser-host/client-pages/browser-host-client-page-adoption'
 import { isRestoredClientHostedBrowserPlacement } from './client-hosted-browser-page-persistence'
-import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type { PageListRef, RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 type AdoptionAuthority = Pick<
   BrowserHostLeaseRegistry,
@@ -33,7 +33,7 @@ export type RuntimeBrowserClientPageAdoptionOptions = {
   lease: BrowserHostLease
   authority: AdoptionAuthority
   pages: RuntimeBrowserPageRegistry
-  notifyWorkspace: (workspaceId: string) => void
+  notifyPageList: (page: PageListRef) => void
   /** The execution-host key that workspace's pages would be created under now. */
   resolveExecutionHostKey: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
@@ -167,7 +167,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
     )
   )
   const byPageId = new Map(adoptable.map((page) => [page.browserPageId, page]))
-  const publishedWorkspaces = new Set<string>()
+  const publishedLists = new Map<string, PageListRef>()
   const publishedPageIds: string[] = []
   for (const browserPageId of adoptedPageIds) {
     const page = byPageId.get(browserPageId)
@@ -200,7 +200,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         // Retire before replacing from host inventory: publishing over a live id is refused.
         options.pages.retirePage(browserPageId, restored.placement)
       }
-      options.pages.publishClientPage({
+      const adopted = options.pages.publishClientPage({
         browserPageId,
         workspaceId: page.workspaceId,
         browserProfileId: page.browserProfileId,
@@ -212,7 +212,7 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
         // Leave focus to client activation reports; adopting active would deactivate a visible sibling.
         active: false
       })
-      publishedWorkspaces.add(page.workspaceId)
+      publishedLists.set(`${adopted.holder ?? 'host'}\0${adopted.workspaceId}`, adopted)
       publishedPageIds.push(browserPageId)
     } catch (error) {
       console.warn('[browser-host-lease] client page adoption publish failed:', {
@@ -221,8 +221,8 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
       })
     }
   }
-  for (const workspaceId of publishedWorkspaces) {
-    options.notifyWorkspace(workspaceId)
+  for (const list of publishedLists.values()) {
+    options.notifyPageList(list)
   }
   const published = new Set(publishedPageIds)
   return {

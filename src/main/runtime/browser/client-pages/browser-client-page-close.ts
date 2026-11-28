@@ -14,6 +14,7 @@ export type BrowserClientPageCloseHost = Pick<
   | 'getBrowserHostLeaseRegistry'
   | 'retireRuntimeOwnedBrowserSessionTab'
   | 'notifyHeadlessBrowserSessionTabsChanged'
+  | 'notifyBrowserPageList'
   | 'resolveBrowserWorkspace'
 >
 
@@ -54,7 +55,7 @@ export async function retireRuntimeBrowserClientPage(
   if (host.retireRuntimeOwnedBrowserSessionTab) {
     host.retireRuntimeOwnedBrowserSessionTab(clientPage.workspaceId, clientPage.browserPageId)
   } else {
-    host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId, clientPage.browserPageId)
+    host.notifyBrowserPageList?.(clientPage)
   }
   return { closed: true }
 }

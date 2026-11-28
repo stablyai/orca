@@ -1,25 +1,27 @@
-/** Collect synchronous admission output; later real transitions publish immediately. */
+import type { PageListRef } from './runtime-browser-page-registry'
+
+/** Collect synchronous admission output, once per list; later real transitions publish immediately. */
 export function batchBrowserPageInitializationNotifications<T>(
-  notify: (workspaceId: string) => void,
-  admit: (notify: (workspaceId: string) => void) => T
+  notify: (page: PageListRef) => void,
+  admit: (notify: (page: PageListRef) => void) => T
 ): T {
   let collecting = true
-  const workspaces = new Set<string>()
-  const changed = (workspace: string): void => {
+  const lists = new Map<string, PageListRef>()
+  const changed = (page: PageListRef): void => {
     if (collecting) {
-      workspaces.add(workspace)
+      lists.set(`${page.holder ?? 'host'}\0${page.workspaceId}`, page)
     } else {
-      notify(workspace)
+      notify(page)
     }
   }
   try {
     return admit(changed)
   } finally {
     collecting = false
-    const pending = [...workspaces]
-    workspaces.clear()
-    for (const workspace of pending) {
-      notify(workspace)
+    const pending = [...lists.values()]
+    lists.clear()
+    for (const page of pending) {
+      notify(page)
     }
   }
 }

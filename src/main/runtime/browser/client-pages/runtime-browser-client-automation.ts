@@ -11,7 +11,8 @@ import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/brow
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry
+  RuntimeBrowserPageRegistry,
+  PageListRef
 } from './runtime-browser-page-registry'
 import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
@@ -28,7 +29,7 @@ type ClientAutomationRoute = {
   pages: RuntimeBrowserPageRegistry
   leases: BrowserHostLeaseRegistry
   resolveExecutionHostKey?(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyWorkspace?(workspaceId: string): void
+  notifyPageList?(page: PageListRef): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
 }
 
@@ -70,7 +71,7 @@ async function runOnClientPage(
     typeof requestParams.url === 'string' &&
     options.leases.clientPageInitializations.lease(page.browserPageId, page.placement) &&
     options.resolveExecutionHostKey &&
-    options.notifyWorkspace
+    options.notifyPageList
   ) {
     if (
       typeof requestParams.expectUrl === 'string' &&
@@ -89,7 +90,7 @@ async function runOnClientPage(
       page,
       action: { type: 'navigate', url: requestParams.url },
       resolveExecutionHostKey: options.resolveExecutionHostKey,
-      notifyWorkspace: options.notifyWorkspace
+      notifyPageList: options.notifyPageList
     })
     const current = options.pages.getPage(page.browserPageId)
     if (!current || !url) {

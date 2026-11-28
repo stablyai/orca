@@ -12,7 +12,8 @@ import type { BrowserHostLeaseIdentity } from '../../browser-host/leases/browser
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type {
   RuntimeBrowserClientPage,
-  RuntimeBrowserPageRegistry
+  RuntimeBrowserPageRegistry,
+  PageListRef
 } from './runtime-browser-page-registry'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 
@@ -29,7 +30,7 @@ export function admitRuntimeBrowserPageInitialization(input: {
   closeTimeoutMs?: number
   claim?(): void
   resolveExecutionHostKey(workspaceId: string): Promise<BrowserExecutionHostKeyResolution>
-  notifyWorkspace(workspaceId: string): void
+  notifyPageList(page: PageListRef): void
   releaseUnrecoverablePage?(page: RuntimeBrowserClientPage): void
   settled?(outcome: InitializationOutcome): void
   signal?: AbortSignal
@@ -55,7 +56,7 @@ export function admitRuntimeBrowserPageInitialization(input: {
     expected: page.placement,
     url: input.url,
     replace: input.replace,
-    changed: () => input.notifyWorkspace(page.workspaceId),
+    changed: () => input.notifyPageList(page),
     ...(input.previous ? { previous: input.previous } : {}),
     ...(input.pageHostGeneration === undefined
       ? {}
@@ -89,7 +90,7 @@ export function admitRuntimeBrowserPageInitialization(input: {
         url: redactKagiSessionToken(normalizeBrowserNavigationUrl(url) ?? url),
         loading: false
       })
-      input.notifyWorkspace(page.workspaceId)
+      input.notifyPageList(page)
       const published = input.pages.getPage(page.browserPageId)
       if (!published || !sameRuntimeBrowserPlacement(published.placement, placement)) {
         throw new Error('browser_page_placement_stale')

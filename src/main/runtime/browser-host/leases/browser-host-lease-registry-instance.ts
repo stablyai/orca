@@ -15,8 +15,11 @@ export function getBrowserHostLeaseRegistry(
   if (!registry) {
     registry = new BrowserHostLeaseRegistry({
       authorityRuntimeId: runtime.getRuntimeId(),
-      onClientPageInitializationChanged: (workspaceId) =>
-        runtime.notifyMobileSessionTabsChanged?.(workspaceId),
+      // A page not published yet (an adoption still initializing) is the host's.
+      onClientPageInitializationChanged: (page) =>
+        runtime.notifyBrowserPageList?.(
+          getRuntimeBrowserPageRegistry(runtime).getPage(page.browserPageId) ?? page
+        ),
       onClientPageReleased: (browserPageId, pageHostGeneration) => {
         void releaseBrowserClientDownloadTransfersForPage(
           runtime,

@@ -3,7 +3,8 @@ import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/c
 export type BrowserHostLeaseRegistryOptions = {
   authorityRuntimeId: string
   authorityEpoch?: string
-  onClientPageInitializationChanged?: (workspaceId: string) => void
+  /** Names the page, so only the list that holds it hears. */
+  onClientPageInitializationChanged?: (page: { browserPageId: string; workspaceId: string }) => void
   reconnectGraceMs?: number
   /** Release staged per-page state even after transport loss; an optional generation scopes cleanup. */
   onClientPageReleased?: (browserPageId: string, pageHostGeneration?: number) => void

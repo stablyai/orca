@@ -15,6 +15,10 @@ import {
   setRuntimeBrowserCommandsFactory
 } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { orcadClientPageCommand } from '../../orcad/browser-providers/orcad-client-page-commands'
+import { retainRuntimeBrowserClientPageRecord } from '../../runtime/browser/client-pages/runtime-browser-client-page-release'
+import { getBrowserHostRequestRegistry } from '../../runtime/browser-host/leases/browser-host-request-registry'
+import { BROWSER_HOST_WEBVIEW_CAPABILITY } from '../../runtime/browser-host/leases/browser-host-capability-selection'
+import { BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY } from '../../../shared/browser/client-hosting/browser-client-automation-protocol'
 
 afterEach(async () => {
   setRuntimeBrowserCommandsFactory(null)
@@ -100,6 +104,10 @@ const openFile = async (r: Rig, deviceId: string, relativePath: string) =>
     })
   ).activeTabId
 const tabIds = (tabs: Tabs) => tabs.tabs.map((tab) => tab.id)
+const pagesHeldBy = (r: Rig, deviceId: string) =>
+  getRuntimeBrowserPageRegistry(r.runtime)
+    .everyPage(r.workspace)
+    .filter((page) => page.pairedDeviceId === deviceId)
 
 /** All the owner has in the Home, byte for byte: their devices' lists, the host's list with its
  *  version and exit proofs, the owner's devices' picks, and the page pageless commands go to. */
@@ -138,6 +146,8 @@ it('opens a teammate’s terminal, page and file in their own list alone, each s
     .object({ parentTabId: z.string() })
     .parse(shown.tabs.find((tab) => tab.id === terminal.id))
   expect(shown.tabGroups).toMatchObject([{ activeTabId: parentTabId }])
+  // Unprojected too: a device with no pick of its own reads the list's own group.
+  expect((await r.list('mate-phone')).tabGroups).toMatchObject([{ activeTabId: parentTabId }])
   const page = await openPage(r, 'mate-desk')
   expect((await r.list('mate-desk')).activeTabId).toBe(page)
   const file = await openFile(r, 'mate-desk', 'notes/plan.md')
@@ -222,6 +232,59 @@ it('keeps the host’s page and page list when a teammate opens or picks one', a
   expect(tabIds(await r.list('owner-desk'))).toEqual([ownersPage])
   // Nothing of theirs reached the owner's stream.
   expect(ownersFrames.length).toBe(framesBefore)
+})
+
+it('keeps a teammate’s page in their own list across a host restart, and quiet to the owner', async () => {
+  servePagesHeadless()
+  const r = await rig()
+  hostPagesOnTheCallersComputer(r)
+  const ownersPage = await openPage(r, 'owner-desk')
+  const ownersFrames = await r.subscribe('owner-phone')
+  const framesBefore = ownersFrames.length
+  const matesPage = await openPage(r, 'mate-desk')
+  const page = getRuntimeBrowserPageRegistry(r.runtime).getPage(matesPage)!
+  // Their computer goes away: the page is kept for its return, and only their list hears.
+  retainRuntimeBrowserClientPageRecord(r.runtime, matesPage, page.placement)
+  await chatTabCommandsSettled()
+  expect(ownersFrames.length).toBe(framesBefore)
+
+  const fresh = await rig({ opened: await physicalReload(r) })
+  // As startup does.
+  fresh.runtime.rehydrateClientHostedBrowserPages()
+  expect(getRuntimeBrowserPageRegistry(fresh.runtime).getPage(matesPage)?.holder).toMatch(
+    /^teammate:/
+  )
+  expect(tabIds(await fresh.list('mate-phone'))).toEqual([matesPage])
+  expect(tabIds(await fresh.list('owner-desk'))).toEqual([ownersPage])
+})
+
+it('never picks a teammate’s computer for a page no one placed, nor asks it to host one', async () => {
+  servePagesHeadless()
+  const r = await rig()
+  hostPagesOnTheCallersComputer(r)
+  const worktree = `id:${r.workspace}`
+  r.stream('mate-desk', 'browser.clientHost.attach', {
+    authorityRuntimeId: r.runtime.getRuntimeId(),
+    browserHostClientId: 'mate-desk-host',
+    hostCapabilities: [BROWSER_HOST_WEBVIEW_CAPABILITY, BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY]
+  })
+  r.stream('mate-desk', 'runtime.clientEvents.subscribe', { browserHostRequests: true })
+  await vi.waitFor(() =>
+    expect(getBrowserHostLeaseRegistry(r.runtime).select('mate-desk-host').pairedDeviceId).toBe(
+      'mate-desk'
+    )
+  )
+  expect(getBrowserHostRequestRegistry(r.runtime).hasVolunteer()).toBe(false)
+  // The owner's open has no computer to go to; Mate's own create still lands on theirs.
+  expect(
+    await r.send('owner-desk', 'browser.openUrl', { worktree, url: 'https://example.com/' })
+  ).toMatchObject({ ok: false })
+  expect(pagesHeldBy(r, 'mate-desk')).toEqual([])
+  await openPage(r, 'mate-desk')
+  expect(pagesHeldBy(r, 'mate-desk')).toHaveLength(1)
+  // An owner's computer volunteers as before.
+  r.stream('owner-desk', 'runtime.clientEvents.subscribe', { browserHostRequests: true })
+  await vi.waitFor(() => expect(getBrowserHostRequestRegistry(r.runtime).hasVolunteer()).toBe(true))
 })
 
 it('stops, closes or sleeps only the host’s terminals of a Home, and never for a teammate', async () => {

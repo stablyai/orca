@@ -24,6 +24,7 @@ import { createMobileSessionTabsNotifyCoalescer } from '../../session-lifecycle/
 import { isSafeMobileRelativePath } from '../../files/mobile-file-kind'
 import { joinWorktreeRelativePath } from '../../files/paths/runtime-relative-paths'
 import { OrcaRuntimeWithPersonSessionTabs, type OwnList } from './person-session-tab-publication'
+import type { PageListRef } from '../../browser/client-pages/runtime-browser-page-registry'
 
 /** A chat tab write: the publication, and the person it is for. */
 export type PersonChatTabPublication = StructuredSessionTabPublicationInput & { person: TabPerson }
@@ -32,6 +33,8 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
   abstract listAutomationRuns(): AutomationRun[]
   abstract showAutomation(id: string): Automation
   abstract restoreStructuredAgentSessionTabs(): Promise<void>
+  abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
+  protected abstract persistClientHostedBrowserPagesForWorktree(worktreeId: string): void
 
   declare readonly browserTabCreate: RuntimeEdgeCommandSurface['browserTabCreate']
   declare readonly browserTabClose: RuntimeEdgeCommandSurface['browserTabClose']
@@ -186,6 +189,18 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
     const key = `${person}\0${worktreeId}`
     this.personListsToRedraw.set(key, { person, worktreeId })
     this.personListRedraws.schedule(key)
+  }
+
+  /** The one way a browser page's change is announced, from every page write and client-page path:
+   *  only the list that holds the page hears. A teammate's page redraws and saves their own list (so
+   *  it survives a restart); a host page notifies the host's list, which saves it. */
+  notifyBrowserPageList(page: PageListRef): void {
+    if (!page.holder) {
+      this.notifyMobileSessionTabsChanged(page.workspaceId)
+      return
+    }
+    this.persistClientHostedBrowserPagesForWorktree(page.workspaceId)
+    this.schedulePersonListRedraw(page.holder, page.workspaceId)
   }
 
   /** The chat tab write (reveal, create, Fork, publish) for the person it names: true when that is a

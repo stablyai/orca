@@ -222,6 +222,16 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
     await vi.waitFor(() => expect(frames.length).toBeGreaterThan(0))
     return frames
   }
+  /** A device's stream of any method, open while the test runs; its raw replies. */
+  const stream = (deviceId: string, method: string, params: unknown) => {
+    const replies: unknown[] = []
+    void dispatcher.dispatchStreamingObjects(
+      { id: `stream-${deviceId}-${randomUUID()}`, authToken: '', method, params },
+      (response) => replies.push(response),
+      context(deviceId)
+    )
+    return replies
+  }
   const create = async (deviceId: string, where = worktree) => {
     // The agent's runtime home is made under the app's data folder: the test's own.
     stubUserData()
@@ -250,6 +260,7 @@ export async function rig(options: { home?: 'rig' | 'other'; opened?: AuthorityR
     call,
     list,
     subscribe,
+    stream,
     create,
     /** The host's list in the rig's workspace, as the owner's window holds it. */
     hostChats: async () =>
