@@ -19,6 +19,10 @@ export function reconcileStartupManagedAgentHooks(host: {
   /** A server (orcad) has no card to ask, so it keeps installing every agent as it did before consent. */
   grantUnasked?: boolean
 }): void {
+  // Before the switch check: a server whose hooks are off today must still install once they're turned on.
+  if (host.grantUnasked) {
+    host.writeConsent(withUnaskedAgentsGranted(host.getSettings().agentHookConsent))
+  }
   if (!isAgentStatusHooksEnabled(host.getSettings())) {
     return
   }
@@ -30,9 +34,6 @@ export function reconcileStartupManagedAgentHooks(host: {
     .then(async ([controls, adoption]) => {
       if (host.isQuitting()) {
         return
-      }
-      if (host.grantUnasked) {
-        host.writeConsent(withUnaskedAgentsGranted(host.getSettings().agentHookConsent))
       }
       adoption.adoptPresentAgentHooks(host, controls.getManagedAgentHookStatuses)
       // Repairs only granted agents; undecided ones wait for the user's answer on the card.

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
+import { readThisComputerDetectedAgents } from '@/components/agent-hook-consent/agent-hook-consent-inventory'
 import { Button } from '@/components/ui/button'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,7 +21,11 @@ import { SettingsGroupNestedRows } from '../../section-layout/SettingsGroup'
 /** One row per detected agent Orca has hooks for: installed or not, with Install or Remove. */
 export function AgentHookConsentRows(): React.JSX.Element | null {
   const t = useTranslate()
-  const detected = useAppStore(readNativeDetectedAgents)
+  // Select the stored record (a stable reference); the merged list is derived from it.
+  const detectedByContext = useAppStore((state) => state.localDetectedAgentIdsByContext)
+  const detected = readThisComputerDetectedAgents({
+    localDetectedAgentIdsByContext: detectedByContext
+  })
   const settings = useAppStore((state) => state.settings)
   const ensureNativeDetectedAgents = useAppStore((state) => state.ensureNativeDetectedAgents)
   // null until the first read lands; an unknown status never offers an action.

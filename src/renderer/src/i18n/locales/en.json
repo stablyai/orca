@@ -31580,6 +31580,6 @@
     "declineFailed": "Couldn’t save your choice",
     "removeFailed": "Couldn’t remove hooks for {{agent}}",
     "approved": "Hooks approved for {{agent}}",
-    "approvedNext": "Orca adds them once it finds {{agent}} on this computer."
+    "approvedNext": "Orca adds them where {{agent}} is installed, the next time it starts there."
   }
 }

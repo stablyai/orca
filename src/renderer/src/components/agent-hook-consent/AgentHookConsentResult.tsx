@@ -64,7 +64,7 @@ export function AgentHookConsentResult({
           {done && view.waiting
             ? t(
                 'agentHookConsent.approvedNext',
-                'Orca adds them once it finds {{agent}} on this computer.',
+                'Orca adds them where {{agent}} is installed, the next time it starts there.',
                 { agent: name }
               )
             : done

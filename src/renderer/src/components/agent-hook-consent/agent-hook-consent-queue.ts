@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
-import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
+import { readThisComputerDetectedAgents } from './agent-hook-consent-inventory'
 import type { AppState } from '@/store/types'
 import { resolveWorktreeResourceTarget } from '@/runtime/hosts/platform/execution-host-facts'
 import type { AgentHookTarget } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
@@ -110,8 +110,8 @@ function isLocalWorktree(state: AppState, worktreeId: string): boolean {
  */
 function wantedAgents(): ReadonlySet<string> {
   const state = useAppStore.getState()
-  // This computer's CLIs, not the active workspace's (which can be a WSL or remote inventory).
-  const detectedAgentIds = readNativeDetectedAgents(state)
+  // This computer's CLIs (WSL distros included), never a remote host's.
+  const detectedAgentIds = readThisComputerDetectedAgents(state)
   if (!isAgentStatusHooksEnabled(state.settings) || !detectedAgentIds) {
     return new Set()
   }

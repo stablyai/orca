@@ -200,14 +200,18 @@ export function watchAgentTerminalArrivals(
   }
   report()
   const unsubscribe = useAppStore.subscribe((state, previous) => {
-    if (
-      !noteArrivalDirt(dirt, state, previous) &&
-      state.localDetectedAgentIdsByContext === previous.localDetectedAgentIdsByContext
-    ) {
+    // Nothing to find: keep no per-key record (it would grow with every pane ever touched);
+    // a later wanted agent gets its own full read instead.
+    if (pendingAgents().size === 0) {
+      dirt = nothing()
+      fullyRead.clear()
       return
     }
-    // Why check wanted before arming: once nothing is left to find, a write costs a catalog-sized check.
-    if (timer === null && pendingAgents().size > 0) {
+    const changed = noteArrivalDirt(dirt, state, previous)
+    if (
+      timer === null &&
+      (changed || state.localDetectedAgentIdsByContext !== previous.localDetectedAgentIdsByContext)
+    ) {
       timer = setTimeout(report, ARRIVAL_SCAN_MS)
     }
   })
