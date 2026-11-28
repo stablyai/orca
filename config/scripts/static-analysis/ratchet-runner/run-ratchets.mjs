@@ -15,7 +15,7 @@ const RUN_ELSEWHERE = new Set([
   // ast-grep-gates.mjs checks it from the ast-grep lint scan instead of scanning again.
   'check-flaky-test-pattern-ratchet.mjs'
 ])
-const MAIN_BLOCKING_RATCHETS = new Set([
+export const MAIN_BLOCKING_RATCHETS = new Set([
   'check-main-blocking-api-ratchet.mjs',
   'check-main-blocking-helper-ratchet.mjs',
   'check-main-sync-fs-ratchet.mjs'
@@ -33,7 +33,7 @@ export function listRatchetScripts(scriptsDir) {
     })
 }
 
-const MAIN_BLOCKING_RUNNER = path.join(
+export const MAIN_BLOCKING_RUNNER = path.join(
   'static-analysis',
   'ratchet-runner',
   'run-main-blocking-ratchets.mjs'
