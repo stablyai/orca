@@ -288,8 +288,8 @@ it('holds every removal in a pass whose item mail retention could not be read', 
   )
 
   // A store that answers on a later read does not release this pass's hold.
-  const answers: (ReadonlySet<string> | null)[] = [null]
-  await launch(root, 1, async () => answers.shift() ?? new Set())
+  let reads = 0
+  await launch(root, 1, async () => (reads++ === 0 ? null : new Set()))
   expect([ORPHAN, OWNED].map((id) => stored(root, id))).toEqual([true, true])
   expect(marks(root)).toEqual([ORPHAN])
 
