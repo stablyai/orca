@@ -195,6 +195,11 @@ export async function startLocalWorker(args: {
       launch,
       effects,
       onStage,
+      // A paired Orca coordinating here has no chat here to name a person.
+      coordinatorPerson:
+        callerSession && callerSession.kind !== 'peer'
+          ? runtime.existingChatTabPerson(callerSession.sessionId)
+          : null,
       followUp:
         retained && followUp && !terminal ? { ...followUp, reopen: retained.publish } : followUp
     })

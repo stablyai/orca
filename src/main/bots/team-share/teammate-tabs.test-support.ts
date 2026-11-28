@@ -27,7 +27,7 @@ import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-s
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { makeTestBot } from '../bot.test-fixture'
-import { structuredAgentSessionCreateFingerprint } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+import { createChatAs } from './teammate-chat-create.test-support'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
 import { TEAMMATE_HOMES_SESSION_PARTITION } from '../../../shared/workspace-session/teammate-homes-session-partition'
@@ -242,27 +242,8 @@ export async function rig(
     )
     return replies
   }
-  const create = async (deviceId: string, where = worktree) => {
-    // The agent's runtime home is made under the app's data folder: the test's own.
-    stubUserData()
-    const sessionId = randomUUID()
-    await call(deviceId, 'agentSession.create', {
-      envelope: {
-        sessionId,
-        clientOperationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
-        expectedRuntimeFence: null,
-        // As the client signs it.
-        payloadFingerprint: structuredAgentSessionCreateFingerprint({
-          sessionId,
-          worktree: where,
-          agent: 'codex'
-        })
-      },
-      worktree: where,
-      agent: 'codex'
-    })
-    return sessionId
-  }
+  const create = (deviceId: string, where = worktree, tabPlacement?: { afterTabId: string }) =>
+    createChatAs(call, deviceId, where, tabPlacement)
   /** A teammate's own workspace in the Home, as the host holds it. */
   const listOf = (teammate: { botId: string; accountId: string } = TEAMMATE) =>
     personWorkspaceKey({ folderWorkspaceId: homeFolder, ...teammate })
@@ -273,9 +254,17 @@ export async function rig(
     /** The chats in a teammate's own workspace, live, and its active tab. */
     mine: (teammate?: { botId: string; accountId: string }) => {
       const snapshot = opened.runtime['mobileSessionTabsByWorktree'].get(listOf(teammate))
+      const chatOf = (id: string) => snapshot?.tabs.find((tab) => tab.id === id)
       return {
         chats: (snapshot?.tabs ?? []).flatMap((tab) =>
           tab.type === 'agent-session' ? [tab.sessionId] : []
+        ),
+        /** The chats in the order the list shows them, group by group. */
+        order: (snapshot?.tabGroups ?? []).flatMap((group) =>
+          group.tabOrder.flatMap((id) => {
+            const tab = chatOf(id)
+            return tab?.type === 'agent-session' ? [tab.sessionId] : []
+          })
         ),
         activeTabId: snapshot?.activeTabId ?? null,
         snapshotVersion: snapshot?.snapshotVersion ?? 0

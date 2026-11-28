@@ -3,6 +3,10 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
  * Keep worker lineage/effects and background presentation in factories; caller passes the pre-decided mode.
  * Structured create refusals fail start through the worker error contract instead of silently downgrading. */
 
+import {
+  unnamedCreatorTabPerson,
+  type TabPerson
+} from '../../../../../../../bots/team-share/teammate-rules'
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { executeAgentLaunch } from '../../../../../../../agent-launch/agent-launch-executor'
@@ -72,6 +76,8 @@ type WorkerAgentPlacementArgs = {
   onStage: (stage: string) => void
   /** A follow-up continuing a worker; a closed one is brought back in place of a launch. */
   followUp?: WorkerFollowUp | undefined
+  /** Whom the starting chat here is for; its worker's tab is theirs. */
+  coordinatorPerson: TabPerson | null
 }
 
 /** Setup evidence for existing placements and failures before placement creation. */
@@ -263,7 +269,9 @@ function workerSurfaceFactory(
         agent,
         dispatchId: args.dispatchId,
         ...(args.launch.preferences ? { launchPreferences: args.launch.preferences } : {}),
-        effects: args.effects
+        effects: args.effects,
+        person:
+          args.coordinatorPerson ?? unnamedCreatorTabPerson(worktreeId, args.runtime.bots.list())
       })
       onStructuredSession(session)
       return {

@@ -64,18 +64,23 @@ export class PersonChatTabs {
 
   /** The lists whose saved chat rows are live this run. */
   private readonly hydrated = new Set<string>()
+  /** Chats closed in a list before it went live, whose saved rows may not have dropped yet. */
+  private readonly closedBeforeHydration = new Map<string, Set<string>>()
 
-  /** Before a list's first write this run: its saved chat rows, as they were placed, go live. */
+  /** Before a list's first write this run, once the chat host is up to name each chat's agent: its
+   *  saved chat rows, as they were placed, go live, less any closed before then. */
   private hydrate(list: string): void {
-    if (this.hydrated.has(list)) {
+    const sessions = getStructuredAgentSessionHost()?.deps.store
+    if (this.hydrated.has(list) || !sessions) {
       return
     }
     this.hydrated.add(list)
-    const sessions = getStructuredAgentSessionHost()?.deps.store
+    const closed = this.closedBeforeHydration.get(list)
+    this.closedBeforeHydration.delete(list)
     for (const tab of this.host.savedLists()?.unifiedTabs?.[list] ?? []) {
       const agent =
-        tab.contentType === 'agent-session'
-          ? sessions?.getConversation(tab.entityId)?.provider
+        tab.contentType === 'agent-session' && !closed?.has(tab.entityId)
+          ? sessions.getConversation(tab.entityId)?.provider
           : undefined
       if (agent) {
         this.host.project({
@@ -94,6 +99,7 @@ export class PersonChatTabs {
   open(list: PersonWorkspaceKey, chat: PersonChatOpen): Promise<void> {
     this.host.restoring()
     this.hydrate(list)
+    this.closedBeforeHydration.get(list)?.delete(chat.sessionId)
     const saved = this.host.saveChanges(list, [
       {
         open: {
@@ -110,6 +116,8 @@ export class PersonChatTabs {
       agent: chat.agent,
       activate: chat.activate,
       rowId: personChatTabId(chat.sessionId),
+      // As the owner's unawaited open: the save has not landed, so the saved order is not read.
+      savedOrder: undefined,
       ...(chat.notify === false ? { notify: false } : {}),
       ...(chat.placement ? { placement: chat.placement } : {})
     })
@@ -120,6 +128,12 @@ export class PersonChatTabs {
    *  does. Resolves once the save lands. */
   close(list: string, sessionId: string): Promise<void> {
     this.hydrate(list)
+    if (!this.hydrated.has(list)) {
+      this.closedBeforeHydration.set(
+        list,
+        (this.closedBeforeHydration.get(list) ?? new Set()).add(sessionId)
+      )
+    }
     const snapshot = this.host.snapshots().get(list)
     const next = snapshot ? retireStructuredAgentSessionTabFrom(snapshot, sessionId) : null
     if (next) {
@@ -176,8 +190,8 @@ export class PersonChatTabs {
     if (list) {
       this.hydrate(list)
     }
-    const chat = list ? findAddressedSessionTab(this.host.snapshots().get(list)?.tabs, tabId) : null
-    if (!list || chat?.type !== 'agent-session') {
+    const chat = list ? this.chatTab(list, tabId) : null
+    if (!list || !chat) {
       this.host.closeListTab(person, home, tabId)
       return committedMobileSessionTabClose(this.selections, home, [])
     }
@@ -187,6 +201,22 @@ export class PersonChatTabs {
     // Every chat in a shared agent's Home runs on when its tab closes, as the owner's do there.
     await this.close(list, chat.sessionId)
     return committedMobileSessionTabClose(this.selections, list, [chat.id])
+  }
+
+  /** The chat a tab of the list shows: live, or saved while the list is not live yet. */
+  private chatTab(list: string, tabId: string): { id: string; sessionId: string } | null {
+    const live = findAddressedSessionTab(this.host.snapshots().get(list)?.tabs, tabId)
+    if (live?.type === 'agent-session') {
+      return live
+    }
+    const saved = this.hydrated.has(list)
+      ? undefined
+      : this.host
+          .savedLists()
+          ?.unifiedTabs?.[list]?.find(
+            (tab) => tab.contentType === 'agent-session' && tab.id === tabId
+          )
+    return saved ? { id: saved.id, sessionId: saved.entityId } : null
   }
 
   private readonly selections = {

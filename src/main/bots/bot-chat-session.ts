@@ -1,6 +1,7 @@
 // An agent's sessions are native chats in its home folder; each person it works with has one ongoing
 // Home Chat: the owner's, shared with its direct messages, and one per teammate it is shared with.
 import { opensHostTab, type AutomationTriggeredBy } from '../../shared/bots/bot-acts-for'
+import { actsForTabPerson, HOST_STATE_PERSON } from './team-share/teammate-rules'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { randomUUID } from 'node:crypto'
 import {
@@ -255,11 +256,9 @@ export async function requireStructuredHost(
   runtime: OrcaRuntimeService
 ): Promise<StructuredAgentSessionHost> {
   await runtime.ensureStructuredAgentSessionHost()
-  const installed = getStructuredAgentSessionHost()
-  if (!installed) {
-    throw new Error('structured_sessions_unavailable')
-  }
-  return installed
+  return (
+    getStructuredAgentSessionHost() ?? Promise.reject(new Error('structured_sessions_unavailable'))
+  )
 }
 
 /** A new native chat in the bot's home, through native chat's own create, on the bot's agent (and its
@@ -313,6 +312,8 @@ export async function startBotSession(
     },
     worktree: botWorkspaceSelector(bot),
     agent: bot.agent,
+    // Whom it acts for names its tab's person; unrecorded is the host's own, as `opensHostTab` says.
+    person: input.actsFor ? actsForTabPerson(bot, input.actsFor.actsFor) : HOST_STATE_PERSON,
     // A picked model replaces the default selection, so a default effort for another model never rides along.
     // Background work always replaces it: the chat defaults hold the owner's last pick in any chat.
     ...(launch.model || input.background

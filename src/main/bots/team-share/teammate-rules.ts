@@ -48,6 +48,8 @@ import type { RpcCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import { lazyZodSchema } from '../../../shared/schema/lazy-zod-schema'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { botShareUsable } from '../../../shared/bots/bot-team-shares'
+import { botHomeOfActsFor, type BotHomeOf } from '../../../shared/bots/bot-home-of'
+import type { BotRequestAsker } from '../../../shared/bots/bot-acts-for'
 
 // ── 1. Methods ──────────────────────────────────────────────────────────────────────────────────
 
@@ -208,6 +210,34 @@ export const HOST_STATE_PERSON: TabPerson = 'owner'
 
 export function callerTabPerson(scope: RpcCallerScope | undefined): TabPerson {
   return scope?.kind === 'bot-share' ? teammateTabListKey(scope) : 'owner'
+}
+
+/** Whom a new chat's tab is for, named by its creator before the chat exists: a person, or no one
+ *  (no tab row in any list) when the creator cannot say whose it is. Never read back from the chat. */
+export type NewChatTabPerson = TabPerson | 'no-one'
+
+/** A bot chat's person, from whom it acts for: the teammate it acts for alone, else the owner. */
+export function actsForTabPerson(
+  bot: Pick<Bot, 'id' | 'shares'>,
+  actsFor: readonly BotRequestAsker[]
+): TabPerson {
+  return botHomeTabPerson(bot.id, botHomeOfActsFor(bot, actsFor))
+}
+
+/** The person whose Home of an agent a chat falls under. */
+export function botHomeTabPerson(botId: string, of: BotHomeOf): TabPerson {
+  return of === 'owner' ? 'owner' : teammateTabListKey({ botId, accountId: of.accountId })
+}
+
+/** A create whose creator names no person: the host's own in a workspace with one list, no one's in
+ *  an agent's Home, where every list is someone's. */
+export function unnamedCreatorTabPerson(
+  worktreeId: string,
+  bots: readonly Pick<Bot, 'folderWorkspaceId'>[]
+): NewChatTabPerson {
+  return bots.some((bot) => folderWorkspaceKey(bot.folderWorkspaceId) === worktreeId)
+    ? 'no-one'
+    : HOST_STATE_PERSON
 }
 
 /** The list a person's write lands in: their own in their agent's Home, the host's (the owner's,

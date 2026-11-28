@@ -9,7 +9,7 @@ import type {
 import {
   homeTabListOf,
   isTeammateTabList,
-  teammateTabListKey,
+  botHomeTabPerson,
   type TabListRef,
   type TabPerson,
   type TeammateTabListKey
@@ -168,15 +168,20 @@ export abstract class OrcaRuntimeWithPersonSessionTabWrites extends OrcaRuntimeW
    *  teammates alone is theirs (their Home Chat, a New chat they started); every other chat is the
    *  owner's. Read from the acts-for record, written once when the chat starts. */
   chatTabPerson(sessionId: string): TabPerson {
+    return this.existingChatTabPerson(sessionId) ?? 'owner'
+  }
+
+  /** An existing chat's person, as a creator it starts reads it; null when there is no such chat. */
+  existingChatTabPerson(sessionId: string): TabPerson | null {
     const workspaceId =
       getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.location.workspaceId
     const bot = this.store
       ?.getBots?.()
       .find((entry) => folderWorkspaceKey(entry.folderWorkspaceId) === workspaceId)
-    const of = bot ? botHomeOfChat(this, bot, sessionId) : 'owner'
-    return of === 'owner'
-      ? 'owner'
-      : teammateTabListKey({ botId: bot!.id, accountId: of.accountId })
+    if (workspaceId === undefined || !bot) {
+      return workspaceId === undefined ? null : 'owner'
+    }
+    return botHomeTabPerson(bot.id, botHomeOfChat(this, bot, sessionId))
   }
 
   /** The list a person's write lands in, in this workspace. */

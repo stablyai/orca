@@ -16,6 +16,7 @@ import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-s
 import type { RpcContext } from '../../core'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/shell/launch/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
+import { callerTabPerson } from '../../../../bots/team-share/teammate-rules'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
 import { supportedStructuredSeedOptions } from '../../../agent-session/installation/structured-agent-runtime-metadata'
 import { deliverTerminalAgentLaunchPrompt } from './agent-launch-terminal-prompt'
@@ -91,6 +92,7 @@ export function agentLaunchSurfaceFactory(
         },
         worktree: `id:${worktreeId}`,
         agent,
+        person: callerTabPerson(context.callerScope),
         ...(chatOptions?.model ? { optionsMode: 'replace-model-selection' as const } : {}),
         ...(seeded ? { options: seeded } : {}),
         ...(tabId ? { tabId } : {}),

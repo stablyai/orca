@@ -332,7 +332,7 @@ it('opens a teammate’s fork in their own list, placed and titled by its source
     itemId: throughItemId
   })
   // Placed after its source, live and saved.
-  expect(r.mine().chats).toEqual([C, sessionId, B])
+  expect(r.mine().order).toEqual([C, sessionId, B])
   expect(r.mineSaved()).toEqual([C, sessionId, B])
   expect(r.host.isSessionTabVisible(sessionId)).toBe(false)
   const row = r.runtime['toMobileSessionTabsResult'](
@@ -433,4 +433,26 @@ it('keeps a chat closed when its save lands after the restore, as under a main-o
 
   expect(fresh.mine().chats).toEqual([B])
   expect(fresh.mineSaved()).toEqual([B])
+})
+
+it('places a teammate’s create where asked while its save has not landed', async () => {
+  const r = await rig()
+  await r.reveal('mate-desk', C)
+  await r.reveal('mate-desk', B)
+  // Saves land later, in order, as main's layout queue applies them.
+  const save = r.runtime['changeWindowlessChatTabs'].bind(r.runtime)
+  const held: (() => Promise<void>)[] = []
+  r.runtime['changeWindowlessChatTabs'] = (...args) =>
+    new Promise<void>((resolve) => held.push(() => save(...args).then(resolve)))
+
+  const creating = r.create('mate-desk', undefined, { afterTabId: `agent-session:${C}` })
+  await vi.waitFor(() => expect(held).toHaveLength(1))
+  expect(r.mine().order).toEqual([C, expect.any(String), B])
+  for (const land of held.splice(0)) {
+    await land()
+  }
+  const created = await creating
+
+  expect(r.mine().order).toEqual([C, created, B])
+  expect(r.mineSaved()).toEqual([C, created, B])
 })
