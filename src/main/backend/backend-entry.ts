@@ -8,9 +8,10 @@ import {
 } from '../../shared/backend/backend-service-contract'
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
-import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
+import { agentTokenUsageDailySchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
 import { createDesktopBackendEnvironment } from './node-service-environment'
+import { BackendDocumentPeers } from './backend-document-peers'
 import { BackendServiceLifetime, activateBackendServices } from './service-composition'
 import { acquireOrcadInstanceLock } from '../orcad/instance-lock/orcad-instance-lock'
 import { OrcadInstanceLockError } from '../orcad/instance-lock/orcad-data-root-privacy'
@@ -46,9 +47,15 @@ if (!parent) {
 const incarnation = randomUUID()
 const lifetime = new BackendServiceLifetime()
 const abort = new AbortController()
-const clients = new Map<string, BackendPortRpc>()
 let control: BackendPortRpc | undefined
 let usage: ReturnType<typeof createUsageService> | undefined
+const documents = new BackendDocumentPeers(
+  incarnation,
+  async (_binding, method, params, signal) => {
+    await usage!.ready
+    return usage!.invoke(method, params, false, signal)
+  }
+)
 let stopping: Promise<void> | undefined
 let booting = false
 let startup: Promise<void> | undefined
@@ -62,9 +69,7 @@ function stop(): Promise<void> {
   stopping ??= (async () => {
     const deadline = setTimeout(() => process.exit(1), ORCAD_SHUTDOWN_DEADLINE_MS)
     abort.abort(new Error('Backend is stopping.'))
-    for (const client of clients.values()) {
-      client.close()
-    }
+    documents.closeAll()
     try {
       await startup?.catch(() => {})
       await lifetime.stop()
@@ -167,7 +172,8 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
       const { createUsageService } = await import('./usage-service')
       abort.signal.throwIfAborted()
       const call = async (method: string, params?: unknown): Promise<unknown> => {
-        return control!.call(method, params)
+        // Stopping cancels reads main is still serving instead of holding shutdown on them.
+        return control!.call(method, params, abort.signal)
       }
       usage = createUsageService({
         signal: abort.signal,
@@ -178,8 +184,11 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
         claudeProfileDirs: async () => (await call('usage.claudeProfileDirs')) as string[],
         telemetry: {
           isEnabled: async () => (await call('usage.telemetry.enabled')) === true,
-          capture: async (snapshot) =>
-            (await call('usage.telemetry.capture', agentTokenUsageSchema.parse(snapshot))) === true
+          capture: async (totals) =>
+            (await call(
+              'usage.telemetry.captureDaily',
+              agentTokenUsageDailySchema.parse(totals)
+            )) === true
         }
       })
       registerCleanup(() => usage!.stop())
@@ -198,7 +207,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
 
 parent.on('message', (event) => {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the owning desktop can send parent messages; every consumed field is validated below.
-  const message = event.data as { type?: unknown; config?: unknown; token?: unknown }
+  const message = event.data as { type?: unknown; config?: unknown; document?: unknown }
   const [port, ...surplus] = event.ports
   for (const extra of surplus) {
     extra.close()
@@ -214,31 +223,13 @@ parent.on('message', (event) => {
     })
     return
   }
-  if (message?.type === 'retire' && typeof message.token === 'string') {
-    clients.get(message.token)?.close()
+  if (message?.type === 'retire' && typeof message.document === 'string') {
+    documents.retire(message.document)
     port?.close()
     return
   }
-  if (
-    message?.type === 'client' &&
-    typeof message.token === 'string' &&
-    port &&
-    usage &&
-    !stopping
-  ) {
-    const token = message.token
-    clients.get(token)?.close()
-    let client: BackendPortRpc
-    client = new BackendPortRpc(
-      backendMessagePort(port),
-      incarnation,
-      async (method, params, signal) => {
-        await usage!.ready
-        return usage!.invoke(method, params, false, signal)
-      },
-      () => clients.delete(token)
-    )
-    clients.set(token, client)
+  if (message?.type === 'client' && port && usage && !stopping) {
+    documents.admit(message, backendMessagePort(port))
     return
   }
   port?.close()

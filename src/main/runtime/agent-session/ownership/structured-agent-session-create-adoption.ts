@@ -1,19 +1,12 @@
-import { stat } from 'node:fs/promises'
 import {
   agentSessionRefusalError,
   isAgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { prepareCodexAdoption } from '../../../native-chat/conversation-adoption/codex-adoption-preparation'
 import { isAiVaultTitleAgent } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import { generatedSessionTitle } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../../ai-vault/session-titles/session-title-resolver'
-import type { NativeCodexResumePreparation } from '../../../codex/history/resume/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
-import type {
-  StructuredAgentCliSourceEvidence,
-  StructuredAgentCliSourceLocator
-} from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { StructuredAgentCliSourceEvidence } from '../../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
   AgentSessionProviderHandle,
   StructuredAgentId
@@ -28,14 +21,14 @@ import { listStructuredProviderSessionOwnership } from '../../../native-chat/age
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,
-  resolveStructuredAgentSessionAdoption,
   structuredAdoptionConflictError
 } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
-import type {
-  StructuredAgentTranscriptImport,
-  StructuredAgentTranscriptImportSettings
-} from '../../../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import { resolveAdoptedTranscriptFolder } from '../../../native-chat/agent-session-journal/history-import/adopted-transcript-source'
+import {
+  findStructuredAgentSessionAdoptionTranscript,
+  type StructuredAgentSessionAdoptionInput
+} from './structured-agent-session-adoption-transcript'
 
 export type StructuredAgentSessionCreateIntentInput = {
   envelope: { sessionId: string; clientOperationId: string }
@@ -120,104 +113,13 @@ export function requireUnownedStructuredAgentSessionAdoption(input: {
   }
 }
 
-export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
-  settings: StructuredAgentTranscriptImportSettings
-  agent: StructuredAgentId
-  /** The agent's registered importer; only an agent with one adopts. */
-  transcriptImport: StructuredAgentTranscriptImport
-  providerSessionId: string
-  selectedAccountHome: AgentSessionAccountHome
-  launchEnv: NodeJS.ProcessEnv
-  workspaceCwd: string
-  conversationName?: string
-  resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
-  prepareCodexResume?: NativeCodexResumePreparation
-}) {
+export async function resolveStructuredAgentSessionAdoptionForCreate(
+  input: StructuredAgentSessionAdoptionInput
+) {
   try {
-    const source = input.resolveTranscriptSource?.()
-    const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
-    const candidates = await input.transcriptImport.accountHomeCandidates(input)
-    // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
-    const stores = new Map<AgentSessionAccountHome, string | null>()
-    const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
-      if (!stores.has(accountHome)) {
-        stores.set(
-          accountHome,
-          input.transcriptImport.conversationStore({
-            accountHome,
-            launchEnv: input.launchEnv
-          })
-        )
-      }
-      return stores.get(accountHome) ?? null
-    }
-    let admitted: { accountHome: AgentSessionAccountHome; path: string } | null = null
-    if (transcriptPath) {
-      for (const accountHome of candidates) {
-        const store = storeOf(accountHome)
-        const path = store
-          ? await input.transcriptImport.admitTranscriptPath({ store, transcriptPath })
-          : null
-        if (path) {
-          admitted = { accountHome, path }
-          break
-        }
-      }
-    }
-    if (transcriptPath && !admitted) {
-      throw new Error('The conversation account is not available on this host.')
-    }
-    const adoption = await resolveStructuredAgentSessionAdoption({
-      providerSessionId: input.providerSessionId,
-      ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
-      candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
-      resolveTranscript: async (args) => {
-        const exact = admitted?.path
-        if (exact) {
-          try {
-            if ((await stat(exact)).isFile()) {
-              return exact
-            }
-          } catch (error) {
-            if (
-              !(
-                error instanceof Error &&
-                'code' in error &&
-                (error.code === 'ENOENT' || error.code === 'ENOTDIR')
-              )
-            ) {
-              throw error
-            }
-          }
-        }
-        const store = storeOf(args.accountHome)
-        if (!store) {
-          return null
-        }
-        const found = await input.transcriptImport.findTranscript({
-          providerSessionId: args.providerSessionId,
-          store,
-          launchEnv: args.launchEnv,
-          workspaceCwd: args.workspaceCwd,
-          strictErrors: true
-        })
-        if (!found) {
-          return null
-        }
-        const path = await input.transcriptImport.admitTranscriptPath({
-          store,
-          transcriptPath: found
-        })
-        if (!path) {
-          throw new Error('The conversation path is outside its account storage.')
-        }
-        return path
-      },
-      launchEnv: input.launchEnv,
-      workspaceCwd: input.workspaceCwd
-    })
+    const { adoption, candidates } = await findStructuredAgentSessionAdoptionTranscript(input)
     // Title from where History found the transcript: Codex preparation may copy it to another home.
-    const [prepared, conversationName] = await Promise.all([
+    const [prepared, conversationName, folder] = await Promise.all([
       input.agent === 'codex'
         ? prepareCodexAdoption(
             adoption,
@@ -231,9 +133,15 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
           agent: input.agent,
           providerSessionId: input.providerSessionId,
           transcriptPath: adoption.transcriptPath
-        })
+        }),
+      // A conversation saved in a sub-folder of the workspace resumes in that folder.
+      resolveAdoptedTranscriptFolder({
+        agent: input.agent,
+        filePath: adoption.transcriptPath,
+        source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
+      })
     ])
-    return { ...prepared, conversationName }
+    return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error
@@ -268,11 +176,7 @@ async function resolveAdoptedConversationName(input: {
     ],
     AbortSignal.timeout(ADOPTED_CONVERSATION_NAME_TIMEOUT_MS)
   ).catch(() => ({ titles: [] }))
-  const title = titles[0]?.title
-  // History's "<Agent> <id prefix>" fallback names nothing.
-  return title && title !== generatedSessionTitle(input.agent, input.providerSessionId)
-    ? title
-    : undefined
+  return titles[0]?.title || undefined
 }
 
 /** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */

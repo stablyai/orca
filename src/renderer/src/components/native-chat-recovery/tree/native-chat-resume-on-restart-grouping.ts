@@ -6,7 +6,10 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
+import {
+  restartActivityWaitsOnPerson,
+  type AgentSessionRestartActivity
+} from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import type { StructuredAgentId } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 export type ResumeCandidate = {
@@ -14,7 +17,7 @@ export type ResumeCandidate = {
   workspaceId: string
   /** Older clients without registered-agent support receive only Claude/Codex offers. */
   agent: StructuredAgentId
-  trigger: 'quit' | 'update'
+  trigger: 'quit' | 'update' | 'crash'
   latestPrompt: string
   recordedAt: number
   /** Optional on the wire: an older host omits them, and a row must still render. */
@@ -23,6 +26,8 @@ export type ResumeCandidate = {
   model?: string
   /** What the chat was doing, snapshotted by the host as it stopped; an older host omits it. */
   activity?: AgentSessionRestartActivity
+  /** A terminal worker offered beside the chats: there is no chat to open. */
+  surface?: 'terminal'
 }
 
 /** Keep refused/unconfirmed offers until manual continuation, successful retry, dismissal or chat closure. */
@@ -221,12 +226,9 @@ export function allResumeSessionIds(candidates: readonly ResumeCandidate[]): str
   return candidates.map((candidate) => candidate.sessionId)
 }
 
-/** Its saved approval or question died with the agent; resuming only makes the agent ask again. */
-function waitedOnPerson(candidate: ResumeCandidate): boolean {
-  return candidate.activity?.state === 'blocked' && candidate.activity.prompts.length > 0
-}
-
 /** Chats that were working; chats waiting on the person stay offered until they choose. */
 export function launchResumeSessionIds(candidates: readonly ResumeCandidate[]): string[] {
-  return allResumeSessionIds(candidates.filter((candidate) => !waitedOnPerson(candidate)))
+  return allResumeSessionIds(
+    candidates.filter((candidate) => !restartActivityWaitsOnPerson(candidate.activity))
+  )
 }

@@ -3,6 +3,8 @@ import type { AgentMessageSource } from '../../../shared/agent-session/journal/a
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { JournalSubmissionInput } from './journal-store-contracts'
 
+export type JournalContinuationLaunch = { runtimeFence: number; launchFence: number | undefined }
+
 export type JournalSendAdmission = {
   input: JournalSubmissionInput
   fromPerson: boolean
@@ -10,6 +12,7 @@ export type JournalSendAdmission = {
   deliveryMode: 'queue' | 'steer'
   queueOnly?: true
   continuationOfTurnItemId?: string
+  expectedContinuationLaunch?: JournalContinuationLaunch
 }
 
 export type JournalSendAdmissionResult =

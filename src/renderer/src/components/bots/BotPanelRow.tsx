@@ -1,9 +1,15 @@
 // A calm one-line row of a bot's right panel: its state as the leading icon, then its name. Details sit in
 // a hover card beside the panel, which keyboard focus opens too, and in the row's accessible description.
-import { Fragment, useId } from 'react'
+import { Fragment, useId, useRef } from 'react'
 import { CircleAlert, CircleX, MoreHorizontal, Pause } from 'lucide-react'
 import { AgentWorkingSpinner } from '@/components/agent/status/AgentWorkingSpinner'
 import { Button } from '@/components/ui/button'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,29 +21,27 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
+import { upcomingAt, upcomingShort } from './bot-upcoming-copy'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
+import { useBotRowCardPlacement } from './use-bot-row-card-placement'
 
-/** Shows `card` beside the panel while `children` (the row's button) is hovered or keyboard-focused. */
-export function BotRowHoverCard({
-  card,
-  children
-}: {
+type BotRowHoverCardProps = {
   card: React.ReactNode
   children: React.ReactElement
-}): React.JSX.Element {
-  if (!card) {
-    return children
-  }
+}
+
+export function BotRowHoverCard(props: BotRowHoverCardProps): React.JSX.Element {
+  return props.card ? <BotRowPreview {...props} /> : props.children
+}
+
+function BotRowPreview({ card, children }: BotRowHoverCardProps): React.JSX.Element {
+  const placement = useBotRowCardPlacement()
   return (
-    <HoverCard openDelay={400} closeDelay={80}>
-      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent
-        side="left"
-        align="start"
-        sideOffset={12}
-        collisionPadding={8}
-        variant="row-details"
-      >
+    <HoverCard openDelay={400} closeDelay={80} {...placement.root}>
+      <HoverCardTrigger asChild {...placement.trigger}>
+        {children}
+      </HoverCardTrigger>
+      <HoverCardContent {...placement.content} variant="row-details">
         {card}
       </HoverCardContent>
     </HoverCard>
@@ -94,15 +98,20 @@ function botRowCardText({ state, facts }: BotRowCard): string {
 }
 
 export function BotPanelRow({
+  rowKey,
   icon,
   title,
   state,
   dimmed = false,
   card,
   onOpen,
+  next = null,
   actions,
-  actionsShown = false
+  actionsShown = false,
+  contextMenu
 }: {
+  /** Names the row for focus that moves to it after another leaves. */
+  rowKey?: string
   icon: React.ReactNode
   title: string
   /** The state the icon shows, read after the name ("Reshare X post, Failed"). */
@@ -117,10 +126,72 @@ export function BotPanelRow({
   actions?: React.ReactNode
   /** Keeps the actions shown, such as while one is busy. */
   actionsShown?: boolean
+  /** Its next run, said short at the row's end ("6:30 PM"), read against the panel's clock so it
+   *  rolls on with it; null when it has none to say. */
+  next?: { at: number; now: number } | null
+  /** Its right-click menu; none without. */
+  contextMenu?: readonly BotRowMenuItem[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const descriptionId = useId()
-  return (
-    <div className="group/item relative flex min-w-0 items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent">
+  const label = [
+    title,
+    state,
+    next
+      ? t('bots.automations.nextAt', 'next {{time}}', { time: upcomingAt(next.at, next.now) })
+      : null
+  ]
+    .filter(Boolean)
+    .join(', ')
+  const keyboardTitle = useRef<HTMLButtonElement | null>(null)
+  const restoreOnEscape = useRef(false)
+  const hasContextMenu = Boolean(contextMenu?.length)
+  const canOpenContextMenu = contextMenu?.some((item) => !item.disabled)
+  const openKeyboardMenu = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== 'F10' || !event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+      return
+    }
+    event.preventDefault()
+    if (!canOpenContextMenu || event.repeat) {
+      return
+    }
+    const titleButton = event.currentTarget
+    const anchor = titleButton.closest('[data-bot-panel-row]') ?? titleButton
+    const { left, bottom } = anchor.getBoundingClientRect()
+    keyboardTitle.current = titleButton
+    // Use the existing Radix trigger so keyboard and pointer share menu ownership and positioning.
+    titleButton.dispatchEvent(
+      new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        button: 2,
+        clientX: left,
+        clientY: bottom
+      })
+    )
+  }
+  const closeContextMenu = (event: Event): void => {
+    const titleButton = keyboardTitle.current
+    const restore = restoreOnEscape.current
+    keyboardTitle.current = null
+    restoreOnEscape.current = false
+    if (restore && titleButton?.isConnected) {
+      event.preventDefault()
+      const active = titleButton.ownerDocument.activeElement
+      if (!active || active === titleButton.ownerDocument.body || active === titleButton) {
+        titleButton.focus()
+      }
+    }
+  }
+  const row = (
+    <div
+      data-bot-panel-row={rowKey}
+      className={cn(
+        'group/item relative flex min-w-0 items-center gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent',
+        hasContextMenu &&
+          'has-[[data-bot-row-open]:focus-visible]:ring-1 has-[[data-bot-row-open]:focus-visible]:ring-ring has-[[data-bot-row-open]:focus-visible]:ring-inset'
+      )}
+    >
       <span
         className={cn('flex h-5 w-4 shrink-0 items-center justify-center', dimmed && 'opacity-60')}
       >
@@ -129,19 +200,37 @@ export function BotPanelRow({
       <BotRowHoverCard card={card ? <BotRowCardBody card={card} /> : null}>
         <button
           type="button"
-          aria-label={state ? `${title}, ${state}` : undefined}
+          aria-label={label === title ? undefined : label}
           aria-describedby={card ? descriptionId : undefined}
           aria-disabled={onOpen ? undefined : true}
+          aria-keyshortcuts={canOpenContextMenu ? 'Shift+F10' : undefined}
+          data-bot-row-open={onOpen ? '' : undefined}
           className={cn(
-            'min-w-0 flex-1 truncate rounded-sm text-left text-[13px] leading-5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'min-w-0 flex-1 truncate rounded-sm text-left text-[13px] leading-5 focus-visible:outline-none',
+            !hasContextMenu && 'focus-visible:ring-1 focus-visible:ring-ring',
             onOpen ? 'cursor-pointer' : 'cursor-default',
             dimmed ? 'text-muted-foreground' : 'text-foreground'
           )}
           onClick={onOpen}
+          onKeyDown={hasContextMenu ? openKeyboardMenu : undefined}
         >
           {title}
         </button>
       </BotRowHoverCard>
+      {next ? (
+        // The actions lay over it on hover or focus; invisible, it keeps the name's cut where it was.
+        <span
+          aria-hidden
+          className={cn(
+            'shrink-0 whitespace-nowrap text-xs leading-5 tabular-nums text-muted-foreground',
+            actionsShown
+              ? 'invisible'
+              : 'group-has-[:focus-visible]/item:invisible group-hover/item:invisible group-has-[[aria-expanded=true]]/item:invisible'
+          )}
+        >
+          {upcomingShort(next.at, next.now)}
+        </span>
+      ) : null}
       {card ? (
         <span id={descriptionId} hidden>
           {botRowCardText(card)}
@@ -160,6 +249,42 @@ export function BotPanelRow({
       ) : null}
     </div>
   )
+  if (!contextMenu || contextMenu.length === 0) {
+    return row
+  }
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger
+        asChild
+        onContextMenu={(event) => {
+          if (event.nativeEvent.isTrusted) {
+            keyboardTitle.current = null
+          }
+        }}
+      >
+        {row}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="w-52"
+        onEscapeKeyDown={() => {
+          restoreOnEscape.current = keyboardTitle.current !== null
+        }}
+        onCloseAutoFocus={closeContextMenu}
+      >
+        {contextMenu.map((item) => (
+          <ContextMenuItem
+            key={item.label}
+            variant={item.variant}
+            disabled={item.disabled}
+            onSelect={item.onSelect}
+          >
+            {item.icon}
+            {item.label}
+          </ContextMenuItem>
+        ))}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
 }
 
 /** What a row's leading icon says in place of its kind; null shows the kind. */
@@ -169,6 +294,8 @@ export type BotRowState =
   | { kind: 'alert'; label: string; reason?: string | null }
   | { kind: 'running'; label: string }
   | { kind: 'paused'; label: string }
+  /** Being deleted; never trouble, never dimmed. */
+  | { kind: 'deleting'; label: string }
 
 /** Failed and alert rows stay listed under a folded section. */
 export const isBotRowTrouble = (state: BotRowState | null): boolean =>
@@ -196,6 +323,12 @@ export function BotRowStateIcon({
       return <AgentWorkingSpinner className="size-3 shrink-0" />
     case 'paused':
       return <Pause aria-hidden className={cn(GLYPH, 'text-muted-foreground')} />
+    case 'deleting':
+      return (
+        <span aria-hidden className="flex">
+          <AgentWorkingSpinner className="size-3 shrink-0" />
+        </span>
+      )
   }
 }
 
@@ -236,6 +369,7 @@ export type BotRowMenuItem = {
   label: string
   onSelect: () => void
   disabled?: boolean
+  variant?: 'destructive'
 }
 
 /** A row's ⋯ menu: its commands, then a separator before where it opens. */
@@ -261,6 +395,7 @@ export function BotRowMoreMenu({
               {group.map((item) => (
                 <DropdownMenuItem
                   key={item.label}
+                  variant={item.variant}
                   disabled={item.disabled}
                   onSelect={item.onSelect}
                 >

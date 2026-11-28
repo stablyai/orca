@@ -1,12 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import React, { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
 import { useAppStore } from '@/store/index'
 import { getTerminalQuickCommandHostPromptMaxLength } from '@/lib/terminal/quick-commands/terminal-quick-command-host-prompt-limit'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  createTerminalQuickCommandDraft,
-  TerminalQuickCommandDialog
-} from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { createTerminalQuickCommandDraft } from '@/components/terminal-quick-commands/terminal-quick-command-dialog-draft'
+
+const LazyTerminalQuickCommandDialog = lazyWithRetry(
+  () =>
+    import('@/components/terminal-quick-commands/TerminalQuickCommandDialog').then((module) => ({
+      default: module.TerminalQuickCommandDialog
+    })),
+  { reloadKey: 'tab-bar-terminal-quick-command-dialog' }
+)
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
@@ -18,6 +26,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import { useQuickCommandEditorPresence } from './quick-command-editor-presence'
 import {
   flattenTerminalQuickCommandHosts,
   type HostedTerminalQuickCommand,
@@ -104,6 +113,8 @@ export function TabBarQuickCommandsButton({
     | { mode: 'edit'; command: TerminalQuickCommand; hostId: ExecutionHostId }
     | null
   >(null)
+  const hasOpenedEditor = useLatchedOpen(editor !== null)
+  useQuickCommandEditorPresence(worktreeId, editor !== null)
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
@@ -150,8 +161,8 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
-  const editorPromptMaxLength = useAppStore((state) =>
-    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  const editorPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(statuses, editor.hostId) : undefined
   )
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)
@@ -189,15 +200,19 @@ export function TabBarQuickCommandsButton({
             )}
           </TooltipContent>
         </Tooltip>
-        <TerminalQuickCommandDialog
-          open={editor !== null}
-          mode={editor?.mode ?? 'add'}
-          command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
-          repos={editorRepos}
-          agentPromptMaxLength={editorPromptMaxLength}
-          onOpenChange={(open) => !open && setEditor(null)}
-          onSave={handleSaveCommand}
-        />
+        {hasOpenedEditor ? (
+          <React.Suspense fallback={null}>
+            <LazyTerminalQuickCommandDialog
+              open={editor !== null}
+              mode={editor?.mode ?? 'add'}
+              command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
+              repos={editorRepos}
+              agentPromptMaxLength={editorPromptMaxLength}
+              onOpenChange={(open) => !open && setEditor(null)}
+              onSave={handleSaveCommand}
+            />
+          </React.Suspense>
+        ) : null}
       </>
     )
   }
@@ -220,15 +235,19 @@ export function TabBarQuickCommandsButton({
         onDeleteCommand={(entry) => void handleDeleteCommand(entry)}
         onRunCommand={handleRun}
       />
-      <TerminalQuickCommandDialog
-        open={editor !== null}
-        mode={editor?.mode ?? 'add'}
-        command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
-        repos={editorRepos}
-        agentPromptMaxLength={editorPromptMaxLength}
-        onOpenChange={(open) => !open && setEditor(null)}
-        onSave={handleSaveCommand}
-      />
+      {hasOpenedEditor ? (
+        <React.Suspense fallback={null}>
+          <LazyTerminalQuickCommandDialog
+            open={editor !== null}
+            mode={editor?.mode ?? 'add'}
+            command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
+            repos={editorRepos}
+            agentPromptMaxLength={editorPromptMaxLength}
+            onOpenChange={(open) => !open && setEditor(null)}
+            onSave={handleSaveCommand}
+          />
+        </React.Suspense>
+      ) : null}
     </>
   )
 }

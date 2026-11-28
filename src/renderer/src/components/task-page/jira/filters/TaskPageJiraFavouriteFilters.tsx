@@ -59,8 +59,8 @@ export function TaskPageJiraFavouriteFilters({
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          size="sm"
-          className="max-w-64"
+          size="toolbar"
+          className="max-w-44"
           title={active?.name}
           aria-label={
             active
@@ -71,7 +71,7 @@ export function TaskPageJiraFavouriteFilters({
           }
         >
           <Star />
-          <span className="truncate">
+          <span className="truncate @max-[40rem]/rail-page:hidden">
             {active ? active.name : t('jira.favourites.label', 'Jira favourites')}
           </span>
         </Button>

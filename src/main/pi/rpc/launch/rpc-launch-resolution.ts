@@ -29,7 +29,7 @@ import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-s
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
-  PI_RPC_SESSION_ENV_TO_DELETE,
+  withPiVisualsEnv,
   piToolLimit,
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
@@ -42,7 +42,8 @@ import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-ex
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
 import { writeAcpInstructionsFile } from '../../../acp/launch/acp-instructions'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { deliverHostMcpServersBesideConfig } from '../../../mcp-servers/session-host-mcp-delivery'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import {
   PI_BOT_TOOLS_EXTENSION_FILE,
   PI_BOT_TOOLS_EXTENSION_SOURCE,
@@ -198,9 +199,13 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const visuals = await basis.visuals()
     const linked = await basis.linkedSkills()
     // Only a folder with skills; Pi loads every SKILL.md under it, links included.
     const linkedRoot = linked.projects.length > 0 ? linked.root : null
+    const skillDirs = [visuals?.skill, linkedRoot].flatMap((root) =>
+      root ? [root.skillsRoot] : []
+    )
     const instructions = await basis.instructions(
       linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
     )
@@ -208,7 +213,8 @@ export function piRpcLaunchPart(
       ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
       : undefined
     const tools = piToolLimit(basis.readOnly, launchVersion)
-    const botTools = await basis.toolServers()
+    // Pi registers each server beside its own; a host-list server named like one of them stays out.
+    const botTools = await deliverHostMcpServersBesideConfig(basis, 'pi', { env, cwd })
     const botServers = piBotToolsConfig(botTools)
     // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
     if (deps.managedExtensionsEnabled?.()) {
@@ -238,7 +244,7 @@ export function piRpcLaunchPart(
         ...(replacement ? { replacement } : {}),
         ...(backgroundWork ? { backgroundWork } : {}),
         ...(instructionsFile ? { instructionsFile } : {}),
-        ...(linkedRoot ? { skillDirs: [linkedRoot.skillsRoot] } : {}),
+        ...(skillDirs.length > 0 ? { skillDirs } : {}),
         ...(tools ? { tools } : {}),
         ...(botServers
           ? {
@@ -257,8 +263,7 @@ export function piRpcLaunchPart(
           ? { shrinksImages: true as const }
           : {})
       },
-      env: withBotLaunchToolsEnv(withoutPiCallerEnv(env), botTools),
-      inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
+      ...withPiVisualsEnv(withSessionMcpToolsEnv(withoutPiCallerEnv(env), botTools), visuals)
     }
   }
 }

@@ -13,7 +13,3 @@ export function setBranchLineTotalMergeBase(worktreeId: string, mergeBase: strin
 export function getBranchLineTotalMergeBase(worktreeId: string): string | undefined {
   return branchLineTotalMergeBaseByWorktree.get(worktreeId)
 }
-
-export function clearBranchLineTotalRequestGateForTests(): void {
-  branchLineTotalMergeBaseByWorktree.clear()
-}

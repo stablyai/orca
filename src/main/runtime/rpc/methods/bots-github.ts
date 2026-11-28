@@ -1,8 +1,10 @@
 // `bots.github.*`: the host account's GitHub link and installs, as this host's own Orca account.
 import {
   BotGitHubDefaultBot,
+  BotGitHubUnlink,
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
+import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
 import { defineMethod } from '../core'
 import { withHostCloudClient } from './bots-slack'
 
@@ -12,15 +14,20 @@ export const BOT_GITHUB_METHODS = [
     permission: 'accounts-admin',
     params: null,
     // What the owner sees is what the next hello says, so a finished install reaches GitHub at once.
-    handler: async (_params, context) =>
-      withHostCloudClient(context, (client) => {
-        const { runtime } = context
-        const read = () => client.githubState()
-        const installations = runtime.connectorGitHubInstallations
-        return installations
-          ? installations.track(runtime.getConnectorCloud()?.signedInAccount() ?? null, read)
-          : read()
-      })
+    handler: async (_params, context) => {
+      const [state, gh] = await Promise.all([
+        withHostCloudClient(context, (client) => {
+          const { runtime } = context
+          const read = () => client.githubState()
+          const installations = runtime.connectorGitHubInstallations
+          return installations
+            ? installations.track(runtime.getConnectorCloud()?.signedInAccount() ?? null, read)
+            : read()
+        }),
+        readGhSignIn()
+      ])
+      return state.ok ? { ...state, value: { ...state.value, gh } } : state
+    }
   }),
   defineMethod({
     name: 'bots.github.users',
@@ -32,15 +39,15 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.unlink',
     permission: 'accounts-admin',
-    params: null,
-    handler: async (_params, context) =>
-      withHostCloudClient(context, (client) => client.unlinkGitHub())
+    params: BotGitHubUnlink,
+    handler: async ({ userId }, context) =>
+      withHostCloudClient(context, (client) => client.unlinkGitHub(userId))
   }),
   defineMethod({
     name: 'bots.github.setDefaultBot',
     permission: 'accounts-admin',
     params: BotGitHubDefaultBot,
-    handler: async ({ botId }, context) =>
-      withHostCloudClient(context, (client) => client.setGitHubDefaultBot(botId))
+    handler: async ({ botId, userId }, context) =>
+      withHostCloudClient(context, (client) => client.setGitHubDefaultBot(botId, userId))
   })
 ]

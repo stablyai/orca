@@ -1,6 +1,7 @@
 // What a paired client reads and may write of this host's settings.
 
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { HostOwnedSettings } from '../../../../shared/settings/host-owned-settings'
 import type { VoiceSettings } from '../../../../shared/speech/speech-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceCleanupRules } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy'
@@ -17,8 +18,6 @@ export type RuntimeClientSettings = Pick<
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'
   | 'agentStatusHooksEnabled'
-  | 'codexShareHistoryAcrossAccounts'
-  | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
   | 'terminalScrollbackRows'
@@ -42,7 +41,6 @@ export type RuntimeClientSettings = Pick<
   | 'agentSkillSharingEnabled'
   | 'machineName'
   | 'nativeChatPermissionMode'
-  | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
   | 'nativeChatCiResultLines'
   | 'sourceControlGroupOrder'
@@ -62,7 +60,10 @@ export type RuntimeClientSettings = Pick<
   voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
   /** Not `notifications`: older paired browsers merge that key over their own switches. */
   hostNotifications: HostNotificationSettings
-}
+  /** Where a phone's Linear account setup goes (the "New projects open on" host); the phone reads it once
+   *  when setup starts so a later change cannot move the key. Absent on older hosts. */
+  trackerAccountHost: ExecutionHostId
+} & HostOwnedSettings
 
 /** The Source Control AI switch and saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
 export type RuntimeClientSourceControlAi = {
@@ -102,11 +103,12 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'worktreeVisibilityDefaults'
   | 'machineName'
   | 'nativeChatPermissionMode'
-  | 'nativeChatAutoContinueAfterUsageLimit'
+  | 'nativeChatResumeWorkOnRestart'
   | 'nativeChatQueueFollowUps'
   | 'nativeChatCiResultLines'
+  | 'nativeChatAutoName'
   | 'workspaceCleanupPolicy'
   | 'prAutoRefresh'
   | 'newTabMenuLayout'
   | 'floatingTerminalNewTabMenuLayout'
-> & { hostNotifications?: Partial<HostNotificationSettings> }
+> & { hostNotifications?: Partial<HostNotificationSettings> } & Partial<HostOwnedSettings>

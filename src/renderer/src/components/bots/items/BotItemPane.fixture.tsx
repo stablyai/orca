@@ -4,6 +4,7 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody, BotItemDeletedNotice } from './BotItemView'
+import { BotItemLoading } from './BotItemLoading'
 import type { BotItemWalkState } from './use-bot-item-walk'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
@@ -192,6 +193,16 @@ export const noLinksScrolled = defineFixture({
   ...frozenScrolled,
   render: () => <Pane state={walk(3, 14)} activity={longActivity} />
 })
+export const loading = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="flex h-[420px] flex-col">
+      <BotItemPaneFrame walk={walk(3, 14, { pending: true })} offline={false} onBack={() => {}}>
+        {() => <BotItemLoading />}
+      </BotItemPaneFrame>
+    </div>
+  )
+})
 export const keyboard = defineFixture({
   ...longTitleScrolled,
   render: () => (
@@ -200,6 +211,23 @@ export const keyboard = defineFixture({
       shown={{ ...linked, title: longTitle }}
       activity={longActivity}
       hasEarlier
+    />
+  )
+})
+const HASH = 'sha256:9f2c4e7a1b3d5f60718293a4b5c6d7e8f9012a3b4c5d6e7f8091a2b3c4d5e6f7'
+// A hash in Done means and the close note wraps in place: the page never scrolls sideways.
+export const longTokens = defineFixture({
+  width: 260,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      shown={{
+        ...item,
+        status: 'done',
+        doneMeans: `Checksum equals ${HASH}`,
+        closeNote: `Verified ${HASH}`
+      }}
+      tall
     />
   )
 })
@@ -261,7 +289,7 @@ const answered: BotItemEvent[] = [
   }
 ]
 
-/** The open question, outlined, under two long messages folded at 8 lines. */
+/** The open question, tagged Needs you, under two long messages folded at 8 lines. */
 export const asking = defineFixture({
   width: 400,
   render: () => (
@@ -346,31 +374,23 @@ export const loadingNext = defineFixture({
   interact: () => new Promise((resolve) => setTimeout(resolve, 600))
 })
 
-/** An answerable open question: its card takes the comment box's place, and the arrows stay in a plain row below. */
-const carding = {
+/** A waiting question: the comment box stays, with the arrows in its row. */
+const waiting = {
   ...named,
   uid: 'uid-card',
   status: 'needs_you' as const,
-  question: { eventId: 'e3', text: QUESTION, answerable: true as const }
+  question: { eventId: 'e3', text: QUESTION }
 }
-function askingCardAt(width: number) {
+function askingAt(width: number) {
   return defineFixture({
     width,
-    render: () => <Pane state={walk(3, 14)} shown={carding} activity={thread} tall />,
+    render: () => <Pane state={walk(3, 14)} shown={waiting} activity={thread} tall />,
     interact: (frame) => scrollItem(frame, 'bottom')
   })
 }
-export const askingCard300 = askingCardAt(300)
-export const askingCardWide = askingCardAt(480)
-/** The card folded: the comment box is back, with the arrows in its row. */
-export const askingCardFolded = defineFixture({
-  ...askingCard300,
-  interact: async (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[aria-label="Collapse"]')?.click()
-    await scrollItem(frame, 'bottom')
-  }
-})
-/** A plain item at the same widths, to compare the arrows' x with the card's row. */
+export const asking300 = askingAt(300)
+export const askingWide = askingAt(480)
+/** A plain item at the same widths, to compare the arrows' x with a waiting question's. */
 export const plain300 = defineFixture({
   width: 300,
   render: () => <Pane state={walk(3, 14)} activity={thread} tall />

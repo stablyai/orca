@@ -86,6 +86,11 @@ export type DeviceKeyLookup =
   | { kind: 'refused' }
   | { kind: 'unavailable' }
 
+// Never-scanned QR tokens are not paired devices.
+export function isPairedMobileDevice(device: DeviceEntry): boolean {
+  return device.scope === 'mobile' && device.lastSeenAt > 0
+}
+
 // Only unscanned token rows are rotatable pairing offers; keyed rows never are.
 export function isPendingTokenRow(device: DeviceEntry): device is TokenDeviceEntry {
   return (

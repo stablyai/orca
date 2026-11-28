@@ -1,12 +1,15 @@
 import type { TaskPageLinearBoardModel } from '../../linear/issues/use-task-page-linear-board'
 import { useMemo, useCallback } from 'react'
-import { findTaskPageJiraIssue } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
+import { resolveTaskPageJiraIssues } from '@/components/task-page/jira/listing/task-page-jira-cache-selectors'
 import {
   getSingleJiraProjectScope,
-  getTaskPageJiraStatusOrderScopeKey,
-  getTaskPageJiraStatusOrderRuntimeScopeKey
+  getTaskPageJiraStatusOrderScopeKey
 } from '@/components/task-page/jira/listing/task-page-jira-status-order'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import {
+  ipcOrRuntimeTargetForHostId,
+  runtimeTargetEnvironmentId
+} from '@/runtime/rpc/targets/runtime-client-target'
+import { useEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   buildJiraIssueWorkspaceAttachmentIndex,
   collectLinkedJiraIssueRefs,
@@ -67,17 +70,11 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
   const linkedJiraIssueRefsSignature = JSON.stringify(linkedJiraIssueRefs)
   const displayedJiraIssues = useMemo(
     () =>
-      (jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues).map(
-        (issue) =>
-          findTaskPageJiraIssue(
-            jiraCacheSnapshot.issueCache,
-            jiraCacheSnapshot.searchCache,
-            issue.key,
-            {
-              sourceContext: jiraTaskSourceContext,
-              siteId: issue.siteId
-            }
-          ) ?? issue
+      resolveTaskPageJiraIssues(
+        jiraHasWorkspace ? filterLinkedJiraIssues(jiraIssues, appliedJiraSearch) : jiraIssues,
+        jiraCacheSnapshot.issueCache,
+        jiraCacheSnapshot.searchCache,
+        { sourceContext: jiraTaskSourceContext }
       ),
     [
       jiraIssues,
@@ -92,10 +89,16 @@ export function useTaskPageJiraListProjection(model: TaskPageLinearBoardModel) {
     () => getSingleJiraProjectScope(displayedJiraIssues),
     [displayedJiraIssues]
   )
-  const statusOrderRuntimeScopeKey = getTaskPageJiraStatusOrderRuntimeScopeKey(
-    jiraTaskSourceScopeKey,
-    ipcOrRuntimeTargetForHostId(jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId)
+  const statusOrderOwner = ipcOrRuntimeTargetForHostId(
+    jiraTaskSourceContext?.hostId ?? accountBackedTaskSourceHostId
   )
+  const statusOrderOwnerContextKey = useEnvironmentRuntimeContextKey(
+    statusOrderOwner ? runtimeTargetEnvironmentId(statusOrderOwner) : null
+  )
+  const statusOrderRuntimeScopeKey = JSON.stringify([
+    jiraTaskSourceScopeKey,
+    statusOrderOwner ? statusOrderOwnerContextKey : null
+  ])
   const displayedJiraStatusOrderScopeKey = displayedJiraProjectScope
     ? getTaskPageJiraStatusOrderScopeKey(statusOrderRuntimeScopeKey, displayedJiraProjectScope)
     : null

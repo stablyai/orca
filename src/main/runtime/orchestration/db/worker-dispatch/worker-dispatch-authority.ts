@@ -1,6 +1,7 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import { dispatchAssigneeOrcaSessionId } from '../../addressing/session-lineage/dispatch-assignee-orca-session-id'
+import type { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from './restart-cut-worker-start'
 
 export function prepareStartingWorkerAuthority(
   this: OrchestrationDb,
@@ -15,11 +16,18 @@ export function prepareStartingWorkerAuthority(
     effects: unknown[]
     setupState: string
     hostScope?: string | null
+    stage?: typeof RETAINED_CHAT_BEFORE_BRIEF_STAGE
     // Created terminals acquire custody; external reuse transfers only an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
+    /** The process Agent Sleep stopped in this same pane before resuming it as this one. */
+    sleptProcessIncarnation?: string | null
   }
 ): void {
-  this.db.exec('BEGIN IMMEDIATE')
+  // A retained follow-up already holds the write transaction that accepts its Dispatch.
+  const ownsTransaction = !this.db.isTransaction
+  if (ownsTransaction) {
+    this.db.exec('BEGIN IMMEDIATE')
+  }
   try {
     // Read under the transaction so guarded updates cannot race another state change.
     const dispatch = this.getDispatchContextById(params.dispatchId)
@@ -28,6 +36,18 @@ export function prepareStartingWorkerAuthority(
       throw new OrchestrationError(
         'dispatch_inactive',
         `Dispatch ${params.dispatchId} is not starting.`
+      )
+    }
+    // A terminal this start created binds only the process its custody recorded, never a replacement.
+    const custody = this.getWorkerTerminalResourceByOwner(params.dispatchId)
+    if (
+      params.terminalOwnership === 'created' &&
+      custody?.process_incarnation &&
+      custody.process_incarnation !== params.processIncarnation
+    ) {
+      throw new OrchestrationError(
+        'worker_identity_changed',
+        `Terminal ${params.handle} no longer runs the process Dispatch ${params.dispatchId} started.`
       )
     }
     if (
@@ -79,11 +99,12 @@ export function prepareStartingWorkerAuthority(
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET stage = 'authority_attached', worktree_id = ?, agent_terminal_handle = ?,
+         SET stage = ?, worktree_id = ?, agent_terminal_handle = ?,
              setup_state = ?, effects = ?, residual_resources = ?, updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'starting'`
       )
       .run(
+        params.stage ?? 'authority_attached',
         params.worktreeId,
         params.handle,
         params.setupState,
@@ -125,10 +146,12 @@ export function prepareStartingWorkerAuthority(
           params.paneKey && params.processIncarnation
             ? { paneKey: params.paneKey, processIncarnation: params.processIncarnation }
             : null
+        // A slept worker's custody names its stopped process; the resume in its pane inherits it.
         const transferable = exact
           ? this.findTransferableWorkerTerminalResource({
               terminalHandle: params.handle,
               ...exact,
+              processIncarnation: params.sleptProcessIncarnation ?? exact.processIncarnation,
               hostScope: params.hostScope ?? null
             })
           : undefined
@@ -157,9 +180,13 @@ export function prepareStartingWorkerAuthority(
         }
       }
     }
-    this.db.exec('COMMIT')
+    if (ownsTransaction) {
+      this.db.exec('COMMIT')
+    }
   } catch (error) {
-    this.db.exec('ROLLBACK')
+    if (ownsTransaction) {
+      this.db.exec('ROLLBACK')
+    }
     throw error
   }
 }

@@ -14,7 +14,7 @@ export function agentReadsSkill(
   sources: readonly SkillDiscoverySource[]
 ): boolean {
   const owner = agent === 'claude-agent-teams' ? 'claude' : agent
-  const reader = getNativeChatAgentProfile(agent) ?? { skillSourceOwner: owner }
+  const reader = getNativeChatAgentProfile(owner) ?? { skillSourceOwner: owner }
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
   return rootPaths.some((rootPath) =>
     sources.some(

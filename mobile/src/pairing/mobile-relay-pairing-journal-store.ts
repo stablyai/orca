@@ -9,7 +9,6 @@ import {
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
-  resetPairingKeychainForTests,
   writePairingKeychainItem
 } from '../host-credentials/pairing-keychain'
 
@@ -200,11 +199,4 @@ function requireNativeSecretStore(): void {
   if (Platform.OS === 'web') {
     throw new Error('Orca Relay pairing requires a native secret store')
   }
-}
-
-export function resetMobileRelayPairingJournalStoreForTests(): void {
-  journalMutation = Promise.resolve()
-  inFlightJournalIds.clear()
-  publications.clear()
-  resetPairingKeychainForTests()
 }

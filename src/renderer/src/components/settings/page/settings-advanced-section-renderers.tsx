@@ -85,6 +85,7 @@ export function renderExperimentalSettingsSection(
           settings={model.settings}
           updateSettings={model.updateSettings}
           hiddenExperimentalUnlocked={model.hiddenExperimentalUnlocked}
+          optInOnlyExperimentRows={model.optInOnlyExperimentRows}
         />
       ) : null}
     </SettingsSection>

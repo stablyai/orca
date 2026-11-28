@@ -13,7 +13,7 @@ function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
   )
 }
 
-type WorkerSetupStageArgs = {
+export type WorkerSetupStageArgs = {
   db: OrchestrationDb
   dispatchId: string
   worktreeId: string

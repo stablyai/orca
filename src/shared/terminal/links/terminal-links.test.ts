@@ -149,6 +149,47 @@ describe('terminal path helpers', () => {
     expect(osc).toMatchObject({ kind: 'path', link: { pathText, line } })
   })
 
+  it.each([
+    ['D:/tmp/test.md#L11', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/test.md#L11-13', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/test.md#L11-L13', true, 'D:/tmp/test.md', 11, null],
+    ['D:/tmp/notes#1.md', true, 'D:/tmp/notes#1.md', null, null],
+    ['/tmp/test.md#L11', false, '/tmp/test.md', 11, null],
+    ['/tmp/test.md#L11C4-L13', false, '/tmp/test.md', 11, 4],
+    ['docs/notes#1.md', false, 'docs/notes#1.md', null, null]
+  ])(
+    'reads a line fragment on OSC hyperlink path %s',
+    (target, windowsPathsFirst, pathText, line, column) => {
+      const osc = classifyTerminalOscLinkTarget(target, { windowsPathsFirst, allowUncHost: false })
+      expect(osc).toMatchObject({ kind: 'path', link: { pathText, line, column } })
+    }
+  )
+
+  it.each(['file:///D:/tmp/test.md#L11-L13', 'file:///D:/tmp/test.md#L11-13'])(
+    'reads the start line of file URL line-range fragment %s',
+    (target) => {
+      const osc = classifyTerminalOscLinkTarget(target, {
+        windowsPathsFirst: true,
+        allowUncHost: false
+      })
+      expect(osc).toMatchObject({
+        kind: 'file-url',
+        target: { filePath: 'D:/tmp/test.md', line: 11 }
+      })
+    }
+  )
+
+  it.each([
+    ['file:///tmp/report%3A12', '/tmp/report:12', null, null],
+    ['file:///tmp/report%3A12:8:3', '/tmp/report:12', 8, 3]
+  ])('keeps an encoded colon in file URL %s as filename text', (target, filePath, line, column) => {
+    const osc = classifyTerminalOscLinkTarget(target, {
+      windowsPathsFirst: false,
+      allowUncHost: false
+    })
+    expect(osc).toEqual({ kind: 'file-url', target: { filePath, line, column } })
+  })
+
   it('does not read a malformed URL OSC hyperlink target as a path', () => {
     const osc = classifyTerminalOscLinkTarget('https://exa mple.com', {
       windowsPathsFirst: false,

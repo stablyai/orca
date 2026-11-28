@@ -1,7 +1,8 @@
 import { parentPort } from 'node:worker_threads'
 import type {
   PluginSourceTranspileRequest,
-  PluginSourceTranspileResponse
+  PluginSourceTranspileResponse,
+  PluginSourceTranspileWorkerReady
 } from './source-transpilation/plugin-source-transpile-protocol'
 import { transpilePluginSource } from './source-transpilation/plugin-source-transpiler'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
@@ -22,3 +23,6 @@ port.on('message', (request: PluginSourceTranspileRequest) => {
   }
   port.postMessage(response)
 })
+
+const ready: PluginSourceTranspileWorkerReady = { ready: true }
+port.postMessage(ready)

@@ -18,6 +18,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/host-guest/retention/browser-automation-visibility-store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import { listenForBrowserLoadStalls } from '@/components/browser-pane/navigate/use-browser-load-stall-status'
 import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'
 import {
@@ -103,6 +104,7 @@ export function registerBrowserStateIpcBridge(
   if (unsubscribeCertificateFailure) {
     unsubs.push(unsubscribeCertificateFailure)
   }
+  unsubs.push(listenForBrowserLoadStalls())
   // Why no runtime guard: only guests in this process report, and streamed pages have none here.
   const unsubscribeAudioState = window.api.browser.onAudioStateChanged?.(
     ({ browserPageId, audible }) => {
@@ -117,6 +119,19 @@ export function registerBrowserStateIpcBridge(
   )
   if (unsubscribeAudioState) {
     unsubs.push(unsubscribeAudioState)
+  }
+  // A paired viewer's mute lands in this window's tab state, so the strip and the published row agree.
+  const unsubscribeAudioMuted = window.api.browser.onAudioMutedChanged?.(
+    ({ browserPageId, muted }) => {
+      const store = useAppStore.getState()
+      const tabId = findPage(store.browserPagesByWorkspace, browserPageId)?.workspaceId
+      if (tabId) {
+        store.setBrowserTabAudioMuted(tabId, muted)
+      }
+    }
+  )
+  if (unsubscribeAudioMuted) {
+    unsubs.push(unsubscribeAudioMuted)
   }
   unsubs.push(
     window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {

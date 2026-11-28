@@ -4,7 +4,21 @@ import {
   sanitizeAgentSessionAttachmentName
 } from '../../../shared/agent-session/agent-session-attachments'
 import type { AgentSessionExpiredAttachment } from '../../../shared/agent-session/failures/agent-session-expired-attachments'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalToolCallItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+/** Items that can name store uploads: messages, and tool calls through the images they returned. */
+export type AgentSessionAttachmentReferrer = AgentJournalMessageItem | AgentJournalToolCallItem
+
+type ReferenceBlock = AgentJournalMessageItem['blocks'][number]
+
+function referenceBlocks(body: AgentSessionAttachmentReferrer): readonly ReferenceBlock[] {
+  return body.kind === 'message'
+    ? body.blocks
+    : (body.outputImagePaths ?? []).map((path): ReferenceBlock => ({ type: 'image-ref', path }))
+}
 
 export const AGENT_SESSION_ATTACHMENT_PART_FILE = '.upload.part'
 
@@ -54,7 +68,7 @@ function normalizedRoot(root: string, platform: NodeJS.Platform): string {
 
 type AttachmentReference = {
   uploadId: string
-  block: AgentJournalMessageItem['blocks'][number]
+  block: ReferenceBlock
   text: string
   rootStart: number
   idEnd: number
@@ -63,7 +77,7 @@ type AttachmentReference = {
 /** Match exact decoded store roots; quoting/spaces cannot hide references and Windows accepts either separator. */
 function* attachmentReferences(
   root: string,
-  body: AgentJournalMessageItem,
+  body: AgentSessionAttachmentReferrer,
   platform: NodeJS.Platform
 ): Generator<AttachmentReference> {
   const ownRoot = normalizedRoot(root, platform)
@@ -71,7 +85,7 @@ function* attachmentReferences(
     `${AGENT_SESSION_ATTACHMENTS_DIR_NAME}[\\\\/](${UPLOAD_ID_SOURCE})(?![0-9a-z-])`,
     platform === 'win32' ? 'gi' : 'g'
   )
-  for (const block of body.blocks) {
+  for (const block of referenceBlocks(body)) {
     const text =
       block.type === 'text' ? block.text : block.type === 'image-ref' ? block.path : undefined
     if (!text) {
@@ -95,7 +109,7 @@ function* attachmentReferences(
 
 export function agentSessionAttachmentReferences(
   root: string,
-  body: AgentJournalMessageItem,
+  body: AgentSessionAttachmentReferrer,
   platform: NodeJS.Platform = process.platform
 ): Set<string> {
   const uploadIds = new Set<string>()
@@ -103,6 +117,25 @@ export function agentSessionAttachmentReferences(
     uploadIds.add(uploadId)
   }
   return uploadIds
+}
+
+/** Claim only the remaining uploads when an older outbox entry refers to files already lost. */
+export function agentSessionAttachmentClaimWithoutUploads(
+  root: string,
+  body: AgentJournalMessageItem,
+  excluded: ReadonlySet<string>
+): AgentJournalMessageItem {
+  const kept = new Map<string, string>()
+  for (const { uploadId, text, rootStart, idEnd } of attachmentReferences(
+    root,
+    body,
+    process.platform
+  )) {
+    if (!excluded.has(uploadId)) {
+      kept.set(uploadId, text.slice(rootStart, idEnd))
+    }
+  }
+  return { ...body, blocks: [...kept.values()].map((text) => ({ type: 'text' as const, text })) }
 }
 
 /** An image block is the whole path; a text reference ends at its quote, or at whitespace because only paths without any go unquoted. */
@@ -125,7 +158,7 @@ function referencedFileName({ block, text, rootStart, idEnd }: AttachmentReferen
 /** Each listed upload with the file name the message gave it, or its id when it gave none, since an expired upload has nothing left on disk to read one from. */
 export function agentSessionAttachmentReferenceNames(
   root: string,
-  body: AgentJournalMessageItem,
+  body: AgentSessionAttachmentReferrer,
   uploadIds: readonly string[],
   platform: NodeJS.Platform = process.platform
 ): AgentSessionExpiredAttachment[] {

@@ -6,6 +6,26 @@ import {
 } from '../../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginMarketplaceFetchResult } from './plugin-marketplace-fetch'
 import type { PluginMarketplaceRegisteredSource } from './plugin-marketplace-store'
+import type { PluginImageCache } from '../media/plugin-image-cache'
+
+export async function cacheValidatedMarketplace(
+  source: PluginMarketplaceRegisteredSource,
+  fetched: PluginMarketplaceFetchResult,
+  cache: PluginImageCache | null
+): Promise<PluginMarketplaceFetchResult> {
+  validateMarketplaceProvenance(source, fetched)
+  if (cache) {
+    await Promise.all(
+      (fetched.images ?? []).map((image) =>
+        cache.put(image).catch((error: unknown) => {
+          console.warn('[plugins] could not cache marketplace image:', error)
+          return null
+        })
+      )
+    )
+  }
+  return fetched
+}
 
 export function validateMarketplaceProvenance(
   source: PluginMarketplaceRegisteredSource,

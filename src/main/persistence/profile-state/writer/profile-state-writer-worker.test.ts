@@ -9,6 +9,7 @@ import { openProfileStateDatabase } from '../database/profile-state-database'
 import { readProfileStateSnapshot } from '../documents/profile-state-documents'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
 import { profileStateWriterFailureOutcome } from './profile-state-writer-errors'
+import { ProfileStateWorkerAuthority } from '../profile-state-worker-authority'
 
 let bundleRoot: string
 let workerPath: string
@@ -180,5 +181,76 @@ describe('persistent profile state write worker', () => {
     expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
+  })
+
+  async function interruptedAuthority(
+    root: string,
+    f: ReturnType<typeof fixture>,
+    afterCommit: boolean,
+    onFailure?: (error: Error) => void
+  ) {
+    const interruptedPath = join(root, 'interrupted-worker.cjs')
+    const marker = JSON.stringify(join(root, 'interrupted-once'))
+    const exitOnce = `if (!require('node:fs').existsSync(${marker})) { require('node:fs').writeFileSync(${marker}, ''); process.exit(17) }`
+    await build({
+      entryPoints: [
+        resolve('src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts')
+      ],
+      outfile: interruptedPath,
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      logLevel: 'silent',
+      plugins: [
+        {
+          name: 'interrupt-first-transaction',
+          setup(builder) {
+            builder.onLoad({ filter: /profile-state-write-transaction\.ts$/ }, (args) => ({
+              contents: readFileSync(args.path, 'utf8').replace(
+                "db.exec('COMMIT')",
+                afterCommit ? `db.exec('COMMIT'); ${exitOnce}` : `${exitOnce}; db.exec('COMMIT')`
+              ),
+              loader: 'ts'
+            }))
+          }
+        }
+      ]
+    })
+    const authority = new ProfileStateWorkerAuthority(f.initialization, {
+      workerPath: interruptedPath,
+      onFailure
+    })
+    await authority.ready
+    const failure = await authority
+      .writeSerializedDomains([{ domain: 'settings', payload: '{"interrupted":true}' }])
+      .catch((error: unknown) => error)
+    expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    return authority
+  }
+
+  it('reopens after an indeterminate write only when the transaction did not commit', async () => {
+    const rolledBack = fixture()
+    const recovered = await interruptedAuthority(rolledBack.root, rolledBack, false)
+    await expect(
+      recovered.writeSerializedDomains([{ domain: 'settings', payload: '{"recovered":true}' }])
+    ).resolves.toBeUndefined()
+    await recovered.close()
+    expect(readState(rolledBack.path, rolledBack.profileId)).toEqual({
+      settings: { recovered: true }
+    })
+
+    const committed = fixture()
+    const failures: Error[] = []
+    const refused = await interruptedAuthority(committed.root, committed, true, (error) =>
+      failures.push(error)
+    )
+    await expect(
+      refused.writeSerializedDomains([{ domain: 'settings', payload: '{"overwrite":true}' }])
+    ).rejects.toMatchObject({ code: 'profile-state-revision-conflict' })
+    expect(failures.map(profileStateWriterFailureOutcome)).toEqual(['indeterminate'])
+    await refused.close().catch(() => {})
+    expect(readState(committed.path, committed.profileId)).toEqual({
+      settings: { interrupted: true }
+    })
   })
 })

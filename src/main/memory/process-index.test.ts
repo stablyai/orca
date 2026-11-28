@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsePsOutput } from './process-index'
+import { buildProcessIndex, collectSubtree, parsePsOutput, type ProcRow } from './process-index'
 import {
   parseTypeperfProcessOutput,
   parseWindowsProcessSample
@@ -30,5 +30,37 @@ describe('process sweep executable names', () => {
     expect(typeperf).toEqual([
       { pid: 42, ppid: 7, cpu: 0, memory: 1048576, privateMemory: 2097152, name: 'node' }
     ])
+  })
+})
+
+describe('a process tree on Windows after PID reuse', () => {
+  it('leaves out a process created before the parent it names', () => {
+    const rows: ProcRow[] = [
+      { pid: 100, ppid: 1, cpu: 0, memory: 1, startTicks: 2_000n },
+      { pid: 200, ppid: 100, cpu: 0, memory: 1, startTicks: 1_000n },
+      { pid: 300, ppid: 100, cpu: 0, memory: 1, startTicks: 3_000n }
+    ]
+    const index = {
+      byPid: new Map(rows.map((row) => [row.pid, row])),
+      childrenOf: new Map([[100, [200, 300]]])
+    }
+
+    expect(collectSubtree(index, 100, undefined, true).sort()).toEqual([100, 300])
+  })
+
+  it('orders typeperf processes by elapsed time when CIM is unavailable', () => {
+    const counters = ['ID Process', 'Creating Process ID', 'Working Set', 'Elapsed Time']
+    const header = (name: string): string =>
+      counters.map((counter) => `"\\\\H\\Process(${name})\\${counter}"`).join(',')
+    const rows = parseTypeperfProcessOutput(
+      [
+        `"(PDH-CSV 4.0)",${header('agent')},${header('old')},${header('new')}`,
+        '"11/17/2026 10:00:00.000","100","1","1","60","200","100","1","3600","300","100","1","5"'
+      ].join('\n')
+    )
+
+    expect(
+      collectSubtree(buildProcessIndex(rows, null, 'working-set'), 100, undefined, true).sort()
+    ).toEqual([100, 300])
   })
 })

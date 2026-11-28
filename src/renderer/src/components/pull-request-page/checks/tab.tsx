@@ -141,7 +141,8 @@ export function ChecksTab({
       return undefined
     }
     const fact = resolveRepoExecutionHostPlatform(
-      { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
+      { sshConnectionStates, sshStateByEnvironment },
+      runtimeStatusByEnvironmentId,
       repo,
       () =>
         getLocalRepoProjectExecutionRuntimeContext(
@@ -174,17 +175,8 @@ export function ChecksTab({
   const sorted = sortChecksBySeverity(list)
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
-  const overallCounts = getOverallCheckCounts(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner
-  )
-  const summaryLabel = getChecksSummaryLabel(
-    list,
-    checkOwner,
-    resolvedChecksState.checkObservationOwner,
-    t
-  )
+  const overallCounts = getOverallCheckCounts(list, checkOwner)
+  const summaryLabel = getChecksSummaryLabel(list, checkOwner, t)
   const { SummaryIcon, summaryColor } = getChecksTabSummaryPresentation(overallCounts)
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
@@ -306,6 +298,7 @@ export function ChecksTab({
       canFixBrokenChecks,
       failedChecksCount: failedChecks.length,
       listLength: list.length,
+      holdRerunSlot: loading && list.length === 0,
       onRefresh: () => {
         void handleRefresh()
       },
@@ -334,6 +327,7 @@ export function ChecksTab({
       summaryLabel={summaryLabel}
       counts={overallCounts}
       showSummary={isCompletePRCheckOwner(checkOwner)}
+      summaryLoading={loading && list.length === 0}
       listLength={list.length}
       refreshAction={refreshAction}
       rerunAction={rerunAction}

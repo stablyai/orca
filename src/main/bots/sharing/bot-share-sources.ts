@@ -1,7 +1,7 @@
 // What a bot could share, read from its record, home and automations: the parts a Share dialog offers,
 // and the ones that never go out.
-import { lstat, readdir, readFile, realpath } from 'node:fs/promises'
-import { join, relative, sep } from 'node:path'
+import { readdir, readFile, realpath } from 'node:fs/promises'
+import { basename, relative, sep } from 'node:path'
 import { isConnectorTrigger } from '../../../shared/automation-event-triggers'
 import { isGoogleTrigger } from '../../../shared/automation-google-triggers'
 import type { Automation } from '../../../shared/automations/automation-definition'
@@ -17,12 +17,21 @@ import { botLinearWorkspaces, botSlackApps, type Bot } from '../../../shared/bot
 import {
   BOT_PACKAGE_PURPOSE_MAX,
   botPackageResults,
+  packagedMascotLook,
   type BotPackageConnector,
   type BotPackageV1,
   type BotShareLeftOut
 } from '../../../shared/bots/bot-package'
-import { validateSkillPackageName } from '../../../shared/skills/packages/skill-package-manifest'
-import { scanSkillProject } from '../bot-skill-projects'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { botHomeFolder } from '../bot-home'
+import { localSkillProjects } from '../bot-skill-projects'
+import { ownPath, validPartName, type Home } from './bot-share-own-path'
+import { readShareSkills, type BotShareSkill } from './bot-share-skills'
+import {
+  skillsSessionKey,
+  type BotShareSkillListing,
+  type BotShareSkillsRead
+} from './bot-share-skill-reads'
 import { botToolCredentialHeaderNames } from '../bot-tool-credentials'
 import { botToolsPath, readBotToolServers } from '../bot-tools-file'
 import { landingLine } from './bot-package-transport'
@@ -34,8 +43,7 @@ export type BotShareable = {
   purpose: string
   avatar: BotPackageV1['avatar']
   avatarImage: Buffer | null
-  /** `homePath`: the skill's folder from the bot home, '/'-separated, for opening its files. */
-  skills: { name: string; description: string; directory: string; homePath: string }[]
+  skills: BotShareSkill[]
   tools: BotPackageV1['tools']
   schedules: (BotPackageV1['schedules'][number] & { automationId: string })[]
   eventSuggestions: (BotPackageV1['eventSuggestions'][number] & { automationId: string })[]
@@ -44,38 +52,6 @@ export type BotShareable = {
   leftOut: BotShareLeftOut[]
   connectors: BotPackageConnector[]
 }
-
-const validPartName = (name: string): boolean => {
-  try {
-    validateSkillPackageName(name)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function within(parent: string, child: string): boolean {
-  const path = relative(parent, child)
-  return path !== '' && !path.startsWith(`..${sep}`) && path !== '..' && !path.startsWith(sep)
-}
-
-/** Every file the export reads goes through here: the bot's own file or folder at this path
- *  (resolved), `linked` when any part of the path is a link (its target could be anything on the
- *  computer, so it never goes out), or null when it is missing. */
-async function ownPath(
-  home: Home,
-  ...segments: string[]
-): Promise<{ own: string } | 'linked' | null> {
-  const path = join(home.path, ...segments)
-  const real = await realpath(path).catch(() => null)
-  if (real !== null && real === join(home.real, ...segments)) {
-    return { own: real }
-  }
-  // A dangling link still counts as a link; a missing file under a linked folder has nothing to read.
-  return real !== null || (await lstat(path).catch(() => null)) ? 'linked' : null
-}
-
-type Home = { path: string; real: string }
 
 /** `.orca/bot-tools.json`, as the tools file module names it. */
 const BOT_TOOLS_FILE_SEGMENTS = relative('home', botToolsPath('home')).split(sep)
@@ -88,38 +64,6 @@ function shareableToolUrl(url: string): string {
   parsed.search = ''
   parsed.hash = ''
   return parsed.toString()
-}
-
-async function readSkills(
-  home: Home,
-  leftOut: BotShareable['leftOut']
-): Promise<BotShareable['skills']> {
-  const scanned = await scanSkillProject(home.path)
-  if (!scanned) {
-    return []
-  }
-  const root = await ownPath(home, ...relative(home.path, scanned.skillsDir).split(sep))
-  if (root === null || root === 'linked') {
-    leftOut.push({ kind: 'skill', name: relative(home.path, scanned.skillsDir), why: 'linked' })
-    return []
-  }
-  const skills: BotShareable['skills'] = []
-  for (const skill of scanned.skills) {
-    if (!validPartName(skill.name)) {
-      leftOut.push({ kind: 'skill', name: skill.name, why: 'name' })
-    } else if (!within(root.own, skill.folder)) {
-      // A link to a folder outside the home's skills: the owner's, not the bot's.
-      leftOut.push({ kind: 'skill', name: skill.name, why: 'outside-home' })
-    } else if (!skills.some((entry) => entry.name === skill.name)) {
-      skills.push({
-        name: skill.name,
-        description: skill.description,
-        directory: skill.folder,
-        homePath: relative(home.real, skill.folder).split(sep).join('/')
-      })
-    }
-  }
-  return skills.sort((left, right) => left.name.localeCompare(right.name, 'en-US'))
 }
 
 function readTools(
@@ -250,7 +194,7 @@ async function readAvatar(
 ): Promise<Pick<BotShareable, 'avatar' | 'avatarImage'>> {
   const avatar = parseBotAvatar(bot.avatar)
   if (avatar?.kind === 'mascot') {
-    return { avatar: { mascot: avatar.id }, avatarImage: null }
+    return { avatar: { mascot: avatar.id, ...packagedMascotLook(bot) }, avatarImage: null }
   }
   if (avatar?.kind === 'upload' && isUploadAvatar(bot.avatar)) {
     const path = await ownPath(home, BOT_AVATAR_FILE)
@@ -297,21 +241,64 @@ export function deriveConnectors(
   return [...kinds].sort()
 }
 
-export async function readBotShareable(input: {
-  bot: Bot
-  home: string
-  automations: readonly Automation[]
-}): Promise<BotShareable> {
+export async function readBotShareable(
+  input: {
+    bot: Bot
+    /** The bot's home folder; its own by default. */
+    home?: string
+    automations: readonly Automation[]
+    /** The app's projects: the bot's linked ones on this host are skills its chats load too. */
+    repos?: readonly Repo[]
+  } & BotShareSkillsRead
+): Promise<BotShareable> {
   const leftOut: BotShareable['leftOut'] = []
-  const home: Home = { path: input.home, real: await realpath(input.home) }
+  const homePath = input.home ?? botHomeFolder(input.bot)
+  const home: Home = { path: homePath, real: await realpath(homePath) }
+  const skillProjects = localSkillProjects(input.bot.skillProjects ?? [], input.repos ?? []).map(
+    (repo) => ({
+      name: repo.displayName.trim() || basename(repo.path).trim() || repo.id,
+      path: repo.path
+    })
+  )
   const soulPath = await ownPath(home, 'SOUL.md')
   if (soulPath === null || soulPath === 'linked') {
     throw new Error("SOUL.md is missing or is a link; Orca shares only the bot's own files.")
   }
   const soul = await readFile(soulPath.own, 'utf8')
   const automationParts = readAutomations(input.bot, input.automations, leftOut)
+  const readSkills = async (): Promise<BotShareSkill[]> => {
+    // Each project's real folder, resolved once: the listing is read from these folders and kept
+    // under them, so a path that now resolves elsewhere reads again, and nothing reads it twice.
+    const roots = await Promise.all(
+      skillProjects.map(async (project) => ({
+        ...project,
+        real: await realpath(project.path).catch(() => null)
+      }))
+    )
+    const listSkills = async (signal?: AbortSignal): Promise<BotShareSkillListing> => {
+      const skillsLeftOut: BotShareLeftOut[] = []
+      const read = await readShareSkills(input.bot, home, skillsLeftOut, roots, signal)
+      return { skills: read.skills, leftOut: skillsLeftOut, moved: read.moved }
+    }
+    const listing = await (input.skillReads && input.session
+      ? input.skillReads.read(
+          skillsSessionKey(input.bot.id, input.session),
+          // A root that could not be resolved may resolve elsewhere next time: never kept.
+          roots.some((root) => root.real === null)
+            ? null
+            : JSON.stringify([input.bot.agent, home.path, home.real, roots]),
+          input.reuseSkills === true,
+          listSkills,
+          input.build
+        )
+      : listSkills())
+    for (const entry of listing.leftOut) {
+      leftOut.push(entry)
+    }
+    return [...listing.skills]
+  }
   const [skills, servers, memory, avatar] = await Promise.all([
-    readSkills(home, leftOut),
+    readSkills(),
     readOwnToolServers(home, leftOut),
     readMemory(home, leftOut),
     readAvatar(input.bot, home, leftOut)
@@ -321,7 +308,7 @@ export async function readBotShareable(input: {
     purpose: landingLine(soulDescription(soul) ?? '', BOT_PACKAGE_PURPOSE_MAX),
     ...avatar,
     skills,
-    tools: readTools(servers, input.home, leftOut),
+    tools: readTools(servers, homePath, leftOut),
     ...automationParts,
     memory,
     leftOut,

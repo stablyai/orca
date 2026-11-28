@@ -41,10 +41,6 @@ export function publishColorQueryReplyColors(colors: TerminalOscColorQueryReplyC
   }
 }
 
-export function _resetColorQueryReplyColorsForTest(): void {
-  colorQueryReplyColors = null
-}
-
 export type RegisteredPtyProvider = {
   provider: IPtyProvider
   hostId: ExecutionHostId

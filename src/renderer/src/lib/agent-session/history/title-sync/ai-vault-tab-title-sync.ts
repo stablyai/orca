@@ -4,11 +4,13 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
 } from './ai-vault-tab-title-requests'
 import { settleAiVaultTitleRequestBatches } from './ai-vault-tab-title-batches'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../../../shared/agent-session/journal/harness-injected-user-turns'
 import {
   aiVaultTitleRequestInputsChanged,
   aiVaultTitleSyncInputsChanged
@@ -31,6 +33,10 @@ function requestIdentity(request: AiVaultTitleRequest): string {
   return `${request.executionHostId}\0${request.agent}\0${request.providerSession.id}`
 }
 
+function isClaudeHarnessTitle(title: Pick<AiVaultSessionTitle, 'agent' | 'title'>): boolean {
+  return title.agent === 'claude' && isKnownHarnessInjectedUserTurnText(title.title)
+}
+
 type RequestSnapshot = {
   inputs: AiVaultTitleRequestInputs
   requests: AiVaultTitleRequest[]
@@ -41,7 +47,15 @@ type RequestSnapshot = {
 type SyncDependencies = {
   getState: () => AppState
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
-  subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
+  subscribe: (
+    listener: (
+      state: AppState,
+      previous: AppState,
+      statuses: RuntimeStatuses,
+      previousStatuses: RuntimeStatuses
+    ) => void
+  ) => () => void
+  readStatuses: () => RuntimeStatuses
   scheduleReconcile?: (callback: () => void) => () => void
   setTimer?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout> | number
   clearTimer?: (timer: ReturnType<typeof setTimeout> | number) => void
@@ -131,7 +145,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
     const titleByIdentity = new Map<string, Pick<AiVaultSessionTitle, 'title' | 'kind'>>()
     for (const title of result.titles) {
-      if (title.title.trim()) {
+      // Older hosts still name Claude sessions with harness markup such as /clear's command caveat.
+      if (title.title.trim() && !isClaudeHarnessTitle(title)) {
         titleByIdentity.set(`${first.executionHostId}\0${title.agent}\0${title.sessionId}`, {
           title: title.title.trim(),
           kind: title.kind
@@ -163,6 +178,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
 
     const state = dependencies.getState()
+    const statuses = dependencies.readStatuses()
     const { requests, byKey: currentKeys } = currentRequests(state)
     for (const key of lastSettledAttemptAt.keys()) {
       if (!currentKeys.has(key)) {
@@ -180,12 +196,16 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       const stored = storedTitles(request)
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
-      if (stored && !identityMatches) {
+      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
+      // Drop a harness-markup title saved from an older host once, and re-ask.
+      const savedHarnessTitle =
+        identityMatches && last === undefined && isClaudeHarnessTitle(stored)
+      if (stored && (!identityMatches || savedHarnessTitle)) {
         writeTitle(request, null)
       }
-      const last = lastSettledAttemptAt.get(aiVaultTitleRequestKey(request))
       return (
         !identityMatches ||
+        savedHarnessTitle ||
         !stored?.title.trim() ||
         (request.refresh && last === undefined) ||
         // Titles saved before they carried a kind are asked for once, so a sleeping session's name can outrank its quick-command label.
@@ -193,8 +213,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         (request.refresh &&
           (dirty.has(aiVaultTitleRequestKey(request)) ||
             now - last! >=
-              titleRefreshInterval(state, request, stored) /
-                (supportsSessionTitleRefresh(state, request) ? 2 : 1)))
+              titleRefreshInterval(statuses, request, stored) /
+                (supportsSessionTitleRefresh(statuses, request) ? 2 : 1)))
       )
     })
 
@@ -225,6 +245,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       schedule()
     } else if (!stopped) {
       const currentState = dependencies.getState()
+      const currentStatuses = dependencies.readStatuses()
       const { requests: currentRequestList } = currentRequests(currentState)
       const currentStoredTitles = storedAiVaultTitles(currentState, currentRequestList)
       const delays = currentRequestList
@@ -233,7 +254,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
           Math.max(
             0,
             (lastSettledAttemptAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
-              titleRefreshInterval(currentState, request, currentStoredTitles(request)) -
+              titleRefreshInterval(currentStatuses, request, currentStoredTitles(request)) -
               Date.now()
           )
         )
@@ -257,12 +278,12 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     })
   }
 
-  const unsubscribe = dependencies.subscribe((state, previous) => {
+  const unsubscribe = dependencies.subscribe((state, previous, statuses, previousStatuses) => {
     if (writing) {
       return
     }
     if (state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId) {
-      for (const key of changedOwningPaneTitleRequests(state, previous)) {
+      for (const key of changedOwningPaneTitleRequests(state, previous, statuses)) {
         dirty.add(key)
       }
     }
@@ -272,7 +293,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
     // Why: host-status pings are frequent and usually leave capabilities alone; walking every saved tab on each
     // one stalled typing in large workspaces, so only collect when some host's title-refresh support flipped.
-    const changedHosts = changedTitleRefreshHosts(state, previous)
+    const changedHosts = changedTitleRefreshHosts(statuses, previousStatuses)
     if (
       changedHosts.size > 0 &&
       collectAiVaultTitleRequests(state).some((request) =>

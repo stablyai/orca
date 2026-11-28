@@ -10,7 +10,11 @@ export type BrowserClientPageGuestBindingInput = {
 export type BrowserClientPageGuestBinding = {
   bindReplacement?(input: BrowserClientPageGuestBindingInput): void
   bind(input: BrowserClientPageGuestBindingInput): void
-  release(registration: BrowserRoutePageGuestIdentity): void
+  /** 'guest-destroyed' keeps the page's downloads running, as when Memory Saver frees it. */
+  release(
+    registration: BrowserRoutePageGuestIdentity,
+    reason?: 'page-closed' | 'guest-destroyed'
+  ): void
 }
 
 export function createBrowserClientPageGuestBinding(
@@ -58,7 +62,7 @@ export function createBrowserClientPageGuestBinding(
         )
       }
     },
-    release: (registration) => {
+    release: (registration, reason) => {
       // Retirement may already have removed or replaced this binding.
       if (
         browserManager.getGuestWebContentsId(registration.browserPageId) !==
@@ -66,7 +70,7 @@ export function createBrowserClientPageGuestBinding(
       ) {
         return
       }
-      browserManager.unregisterGuest(registration.browserPageId)
+      browserManager.unregisterGuest(registration.browserPageId, reason)
     }
   }
 }

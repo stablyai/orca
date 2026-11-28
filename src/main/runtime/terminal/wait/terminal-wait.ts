@@ -22,6 +22,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { TerminalWaiter } from './terminal-waiter'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalIdlePolls } from './terminal-idle-polls'
+import { TUI_IDLE_DEFAULT_TIMEOUT_MS } from './terminal-idle-policy'
 import type { RuntimeTerminalWaiterRegistry } from './terminal-waiter-registry'
 
 /** Probe unseen/provider-only panes and clockless screen-ruled agents with untrusted restored models; clocked panes settle through quiet polling. profile.screenProbeBanner also opts in. */
@@ -39,7 +40,6 @@ function shouldProbeVisibleScreen(
 }
 
 type RuntimeTerminalWaitDependencies = TuiIdleEvidenceSource & {
-  defaultTimeoutMs: number
   /** The terminal a handle names for this wait; throws `terminal_handle_stale` when it names none. */
   getTerminalPty(
     handle: string,
@@ -67,7 +67,7 @@ export class RuntimeTerminalWait {
     waitText: string,
     acceptsMidTurnInput: boolean | undefined
   ): { verdict: TuiIdleVerdict; ready: boolean } {
-    const evidence = ptyTuiIdleEvidence(this.deps, pty, () => waitText)
+    const evidence = ptyTuiIdleEvidence(this.deps, pty, () => waitText, acceptsMidTurnInput)
     const verdict = evaluateTuiIdle(evidence)
     return {
       verdict,
@@ -87,6 +87,8 @@ export class RuntimeTerminalWait {
       launchReadiness?: boolean
       /** Main-internal, never on the wire: see `TerminalWaiter.acceptsMidTurnInput`. */
       acceptsMidTurnInput?: boolean
+      /** Main-internal, never on the wire: see `TerminalWaiter.outlivesRenderer`. */
+      outlivesRenderer?: true
     }
   ): Promise<RuntimeTerminalWaitResult> {
     const condition = options?.condition ?? 'exit'
@@ -114,7 +116,7 @@ export class RuntimeTerminalWait {
         typeof options?.timeoutMs === 'number' && options.timeoutMs > 0
           ? options.timeoutMs
           : condition === 'tui-idle'
-            ? this.deps.defaultTimeoutMs
+            ? TUI_IDLE_DEFAULT_TIMEOUT_MS
             : 0
       const waiter: TerminalWaiter = {
         handle,
@@ -126,7 +128,8 @@ export class RuntimeTerminalWait {
         cancelIdlePoll: null,
         abortCleanup: null,
         ...(options?.launchReadiness ? { launchReadiness: true } : {}),
-        ...(options?.acceptsMidTurnInput ? { acceptsMidTurnInput: true } : {})
+        ...(options?.acceptsMidTurnInput ? { acceptsMidTurnInput: true } : {}),
+        ...(options?.outlivesRenderer ? { outlivesRenderer: true } : {})
       }
       if (!this.waiters.bindAbort(waiter, options?.signal)) {
         reject(new Error('request_aborted'))

@@ -4,6 +4,7 @@
 import { translate } from '@/i18n/i18n'
 import type { BotConnector } from '../bot-connectors'
 import {
+  BOT_APP_CATEGORIES,
   BOT_MCP_APPS,
   type BotAppCategory,
   type BotMcpApp
@@ -12,19 +13,10 @@ import {
   COMPOSIO_CURATED_APPS,
   type ComposioCuratedApp
 } from '../../../../../shared/composio/composio-curated-apps'
+import { botMcpAppLine } from '../../../../../shared/bots/bot-app-lines'
 
 export type { BotAppCategory }
-
-/** Rail order; a category shows only while it lists an app. */
-export const BOT_APP_CATEGORIES: readonly BotAppCategory[] = [
-  'coding',
-  'chat',
-  'monitoring',
-  'docs',
-  'mail',
-  'sales',
-  'design'
-]
+export { BOT_APP_CATEGORIES }
 
 export function botAppCategoryName(category: BotAppCategory): string {
   switch (category) {
@@ -59,6 +51,7 @@ export type BotDirectApp = { category: BotAppCategory; composio?: readonly strin
       name: string
       line: string
       url: string
+      variable?: BotMcpApp['variable']
       signIn: BotMcpApp['signIn']
     }
 )
@@ -68,22 +61,25 @@ export const DIRECT_APPS: readonly BotDirectApp[] = [
   { route: 'connector', connector: 'slack', category: 'chat', composio: ['slack'] },
   { route: 'connector', connector: 'linear', category: 'docs', composio: ['linear'] },
   { route: 'connector', connector: 'google', category: 'mail', composio: ['gmail'] },
-  ...BOT_MCP_APPS.map(({ id, name, line, url, signIn, category, composio }): BotDirectApp => ({
-    route: 'mcp',
-    id,
-    name,
-    line,
-    url,
-    signIn,
-    category,
-    composio
-  }))
+  ...BOT_MCP_APPS.map(
+    ({ id, name, line, url, variable, signIn, category, composio }): BotDirectApp => ({
+      route: 'mcp',
+      id,
+      name,
+      line,
+      url,
+      variable,
+      signIn,
+      category,
+      composio
+    })
+  )
 ]
 
 /** A row's one line: what the app does for the bot, before it is added. */
 export function directAppLine(app: BotDirectApp): string {
   if (app.route === 'mcp') {
-    return app.line
+    return botMcpAppLine(app, translate)
   }
   switch (app.connector) {
     case 'github':

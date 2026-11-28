@@ -5,6 +5,10 @@ import { decideBrowserSessionRequestHeaders } from '../../sessions/requests/brow
 import { reportBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-observer'
 import { holdBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-owner'
 import {
+  hasBrowserSessionUserAgentDemand,
+  watchBrowserSessionUserAgentDemand
+} from './browser-session-ua-demand'
+import {
   currentUserAgent,
   setUserAgentHeader,
   stripClientHints,
@@ -27,6 +31,14 @@ export type BrowserSessionRequestUserAgentResolver = (args: {
 }) => BrowserTabIdentity | undefined
 
 // Rewrite only hints Chromium emitted; desktop hints remain browser-owned.
+/** Clean mode and extensions keep the header listener installed whatever tabs demand. */
+export function browserSessionHeaderListenerIgnoresDemand(sess: Session): boolean {
+  return (
+    getBrowserProcessUserAgentIdentity().mode === 'clean' ||
+    (sess.extensions?.getAllExtensions().length ?? 0) > 0
+  )
+}
+
 export function installBrowserSessionUserAgentPolicy(
   sess: Session,
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
@@ -72,17 +84,42 @@ export function installBrowserSessionUserAgentPolicy(
       setUserAgentHeader(headers, teamsRequestUserAgent(details.url, outgoingUserAgent))
     }
   }
-  return holdBrowserSessionWebRequest(
-    sess,
-    'onBeforeSendHeaders',
-    (details, callback) => {
-      reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
-      applyUserAgentPolicy(details)
-      // Why after the policy: Chrome sets its own user agent before extensions modify headers.
-      callback({
-        requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
-      })
-    },
-    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
-  )
+  const listen = (): (() => void) =>
+    holdBrowserSessionWebRequest(
+      sess,
+      'onBeforeSendHeaders',
+      (details, callback) => {
+        reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
+        applyUserAgentPolicy(details)
+        // Why after the policy: Chrome sets its own user agent before extensions modify headers.
+        callback({
+          requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
+        })
+      },
+      { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
+    )
+  // Any listener makes every request wait on main, so listen only while a header can change:
+  // clean mode (Google sign-in restores Electron's UA), extensions, or a tab whose identity differs.
+  let release: (() => void) | null = null
+  const refresh = (): void => {
+    const needed =
+      browserSessionHeaderListenerIgnoresDemand(sess) || hasBrowserSessionUserAgentDemand(sess)
+    if (needed && !release) {
+      release = listen()
+    } else if (!needed && release) {
+      release()
+      release = null
+    }
+  }
+  const stopDemand = watchBrowserSessionUserAgentDemand(sess, refresh)
+  sess.extensions?.on('extension-loaded', refresh)
+  sess.extensions?.on('extension-unloaded', refresh)
+  refresh()
+  return () => {
+    stopDemand()
+    sess.extensions?.off('extension-loaded', refresh)
+    sess.extensions?.off('extension-unloaded', refresh)
+    release?.()
+    release = null
+  }
 }

@@ -4,10 +4,12 @@ import {
   bindBrowserPageMemoryInvalidation
 } from '../../browser-page-memory'
 import { publishBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
+import { disposeGrabModeStateForPage } from '../../../element-grab/browser-grab-mode-admission'
 import { webContents } from 'electron'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
 import { isWorkspaceDocPageId } from '../../../document-preview/doc-preview-guest-policy'
 import { BrowserManagerGuestPolicy } from './browser-manager-guest-policy'
+import { clearBrowserGuestUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
 import {
   cancelBrowserPagePrompts,
   showBrowserPagePromptsAwaitingRegistration
@@ -105,6 +107,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.setupMouseWheelZoomForwarding(browserTabId, guest)
     this.setupTargetUrlForwarding(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
+    this.flushPendingLoadStall(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
@@ -125,6 +128,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     }
     if (reason === 'page-closed') {
       closeBrowserMemoryPage(browserTabId)
+      this.mutedOffscreenPageIds.delete(browserTabId)
     }
     const wcId = this.webContentsIdByTabId.get(browserTabId)
     const disposers = [
@@ -141,7 +145,11 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       }
     }
     try {
-      this.completeGuestCleanup('grab', () => this.cancelGrabOp(browserTabId, 'evicted'))
+      this.completeGuestCleanup('grab', () => {
+        this.cancelGrabOp(browserTabId, 'evicted')
+        // Streamed pages never pass the renderer's close IPC, so the mode owner retires here too.
+        disposeGrabModeStateForPage(browserTabId)
+      })
       this.completeGuestCleanup('prompts', () => cancelBrowserPagePrompts(browserTabId))
       this.completeGuestCleanup('audio', () => this.notifyAudioStateChanged(browserTabId, false))
       this.completeGuestCleanup('agent activity', () => this.agentActivity.end(browserTabId))
@@ -223,6 +231,9 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
     // Saved site zoom and color scheme apply to every page of the profile, not only pane webviews.
     this.siteDisplayController?.onGuestRegistered(guest, sessionProfileId ?? null)
+    if (this.mutedOffscreenPageIds.has(browserPageId)) {
+      guest.setAudioMuted(true)
+    }
     return true
   }
 
@@ -239,7 +250,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.agentLedGuestIds.clear()
     this.offscreenGuestIds.clear()
     // Also clean up guests attached before registration.
-    for (const cleanup of this.policyCleanupByGuestId.values()) {
+    for (const [guestId, cleanup] of this.policyCleanupByGuestId) {
+      clearBrowserGuestUserAgentDemand(guestId)
       cleanup()
     }
     this.policyCleanupByGuestId.clear()
@@ -253,6 +265,8 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.cdpUserAgentOverrideStateByGuestId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
+    this.pendingLoadStallsByGuestId.clear()
+    this.loadStallPageIdByGuestId.clear()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
     this.pendingPermissionEventsByGuestId.clear()

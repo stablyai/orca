@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import {
@@ -77,7 +77,13 @@ async function stageSkill(input: {
   description: string
 }): Promise<SkillBundleEntry> {
   const stagedDirectory = join(input.skillsRoot, input.name)
-  await cp(input.source.sourceDirectory, stagedDirectory, {
+  // Why: verbatimSymlinks would recreate a linked source (provider alias) as a link: a relative
+  // POSIX alias dangles in staging and Windows needs symlink privilege to create it (EPERM).
+  // Native realpath fails on some Windows volumes (no drive mapping); copy the path as given there.
+  const sourceDirectory = await realpath(input.source.sourceDirectory).catch(
+    () => input.source.sourceDirectory
+  )
+  await cp(sourceDirectory, stagedDirectory, {
     recursive: true,
     verbatimSymlinks: true,
     force: false,

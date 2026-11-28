@@ -4,6 +4,7 @@ import { lstatSync, readFileSync, readdirSync, realpathSync, statSync } from 'no
 import { lstat, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ProviderProcessExit } from '../provider-process/managed-provider-process'
 import type { ArchiveDigest } from './runtime-archive-download'
@@ -22,8 +23,9 @@ export type ManagedRuntimePin = {
         members: readonly ManagedRuntimeMember[]
       }
     | {
-        /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
-        format: 'tar.gz' | 'zip'
+        /** Only the archive's hash is published; it vouches for every file, and these must be executable.
+         *  `file`: the download is the one executable itself. */
+        format: 'tar.gz' | 'zip' | 'file'
         executables: readonly string[]
       }
   )
@@ -34,6 +36,8 @@ export type ManagedRuntime = {
   pin(): ManagedRuntimePin | null
   /** Runtimes that follow a published latest release look it up here; pin() answers from it. */
   refreshPin?(signal?: AbortSignal): Promise<void>
+  /** An installed copy older than pin() is brought up to it without a click, as this build ships it. */
+  updatesToPin?: true
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
   /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
@@ -46,6 +50,25 @@ export type ManagedAgentCli = {
   /** Whether this host has a build to download. */
   available: () => boolean
   executable: (folder: string) => string
+  /** The one stock command it stands in for, when the agent's launches name other programs too. */
+  standsInFor?: string
+}
+
+const serverUseListeners = new Set<(agent: string) => void>()
+/** Told each time a chat starts on Orca's installed server, so an update that failed is retried on use. */
+export function onManagedServerUse(listener: (agent: string) => void): () => void {
+  serverUseListeners.add(listener)
+  return () => serverUseListeners.delete(listener)
+}
+/** A launch resolved to `version` of Orca's `runtime`; only runtimes that follow their pin listen. */
+export function noteManagedServerUse(
+  agent: string,
+  runtime: ManagedRuntime | undefined,
+  version: string | undefined
+): void {
+  if (version !== undefined && runtime?.updatesToPin) {
+    serverUseListeners.forEach((listener) => listener(agent))
+  }
 }
 
 /** The download's digest names the release, so a republished build is never mistaken for it. */
@@ -74,13 +97,17 @@ export const RUNTIME_RELEASE_RECEIPT = '.install-complete.json'
 const RECEIPT_MAX_BYTES = 8 * 1024
 const VERSION_ORDER = new Intl.Collator(undefined, { numeric: true })
 
-const runtimeReleaseReceiptSchema = z.object({
-  releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
-  version: z.string().min(1),
-  platform: z.string(),
-  arch: z.string(),
-  members: z.array(z.object({ path: z.string().min(1), bytes: z.number().int().positive() })).min(1)
-})
+const runtimeReleaseReceiptSchema = lazyZodSchema(() =>
+  z.object({
+    releaseId: z.string().regex(/^[a-f0-9]{64}(?:[a-f0-9]{64})?$/),
+    version: z.string().min(1),
+    platform: z.string(),
+    arch: z.string(),
+    members: z
+      .array(z.object({ path: z.string().min(1), bytes: z.number().int().positive() }))
+      .min(1)
+  })
+)
 
 export type InstalledRuntimeRelease = {
   folder: string
@@ -124,6 +151,27 @@ export function resolveInstalledRuntimeRelease(
     broken: reads.filter(({ read }) => read === 'broken').map(({ name }) => name),
     unreadable: reads.some(({ read }) => read === 'unreadable')
   }
+}
+
+/** Whether `root` may hold a published release; an unreadable one may, so callers fail closed. */
+export async function runtimeReleaseMayBePublished(root: string): Promise<boolean> {
+  let names: string[]
+  try {
+    names = await readdir(root)
+  } catch (error) {
+    return !isDefinitiveAbsence(error)
+  }
+  const receipts = await Promise.all(
+    names
+      .filter((name) => !name.startsWith('.'))
+      .map((name) =>
+        lstat(join(root, name, RUNTIME_RELEASE_RECEIPT)).then(
+          (receipt) => receipt.isFile(),
+          (error: unknown) => !isDefinitiveAbsence(error)
+        )
+      )
+  )
+  return receipts.some(Boolean)
 }
 
 /** Require every pinned companion beside the resolved executable; never launch an isolated server file. */

@@ -225,7 +225,9 @@ export async function tagBotMemoryFile(
   folder: string,
   before: string,
   /** Read only when the file has a fact `before` lacks: the only line a label marks. */
-  label: () => Promise<string | null>
+  label: () => Promise<string | null>,
+  /** Of the lines the file has that `before` lacks, those to take back out (see readdGuard). */
+  keepOut?: (added: string[]) => Promise<string[]>
 ): Promise<{ text: string; kept: BotMemoryChange } | null> {
   const path = join(folder, 'MEMORY.md')
   for (let attempt = 0; attempt < REWRITE_ATTEMPTS; attempt += 1) {
@@ -234,8 +236,18 @@ export async function tagBotMemoryFile(
       return null
     }
     const lost = botMemoryChange(before, current).removed
-    const kept = applyBotMemoryChange(current, { added: lost, removed: [] })
-    const added = botMemoryChange(before, kept).added.length > 0
+    const restored = applyBotMemoryChange(current, { added: lost, removed: [] })
+    const fresh = botMemoryChange(before, restored).added
+    // Before the record knew the file, every line reads as new: nothing to keep out then.
+    const out =
+      keepOut && before !== '' && fresh.length > 0
+        ? await keepOut(fresh.map(({ line }) => line))
+        : []
+    const kept = applyBotMemoryChange(restored, {
+      added: [],
+      removed: out.map((line) => ({ line, after: null }))
+    })
+    const added = fresh.length > out.length
     const tagged = tagBotMemoryChanges(before, kept, added ? await label() : null)
     if (tagged === current || (await fs.replaceText(path, current, tagged))) {
       return { text: tagged, kept: botMemoryChange(current, kept) }

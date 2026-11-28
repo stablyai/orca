@@ -6,9 +6,11 @@ import type {
 } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorTurnAutomation } from '../../shared/connector-trigger-event-contract'
 import type { TurnAutomations } from './connector-turn-automations'
+import type { RecordHandled, ThreadMuteOutcome } from './connector-thread-mute'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import type { ConnectorAccountTransport } from './connector-transport'
+import type { ConnectorWakeSocketFactory } from './connector-wake-socket'
 
 export type ConnectorRuntimeKind = 'desktop' | 'serve'
 
@@ -29,6 +31,13 @@ export type ConnectorMachine = {
   runTrigger: (delivery: Extract<ConnectorDelivery, { kind: 'trigger' }>) => Promise<boolean>
   /** The automations a bot's start or send also carries, run in that turn; null for none. */
   turnAutomations?: (entries: readonly ConnectorTurnAutomation[]) => TurnAutomations | null
+  /** A send a bot thread's mute handles before the agent (accepted, no turn); null when it goes on
+   *  now, 'send' when it goes on once its thread is linked. */
+  threadMute?: (
+    delivery: Extract<ConnectorDelivery, { kind: 'send' }>,
+    record: RecordHandled,
+    carriedBefore?: Promise<boolean>
+  ) => ThreadMuteOutcome | null
   /** Tells the bot's owner about one of its hooks; false when the hook isn't this machine's. */
   webhookNotice?: (
     delivery: Extract<ConnectorDelivery, { kind: 'webhook_notice' }>
@@ -46,7 +55,8 @@ export type ConnectorMachine = {
 }
 
 /** How the client reaches the cloud as this machine; the credential behind it can change. */
-export type ConnectorTransport = Pick<ConnectorAccountTransport, 'call'>
+export type ConnectorTransport = Pick<ConnectorAccountTransport, 'call'> &
+  Partial<Pick<ConnectorAccountTransport, 'wakeToken'>>
 
 export type ConnectorPollClientOptions = {
   transport: ConnectorTransport
@@ -55,6 +65,8 @@ export type ConnectorPollClientOptions = {
   seam: ExternalConversationSeam
   machine: ConnectorMachine
   random?: () => number
+  /** Opens wake sockets; tests pass a fake. */
+  wakeSocketFactory?: ConnectorWakeSocketFactory
   /** The cloud stopped this client, for good. */
   onHalt?: (reason: string) => void
 }

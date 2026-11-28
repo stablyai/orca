@@ -1,6 +1,7 @@
 // Drive files as the Drive, Docs and Sheets commands name them: an id or any Google link to one,
 // a folder also by its name, and one summary shape for every answer.
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import type { DriveFileSummary } from '../../shared/google/google-files-types'
 import { GoogleToolError, parseGoogleJson, type GoogleApi } from './google-api-client'
 
@@ -13,18 +14,20 @@ export const SLIDES_TYPE = 'application/vnd.google-apps.presentation'
 export const FILE_FIELDS =
   'id,name,mimeType,modifiedTime,size,owners(displayName,emailAddress),webViewLink,parents'
 
-export const DriveFileSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  mimeType: z.string(),
-  modifiedTime: z.string().optional(),
-  size: z.string().optional(),
-  owners: z
-    .array(z.object({ displayName: z.string().optional(), emailAddress: z.string().optional() }))
-    .optional(),
-  webViewLink: z.string().optional(),
-  parents: z.array(z.string()).optional()
-})
+export const DriveFileSchema = lazyZodSchema(() =>
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    mimeType: z.string(),
+    modifiedTime: z.string().optional(),
+    size: z.string().optional(),
+    owners: z
+      .array(z.object({ displayName: z.string().optional(), emailAddress: z.string().optional() }))
+      .optional(),
+    webViewLink: z.string().optional(),
+    parents: z.array(z.string()).optional()
+  })
+)
 export type DriveFile = z.infer<typeof DriveFileSchema>
 
 // Drive ids are long; a short word is a folder's name, never an id.

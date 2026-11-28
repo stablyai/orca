@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { getFindRequestQuery } from '@/lib/text-search/find-query-bounds'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
+import type { BrowserFindResultEvent, BrowserFindTarget } from './browser-find-target'
+import { BROWSER_FIND_BAR_ATTRIBUTE } from '../../annotate/palette/use-palette-top-offset'
 
 type BrowserFindProps = {
   browserPageId: string
   isOpen: boolean
   onClose: () => void
-  webviewRef: React.RefObject<Electron.WebviewTag | null>
+  webviewRef: React.RefObject<BrowserFindTarget | null>
   /** Bumped whenever the pane swaps in a new guest under the same mount; rebinds the listener. */
   guestGeneration?: number | null
 }
@@ -28,7 +30,7 @@ export default function BrowserFind({
   const activeFindRef = useRef<{
     query: string
     guestGeneration: number | null
-    webview: Electron.WebviewTag
+    webview: BrowserFindTarget
     requestId: number
   } | null>(null)
   const [query, setQuery] = useState('')
@@ -45,7 +47,7 @@ export default function BrowserFind({
   const totalMatches = currentResult?.totalMatches ?? 0
 
   const safeFindInPage = useCallback(
-    (text: string, opts?: Electron.FindInPageOptions): void => {
+    (text: string, opts?: { forward?: boolean; findNext?: boolean }): void => {
       const webview = webviewRef.current
       if (!webview || !text) {
         return
@@ -139,7 +141,7 @@ export default function BrowserFind({
     if (!webview || !isOpen) {
       return
     }
-    const handleFoundInPage = (event: Electron.FoundInPageEvent): void => {
+    const handleFoundInPage = (event: BrowserFindResultEvent): void => {
       const activeFind = activeFindRef.current
       if (
         !activeFind ||
@@ -195,6 +197,7 @@ export default function BrowserFind({
 
   return (
     <div
+      {...{ [BROWSER_FIND_BAR_ATTRIBUTE]: '' }}
       className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}

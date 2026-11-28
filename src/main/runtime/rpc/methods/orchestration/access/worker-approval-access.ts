@@ -4,6 +4,24 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isAgentRpcCaller } from '../../../callers/rpc-caller-identity'
 import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationAccessRuleInput } from './orchestration-method-access'
+import type { RpcContext } from '../../../core'
+
+/** A person, proven by the transport: the desktop app's own IPC, a phone's pairing, or a paired
+ *  window that says so; never the orca CLI, an agent session, or a paired Orca's forwarded call. */
+export function isPersonCaller(
+  ctx: Pick<RpcContext, 'caller' | 'orchestrationCaller' | 'clientKind' | 'clientCapabilities'>
+): boolean {
+  return (
+    ctx.caller?.kind === 'desktop' ||
+    (ctx.caller?.kind === 'paired-device' &&
+      !isAgentRpcCaller(ctx.caller) &&
+      ctx.orchestrationCaller === undefined &&
+      // Only the phone app holds a phone's pairing; a paired window says it is one.
+      (ctx.clientKind === 'mobile' ||
+        ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) ===
+          true))
+  )
+}
 
 export type WorkerApprovalAccess = { answeredBy: 'person' | 'coordinator'; reason: string | null }
 
@@ -15,15 +33,7 @@ export function workerApprovalAccess({
   params,
   ctx
 }: OrchestrationAccessRuleInput<z.infer<typeof ApprovalAnswerParams>>): WorkerApprovalAccess {
-  const person =
-    ctx.caller?.kind === 'desktop' ||
-    (ctx.caller?.kind === 'paired-device' &&
-      !isAgentRpcCaller(ctx.caller) &&
-      ctx.orchestrationCaller === undefined &&
-      // Only the phone app holds a phone's pairing; a paired window says it is one.
-      (ctx.clientKind === 'mobile' ||
-        ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) ===
-          true))
+  const person = isPersonCaller(ctx)
   const reason = params.reason?.trim() || null
   // Without a reason it is not a coordinator's approve.
   if (

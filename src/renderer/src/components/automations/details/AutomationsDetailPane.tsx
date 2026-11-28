@@ -8,7 +8,10 @@ import type {
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
-import { AutomationDetailActions } from './AutomationDetailActions'
+import {
+  AutomationDetailActions,
+  COPY_URL_COMPACT_HEADER_WIDTH_PX
+} from './AutomationDetailActions'
 import { AutomationRunHistory, formatAutomationRunCountSummary } from '../runs/AutomationRunHistory'
 import { ExternalAutomationManagers } from '../external/ExternalAutomationManagers'
 import type { ExternalAutomationListEntry } from '../external/external-automation-list-entries'
@@ -18,7 +21,13 @@ import type { AutomationHostRecoveryAction } from '../hosts/automation-host-stat
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import type { AutomationTargetAvailability } from '../hosts/automation-target-availability-types'
 import type { AutomationPaneTab, AutomationRunPageOrigin } from '../automation-page-state'
-import { AutomationsPageFrame, AutomationsPageTitle } from '../AutomationsPageFrame'
+import {
+  AutomationsPageFrame,
+  AutomationsPageTitle,
+  COMPACT_HEADER_WIDTH_PX
+} from '../AutomationsPageFrame'
+import { automationWebhookUrlCopy } from '@/components/bots/webhooks/automation-webhook-url'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
 import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationsDetailPaneProps = {
@@ -88,6 +97,8 @@ export function AutomationsDetailPane({
   recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
   const t = useTranslate()
+  const bots = useBots(useBotsEnabled())
+  const copyUrl = selected ? automationWebhookUrlCopy(selected, bots) : null
 
   if (selectedExternal) {
     return (
@@ -146,6 +157,7 @@ export function AutomationsDetailPane({
   return (
     <AutomationsPageFrame
       nav={nav}
+      compactBelowPx={copyUrl ? COPY_URL_COMPACT_HEADER_WIDTH_PX : COMPACT_HEADER_WIDTH_PX}
       actions={
         selected
           ? ({ compact }) => (
@@ -158,6 +170,7 @@ export function AutomationsDetailPane({
                 onEdit={openEditDialog}
                 onToggle={toggleAutomation}
                 onDelete={requestDeleteAutomation}
+                onCopyUrl={copyUrl}
               />
             )
           : undefined

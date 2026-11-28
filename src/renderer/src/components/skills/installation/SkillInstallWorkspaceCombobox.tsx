@@ -98,7 +98,7 @@ function SkillInstallWorkspaceChoiceList({
         : (choiceKeys[0] ?? null)
   const activeIndex = activeKey === null ? -1 : (indexByKey.get(activeKey) ?? -1)
 
-  const virtualizer = useWindowedCommandVirtualizer({
+  const { virtualItems, totalSize, scrollToIndex, scrollToOffset } = useWindowedCommandVirtualizer({
     itemKeys: choiceKeys,
     scrollElement: () => listRef.current,
     estimateSize: estimateChoiceOptionSize,
@@ -111,9 +111,9 @@ function SkillInstallWorkspaceChoiceList({
   const [openedOnIndex] = useState(activeIndex)
   useLayoutEffect(() => {
     if (openedOnIndex > 0) {
-      virtualizer.scrollToIndex(openedOnIndex, { align: 'auto' })
+      scrollToIndex(openedOnIndex, { align: 'auto' })
     }
-  }, [openedOnIndex, virtualizer])
+  }, [openedOnIndex, scrollToIndex])
 
   const setInputRef = useCallback(
     (node: HTMLInputElement | null) => {
@@ -129,7 +129,7 @@ function SkillInstallWorkspaceChoiceList({
 
   const handleQueryChange = (nextQuery: string): void => {
     onQueryChange(nextQuery)
-    virtualizer.scrollToOffset(0)
+    scrollToOffset(0)
   }
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -138,7 +138,7 @@ function SkillInstallWorkspaceChoiceList({
       event.preventDefault()
       if (navigation.targetId !== null) {
         onHighlightChange({ kind: 'choice', key: navigation.targetId })
-        virtualizer.scrollToIndex(indexByKey.get(navigation.targetId) ?? 0, { align: 'auto' })
+        scrollToIndex(indexByKey.get(navigation.targetId) ?? 0, { align: 'auto' })
       }
       return
     }
@@ -171,8 +171,8 @@ function SkillInstallWorkspaceChoiceList({
               )}
             </div>
           ) : (
-            <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-              {virtualizer.getVirtualItems().map((virtualRow) => {
+            <div className="relative w-full" style={{ height: totalSize }}>
+              {virtualItems.map((virtualRow) => {
                 const choice = filteredChoices[virtualRow.index]
                 if (!choice) {
                   return null

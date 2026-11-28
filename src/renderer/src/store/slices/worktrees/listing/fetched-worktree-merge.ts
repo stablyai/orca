@@ -1,6 +1,7 @@
 import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
+import { appliedWorktreeCatalogAuthorityPatch } from './worktree-catalog-absence'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -38,21 +39,30 @@ import {
 } from './authoritative-worktree-removal-memory'
 import type { FencedWorktreeMergeArgs } from './worktree-slice-types'
 
+function indexHostWorktreesById(
+  worktrees: readonly Worktree[],
+  matchesRefreshHost: (worktree: Worktree) => boolean
+): Map<string, Worktree> {
+  const byId = new Map<string, Worktree>()
+  for (const worktree of worktrees) {
+    if (matchesRefreshHost(worktree)) {
+      byId.set(worktree.id, worktree)
+    }
+  }
+  return byId
+}
+
 export function preserveConcurrentManualOrder<T extends Worktree>(
   incoming: readonly T[],
   requestStarted: readonly Worktree[] | undefined,
   current: readonly Worktree[] | undefined,
   matchesRefreshHost: (worktree: Worktree) => boolean
 ): T[] {
-  if (!requestStarted || !current) {
+  if (!requestStarted || !current || requestStarted === current) {
     return [...incoming]
   }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
+  const startedById = indexHostWorktreesById(requestStarted, matchesRefreshHost)
+  const currentById = indexHostWorktreesById(current, matchesRefreshHost)
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)
@@ -73,12 +83,9 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
   if (!requestStarted || !current) {
     return [...incoming]
   }
-  const startedById = new Map(
-    requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
-  const currentById = new Map(
-    current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
-  )
+  const startedById = indexHostWorktreesById(requestStarted, matchesRefreshHost)
+  const currentById =
+    requestStarted === current ? startedById : indexHostWorktreesById(current, matchesRefreshHost)
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)
@@ -219,17 +226,18 @@ export function mergeFetchedWorktrees(
       args,
       matchOptions
     )
+    const detectedChanged = !areDetectedWorktreeResultsEqual(
+      s.detectedWorktreesByRepo[args.repoId],
+      mergedDetected
+    )
+    const detectedPatch = detectedChanged
+      ? { detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [args.repoId]: mergedDetected } }
+      : null
+    const authorityPatch = appliedWorktreeCatalogAuthorityPatch(s, args.repoId, args.refresh)
     // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.
     const keepCurrent = worktrees.length === 0 || !!args.refresh.result.wslDistroStopped
     if (!args.refresh.result.authoritative && keepCurrent && currentForHost.length > 0) {
-      return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
-        ? s
-        : {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
-          }
+      return authorityPatch || detectedPatch ? { ...authorityPatch, ...detectedPatch } : s
     }
     const mergedWorktrees = mergeWorktreesForHost(
       s.worktreesByRepo[args.repoId],
@@ -251,10 +259,6 @@ export function mergeFetchedWorktrees(
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
     const worktreesChanged = !catalogRowsEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
-    const detectedChanged = !areDetectedWorktreeResultsEqual(
-      s.detectedWorktreesByRepo[args.repoId],
-      mergedDetected
-    )
     const versionPatch = appliedWorktreeCatalogVersionPatch(
       s,
       args.repoId,
@@ -265,12 +269,14 @@ export function mergeFetchedWorktrees(
       !worktreesChanged &&
       !detectedChanged &&
       removedIds.length === 0 &&
-      Object.keys(versionPatch).length === 0
+      Object.keys(versionPatch).length === 0 &&
+      !authorityPatch
     ) {
       return s
     }
     return {
       ...versionPatch,
+      ...authorityPatch,
       ...(worktreesChanged
         ? {
             worktreesByRepo: {
@@ -283,14 +289,7 @@ export function mergeFetchedWorktrees(
               : { sortEpoch: s.sortEpoch + 1 })
           }
         : {}),
-      ...(detectedChanged
-        ? {
-            detectedWorktreesByRepo: {
-              ...s.detectedWorktreesByRepo,
-              [args.repoId]: mergedDetected
-            }
-          }
-        : {}),
+      ...detectedPatch,
       ...(removedIds.length > 0
         ? buildWorktreePurgeState(
             s,

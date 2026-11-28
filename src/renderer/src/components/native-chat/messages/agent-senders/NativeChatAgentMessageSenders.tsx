@@ -1,11 +1,16 @@
 import { Fragment } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
-import { NativeChatEventOpenButton } from '../events/NativeChatEventOpenButton'
+import {
+  NATIVE_CHAT_INLINE_CHIP,
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_READABLE_SHARE
+} from '../events/native-chat-inline-chip'
 import { agentMessageSendersShown } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type {
   AgentMessageSender,
@@ -13,7 +18,7 @@ import type {
 } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   unnamedSenderLabel,
-  useAgentMessageSenderLabel
+  useAgentMessageSenderName
 } from './native-chat-agent-message-sender-label'
 import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -94,7 +99,8 @@ function SenderName({
   compact: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
+  const name = useAgentMessageSenderName(sender, chatWorktreeId, target, dispatchId)
+  const label = name ?? unnamedSenderLabel(t)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
@@ -118,7 +124,7 @@ function SenderName({
           : t('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
       onClick={() =>
-        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
       }
     >
       <span className="min-w-0 truncate">{label}</span>
@@ -127,99 +133,175 @@ function SenderName({
   )
 }
 
-/** A status row's sender names, plain: the row's open icon does the opening. */
+/** An agent message row's first sender name as plain words, then +N for the rest; a name this chat
+ *  can open is a button that opens it, underlined on hover. `spoken` false leaves plain names to
+ *  the row button's own words. */
 export function NativeChatAgentMessageSenderNames({
+  from,
   shown,
+  more,
   chatWorktreeId,
   target,
-  dispatchId
+  dispatchId,
+  spoken,
+  name,
+  label,
+  title
 }: {
+  from: AgentMessageSource
   shown: readonly AgentMessageSender[]
+  more: number
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   dispatchId?: string
+  spoken: boolean
+  name: string | null
+  label: string
+  /** The name where it stands alone on hover; a recipient's reads "an Eule" in German. */
+  title: string
 }): React.JSX.Element {
+  // The message's Dispatch is its one sender's; mail from several opens its first by its own address.
+  const senderDispatchId = shown.length > 1 ? undefined : dispatchId
+  // One line has room for one name: the rest count as +N.
+  const first = shown[0]
+  const others = Math.max(shown.length - 1, 0) + more
   return (
     <>
-      {shown.map((sender, index) => (
-        <Fragment key={sender.party.address}>
-          {index > 0 ? ', ' : null}
-          <SenderLabel
-            sender={sender}
+      {shown.length === 0 ? (
+        <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE}>
+          {label}
+        </span>
+      ) : null}
+      {first ? (
+        <>
+          <RowSenderName
+            from={from}
+            sender={first}
             chatWorktreeId={chatWorktreeId}
             target={target}
-            dispatchId={dispatchId}
+            dispatchId={senderDispatchId}
+            spoken={spoken}
+            name={name}
+            label={label}
+            title={title}
           />
-          {sender.host ? (
-            <WorktreeHostContextBadge
-              label={sender.host}
-              className="ml-1 inline-flex align-middle"
-            />
+          {first.host ? (
+            <WorktreeHostContextBadge label={first.host} className="inline-flex shrink-0" />
           ) : null}
-        </Fragment>
-      ))}
+        </>
+      ) : null}
+      {others > 0 ? (
+        <span aria-hidden={!spoken || undefined} className="shrink-0 font-normal">
+          +{others}
+        </span>
+      ) : null}
     </>
   )
 }
 
-function SenderLabel({
+function RowSenderName({
+  from,
+  sender,
+  chatWorktreeId,
+  target,
+  dispatchId,
+  spoken,
+  name,
+  label,
+  title
+}: {
+  from: AgentMessageSource
+  sender: AgentMessageSender
+  chatWorktreeId: string | null
+  target?: RuntimeClientTarget
+  dispatchId?: string
+  spoken: boolean
+  name: string | null
+  label: string
+  /** The name where it stands alone on hover; a recipient's reads "an Eule" in German. */
+  title: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
+  if (!opens || !chatWorktreeId) {
+    return (
+      <span aria-hidden={!spoken || undefined} className={NATIVE_CHAT_READABLE_SHARE} title={title}>
+        {label}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', {
+        name: name ?? unnamedSenderLabel(t)
+      })}
+      title={title}
+      className={`${NATIVE_CHAT_READABLE_SHARE} rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+      onClick={() =>
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
+      }
+    >
+      {label}
+    </button>
+  )
+}
+
+/** A sender's name as the chip that opens it (or plain when nothing can), whole on hover. */
+export function SenderChip({
+  from,
   sender,
   chatWorktreeId,
   target,
   dispatchId
 }: {
+  from: AgentMessageSource
   sender: AgentMessageSender
   chatWorktreeId: string | null
   target?: RuntimeClientTarget
   dispatchId?: string
 }): React.JSX.Element {
-  const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
-  return <span className="text-chat-foreground">{label}</span>
+  const t = useTranslate()
+  const name = useAgentMessageSenderName(sender, chatWorktreeId, target, dispatchId)
+  const label = name ?? unnamedSenderLabel(t)
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
+  if (!opens || !chatWorktreeId) {
+    return (
+      <SenderTooltip label={label}>
+        <span className={NATIVE_CHAT_INLINE_NAME}>{label}</span>
+      </SenderTooltip>
+    )
+  }
+  return (
+    <SenderTooltip label={label}>
+      <button
+        type="button"
+        aria-label={t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })}
+        className={NATIVE_CHAT_INLINE_CHIP}
+        onClick={() =>
+          void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, name)
+        }
+      >
+        <span className="min-w-0 truncate">{label}</span>
+      </button>
+    </SenderTooltip>
+  )
 }
 
-/** The open icon a status row shows after its words: the worker card's ArrowUpRight, named for
- *  what it opens. Nothing when the sender can't be opened from here. */
-export function NativeChatAgentMessageSenderOpen({
-  from,
-  sender,
-  dispatchId,
-  chatWorktreeId,
-  target,
-  named = false
+/** The whole name on hover, as an item chip shows its title. */
+function SenderTooltip({
+  label,
+  children
 }: {
-  from: AgentMessageSource
-  sender: AgentMessageSender
-  dispatchId?: string
-  chatWorktreeId: string | null
-  target?: RuntimeClientTarget
-  /** Its name beside the icon, for mail from several senders. */
-  named?: boolean
-}): React.JSX.Element | null {
-  const t = useTranslate()
-  const owner = useNativeChatVisualOwner()
-  const worktreeId = owner?.worktreeId ?? chatWorktreeId
-  const label = useAgentMessageSenderLabel(sender, worktreeId, target, dispatchId)
-  const opens = useAgentMessageSenderOpens(sender, worktreeId, target, dispatchId)
-  if (!opens || !worktreeId) {
-    return null
-  }
-  const name = t('components.native-chat.agentMessage.open', 'Open {{name}}', { name: label })
-  const open = (): void =>
-    void openAgentMessageSender(
-      from,
-      sender,
-      worktreeId,
-      owner?.target ?? target,
-      dispatchId,
-      label
-    )
-  if (named) {
-    return (
-      <Button type="button" variant="ghost" size="xs" aria-label={name} onClick={open}>
+  label: string
+  children: React.ReactElement
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
         {label}
-        <ArrowUpRight aria-hidden />
-      </Button>
-    )
-  }
-  return <NativeChatEventOpenButton name={name} onOpen={open} />
+      </TooltipContent>
+    </Tooltip>
+  )
 }

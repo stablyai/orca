@@ -141,7 +141,7 @@ export function sendPointToPointMessage(args: {
         // No Dispatch means no coordinator can act on it; mark it read and record the receipt
         // directly, since recordReceiptForPostCommitNudge would default a replay nudge.
         if (!dispatch) {
-          db.markAsRead([msg.id])
+          db.markAsRead([msg.id], { kind: 'orca' })
           recordMutationReceipt?.(receipt)
           return { receipt, nudge: () => undefined }
         }

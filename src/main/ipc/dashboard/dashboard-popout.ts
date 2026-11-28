@@ -1,5 +1,7 @@
 import { app, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import type { Store } from '../../persistence/loading-store/store'
+import { createStoreNativeSettingsProjection } from '../../core-desktop/native-settings-projection'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
 import type { DashboardSnapshot } from '../../../shared/agent-status/presentation/dashboard-snapshot'
 import {
@@ -27,14 +29,18 @@ function isDashboardEnabled(store: Store): boolean {
 
 export function registerDashboardPopoutHandlers(
   store: Store,
-  keybindings?: KeybindingService
+  keybindings?: KeybindingService,
+  ipc: IpcHandleRegistrar = ipcMain
 ): void {
-  ipcMain.removeHandler('dashboardPopout:open')
-  ipcMain.removeHandler('dashboard:publishSnapshot')
-  ipcMain.removeHandler('dashboard:requestSnapshot')
-  ipcMain.removeHandler('dashboard:getPopoutOpen')
-  ipcMain.removeHandler('dashboardPopout:revealAgent')
-  ipcMain.removeHandler('dashboardPopout:ackAgent')
+  const nativeSettings = createStoreNativeSettingsProjection(store)
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('dashboardPopout:open')
+    ipcMain.removeHandler('dashboard:publishSnapshot')
+    ipcMain.removeHandler('dashboard:requestSnapshot')
+    ipcMain.removeHandler('dashboard:getPopoutOpen')
+    ipcMain.removeHandler('dashboardPopout:revealAgent')
+    ipcMain.removeHandler('dashboardPopout:ackAgent')
+  }
 
   onDashboardPopoutOpenChanged((open) => {
     if (!open) {
@@ -51,16 +57,16 @@ export function registerDashboardPopoutHandlers(
     }
   })
 
-  ipcMain.handle('dashboardPopout:open', (event): void => {
+  ipc.handle('dashboardPopout:open', (event): void => {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
-    createOrFocusDashboardPopout(store, {
+    createOrFocusDashboardPopout(nativeSettings, {
       getKeybindings: () => keybindings?.getOverrides()
     })
   })
 
-  ipcMain.handle('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
+  ipc.handle('dashboard:publishSnapshot', (event, snapshot: unknown): void => {
     if (!isTrustedUIRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
@@ -82,7 +88,7 @@ export function registerDashboardPopoutHandlers(
   })
 
   // Replay immediately, then request fresh renderer state.
-  ipcMain.handle('dashboard:requestSnapshot', (event): void => {
+  ipc.handle('dashboard:requestSnapshot', (event): void => {
     if (!isDashboardPopoutRenderer(event.sender) || !isDashboardEnabled(store)) {
       return
     }
@@ -92,14 +98,14 @@ export function registerDashboardPopoutHandlers(
     sendToTrustedUIRenderer('dashboard:snapshotRequested', null)
   })
 
-  ipcMain.handle('dashboard:getPopoutOpen', (event): boolean =>
+  ipc.handle('dashboard:getPopoutOpen', (event): boolean =>
     isTrustedUIRenderer(event.sender) && isDashboardEnabled(store)
       ? getDashboardPopoutWindow() !== null
       : false
   )
 
   // Acknowledge in the main store so popout views also mute sidebar rows.
-  ipcMain.handle('dashboardPopout:ackAgent', (event, args: unknown): void => {
+  ipc.handle('dashboardPopout:ackAgent', (event, args: unknown): void => {
     const ack = args && typeof args === 'object' ? args : {}
     const paneKey = 'paneKey' in ack ? ack.paneKey : undefined
     if (
@@ -115,7 +121,7 @@ export function registerDashboardPopoutHandlers(
     })
   })
 
-  ipcMain.handle('dashboardPopout:revealAgent', (event, args: unknown): void => {
+  ipc.handle('dashboardPopout:revealAgent', (event, args: unknown): void => {
     if (
       !isDashboardPopoutRenderer(event.sender) ||
       !isDashboardEnabled(store) ||

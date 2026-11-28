@@ -181,14 +181,3 @@ export function peekWslGuestEnvironment(
 ): WslGuestEnvironment | undefined {
   return resolved.get(cacheKey(distro))
 }
-
-/** Test-only: pretend a distro has already been probed. */
-export function seedWslGuestEnvironmentForTests(
-  distro: string | undefined,
-  environment: WslGuestEnvironment
-): void {
-  const key = cacheKey(distro)
-  inFlight.set(key, Promise.resolve(environment))
-  resolved.set(key, environment)
-  retryAfter.delete(key)
-}

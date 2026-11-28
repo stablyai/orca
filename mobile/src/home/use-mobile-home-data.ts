@@ -34,7 +34,6 @@ import {
 import { loadHostCatalog } from '../host-catalog/host-store'
 import type { HostCatalogEntry } from '../host-catalog/host-profile'
 import { hostObserverOptions, type HostQuery } from '../query/host-query'
-import { isHostNotConnectedError } from '../query/host-query-errors'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
@@ -44,11 +43,10 @@ import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/hom
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { useHomeBots } from './bots/use-home-bots'
-import {
-  homeUnreachableHostIds,
-  projectHomeHostConnections
-} from './home-host-connection-projection'
+import { projectHomeHostConnections } from './home-host-connection-projection'
 import { restoreHomeQueries } from './home-query-restore'
+import { homeWorktreeRead } from './home-worktree-read'
+import { useHomeUnreachableHosts } from './use-home-unreachable-hosts'
 import { useMobileHomeHostConnections } from './use-mobile-home-host-connections'
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
@@ -62,13 +60,6 @@ const homeQueryOptions = <TData>(
   query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
   host: HomeHost
 ) => hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
-
-const readOf = (result: QueryObserverResult<HomeWorktreeCounts>) => ({
-  data: result.data,
-  dataUpdatedAt: result.dataUpdatedAt,
-  // A read refused because the desktop isn't connected yet says nothing about its list.
-  failed: result.isError && !isHostNotConnectedError(result.error)
-})
 
 export function useMobileHomeData() {
   const router = useRouter()
@@ -121,7 +112,7 @@ export function useMobileHomeData() {
       const byHost: Record<string, HostWorktreeInfo> = {}
       homeHosts.forEach(({ hostId }, at) => {
         const result = results[at]
-        const info = result && homeWorktreeInfo(hostId, readOf(result), isLive)
+        const info = result && homeWorktreeInfo(hostId, homeWorktreeRead(result), isLive)
         if (info) {
           byHost[hostId] = info
         }
@@ -226,10 +217,11 @@ export function useMobileHomeData() {
   const sortedHostCatalog = useMemo(() => sortHostsByLastConnected(hostCatalog), [hostCatalog])
   // One clock for every agent count, so Feed, the Agents badge and each desktop agree.
   const now = useNow(30_000, homeFocused)
-  // A fresh read, not one already out: that one may predate the write it must carry. The cached rows stay
-  // its delta base, so the desktop answers with only what changed.
+  // A write's read is fresh, not one already out: that one may predate the write it must carry. The cached
+  // rows stay its delta base, so the desktop answers with only what changed. Pull to refresh joins a read
+  // already out instead, so it never cancels the one a write awaits.
   const refetchHostAgents = useCallback(
-    async (hostId: string): Promise<void> => {
+    async (hostId: string, cancelRefetch = true): Promise<void> => {
       const entry = allClientsRef.current.find((candidate) => candidate.hostId === hostId)
       if (entry?.client.getState() !== 'connected') {
         return
@@ -237,7 +229,7 @@ export function useMobileHomeData() {
       await queryClient
         .refetchQueries(
           { queryKey: homeWorktreeCountsKey(hostId), exact: true },
-          { cancelRefetch: true, throwOnError: false }
+          { cancelRefetch, throwOnError: false }
         )
         .catch(() => undefined)
       // Resolves once observers hold the answer, so the write's guess isn't dropped a frame early.
@@ -245,6 +237,9 @@ export function useMobileHomeData() {
     },
     [queryClient]
   )
+  const refreshAgents = useCallback(async (): Promise<void> => {
+    await Promise.all(allClientsRef.current.map((entry) => refetchHostAgents(entry.hostId, false)))
+  }, [refetchHostAgents])
   const agentActivity = useAgentActivityWrites(allClients, refetchHostAgents)
   const { pendingActivity } = agentActivity
   const agentList = useMemo<AgentListInput>(
@@ -271,19 +266,10 @@ export function useMobileHomeData() {
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
   const { autoConnectHostIds, hostAttempts } = connections
-  // Keyed by its members, so a retry that moves no desktop in or out keeps Home's rows as they are.
-  const unreachableKey = useMemo(
-    () =>
-      homeUnreachableHostIds(
-        hosts,
-        { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
-        now
-      ).join('\n'),
-    [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now]
-  )
-  const unreachableHosts = useMemo(
-    () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
-    [unreachableKey]
+  const unreachableHosts = useHomeUnreachableHosts(
+    hosts,
+    { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
+    now
   )
   // A desktop still dialing may yet connect; one Home never dials or gave up on won't.
   const hostsConnecting = hosts.some(
@@ -314,6 +300,7 @@ export function useMobileHomeData() {
     hostConnections,
     hostsConnecting,
     needsYouByHost,
+    refreshAgents,
     router,
     setHostCatalog,
     sortedHostCatalog,

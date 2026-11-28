@@ -33,6 +33,8 @@ export const CONNECTOR_CLOUD_FEATURES = [
   'triggers.github2',
   // github.workflow_finished and a rule's `run` (WORKFLOW_EVENT_KINDS in automation-github-triggers.ts).
   'triggers.workflows',
+  // github.ci_finished (CI_FINISHED_EVENT_KINDS in automation-github-triggers.ts).
+  'triggers.ci_finished',
   // A file's bytes go straight between the CLI and the source: reply and attach stage an `upload`
   // and post its `files`; read's `stream` answers a link to the bytes. No Orca size cap.
   'files.direct',
@@ -46,14 +48,43 @@ export type ConnectorCloudFeature = (typeof CONNECTOR_CLOUD_FEATURES)[number]
  *  keeps it: without it this Orca sends those prompts nowhere. */
 export const CONNECTOR_CLOUD_PROMPTS_AUDIENCE_FEATURE = 'prompts.audience'
 
+/** The cloud marks a thread reply that @mentions the bot (`mentioned`), which is what brings back a
+ *  bot that left the thread; without it no bot leaves a thread on that cloud. */
+export const CONNECTOR_CLOUD_MENTIONED_FEATURE = 'sends.mentioned'
+
 /** The cloud takes a turn's answer up to maxLongAnswerBytes; without it this Orca keeps to
  *  maxLastAssistantMessageBytes. Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE = 'answers.long'
+
+/** The cloud takes a post's `postAt` and has the source post it then. Its own constant, as the
+ *  cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_POST_SCHEDULE_FEATURE = 'post.schedule'
+
+/** The cloud takes the verbs for Slack's own surfaces (pin, canvas, list, scheduled). Its own
+ *  constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_SLACK_TOOLS_FEATURE = 'slack.tools'
+
+/** The cloud takes a reply's `choices` and routes a press of one as its presser's message. Its own
+ *  constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 
 /** The cloud takes the `activity` event and shows what a running turn is doing. Its own constant,
  *  as the cloud's contract keeps it. */
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
 
+/** The cloud keeps a bot's sharedWith, serves the shares routes and sends the share deliveries
+ *  (cloud/packages/connector-contract/src/share-messages.ts); this Orca lists it once it takes them.
+ *  Its own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
+
 /** Listed by this Orca, which keeps a reply outbox, and by a cloud that takes its `reply` events
  *  (design item 125). Its own constant, as the cloud's contract keeps it. */
 export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
+
+/** The cloud shows a usage-limit pause this Orca will resume (turn-ended `resumes`) as paused. Its
+ *  own constant, as the cloud's contract keeps it. */
+export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
+
+/** This Orca takes a send's `resume` (Resume on a failed turn's status). Its own constant, as the
+ *  cloud's contract keeps it. */
+export const CONNECTOR_RESUME_FEATURE = 'resume'

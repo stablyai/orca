@@ -26,7 +26,7 @@ import {
 
 type CrewRuntimeWatchDependencies = {
   store: RuntimeStore | null
-  watchChanges: (wake: (facets: CrewInvalidation) => void) => () => void
+  watchChanges: (wake: (facets: CrewInvalidation) => void, idle: () => boolean) => () => void
   watchTransitions: (wake: (change: { paneKey: string }) => void) => () => void
   watchClient: (wake: (event: RuntimeClientEvent) => void) => () => void
 }
@@ -46,12 +46,14 @@ function changedSince<T>(
   return !isDeepStrictEqual(previous.value, comparable.value)
 }
 
-/** `relevance` is what mounted crews show, or null before their first read; names compare only that. */
+/** `relevance` is what mounted crews show, or null before their first read; names compare only that.
+ *  While `idle`, workspace writes are only noted; `resume` compares them once, before the next read. */
 export function watchCrewRuntimeSources(
   deps: CrewRuntimeWatchDependencies,
   wake: (facets: CrewInvalidation) => void,
-  relevance: () => CrewRelevance | null = () => null
-) {
+  relevance: () => CrewRelevance | null = () => null,
+  idle: () => boolean = () => false
+): (() => void) & { resume: () => void } {
   const hostIds = () => deps.store?.getWorkspaceSessionHostIds?.() ?? (['local'] as const)
   type HostId = ReturnType<typeof hostIds>[number]
   // Per scope and host, where the scope's tabs live.
@@ -94,26 +96,34 @@ export function watchCrewRuntimeSources(
   const topologyByHost = new Map(
     ORCA_LAYOUT_OWNER_IS_MAIN ? hostIds().map((id) => [id, topology(id)]) : []
   )
+  const written = new Set<HostId>()
+  const compareSession = (id: HostId) => {
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const previous = topologyByHost.get(id)
+      const next = topology(id)
+      topologyByHost.set(id, next)
+      if (previous && changedSince(previous, next, (scope) => topology(id, scope))) {
+        wake(new Set(['topology']))
+      }
+    }
+    const previous = namesByHost.get(id)
+    const next = names(id)
+    namesByHost.set(id, next)
+    if (previous && changedSince(previous, next, (scope) => names(id, scope))) {
+      wake(new Set(['names']))
+    }
+  }
   const disposers = [
-    deps.watchChanges(wake),
+    deps.watchChanges(wake, idle),
     sessionCrewChanges.subscribe(wake),
     // A hook observation names its pane: one for a pane no crew row shows wakes nothing.
     deps.watchTransitions((change) => wake(scoped(['status', 'names'], change.paneKey))),
     deps.store?.onWorkspaceSessionWritten?.((hostId) => {
       for (const id of hostId === null ? hostIds() : [hostId]) {
-        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-          const previous = topologyByHost.get(id)
-          const next = topology(id)
-          topologyByHost.set(id, next)
-          if (previous && changedSince(previous, next, (scope) => topology(id, scope))) {
-            wake(new Set(['topology']))
-          }
-        }
-        const previous = namesByHost.get(id)
-        const next = names(id)
-        namesByHost.set(id, next)
-        if (previous && changedSince(previous, next, (scope) => names(id, scope))) {
-          wake(new Set(['names']))
+        if (idle()) {
+          written.add(id)
+        } else {
+          compareSession(id)
         }
       }
     }) ?? (() => {}),
@@ -136,7 +146,15 @@ export function watchCrewRuntimeSources(
       }
     })
   ]
-  return () => disposers.forEach((dispose) => dispose())
+  return Object.assign(() => disposers.forEach((dispose) => dispose()), {
+    resume: () => {
+      // Each host stays noted until its own comparison has run.
+      for (const id of written) {
+        compareSession(id)
+        written.delete(id)
+      }
+    }
+  })
 }
 
 export type CrewRuntimeReaders = {

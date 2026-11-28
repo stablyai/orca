@@ -1,3 +1,4 @@
+import { runWithFinally } from '@/lib/run-with-finally'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useAppStore } from '../../../store/index'
@@ -13,7 +14,6 @@ import {
 } from '../usage/usage-provider-settings-target'
 import { useStatusBarMenuFocusHandoff } from '../usage/ProviderDetailsMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { useStatusBarDensity } from './status-bar-density'
 import {
   getUsageOwnerHostScope,
   useOwnerUsageRateLimits
@@ -61,15 +61,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const {
-    density: { compact, usageTightestOnly, segmentsIconOnly, collapseUsage },
-    overflowing,
-    collapsedUsageProviders,
-    barRef,
-    usageRef,
-    segmentsRef
-  } = useStatusBarDensity()
-
   useEffect(() => {
     mountedRef.current = true
     return () => {
@@ -90,40 +81,36 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing) {
+    if (isRefreshing || getUsageOwnerHostScope(remoteOwner) === null) {
       return
     }
     setIsRefreshing(true)
-    try {
-      // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
-      await Promise.all([
-        (refreshRemote ?? refreshRateLimits)(),
-        refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
-      ])
-    } finally {
-      if (mountedRef.current) {
-        setIsRefreshing(false)
+    await runWithFinally(
+      async () => {
+        // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
+        await Promise.all([
+          (refreshRemote ?? refreshRateLimits)(),
+          refreshDetectedAgents(undefined, { wakeWslDistro: true, userInitiated: true })
+        ])
+      },
+      () => {
+        if (mountedRef.current) {
+          setIsRefreshing(false)
+        }
       }
-    }
-  }, [isRefreshing, refreshRemote, refreshRateLimits, refreshDetectedAgents])
+    )
+  }, [isRefreshing, remoteOwner, refreshRemote, refreshRateLimits, refreshDetectedAgents])
 
   if (!statusBarVisible) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
-    rateLimits
+  const { claude, codex, opencodeGo, kimi, minimax, grok, cursor, zcode } = rateLimits
   const muse = rateLimits.muse
 
-  // Antigravity has no saved credential; the checked item and detected CLI establish setup.
-  const antigravityUsageConfigured =
-    !remoteOwned &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // Use owner-specific durable setup flags; viewer credentials cannot establish remote configuration.
   const usageSettings = {
     ...(remoteOwned ? {} : settings),
-    antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
@@ -133,9 +120,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
-  const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
   const visibleGrok = getVisibleUsageProvider('grok', grok, usageSettings)
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
@@ -149,18 +134,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  const showGemini =
-    visibleGemini !== null &&
-    statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
   const showKimi =
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
     isStatusBarItemAvailable('kimi', detectedAgentIds)
-  const showAntigravity =
-    visibleAntigravity !== null &&
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
   // MiniMax supports cookie/API-key usage without an installed CLI.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -191,10 +168,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
-    showGemini ||
     showOpencodeGo ||
     showKimi ||
-    showAntigravity ||
     showMiniMax ||
     showGrok ||
     showCursor ||
@@ -208,10 +183,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
     grok?.status === 'fetching' ||
     cursor?.status === 'fetching' ||
@@ -227,8 +200,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
-    showGemini ? visibleGemini : null,
-    showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,
     showMiniMax ? visibleMiniMax : null,
@@ -238,25 +209,25 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
-    // Why: the bar collapses chips from the end, so placeholders give way first.
+    // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
-  // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)
-  const handleManageAccounts = (): void => {
-    setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'accounts', repoId: null, hostScope })
-    openSettingsPage()
-  }
   const handleUsageDetails = (): void => {
+    if (!hostScope) {
+      return
+    }
     setUsageMenuOpen(false)
-    openSettingsTarget({ pane: 'stats', repoId: null })
+    openSettingsTarget({ pane: 'stats', repoId: null, hostScope })
     openSettingsPage()
   }
-  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider']): void => {
-    const sectionId = getUsageProviderAccountsSectionId(provider)
+  const handleOpenProviderAccounts = (provider: ProviderRateLimits['provider'] | null): void => {
+    if (!hostScope) {
+      return
+    }
+    const sectionId = provider ? getUsageProviderAccountsSectionId(provider) : null
     // Why: a placeholder for a CLI-owned provider still leads to the host's accounts.
-    if (!sectionId && !remoteOwner) {
+    if (provider && !sectionId && !remoteOwner) {
       return
     }
     setUsageMenuOpen(false)
@@ -269,7 +240,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     openSettingsPage()
   }
   const canSignInFromUsageRow = (provider: ProviderRateLimits['provider']): boolean =>
-    usageRowSignInOpensSettings(provider, settings)
+    hostScope !== null && usageRowSignInOpensSettings(provider, settings)
   const handleUsageMenuOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       usageMenuFocusHandoff.reset()
@@ -279,18 +250,13 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
 
   return {
-    antigravityAccounts: rateLimits.antigravityAccounts,
     anyFetching,
     anyVisible,
-    barRef,
     canSignInFromUsageRow,
-    collapseUsage,
-    collapsedUsageProviders,
-    compact,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,
-    handleManageAccounts,
+    handleManageAccounts: () => handleOpenProviderAccounts(null),
     handleOpenProviderAccounts,
     handleRefresh,
     handleUsageDetails,
@@ -300,14 +266,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     isRefreshing,
     menuOpen,
     menuPoint,
-    overflowing,
     ownerUsage,
     petEnabled,
     recordFeatureInteraction,
     remoteOwner,
     rosterProviders,
-    segmentsIconOnly,
-    segmentsRef,
     setMenuOpen,
     setMenuPoint,
     setStatusBarUsageMode,
@@ -323,9 +286,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,
-    usagePercentageDisplay,
-    usageRef,
-    usageTightestOnly
+    usagePercentageDisplay
   }
 }
 

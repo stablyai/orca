@@ -163,21 +163,6 @@ export function migrateHostedReviewLinkMutationGeneration(
   }
 }
 
-export function getHostedReviewLinkMutationGenerationForTests(worktreeId: string): number {
-  return getHostedReviewLinkMutationGeneration(worktreeId)
-}
-
-export function getHostedReviewLinkWorktreeAliasCountForTests(): number {
-  return hostedReviewLinkWorktreeIdAliases.size
-}
-
-export function resetHostedReviewLinkMutationGenerationForTests(): void {
-  hostedReviewLinkMutationGenerationByWorktreeId.clear()
-  hostedReviewLinkClearTombstonesByCopy.clear()
-  hostedReviewLinkWorktreeIdAliases.clear()
-  deleteDetachedOwners()
-}
-
 export function hostedReviewLinksAreCleared(
   worktree: HostedReviewContext,
   updates: HostedReviewClearUpdates = CLEARED_HOSTED_REVIEW_LINK_UPDATES

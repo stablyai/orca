@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest'
+import { codexSharedServerSpec } from './codex-shared-server-key'
+
+const VERSION = 'codex-cli 0.167.0'
+
+const launch = (cwd: string, args: string[]) => ({
+  command: '/usr/local/bin/codex',
+  args: ['app-server', ...args],
+  cwd,
+  env: { CODEX_HOME: '/home/a/.codex' }
+})
+
+describe('shared Codex server key', () => {
+  it("shares across folders with Orca's own hooks-off override", async () => {
+    const hooksOff = [
+      '-c',
+      'hooks.state={"/home/a/.codex/hooks.json:stop:0:0"={enabled=false},"/home/a/.codex/hooks.json:pre_tool_use:0:1"={enabled=false}}'
+    ]
+    const a = await codexSharedServerSpec(launch('/repo/wt-a', hooksOff), [], VERSION)
+    const b = await codexSharedServerSpec(launch('/repo/wt-b', hooksOff), [], VERSION)
+    expect(a.key).toBe(b.key)
+  })
+
+  // Codex skips only CODEX_HOME's own .codex, so a server in home would load ~/.codex as a project.
+  it('starts the server in its CODEX_HOME, never home', async () => {
+    const a = await codexSharedServerSpec(launch('/repo/wt-a', []), [], VERSION)
+    expect(a.launch.cwd).toBe('/home/a/.codex')
+  })
+
+  it.each([
+    'model_instructions_file="./AGENTS.extra.md"',
+    'hooks.state={".codex/hooks.json:stop:0:0"={enabled=false}}'
+  ])('keeps the folder for a user --config value Codex may resolve from it: %s', async (value) => {
+    const config = ['-c', value]
+    const a = await codexSharedServerSpec(launch('/repo/wt-a', config), [], VERSION)
+    const b = await codexSharedServerSpec(launch('/repo/wt-b', config), [], VERSION)
+    expect(a.key).not.toBe(b.key)
+    expect(a.launch.cwd).toBe('/repo/wt-a')
+  })
+
+  it('never shares a Codex whose version is unknown', async () => {
+    const a = await codexSharedServerSpec(launch('/repo/wt-a', []), [], null)
+    const b = await codexSharedServerSpec(launch('/repo/wt-a', []), [], null)
+    expect(a.key).not.toBe(b.key)
+  })
+})

@@ -10,6 +10,7 @@ import type { OrcadRelay } from './orcad-relay'
 import type { BackendServiceCleanup } from '../backend/service-composition'
 import { orcadServedProfileId } from './orcad-served-profile'
 import type * as OrcadConnector from './orcad-connector'
+import { scheduleTeamPolicyRefresh } from '../orca-profiles/cloud-auth/team-policy-refresh'
 
 /** The daemon's relay host and its Orca account, which signs the relay in and out. */
 export async function installOrcadRelayAndAccount(
@@ -37,7 +38,7 @@ export function installOrcadOrcaAccount(
     serveOrcaProfile: (profileId: string) => void
     getConnectorCloud: () => Pick<
       ConnectorCloud,
-      'accountChanged' | 'signOutStarted' | 'signOutFinished'
+      'accountChanged' | 'signOutStarted' | 'signOutFinished' | 'signedIn'
     > | null
   },
   relay: Pick<OrcadRelay, 'accountChanged' | 'signOutStarted'>,
@@ -64,6 +65,7 @@ export function installOrcadOrcaAccount(
         relay.accountChanged()
         runtime.getConnectorCloud()?.accountChanged()
       },
+      onSignedIn: () => runtime.getConnectorCloud()?.signedIn(),
       onBeforeSignOut: () => {
         relay.signOutStarted()
         runtime.getConnectorCloud()?.signOutStarted()
@@ -74,6 +76,7 @@ export function installOrcadOrcaAccount(
   const server = new OrcaServerSignIn({ account })
   installOrcaServerSignIn(server)
   server.startDailyRefresh()
+  registerCleanup(scheduleTeamPolicyRefresh(account))
   // A rotation saved only in memory would be replayed after restart and end the session family.
   getAppEnvironment().onWillQuit(flushUnsavedCloudSessions)
   registerCleanup(() => installOrcaServerSignIn(null))

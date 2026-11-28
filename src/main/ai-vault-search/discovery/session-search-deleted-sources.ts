@@ -31,9 +31,9 @@ export type SessionSearchRetirementArgs = {
   /** Complete successful container enumerations; see session-search-synthetic-sources.ts. */
   enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
   listings: SessionSearchDirectoryReader
-  /** Roots whose sessions are all `<store>#<id>` references: a plain file under one is a retired format
-   *  (Hermes' old session_*.json snapshots), retired even while it stays on disk. */
-  referenceOnlyRoots?: readonly string[]
+  /** Roots whose plain files retire even while on disk: Hermes' old session_*.json snapshots (its
+   *  sessions are `<store>#<id>` references) and roots that alias another root, which owns the rows. */
+  retiredFileRoots?: readonly string[]
   /** Bound directory work rather than rows so one unreadable directory cannot starve later rows. */
   directoryLimit?: number
   signal?: AbortSignal
@@ -66,17 +66,27 @@ export async function retireDeletedSessionSearchSources(
     degradedRoots: []
   }
   const degraded = new Map<string, string>()
+  const retire = async (path: string): Promise<void> => {
+    store.removeFile(path)
+    retirement.retired.push(path)
+    if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
+      await store.flush?.()
+    }
+  }
   for (const [index, path] of paths.entries()) {
+    if (signal?.aborted) {
+      retirement.unchecked = paths.slice(index)
+      break
+    }
     // Synthetic paths name entries inside containers, not filesystem objects.
     const synthetic = splitSyntheticSessionSource(path)
-    if (!synthetic && args.referenceOnlyRoots?.some((root) => isUnderScanRoot(path, root))) {
-      store.removeFile(path)
-      retirement.retired.push(path)
+    if (!synthetic && args.retiredFileRoots?.some((root) => isUnderScanRoot(path, root))) {
+      await retire(path)
       continue
     }
     const filePath = synthetic?.container ?? path
     // After the budget, finish cached directories so row ordering cannot monopolize the next pass.
-    if (signal?.aborted || (asked.size >= directoryLimit && !asked.has(dirname(filePath)))) {
+    if (asked.size >= directoryLimit && !asked.has(dirname(filePath))) {
       retirement.unchecked = paths.slice(index)
       break
     }
@@ -90,11 +100,7 @@ export async function retireDeletedSessionSearchSources(
       ? proveSyntheticSource(synthetic, containerProof, args.enumeratedContainers)
       : containerProof
     if (proof.verdict === 'gone') {
-      store.removeFile(path)
-      retirement.retired.push(path)
-      if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
-        await store.flush?.()
-      }
+      await retire(path)
       continue
     }
     if (proof.verdict === 'present') {

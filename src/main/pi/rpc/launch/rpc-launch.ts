@@ -3,10 +3,12 @@ import { ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from '../../../ipc/pty/host-env/sp
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  withNativeChatVisualsEnv,
+  type NativeChatVisualsLaunch
 } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { ProviderProcessLaunch } from '../../../provider-process/provider-process-launch'
-import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
+import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { compareAppVersions } from '../../../../shared/app-lifecycle/identity/app-version'
 import type { AgentCliVersionCheck } from '../../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
@@ -42,11 +44,18 @@ const CALLER_ENV_TO_DELETE = [
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 ]
 
-/** Structured Pi has no scratch folder; an inherited one belongs to another chat. */
-export const PI_RPC_SESSION_ENV_TO_DELETE: readonly string[] = [
-  NATIVE_CHAT_SCRATCH_DIR_ENV,
-  LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
-]
+/** This chat's own scratch folder, if it has one; an inherited one belongs to another chat. */
+export function withPiVisualsEnv(
+  env: Record<string, string>,
+  visuals: NativeChatVisualsLaunch | null
+): { env: Record<string, string>; inheritedEnvToDelete: readonly string[] } {
+  return {
+    env: withNativeChatVisualsEnv(env, visuals),
+    inheritedEnvToDelete: visuals
+      ? [LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
+      : [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]
+  }
+}
 
 /** Remove caller identity before the structured-session seal supplies its own. */
 export function withoutPiCallerEnv(env: Readonly<Record<string, string>>): Record<string, string> {
@@ -92,7 +101,7 @@ export function piToolLimit(
   readOnly: ReadOnlySessionMode | null,
   launchVersion: AgentCliVersionCheck
 ): PiToolLimit | null {
-  const tools = readOnly === 'reply-only' ? 'none' : readOnly ? 'read' : null
+  const tools = toolFreeSession(readOnly) ? 'none' : readOnly ? 'read' : null
   if (
     tools &&
     launchVersion.status === 'ready' &&

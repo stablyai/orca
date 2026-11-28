@@ -10,12 +10,14 @@ import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-c
 import { probePtyRunningWork } from '../../terminal/tab-lifecycle/pty-running-work-probe'
 import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
+import { namesCliConversation } from '../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
-  chatAgentsShareConversations,
-  namesCliConversation
-} from '../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
-import { recognizeAgentProcess } from '../../../../../shared/agent-status/process/agent-process-recognition'
+  cliChatResumeCloseFromProbe,
+  type CliChatResumeClose
+} from '../../../../../shared/agent-session/view/cli-chat-resume-close-verdict'
 import { reportCliChatResumeOwner } from './cli-chat-resume-feedback'
+import { agentSessionWriteFailureText } from '../../native-chat/messages/notices/agent-session-write-notice-text'
+import { agentSessionRefusalFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { cliChatResumeClosingPaneKeys } from './cli-chat-resume-close-terminal'
 import { cliConversationExitGuidance } from '@/lib/agent-session/resume/history/cli-conversation-exit-guidance'
 import { structuredLaunchesHoldingIdentity } from '@/lib/agent-session/launch/structured-agent-session-launch-holders'
@@ -27,11 +29,7 @@ import type { CliChatResumeSource } from './cli-chat-resume-source'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { StructuredLaunchState } from '@/lib/agent-session/launch/structured-agent-session-launch-state-store'
 
-/** keep: the agent quit, so the terminal stays; close: continuing stops the pane's agent;
- *  ask: the pane runs another job, so the terminal's own running-process prompt asks. */
-export type CliChatResumeClose = 'keep' | 'close' | 'ask'
-
-/** Only the host's proof that the pane's shell runs nothing shows its agent quit; a CLI has no status row before its first hook. */
+/** Only the host's proof that the pane's shell runs nothing shows its agent quit. */
 async function paneClose(
   source: CliChatResumeSource,
   signal: AbortSignal
@@ -47,14 +45,7 @@ async function paneClose(
     probePtyRunningWork([ptyId], { timeoutMs: 5_000 }),
     signal
   )
-  if (probe?.verdict === 'exited') {
-    return 'keep'
-  }
-  // Only this conversation's agent is the user's to stop; a job started after it quit (an editor,
-  // a dev server, another agent) is asked about first.
-  const running = probe?.verdict === 'live' ? probe.foregroundProcess : undefined
-  const agent = running ? recognizeAgentProcess(running)?.agent : undefined
-  return running && !(agent && chatAgentsShareConversations(source.agent, agent)) ? 'ask' : 'close'
+  return cliChatResumeCloseFromProbe(probe, source.agent)
 }
 
 export type LaunchHeld = { holder?: StructuredLaunchState }
@@ -139,8 +130,9 @@ export async function admitCliChatResumeClose(
     )
     return null
   }
-  // The host's create refuses another terminal running the conversation; asked now, this terminal
-  // stays open. Its own panes are left out: the close stops them before create.
+  // The host's create refuses another terminal running the conversation, or one saved in another
+  // folder; asked now, this terminal stays open. Its own panes are left out: the close stops them
+  // before create.
   const support = await waitForPromiseWithSignal(
     admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent, {
       providerSessionId: source.providerSessionId,
@@ -152,7 +144,11 @@ export async function admitCliChatResumeClose(
     return null
   }
   if (support.kind === 'refused') {
-    toast.error(cliConversationExitGuidance(source.agent))
+    toast.error(
+      support.refusal.code === 'agent_session_identity_required'
+        ? agentSessionWriteFailureText(agentSessionRefusalFailure(support.refusal), 'read-history')
+        : cliConversationExitGuidance(source.agent)
+    )
     return null
   }
   if (support.kind === 'declined') {

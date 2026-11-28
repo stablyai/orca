@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { MACOS_DEPLOYMENT_TARGET } from '../posix/build-provider-exec.mjs'
 
 const repoRoot = path.resolve(import.meta.dirname, '../../../..')
 const packagePath = path.join(repoRoot, 'native', 'computer-use-macos')
@@ -23,9 +24,23 @@ if (process.platform !== 'darwin') {
   process.exit(0)
 }
 
+assertPackageMatchesDeploymentTarget()
 buildUniversalBinary()
 chmodSync(binaryPath, 0o755)
 createHelperApp()
+
+// Why: the binary's minos comes from Package.swift and the plist floor from
+// MACOS_DEPLOYMENT_TARGET; if they drift, Launch Services rejects the helper (#20418).
+function assertPackageMatchesDeploymentTarget() {
+  const manifest = readFileSync(path.join(packagePath, 'Package.swift'), 'utf8')
+  const packageTarget = manifest.match(/\.macOS\("([^"]+)"\)/)?.[1]
+  if (packageTarget !== MACOS_DEPLOYMENT_TARGET) {
+    console.error(
+      `Package.swift platform .macOS(${packageTarget ?? '<unparsed>'}) must equal MACOS_DEPLOYMENT_TARGET (${MACOS_DEPLOYMENT_TARGET}).`
+    )
+    process.exit(1)
+  }
+}
 
 function buildUniversalBinary() {
   const builtBinaries = universalTriples.map((triple) => {
@@ -130,7 +145,7 @@ function infoPlist() {
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>${MACOS_DEPLOYMENT_TARGET}</string>
   <key>LSUIElement</key>
   <true/>
   <key>NSAccessibilityUsageDescription</key>

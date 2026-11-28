@@ -5,22 +5,25 @@
 import { mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../shared/schema/lazy-zod-schema'
 import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { getDataFile } from '../persistence/loading-store/user-data-path'
 
-const StateSchema = z.object({
-  accounts: z
-    .record(
-      z.string(),
-      z.object({
-        historyId: z.string().optional(),
-        calendars: z.record(z.string(), z.object({ syncToken: z.string().optional() })).optional()
-      })
-    )
-    .default({}),
-  /** `${botId} ${account}` to when that bot began listening there: older mail never starts it. */
-  listeners: z.record(z.string(), z.number()).default({})
-})
+const StateSchema = lazyZodSchema(() =>
+  z.object({
+    accounts: z
+      .record(
+        z.string(),
+        z.object({
+          historyId: z.string().optional(),
+          calendars: z.record(z.string(), z.object({ syncToken: z.string().optional() })).optional()
+        })
+      )
+      .default({}),
+    /** `${botId} ${account}` to when that bot began listening there: older mail never starts it. */
+    listeners: z.record(z.string(), z.number()).default({})
+  })
+)
 
 export type GoogleTriggerState = z.infer<typeof StateSchema>
 

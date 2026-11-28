@@ -1,6 +1,14 @@
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
-import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  type ExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './session-tabs-inventory'
+
+// Bounds how stale a reused census may be: a terminal the controller holds but the runtime was never told about
+// shows up within this long, while a burst of reads still shares one census.
+const LOCAL_TERMINAL_CENSUS_REUSE_MS = 1_000
 
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
   /** A workspace's chat tabs, from the tab state alone: no PTY inventory, which only terminal tabs need.
@@ -46,6 +54,55 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
     })
   }
 
+  private localTerminalCensus: { receipt: () => boolean; takenAt: number } | null = null
+  private pendingLocalTerminalCensus: Promise<(() => boolean) | null> | null = null
+
+  /** A census of this machine's terminals, the only ones callers ask after. Reads within a second share its receipt,
+   *  which stays current only while the same controller and published graph own the census. */
+  refreshAuthoritativeTerminalInventory(): Promise<(() => boolean) | null> {
+    const census = this.localTerminalCensus
+    if (
+      census &&
+      performance.now() - census.takenAt < LOCAL_TERMINAL_CENSUS_REUSE_MS &&
+      census.receipt()
+    ) {
+      return Promise.resolve(census.receipt)
+    }
+    this.pendingLocalTerminalCensus ??= this.takeLocalTerminalCensus().finally(() => {
+      this.pendingLocalTerminalCensus = null
+    })
+    return this.pendingLocalTerminalCensus
+  }
+
+  private async takeLocalTerminalCensus(): Promise<(() => boolean) | null> {
+    const epoch = this.getAuthoritativeSessionTabsInventoryEpoch()
+    if (epoch === null || !this.ptyController) {
+      return null
+    }
+    const generation = this.ptyControllerGeneration
+    const takenAt = performance.now()
+    const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
+      await this.listResolvedWorktrees(),
+      null,
+      undefined,
+      null,
+      false,
+      {
+        includeForegroundProcessEvidence: false,
+        refreshForegroundAgents: false,
+        supersedesPendingListings: false
+      }
+    )
+    if (!inventory) {
+      return null
+    }
+    const receipt = () =>
+      this.ptyControllerGeneration === generation &&
+      this.getAuthoritativeSessionTabsInventoryEpoch() === epoch
+    this.localTerminalCensus = { receipt, takenAt }
+    return receipt
+  }
+
   protected getAuthoritativeSessionTabsInventoryEpoch(): number | null {
     return this.graphStatus === 'ready' &&
       this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch
@@ -69,13 +126,19 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
   }
 
   protected isCompleteSessionTabsPtyCensus(inventory: PtyControllerInventory | null): boolean {
-    if (!inventory) {
-      return false
-    }
-    const knownHostIds = this.listKnownExecutionHostIds(inventory.queriedHostIds)
-    return ![...knownHostIds].some((hostId) => {
+    return !!inventory && !this.knowsTerminalHostOutside(inventory.queriedHostIds)
+  }
+
+  /** Whether a terminal could live on a known host the local census never asks. */
+  knowsNonLocalTerminalHost(): boolean {
+    return this.knowsTerminalHostOutside(new Set([LOCAL_EXECUTION_HOST_ID]))
+  }
+
+  private knowsTerminalHostOutside(queriedHostIds: ReadonlySet<ExecutionHostId>): boolean {
+    const knownHostIds = this.listKnownExecutionHostIds(queriedHostIds)
+    return [...knownHostIds].some((hostId) => {
       const parsed = parseExecutionHostId(hostId)
-      return parsed?.kind !== 'runtime' && !inventory.queriedHostIds.has(hostId)
+      return parsed?.kind !== 'runtime' && !queriedHostIds.has(hostId)
     })
   }
 }

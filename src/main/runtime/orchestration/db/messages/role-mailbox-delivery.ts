@@ -1,3 +1,4 @@
+import { noteQuestionEdge } from './question-edges'
 import {
   finalizeMailboxDelivery,
   markDeliveryAcknowledged,
@@ -13,6 +14,7 @@ import { requireMailboxConsumer } from './mailbox-consumer'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import { DELIVERY_COLUMN_LIST } from '../row-column-lists'
+import type { MailTaker } from './mail-taker'
 
 // Repeats the outstanding index predicate; empty handles predate mailboxes.
 const OUTSTANDING_IN_MAILBOX = "mailbox_handle = ? AND mailbox_handle != ''"
@@ -87,7 +89,11 @@ export function getOrCreateMailboxDelivery(
 // A consuming read hands over its batch and records the caller's receipt in the same commit.
 export function takeMailboxDelivery(
   this: OrchestrationDb,
-  params: MailboxDeliveryParams & { recordTaken?: (batch: MailboxDeliveryBatch) => void }
+  params: MailboxDeliveryParams & {
+    recordTaken?: (batch: MailboxDeliveryBatch) => void
+    /** Who this read hands its questions to. */
+    taker: MailTaker
+  }
 ): MailboxDeliveryBatch | undefined {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -95,7 +101,9 @@ export function takeMailboxDelivery(
     const selected = selectMailboxDelivery(this, params)
     const batch = selected && {
       ...selected,
-      delivery: exposeDeliveryTimestamps(markDeliveryAcknowledged(this, selected.delivery))
+      delivery: exposeDeliveryTimestamps(
+        markDeliveryAcknowledged(this, selected.delivery, params.taker)
+      )
     }
     if (batch) {
       params.recordTaken?.(batch)
@@ -183,6 +191,8 @@ export function acknowledgeMailboxDelivery(
     consumerGeneration: number
     consumerSource?: 'dispatch' | 'attachment'
     deliveryId: string
+    /** Who this acknowledgement hands its questions to. */
+    taker: MailTaker
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -209,7 +219,7 @@ export function acknowledgeMailboxDelivery(
       this.db.exec('COMMIT')
       return { delivery: exposeDeliveryTimestamps(delivery), duplicate: true }
     }
-    const acknowledged = markDeliveryAcknowledged(this, delivery)
+    const acknowledged = markDeliveryAcknowledged(this, delivery, params.taker)
     this.db.exec('COMMIT')
     return { delivery: exposeDeliveryTimestamps(acknowledged), duplicate: false }
   } catch (error) {
@@ -265,6 +275,8 @@ export function fenceUnacknowledgedMailboxDeliveries(
       `UPDATE deliveries SET status = 'fenced' WHERE ${OUTSTANDING_IN_MAILBOX} AND status = 'outstanding'`
     )
     .run(mailboxHandle)
+  // Who reads this mailbox changed: a question its mail held for the old reader is decided again.
+  noteQuestionEdge({ kind: 'mailbox', mailbox: mailboxHandle })
 }
 
 export type RoleMailboxDeliveryMethods = {

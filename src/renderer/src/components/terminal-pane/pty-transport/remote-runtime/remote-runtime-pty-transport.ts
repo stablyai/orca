@@ -22,7 +22,7 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
-import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
+import { createAgentSessionTerminalOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-terminal-options'
 import {
   agentProviderSessionForHostEnsure,
   restoreSourcePaneOptions
@@ -135,9 +135,10 @@ import {
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
-import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
@@ -634,7 +635,10 @@ export function createRemoteRuntimePtyTransport(
   const terminalCreateMutationId = createBrowserUuid()
   // Replay one stable host operation after lost responses so reconnect cannot launch a second agent.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentKeyboardOptions = createAgentSessionKeyboardOptions(terminalKittyKeyboardProtocol)
+  const agentTerminalOptions = createAgentSessionTerminalOptions(
+    terminalKittyKeyboardProtocol,
+    terminalColorQueryReplies
+  )
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -3706,9 +3710,7 @@ export function createRemoteRuntimePtyTransport(
       }
       const freshLaunch = !resumeProviderSessionToSend ? opts.freshAgentLaunch : undefined
       const promptStatus = freshLaunch
-        ? lastVerifiedRuntimeStatus(
-            useAppStore.getState().runtimeStatusByEnvironmentId.get(createEnvironmentId)
-          )
+        ? lastVerifiedRuntimeStatus(readRuntimeStatuses().get(createEnvironmentId))
         : null
       const promptPlatform = authoritativeHostPlatform ?? promptStatus?.hostPlatform
       let promptPlan =
@@ -3755,7 +3757,7 @@ export function createRemoteRuntimePtyTransport(
         return result
       }
       const hostAuthorityCreate = async (epoch = connectLifecycleEpoch) => {
-        const keyboardOptions = await agentKeyboardOptions(createEnvironmentId)
+        const terminalOptions = await agentTerminalOptions(createEnvironmentId)
         const freshInputs =
           freshLaunch && launchAgentToSend
             ? await pairedAgentLaunchInputs({
@@ -3798,7 +3800,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.ensureAgentSession',
                   {
                     kind: 'explicit',
-                    ...keyboardOptions,
+                    ...terminalOptions,
                     ...originOptions,
                     ...sourcePaneOptions,
                     worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
@@ -3822,7 +3824,7 @@ export function createRemoteRuntimePtyTransport(
                   'terminal.createAgentSession',
                   withAgentSessionCreateOperationId(
                     {
-                      ...keyboardOptions,
+                      ...terminalOptions,
                       ...sectionTrustOptions,
                       ...(opts.trustWorktreeId && opts.cwd ? { startupCwd: opts.cwd } : {}),
                       worktree: toRuntimeTerminalWorktreeSelector(worktreeId),

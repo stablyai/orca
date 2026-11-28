@@ -2,10 +2,13 @@ import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-ses
 import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-replacement'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { replacedPaneBindingState } from '../../../persistence/loading-store/terminal-bindings/replaced-pane-binding'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentSessionResumeClaim } from './agent-session-resume-claims'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 
 export type AgentPaneRestartRefusal =
   /** Not a live terminal of this host's own (an SSH relay or another server's pane). */
@@ -14,6 +17,9 @@ export type AgentPaneRestartRefusal =
   | 'viewer_cannot_follow'
   | 'no_resume_command'
   | 'busy'
+  /** The saved layout gives the pane to another terminal or lacks its tab: the binding retire after
+   *  the stop would refuse, leaving no replacement. */
+  | 'saved_layout_differs'
   /** The stop was sent but its exit unconfirmed: the terminal may still end, with no replacement. */
   | 'stop_failed'
   /** Stopped, but no new terminal took the pane: it is left as a slept pane, so its next view
@@ -124,8 +130,9 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       ) {
         return refuse('not_local')
       }
-      if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(ptyId)) {
-        return refuse('viewer_cannot_follow')
+      const refusalBeforeStop = this.restartRefusalBeforeStop(current)
+      if (refusalBeforeStop) {
+        return refuse(refusalBeforeStop)
       }
       let stopped = false
       // Left as a slept pane is: its next view starts it afresh and resumes the conversation.
@@ -182,6 +189,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
             launchRuntime: resume.launchRuntime,
             resumeProviderSession: resume.resumeProviderSession,
             spawnIntent: 'user-resume',
+            // A desktop window that didn't hold the pane isn't shown or focused to the new terminal.
+            presentation: 'background',
             identity: { tabId, leafId: pane.leafId },
             reopensPane: true,
             onPtySpawnDispatched: () => {
@@ -213,6 +222,31 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
     } finally {
       this.agentPaneRestartsByPaneKey.delete(paneKey)
     }
+  }
+
+  /** What a restart refuses last, with no await before its stop: a viewer an older Orca would
+   *  leave on a dead pane, or a saved layout that gives the pane to another terminal or lacks its
+   *  tab, so the binding retire after the stop would refuse. Reads the partition the retire reads. */
+  protected restartRefusalBeforeStop(
+    pty: RuntimePtyWorktreeRecord
+  ): 'viewer_cannot_follow' | 'saved_layout_differs' | null {
+    if (!this.terminalViewSubscribers.everyRemoteViewFollowsHostRespawn(pty.ptyId)) {
+      return 'viewer_cannot_follow'
+    }
+    const recorded = this.paneOfPty(pty)
+    const leafId = parsePaneKey(recorded.paneKey ?? '')?.leafId
+    const saved = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+    const taken =
+      saved !== undefined &&
+      recorded.tabId !== null &&
+      leafId !== undefined &&
+      replacedPaneBindingState(saved, {
+        worktreeId: pty.worktreeId,
+        tabId: recorded.tabId,
+        leafId,
+        ptyId: pty.ptyId
+      }) === 'taken'
+    return taken ? 'saved_layout_differs' : null
   }
 
   /** The terminal service refuses to reattach a terminal it was told to kill, so the pane's row

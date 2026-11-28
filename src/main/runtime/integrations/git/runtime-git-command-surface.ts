@@ -11,6 +11,8 @@ type RuntimeGitCommandName =
   | 'readRuntimeWorktreeAtRiskLocalFiles'
   | 'abortRuntimeGitMerge'
   | 'abortRuntimeGitRebase'
+  | 'continueRuntimeGitRebase'
+  | 'readRuntimeGitRebaseAutoStash'
   | 'switchRuntimeGitBranch'
   | 'checkoutRuntimeGitBranch'
   | 'listRuntimeGitLocalBranches'
@@ -67,6 +69,8 @@ export function installRuntimeGitCommandSurface(
       commands.readRuntimeWorktreeAtRiskLocalFiles.bind(commands),
     abortRuntimeGitMerge: commands.abortRuntimeGitMerge.bind(commands),
     abortRuntimeGitRebase: commands.abortRuntimeGitRebase.bind(commands),
+    continueRuntimeGitRebase: commands.continueRuntimeGitRebase.bind(commands),
+    readRuntimeGitRebaseAutoStash: commands.readRuntimeGitRebaseAutoStash.bind(commands),
     switchRuntimeGitBranch: commands.switchRuntimeGitBranch.bind(commands),
     checkoutRuntimeGitBranch: commands.checkoutRuntimeGitBranch.bind(commands),
     listRuntimeGitLocalBranches: commands.listRuntimeGitLocalBranches.bind(commands),

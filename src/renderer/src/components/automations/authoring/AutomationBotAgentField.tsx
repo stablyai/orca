@@ -2,11 +2,12 @@
 import { BotAgentLaunchPicker } from '@/components/bots/BotAgentLaunchPicker'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { useBotAgentMenu } from '@/components/bots/use-bot-agent-choices'
-import { launchModelLabel } from '@/components/agent/AgentLaunchPicker'
+import { launchModelLabel } from '@/components/agent/agent-launch-model-label'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationBotTarget } from '../../../../../shared/automations/automation-definition'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from '../automation-page-parts'
 
 /** "Claude Code · Opus 5.5": what the bot's own setup runs. */
@@ -21,7 +22,7 @@ export function AutomationBotAgentField({
   onChange
 }: {
   target: AutomationBotTarget
-  bot: Pick<Bot, 'name' | 'agent' | 'launch' | 'hostId'>
+  bot: Pick<Bot, 'name' | 'agent' | 'launch' | 'hostId' | 'folderWorkspaceId'>
   onChange: (target: AutomationBotTarget) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -38,6 +39,7 @@ export function AutomationBotAgentField({
         model={menu.model}
         choices={menu.choices}
         value={{ agent: setup.agent, ...(setup.launch ? { launch: setup.launch } : {}) }}
+        worktreeId={folderWorkspaceKey(bot.folderWorkspaceId)}
         withPermission={false}
         disabled={inChat}
         inherit={

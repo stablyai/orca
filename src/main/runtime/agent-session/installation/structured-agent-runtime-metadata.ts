@@ -4,6 +4,7 @@ import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
 import {
+  acpHostProgramTakesNewChats,
   resolveAcpLaunchCommand,
   selectAcpHostAccountHome,
   selectAcpHostAccountHomeForCatalog
@@ -57,9 +58,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
     ...(isManagedAgentCli(agent) ? { installable: () => managedAgentCli(agent).available() } : {}),
     ...(spec.hostBackend
       ? {
-          hostAlternative: async (shellEnv, settings) =>
-            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null,
+          hostAlternative: (shellEnv, settings) =>
+            acpHostProgramTakesNewChats(spec, shellEnv, getProfileUserDataPath(), settings),
           ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
@@ -82,6 +82,9 @@ function cliChatProgram(agent: 'claude' | 'codex'): StructuredAgentChatProgram {
 function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
   const { minimumVersions } = spec
   return {
+    ...(spec.hostBackend?.followsSelectionBeforeFirstTurn
+      ? { followsSelectionBeforeFirstTurn: true as const }
+      : {}),
     definition: acpStructuredAgentDefinition(spec),
     chatProgram: acpChatProgram(spec),
     supportsLocation: (location) => supportsAcpStructuredLocation(spec, location),
@@ -116,9 +119,12 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
           ? await hostLaunchEnvironment(spec.agent)
               .then((env) =>
-                (purpose === 'catalog'
-                  ? selectAcpHostAccountHomeForCatalog
-                  : selectAcpHostAccountHome)(spec, env, stateDirectory, hostSettings())
+                purpose === 'catalog'
+                  ? selectAcpHostAccountHomeForCatalog(spec, env, stateDirectory, hostSettings())
+                  : // A chat starting is someone using the agent, so its program may be asked.
+                    selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings(), {
+                      startsProgram: true
+                    })
               )
               .catch(() => null)
           : null

@@ -31,7 +31,8 @@ function positiveTiming(value: string | undefined, fallback: number): number {
 export function installMainThreadHangWatchdog(options: {
   userDataPath: string
 }): MainThreadHangWatchdogHandle | null {
-  if (process.platform !== 'darwin') {
+  // The worker heartbeat watches any platform; native `sample` capture stays macOS-only in the worker.
+  if (process.platform !== 'darwin' && process.platform !== 'win32') {
     return null
   }
   if (!resolveObservabilityConsent().localFileEnabled) {
@@ -74,7 +75,7 @@ export function installMainThreadHangWatchdog(options: {
   }
   let stopped = false
   const postMessage = (message: MainToHangWatchdogWorkerMessage): void => {
-    if (stopped && message.type !== 'shutdown' && message.type !== 'capture-drain-ack') {
+    if (stopped && message.type !== 'shutdown') {
       return
     }
     try {
@@ -85,12 +86,6 @@ export function installMainThreadHangWatchdog(options: {
   }
   worker.on('message', (message: HangWatchdogToMainMessage) => {
     if (
-      message?.type === 'capture-drain' &&
-      typeof message.token === 'string' &&
-      message.token.length <= 80
-    ) {
-      setImmediate(() => postMessage({ type: 'capture-drain-ack', token: message.token }))
-    } else if (
       message?.type === 'stall-recovered' &&
       Number.isFinite(message.unresponsiveMs) &&
       Number.isFinite(message.endedAt)

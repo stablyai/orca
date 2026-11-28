@@ -1,4 +1,5 @@
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { fingerprintString } from '../../../../shared/text/string-fingerprint'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
@@ -25,7 +26,8 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { readRuntimeStatusesForView } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
@@ -37,7 +39,7 @@ import {
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
-import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import {
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
@@ -81,15 +83,15 @@ export function useAgentLaunchPickerInventorySource(
   }, [selected])
   const context = model.state === 'settled' ? model.pickerContext : undefined
   const settings = context ? context.settings : store.getState().settings
-  const executionHostId =
-    context?.executionHostId ??
-    buildAgentLaunchRouteInput(store.getState(), {
+  const pickerRoute = () =>
+    buildRouteInputForStatuses(store.getState(), readRuntimeStatusesForView(store), {
       agent: 'claude',
       workspace: context?.workspace ?? {
         kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
         ...(worktreeId ? { worktreeId } : {})
       }
-    }).executionHostId
+    })
+  const executionHostId = context?.executionHostId ?? pickerRoute().executionHostId
   const target = structuredAgentSessionTargetForHost(executionHostId)
   const agentsVersion = useHostStructuredAgentsVersion()
   const registeredAgents = recomputeOn(
@@ -125,13 +127,7 @@ export function useAgentLaunchPickerInventorySource(
       ? localCapabilities.state === 'known'
         ? localCapabilities.capabilities
         : null
-      : buildAgentLaunchRouteInput(state, {
-          agent: 'claude',
-          workspace: context?.workspace ?? {
-            kind: worktreeId ? workspaceKindForWorktreeId(worktreeId) : 'floating',
-            ...(worktreeId ? { worktreeId } : {})
-          }
-        }).hostCapabilities
+      : pickerRoute().hostCapabilities
   const coherentCatalog =
     hostCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
   const draftTarget = useMemo(
@@ -179,27 +175,29 @@ export function useAgentLaunchPickerInventorySource(
     model.state === 'settled' && model.rows.some(reads.refreshOnInvalidation)
   const key = useMemo(
     () =>
-      JSON.stringify([
-        context?.key,
-        context?.workspace,
-        context?.pairingRevision,
-        context?.runtimeId,
-        ...(observesHostCatalog ? [registeredAgents, coherentCatalog] : []),
-        worktreeId,
-        selector,
-        executionHostId,
-        model.state === 'settled' ? model.rows : [],
-        model.state === 'settled' ? model.detection.detectedIds : [],
-        model.state === 'settled' ? model.defaultTuiAgent : undefined,
-        settings && {
-          agentDefaultArgs: settings.agentDefaultArgs,
-          agentLaunchChoices: settings.agentLaunchChoices,
-          agentPermissionDefault: settings.agentPermissionDefault,
-          agentPermissionOverrides: settings.agentPermissionOverrides,
-          nativeChatSessionOptions: settings.nativeChatSessionOptions,
-          nativeChatPermissionMode: settings.nativeChatPermissionMode
-        }
-      ]),
+      fingerprintString(
+        JSON.stringify([
+          context?.key,
+          context?.workspace,
+          context?.pairingRevision,
+          context?.runtimeId,
+          ...(observesHostCatalog ? [registeredAgents, coherentCatalog] : []),
+          worktreeId,
+          selector,
+          executionHostId,
+          model.state === 'settled' ? model.rows : [],
+          model.state === 'settled' ? model.detection.detectedIds : [],
+          model.state === 'settled' ? model.defaultTuiAgent : undefined,
+          settings && {
+            agentDefaultArgs: settings.agentDefaultArgs,
+            agentLaunchChoices: settings.agentLaunchChoices,
+            agentPermissionDefault: settings.agentPermissionDefault,
+            agentPermissionOverrides: settings.agentPermissionOverrides,
+            nativeChatSessionOptions: settings.nativeChatSessionOptions,
+            nativeChatPermissionMode: settings.nativeChatPermissionMode
+          }
+        ])
+      ),
     [
       context,
       worktreeId,
@@ -218,7 +216,7 @@ export function useAgentLaunchPickerInventorySource(
           model.rows,
           model.detection.detectedIds ?? [],
           (agent) => agentPickerChoiceSeeds(agent, defaults),
-          formatAgentTypeLabel,
+          getAgentLabel,
           model.defaultTuiAgent
         ).map((entry) => ({
           ...entry,
@@ -283,8 +281,11 @@ export function useAgentLaunchPickerInventorySource(
                   ? build(defaults.settings).map((entry) => ({
                       ...entry,
                       defaultsPending: false,
+                      // Without a workspace there are no workspace chat seeds to wait for.
                       structuredDefaultsPending:
-                        entry.surfaces.includes('chat') && !defaults.structuredKnown,
+                        entry.surfaces.includes('chat') &&
+                        !defaults.structuredKnown &&
+                        selector !== undefined,
                       ownerKey: key,
                       draftTarget,
                       worktreeId

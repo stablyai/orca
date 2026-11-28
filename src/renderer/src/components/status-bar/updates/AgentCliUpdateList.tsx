@@ -2,13 +2,15 @@ import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
-import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
 import { AgentCliUpdateFailedChip } from '@/components/agent-cli-update/AgentCliUpdateFailedChip'
 import { openAgentCliUpdateFailure } from '@/components/agent-cli-update/agent-cli-update-failure-modal'
-import type {
-  AgentCliUpdateHost,
-  AgentCliUpdateRun
+import {
+  agentCliUpdateHostTarget,
+  type AgentCliUpdateHost,
+  type AgentCliUpdateRun
 } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import {
   AGENT_CLI_UPDATE_AGENTS,
@@ -25,7 +27,7 @@ export type AgentCliUpdateRow = {
 
 export type AgentCliUpdateGroup = {
   hostKey: string
-  /** Null when every row is on this computer, so no host heading is needed. */
+  /** Null when every row is on this computer and no other host is added, so no host heading is needed. */
   label: string | null
   rows: readonly AgentCliUpdateRow[]
 }
@@ -43,9 +45,38 @@ export function agentCliUpdateRows(hostKey: string, host: AgentCliUpdateHost): A
   }))
 }
 
-/** Rows Update all may start: offered, runnable and not already running. */
+/** Rows Update all may start: offered, runnable and not already queued or running. */
 export function agentCliUpdateStartable(row: AgentCliUpdateRow): boolean {
-  return row.update?.runnable === true && row.run?.phase !== 'running'
+  return row.update?.runnable === true && !agentCliUpdateBusy(row)
+}
+
+export function agentCliUpdateBusy(row: AgentCliUpdateRow): boolean {
+  return row.run?.phase === 'running' || row.run?.phase === 'queued'
+}
+
+export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {
+  void useAppStore.getState().runAgentCliUpdate(agentCliUpdateHostTarget(row.hostKey), row.agent)
+}
+
+/** For a CLI Orca can't update itself: the user runs its command in a terminal. Resolves whether it copied. */
+export function copyAgentCliUpdateCommand(
+  command: string,
+  t: Translate,
+  // Off when the button itself shows that it copied.
+  { announce = true }: { announce?: boolean } = {}
+): Promise<boolean> {
+  return window.api.ui.writeClipboardText(command).then(
+    () => {
+      if (announce) {
+        toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      }
+      return true
+    },
+    () => {
+      toast.error(t('agentCliUpdate.commandNotCopied', 'Could not copy the command'))
+      return false
+    }
+  )
 }
 
 function AgentCliUpdateListRow({
@@ -58,18 +89,17 @@ function AgentCliUpdateListRow({
   const t = useTranslate()
   const { update, run } = row
   const manual = update && !update.runnable ? update.command : null
-  const copyCommand = (command: string) =>
-    void navigator.clipboard.writeText(command).then(
-      () => toast.success(t('agentCliUpdate.commandCopied', 'Command copied')),
-      () => toast.error(t('agentCliUpdate.commandNotCopied', 'Could not copy the command'))
-    )
   return (
     <div>
       <div className="flex h-9 items-center gap-2 rounded-md pr-1 pl-2">
         <AgentIcon agent={row.agent} size={14} />
         <span className="truncate text-[13px]">{agentCliProductName(row.agent, t, 'short')}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
-          {run?.phase === 'running' ? (
+          {run?.phase === 'queued' ? (
+            <span className="text-2xs text-muted-foreground">
+              {t('agentCliUpdate.queued', 'Queued')}
+            </span>
+          ) : run?.phase === 'running' ? (
             <>
               <span className="text-2xs text-muted-foreground">
                 {t('agentCliUpdate.updating', 'Updating…')}
@@ -106,7 +136,7 @@ function AgentCliUpdateListRow({
                   type="button"
                   variant="outline"
                   size="xs"
-                  onClick={() => copyCommand(manual)}
+                  onClick={() => void copyAgentCliUpdateCommand(manual, t)}
                 >
                   <Copy />
                   {t('agentCliUpdate.copyCommand', 'Copy')}

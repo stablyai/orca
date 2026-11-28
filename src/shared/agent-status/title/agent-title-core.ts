@@ -6,20 +6,14 @@ import {
   containsBrailleSpinner
 } from './agent-title-glyphs'
 
-import { isDeepSeekBuildTerminalTitle } from './providers/dsb-terminal-title'
-import { isDshTerminalTitle } from './providers/dsh-terminal-title'
-
-import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
-  titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './providers/pi-compatible-synthetic-title'
-import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export type AgentStatus = 'working' | 'permission' | 'idle'
@@ -53,54 +47,22 @@ export const STRONG_PERMISSION_KEYWORDS_RE =
 
 export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 
-export function hasGeminiStatusGlyph(title: string): boolean {
-  return (
-    title.includes(GEMINI_PERMISSION) ||
-    title.includes(GEMINI_WORKING) ||
-    title.includes(GEMINI_SILENT_WORKING) ||
-    title.includes(GEMINI_IDLE)
-  )
-}
-
-const GEMINI_IDENTITY_FRAME_RE =
-  /^gemini(?: cli)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
-
-// Decorated Claude task text can mention Gemini; behind a spinner/prefix only a Gemini label frame claims identity.
-function isDecoratedNonGeminiFrameSegment(segment: string): boolean {
-  const body = stripLeadingAgentTitleDecorationOrEmpty(segment)
-  return body !== segment.trimStart() && !GEMINI_IDENTITY_FRAME_RE.test(body.trim().toLowerCase())
-}
-
-function computeIsGeminiTerminalTitle(title: string): boolean {
-  // Why: native Qoder and DSH markers own titles before the shared Gemini glyphs.
-  if (isQoderTerminalTitle(title)) {
-    return false
-  }
-  if (isDshTerminalTitle(title) || isDeepSeekBuildTerminalTitle(title)) {
-    return false
-  }
-  // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
-  if (hasGeminiStatusGlyph(title)) {
-    return true
-  }
-  if (getWrapperTitleSegments(title).some(isDecoratedNonGeminiFrameSegment)) {
-    return false
-  }
-  // Pi/OMP cwd/session text may contain gemini-project; substrings cannot establish Gemini identity.
-  if (isPiAgentTitle(title)) {
-    return false
-  }
-  // agy model names contain Gemini tokens. Defer token identity when agy is present; real Gemini OSC glyphs remain decisive.
-  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
-    return false
-  }
-  return titleHasAgentName(title, 'gemini')
-}
-
-/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
-export const isGeminiTerminalTitle: (title: string) => boolean = memoizeTitleClassification(
-  computeIsGeminiTerminalTitle
+const GEMINI_GLYPH_CLASS = `[${GEMINI_PERMISSION}${GEMINI_WORKING}${GEMINI_SILENT_WORKING}${GEMINI_IDLE}]`
+// Gemini-family titles (Qoder's idle frame among them) open with the glyph, or a `<glyph>  ` frame behind a tmux/Administrator prefix; leftmost anchor wins.
+const GEMINI_STATUS_GLYPH_RE = new RegExp(
+  String.raw`(?:^\s*| \| \s*|["'\s](?=${GEMINI_GLYPH_CLASS}  ))(${GEMINI_GLYPH_CLASS})`
 )
+
+export function leadingGeminiGlyphStatus(title: string): AgentStatus | null {
+  const glyph = GEMINI_STATUS_GLYPH_RE.exec(title)?.[1]
+  if (!glyph) {
+    return null
+  }
+  if (glyph === GEMINI_PERMISSION) {
+    return 'permission'
+  }
+  return glyph === GEMINI_IDLE ? 'idle' : 'working'
+}
 
 export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)

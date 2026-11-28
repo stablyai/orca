@@ -1,22 +1,47 @@
-import * as z from 'zod'
-import { BotImportedFromSchema } from './bots/bot-import'
-import { BotSharedFromSchema } from './bots/bot-shared-from'
-import { AGENT_CHAT_PERMISSION_MODES } from './agent-launch/permissions/agent-chat-permission-mode'
-import { optionalConnectorAvatarUrl } from './connector-message-asker'
-import type { NativeChatAgent } from './agent-launch/permissions/agent-chat-permission-support'
-import { LOCAL_EXECUTION_HOST_ID } from './execution-host/execution-host'
-import { BotLookAroundSchema } from './bots/bot-look-around'
-import { BotLaunchSchema } from './bots/bot-launch'
-import { BotTidyUpSchema } from './bots/bot-tidy-up'
-import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
-import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
-import { BotAvatarColorSchema } from './bots/bot-avatar-color'
+import { migrateRetiredBotAgent } from './bots/bot-retired-agents'
+import {
+  BOT_AGENTS,
+  BotSchema,
+  type Bot,
+  type BotAgent,
+  type BotLinearLink,
+  type BotMember,
+  type BotSlackLink
+} from './bots/bot-record-schemas'
 
-/** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
-export const BOT_HELD_BACK_AGENTS = ['opencode2', 'copilot', 'cursor', 'kimi', 'hermes'] as const
+export {
+  BOT_HELD_BACK_AGENTS,
+  BOT_AGENTS,
+  BotAgentReadSchema,
+  BOT_NAME_MAX_LENGTH,
+  BOT_HANDED_PAIRED_WORKSPACES_MAX,
+  BOT_MAX_MEMBERS,
+  BotNameSchema,
+  NewBotNameSchema,
+  BotMemberSchema,
+  BotNotificationsSchema,
+  BotSlackAppSchema,
+  BotLinearSchema,
+  BotGitHubSchema,
+  BOT_MAX_CONNECTOR_WORKSPACES,
+  BOT_MAX_SKILL_PROJECTS,
+  BotItemsStaleSchema,
+  BOT_ITEMS_STALE_CHOICES,
+  BotSchema,
+  type BotAgent,
+  type BotItemsStale,
+  type BotMember,
+  type BotNotifications,
+  type BotSlackApp,
+  type BotLinear,
+  type BotGitHub,
+  type Bot,
+  type BotSlackLink,
+  type BotLinearLink
+} from './bots/bot-record-schemas'
 
-/** Bots run in a native chat; every native-chat agent but the held-back ones. */
-export const BOT_AGENTS = [
+/** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
+const BOT_AGENTS_OLDER_BUILDS_READ: ReadonlySet<string> = new Set([
   'claude',
   'codex',
   'grok',
@@ -24,27 +49,30 @@ export const BOT_AGENTS = [
   'omp',
   'pi',
   'antigravity'
-] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
+])
+
+/** Bots saved where an older build, after a rollback, cannot drop them: it ignores keys it does not know. */
+export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
+  readable: Bot[]
+  newer: Bot[]
+} {
+  const readable: Bot[] = []
+  const newer: Bot[] = []
+  for (const bot of bots) {
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
+  }
+  return { readable, newer }
+}
 
 export function isBotAgent(agent: string): agent is BotAgent {
   return BOT_AGENTS.some((entry) => entry === agent)
 }
 
-export const BOT_NAME_MAX_LENGTH = 64
-export const BOT_HANDED_PAIRED_WORKSPACES_MAX = 50
-export const BOT_MAX_MEMBERS = 200
-
-const BotNameText = z
-  .string()
-  .trim()
-  .max(BOT_NAME_MAX_LENGTH)
-  // The name is written into the bot's files; a line break would forge their structure.
-  .refine((name) => !/\p{Cc}/u.test(name), 'Bot names cannot contain control characters')
-
-export const BotNameSchema = BotNameText.refine((name) => name.length > 0, 'Missing bot name')
-
-/** A new bot's name; empty names it `UNNAMED_BOT_NAME`, numbered past the host's bots that hold it. */
-export const NewBotNameSchema = BotNameText
+/** Memory upkeep runs tool-free, so every bot agent runs it; Look around is `lookAroundSupported`. */
+export function tidyUpSupported(agent: string): boolean {
+  return isBotAgent(agent)
+}
 
 export const UNNAMED_BOT_NAME = 'New bot'
 
@@ -60,155 +88,6 @@ export function newBotName(requested: string, bots: readonly { name: string }[])
   }
   return name
 }
-
-/** A person the owner lets ask the bot, by their user id on one connector's service. */
-export const BotMemberSchema = z.object({
-  id: z.string().min(1),
-  name: z.string(),
-  /** The connector the id belongs to, e.g. `slack`. Absent on entries saved before sources, which are all Slack; any string, so a newer source never voids the bot. */
-  source: z.string().min(1).optional(),
-  /** The service's workspace the id belongs to: a Linear workspace, or a Slack team. A Slack entry without one is in the bot's first Slack workspace. */
-  workspaceId: z.string().min(1).optional(),
-  /** The service's picture of them, as it gave it when they were added; Slack's only. */
-  avatarUrl: optionalConnectorAvatarUrl
-})
-
-export const BotNotificationsSchema = z.object({
-  needsPermission: z.boolean(),
-  taskComplete: z.boolean(),
-  couldNotFinish: z.boolean()
-})
-
-/** The bot's own Slack app, once created; its install state is read from the cloud. */
-export const BotSlackAppSchema = z.object({ appId: z.string().min(1), teamId: z.string().min(1) })
-
-/** The Linear workspace the bot takes requests in, through Orca's one shared Linear app. */
-export const BotLinearSchema = z.object({
-  workspaceId: z.string().min(1),
-  workspaceName: z.string(),
-  /** linear.app/<urlKey>, which tells apart workspaces that share a name. */
-  urlKey: z.string().optional()
-})
-
-/** The bot answers on GitHub, in every installation of Orca's one shared GitHub app the owner's link can see but the removed ones. */
-export const BotGitHubSchema = z.object({
-  removedInstallationIds: z.array(z.string().min(1)).max(100).optional()
-})
-
-/** The account a link was made under; absent on links made before owners were recorded. */
-const BotLinkOwner = { ownerUserId: z.string().min(1).optional() }
-
-/** Workspaces one connector can hold for a bot. */
-export const BOT_MAX_CONNECTOR_WORKSPACES = 8
-export const BOT_MAX_SKILL_PROJECTS = 20
-const BotSlackLinkSchema = BotSlackAppSchema.extend(BotLinkOwner)
-const BotLinearLinkSchema = BotLinearSchema.extend(BotLinkOwner)
-
-export const BotItemsStaleSchema = z.union([
-  z.literal(3),
-  z.literal(5),
-  z.literal(7),
-  z.literal(14),
-  z.literal('never')
-])
-export type BotItemsStale = z.infer<typeof BotItemsStaleSchema>
-
-export const BotSchema = z.object({
-  id: z.string().min(1),
-  name: BotNameSchema,
-  /** v1 bots live on this computer; SSH and WSL hosts come later. */
-  hostId: z.literal(LOCAL_EXECUTION_HOST_ID),
-  /** The home's name in ~/.orca/bots, reserved at create; never a path, so it cannot point outside. */
-  folder: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  /** The bot's home folder workspace, in the hidden Bots project group. */
-  folderWorkspaceId: z.string().min(1),
-  agent: z.enum(BOT_AGENTS),
-  avatar: z.string().nullable(),
-  /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
-  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
-  paused: z.boolean(),
-  /** An owner's override; absent, the bot's chats start like any native chat. */
-  permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
-  /** The owner's model and options for `agent`; absent on older bots and dropped by older hosts. */
-  // A malformed value reads as unset rather than losing the whole bot.
-  launch: BotLaunchSchema.optional().catch(undefined),
-  notifications: BotNotificationsSchema,
-  members: z.array(BotMemberSchema).max(BOT_MAX_MEMBERS),
-  /** The first of slackApps, kept for readers that know one workspace (older Orcas, the phone). */
-  slack: BotSlackLinkSchema.nullable(),
-  /** Every Slack workspace the bot is in, first one first; absent on bots saved before several. */
-  slackApps: z.array(BotSlackLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
-  /** The first of linearWorkspaces, as `slack` is of slackApps. */
-  linear: BotLinearLinkSchema.nullable().default(null),
-  linearWorkspaces: z.array(BotLinearLinkSchema).max(BOT_MAX_CONNECTOR_WORKSPACES).optional(),
-  github: BotGitHubSchema.extend(BotLinkOwner).nullable().default(null),
-  /** Whether a new Slack thread the owner starts posts the owner's Orca messages back to it; absent is on.
-   *  Threads others start, and the owner's teammates' DMs, start off whatever this says. */
-  slackMirror: z.boolean().optional().catch(undefined),
-  /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
-  google: z.boolean().optional(),
-  /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
-  skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
-  /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
-  sidebarOrder: z.number().int().nonnegative().optional(),
-  /** The bot's Chat, its one ongoing conversation; null until first opened. */
-  chatSessionId: z.string().min(1).nullable().default(null),
-  /** Look around, once changed; absent is on with the defaults. Older hosts drop it. */
-  // A malformed value reads as unset rather than losing the whole bot.
-  lookAround: BotLookAroundSchema.optional().catch(undefined),
-  /** Nightly Tidy-up of its memory, once turned off (by its owner, or after it kept failing);
-   *  absent is on. Older hosts drop it. */
-  tidyUp: BotTidyUpSchema.optional().catch(undefined),
-  /** Days an untouched ask waits before it moves to Stale (planned items 3× as long), or never;
-   *  absent is 5. Older hosts drop it. */
-  itemsStale: BotItemsStaleSchema.optional().catch(undefined),
-  /** The newest item event its owner has seen in its Items tab; absent is none. Older hosts drop it. */
-  itemsSeen: z.number().int().nonnegative().optional().catch(undefined),
-  /** Set at create: the Chat runs first-run setup until SOUL.md is written. Older bots never have it. */
-  firstRun: z.literal(true).optional(),
-  /** New bots its owner created from this bot's bot-create cards, by card, so each card stays Created
-   *  however the new bot is renamed, and can't create a second one. */
-  acceptedOffers: z
-    .array(z.object({ offerId: z.string().min(1), botId: z.string().min(1) }))
-    .optional()
-    .catch(undefined),
-  /** What its owner answered on its offer cards, by card. */
-  offerAnswers: z.array(BotOfferAnswerSchema).optional().catch(undefined),
-  /** Workspaces on a paired computer its owner handed it: their store holds the link, so Activity
-   *  asks that computer for their agents. An entry whose workspace moved elsewhere is dropped. */
-  handedPairedWorkspaces: z
-    .array(
-      z.object({
-        environmentId: z.string().min(1),
-        worktreeId: z.string().min(1),
-        /** When it was handed over: only a computer's answer asked after this can prove a move away. */
-        at: z.number().optional()
-      })
-    )
-    .max(BOT_HANDED_PAIRED_WORKSPACES_MAX)
-    .optional()
-    .catch(undefined),
-  /** Its waits cancelled before they ended, newest last. */
-  cancelledWaits: z.array(BotCancelledWaitSchema).optional().catch(undefined),
-  /** The other app's bot it was made from, so importing that bot again offers this one. */
-  importedFrom: BotImportedFromSchema.optional().catch(undefined),
-  /** The shared link it was made from. */
-  sharedFrom: BotSharedFromSchema.optional().catch(undefined),
-  /** The built-in template it was made from. */
-  templateId: z.string().max(64).optional().catch(undefined),
-  createdAt: z.number(),
-  updatedAt: z.number()
-})
-
-export type BotAgent = (typeof BOT_AGENTS)[number]
-export type BotMember = z.infer<typeof BotMemberSchema>
-export type BotNotifications = z.infer<typeof BotNotificationsSchema>
-export type BotSlackApp = z.infer<typeof BotSlackAppSchema>
-export type BotLinear = z.infer<typeof BotLinearSchema>
-export type BotGitHub = z.infer<typeof BotGitHubSchema>
-export type Bot = z.infer<typeof BotSchema>
-export type BotSlackLink = z.infer<typeof BotSlackLinkSchema>
-export type BotLinearLink = z.infer<typeof BotLinearLinkSchema>
 
 /** Every Slack workspace the bot is in, first one first. */
 export function botSlackApps(bot: Pick<Bot, 'slack' | 'slackApps'>): BotSlackLink[] {
@@ -329,7 +208,7 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   const bots: Bot[] = []
   const seen = new Set<string>()
   for (const candidate of value) {
-    const parsed = BotSchema.safeParse(candidate)
+    const parsed = BotSchema.safeParse(migrateRetiredBotAgent(candidate))
     if (parsed.success && !seen.has(parsed.data.id)) {
       seen.add(parsed.data.id)
       bots.push(withSlackMembersTagged(parsed.data))
@@ -338,19 +217,4 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   return bots
 }
 
-const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
-
-/** A folder name every supported filesystem accepts. */
-export function botFolderName(botName: string): string {
-  const slug = botName
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '')
-  if (!slug) {
-    return 'bot'
-  }
-  return WINDOWS_RESERVED_NAME.test(slug) ? `${slug}-bot` : slug
-}
+export { botFolderName } from './bots/bot-folder-name'

@@ -17,7 +17,7 @@ import {
   TERMINAL_TAB_COLD_PARK_DELAY_MS,
   selectColdParkedTerminalTabs
 } from '../retention/terminal-hidden-view-parking'
-import { selectPairedRuntimeParkingEnvironmentIdsFromState } from '../retention/paired-runtime-parking-capabilities'
+import { usePairedRuntimeParkingEnvironmentIds } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import type { ParkVerdictFlipRecord } from '../verdict/terminal-park-verdict-flip-telemetry'
 import {
   haveSameTerminalTabIds,
@@ -33,6 +33,7 @@ import { canWatcherCoverParkedTerminalTab } from '../output-watchers/parked-term
 import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-capture-episodes'
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
+import { isTerminalActivationSpawnSettled } from '../retention/settled-activation-spawn'
 import {
   useTerminalParkingWorkspaceInputs,
   useParkedTerminalWatcherSynchronization
@@ -96,9 +97,7 @@ export function useTerminalTabColdParking(args: {
     getTerminalPaneSplitMountLeaseTabIds,
     getTerminalPaneSplitMountLeaseTabIds
   )
-  const pairedRuntimeParkingEnvironmentIds = useAppStore(
-    selectPairedRuntimeParkingEnvironmentIdsFromState
-  )
+  const pairedRuntimeParkingEnvironmentIds = usePairedRuntimeParkingEnvironmentIds()
   // Subscribe to worktree-scoped presence; the app-global map rerenders this worktree for unrelated writes.
   const sleepingRecordOwnedTabIds = useAppStore(
     useShallow((state) => selectSleepingRecordParkExemptTabIds(state, worktreeId))
@@ -179,6 +178,8 @@ export function useTerminalTabColdParking(args: {
       parkingEnabled: terminalParkingEnabled,
       nowMs,
       parkCooldownUntilMs: measureParkCooldownUntilRef.current,
+      isActivationSpawnSettled: (tabId) =>
+        isTerminalActivationSpawnSettled(useAppStore.getState(), tabId),
       restorePolicy: {
         sshParkingEnabled: terminalSshParkingEnabled,
         pairedRuntimeParkingEnvironmentIds

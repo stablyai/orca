@@ -2,10 +2,8 @@ import { useMemo, useRef, useState } from 'react'
 import { Platform, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { colors, feedback, radii } from '../../theme/mobile-theme'
-import { themedStyleSheet } from '../../theme/themed-styles'
-import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-
+import { feedback, radii } from '../../theme/mobile-theme'
+import { themedStyleSheet, useThemedStyles } from '../../theme/themed-styles'
 export type MobileSliderProps = {
   value: number
   min: number
@@ -43,7 +41,7 @@ export function MobileSlider({
   disabled = false,
   testID
 }: MobileSliderProps) {
-  useMobileColorScheme()
+  const styles = useThemedStyles(stylesSheet)
   const [width, setWidth] = useState(0)
   const live = useRef({ value, width, onValueChange, onSlidingComplete })
   live.current.width = width
@@ -161,7 +159,7 @@ export function MobileSlider({
   )
 }
 
-const styles = themedStyleSheet(() => ({
+const stylesSheet = themedStyleSheet((colors) => ({
   root: { height: HEIGHT, justifyContent: 'center' },
   disabled: { opacity: feedback.disabledOpacity },
   track: {
@@ -171,9 +169,10 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.translucentFill,
     overflow: 'hidden'
   },
+  // Monochrome like MobileSwitch's on state, so a page's controls share one ink.
   fill: {
     height: TRACK_HEIGHT,
-    backgroundColor: colors.accentBlue
+    backgroundColor: colors.textPrimary
   },
   thumb: {
     position: 'absolute',

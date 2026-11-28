@@ -1,10 +1,27 @@
 import { ipcMain, BrowserWindow } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { scrcpyVideoRegistry } from '../../emulator/scrcpy-video-registry'
-import { sendScrcpyButton, sendScrcpyText } from '../../emulator/android/scrcpy-control-input'
+import {
+  sendScrcpyHidKey,
+  sendScrcpyKey,
+  sendScrcpyText
+} from '../../emulator/android/scrcpy-input-queue'
 
-type ScrcpyKeyboardInput =
-  | { deviceId: string; text: string }
+type HidKey = { usage: number; shift: boolean }
+
+type ScrcpyKeyboardInput = { hid: HidKey | null } & (
+  | { deviceId: string; text: string; paste: boolean }
   | { deviceId: string; key: string; shift: boolean }
+)
+
+function parseHidKey(hid: unknown): HidKey | null {
+  if (typeof hid !== 'object' || hid === null || !('usage' in hid)) {
+    return null
+  }
+  return typeof hid.usage === 'number' && Number.isInteger(hid.usage)
+    ? { usage: hid.usage & 0xff, shift: 'shift' in hid && hid.shift === true }
+    : null
+}
 
 function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   if (typeof value !== 'object' || value === null || !('deviceId' in value)) {
@@ -14,20 +31,23 @@ function parseScrcpyKeyboardInput(value: unknown): ScrcpyKeyboardInput | null {
   if (typeof deviceId !== 'string') {
     return null
   }
+  const hid = parseHidKey('hid' in value ? value.hid : undefined)
   if ('text' in value && typeof value.text === 'string') {
-    return { deviceId, text: value.text }
+    return { deviceId, hid, text: value.text, paste: 'paste' in value && value.paste === true }
   }
   if ('key' in value && typeof value.key === 'string') {
-    return { deviceId, key: value.key, shift: 'shift' in value && value.shift === true }
+    return { deviceId, hid, key: value.key, shift: 'shift' in value && value.shift === true }
   }
   return null
 }
 
-// Live Android pane typing and paste go to the same scrcpy control socket as the pane's
-// touches (emulator-scrcpy-touch.ts), so keys and taps reach the device in the order sent.
-export function registerEmulatorScrcpyKeyboardHandler(): void {
-  ipcMain.removeHandler('emulator:scrcpyKeyboard')
-  ipcMain.handle('emulator:scrcpyKeyboard', (event, value: unknown): boolean => {
+// Live Android pane typing and paste go to the same scrcpy control socket as the pane's touches
+// (emulator-scrcpy-touch.ts); keys can wait up to a paste's settle time while touches go at once.
+export function registerEmulatorScrcpyKeyboardHandler(ipc: IpcHandleRegistrar = ipcMain): void {
+  if (ipc === ipcMain) {
+    ipcMain.removeHandler('emulator:scrcpyKeyboard')
+  }
+  ipc.handle('emulator:scrcpyKeyboard', async (event, value: unknown): Promise<boolean> => {
     const input = parseScrcpyKeyboardInput(value)
     if (!BrowserWindow.fromWebContents(event.sender) || !input) {
       return false
@@ -36,13 +56,13 @@ export function registerEmulatorScrcpyKeyboardHandler(): void {
     if (!control) {
       return false
     }
-    try {
-      return 'text' in input
-        ? sendScrcpyText(control, input.text)
-        : sendScrcpyButton(control, input.key, { shift: input.shift })
-    } catch {
-      // Unknown key names throw from the keycode table.
-      return false
-    }
+    // Text and keys share one queue per device, so a key pressed during a paste lands after it.
+    const send = () =>
+      'text' in input
+        ? sendScrcpyText(control, input.text, { paste: input.paste })
+        : sendScrcpyKey(control, input.key, { shift: input.shift })
+    // A key whose US character matches the host's goes to the UHID keyboard; text/key is the fallback.
+    const sent = input.hid ? sendScrcpyHidKey(control, input.hid, send) : send()
+    return sent.catch(() => false)
   })
 }

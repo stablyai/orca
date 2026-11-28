@@ -8,6 +8,9 @@ import { LinuxLidSleepAssertion } from './linux-lid-sleep-assertion'
 import { MacosSystemSleepAssertion } from './macos-system-sleep-assertion'
 import { AgentAwakeStatusLease, type AgentAwakeStatus } from './agent-awake-status-lease'
 
+/** A pane working on a WSL host, stamped with this machine's receipt time, never the host's clock. */
+export type WslHostAwakeStatus = { paneKey: string; receivedAt: number }
+
 type PowerSaveBlocker = {
   start: (type: 'prevent-app-suspension' | 'prevent-display-sleep') => number
   stop: (id: number) => void
@@ -49,6 +52,9 @@ export class AgentAwakeService {
   private readonly platform: NodeJS.Platform
   private readonly now: () => number
   private readonly statusLease: AgentAwakeStatusLease
+  // Why separate: WSL-host agents report through their host's session stream, not the local hook server.
+  private readonly wslHostStatusLease: AgentAwakeStatusLease
+  private readonly wslHostKeysByEnvironment = new Map<string, string[]>()
   private readonly unsubscribeResume: (() => void) | null
 
   constructor(options: AgentAwakeServiceOptions = {}) {
@@ -56,6 +62,9 @@ export class AgentAwakeService {
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
     this.statusLease = new AgentAwakeStatusLease(this.now, () => this.refresh('stale-expiry'))
+    this.wslHostStatusLease = new AgentAwakeStatusLease(this.now, () =>
+      this.refresh('stale-expiry')
+    )
     // Preventing Windows lid sleep requires changing the user’s global power plan.
     this.linuxAssertion =
       options.linuxAssertion ??
@@ -108,6 +117,32 @@ export class AgentAwakeService {
     this.refresh('status-change')
   }
 
+  /** Replace one WSL host's working agents; an empty list clears that host. */
+  setWslHostStatuses(environmentId: string, statuses: readonly WslHostAwakeStatus[]): void {
+    for (const key of this.wslHostKeysByEnvironment.get(environmentId) ?? []) {
+      this.wslHostStatusLease.remove(key)
+    }
+    const keys: string[] = []
+    const now = this.now()
+    for (const status of statuses) {
+      const key = `${environmentId}\0${status.paneKey}`
+      keys.push(key)
+      this.wslHostStatusLease.renew({
+        paneKey: key,
+        state: 'working',
+        // Why clamp: a future stamp would overflow the expiry timer and re-arm it every millisecond.
+        receivedAt: Math.min(status.receivedAt, now),
+        observedInCurrentRuntime: true
+      })
+    }
+    if (keys.length > 0) {
+      this.wslHostKeysByEnvironment.set(environmentId, keys)
+    } else {
+      this.wslHostKeysByEnvironment.delete(environmentId)
+    }
+    this.refresh('wsl-host-status-change')
+  }
+
   /** Renew one accepted observation without rescanning every active agent. */
   observeStatusFreshness(status: AgentAwakeStatus): void {
     if (!this.statusLease.renew(status)) {
@@ -126,9 +161,10 @@ export class AgentAwakeService {
     }
   }
 
-  /** Agents this runtime has seen working recently, independent of the awake setting. */
+  /** Local agents this runtime has seen working recently, independent of the awake setting.
+   *  WSL-host agents are left out: they run git inside their distro, not on this machine's repos. */
   getWorkingAgentCount(): number {
-    return this.getEligibleRunningStatusCount()
+    return this.statusLease.countEligible()
   }
 
   subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
@@ -138,6 +174,7 @@ export class AgentAwakeService {
 
   dispose(): void {
     this.statusLease.dispose()
+    this.wslHostStatusLease.dispose()
     this.unsubscribeResume?.()
     this.stopBlocker('dispose')
     this.macosAssertion.dispose()
@@ -182,7 +219,7 @@ export class AgentAwakeService {
   }
 
   private getEligibleRunningStatusCount(): number {
-    return this.statusLease.countEligible()
+    return this.statusLease.countEligible() + this.wslHostStatusLease.countEligible()
   }
 
   private startBlocker(reason: string, runningStatusCount: number): void {

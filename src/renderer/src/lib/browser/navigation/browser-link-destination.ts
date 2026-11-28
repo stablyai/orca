@@ -44,7 +44,9 @@ export type BrowserOpenResult = {
 
 export type BrowserOpenOutcome =
   | { status: 'opened'; result: BrowserOpenResult }
-  | { status: 'refused' | 'unsupported' | 'superseded' | 'failed' }
+  | { status: 'refused' | 'unsupported' | 'superseded' }
+  /** `cause` names a failure the toast can show; only fixed tags, never an error's text. */
+  | { status: 'failed'; cause?: 'client-create-rejected' }
 
 export type BrowserLinkOpenContext = {
   linkIntent: LinkOpenIntent | null

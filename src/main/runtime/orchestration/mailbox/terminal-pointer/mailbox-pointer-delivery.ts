@@ -1,3 +1,4 @@
+import { noteQuestionEdge } from '../../db/messages/question-edges'
 import type { PointerDeliveryDependencies } from './mailbox-pointer-delivery-contract'
 import {
   hasUnfilteredOrchestrationWaiter,
@@ -21,11 +22,11 @@ import { stageOrchestrationMailboxPointer } from './mailbox-pointer-stage'
 
 const DEFAULT_POINTER_ENTER_DELAY_MS = 500
 
-function pointerEnterDelayMs(): number {
+function pointerEnterDelayMs(hostDelayMs: number | null): number {
   const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
   return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
     ? configured
-    : DEFAULT_POINTER_ENTER_DELAY_MS
+    : (hostDelayMs ?? DEFAULT_POINTER_ENTER_DELAY_MS)
 }
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
@@ -36,6 +37,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     try {
       const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
+      this.deps.wakeSleepingRecipient?.(handle, reservedTypes)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
       if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
         return
@@ -54,7 +56,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     options: {
       mailboxHandle: string
       reservedTypes?: ReadonlySet<string>
-      skipAbsenceProbe?: boolean
+      skipTerminalProbe?: boolean
     }
   ): void {
     const db = this.deps.getDb()
@@ -122,11 +124,13 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       return
     }
     if (
-      this.deps.deliveryTarget.deferForAbsenceProbe(
+      this.deps.deliveryTarget.deferForTerminalProbe(
         ptyId,
         mailboxHandle,
-        options.skipAbsenceProbe,
-        (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
+        options.skipTerminalProbe,
+        (probedMailbox, reprobe, reservedTypes) =>
+          this.redeliverAfterProbe(ptyId, probedMailbox, reprobe, reservedTypes),
+        options.reservedTypes
       )
     ) {
       return
@@ -148,7 +152,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       messages: unread,
       heldDeliveryId,
       newestSequence,
-      enterDelayMs: pointerEnterDelayMs(),
+      enterDelayMs: (pointer) =>
+        pointerEnterDelayMs(this.deps.getWindowsPointerEnterDelayMs(ptyId, pointer)),
       settle: (ptyId, flight) => this.settle(ptyId, flight),
       redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
     })
@@ -161,6 +166,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   retirePty(ptyId: string): void {
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId)
+    if (flight) {
+      noteQuestionEdge({ kind: 'pane', ptyId })
+    }
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)
     }
@@ -213,15 +221,26 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
   }
 
-  private redeliverAfterProbe(ptyId: string, mailboxHandle: string): void {
+  private redeliverAfterProbe(
+    ptyId: string,
+    mailboxHandle: string,
+    reprobe: boolean,
+    reservedTypes: ReadonlySet<string> | undefined
+  ): void {
     const current = this.deps.getTerminal(ptyId)
     if (current) {
-      this.deliver(current, { mailboxHandle, skipAbsenceProbe: true })
+      this.deliver(current, { mailboxHandle, reservedTypes, skipTerminalProbe: !reprobe })
     }
+  }
+
+  /** A pointer is being typed into this terminal now; a flight waiting for its agent to rest is not. */
+  handingOver(ptyId: string): boolean {
+    return this.state.hasFlight(ptyId) && !this.state.isDeferred(ptyId)
   }
 
   private settle(ptyId: string, flight: OrchestrationMailboxDeliveryFlight): void {
     const parked = this.state.settleFlight(ptyId, flight)
+    noteQuestionEdge({ kind: 'pane', ptyId })
     if (!parked) {
       return
     }

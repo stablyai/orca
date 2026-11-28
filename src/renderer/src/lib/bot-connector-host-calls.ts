@@ -92,20 +92,23 @@ export function botGitHubCalls(hostId: ExecutionHostId) {
     state: () => call<ConnectorGitHubState>(hostId, 'bots.github.state'),
     users: (args: { query: string }) =>
       call<ConnectorGitHubUsersResponse>(hostId, 'bots.github.users', args),
-    unlink: () => call<undefined>(hostId, 'bots.github.unlink'),
-    setDefaultBot: (args: { botId: string | null }) =>
+    /** `userId`: one linked GitHub user; none unlinks them all, as an older host does. */
+    unlink: (args: { userId?: string } = {}) => call<undefined>(hostId, 'bots.github.unlink', args),
+    setDefaultBot: (args: { botId: string | null; userId?: string }) =>
       call<undefined>(hostId, 'bots.github.setDefaultBot', args)
   }
 }
 
 export function connectorTripCalls(hostId: ExecutionHostId, source: ConnectorConnectSource) {
   return {
-    /** The page to open once the host listens for its return. */
-    start: (switchAccount: boolean) =>
-      call<{ tripId: string; authorizeUrl: string }>(hostId, 'bots.connect.start', {
-        source,
-        switchAccount
-      }),
+    /** The page to open once the host listens for its return; `addAccess` comes back from a host
+     *  that has it. */
+    start: (switchAccount: boolean, addAccess?: { workspace?: string }) =>
+      call<{ tripId: string; authorizeUrl: string; addAccess?: true }>(
+        hostId,
+        'bots.connect.start',
+        { source, switchAccount, ...(addAccess ? { addAccess } : {}) }
+      ),
     /** One slice of waiting for the trip's end. */
     wait: (tripId: string): Promise<ConnectorTripWait> =>
       callRuntimeRpc<ConnectorTripWait>(

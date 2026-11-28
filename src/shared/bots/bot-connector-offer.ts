@@ -1,6 +1,7 @@
 // The Connect card a bot asks Orca to put in its chat (`orca bot connectors --offer`). Older clients and
 // the phone paint its `text` as a plain line.
 import * as z from 'zod'
+import { lazyZodSchema } from '../schema/lazy-zod-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalPlainStatusItem
@@ -8,6 +9,13 @@ import type {
 import { CONNECTOR_SOURCE_NAMES } from '../connectors/external-conversation-link'
 import { botLinearWorkspaces, botSlackApps, type Bot } from '../bot-types'
 import { googleBotAsk, type GoogleBotConnectState } from '../google/google-bot-connect-state'
+import { CONNECTOR_OFFER_NO_DIRECTIONS } from './connector-offer-directions'
+import {
+  orcaCloudNeedsSignIn,
+  serverSignInSteps,
+  thisHost,
+  type OrcaSignInServer
+} from './host-orca-sign-in'
 
 export const CONNECTOR_OFFER_SOURCES = ['slack', 'linear', 'github', 'google'] as const
 export type ConnectorOfferSource = (typeof CONNECTOR_OFFER_SOURCES)[number]
@@ -25,22 +33,24 @@ export type OfferSource = (typeof OFFER_SOURCES)[number]
 
 export const CONNECTOR_OFFER_PRESENTATION = 'connector-offer'
 
-export const ConnectorOfferSchema = z.object({
-  botId: z.string().min(1),
-  source: z.enum(OFFER_SOURCES),
-  /** A workspace or org the owner named that the bot isn't in yet: the card adds it. */
-  workspace: z.string().trim().min(1).max(200).optional(),
-  /** Already connected: the card adds access (GitHub repositories or organizations, or another
-   *  Slack or Linear workspace). */
-  addAccess: z.literal(true).optional(),
-  /** The host is signed out of Orca: the card is a Sign in line for the source's events. */
-  signIn: z.literal(true).optional()
-})
+export const ConnectorOfferSchema = lazyZodSchema(() =>
+  z.object({
+    botId: z.string().min(1),
+    source: z.enum(OFFER_SOURCES),
+    /** A workspace or org the owner named that the bot isn't in yet: the card adds it. */
+    workspace: z.string().trim().min(1).max(200).optional(),
+    /** Already connected: the card adds access (GitHub repositories or organizations, or another
+     *  Slack or Linear workspace). */
+    addAccess: z.literal(true).optional(),
+    /** The host is signed out of Orca: the card is a Sign in line for the source's events. */
+    signIn: z.literal(true).optional()
+  })
+)
 
 export type ConnectorOffer = z.infer<typeof ConnectorOfferSchema>
 
-// What a connected source's add-access card adds: GitHub's install page covers both repositories and orgs.
-function addAccessWhat(source: LinkedOfferSource): string {
+/** What a connected source's add-access card adds: GitHub's install page covers both repositories and orgs. */
+export function addAccessWhat(source: LinkedOfferSource): string {
   return source === 'github'
     ? 'more GitHub repositories or organizations'
     : `another ${CONNECTOR_OFFER_NAMES[source]} workspace`
@@ -51,10 +61,17 @@ function signInWhat(source: OfferSource): string {
   return source === 'webhook' ? 'Webhooks' : `${CONNECTOR_OFFER_NAMES[source]} events`
 }
 
-/** The line a client that can't draw the card shows instead. */
-export function connectorOfferText(offer: ConnectorOffer, botName: string): string {
+/** The line a client that can't draw the card shows instead; `server` names a headless host. */
+export function connectorOfferText(
+  offer: ConnectorOffer,
+  botName: string,
+  server?: OrcaSignInServer
+): string {
   if (offer.signIn || offer.source === 'webhook') {
-    return `${signInWhat(offer.source)} need Orca sign-in. Sign in to Orca on your computer, then tell ${botName}.`
+    const steps = serverSignInSteps(server, botName, 'owner')
+    return steps
+      ? `${signInWhat(offer.source)} need Orca Cloud sign-in on ${server}. ${steps} Then tell ${botName}.`
+      : `${signInWhat(offer.source)} need Orca Cloud sign-in. Sign in to Orca Cloud on your computer, then tell ${botName}.`
   }
   const name = CONNECTOR_OFFER_NAMES[offer.source]
   if (offer.addAccess && offer.source !== 'google') {
@@ -66,11 +83,12 @@ export function connectorOfferText(offer: ConnectorOffer, botName: string): stri
 
 export function connectorOfferBody(
   offer: ConnectorOffer,
-  botName: string
+  botName: string,
+  server?: OrcaSignInServer
 ): AgentJournalPlainStatusItem & { connectorOffer: ConnectorOffer } {
   return {
     kind: 'status',
-    text: connectorOfferText(offer, botName),
+    text: connectorOfferText(offer, botName, server),
     presentation: CONNECTOR_OFFER_PRESENTATION,
     connectorOffer: offer
   }
@@ -112,21 +130,37 @@ function inNamedLinearWorkspace(bot: OfferingBot, workspace: string): boolean {
 export function signInOfferReply(
   bot: OfferingBot,
   source: OfferSource,
-  signedOut: boolean
+  /** The host's link to Orca Cloud (ConnectorCloudStatus); undefined without Orca Cloud. */
+  status: string | undefined,
+  server?: OrcaSignInServer
 ): { offered: boolean; message: string } | null {
+  const signedOut = orcaCloudNeedsSignIn(status)
   if (source === 'google' || (source !== 'webhook' && !(signedOut && connected(bot, source)))) {
     return null
   }
-  if (!signedOut) {
+  // Only a known link says signed in: no Orca Cloud at all is no proof of it.
+  if (status === undefined) {
     return {
       offered: false,
-      message:
-        'This computer is signed in to Orca, so webhooks need no card; no card was shown. Set up the webhook again.'
+      message: `${thisHost(server)} has no Orca Cloud connection, so it can't make webhooks; no card was shown.`
+    }
+  }
+  if (!signedOut) {
+    // Signed in; only a link that says ok is worth setting the webhook up again on.
+    const why =
+      status === 'ok'
+        ? 'Set up the webhook again.'
+        : status === 'unreachable'
+          ? "It can't reach Orca Cloud right now; set up the webhook again once it can."
+          : 'Orca Cloud refuses its link right now; tell your owner instead of trying again.'
+    return {
+      offered: false,
+      message: `${thisHost(server)} is signed in to Orca Cloud, so webhooks need no card; no card was shown. ${why}`
     }
   }
   return {
     offered: true,
-    message: `Your owner now sees a Sign in line for ${signInWhat(source).toLowerCase()} in this chat. Once they sign in, they'll tell you; then save it again. Don't tell them where to click.`
+    message: `Your owner now sees a Sign in line for ${signInWhat(source).toLowerCase()} in this chat. Once they sign in, they'll tell you; then save it again.${CONNECTOR_OFFER_NO_DIRECTIONS}`
   }
 }
 
@@ -155,7 +189,7 @@ export function connectorOfferReply(
   }
   return {
     offered: true,
-    message: `Your owner now sees a Connect card for ${name}${workspace ? ` (${workspace})` : ''} in this chat; it turns to Connected once they connect it. Don't tell them where to click. Before using it, check with \`orca bot connectors\`.`
+    message: `Your owner now sees a Connect card for ${name}${workspace ? ` (${workspace})` : ''} in this chat; it turns to Connected once they connect it.${CONNECTOR_OFFER_NO_DIRECTIONS} Before using it, check with \`orca bot connectors\`.`
   }
 }
 

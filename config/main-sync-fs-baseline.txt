@@ -15,15 +15,13 @@
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
+2 src/main/ai-vault/parse-cache/session-parse-cache-version-files.ts # once per scanner-child database open: list and stat the few cache files; not Electron main
 2 src/main/ai-vault/scan-service/session-scanner-service-entry-path.ts
 1 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts
 3 src/main/ai-vault/scanners/omp/omp-session-root.ts # small fixed profile-dir probes mirroring OMP dirs.ts; one readdir + per-profile candidate checks, not a per-file sweep
 1 src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.ts
-2 src/main/ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn.ts
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
-1 src/main/antigravity/antigravity-host-acp.ts
-2 src/main/antigravity/native-credential-backend.ts
 3 src/main/antigravity/native-file-credentials.ts
 3 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
@@ -35,7 +33,6 @@
 1 src/main/bots/bot-tools-claude.ts
 1 src/main/bots/bot-tools-host.ts
 2 src/main/bots/bot-work-runtime.ts
-1 src/main/bots/bot-work-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
@@ -49,10 +46,8 @@
 2 src/main/browser/cookies/chromium/chromium-cookie-path.ts
 4 src/main/browser/cookies/chromium/chromium-cookie-snapshot.ts
 1 src/main/browser/cookies/chromium/import-cookies.ts
-3 src/main/browser/cookies/client-route/client-route-cookie-import-source-store.ts
 2 src/main/browser/cookies/sources/browser-cookie-detection.ts
 8 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
-2 src/main/browser/cookies/sources/browser-cookie-key.ts
 1 src/main/browser/cookies/sources/browser-cookie-safari-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-source-profiles.ts
 11 src/main/browser/cookies/staging/browser-session-cookie-staging.ts
@@ -69,7 +64,6 @@
 1 src/main/browser/identity/mode/browser-identity-mode-record.ts
 2 src/main/browser/identity/mode/browser-identity-mode-store.ts
 2 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-4 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
 5 src/main/browser/routing/partitions/browser-route-partition-binding-file.ts
 3 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 4 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
@@ -118,17 +112,17 @@
 36 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 6 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
 1 src/main/codex-accounts/login/codex-login-auth-snapshot.ts
-4 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
+2 src/main/codex-accounts/managed-homes/codex-config-mirror.ts
 5 src/main/codex-accounts/managed-homes/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/managed-homes/codex-managed-home-path.ts
 1 src/main/codex-accounts/managed-homes/guest-codex-account-homes.ts
 6 src/main/codex-accounts/managed-homes/host-codex-managed-home-ownership.ts
-7 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts
+8 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-core.ts # +1 stat only before deleting a mirror login on a system logout, so an unreadable auth.json is not taken for one (#45264)
 5 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-provenance.ts
 23 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-auth-sync.ts
 2 src/main/codex-accounts/runtime-home/credentials/runtime-home-service-wsl-core.ts
 2 src/main/codex-accounts/runtime-home/legacy-host/legacy-shared-auth-migration.ts
-19 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
+18 src/main/codex-accounts/runtime-home/legacy-host/runtime-home-service-legacy-migration.ts
 1 src/main/codex-accounts/runtime-home/routing/runtime-home-service-managed-home.ts
 14 src/main/codex-accounts/runtime-home/runtime-home-service-paths.ts
 1 src/main/codex-accounts/runtime-home/runtime-home-service-sync.ts
@@ -139,13 +133,12 @@
 5 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 5 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
-1 src/main/codex/configuration/settings/config-settings-baseline.ts
-5 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
-3 src/main/codex/configuration/settings/config-settings-promotion.ts
+3 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable (per promotion pass with edits to write back or values held back), so a host ~/.codex linked into a WSL distro is detected before any write (#45247)
+2 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
-6 src/main/codex/configuration/toml/config-toml-atomic-write.ts
+7 src/main/codex/configuration/toml/config-toml-atomic-write.ts # compare-before-publish re-read of config.toml so a save made after Orca read it is never overwritten (moved here from the worker-only trust transaction)
 4 src/main/codex/history/backfill/codex-session-backfill-marker.ts
-17 src/main/codex/history/bridges/codex-session-bridge.ts
+14 src/main/codex/history/bridges/codex-session-bridge.ts
 5 src/main/codex/history/index/codex-session-index-heal-state.ts
 2 src/main/codex/history/index/codex-state-db.ts
 2 src/main/codex/history/resume/codex-session-resume-home.ts
@@ -235,11 +228,11 @@
 7 src/main/emulator/serve-sim-execution.ts
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
-14 src/main/filesystem/atomic-file-publication.ts
+13 src/main/filesystem/atomic-file-publication.ts
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-3 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
+2 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
@@ -259,7 +252,7 @@
 1 src/main/hang-watchdog/previous-hang-detection.ts
 9 src/main/hang-watchdog/renderer-hang-records.ts
 1 src/main/hermes/hermes-default-home.ts
-10 src/main/hermes/hermes-home-filesystem.ts
+7 src/main/hermes/hermes-home-filesystem.ts
 2 src/main/hermes/hook-service.ts
 2 src/main/host/secret-protection-report.ts
 1 src/main/ipc/app.ts
@@ -273,7 +266,6 @@
 3 src/main/ipc/filesystem/watcher-process/parcel-watcher-entry-path.ts
 1 src/main/ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite.ts
 1 src/main/ipc/filesystem/watcher-process/supervision/parcel-watcher-supervisor-subscribe.ts
-1 src/main/ipc/notifications/notification-authorization-status.ts
 1 src/main/ipc/pty/host-env/spawn-pane-env.ts
 1 src/main/ipc/ssh/ssh-connect-flow.ts
 1 src/main/ipc/worktrees/floating-workspace-directory.ts
@@ -298,7 +290,6 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts
@@ -366,7 +357,7 @@
 7 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer.ts
 1 src/main/persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-restore-hint-store.ts
 1 src/main/persistence/moving-wsl-projects/desktop-state/wsl-move-orchestration-history-rewrite.ts
-1 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts
+2 src/main/persistence/moving-wsl-projects/orchestration/wsl-move-orchestrator-store.ts # one read per load (retried on a wake only while unreadable) and one rename setting an unparseable file aside (#49980)
 6 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback.ts
 2 src/main/persistence/moving-wsl-projects/terminal-state/wsl-move-slept-spool-sweep.ts
 5 src/main/persistence/preferences/active-view-preference.ts
@@ -422,7 +413,7 @@
 1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
 3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
 3 src/main/providers/shell-launch/windows/powershell-executable.ts
-2 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
+1 src/main/providers/shell-launch/windows/windows-interactive-login-spawn.ts
 2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts
@@ -524,6 +515,7 @@
 1 src/main/warp-themes/discovery.ts
 1 src/main/webhooks/webhook-call-file.ts
 2 src/main/webhooks/webhook-host-ledger.ts
+1 src/main/webhooks/webhook-host-newer-agent-hooks.ts # one read of the small newer-agent hooks file per signed-in account, next to the ledger's own read (STA-16837)
 1 src/main/window/desktop-integration/custom-app-icon.ts
 3 src/main/window/desktop-integration/macos-press-and-hold-default.ts
 1 src/main/windows/windows-administrator-restart.ts
@@ -531,7 +523,7 @@
 1 src/main/windows/windows-process-table.ts
 2 src/main/worker-threads/forked-child-entry-path.ts
 3 src/main/worker-threads/worker-large-send-log.ts
-4 src/main/workspace-hooks/hooks.ts
+3 src/main/workspace-hooks/hooks.ts
 10 src/main/workspace-hooks/issue-command-file.ts
 1 src/main/workspaces/catalog/folder-repo-git-conversion.ts
 2 src/main/workspaces/catalog/folder-upgrade-worktree-path.ts
@@ -543,6 +535,7 @@
 3 src/main/wsl/filesystem/wsl-drive-project-new-default.ts
 9 src/main/wsl/filesystem/wsl-drive-unc-conversion-stores.ts
 2 src/main/wsl/filesystem/wsl-guest-windows-drive-path.ts
+1 src/main/wsl/filesystem/wsl-share-path-resolution.ts # realpathSync.native of a drive root, only on Windows for a drive-letter config target in a promotion pass that writes back or holds values back, so a drive mapped to a distro share is never written (#45247)
 2 src/main/wsl/host-lifecycle/wsl-host-automation-wake-store.ts
 4 src/main/wsl/host-lifecycle/wsl-host-e2e-fake-connector.ts
 1 src/main/wsl/host-lifecycle/wsl-host-early-wake.ts
@@ -569,7 +562,7 @@
 6 src/shared/file-content/node-bounded-file-reader.ts
 5 src/shared/file-content/node-file-content-equality.ts
 6 src/shared/file-content/node-source-copy-content-equality.ts
-2 src/shared/file-write/windows-retry-file-operations.ts
+3 src/shared/file-write/windows-retry-file-operations.ts # removeFileWithWindowsRetry: the rmSync moved here from rolling-file-backup.ts, which dropped one
 1 src/shared/file-write/windows-transient-lock-removal.ts
 1 src/shared/plugins/declarative/testing/orca-testing.ts
 1 src/shared/remote-runtime/e2ee/node/remote-runtime-e2ee-v2-host-latch.ts

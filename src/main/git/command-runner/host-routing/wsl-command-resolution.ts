@@ -1,5 +1,6 @@
 import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
-import { getDefaultWslDistro } from '../../../wsl/discovery/distro-catalog'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
+import { getDefaultWslDistro, listWslDistrosAsync } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import type { WslUncPathInfo as WslPathInfo } from '../../../../shared/file-access/wsl-paths'
 import {
@@ -75,12 +76,9 @@ export function defaultWslCliDistro(): string | null {
   return defaultWslDistroOverride ?? getDefaultWslDistro()
 }
 
-export function resolveDefaultWslCli(
-  command: 'gh' | 'glab',
-  args: string[]
-): ResolvedCommand | null {
-  const distro = defaultWslCliDistro()
-  return distro ? resolveCommand(command, args, undefined, distro) : null
+/** `defaultWslCliDistro` without a synchronous wsl.exe list on the main thread. */
+export async function defaultWslCliDistroAsync(): Promise<string | null> {
+  return defaultWslDistroOverride ?? (await listWslDistrosAsync())[0] ?? null
 }
 
 /** Use shell cd for WSL cwd: wsl.exe --cd can fail with ERROR_PATH_NOT_FOUND under Node spawning. */
@@ -114,8 +112,9 @@ export function resolveCommand(
   if (!wsl) {
     return { binary: command, args, cwd, wsl: null, wslMode: null }
   }
+  const wslExe = windowsSystem32Binary('wsl.exe')
   // Every Git/gh/glab path into a distro resolves here, whichever spawn API then runs it.
-  assertWslDistroAllowed('wsl.exe', ['-d', wsl.distro])
+  assertWslDistroAllowed(wslExe, ['-d', wsl.distro])
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
   noteWslDistroLaunched(wsl.distro)
 
@@ -185,7 +184,7 @@ export function resolveCommand(
         ]
     return withWslProcessGroupTermination(
       {
-        binary: 'wsl.exe',
+        binary: wslExe,
         args: ['-d', wsl.distro, '--exec', ...guestArgv],
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
@@ -201,7 +200,7 @@ export function resolveCommand(
       const captured = buildWslCapturedLoginShellCommand(shellCmd)
       return withWslProcessGroupTermination(
         {
-          binary: 'wsl.exe',
+          binary: wslExe,
           args: buildWslExecArgs(wsl.distro, ['sh', '-lc', captured.command]),
           cwd: resolveWslInteropSpawnCwd(),
           wsl,
@@ -213,7 +212,7 @@ export function resolveCommand(
     }
     return withWslProcessGroupTermination(
       {
-        binary: 'wsl.exe',
+        binary: wslExe,
         args: buildWslExecArgs(wsl.distro, ['sh', '-lc', buildWslLoginShellCommand(shellCmd)]),
         cwd: resolveWslInteropSpawnCwd(),
         wsl,
@@ -225,7 +224,7 @@ export function resolveCommand(
 
   return withWslProcessGroupTermination(
     {
-      binary: 'wsl.exe',
+      binary: wslExe,
       args: buildWslExecArgs(wsl.distro, ['bash', '-c', shellCmd]),
       // Use a stable Win32 spawn cwd; inheriting Orca's deletable UNC cwd can break CreateProcessW.
       cwd: resolveWslInteropSpawnCwd(),

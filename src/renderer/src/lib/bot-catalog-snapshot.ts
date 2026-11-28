@@ -8,14 +8,10 @@ import {
 import { keepBotHostList, readKeptBotHostList } from './bot-host-kept-lists'
 import { reuseEqualJson } from '../../../shared/reuse-equal-json'
 import type { BotNeedsYouCounts } from '../../../shared/bots/bot-change-scope'
+import type { ConnectorCloudStatus } from '../../../shared/bots/connector-cloud-status'
 
-/** What a host's bots.list says of its link to Orca Cloud (the host's ConnectorCloudStatus). */
-export type BotHostConnectorStatus =
-  | 'signed-out'
-  | 'needs-sign-in'
-  | 'unreachable'
-  | 'refused'
-  | 'ok'
+/** What a host's bots.list says of its link to Orca Cloud. */
+export type BotHostConnectorStatus = ConnectorCloudStatus
 
 /** A listed host is read while connected; a disconnected one keeps its last read, shown dimmed. */
 export type BotHostState = 'live' | 'offline'
@@ -245,8 +241,12 @@ export type BotHostListing = {
  * Sets which hosts list bots. A new host starts from its kept last read, or unread; a dropped one
  * takes its bots with it.
  * Returns the hosts that just became live, which need a read. Nothing changes, nothing is told.
+ * `beforePublish` sees those hosts before any listener is told they are live.
  */
-export function setBotHostListing(next: BotHostListing): ExecutionHostId[] {
+export function setBotHostListing(
+  next: BotHostListing,
+  beforePublish?: (becameLive: readonly ExecutionHostId[]) => void
+): ExecutionHostId[] {
   const nextIds = next.hosts.map((host) => host.hostId)
   let changed =
     nextIds.length !== hostIds.length ||
@@ -278,6 +278,7 @@ export function setBotHostListing(next: BotHostListing): ExecutionHostId[] {
   liveHostIds = nextIds.filter((id) => hosts.get(id)?.state === 'live')
   updateNeeded = next.updateNeeded
   reflatten()
+  beforePublish?.(becameLive)
   listeners.forEach((listener) => listener())
   return becameLive
 }

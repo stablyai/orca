@@ -6,7 +6,7 @@ import { holdBrowserSessionWebRequest } from './browser-session-web-request-owne
 
 /**
  * Electron allows one session.webRequest listener per event, so request decisions owned by other
- * layers (extension content blocking) run inside Orca's own handlers: the certificate guard's
+ * layers (extension content blocking) run inside Orca's own handlers: the request gate's
  * onBeforeRequest, the user agent policy's onBeforeSendHeaders and the onHeadersReceived installed
  * here. Each hook is called only after Orca's own policy for that event has run.
  */
@@ -71,8 +71,21 @@ function noteBlockedMainFrame(
     details.resourceType === 'mainFrame' &&
     details.webContentsId !== undefined
   ) {
-    blockedMainFrameWatchers.get(details.webContentsId)?.(details.url)
+    const onBlocked = blockedMainFrameWatchers.get(details.webContentsId)
+    reportingBlockedRequestId = details.id
+    try {
+      onBlocked?.(details.url)
+    } finally {
+      reportingBlockedRequestId = null
+    }
   }
+}
+
+let reportingBlockedRequestId: number | null = null
+
+/** While the failure for an extension-blocked main frame is reported, that request's id. */
+export function blockedMainFrameRequestBeingReported(): number | null {
+  return reportingBlockedRequestId
 }
 
 /** Answers an onBeforeRequest that Orca's own policy let through. */

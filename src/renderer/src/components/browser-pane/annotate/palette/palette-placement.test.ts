@@ -1,0 +1,190 @@
+import { describe, expect, it } from 'vitest'
+import {
+  clampPaletteOffset,
+  paletteDragRest,
+  paletteKeyMove,
+  paletteHintPlacement,
+  paletteMeasuredLayout,
+  paletteOffsetForRatio,
+  paletteRatioForOffset,
+  snapPaletteRatio
+} from './palette-placement'
+
+describe('annotate palette placement', () => {
+  it("lines a right-side palette's hint up with its right edge and keeps it inside the page", () => {
+    const layout = (x: number, left: number) =>
+      paletteHintPlacement({
+        boundsWidth: 560,
+        boundsHeight: 400,
+        paletteWidth: 300,
+        paletteHeight: 38,
+        left,
+        top: 8,
+        x,
+        y: 0,
+        topMin: 8
+      })
+    expect(layout(1, 252)).toEqual({ top: 54, right: 8, maxWidth: 'calc(100% - 16px)' })
+    expect(layout(0.3, 130)).toEqual({ top: 54, left: 130, maxWidth: 'calc(100% - 138px)' })
+    // Centred palette: the hint centres under it, as wide as the nearer edge allows.
+    expect(layout(0.5, 130)).toEqual({
+      top: 54,
+      left: 280,
+      transform: 'translateX(-50%)',
+      width: 'max-content',
+      maxWidth: 544
+    })
+  })
+
+  it('puts a wrapped hint above the palette when its measured height has no room below', () => {
+    const near = {
+      boundsWidth: 560,
+      boundsHeight: 400,
+      paletteWidth: 300,
+      paletteHeight: 38,
+      left: 8,
+      top: 300,
+      x: 0,
+      y: 1,
+      topMin: 8
+    }
+    // 62px below the palette: room for one line, not for three.
+    expect(paletteHintPlacement(near, 24)).toMatchObject({ top: 346 })
+    expect(paletteHintPlacement(near, 60)).toMatchObject({ bottom: 'calc(100% - 292px)' })
+  })
+
+  it('keeps a placed palette on its saved side when compaction narrows it', () => {
+    const measured = (
+      x: number,
+      paletteWidth: number,
+      prev: ReturnType<typeof paletteMeasuredLayout> | null
+    ) =>
+      paletteMeasuredLayout(
+        prev,
+        { boundsWidth: 560, boundsHeight: 400, paletteWidth, paletteHeight: 38 },
+        { x, y: 0 },
+        8
+      )
+    // Centred and right-edge palettes that fit, then compact to 380px.
+    expect(measured(0.5, 380, measured(0.5, 500, null)).left).toBe(90)
+    expect(measured(1, 380, measured(1, 500, null)).left).toBe(172)
+    expect(measured(0, 380, measured(0, 500, null)).left).toBe(8)
+    // Too wide to move at first, so pinned left; once it fits it goes back to the centre.
+    expect(measured(0.5, 380, measured(0.5, 600, null)).left).toBe(90)
+  })
+
+  it('keeps the palette 8px inside both edges of the page on either axis', () => {
+    expect(paletteOffsetForRatio(0, 600, 200)).toBe(8)
+    expect(paletteOffsetForRatio(1, 600, 200)).toBe(392)
+    expect(paletteOffsetForRatio(0.5, 600, 200)).toBe(200)
+    expect(clampPaletteOffset(-50, 600, 200)).toBe(8)
+    expect(clampPaletteOffset(900, 600, 200)).toBe(392)
+    // Vertically: a 38px palette in a 400px page.
+    expect(clampPaletteOffset(-50, 400, 38)).toBe(8)
+    expect(clampPaletteOffset(900, 400, 38)).toBe(354)
+  })
+
+  it('keeps the palette below a find bar that raises the top limit', () => {
+    expect(clampPaletteOffset(8, 400, 38, 52)).toBe(52)
+    expect(clampPaletteOffset(200, 400, 38, 52)).toBe(200)
+    // A page too short to fit under the find bar pins the palette there rather than above it.
+    expect(clampPaletteOffset(0, 80, 38, 52)).toBe(52)
+  })
+
+  it('saves the highest spot under an open find bar as the top', () => {
+    // A 38px palette in a 400px page, find bar limit at 52px: resting right under it is the top (0)…
+    expect(paletteRatioForOffset(52, 400, 38, 0, 52)).toBe(0)
+    expect(paletteRatioForOffset(354, 400, 38, 0, 52)).toBe(1)
+    expect(paletteOffsetForRatio(0, 400, 38, 52)).toBe(52)
+    // …so once find closes, the same saved place is the page's top inset again.
+    expect(paletteOffsetForRatio(0, 400, 38)).toBe(8)
+  })
+
+  it('keeps the same place on the page when the pane resizes', () => {
+    const ratio = paletteRatioForOffset(paletteOffsetForRatio(0.8, 600, 200), 600, 200, 0.5)
+    expect(ratio).toBeCloseTo(0.8)
+    // Same fraction of the free travel in a larger pane.
+    expect(paletteOffsetForRatio(ratio, 1000, 200)).toBeCloseTo(8 + 784 * 0.8)
+    // A palette at the bottom stays at the bottom.
+    const bottom = paletteRatioForOffset(clampPaletteOffset(900, 400, 38), 400, 38, 0)
+    expect(paletteOffsetForRatio(bottom, 700, 38)).toBe(654)
+  })
+
+  it('keeps the fallback for an axis with no room to move', () => {
+    expect(paletteRatioForOffset(8, 200, 200, 0.5)).toBe(0.5)
+    expect(paletteRatioForOffset(8, 40, 38, 0)).toBe(0)
+    expect(paletteOffsetForRatio(0.9, 200, 200)).toBe(8)
+  })
+
+  it('keeps the saved place on the axis a grip key does not move', () => {
+    // A find bar has pushed the shown top below the saved one; a sideways key must not save the pushed top.
+    const shown = { x: 0.5, y: 0.2 }
+    const saved = { x: 0.5, y: 0 }
+    expect(paletteKeyMove('ArrowRight', false, shown, saved, true, true)?.next).toEqual({
+      x: 0.55,
+      y: 0
+    })
+    expect(paletteKeyMove('End', false, shown, saved, true, true)?.next).toEqual({ x: 1, y: 0 })
+    expect(paletteKeyMove('ArrowDown', false, { x: 0.3, y: 0.2 }, saved, true, true)?.next).toEqual(
+      {
+        x: 0.5,
+        y: 0.25
+      }
+    )
+  })
+
+  describe('where a drag comes to rest', () => {
+    // A 200x38 palette in a 600x400 page, saved at the centre, halfway down; anchored 20px right of centre.
+    const start = {
+      boundsWidth: 600,
+      boundsHeight: 400,
+      paletteWidth: 200,
+      paletteHeight: 38,
+      left: 220,
+      top: 181,
+      topMin: 8,
+      saved: { x: 0.5, y: 0.5 }
+    }
+
+    it('saves nothing for a press that never moved, so the anchored edge does not drift the saved place', () => {
+      expect(paletteDragRest(start, { left: null, top: null }, 8)).toEqual({
+        left: 220,
+        top: 181,
+        save: null,
+        snapped: false
+      })
+    })
+
+    it('puts a cancelled drag back at the saved height under a find bar that opened meanwhile', () => {
+      expect(paletteDragRest(start, null, 8).top).toBe(181)
+      expect(paletteDragRest(start, null, 52)).toMatchObject({ top: 203, save: null })
+    })
+
+    it('writes only the axis the drag moved', () => {
+      // Pinned on X (a 304px palette in a 320px page): a vertical drag keeps the saved X for a wider page later.
+      const pinnedX = {
+        ...start,
+        boundsWidth: 320,
+        paletteWidth: 304,
+        left: 8,
+        saved: { x: 0.2, y: 0.5 }
+      }
+      expect(paletteDragRest(pinnedX, { left: null, top: 354 }, 8).save).toEqual({ x: 0.2, y: 1 })
+      // Pinned on Y (38px palette in a 54px page): a sideways drag keeps the saved Y.
+      const pinnedY = { ...start, boundsHeight: 54, top: 8, saved: { x: 0.5, y: 1 } }
+      expect(paletteDragRest(pinnedY, { left: 392, top: null }, 8).save).toEqual({ x: 1, y: 1 })
+      // An anchored edge 20px right of the saved centre doesn't leak into a vertical-only drag.
+      expect(paletteDragRest(start, { left: null, top: 8 }, 8).save).toEqual({ x: 0.5, y: 0 })
+    })
+
+    it('saves the top as 0 when a drag ends at an open find bar limit', () => {
+      expect(paletteDragRest(start, { left: null, top: 52 }, 52).save).toEqual({ x: 0.5, y: 0 })
+    })
+  })
+
+  it('snaps a release near the horizontal centre back to the centre', () => {
+    expect(snapPaletteRatio(0.52)).toBe(0.5)
+    expect(snapPaletteRatio(0.47)).toBe(0.5)
+    expect(snapPaletteRatio(0.6)).toBe(0.6)
+  })
+})

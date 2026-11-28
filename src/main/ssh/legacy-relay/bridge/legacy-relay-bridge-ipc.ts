@@ -1,121 +1,47 @@
 /**
- * The bridge's own IPC channels, and the live collaborators it runs with.
+ * The bridge's own IPC channels; the desktop adapter for the legacy relay bridge.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
-import { ipcMain, type BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
 import { z } from 'zod'
+import { lazyZodSchema } from '../../../../shared/schema/lazy-zod-schema'
 import { LEGACY_RELAY_BRIDGE_CHANNELS as CHANNELS } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
-import { isRemoteCliControlAllowed } from '../../../../shared/remote-runtime/ssh/ssh-remote-cli-control'
-import type { Store } from '../../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { PtyRetirementWithoutProof } from '../../../pty/process-retirement/pty-exit-proof'
-import { toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { track } from '../../../telemetry/client'
-import type { SshConnection } from '../../connection/ssh-connection'
-import { knownSshHostPlatform } from '../../remote-host/ssh-host-platform-memo'
-import { hostProps } from '../../host-server/ssh-host-server-telemetry'
 import {
   attachLegacyRelayPane,
   closeLegacyRelayPane,
   detachLegacyRelayPane,
-  installLegacyRelayBridge,
   legacyRelayBridgedPanes,
   resizeLegacyRelayPane,
   setLegacyRelayOutputPaused,
   writeLegacyRelayPane
 } from './legacy-relay-bridge-registry'
-import { terminalsBucket } from './legacy-relay-daily-activity'
 
-const PtyIdSchema = z.string().min(1).max(4096)
-const SizeSchema = z.number().int().positive().max(10_000)
-const PaneArgsSchema = z.object({ ptyId: PtyIdSchema })
-const DetachArgsSchema = z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
-const AttachArgsSchema = z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
-const WriteArgsSchema = z.object({ ptyId: PtyIdSchema, data: z.string() })
-const PausedArgsSchema = z.object({
-  ptyId: PtyIdSchema,
-  paused: z.boolean(),
-  replayNeeded: z.boolean().optional()
-})
-const ResizeArgsSchema = z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
+const PtyIdSchema = lazyZodSchema(() => z.string().min(1).max(4096))
+const SizeSchema = lazyZodSchema(() => z.number().int().positive().max(10_000))
+const PaneArgsSchema = lazyZodSchema(() => z.object({ ptyId: PtyIdSchema }))
+const DetachArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, acquisitionId: z.number().int() })
+)
+const AttachArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, replayInStream: z.boolean().optional() })
+)
+const WriteArgsSchema = lazyZodSchema(() => z.object({ ptyId: PtyIdSchema, data: z.string() }))
+const PausedArgsSchema = lazyZodSchema(() =>
+  z.object({
+    ptyId: PtyIdSchema,
+    paused: z.boolean(),
+    replayNeeded: z.boolean().optional()
+  })
+)
+const ResizeArgsSchema = lazyZodSchema(() =>
+  z.object({ ptyId: PtyIdSchema, cols: SizeSchema, rows: SizeSchema })
+)
 
 export function registerLegacyRelayBridgeIpc(args: {
-  store: Pick<
-    Store,
-    | 'getSshRemotePtyLeases'
-    | 'markSshRemotePtyLease'
-    | 'setSshRemotePtyLeasePendingKill'
-    | 'getSshTarget'
-  >
-  getMainWindow: () => BrowserWindow | null
-  connection: (targetId: string) => SshConnection | null
   runtime?: () => OrcaRuntimeService | null
 }): void {
-  const send = (channel: string, payload: unknown): void => {
-    const contents = args.getMainWindow()?.webContents
-    if (contents && !contents.isDestroyed()) {
-      contents.send(channel, payload)
-    }
-  }
-  installLegacyRelayBridge({
-    leases: (targetId) => args.store.getSshRemotePtyLeases(targetId),
-    retireLease: (targetId, relayPtyId, evidence) => {
-      // Cleared first so the retire can prune the tombstone.
-      args.store.setSshRemotePtyLeasePendingKill(targetId, relayPtyId, null)
-      args.store.markSshRemotePtyLease(targetId, relayPtyId, evidence)
-      if (evidence instanceof PtyRetirementWithoutProof) {
-        args
-          .runtime?.()
-          ?.markPtyLivenessUnverifiable(
-            toAppSshPtyId(targetId, relayPtyId),
-            evidence.unverifiableReason
-          )
-      }
-    },
-    recordStop: (targetId, relayPtyId, pendingKill) =>
-      args.store.setSshRemotePtyLeasePendingKill(targetId, relayPtyId, pendingKill),
-    connection: args.connection,
-    ...(args.runtime
-      ? {
-          remoteCli: {
-            runtime: args.runtime,
-            allowed: (targetId: string) =>
-              isRemoteCliControlAllowed(args.store.getSshTarget(targetId))
-          }
-        }
-      : {}),
-    onPanesChanged: (panes) => send(CHANNELS.panes, panes),
-    onData: (ptyId, data) => send(CHANNELS.data, { ptyId, data }),
-    onReplay: (ptyId, replay) => send(CHANNELS.replay, { ptyId, replay }),
-    // Every bridge exit is the relay's proof; no provider listener reports these to the runtime.
-    onExit: (ptyId, code) => {
-      send(CHANNELS.exit, { ptyId, code })
-      // A negative code is a proven absence with no reported status, not an unconfirmed stop.
-      const options = {
-        hostExitConfirmed: true,
-        ...(code < 0 ? { cause: { kind: 'unknown', reason: 'cause_unreported' } as const } : {})
-      }
-      try {
-        void Promise.resolve(args.runtime?.()?.onPtyExit(ptyId, code, undefined, options)).catch(
-          (error: unknown) => console.warn('[legacy-relay] runtime exit failed:', error)
-        )
-      } catch (error) {
-        // The bridge still retires the pane and re-lists.
-        console.warn('[legacy-relay] runtime exit failed:', error)
-      }
-    },
-    report: (targetId, phase, terminals) => {
-      try {
-        track('ssh_host_server_legacy_relay_bridge', {
-          phase,
-          terminals: terminalsBucket(terminals),
-          ...hostProps(knownSshHostPlatform(targetId))
-        })
-      } catch {
-        // Telemetry never costs a terminal.
-      }
-    }
-  })
+  const runtime = args.runtime
   ipcMain.removeHandler(CHANNELS.listPanes)
   ipcMain.removeHandler(CHANNELS.attach)
   ipcMain.removeHandler(CHANNELS.close)
@@ -134,7 +60,6 @@ export function registerLegacyRelayBridgeIpc(args: {
       ? attachLegacyRelayPane(args.data.ptyId, args.data.replayInStream === true)
       : { status: 'not-bridged' }
   })
-  const runtime = args.runtime
   ipcMain.handle(CHANNELS.close, async (_event, payload: unknown) => {
     const args = PaneArgsSchema.safeParse(payload)
     if (!args.success) {

@@ -1,6 +1,8 @@
 import type { TerminalCursorContext } from './terminal-composer-draft'
+import type { TerminalGridReadOptions } from '../viewport/terminal-line-applied-columns'
+import { readTerminalGridCursorLineContext } from './terminal-grid-cursor-line-context'
 
-type TerminalCursorCell = {
+export type TerminalCursorCell = {
   getChars(): string
   getWidth(): number
   isBold(): boolean | number
@@ -9,7 +11,7 @@ type TerminalCursorCell = {
   isInverse(): boolean | number
 }
 
-type TerminalCursorLine<Cell extends TerminalCursorCell> = {
+export type TerminalCursorLine<Cell extends TerminalCursorCell> = {
   readonly isWrapped: boolean
   readonly length: number
   getCell(column: number, reusableCell?: Cell): Cell | undefined
@@ -17,6 +19,7 @@ type TerminalCursorLine<Cell extends TerminalCursorCell> = {
 }
 
 export type TerminalCursorContextSource<Cell extends TerminalCursorCell = TerminalCursorCell> = {
+  readonly cols: number
   readonly rows: number
   readonly modes: { readonly showCursor: boolean }
   readonly buffer: {
@@ -77,8 +80,13 @@ function readUndimmedTextAndFirstVisibleStyle<Cell extends TerminalCursorCell>(
 
 export function readTerminalCursorLineContext<Cell extends TerminalCursorCell>(
   terminal: TerminalCursorContextSource<Cell>,
-  rowsAroundCursor: number
+  rowsAroundCursor: number,
+  options?: TerminalGridReadOptions
 ): TerminalCursorContext | null {
+  // Keep live screen and IME reads free of per-row clipping checks.
+  if (options?.clipToGrid) {
+    return readTerminalGridCursorLineContext(terminal, rowsAroundCursor)
+  }
   const buffer = terminal.buffer.active
   const cursorRow = buffer.baseY + buffer.cursorY
   const cursorLine = buffer.getLine(cursorRow)

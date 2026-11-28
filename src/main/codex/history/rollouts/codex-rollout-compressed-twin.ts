@@ -53,12 +53,7 @@ export async function isRolloutTwinKeptFromStore(from: string, to: string): Prom
 }
 
 /** Plain-form paths of the rollouts under `folder` present in both forms, at most `limit`. */
-export async function listRolloutTwinPairs(
-  folder: string,
-  limit = Infinity,
-  /** Ends the walk early, with what it found so far. */
-  shouldStop: () => boolean = () => false
-): Promise<string[]> {
+export async function listRolloutTwinPairs(folder: string, limit = Infinity): Promise<string[]> {
   let entries: Dirent[]
   try {
     entries = await readdir(folder, { withFileTypes: true })
@@ -71,13 +66,11 @@ export async function listRolloutTwinPairs(
   const names = new Set(entries.map((entry) => entry.name))
   const pairs: string[] = []
   for (const entry of entries) {
-    if (pairs.length >= limit || shouldStop()) {
+    if (pairs.length >= limit) {
       break
     }
     if (entry.isDirectory()) {
-      pairs.push(
-        ...(await listRolloutTwinPairs(join(folder, entry.name), limit - pairs.length, shouldStop))
-      )
+      pairs.push(...(await listRolloutTwinPairs(join(folder, entry.name), limit - pairs.length)))
     } else if (
       entry.name.endsWith(COMPRESSED_ROLLOUT_SUFFIX) &&
       names.has(rolloutTwinPath(entry.name)) &&

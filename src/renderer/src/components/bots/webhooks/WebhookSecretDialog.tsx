@@ -27,12 +27,12 @@ import {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
 import { notifyWebhooksChanged } from './use-webhook-data'
+import { webhookErrorMessage } from './webhook-copy'
 import {
   webhookAdapterGeneratesSecret,
-  webhookAdapterTakesPastedSecret,
-  webhookErrorMessage
-} from './webhook-copy'
-import { webhookAdapterName } from '../../../../../shared/bots/webhook-card-view'
+  webhookAdapterName,
+  webhookAdapterTakesPastedSecret
+} from '../../../../../shared/bots/webhook-card-view'
 import { callWebhookHost, newWebhookOperationId, webhookErrorCode } from './webhook-host-client'
 import { copyWebhookSecret } from './webhook-secret-copy'
 
@@ -134,7 +134,7 @@ function SecretForm({
           </Button>
           <Button
             onClick={() =>
-              copyWebhookSecret(generated, t('bots.webhooks.secret.copied', 'Secret copied'))
+              void copyWebhookSecret(generated, t('bots.webhooks.secret.copied', 'Secret copied'))
             }
           >
             {t('bots.webhooks.secret.copy', 'Copy secret')}

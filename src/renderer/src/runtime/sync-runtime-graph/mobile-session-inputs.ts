@@ -139,9 +139,10 @@ export function buildMobileSessionWorktreeInputs(
   )
   const browserWorkspaces =
     publication.browserTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_BROWSER_WORKSPACES
+  const browserWorkspaceIds = browserWorkspaces.map((workspace) => workspace.id)
   const pagesByBrowserWorkspaceId = narrowRecordByKeys(
     state.browserPagesByWorkspace,
-    browserWorkspaces.map((workspace) => workspace.id)
+    browserWorkspaceIds
   )
   const browserPageIds: string[] = []
   for (const pages of pagesByBrowserWorkspaceId.values()) {
@@ -193,6 +194,11 @@ export function buildMobileSessionWorktreeInputs(
     certificateFailureByBrowserPageId: narrowRecordByKeys(
       state.browserCertificateFailuresByPageId,
       browserPageIds
+    ),
+    audibleBrowserPageIds: narrowRecordByKeys(state.browserAudiblePageIds, browserPageIds),
+    audioMutedBrowserWorkspaceIds: narrowRecordByKeys(
+      state.browserAudioMutedTabIds,
+      browserWorkspaceIds
     ),
     activeEditorFileId,
     activeEditorTabType: activeEditorFileId

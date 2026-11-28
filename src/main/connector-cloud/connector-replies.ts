@@ -17,6 +17,7 @@ import { connectorReviewText } from '../../shared/connector-review-text'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'
+import { slackBotPostBody, slackReplyBody } from './connector-slack-text'
 
 const REPLY_ATTEMPTS = 3
 // A longer Retry-After fails the reply rather than holding the agent's command.
@@ -34,19 +35,21 @@ export type ConnectorReplyBody = {
   answerDeliveryId?: string
 }
 
-/** For a cloud that takes no review. */
-export function foldConnectorReview(body: ConnectorReplyBody): ConnectorReplyBody {
+/** For a cloud that takes no review; Slack's notes are scrubbed before they join the text. */
+export function foldConnectorReview(written: ConnectorReplyBody): ConnectorReplyBody {
+  const body = slackReplyBody(written)
   const { review, ...rest } = body
   return review ? { ...rest, text: connectorReviewText(body.text, review) } : body
 }
 
 /** Retries an unreachable or busy cloud with the same idempotency key, which never posts twice, and
- *  the usual backoff. */
+ *  the usual backoff; `proceed` is asked before each retry, which stops once it says no. */
 export async function postWithRetries<TSchema extends z.ZodType>(
   transport: ConnectorTransport,
   call: { path: string; body: unknown; schema: TSchema },
   signal: AbortSignal,
-  random: () => number
+  random: () => number,
+  proceed?: () => boolean
 ): Promise<ConnectorResult<z.infer<TSchema>>> {
   for (let failures = 0; ; failures++) {
     const sent = await transport.call(call.path, call.body, call.schema, { signal })
@@ -60,6 +63,9 @@ export async function postWithRetries<TSchema extends z.ZodType>(
       return sent
     }
     await delayUnlessAborted(waitMs, signal)
+    if (proceed && !proceed()) {
+      return sent
+    }
   }
 }
 
@@ -67,13 +73,19 @@ export function postConnectorReply(
   transport: ConnectorTransport,
   body: ConnectorReplyBody,
   signal: AbortSignal,
-  random: () => number
+  random: () => number,
+  proceed?: () => boolean
 ): Promise<ConnectorResult<ConnectorReplyResponse>> {
   return postWithRetries(
     transport,
-    { path: CONNECTOR_PATHS.replies, body: { v: 1, ...body }, schema: ConnectorReplyResponse },
+    {
+      path: CONNECTOR_PATHS.replies,
+      body: { v: 1, ...slackReplyBody(body) },
+      schema: ConnectorReplyResponse
+    },
     signal,
-    random
+    random,
+    proceed
   )
 }
 
@@ -97,10 +109,11 @@ export type ConnectorBotPostBody =
 export async function postConnectorBotMessage(
   transport: ConnectorTransport,
   botId: string,
-  body: ConnectorBotPostBody,
+  written: ConnectorBotPostBody,
   signal: AbortSignal,
   random: () => number = Math.random
 ): Promise<ConnectorResult<ConnectorBotPostAnswer>> {
+  const body = slackBotPostBody(written)
   if ('ref' in body) {
     // The actions route's post, queued once per postId as the bot's other posts are.
     const { postId, ref, text, turnFor } = body

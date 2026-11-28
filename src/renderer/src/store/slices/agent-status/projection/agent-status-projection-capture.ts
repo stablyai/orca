@@ -12,9 +12,12 @@ export function captureProjectionState(
     revision: data.tabProjection.revision
   }
   captured.display = data.display.capture()
-  captured.activeDashboardOwners = new Set(data.activeDashboardOwners)
+  captured.activeDashboardOwners = data.activeDashboardOwners
+    ? new Set(data.activeDashboardOwners)
+    : null
   captured.dashboardTotals = data.dashboardTotals
   captured.inputs = data.inputs
+  captured.remoteRows = data.remoteRows
   captured.activeAgentCount = data.activeAgentCount
   for (const [tabId, bucket] of data.terminalTypes) {
     captured.terminalTypes.set(tabId, { leaves: new Map(bucket.leaves), output: bucket.output })
@@ -25,6 +28,7 @@ export function captureProjectionState(
   captured.nextRank = data.nextRank
   captured.nextRowRevision = data.nextRowRevision
   captured.freshEvidence = data.freshEvidence
+  captured.rowOwnersRevision = data.rowOwnersRevision
   captured.deadCandidates = data.deadCandidates.capture()
   captured.freshCandidates = data.freshCandidates.capture()
   captured.candidateExpiries = data.candidateExpiries.capture()

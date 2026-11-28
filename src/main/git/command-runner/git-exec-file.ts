@@ -93,6 +93,7 @@ async function gitExecFileAsyncUnlocked(
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
+        options.observeGitRuntime?.(gitRunsIn(command).toLowerCase())
         let reportTerminated: () => void = () => {}
         terminationState.current = new Promise<void>((resolve) => {
           reportTerminated = resolve
@@ -228,7 +229,8 @@ export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) 
             command.cwd,
             options.signal,
             () => gitExecFileAsyncUnlocked(args, options, terminationState),
-            command.gitDir
+            command.gitDir,
+            process.platform === 'win32' ? () => terminationState.current : undefined
           )
         : gitExecFileAsyncUnlocked(args, options, terminationState)
     )

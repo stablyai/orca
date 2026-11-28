@@ -5,6 +5,8 @@ export type RepoIconImageSource = 'upload' | 'file' | 'favicon' | 'github'
 export type RepoIcon =
   | { type: 'lucide'; name: string }
   | { type: 'emoji'; emoji: string }
+  /** One or two characters drawn on the project color, like an avatar monogram. */
+  | { type: 'letters'; text: string }
   | { type: 'image'; src: string; source: RepoIconImageSource; label?: string }
 
 export const MAX_REPO_ICON_UPLOAD_BYTES = 256 * 1024
@@ -124,6 +126,17 @@ function isSupportedImageSrc(
   return supported
 }
 
+export const MAX_REPO_MONOGRAM_CHARACTERS = 2
+
+/** Letters and digits only, at most two code points, so the mark stays legible at 16px. */
+export function sanitizeRepoMonogramText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+  const characters = Array.from(value.trim()).filter((character) => /[\p{L}\p{N}]/u.test(character))
+  return characters.length > 0 ? characters.slice(0, MAX_REPO_MONOGRAM_CHARACTERS).join('') : null
+}
+
 export function sanitizeRepoIcon(value: unknown): RepoIcon | null | undefined {
   if (value === undefined) {
     return undefined
@@ -150,6 +163,11 @@ export function sanitizeRepoIcon(value: unknown): RepoIcon | null | undefined {
       return undefined
     }
     return { type: 'emoji', emoji }
+  }
+
+  if (candidate.type === 'letters') {
+    const text = sanitizeRepoMonogramText(candidate.text)
+    return text ? { type: 'letters', text } : undefined
   }
 
   if (candidate.type === 'image') {

@@ -1,8 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../../theme/mobile-theme'
+import { spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-export const filePreviewStyles = themedStyleSheet(() => ({
+export const filePreviewStylesSheet = themedStyleSheet((colors) => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -92,8 +92,8 @@ export const filePreviewStyles = themedStyleSheet(() => ({
   }
 }))
 
-export const chatAttachmentPreviewStyles = themedStyleSheet(() => ({
-  ...filePreviewStyles,
+export const chatAttachmentPreviewStylesSheet = themedStyleSheet((colors, scheme) => ({
+  ...filePreviewStylesSheet.resolve(scheme),
   header: {
     backgroundColor: colors.bgPanel,
     borderBottomWidth: StyleSheet.hairlineWidth,

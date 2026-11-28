@@ -53,7 +53,7 @@ export function agentLaunchSetupState(
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
-  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel)
+  const catalog = agentLaunchSetupCatalogState(entry, models, currentModel, draft.surface)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   return {
     argumentsView,
@@ -126,12 +126,13 @@ export function usePickedAgentModel(
   )
 }
 
-/** "Claude Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
+/** "Opus 5.5 · Med · Fast": the model, level and speed a launch with this draft uses. */
 export function agentLaunchSetupSummary(
   entry: AgentPickerEntry,
   draft: AgentPickerDraft,
   /** The row the user picked this model from, for an entry whose own listing lacks it. */
-  picked?: AgentPickerModel
+  picked?: AgentPickerModel,
+  defaultModelLabel?: string
 ): string[] {
   const modelId = draft.choices.model
   const listed =
@@ -149,9 +150,10 @@ export function agentLaunchSetupSummary(
       : entry,
     draft
   )
-  const model =
-    state.modelInArguments || !state.currentModel
-      ? undefined
+  const model = state.modelInArguments
+    ? undefined
+    : !state.currentModel
+      ? defaultModelLabel
       : state.currentModel === TEXT_ACTION_DEFAULT_MODEL
         ? entry.textGeneration?.defaultLabel
         : (state.models.find((candidate) => candidate.id === state.currentModel)?.label ??

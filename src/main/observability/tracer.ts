@@ -211,11 +211,6 @@ function formatError(err: Error): string {
   return err.stack ? `${head}\n${err.stack}` : head
 }
 
-export function _resetTracerForTests(): void {
-  activeSink = null
-  // Context tests should create their own withSpan scope.
-}
-
 /** Worker spans are already redacted before crossing the internal transport. */
 export function recordRelayedSpan(record: unknown): void {
   try {

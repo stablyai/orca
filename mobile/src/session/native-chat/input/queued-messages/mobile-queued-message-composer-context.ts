@@ -10,6 +10,7 @@ export const MobileQueuedMessageComposerContext = createContext<{
   onNeedSkills?: () => void
   filePaths: string[]
   onNeedFiles: ((query: string) => void) | undefined
+  fileReference?: (path: string) => string | undefined
   onError: (text: string) => void
   onMicPress: (() => void) | undefined
   micActive: boolean

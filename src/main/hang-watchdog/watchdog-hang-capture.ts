@@ -1,145 +1,113 @@
 import { createNativeHangCaptureId, NativeHangCaptureStore } from './native-hang-capture-store'
 import type { NativeHangProcessMetadata } from './native-hang-report'
 import type { HangObservation } from './hang-observations'
+import type { captureNativeHang } from './native-hang-capture'
+import type { runProcess } from '@orca/process-host'
 
-type CaptureOwner = {
-  id: string
-  reason?: 'recovery' | 'shutdown'
-  stop?: (reason: 'recovery' | 'shutdown') => void
+type NativeCaptureOwner = { stop?: () => void }
+type NativeCaptureModule = { captureNativeHang: typeof captureNativeHang }
+type ProcessHostModule = { runProcess: typeof runProcess }
+// After startup's busiest stretch, well before a user could hit a hang.
+const PRELOAD_DELAY_MS = 30_000
+let preloaded: { native: NativeCaptureModule; host: ProcessHostModule } | null = null
+
+/** Loads capture code early: a module load during a hang needs the disk and thread pool main may be blocking. */
+export function preloadHangCaptureModules(): ReturnType<typeof setTimeout> {
+  const timer = setTimeout(() => {
+    // Enrichment runs everywhere; the native sample (and its process host) is macOS-only, so load it only there.
+    void import('./hang-incident-snapshot').catch(() => {})
+    if (process.platform !== 'darwin') {
+      return
+    }
+    void Promise.all([import('./native-hang-capture'), import('@orca/process-host')])
+      .then(([native, host]) => {
+        preloaded = { native, host }
+      })
+      .catch(() => {})
+  }, PRELOAD_DELAY_MS)
+  timer.unref?.()
+  return timer
 }
-
-type CaptureParts = { js: boolean; native: boolean }
 
 export function createWatchdogHangCapture(options: {
   parentPid: number
   artifactDirectory?: string
   processMetadata?: NativeHangProcessMetadata
   publish: (id: string, change: Partial<HangObservation>) => void
-  drain: (token: string) => Promise<void>
   onIdle: () => void
 }): {
-  capture: (
-    record: HangObservation,
-    detectedAt: number,
-    showMenuBarIcon: boolean | null,
-    parts?: CaptureParts
-  ) => void
-  recover: (id: string) => void
+  capture: (record: HangObservation, showMenuBarIcon: boolean | null) => void
   shutdown: () => void
 } {
   let stopped = false
-  let jsOwner: CaptureOwner | null = null
-  let nativeOwner: CaptureOwner | null = null
+  let activeCapture: NativeCaptureOwner | null = null
+  const preload = preloadHangCaptureModules()
   const store = options.artifactDirectory
     ? new NativeHangCaptureStore(options.artifactDirectory)
     : null
-  const idle = (): void => {
-    if (stopped && !jsOwner && !nativeOwner) {
-      options.onIdle()
-    }
-  }
-  const capture = (
-    record: HangObservation,
-    detectedAt: number,
-    showMenuBarIcon: boolean | null,
-    parts: CaptureParts = { js: true, native: true }
-  ): void => {
-    if (stopped || record.kind !== 'heartbeat-stall') {
-      return
-    }
-    let nativeStarted: Promise<void> = Promise.resolve()
-    if (parts.native && process.platform === 'darwin' && !nativeOwner) {
-      const owner: CaptureOwner = { id: record.id }
-      nativeOwner = owner
-      const captureId = createNativeHangCaptureId(record.detectedAt)
-      const metadata = options.processMetadata
-      nativeStarted = import('./native-hang-capture')
-        .then((native) => {
-          const child = native.captureNativeHang({
-            pid: options.parentPid,
-            publish: (native) => options.publish(record.id, { native }),
-            completeReport: (report) => {
-              if (store && metadata) {
-                void store.save({
-                  version: 1,
-                  captureId,
-                  detectedAt: record.detectedAt,
-                  capturedAt: Date.now(),
-                  pid: options.parentPid,
-                  showMenuBarIcon,
-                  process: metadata,
-                  report
-                })
-              }
-            }
-          })
-          owner.stop = () => child.stop()
-          if (owner.reason === 'shutdown') {
-            child.stop()
-          }
-          void child.done.finally(() => {
-            if (nativeOwner === owner) {
-              nativeOwner = null
-            }
-            idle()
-          })
-          return child.started
-        })
-        .catch(() => {
-          if (nativeOwner === owner) {
-            nativeOwner = null
-          }
-          idle()
-        })
-    }
-    if (parts.js && !jsOwner) {
-      const owner: CaptureOwner = { id: record.id }
-      jsOwner = owner
-      void (async () => {
-        await nativeStarted
-        const [inspector, js] = await Promise.all([
-          import('node:inspector'),
-          import('./main-js-hang-capture')
-        ])
-        const mainJs = js.captureMainJsHang({
-          session: new inspector.Session(),
-          detectedAt,
-          now: () => performance.now(),
-          publish: (mainJs) => options.publish(record.id, { mainJs }),
-          drain: () => options.drain(record.id)
-        })
-        owner.stop = mainJs.stop
-        if (owner.reason) {
-          mainJs.stop(owner.reason)
+  return {
+    capture: (record, showMenuBarIcon) => {
+      if (
+        stopped ||
+        activeCapture ||
+        process.platform !== 'darwin' ||
+        record.kind !== 'heartbeat-stall'
+      ) {
+        return
+      }
+      const owner: NativeCaptureOwner = {}
+      activeCapture = owner
+      // V8 profiler startup runs on the stalled main thread and can wedge it.
+      const start = (native: NativeCaptureModule, host?: ProcessHostModule): Promise<void> => {
+        if (stopped) {
+          return Promise.resolve()
         }
-        await mainJs.done
-      })()
+        const captureId = createNativeHangCaptureId(record.detectedAt)
+        const metadata = options.processMetadata
+        const child = native.captureNativeHang({
+          pid: options.parentPid,
+          runProcess: host?.runProcess,
+          publish: (native) => options.publish(record.id, { native }),
+          completeReport: (report) => {
+            if (store && metadata) {
+              void store.save({
+                version: 1,
+                captureId,
+                detectedAt: record.detectedAt,
+                capturedAt: Date.now(),
+                pid: options.parentPid,
+                showMenuBarIcon,
+                process: metadata,
+                report
+              })
+            }
+          }
+        })
+        owner.stop = child.stop
+        return child.done
+      }
+      // Preloaded: spawn sample now, synchronously, ahead of the caller's marker write.
+      void (
+        preloaded
+          ? start(preloaded.native, preloaded.host)
+          : import('./native-hang-capture').then(start)
+      )
         .catch(() => {})
         .finally(() => {
-          if (jsOwner === owner) {
-            jsOwner = null
+          activeCapture = null
+          if (stopped) {
+            options.onIdle()
           }
-          idle()
         })
-    }
-  }
-  return {
-    capture,
-    recover: (id) => {
-      if (jsOwner?.id === id) {
-        jsOwner.reason ??= 'recovery'
-        jsOwner.stop?.('recovery')
-      }
     },
     shutdown: () => {
       stopped = true
-      for (const owner of [jsOwner, nativeOwner]) {
-        if (owner) {
-          owner.reason ??= 'shutdown'
-          owner.stop?.('shutdown')
-        }
+      clearTimeout(preload)
+      if (activeCapture) {
+        activeCapture.stop?.()
+      } else {
+        options.onIdle()
       }
-      idle()
     }
   }
 }

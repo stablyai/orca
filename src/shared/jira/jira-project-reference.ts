@@ -60,6 +60,10 @@ export function findJiraIssueDefaultRepo(
 }
 
 export function restrictJiraQueryToProject(jql: string, project: JiraProjectReference): string {
+  return restrictJiraQueryToProjectIds(jql, [project.id])
+}
+
+export function restrictJiraQueryToProjectIds(jql: string, projectIds: readonly string[]): string {
   let quote: string | null = null
   let orderIndex = -1
   for (let index = 0; index < jql.length; index += 1) {
@@ -72,7 +76,8 @@ export function restrictJiraQueryToProject(jql: string, project: JiraProjectRefe
       quote = character
     } else if (
       !quote &&
-      (index === 0 || /\s/.test(character)) &&
+      // Test each whitespace run once; testing every space is quadratic on long runs.
+      (index === 0 || (/\s/.test(character) && !/\s/.test(jql[index - 1]))) &&
       /^\s*ORDER\s+BY\s+/i.test(jql.slice(index))
     ) {
       orderIndex = index
@@ -81,5 +86,7 @@ export function restrictJiraQueryToProject(jql: string, project: JiraProjectRefe
   }
   const clause = orderIndex >= 0 ? jql.slice(0, orderIndex) : jql
   const ordering = orderIndex >= 0 ? jql.slice(orderIndex) : ''
-  return `project = ${JSON.stringify(project.id)}${clause.trim() ? ` AND (${clause})` : ''}${ordering.trim() ? ` ${ordering.trim()}` : ''}`
+  const ids = projectIds.map((id) => JSON.stringify(id))
+  const restriction = ids.length === 1 ? `project = ${ids[0]}` : `project in (${ids.join(', ')})`
+  return `${restriction}${clause.trim() ? ` AND (${clause})` : ''}${ordering.trim() ? ` ${ordering.trim()}` : ''}`
 }

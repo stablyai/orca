@@ -1,6 +1,7 @@
 import {
   agentSessionFailureFact,
   providerDiagnostic,
+  type AgentSessionFailureFact,
   type ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import {
@@ -12,6 +13,7 @@ import {
   type AgentSessionUsageLimit,
   type AgentSessionUsageLimitWindow
 } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentTurnFailure } from '../../../../shared/agent-status/lifecycle/main-agent-status'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import { claudeLimitLine } from './claude-limit-line'
@@ -40,6 +42,27 @@ export function claudePooledUsageLimit(text: string, now: number): AgentSessionU
   const at = POOLED_RESET.exec(text)?.[1]
   const resetsAt = at ? usageLimitResetsAt(Date.parse(at), now) : undefined
   return resetsAt ? { resetsAt } : {}
+}
+
+/** A terminal Claude's StopFailure `rate_limit`: a usage limit when its message is the CLI's own
+ *  limit line, else a failed response. Other errors are not worded here. */
+export function claudeStopFailureFact(
+  failure: AgentTurnFailure | undefined,
+  now: number
+): AgentSessionFailureFact | null {
+  if (failure?.error !== 'rate_limit') {
+    return null
+  }
+  const text = failure.message ?? ''
+  const detail = providerDiagnostic(text, 'person')
+  const limit = claudePooledUsageLimit(text, now) ?? claudeLimitLine(text, now)
+  if (!limit) {
+    return agentSessionFailureFact('providerResponseFailed', { detail })
+  }
+  return agentSessionFailureFact('usageLimitReached', {
+    ...(limit.window || limit.resetsAt ? { usageLimit: limit } : {}),
+    detail
+  })
 }
 
 export type ClaudeUsageLimitRow = AgentSessionFailureRowWords & {

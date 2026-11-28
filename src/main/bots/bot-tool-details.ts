@@ -1,3 +1,4 @@
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import {
   BotToolInputSchema,
   botToolInputError,
@@ -7,14 +8,27 @@ import {
   type BotToolServer
 } from '../../shared/bot-tools'
 import { readBotToolsSnapshot } from './bot-tools-file'
-import { botToolCredentialHeaderNames } from './bot-tool-credentials'
+import {
+  botToolCredentialHeaderNames,
+  readBotToolCredential,
+  readBotToolOAuth
+} from './bot-tool-credentials'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
   const { servers, version } = await readBotToolsSnapshot(folder)
   const server = servers.find((entry) => entry.name === name)
   if (!server) {
-    throw new Error('This bot no longer has that tool.')
+    throw new BotFailureError('toolGone')
   }
+  return botToolDetailsOf(folder, server, version)
+}
+
+/** `server` for the editor, its saved values masked; `folder` holds its credential. */
+export function botToolDetailsOf(
+  folder: string,
+  server: BotToolServer,
+  version: string
+): BotToolDetails {
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   return {
@@ -43,7 +57,7 @@ export function resolveBotToolInput(
 ): BotToolServer {
   const result = BotToolInputSchema.safeParse(input)
   if (!result.success) {
-    throw new Error('Tool details are invalid. Check the name, URL or executable and values.')
+    throw new BotFailureError('toolDetailsInvalid')
   }
   const draft = result.data
   const remote = 'url' in draft
@@ -70,22 +84,50 @@ export function resolveBotToolInput(
     let value = row.value
     if (row.keep) {
       if (!destinationUnchanged) {
-        throw new Error(
-          'The credential destination changed. Re-enter saved values or remove their rows.'
-        )
+        throw new BotFailureError('toolDestinationChanged')
       }
       value = saved?.[row.key]
       if (value === undefined) {
-        throw new Error('That saved value is no longer available. Re-enter it or remove its row.')
+        throw new BotFailureError('toolSavedValueGone')
       }
     }
     if (value === undefined || (!row.keep && value === '') || (remote && /[\r\n]/.test(value))) {
-      throw new Error('Enter a value for each row, or remove the row.')
+      throw new BotFailureError('toolValueMissing')
     }
     return [row.key, value]
   })
   const secrets = Object.fromEntries(entries)
+  // The editor never sees a sign-in: with no headers it stays, and a new address starts a new one.
+  const signIn =
+    previous && 'url' in previous && entries.length === 0 ? previous.credential : undefined
   return remote
-    ? { name: draft.name, url: draft.url, transport: 'http', headers: secrets }
+    ? {
+        name: draft.name,
+        url: draft.url,
+        transport: 'http',
+        headers: secrets,
+        ...(signIn ? { credential: signIn } : {})
+      }
     : { name: draft.name, command: draft.command, args: draft.args, env: secrets }
+}
+
+/**
+ * A stored tool as an edit starts from: its saved values and the address they're bound to, and a
+ * credential id only for Orca's own sign-in, which the edit keeps.
+ */
+export function withSavedBotToolHeaders(folder: string, server: BotToolServer): BotToolServer {
+  if (!('url' in server) || !server.credential) {
+    return server
+  }
+  if (readBotToolOAuth(folder, server.credential)) {
+    // Its tokens are Orca's own sign-in; a generic edit keeps the id and changes no values.
+    return server
+  }
+  const { credential, ...rest } = server
+  const saved = readBotToolCredential(folder, credential)
+  if (saved?.source) {
+    // Its headers come from a source Orca fills per call; a generic edit would drop them.
+    throw new BotFailureError('toolSourceManaged')
+  }
+  return saved ? { ...rest, url: saved.url, headers: saved.headers } : rest
 }

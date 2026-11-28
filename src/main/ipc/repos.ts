@@ -1,18 +1,42 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
+import { registerLazyIpcHandleGroup } from './lazy-ipc-handle-group'
 import { registerRepoCatalogHandlers } from './repos/repo-catalog-handlers'
-import { registerProjectHostSetupHandlers } from './repos/project-host-setup-handlers'
-import { registerRepoCreationHandlers } from './repos/repo-creation-handlers'
 import { registerProjectGroupHandlers } from './repos/project-group-handlers'
 import { registerFolderWorkspaceHandlers } from './repos/folder-workspace-handlers'
-import { registerNestedRepoImportHandler } from './repos/nested-repo-import-handler'
-import { registerRepoUpdateHandler } from './repos/repo-update-handler'
-import { registerSparsePresetHandlers } from './repos/sparse-preset-handlers'
-import { registerRepoFolderPickerHandlers } from './repos/repo-folder-picker-handlers'
-import { registerRepoCloneHandlers } from './repos/repo-clone-lifecycle'
-import { registerBaseRefQueryHandlers } from './repos/base-ref-query-handlers'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+
+const PROJECT_HOST_SETUP_CHANNELS = [
+  'projectHostSetups:create',
+  'projectHostSetups:update',
+  'projectHostSetups:delete',
+  'projectHostSetups:setupExistingFolder'
+] as const
+const REPO_CREATION_CHANNELS = [
+  'repos:isGitAvailable',
+  'repos:getDefaultCreateProjectParent',
+  'repos:add',
+  'repos:create'
+] as const
+const NESTED_REPO_IMPORT_CHANNELS = ['projectGroups:importNested'] as const
+const REPO_UPDATE_CHANNELS = ['repos:update'] as const
+const SPARSE_PRESET_CHANNELS = [
+  'sparsePresets:list',
+  'sparsePresets:save',
+  'sparsePresets:remove'
+] as const
+const REPO_FOLDER_PICKER_CHANNELS = [
+  'repos:pickFolder',
+  'repos:pickFolders',
+  'repos:pickDirectory'
+] as const
+const REPO_CLONE_CHANNELS = ['repos:cloneAbort', 'repos:checkCloneTarget', 'repos:clone'] as const
+const BASE_REF_QUERY_CHANNELS = [
+  'repos:getBaseRefDefault',
+  'repos:searchBaseRefs',
+  'repos:searchBaseRefDetails'
+] as const
 
 export function registerRepoHandlers(
   mainWindow: BrowserWindow,
@@ -75,14 +99,38 @@ export function registerRepoHandlers(
       repo: Parameters<typeof runtime.repositoryForkBackfill.resolve>[0]
     ) => runtime.repositoryForkBackfill.resolve(repo)
   }
-  registerProjectHostSetupHandlers(mainWindow, store, metadata)
-  registerRepoCreationHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
   registerProjectGroupHandlers(mainWindow, store, runtime)
   registerFolderWorkspaceHandlers(mainWindow, store, runtime)
-  registerNestedRepoImportHandler(mainWindow, store, metadata.enqueueRepositoryMetadata)
-  registerRepoUpdateHandler(mainWindow, store)
-  registerSparsePresetHandlers(mainWindow, store)
-  registerRepoFolderPickerHandlers(mainWindow, store)
-  registerRepoCloneHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata)
-  registerBaseRefQueryHandlers(store)
+  registerLazyIpcHandleGroup(PROJECT_HOST_SETUP_CHANNELS, async (ipc) => {
+    const { registerProjectHostSetupHandlers } = await import('./repos/project-host-setup-handlers')
+    registerProjectHostSetupHandlers(mainWindow, store, metadata, ipc)
+  })
+  registerLazyIpcHandleGroup(REPO_CREATION_CHANNELS, async (ipc) => {
+    const { registerRepoCreationHandlers } = await import('./repos/repo-creation-handlers')
+    registerRepoCreationHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata, ipc)
+  })
+  registerLazyIpcHandleGroup(NESTED_REPO_IMPORT_CHANNELS, async (ipc) => {
+    const { registerNestedRepoImportHandler } = await import('./repos/nested-repo-import-handler')
+    registerNestedRepoImportHandler(mainWindow, store, metadata.enqueueRepositoryMetadata, ipc)
+  })
+  registerLazyIpcHandleGroup(REPO_UPDATE_CHANNELS, async (ipc) => {
+    const { registerRepoUpdateHandler } = await import('./repos/repo-update-handler')
+    registerRepoUpdateHandler(mainWindow, store, ipc)
+  })
+  registerLazyIpcHandleGroup(SPARSE_PRESET_CHANNELS, async (ipc) => {
+    const { registerSparsePresetHandlers } = await import('./repos/sparse-preset-handlers')
+    registerSparsePresetHandlers(mainWindow, store, ipc)
+  })
+  registerLazyIpcHandleGroup(REPO_FOLDER_PICKER_CHANNELS, async (ipc) => {
+    const { registerRepoFolderPickerHandlers } = await import('./repos/repo-folder-picker-handlers')
+    registerRepoFolderPickerHandlers(mainWindow, store, ipc)
+  })
+  registerLazyIpcHandleGroup(REPO_CLONE_CHANNELS, async (ipc) => {
+    const { registerRepoCloneHandlers } = await import('./repos/repo-clone-lifecycle')
+    registerRepoCloneHandlers(mainWindow, store, metadata.enqueueRepositoryMetadata, ipc)
+  })
+  registerLazyIpcHandleGroup(BASE_REF_QUERY_CHANNELS, async (ipc) => {
+    const { registerBaseRefQueryHandlers } = await import('./repos/base-ref-query-handlers')
+    registerBaseRefQueryHandlers(store, ipc)
+  })
 }

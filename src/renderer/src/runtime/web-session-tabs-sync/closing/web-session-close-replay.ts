@@ -330,8 +330,3 @@ export function replayWebSessionClosesDueForSnapshot(
     ({ replayWebSessionTabCloses }) => replayWebSessionTabCloses(environmentId, due)
   )
 }
-
-export function resetWebSessionCloseReplaysForTests(): void {
-  attemptsByIntent.clear()
-  hiddenUnderCurrentPairing.clear()
-}

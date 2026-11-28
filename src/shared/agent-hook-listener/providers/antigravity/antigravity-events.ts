@@ -9,7 +9,7 @@ import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
 import { readLastUserPromptFromTranscript } from '../../transcript-lines'
 import { readAntigravityToolCall } from './antigravity-tool-fields'
-import { isAntigravityStopStillBusy } from './antigravity-event-rules'
+import { isAntigravityStopFailed, isAntigravityStopStillBusy } from './antigravity-event-rules'
 
 export function isAntigravityFeedbackTool(toolName: string | undefined): boolean {
   return toolName === 'ask_question' || toolName === 'ask_permission'
@@ -144,6 +144,7 @@ export function normalizeAntigravityEvent(
     return null
   }
 
+  const failed = stateName === 'done' && isAntigravityStopFailed(hookPayload)
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
   // Cache prompts per turn instead of rescanning large transcripts per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
@@ -169,8 +170,8 @@ export function normalizeAntigravityEvent(
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
     ...(heldOpenByCommands ? { workingMode: 'monitoring' as const } : {}),
     mainAgent:
-      heldOpenByHelpers || heldOpenByCommands
-        ? { state: 'done', stateStartedAt: Date.now() }
+      failed || heldOpenByHelpers || heldOpenByCommands
+        ? { state: 'done', stateStartedAt: Date.now(), outcome: failed ? 'failure' : undefined }
         : undefined
   })
   // Stop between tools can report fullyIdle=false; only an idle Stop is terminal.

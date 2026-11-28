@@ -2,13 +2,12 @@ import type { BrowserWindow } from 'electron'
 import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
-import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
 import { preserveAgentAuthBeforeRestart } from '../../providers/accounts/agent-auth-restart-preservation'
-import { preserveStateBeforeUpdateRestart } from '../../updater/update-restart-preservation'
+import { preserveStateBeforeUpdateRestart } from '../../core-desktop/update-restart-preservation'
 import {
   emitPluginWorktreeLifecycle,
   handleCodexHomePtySpawned,
@@ -21,6 +20,7 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
+import { quitFromUserCommand } from './main-window-actions'
 
 let attachmentTail: Promise<void> = Promise.resolve()
 
@@ -49,18 +49,20 @@ async function installMainWindowCoreServices(
     throw new Error('Main window closed while preparing services')
   }
   const store = state.store
-  const runtime = state.runtime
-  const stats = state.stats
-  const codexAccounts = state.codexAccounts
-  const claudeAccounts = state.claudeAccounts
-  const rateLimits = state.rateLimits
-  const automations = state.automations
-  const keybindings = state.keybindings
-  const codexRuntimeHome = state.codexRuntimeHome
-  const claudeRuntimeAuth = state.claudeRuntimeAuth
-  const orcaAccount = state.orcaAccount
+  const nativeSettings = state.nativeSettings
+  const runtime = state.core.runtime
+  const stats = state.core.stats
+  const codexAccounts = state.core.codexAccounts
+  const claudeAccounts = state.core.claudeAccounts
+  const rateLimits = state.core.rateLimits
+  const automations = state.core.automations
+  const keybindings = state.core.keybindings
+  const codexRuntimeHome = state.core.codexRuntimeHome
+  const claudeRuntimeAuth = state.core.claudeRuntimeAuth
+  const orcaAccount = state.core.orcaAccount
   if (
     !store ||
+    !nativeSettings ||
     !runtime ||
     !stats ||
     !codexAccounts ||
@@ -105,21 +107,26 @@ async function installMainWindowCoreServices(
       onBeforeRelaunch: async () => {
         state.isQuitting = true
         fenceMainProcessCloudOnQuit()
-        await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
+        await Promise.all([
+          preserveAgentAuthBeforeRestart({ codexRuntimeHome, store }),
+          state.core.runtime?.bots.slackIcons.shownRecords.finalSave()
+        ])
       },
-      orcaAccount
+      onQuit: quitFromUserCommand,
+      orcaAccount,
+      rendererCheckpoint: state.core.rendererCheckpoint ?? undefined
     },
-    state.pluginService ?? undefined,
-    state.pluginMarketplaceService && state.pluginMarketplaceInstaller
+    state.core.pluginService ?? undefined,
+    state.core.pluginMarketplaceService && state.core.pluginMarketplaceInstaller
       ? {
-          marketplace: state.pluginMarketplaceService,
-          installer: state.pluginMarketplaceInstaller,
-          ...(state.pluginAutoUpdater ? { autoUpdater: state.pluginAutoUpdater } : {}),
-          ...(state.pluginInstallStatsService
-            ? { installStats: state.pluginInstallStatsService }
+          marketplace: state.core.pluginMarketplaceService,
+          installer: state.core.pluginMarketplaceInstaller,
+          ...(state.core.pluginAutoUpdater ? { autoUpdater: state.core.pluginAutoUpdater } : {}),
+          ...(state.core.pluginInstallStatsService
+            ? { installStats: state.core.pluginInstallStatsService }
             : {}),
-          ...(state.pluginUpdateReviewNotices
-            ? { reviewNotices: state.pluginUpdateReviewNotices }
+          ...(state.core.pluginUpdateReviewNotices
+            ? { reviewNotices: state.core.pluginUpdateReviewNotices }
             : {})
         }
       : undefined
@@ -131,6 +138,7 @@ async function installMainWindowCoreServices(
   await attachMainWindowServices(
     window,
     store,
+    nativeSettings,
     runtime,
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
@@ -152,7 +160,7 @@ async function installMainWindowCoreServices(
       onPtyExit: handlePtyExit,
       onBeforeUpdateQuit: () => preserveStateBeforeUpdateRestart({ codexRuntimeHome, store }),
       onBeforeUpdateQuitFailure: 'abort',
-      updateInstallMode: resolveUpdateInstallMode(state.isServeMode),
+      isServeMode: state.isServeMode,
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )

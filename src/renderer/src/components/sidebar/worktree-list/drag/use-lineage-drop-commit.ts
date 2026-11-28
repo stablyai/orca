@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useCallback, useMemo } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -25,6 +26,7 @@ import {
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeSidebarLineageDropTarget } from './row-state'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { getDropFolderParentsInState } from '../../workspace-actions/parenting/use-eligible-folder-parents'
 
 export type WorktreeLineageDropCommit = ReturnType<typeof useWorktreeLineageDropCommit>
@@ -33,16 +35,17 @@ export function useWorktreeLineageDropCommit(args: {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
-  worktreeDragGroups: readonly WorktreeDragGroup[]
+  getWorktreeDragGroups: () => readonly WorktreeDragGroup[]
   keepsFolderParent: (identity: string, point: WorktreeReorderDropPoint | undefined) => boolean
   captureFolderRetention: (
     point: WorktreeReorderDropPoint | undefined,
     folders: ReadonlySet<string>
   ) => WorktreeReorderDropPoint | undefined
 }) {
-  const { repoMap, worktreeMap, worktreeLineageById, worktreeDragGroups, keepsFolderParent } = args
+  const { repoMap, worktreeMap, worktreeLineageById, getWorktreeDragGroups, keepsFolderParent } =
+    args
   const worktrees = useAllWorktrees()
-  const parentIdentities = useAppStore(selectSidebarLineageParentIdentities)
+  const parentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
   const folderParentOf = useCallback(
     (identity: string) => {
       const parent = parentIdentities?.get(identity)
@@ -68,7 +71,8 @@ export function useWorktreeLineageDropCommit(args: {
         if (parent) {
           if (members === undefined) {
             members =
-              worktreeDragGroups.find((group) => group.key === sourceGroupKey)?.worktreeIds ?? []
+              getWorktreeDragGroups().find((group) => group.key === sourceGroupKey)?.worktreeIds ??
+              []
           }
           if (members.includes(identity)) {
             folders.add(parent)
@@ -77,7 +81,7 @@ export function useWorktreeLineageDropCommit(args: {
       }
       return captureGeometry(point, folders)
     },
-    [captureGeometry, folderParentOf, worktreeDragGroups]
+    [captureGeometry, folderParentOf, getWorktreeDragGroups]
   )
   const assignWorktreeParent = useAppStore((s) => s.assignWorktreeParent)
   const assignCrossStoreWorktreeParent = useAppStore((s) => s.assignCrossStoreWorktreeParent)
@@ -124,9 +128,11 @@ export function useWorktreeLineageDropCommit(args: {
           }
         } else {
           // A folder workspace parent, when Set Parent would offer it to this child.
-          parent = getDropFolderParentsInState(useAppStore.getState(), child).find(
-            (folder) => getWorktreeHostIdentity(folder) === parentIdentity
-          )
+          parent = getDropFolderParentsInState(
+            useAppStore.getState(),
+            readRuntimeStatuses(),
+            child
+          ).find((folder) => getWorktreeHostIdentity(folder) === parentIdentity)
           if (!parent) {
             return null
           }
@@ -206,7 +212,7 @@ export function useWorktreeLineageDropCommit(args: {
       pickedCopies?: DraggedWorktreeCopies
       dropPoint?: WorktreeReorderDropPoint
     }) => {
-      const sourceGroup = worktreeDragGroups.find(
+      const sourceGroup = getWorktreeDragGroups().find(
         (group) => group.key === unnestArgs.sourceGroupKey
       )
       if (!sourceGroup) {
@@ -238,7 +244,7 @@ export function useWorktreeLineageDropCommit(args: {
       keepsFolderParent,
       folderParentOf,
       updateWorktreeLineage,
-      worktreeDragGroups,
+      getWorktreeDragGroups,
       worktreeLineageById,
       worktreeMap
     ]

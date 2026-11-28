@@ -1,14 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
-import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
-import { syncGuestAnnotationViewportBridge } from '@/components/browser-pane/annotate/viewport/guest-annotation-viewport-bridge'
-import { consumeBrowserAnnotationViewportMessage } from '@/components/browser-pane/annotate/viewport/browser-annotation-viewport-message'
-import { useBrowserPageAnnotationSend } from '@/components/browser-pane/annotate/delivery/use-browser-page-annotation-send'
-import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotate/grab/use-browser-page-grab-annotations'
+import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
+import { useBrowserAnnotateKeys } from '../host-guest/input/use-browser-annotate-keys'
+import type { MutableRefObject } from 'react'
 import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/capture/use-browser-page-markup-capture'
-import { useGrabMode } from '@/components/browser-pane/annotate/grab/useGrabMode'
-import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
-import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-tool-button'
+import { useBrowserGuestAnnotateTools } from '@/components/browser-pane/annotate/use-browser-guest-annotate-tools'
 
 /** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
 export function useDocPreviewGuestTools({
@@ -17,7 +11,9 @@ export function useDocPreviewGuestTools({
   grantId,
   webviewRef,
   containerRef,
-  toolsReady
+  toolsReady,
+  isActive,
+  documentGeneration
 }: {
   previewId: string
   worktreeId: string
@@ -25,97 +21,49 @@ export function useDocPreviewGuestTools({
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   containerRef: MutableRefObject<HTMLDivElement | null>
   toolsReady: boolean
-}): {
-  grab: ReturnType<typeof useGrabMode>
-  markup: ReturnType<typeof useBrowserPageMarkupCapture>
-  annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
-  grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
-  browserOverlayViewport: BrowserOverlayViewport
-  handleAnnotationViewportMessage: (event: { message?: string }) => void
-  resetBrowserOverlayViewport: () => void
-  elementTools: BrowserChromeElementTools
-} {
-  // No tool target exists before the first grant commits; do not queue requests for a page without a document.
-  const toolTargetId = grantId === null ? '' : previewId
-  const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
-  annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
-  const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
-    scrollX: 0,
-    scrollY: 0,
-    version: 0
-  })
-  const handleAnnotationViewportMessage = useCallback(
-    (event: { message?: string }): void =>
-      consumeBrowserAnnotationViewportMessage(
-        event,
-        annotationViewportBridgeTokenRef.current,
-        setBrowserOverlayViewport
-      ),
-    []
-  )
-  const resetBrowserOverlayViewport = useCallback(
-    (): void => setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 }),
-    []
-  )
-
-  const grabElementShortcut = useShortcutLabel('browser.grabElement')
-  const grab = useGrabMode(toolTargetId)
+  isActive: boolean
+  documentGeneration: number
+}) {
   const markup = useBrowserPageMarkupCapture(webviewRef)
-  const annotationSend = useBrowserPageAnnotationSend({ browserTabId: previewId, worktreeId })
-  const grabAnnotations = useBrowserPageGrabAnnotations({
-    browserTabId: previewId,
-    toolTargetId,
+  const tools = useBrowserGuestAnnotateTools({
+    browserPageId: previewId,
+    // No tool target exists before the first grant commits; do not queue requests for a page without a document.
+    toolTargetId: grantId === null ? '' : previewId,
+    worktreeId,
     isActive: toolsReady,
-    grab,
+    // Nothing has painted on a loading or failed preview, so there is no element to pick.
+    toolsDisabled: !toolsReady,
+    markupIsActive: markup.isActive,
+    paletteKeys: true,
     containerRef,
-    webviewRef,
-    setBrowserOverlayViewport,
-    browserAnnotationsLength: annotationSend.browserAnnotations.length
+    guestSurfaceRef: webviewRef
   })
-
-  const { browserAnnotations } = annotationSend
-  const { pendingAnnotationPayload } = grabAnnotations
-  useEffect(() => {
-    if (!toolTargetId) {
-      return
-    }
-    syncGuestAnnotationViewportBridge({
-      toolTargetId,
-      annotations: browserAnnotations,
-      pendingPayload: pendingAnnotationPayload,
-      surfaceActive: toolsReady,
-      token: annotationViewportBridgeTokenRef.current
-    })
-  }, [browserAnnotations, pendingAnnotationPayload, toolTargetId, toolsReady])
-
-  const elementTools = useMemo<BrowserChromeElementTools>(
-    () => ({
-      activeIntent: grab.state !== 'idle' ? grabAnnotations.grabIntent : null,
-      onStartIntent: grabAnnotations.startGrabIntent,
-      // Nothing has painted on a loading or failed preview, so there is no element to pick.
-      disabled: !toolsReady || markup.isActive,
-      grabShortcutLabel: grabElementShortcut,
-      annotationCount: browserAnnotations.length
-    }),
-    [
-      browserAnnotations.length,
-      grab.state,
-      grabAnnotations.grabIntent,
-      grabAnnotations.startGrabIntent,
-      grabElementShortcut,
-      markup.isActive,
-      toolsReady
-    ]
-  )
-
-  return {
-    grab,
+  const toolTargetId = grantId === null ? '' : previewId
+  const toolSwitch = useBrowserAnnotateToolSwitch({
+    grab: tools.grab,
+    grabIntent: tools.grabAnnotations.grabIntent,
+    startGrabIntent: tools.grabAnnotations.startGrabIntent,
+    cancelPendingBrowserCapture: tools.grabAnnotations.cancelPendingBrowserCapture,
     markup,
-    annotationSend,
-    grabAnnotations,
-    browserOverlayViewport,
-    handleAnnotationViewportMessage,
-    resetBrowserOverlayViewport,
-    elementTools
+    canPickElements: toolsReady,
+    toolTargetId,
+    documentKey: `${grantId ?? ''}\n${documentGeneration}`
+  })
+  useBrowserAnnotateKeys({
+    browserTabId: toolTargetId,
+    isActive: isActive && toolsReady,
+    grabIsInteractive: tools.grab.state !== 'idle' && tools.grab.state !== 'error',
+    markupIsActive: markup.isActive,
+    annotateToolOn: toolSwitch.activeTool !== null,
+    handleAnnotateToolKey: toolSwitch.selectToolByKey,
+    handleGrabActionShortcut: tools.grabAnnotations.handleGrabActionShortcut
+  })
+  return {
+    ...tools,
+    toolSwitch,
+    elementTools: { ...tools.elementTools, onStartIntent: toolSwitch.toggleTool },
+    markup,
+    handleAnnotationViewportMessage: tools.viewportBridge.handleViewportMessage,
+    resetBrowserOverlayViewport: tools.viewportBridge.resetOverlayViewport
   }
 }

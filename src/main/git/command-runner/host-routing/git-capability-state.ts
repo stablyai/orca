@@ -61,7 +61,3 @@ export function withLocalGitCapabilityCacheForExecution<T>(
     )
   )
 }
-
-export function clearGitCapabilityStateForTests(): void {
-  localCapabilitiesByExecutionHost.clear()
-}

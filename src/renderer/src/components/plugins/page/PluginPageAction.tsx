@@ -118,6 +118,7 @@ export function usePluginPageAction({
           installed={plugin}
           official={plugin.official}
           publisher={plugin.publisher}
+          managedByTeams={plugin.managedByTeams}
           source={plugin.source}
           changed={plugin.needsReconsent}
           error={consentError}
@@ -216,6 +217,7 @@ export function usePluginPageAction({
           installed={null}
           official={listing.official}
           publisher={entry.publisher ?? ''}
+          managedByTeams={listing.managedByTeams}
           changed={false}
           error={null}
         />

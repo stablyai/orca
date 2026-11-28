@@ -1,7 +1,7 @@
 /** Scope bookkeeping for saved session cookies: what changed, and what Electron's cookie list can settle. */
 import type { Cookie } from 'electron'
 import type { CdpCookie } from '../browser-cdp-cookie'
-import { cdpSameSite, cookieScopeKey } from '../browser-cookie-clear-store'
+import { cdpCookieScopeKey, cdpSameSite, cookieScopeKey } from '../browser-cookie-clear-store'
 
 /** 'value': only a session cookie was (re)set there, so Electron's list can tell its new value. */
 export type ScopeChange = 'value' | 'other'
@@ -97,4 +97,59 @@ export function sameSavedCookies(
     a.size === b.size &&
     [...a].every(([key, cookies]) => JSON.stringify(cookies) === JSON.stringify(b.get(key)))
   )
+}
+
+function partitionIdentity(cookie: CdpCookie): string {
+  const key = cookie.partitionKey
+  return JSON.stringify([key?.topLevelSite, key?.hasCrossSiteAncestor, cookie.partitionKeyOpaque])
+}
+
+/** Whether `cookies` holds this exact cookie identity: its scope and its partition. */
+export function holdsCookie(cookies: readonly CdpCookie[], cookie: CdpCookie): boolean {
+  const key = cdpCookieScopeKey(cookie)
+  const identity = partitionIdentity(cookie)
+  return cookies.some(
+    (other) => cdpCookieScopeKey(other) === key && partitionIdentity(other) === identity
+  )
+}
+
+/**
+ * `cookies` with each cookie launch couldn't restore added back as saved, unless that exact one is
+ * there. At quit (`live` from Electron, without partitions) an unpartitioned one whose scope holds
+ * exactly one live cookie with its protections takes that newer value.
+ */
+export function withUnrestoredCookies(
+  cookies: CdpCookie[],
+  unrestored: ReadonlyMap<string, CdpCookie[]>,
+  live?: readonly Cookie[]
+): CdpCookie[] {
+  const liveByScope = live ? groupByScope(live, liveCookieScopeKey) : null
+  const missing = [...unrestored].flatMap(([key, members]) =>
+    members
+      .filter((member) => !holdsCookie(cookies, member))
+      .map((member) => {
+        const [only, ...more] = liveByScope?.get(key) ?? []
+        const newer =
+          only && more.length === 0 && !member.partitionKey && !member.partitionKeyOpaque
+        return newer && sameCookieAttributes(member, only)
+          ? { ...member, value: only.value }
+          : member
+      })
+  )
+  return missing.length === 0 ? cookies : [...cookies, ...missing]
+}
+
+/** After a CDP read of the live jar: a cookie it shows is live again, so live decides it from now on. */
+export function forgetObservedUnrestored(
+  unrestored: Map<string, CdpCookie[]>,
+  live: readonly CdpCookie[]
+): void {
+  for (const [key, members] of unrestored) {
+    const unseen = members.filter((member) => !holdsCookie(live, member))
+    if (unseen.length === 0) {
+      unrestored.delete(key)
+    } else {
+      unrestored.set(key, unseen)
+    }
+  }
 }

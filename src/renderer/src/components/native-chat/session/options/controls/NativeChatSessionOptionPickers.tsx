@@ -79,7 +79,10 @@ function pillAccessibleName(title: string, value: string, t: Translate = transla
       })
 }
 
-function PickerTrigger(props: {
+function PickerTrigger({
+  triggerRef,
+  ...props
+}: {
   modelLabel: string
   /** The options' values, shown after the model; empty when there are none to show. */
   optionsLabel: string
@@ -97,7 +100,7 @@ function PickerTrigger(props: {
       <TooltipTrigger asChild>
         <PopoverTrigger asChild>
           <Button
-            ref={props.triggerRef}
+            ref={triggerRef}
             type="button"
             variant="ghost"
             size="xs"
@@ -220,10 +223,11 @@ function SessionOptionPopover(props: {
     if (descriptor.id === 'effort') {
       setOpen(false)
     }
+    // During a provider fallback, picking the saved model is a real change.
     if (
       descriptor.valueSource === 'unknown' ||
       descriptor.valueSource === 'default' ||
-      descriptor.kind.currentValue !== value
+      (descriptor.fallbackModel ?? descriptor.kind.currentValue) !== value
     ) {
       props.onSet(descriptor, value)
     }
@@ -305,7 +309,7 @@ function SessionOptionPopover(props: {
         {model.kind.type === 'select' && !model.action ? (
           <NativeChatModelCombobox
             choices={model.kind.choices}
-            currentValue={model.kind.currentValue}
+            currentValue={model.fallbackModel ?? model.kind.currentValue}
             readOnly={!model.settable}
             readOnlyReason={modelReason}
             busy={pendingIds.has(model.id)}

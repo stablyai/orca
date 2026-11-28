@@ -56,16 +56,31 @@ export function admitBotRequest(
     depth: number
     record: string
     message: MessageInsert
+    /** Commits with the stored request, before anyone is woken for it. */
+    onAdmitted?: () => void
   }
 ): BotRequestAdmission {
-  this.db.exec(`SAVEPOINT ${SAVEPOINT}`)
-  try {
+  return withinAdmission(this, () => {
     const admission = admitWithin(this, input)
-    this.db.exec(`RELEASE ${SAVEPOINT}`)
+    if (admission.kind === 'sent') {
+      input.onAdmitted?.()
+    }
     return admission
+  })
+}
+
+function withinAdmission<T>(db: OrchestrationDb, write: () => T): T {
+  db.db.exec(`SAVEPOINT ${SAVEPOINT}`)
+  try {
+    const result = write()
+    db.db.exec(`RELEASE ${SAVEPOINT}`)
+    return result
   } catch (error) {
-    this.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
-    this.db.exec(`RELEASE ${SAVEPOINT}`)
+    // An I/O error can end the whole transaction first; rolling back then would hide it.
+    if (db.db.isTransaction) {
+      db.db.exec(`ROLLBACK TO ${SAVEPOINT}`)
+      db.db.exec(`RELEASE ${SAVEPOINT}`)
+    }
     throw error
   }
 }
@@ -108,7 +123,10 @@ function admitWithin(
   return { kind: 'sent', message }
 }
 
-type BotRequestReservation = Omit<Parameters<typeof admitBotRequest>[0], 'message'> & {
+type BotRequestReservation = Omit<
+  Parameters<typeof admitBotRequest>[0],
+  'message' | 'onAdmitted'
+> & {
   messageId: string
 }
 
@@ -129,15 +147,20 @@ export function reserveBotRequest(
   return { kind: 'reserved' }
 }
 
-/** Stores the mail of a reserved request under the id it was reserved with. */
+/** Stores the mail of a reserved request under the id it was reserved with; `onAdmitted` commits with it. */
 export function admitReservedBotRequest(
   this: OrchestrationDb,
-  message: MessageInsert & { id: string }
+  message: MessageInsert & { id: string },
+  onAdmitted?: () => void
 ): MessageRow {
   if (!this.getBotRequest(message.id)) {
     throw new Error(`bot request ${message.id} is not reserved`)
   }
-  return this.insertMessage(message)
+  return withinAdmission(this, () => {
+    const stored = this.insertMessage(message)
+    onAdmitted?.()
+    return stored
+  })
 }
 
 /** Gives back a reserved place whose mail was never stored. */

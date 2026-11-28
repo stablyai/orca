@@ -5,7 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, type MutableRefObject } from '
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { resolveMarkdownPreviewAddReviewNoteKey } from '../review/markdown-preview-annotation-shortcut'
 import {
-  decodeMarkdownPreviewAnchor,
+  findMarkdownPreviewAnchorElement,
   getMarkdownPreviewAnchorScrollTop
 } from './markdown-preview-anchor-navigation'
 import { cancelMarkdownPreviewEditorRevealFrames } from '../links/markdown-preview-editor-reveal'
@@ -151,14 +151,7 @@ export function useMarkdownPreviewViewport({
         return false
       }
 
-      const decodedAnchor = decodeMarkdownPreviewAnchor(rawAnchor)
-      let target: HTMLElement | null = null
-      for (const candidate of body.querySelectorAll<HTMLElement>('[id]')) {
-        if (candidate.id === decodedAnchor) {
-          target = candidate
-          break
-        }
-      }
+      const target = findMarkdownPreviewAnchorElement(body, rawAnchor)
       if (!target) {
         return false
       }

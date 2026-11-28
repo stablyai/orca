@@ -2,13 +2,15 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   resolveQualifiedFolderWorkspaceResult,
-  type QualifiedFolderHostState
+  type QualifiedFolderHostState,
+  type QualifiedFolderWorkspaceSelection
 } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   folderIdOfSelector,
   folderWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { runtimePathsEqual, type ResolvedWorktree } from './runtime-worktree-path-identity'
+import { storedNameMatcher } from '../../../../shared/text/typed-name-normalization'
 
 /** The error a selector naming no workspace throws; callers match it to tell absence from failure. */
 export const WORKSPACE_SELECTOR_NOT_FOUND = 'selector_not_found'
@@ -59,6 +61,21 @@ export function resolveKeyedFolderWorkspace(
   selector: string,
   requiredHostId?: ExecutionHostId
 ): FolderWorkspace | null {
+  const selected = resolveKeyedFolderWorkspaceSelection(catalog, selector, requiredHostId)
+  return selected
+    ? {
+        ...selected.workspace,
+        executionHostId: selected.hostId,
+        connectionId: selected.connectionId
+      }
+    : null
+}
+
+export function resolveKeyedFolderWorkspaceSelection(
+  catalog: FolderCatalog,
+  selector: string,
+  requiredHostId?: ExecutionHostId
+): QualifiedFolderWorkspaceSelection | null {
   const folderId = folderIdOfSelector(selector)
   if (folderId === undefined) {
     return null
@@ -71,8 +88,7 @@ export function resolveKeyedFolderWorkspace(
   if (result.kind !== 'selected') {
     throw new Error(result.kind === 'missing' ? WORKSPACE_SELECTOR_NOT_FOUND : 'selector_ambiguous')
   }
-  const { workspace, hostId, connectionId } = result.value
-  return { ...workspace, executionHostId: hostId, connectionId }
+  return result.value
 }
 
 /** path: and name: name folder workspaces too; branch:, issue: and identity: stay repo-backed. */
@@ -84,7 +100,8 @@ export function matchFolderWorkspaceRows(
     return folders.filter((folder) => runtimePathsEqual(folder.folderPath, selector.slice(5)))
   }
   if (selector.startsWith('name:')) {
-    return folders.filter((folder) => folder.name === selector.slice(5))
+    const matchesName = storedNameMatcher(selector.slice(5))
+    return folders.filter((folder) => matchesName(folder.name))
   }
   return []
 }

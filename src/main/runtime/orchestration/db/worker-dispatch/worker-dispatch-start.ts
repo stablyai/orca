@@ -9,7 +9,15 @@ import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 import { taskNotFoundError } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { claimTaskForStart } from '../tasks/task-start-claim'
-import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
+import {
+  assertWorkerFollowUpUnclaimed,
+  takeFollowUpMail
+} from '../dispatch-context/worker-follow-up-lineage'
+import {
+  requireRetainedWorkerTerminal,
+  type RetainedWorkerAuthority
+} from '../worker-terminal/worker-terminal-transfer'
+import { RETAINED_CHAT_BEFORE_BRIEF_STAGE } from './restart-cut-worker-start'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -49,16 +57,28 @@ export function createStartingWorkerDispatch(
     requiredCreatorDispatchId?: string
     /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
     followUpOf?: string
+    retainedChat?: { authority: RetainedWorkerAuthority; worktreeId: string; effects: unknown[] }
     /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
     acceptedBy?: { callerFingerprint: string; requestId: string }
     /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
     takesMailOf?: string
     /** What the creator started it for; a retry or follow-up without one keeps its earlier start's. */
     originRef?: string
+    /** The question it was started to answer; a retry or follow-up without one keeps its earlier start's. */
+    forMessageId?: string
+    /** Its worker, and the workers under it, start as chats; a retry or follow-up keeps its earlier start's. */
+    chatLineage?: boolean
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    if (params.followUpOf) {
+      assertWorkerFollowUpUnclaimed(this, params.followUpOf)
+    }
+    const retained = params.retainedChat
+    if (retained) {
+      requireRetainedWorkerTerminal(this, retained.authority, retained.worktreeId)
+    }
     if (params.mutationReceipt) {
       const receipt = params.mutationReceipt
       const existing = this.getMutationReceipt(receipt.callerFingerprint, receipt.requestId)
@@ -82,14 +102,6 @@ export function createStartingWorkerDispatch(
            ) VALUES (?, ?, ?, ?, 'pending')`
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
-    }
-    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
-    if (claimedFollowUp) {
-      throw new OrchestrationError(
-        'follow_up_claimed',
-        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
-        { followUpDispatchId: claimedFollowUp.id }
-      )
     }
     const adopted = params.adoptTaskId ? this.getTask(params.adoptTaskId) : undefined
     if (adopted && !params.retryOf) {
@@ -179,6 +191,17 @@ export function createStartingWorkerDispatch(
           .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.origin_ref : null))
           .find((ref) => ref) ??
         null,
+      forMessageId:
+        params.forMessageId ??
+        [params.retryOf, params.followUpOf]
+          .map((earlier) => (earlier ? this.getDispatchContextById(earlier)?.for_message_id : null))
+          .find((ref) => ref) ??
+        null,
+      chatLineage:
+        params.chatLineage === true ||
+        [params.retryOf, params.followUpOf].some(
+          (earlier) => earlier && this.getDispatchContextById(earlier)?.chat_lineage === 1
+        ),
       ...recordedCreatorIdentity(params.creator)
     })
     if (params.takesMailOf) {
@@ -191,6 +214,23 @@ export function createStartingWorkerDispatch(
          ) VALUES (?, ?, 'starting', 'accepted', ?)`
       )
       .run(id, params.runtimeEpoch ?? null, JSON.stringify(params.startOptions))
+    if (retained) {
+      const { authority } = retained
+      this.prepareStartingWorkerAuthority({
+        dispatchId: id,
+        ...authority,
+        worktreeId: retained.worktreeId,
+        effects: retained.effects,
+        setupState: 'not_applicable',
+        stage: RETAINED_CHAT_BEFORE_BRIEF_STAGE
+      })
+      this.transferWorkerTerminalResourceStatement({
+        ...authority,
+        toDispatchId: id,
+        terminalHandle: authority.handle,
+        endpointId: params.runtimeEpoch
+      })
+    }
     if (params.federation) {
       this.db
         .prepare(
@@ -215,8 +255,10 @@ export function createStartingWorkerDispatch(
     })
     this.db.exec('COMMIT')
     this.hasAnyDispatchContextsCache = true
+    const dispatch = this.getDispatchContextById(id) as DispatchContextRow
+    this.workerDockSources?.changedDispatch(id)
     return {
-      dispatch: this.getDispatchContextById(id) as DispatchContextRow,
+      dispatch,
       worker: this.getWorkerDispatch(id) as WorkerDispatchRow,
       task: this.getTask(task.id) as TaskRow
     }

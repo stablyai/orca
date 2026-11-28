@@ -16,7 +16,3 @@ export async function initWebDeviceKeySupport(): Promise<WebDeviceKeySupport> {
 export function readWebDeviceKeySupport(): WebDeviceKeySupport | null {
   return detected
 }
-
-export function setWebDeviceKeySupportForTests(support: WebDeviceKeySupport | null): void {
-  detected = support
-}

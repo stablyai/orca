@@ -22,6 +22,10 @@ export type WslOrcadConnection = {
   fullVersion: string
   /** orcad's pid inside the distro, from its pid file; null when unreadable. */
   pid: number | null
+  /** The Linux account orcad runs as; null when the launch couldn't read it. */
+  linuxUser: string | null
+  /** The distro's default account when it differs from `linuxUser`. */
+  defaultLinuxUser: string | null
   /** orcad's pairing code, with its endpoint rewritten to `ws://127.0.0.1:<localPort>`. */
   pairingOffer: string
   /** An app update the incumbent `fullVersion` is waiting to take (live terminals). */

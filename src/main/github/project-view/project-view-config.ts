@@ -46,10 +46,6 @@ export type RawProjectView = {
 // Older GHES hosts omit vertical grouping so one missing field cannot break all views.
 const hostsWithoutVerticalGroupBy = new Set<string>()
 
-export function resetVerticalGroupByCapabilityForTests(): void {
-  hostsWithoutVerticalGroupBy.clear()
-}
-
 function verticalGroupBySelection(host: string | undefined): string {
   return hostsWithoutVerticalGroupBy.has(githubProjectHost(host))
     ? ''

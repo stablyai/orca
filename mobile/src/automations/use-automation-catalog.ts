@@ -1,3 +1,5 @@
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   useCallback,
   useEffect,
@@ -68,6 +70,7 @@ export function useAutomationCatalog(
   executionHost?: ExecutionHostId
 ) {
   const queryClient = useQueryClient()
+  const t = useMobileTranslation()
   const server = executionHost !== undefined
   const queryKey = useMemo(
     () =>
@@ -179,12 +182,14 @@ export function useAutomationCatalog(
       if (current()) {
         accept(value)
       } else if (mounted.current) {
-        setActionWarning(automationOutcomeUnknownMessage())
+        setActionWarning(automationOutcomeUnknownMessage(translate))
       }
     } catch (failure) {
       if (mounted.current) {
         setActionWarning(
-          current() ? automationErrorMessage(failure) : automationOutcomeUnknownMessage()
+          current()
+            ? automationErrorMessage(failure, translate)
+            : automationOutcomeUnknownMessage(translate)
         )
       }
     } finally {
@@ -199,7 +204,7 @@ export function useAutomationCatalog(
   // Reads while disconnected fail fast; the screen already says it is offline.
   const readError =
     catalog.error && !isHostNotConnectedError(catalog.error)
-      ? automationErrorMessage(catalog.error)
+      ? automationErrorMessage(catalog.error, t)
       : null
   return {
     rows: catalog.data?.rows ?? NO_ROWS,
@@ -227,3 +232,26 @@ export function useAutomationCatalog(
 
 const NO_ROWS: MobileAutomationRow[] = []
 const NO_CAPABILITIES: readonly string[] = []
+
+/** Opens the automation a link asked for once a list holds it; a fresh read without it drops the ask. */
+export function useStartOnAutomation(
+  catalog: Pick<ReturnType<typeof useAutomationCatalog>, 'loaded' | 'rows' | 'revision'>,
+  automationId: string | undefined,
+  open: (row: MobileAutomationRow) => void
+): void {
+  // A cached list from an earlier visit may predate the automation, so only a newer read settles it.
+  const ask = useRef(automationId ? { id: automationId, after: catalog.revision } : null)
+  useEffect(() => {
+    const pending = ask.current
+    if (!pending || !catalog.loaded) {
+      return
+    }
+    const found = catalog.rows.find((entry) => entry.automation.id === pending.id)
+    if (found || catalog.revision > pending.after) {
+      ask.current = null
+      if (found) {
+        open(found)
+      }
+    }
+  })
+}

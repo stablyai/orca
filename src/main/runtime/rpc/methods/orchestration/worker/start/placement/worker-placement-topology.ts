@@ -23,6 +23,8 @@ export type WorkerEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  /** A structured worker's chat session, kept so a restart that cuts its start can close it. */
+  sessionId?: string
   surface?: 'visible' | 'background'
   warning?: string
 }
@@ -94,7 +96,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
-  /** `--model`/`--effort`; the session seeds them exactly as a saved selection is seeded. */
+  /** `--model`/`--effort`, laid over the saved selection; a leveled Antigravity `--model` replaces it. */
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<Awaited<ReturnType<typeof createStructuredWorkerSession>>> {
@@ -111,6 +113,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
     role: 'agent',
     action: 'created',
     id: created.identity.handle,
+    sessionId: created.identity.sessionId,
     surface: 'background'
   })
   return created
@@ -167,7 +170,8 @@ export function monitorWorkerSetup(args: {
           effect.kind === 'setup' ? { ...effect, state: setupState } : effect
         )
       })
-      if (!evidence.changed) {
+      // Why: success needs no action and worker-show already reads setup_state; only failure wakes.
+      if (!evidence.changed || setupState === 'succeeded') {
         return
       }
       const dispatch = args.db.getDispatchContextById(args.dispatchId)
@@ -175,9 +179,9 @@ export function monitorWorkerSetup(args: {
         runId: args.runId,
         from: `dispatch:${args.dispatchId}`,
         to: dispatch ? dispatchReportMailbox(args.db, dispatch) : `run:${args.runId}`,
-        subject: `Setup ${setupState} for worker ${args.dispatchId}`,
+        subject: `Setup failed for worker ${args.dispatchId}`,
         type: 'status',
-        priority: setupState === 'failed' ? 'high' : 'normal',
+        priority: 'high',
         payload: JSON.stringify({
           dispatchId: args.dispatchId,
           setupState,
@@ -189,17 +193,12 @@ export function monitorWorkerSetup(args: {
     .catch(() => undefined)
 }
 
-export function isUnknownWorkerStartOutcome(error: unknown, stage: string): boolean {
-  const code =
-    error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
-      ? (error as { code: string }).code
-      : ''
-  if (code === 'operation_unknown') {
-    return true
-  }
-  if (stage !== 'worktree_create') {
-    return false
-  }
-  const message = error instanceof Error ? error.message : String(error)
-  return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
+/** Only an explicit unknown is one: a local start runs in this process, so its errors are known failures. */
+export function isUnknownWorkerStartOutcome(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'operation_unknown'
+  )
 }

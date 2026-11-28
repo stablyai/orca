@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { resolveOwnerOrLocal } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { NativeChatFileLinkContext } from '../actions/native-chat-file-link-context'
 import { useNativeChatGitHubRepo, type NativeChatGitHubRepo } from './native-chat-github-repo'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   authorityKey,
   type HostAuthorityKey
@@ -26,19 +27,23 @@ export const NativeChatLinkPeekContext = createContext<NativeChatLinkPeek>({
 /** Resolved once per chat; every message's links read it. */
 export function NativeChatLinkPeekProvider({
   fileLinkContext,
+  hostId,
   children
 }: {
   fileLinkContext: NativeChatFileLinkContext | null
+  /** The workspace's host when the caller knows it, as a bot's folder does: a same-id twin the
+   *  active selection names on another host must not answer its GitHub links. */
+  hostId?: ExecutionHostId
   children: ReactNode
 }): React.JSX.Element {
-  const githubRepo = useNativeChatGitHubRepo(fileLinkContext?.worktreeId)
+  const githubRepo = useNativeChatGitHubRepo(fileLinkContext?.worktreeId, hostId)
   const webPreviewsEnabled = useAppStore(
     (state) => state.settings?.nativeChatLinkPreviews !== false
   )
   const runtimeEnvironmentId = fileLinkContext?.runtimeEnvironmentId ?? null
   const githubRoutingAuthorityKey = useAppStore((state) => {
     const match = fileLinkContext
-      ? resolveOwnerOrLocal(state, { workspaceId: fileLinkContext.worktreeId })
+      ? resolveOwnerOrLocal(state, { workspaceId: fileLinkContext.worktreeId, hostId })
       : null
     return match?.kind === 'resolved' ? authorityKey(match.owner) : null
   })

@@ -1,4 +1,9 @@
+import { realpathSync } from 'node:fs'
+import { dirname, join, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 const PACKAGE_BUILD_PLUGIN_NAME = 'orca-one-package-build'
+const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -23,8 +28,67 @@ const PACKAGE_BUILD_REDIRECTS = [
     from: 'entities',
     to: 'entities/lib/decode.js',
     importer: /[\\/]markdown-it[\\/]/
+  },
+  {
+    // The root re-exports every navigator (tabs, error boundary) as CommonJS esbuild can't tree-shake.
+    from: 'expo-router',
+    to: fileURLToPath(new URL('../../../../mobile/web-entry/expo-router-page.ts', import.meta.url))
+  },
+  {
+    // expo-router always registers its /_sitemap developer index; only its not-found screen links there.
+    from: './views/Sitemap',
+    to: fileURLToPath(
+      new URL('../../../../mobile/web-entry/expo-router-sitemap.ts', import.meta.url)
+    ),
+    importer: /[\\/]expo-router[\\/]build[\\/][^\\/]+\.js$/
+  },
+  {
+    // These subpaths resolve to the CommonJS build, which keeps all of sha2 (sha512 too); the esm one shakes.
+    from: '@noble/hashes/sha256',
+    to: '@noble/hashes/esm/sha256.js'
+  },
+  {
+    from: '@noble/hashes/utils',
+    to: '@noble/hashes/esm/utils.js'
+  },
+  {
+    // react-native-web pins an older color parser than expo-router's; every importer takes expo-router's,
+    // the one react-native ships to the phone app, so both parse a color alike.
+    from: '@react-native/normalize-colors',
+    to: '@react-native/normalize-colors',
+    via: 'expo-router'
   }
 ]
+
+// Find `via` as the app depends on it, then its own copy of `dependency`: resolving from inside the
+// package finds that copy, and the copy's real path is what the result must land in. Without that check
+// a `via` that drops the dependency would silently get whichever version is hoisted further up.
+// The marker skips the redirects: expo-router's own one points at the page's shim, not the package.
+async function viaDependency(build, via, dependency) {
+  const { path, errors } = await build.resolve(via, {
+    kind: 'import-statement',
+    resolveDir: mobileDir,
+    pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
+  })
+  if (errors.length > 0) {
+    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${via} no longer resolves`)
+  }
+  const packageMarker = `${sep}node_modules${sep}${via.split('/').join(sep)}${sep}`
+  const at = path.lastIndexOf(packageMarker)
+  if (at === -1) {
+    throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${via} resolved outside node_modules (${path})`)
+  }
+  const ownLink = join(path.slice(0, at), 'node_modules', dependency)
+  let own
+  try {
+    own = realpathSync(ownLink)
+  } catch {
+    throw new Error(
+      `${PACKAGE_BUILD_PLUGIN_NAME}: ${via} no longer depends on ${dependency} itself`
+    )
+  }
+  return { resolveDir: dirname(path), own }
+}
 
 export const packageBuildPlugin = {
   name: PACKAGE_BUILD_PLUGIN_NAME,
@@ -33,20 +97,31 @@ export const packageBuildPlugin = {
       `^(?:${PACKAGE_BUILD_REDIRECTS.map(({ from }) => escapeRegExp(from)).join('|')})$`
     )
     build.onResolve({ filter }, async (args) => {
+      // A redirect to its own specifier comes back through here; let esbuild resolve that one.
+      if (args.pluginData?.[PACKAGE_BUILD_PLUGIN_NAME]) {
+        return undefined
+      }
       const redirect = PACKAGE_BUILD_REDIRECTS.find(
         ({ from, importer }) => from === args.path && (!importer || importer.test(args.importer))
       )
       if (!redirect) {
         return undefined
       }
+      const via = redirect.via ? await viaDependency(build, redirect.via, redirect.to) : null
       const { path, namespace, sideEffects, errors } = await build.resolve(redirect.to, {
         kind: args.kind,
         importer: args.importer,
-        resolveDir: args.resolveDir
+        resolveDir: via ? via.resolveDir : args.resolveDir,
+        pluginData: { [PACKAGE_BUILD_PLUGIN_NAME]: true }
       })
       // An upgrade that moves the target fails the build instead of shipping both copies again.
       if (errors.length > 0) {
         throw new Error(`${PACKAGE_BUILD_PLUGIN_NAME}: ${redirect.to} no longer resolves`)
+      }
+      if (via && !realpathSync(path).startsWith(`${via.own}${sep}`)) {
+        throw new Error(
+          `${PACKAGE_BUILD_PLUGIN_NAME}: ${redirect.to} resolved to ${path}, not ${redirect.via}'s own copy at ${via.own}`
+        )
       }
       return { path, namespace, sideEffects }
     })

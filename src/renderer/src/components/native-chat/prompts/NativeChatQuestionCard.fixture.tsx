@@ -82,6 +82,95 @@ export const multiline = defineFixture({
   )
 })
 
+export const multiStep = defineFixture({
+  width: 560,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Where should this run?',
+              header: 'Location',
+              multiSelect: false,
+              options: [{ label: 'Local' }, { label: 'Remote' }]
+            },
+            {
+              question: 'Which connection should it use?',
+              header: 'Connection',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
+export const narrowMultiStep = defineFixture({
+  width: 360,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which connection should the new workspace use before it starts?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            },
+            {
+              question: 'Which connection should it use next?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
+export const veryNarrowMultiStep = defineFixture({
+  width: 220,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-2"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which connection should the new workspace use before it starts?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            },
+            {
+              question: 'Which connection should it use next?',
+              multiSelect: false,
+              options: [{ label: 'Current host' }, { label: 'Another host' }]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  )
+})
+
 function PendingAsyncQuestion() {
   const [pending, setPending] = useState(false)
   const title = 'What would you most like to do this weekend?'
@@ -311,75 +400,6 @@ export const previewsFocused = defineFixture({
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.focus()
-    await new Promise(requestAnimationFrame)
-  }
-})
-
-const dispatchOptions = [
-  {
-    label: 'Yes, investigate and report',
-    description: "I'll find the config and summarize it."
-  },
-  {
-    label: 'No, I know what it is',
-    description: "You're already aware of it; I'll leave it alone."
-  },
-  {
-    label: 'Ask me later',
-    description: 'Keep the dispatches running for now.'
-  }
-]
-
-function FocusedQuestion({ steps = 1 }: { steps?: number }) {
-  return (
-    <div
-      className="native-chat-appearance bg-chat-canvas p-4"
-      style={nativeChatAppearanceStyle({})}
-    >
-      <NativeChatQuestionCard
-        prompt={{
-          questions: Array.from({ length: steps }, (_, i) => ({
-            question:
-              i === 0
-                ? 'I found active dispatches from an automation I do not recognize. Should I look into it?'
-                : 'Where should the report go?',
-            header: i === 0 ? 'Investigate' : 'Report',
-            multiSelect: false,
-            options: dispatchOptions
-          }))
-        }}
-        onAnswer={() => {}}
-        onCancel={() => {}}
-        onCollapse={() => {}}
-        shouldFocus
-      />
-    </div>
-  )
-}
-
-// Keyboard focus lands on option 1 as the card opens; it must not look picked.
-export const keyboardFocus = defineFixture({
-  width: 720,
-  render: () => <FocusedQuestion />
-})
-
-export const multiStep = defineFixture({
-  width: 720,
-  render: () => <FocusedQuestion steps={2} />
-})
-
-export const narrow = defineFixture({
-  width: 400,
-  render: () => <FocusedQuestion />
-})
-
-// Answered the first step, then skipped to the last: the footer must still offer Submit.
-export const skippedLastStep = defineFixture({
-  width: 720,
-  render: () => <FocusedQuestion steps={2} />,
-  interact: async (frame) => {
-    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
-    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
     await new Promise(requestAnimationFrame)
   }
 })

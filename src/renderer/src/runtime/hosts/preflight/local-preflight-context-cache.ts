@@ -21,27 +21,6 @@ const PROJECT_RUNTIME_PREFLIGHT_CONTEXT_CACHE_MAX = 2048
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
 const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
 
-export function resetLocalPreflightContextCachesForTests(): void {
-  wslPreflightContextsByDistro.clear()
-  projectRuntimePreflightContextsByKey.clear()
-}
-
-export function _getWslPreflightContextCacheSizeForTest(): number {
-  return wslPreflightContextsByDistro.size
-}
-
-export function _hasWslPreflightContextCacheEntryForTest(wslDistro: string): boolean {
-  return wslPreflightContextsByDistro.has(wslDistro)
-}
-
-export function _getProjectRuntimePreflightContextCacheSizeForTest(): number {
-  return projectRuntimePreflightContextsByKey.size
-}
-
-export function _hasProjectRuntimePreflightContextCacheEntryForTest(cacheKey: string): boolean {
-  return projectRuntimePreflightContextsByKey.has(cacheKey)
-}
-
 export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightContext> {
   const cached = wslPreflightContextsByDistro.get(wslDistro)
   if (cached) {

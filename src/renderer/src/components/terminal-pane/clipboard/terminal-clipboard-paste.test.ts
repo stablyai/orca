@@ -1,57 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
-
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
-import {
-  markTerminalBracketedPasteInterrupted,
-  pasteTerminalText
-} from '../input/paste/terminal-bracketed-paste'
 
-describe('terminal clipboard paste', () => {
-  it('records a preview only after an image path reaches a local terminal', async () => {
-    const onLocalImagePasted = vi.fn()
-    const deps = {
-      readClipboardText: async () => '',
-      saveClipboardImageAsTempFile: async () => '/tmp/preview.png',
-      onLocalImagePasted
-    }
-    await pasteTerminalClipboard({ ...deps, pasteText: () => true, connectionId: 'ssh-target' })
-    await pasteTerminalClipboard({ ...deps, pasteText: () => true, runtimeEnvironmentId: 'paired' })
-    expect(onLocalImagePasted).not.toHaveBeenCalled()
-
-    await pasteTerminalClipboard({ ...deps, pasteText: () => true })
-    expect(onLocalImagePasted).toHaveBeenCalledWith('/tmp/preview.png')
-  })
-
-  it('forces generated image paste onto the native bracketed-paste path after Ctrl+C', async () => {
-    const observedIgnoreBracketedPasteMode: boolean[] = []
-    const terminal = {
-      modes: { bracketedPasteMode: true },
-      options: { ignoreBracketedPasteMode: false },
-      input: vi.fn(() => {
-        observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
-      }),
-      paste: vi.fn(() => {
-        observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
-      })
-    }
-    markTerminalBracketedPasteInterrupted(terminal)
-
-    await pasteTerminalClipboard({
-      readClipboardText: vi.fn().mockResolvedValue(''),
-      saveClipboardImageAsTempFile: vi
-        .fn()
-        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
-      pasteText: (text, options) => {
-        pasteTerminalText(terminal, text, options)
-        return true
-      }
+describe('pasteTerminalClipboard', () => {
+  it('asks for an image when only the paste event listed files and the read skipped the check', async () => {
+    const pasteFiles = vi.fn(async () => {})
+    const pasteText = vi.fn(() => true)
+    const result = await pasteTerminalClipboard({
+      readClipboardContent: async () => ({ text: '', filePaths: [], linkHtml: '', hasImage: null }),
+      eventCopiedFilePaths: ['C:\\shots\\shot.png'],
+      copiedFiles: { hasImage: async () => true, paste: pasteFiles },
+      saveClipboardImageAsTempFile: async () => '/tmp/orca-paste.png',
+      pasteText
     })
-
-    expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
-    )
-    expect(terminal.paste).not.toHaveBeenCalled()
-    expect(observedIgnoreBracketedPasteMode).toEqual([false])
-    expect(terminal.options.ignoreBracketedPasteMode).toBe(false)
+    expect(result).toEqual({ status: 'pasted', kind: 'image-path' })
+    expect(pasteFiles).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste.png', expect.anything())
   })
 })

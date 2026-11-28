@@ -16,6 +16,7 @@ import {
   readCachedPluginAppTheme
 } from './app-shell/appearance/document-theme'
 import { installTypingLatencyDiagnostic } from './diagnostics/typing-latency/diagnostic'
+import { installFocusedHostGestureWake } from './runtime/rpc/calls/focused-host-gesture-wake'
 import { installAppKeyboardRouter } from './lib/keyboard/app-keyboard-router'
 import { shouldEnableReactGrab } from './diagnostics/react-commits/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -42,6 +43,7 @@ import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installFocusedHostGestureWake()
 installAppKeyboardRouter()
 installAutomationHostDiagnostic()
 // Track from startup: a browser page can take focus before the lazy terminal chunk mounts.

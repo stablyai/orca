@@ -1,51 +1,61 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
-import { CircleHelp, Ellipsis, Settings } from 'lucide-react'
+import React, { Suspense, useLayoutEffect, useRef, useState } from 'react'
+import { Ellipsis } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import type { HelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
-import { AppRailButton } from './AppRailButton'
+import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
+import { useLatchedOpen } from '@/app-shell/root-surfaces/use-latched-open'
+import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { appRailSlotCapacity } from './app-rail-overflow'
+import type { AppRailCustomizeRow } from './app-rail-menu-focus'
+import type { AppRailMoreDestination } from './AppRailMoreMenuContent'
 
-/** What doesn't fit on a very short rail: Help (as a submenu sharing the rail's one Help controller), then Settings. */
+const LazyAppRailMoreMenuContent = lazyWithRetry(
+  () =>
+    import('./AppRailMoreMenuContent').then((module) => ({
+      default: module.AppRailMoreMenuContent
+    })),
+  { reloadKey: 'app-rail-more-menu-content' }
+)
+
+/**
+ * What doesn't fit on a short rail: folded pages, then Customize (the "…" this button replaced). The account button
+ * never folds in here.
+ */
 export function AppRailMoreMenu({
-  help,
-  includeHelp,
-  includeSettings,
-  settingsActive,
-  onOpenSettings,
-  tabStop
+  tabStop,
+  destinations,
+  customizeRows
 }: {
-  help: HelpMenuController
-  includeHelp: boolean
-  includeSettings: boolean
-  settingsActive: boolean
-  onOpenSettings: () => void
   tabStop: boolean
+  /** Folded destinations, in rail order: plain rows that open their page. */
+  destinations: readonly AppRailMoreDestination[]
+  customizeRows: readonly AppRailCustomizeRow[]
 }): React.JSX.Element {
   const t = useTranslate()
   const label = t('appRail.more', 'More')
-  const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
-  const current = includeSettings && settingsActive ? settingsLabel : undefined
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const hasOpenedMenu = useLatchedOpen(menuOpen)
+  const current = destinations.find((destination) => destination.current)?.label
   return (
-    <DropdownMenu modal={false} onOpenChange={help.handleMenuOpenChange}>
+    <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <AppRailButton
+              ref={triggerRef}
               itemId="more"
               label={current ? `${label}, ${current}` : label}
               active={current !== undefined}
               tabStop={tabStop}
-              icon={<Ellipsis size={18} aria-hidden />}
+              icon={
+                <Ellipsis
+                  size={APP_RAIL_ICON_SIZE}
+                  strokeWidth={APP_RAIL_ICON_STROKE_WIDTH}
+                  aria-hidden
+                />
+              }
             />
           </DropdownMenuTrigger>
         </TooltipTrigger>
@@ -53,29 +63,15 @@ export function AppRailMoreMenu({
           {current ? `${label} · ${current}` : label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="right" align="start" sideOffset={8} className="w-52">
-        {includeHelp ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <CircleHelp className="size-3.5" aria-hidden />
-              {t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')}
-            </DropdownMenuSubTrigger>
-            {/* Help folds in only when the window is short, so its rows must scroll within the window. */}
-            <DropdownMenuSubContent scrollable className="w-52">
-              {help.items}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
-        {includeSettings ? (
-          <DropdownMenuItem
-            onSelect={onOpenSettings}
-            aria-current={settingsActive ? 'page' : undefined}
-          >
-            <Settings className="size-3.5" aria-hidden />
-            {settingsLabel}
-          </DropdownMenuItem>
-        ) : null}
-      </DropdownMenuContent>
+      {hasOpenedMenu ? (
+        <Suspense fallback={null}>
+          <LazyAppRailMoreMenuContent
+            destinations={destinations}
+            customizeRows={customizeRows}
+            triggerRef={triggerRef}
+          />
+        </Suspense>
+      ) : null}
     </DropdownMenu>
   )
 }

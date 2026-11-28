@@ -23,8 +23,3 @@ export function getRendererAppPlatform(): NodeJS.Platform {
   }
   return 'win32'
 }
-
-/** Tests swap the window.api platform stub between cases; the real value never changes. */
-export function resetRendererAppPlatformCacheForTests(): void {
-  cachedAppPlatform = undefined
-}

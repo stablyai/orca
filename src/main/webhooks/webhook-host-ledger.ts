@@ -2,89 +2,21 @@
 // starts and settles every call it took. Tagged with the account, as the turn outbox is.
 import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { z } from 'zod'
-import {
-  WEBHOOK_CALL_ID_PATTERN,
-  WEBHOOK_CALL_STATES,
-  WEBHOOK_HOOK_ID_PATTERN
-} from '../../shared/connector-webhook-contract'
-import {
-  writeDurableSecureJsonFile,
-  writeSecureJsonFile
-} from '../../shared/secure-storage/secure-file'
 import { isMissingFileError } from '../runtime/rpc/server/pairing/device-registry-corruption'
+import { NewerAgentHooks } from './webhook-host-newer-agent-hooks'
+import {
+  LedgerHook,
+  StoredLedger,
+  type LedgerCall,
+  type LedgerCallState,
+  type LedgerIntent
+} from './webhook-host-ledger-schemas'
+
+export type { LedgerCall, LedgerCallState, LedgerHook, LedgerIntent }
 
 const LEDGER_FILE = 'webhook-host.json'
 // Kept as long as the cloud keeps call rows.
 export const WEBHOOK_LEDGER_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
-
-const HookId = z.string().regex(WEBHOOK_HOOK_ID_PATTERN)
-const Epoch = z.number().int().nonnegative()
-
-// received: taken and acknowledged, not yet offered to the automation.
-const LedgerCallState = z.enum(['received', ...WEBHOOK_CALL_STATES])
-export type LedgerCallState = z.infer<typeof LedgerCallState>
-
-const LedgerCall = z.object({
-  callId: z.string().regex(WEBHOOK_CALL_ID_PATTERN),
-  hookId: HookId,
-  automationId: z.string().min(1),
-  triggerId: z.string().min(1),
-  occurredAt: z.number(),
-  subject: z.string().optional(),
-  epoch: Epoch,
-  sample: z.literal(true).optional(),
-  /** The hook's first call that wasn't a sample. */
-  first: z.literal(true).optional(),
-  /** A host-level hook's call, bound to the automation and rule it was routed to. */
-  routed: z.literal(true).optional(),
-  /** The id its run will have, bound before the cloud is asked to start it, so every ask names one run. */
-  reservedRunId: z.string().optional(),
-  /** The call's file, written once its run was cleared to start; it goes with the row. */
-  file: z.string().optional(),
-  state: LedgerCallState,
-  runId: z.string().optional(),
-  reason: z.string().optional(),
-  /** waiting_capacity: when the run caps have room again. */
-  retryAt: z.number().optional(),
-  updatedAt: z.number()
-})
-export type LedgerCall = z.infer<typeof LedgerCall>
-
-const LedgerHook = z.object({
-  hookId: HookId,
-  automationId: z.string().min(1),
-  botId: z.string().min(1),
-  /** The newest generation this host has seen; a delivery below it is refused. */
-  epoch: Epoch,
-  /** What the cloud last confirmed. */
-  state: z.enum(['pending', 'live', 'paused']),
-  /** A call that wasn't a sample has arrived. */
-  called: z.literal(true).optional(),
-  /** A pause, resume or delete the cloud hasn't confirmed; retried with its operationId until it does. */
-  change: z
-    .object({ state: z.enum(['live', 'paused', 'deleted']), operationId: z.string().min(1) })
-    .optional()
-})
-export type LedgerHook = z.infer<typeof LedgerHook>
-
-// A create that may have minted a hook before its automation was saved.
-const LedgerIntent = z.object({
-  operationId: z.string().min(1),
-  automationId: z.string().min(1),
-  botId: z.string().min(1),
-  hookId: HookId.optional(),
-  createdAt: z.number()
-})
-export type LedgerIntent = z.infer<typeof LedgerIntent>
-
-const StoredLedger = z.object({
-  account: z.string().min(1),
-  hooks: z.array(LedgerHook),
-  calls: z.array(LedgerCall),
-  intents: z.array(LedgerIntent)
-})
-type StoredLedger = z.infer<typeof StoredLedger>
 
 const emptyLedger = (account: string): StoredLedger => ({
   account,
@@ -97,11 +29,15 @@ export class WebhookHostLedger {
   private stored: StoredLedger | null = null
   // The last write failed: memory holds what disk lacks, so the next save writes even if unchanged.
   private unsaved = false
+  private readonly newerAgentHooks: NewerAgentHooks<LedgerHook>
 
   constructor(
     private readonly userDataPath: string,
-    private readonly account: () => string | null
-  ) {}
+    private readonly account: () => string | null,
+    newerAgentBotIds: () => ReadonlySet<string>
+  ) {
+    this.newerAgentHooks = new NewerAgentHooks(userDataPath, newerAgentBotIds, LedgerHook)
+  }
 
   private get path(): string {
     return join(this.userDataPath, LEDGER_FILE)
@@ -115,9 +51,19 @@ export class WebhookHostLedger {
     }
     if (this.stored?.account !== account) {
       const loaded = this.read()
-      this.stored = loaded?.account === account ? loaded : emptyLedger(account)
+      const ledger = loaded?.account === account ? loaded : emptyLedger(account)
+      ledger.hooks = this.newerAgentHooks.load(account, ledger.hooks)
+      this.stored = ledger
     }
     return this.stored
+  }
+
+  /** Bots were written: a hook whose bot changed agents moves into the file older builds read, or out of it. */
+  refile(): void {
+    const ledger = this.ledger()
+    if (ledger && this.newerAgentHooks.unfiled(ledger.hooks)) {
+      this.write()
+    }
   }
 
   private read(): StoredLedger | null {
@@ -138,7 +84,7 @@ export class WebhookHostLedger {
       return
     }
     try {
-      writeSecureJsonFile(this.path, this.stored)
+      this.newerAgentHooks.save(this.path, this.stored, false)
       this.unsaved = false
     } catch (error) {
       this.unsaved = true
@@ -154,7 +100,7 @@ export class WebhookHostLedger {
     }
     const next = structuredClone(ledger)
     change(next)
-    writeDurableSecureJsonFile(this.path, next)
+    this.newerAgentHooks.save(this.path, next, true)
     this.stored = next
     return true
   }

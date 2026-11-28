@@ -5,6 +5,6 @@ export async function isAlreadyRemovedWorktreePath(
   worktreePath: string,
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
-  const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+  const access = getLocalWorktreePathAccess(localWorktreeGitOptions, worktreePath)
   return isWorktreePathMissing(worktreePath, access.statPath)
 }

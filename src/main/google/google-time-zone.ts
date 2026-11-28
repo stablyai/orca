@@ -1,5 +1,7 @@
 // Calendar windows in the calendar's own time zone: "today" is that zone's day, not this host's.
 
+import { hasImpossibleLeadingDate } from '../../shared/validation/calendar-date'
+
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 
 /** The calendar day (YYYY-MM-DD) an instant falls on in a time zone. */
@@ -20,10 +22,13 @@ export function addDays(date: string, days: number): string {
   return at.toISOString().slice(0, 10)
 }
 
-/** The zone's UTC offset on that day, as RFC 3339 writes it (+05:30, -04:00, Z). */
+/** The zone's UTC offset at local midnight, as RFC 3339 writes it (+05:30, -04:00, Z). */
 function offsetOn(date: string, timeZone: string): string {
+  const midnight = zonedInstant(date, '00:00', timeZone)
+  // Where the clocks skip midnight (Beirut, Cairo), the day starts as the old offset reaches 00:00.
+  const skipped = midnight + zoneOffsetMs(midnight, timeZone) !== Date.parse(`${date}T00:00:00Z`)
   const name = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-    .formatToParts(new Date(`${date}T12:00:00Z`))
+    .formatToParts(new Date(skipped ? midnight - 1 : midnight))
     .find((part) => part.type === 'timeZoneName')?.value
   const offset = name?.replace(/^GMT/, '') ?? ''
   return offset === '' ? 'Z' : offset
@@ -37,6 +42,9 @@ export function zonedMidnight(date: string, timeZone: string): string {
 /** A --from/--to value: a day (its midnight in the zone; `--to` days are included) or RFC 3339. */
 export function windowBound(value: string, timeZone: string, end: boolean): string | null {
   const trimmed = value.trim()
+  if (hasImpossibleLeadingDate(trimmed)) {
+    return null
+  }
   if (DATE.test(trimmed)) {
     return zonedMidnight(end ? addDays(trimmed, 1) : trimmed, timeZone)
   }

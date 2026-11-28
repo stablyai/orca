@@ -1,46 +1,53 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { CallerOwnedSignInChannel } from './caller-owned-sign-in-contract'
 import { CallerOwnedSignInFlows } from './caller-owned-sign-in-flows'
 
-type Prompt = { state: string }
+type Prompt = { url: string }
 
-function flows() {
-  return new CallerOwnedSignInFlows<'p', Prompt, string, { got: string }, string>(
-    async (_provider, channel, state) => {
-      channel.onPrompt({ state: state ?? '' })
-      return { got: await channel.nextCode() }
-    },
+function flowsWithDeadline(
+  run: (channel: CallerOwnedSignInChannel<Prompt, string>) => Promise<object>
+): CallerOwnedSignInFlows<'claude', Prompt, string, object> {
+  return new CallerOwnedSignInFlows<'claude', Prompt, string, object>(
+    (_provider, channel) => run(channel),
     {
       acceptsPrompt: () => true,
-      acceptsCode: (prompt) => prompt !== undefined,
-      describeFailure: (message) => ({ error: message }),
+      acceptsCode: () => true,
+      describeFailure: (error) => ({ error }),
       busyMessage: 'busy',
-      // Each flow checks a code against its own prompt.
-      readCode: (prompt, code) => {
-        if (!code.startsWith(`${prompt?.state}:`)) {
-          throw new Error('not this sign-in')
-        }
-        return code.slice(code.indexOf(':') + 1)
-      }
+      ownerSilenceMs: 10_000_000,
+      promptDeadlineMs: 60_000
     }
   )
 }
 
-describe('caller-owned sign-in flows', () => {
-  it("checks a code against its own flow's prompt and refuses another flow's without spending", async () => {
-    const signIns = flows()
-    const first = signIns.start('a', 'p', 'one')
-    await signIns.wait('a', first.flowId, 0)
-    await signIns.cancel('a', first.flowId)
+// Aborted like a real login: the run rejects once the flow ends it.
+function runUntilAborted(channel: CallerOwnedSignInChannel<Prompt, string>): Promise<object> {
+  return new Promise((_, reject) =>
+    channel.signal.addEventListener('abort', () => reject(new Error('cancelled')))
+  )
+}
 
-    const second = signIns.start('b', 'p', 'two')
-    const waiting = await signIns.wait('b', second.flowId, 0)
-    expect(waiting.prompt).toEqual({ state: 'two' })
-    expect(() => signIns.submitCode('b', second.flowId, 'one:code')).toThrow('not this sign-in')
-    signIns.submitCode('b', second.flowId, 'two:code')
-    let status = await signIns.wait('b', second.flowId, waiting.revision)
-    while (status.phase === 'verifying') {
-      status = await signIns.wait('b', second.flowId, status.revision)
-    }
-    expect(status).toMatchObject({ phase: 'signedIn', got: 'code' })
+describe('CallerOwnedSignInFlows prompt deadline', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('fails a login that never publishes a prompt, with a code clients can name', async () => {
+    const flows = flowsWithDeadline(runUntilAborted)
+    const started = flows.start('owner', 'claude')
+    await vi.advanceTimersByTimeAsync(60_000)
+    const status = await flows.wait('owner', started.flowId, 0)
+    expect(status.phase).toBe('failed')
+    expect(status.errorCode).toBe('noPrompt')
+  })
+
+  it('leaves a login that prompted in time waiting for the code', async () => {
+    const flows = flowsWithDeadline((channel) => {
+      channel.onPrompt({ url: 'https://claude.ai/oauth/authorize?x' })
+      return runUntilAborted(channel)
+    })
+    const started = flows.start('owner', 'claude')
+    await vi.advanceTimersByTimeAsync(120_000)
+    const status = await flows.wait('owner', started.flowId, 0)
+    expect(status.phase).toBe('waiting')
   })
 })

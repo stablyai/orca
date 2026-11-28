@@ -1,19 +1,11 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
 import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
+export const hostScreenSecondaryStylesSheet = themedStyleSheet((colors) => ({
   list: {
     paddingBottom: spacing.lg
-  },
-  offlineBanner: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm
   },
   // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
@@ -55,17 +47,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     backgroundColor: colors.borderSubtle,
     marginLeft: WORKTREE_ROW_LAYOUT.textInset
   },
-  filterModalSubtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  },
-  optionPending: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.sm
-  },
   optionSectionGap: {
     height: spacing.xs
   },
@@ -96,6 +77,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20
+  },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
   },
   confirmButtons: {
     flexDirection: 'row',

@@ -5,7 +5,6 @@ import type { PluginHostInstallSource } from '../../../../../preload/api/plugins
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import { PluginDevelopmentDialog } from '../dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../dialogs/PluginInstallDialog'
 import { sourceInstallTrustPrompt } from '../presentation/plugin-install-trust'
@@ -14,8 +13,8 @@ import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
 import { PluginSettingsOverview } from './PluginSettingsOverview'
+import { RequiredPluginWarnings } from './RequiredPluginWarnings'
 import { PluginsAlphaNotice } from './PluginsAlphaNotice'
-import { PluginsSectionDescription } from './PluginsSectionDescription'
 import { getPluginsSectionPresentation } from '../../settings/plugins/plugins-search'
 import { SettingsSection } from '../../settings/section-layout/SettingsSection'
 import { usePluginLogs } from '../state/use-plugin-logs'
@@ -25,11 +24,15 @@ import { usePluginReviewQueue } from '../state/use-plugin-review-queue'
 import { usePluginSettingsWrites } from '../state/use-plugin-settings-writes'
 import { isPluginEnabled } from '../presentation/plugin-status-presentation'
 import { applyPluginThemesNow } from '../state/plugin-theme-apply'
+import { PluginsSectionFrame } from './PluginsSectionFrame'
+import { openShortcutsSettingsFromPlugins } from '../../settings/navigation/open-plugins-settings'
 
 type PluginsSettingsSectionProps = {
   mounted: boolean
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
+  /** Renders the same content as the app rail's Plugins page instead of a Settings pane. */
+  railPage?: { onClose: () => void }
 }
 
 function errorMessage(cause: unknown, fallback: string): string {
@@ -40,7 +43,8 @@ function errorMessage(cause: unknown, fallback: string): string {
 export function PluginsSettingsSection({
   mounted,
   settings,
-  updateSettings
+  updateSettings,
+  railPage
 }: PluginsSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
   const confirmTrust = usePluginInstallTrust(mounted)
@@ -270,11 +274,13 @@ export function PluginsSettingsSection({
     }
   }
 
-  // Why: re-enabling resets the supervisor's restart budget, which is what "Restart" means here.
+  // Required plugins reset the supervisor without writing a disabled preference.
   const restart = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
     try {
-      applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      if (!plugins.some((plugin) => plugin.pluginKey === pluginKey && plugin.requiredByTeam)) {
+        applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: false }))
+      }
       applyCompletedMutation(await window.api.plugins.setEnabled({ pluginKey, enabled: true }))
     } catch (cause) {
       if (mountedRef.current) {
@@ -329,29 +335,29 @@ export function PluginsSettingsSection({
   }
 
   const featureEnabled = settings.pluginSystemEnabled
-  return (
-    <SettingsSection
-      id="plugins"
-      {...sectionPresentation}
-      description={<PluginsSectionDescription text={sectionPresentation.description} />}
-      hideHeader={featureEnabled && page.openKey !== null}
-      bodyClassName="gap-6"
-      headerAction={
-        <PluginsHeaderActions
-          featureEnabled={featureEnabled}
-          suggestionsEnabled={settings.pluginFileTypeSuggestions !== false}
-          onToggleSuggestions={() => void toggleSuggestions()}
-          autoUpdateEnabled={isPluginAutoUpdateOn(settings)}
-          onToggleAutoUpdate={() => void toggleAutoUpdate()}
-          open={settingsMenuOpen}
-          onOpenChange={setSettingsMenuOpen}
-          onAdd={setInstallKind}
-          onSources={() => setSourcesOpen(true)}
-          onDevelopment={() => setDevelopmentOpen(true)}
-        />
-      }
-    >
-      {featureEnabled && page.openKey !== null ? null : <PluginsAlphaNotice />}
+  const headerAction = (
+    <PluginsHeaderActions
+      featureEnabled={featureEnabled}
+      suggestionsEnabled={settings.pluginFileTypeSuggestions !== false}
+      onToggleSuggestions={() => void toggleSuggestions()}
+      autoUpdateEnabled={isPluginAutoUpdateOn(settings)}
+      onToggleAutoUpdate={() => void toggleAutoUpdate()}
+      open={settingsMenuOpen}
+      onOpenChange={setSettingsMenuOpen}
+      onAdd={setInstallKind}
+      onSources={() => setSourcesOpen(true)}
+      onDevelopment={() => setDevelopmentOpen(true)}
+      railPage={railPage !== undefined}
+    />
+  )
+  const content = (
+    <>
+      {featureEnabled && page.openKey !== null ? null : (
+        <>
+          <PluginsAlphaNotice />
+          <RequiredPluginWarnings />
+        </>
+      )}
       <PluginSettingsOverview
         featureEnabled={featureEnabled}
         settingsError={settingsError}
@@ -379,9 +385,7 @@ export function PluginsSettingsSection({
         sourcesOpen={sourcesOpen}
         setSourcesOpen={setSourcesOpen}
         page={page}
-        onOpenShortcuts={() =>
-          useAppStore.getState().openSettingsTarget({ pane: 'shortcuts', repoId: null })
-        }
+        onOpenShortcuts={() => openShortcutsSettingsFromPlugins(railPage !== undefined)}
       />
       <PluginInstallDialog
         key={installKind ?? 'closed'}
@@ -417,6 +421,17 @@ export function PluginsSettingsSection({
         onCancel={marketplaceLifecycle.cancelRollback}
         onConfirm={(pluginKey) => void marketplaceLifecycle.confirmRollback(pluginKey)}
       />
-    </SettingsSection>
+    </>
+  )
+  return (
+    <PluginsSectionFrame
+      railPage={railPage}
+      page={page}
+      featureEnabled={featureEnabled}
+      count={featureEnabled && !loading && !error ? plugins.length : null}
+      headerAction={headerAction}
+    >
+      {content}
+    </PluginsSectionFrame>
   )
 }

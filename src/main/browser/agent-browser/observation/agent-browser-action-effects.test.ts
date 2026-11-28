@@ -11,19 +11,6 @@ vi.mock('../../routing/input-ownership/remote-cli-page-admission', () => ({
 
 // Real agent-browser 0.39.4 `snapshot --delta` replies.
 const UNCHANGED = { snapshot: { kind: 'unchanged', baseRevision: 1, revision: 2 } }
-const INVALID_LOGIN = {
-  snapshot: {
-    kind: 'delta',
-    baseRevision: 3,
-    revision: 4,
-    changes: [],
-    treeChange: {
-      startLine: 12,
-      deleteCount: 0,
-      lines: ['    - StaticText "Invalid username or password"']
-    }
-  }
-}
 
 function fakeGuest(url = 'http://127.0.0.1/login.html', title = 'Login') {
   const guest = Object.assign(new EventEmitter(), {
@@ -71,50 +58,17 @@ function fakeHost(
 }
 
 describe('runWithActionEffects', () => {
-  it('returns no page text while the page may show a secret', async () => {
-    const guest = fakeGuest('https://console.cloud.google.com/auth/clients', 'Clients')
-    const secretDialog = {
-      snapshot: {
-        kind: 'delta',
-        baseRevision: 1,
-        revision: 2,
-        changes: [],
-        treeChange: {
-          startLine: 3,
-          deleteCount: 0,
-          lines: [
-            '  - dialog "OAuth client created"',
-            '    - StaticText "Client secret GOCSPX-fake-secret-123"'
-          ]
-        }
-      }
-    }
-    const { host } = fakeHost(guest, [UNCHANGED, secretDialog])
-    host.withholdsPageText = () => true
-
-    const result = await runWithActionEffects(host, async () => ({ clicked: '@e9' }))
-
-    expect(JSON.stringify(result)).not.toContain('GOCSPX-fake-secret-123')
-    expect(readBrowserActionEffects(result)?.page).toBeUndefined()
-    // The agent never saw that reading, so the next action doesn't diff against it.
-    expect(host.forgetDeltaBaseline).toHaveBeenCalled()
-  })
-
-  it('does not read a replacement guest the caller was never admitted to', async () => {
+  it('redacts URL effects before clipping can truncate a long bearer', async () => {
     const guest = fakeGuest()
-    const replacement = Object.assign(fakeGuest('http://127.0.0.1/app.html', 'App'), { id: 8 })
-    const { host } = fakeHost(guest, [UNCHANGED, INVALID_LOGIN])
-    let current = guest
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the effects layer reads only the guest members faked here.
-    host.guest = () => current as unknown as WebContents
-
+    const { host } = fakeHost(guest, [UNCHANGED, UNCHANGED])
     const result = await runWithActionEffects(host, async () => {
-      current = replacement
-      return { clicked: '@e6' }
+      guest.url = `https://kagi.com/search?token=${'synthetic'.repeat(500)}&q=one`
+      guest.title = guest.url
+      return { clicked: 'link' }
     })
-
-    expect(readBrowserActionEffects(result)).toMatchObject({ url: 'http://127.0.0.1/app.html' })
-    expect(readBrowserActionEffects(result)?.page).toBeUndefined()
-    expect(host.snapshotDelta).toHaveBeenCalledTimes(1)
+    expect(readBrowserActionEffects(result)).toMatchObject({
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one'
+    })
   })
 })

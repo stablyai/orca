@@ -43,8 +43,13 @@ export function countActivityUnread(source: ActivityUnreadCountSource, now = Dat
     }
   }
 
-  for (const [paneKey, entry] of Array.from(source.agentStatusByPaneKey.entries())) {
+  const { projection } = source.agentStatusByPaneKey
+  for (const [paneKey, entry] of source.agentStatusByPaneKey.entries()) {
     seenPaneKeys.add(paneKey)
+    // Panes with no workspace row have no Activity row to clear.
+    if (!projection.rowWorktree(paneKey)) {
+      continue
+    }
     countEntry(entry, source.acknowledgedAgentsByPaneKey[paneKey] ?? 0, true)
   }
   for (const unsupported of Object.values(source.migrationUnsupportedByPtyId)) {
@@ -65,7 +70,9 @@ const createActivityUnreadCountSelector = () =>
       state: AppState,
       migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId'],
       acknowledgedAgentsByPaneKey: AppState['acknowledgedAgentsByPaneKey'],
-      activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey']
+      activityClearedAtByPaneKey: AppState['activityClearedAtByPaneKey'],
+      // Closing a tab can drop a pane's row without a status write.
+      _rowOwnersRevision: number
     ) =>
       countActivityUnread({
         agentStatusByPaneKey: state.agentStatusByPaneKey,
@@ -82,7 +89,8 @@ export function useActivityUnreadCount(): number {
       state,
       state.migrationUnsupportedByPtyId,
       state.acknowledgedAgentsByPaneKey,
-      state.activityClearedAtByPaneKey
+      state.activityClearedAtByPaneKey,
+      state.agentStatusByPaneKey.projection.rowOwnersRevision()
     )
   )
 }

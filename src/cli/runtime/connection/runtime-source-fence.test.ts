@@ -1,158 +1,66 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
-import { createServer, type Server } from 'node:net'
-import { randomUUID } from 'node:crypto'
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { throwNoActiveSenderTerminal } from '../../orchestration/identity/terminal-identity'
 import {
-  RUNTIME_SOURCE_ID_ENV,
-  RUNTIME_SOURCE_INCARNATION_ENV,
-  RUNTIME_SOURCE_PROFILE_PATH_ENV
-} from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
-import { RuntimeClient } from '../client'
-import { RuntimeClientError } from './types'
+  dropForeignTerminalHandle,
+  resolveFencedRuntimeSource,
+  RuntimeSourceFence
+} from './runtime-source-fence'
 
-const SOURCE_A = '11111111-1111-4111-8111-111111111111'
-const SOURCE_B = '22222222-2222-4222-8222-222222222222'
-
-const servers = new Set<Server>()
-const savedEnv = {
-  id: process.env[RUNTIME_SOURCE_ID_ENV],
-  incarnation: process.env[RUNTIME_SOURCE_INCARNATION_ENV],
-  profilePath: process.env[RUNTIME_SOURCE_PROFILE_PATH_ENV]
+const windowsStamp = {
+  sourceId: 'install-win',
+  incarnation: 'runtime-win',
+  profilePath: 'C:\\Users\\u\\AppData\\Roaming\\orca'
 }
 
-function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) {
-    delete process.env[name]
-  } else {
-    process.env[name] = value
+function paneEnv(): Record<string, string | undefined> {
+  return {
+    ORCA_TERMINAL_HANDLE: 'term_win',
+    ORCA_RUNTIME_SOURCE_ID: windowsStamp.sourceId,
+    ORCA_RUNTIME_SOURCE_INCARNATION: windowsStamp.incarnation,
+    ORCA_RUNTIME_SOURCE_PROFILE_PATH: windowsStamp.profilePath
   }
 }
 
-afterEach(async () => {
-  restoreEnv(RUNTIME_SOURCE_ID_ENV, savedEnv.id)
-  restoreEnv(RUNTIME_SOURCE_INCARNATION_ENV, savedEnv.incarnation)
-  restoreEnv(RUNTIME_SOURCE_PROFILE_PATH_ENV, savedEnv.profilePath)
-  await Promise.all(
-    [...servers].map((server) => new Promise<void>((resolve) => server.close(() => resolve())))
-  )
-  servers.clear()
+it('does not fence a guest CLI to the Windows runtime that stamped its pane (#49580)', async () => {
+  const linuxProfile = '/home/u/.config/orca'
+  const expected = resolveFencedRuntimeSource(windowsStamp, linuxProfile, linuxProfile, 'linux')
+  const probe = vi.fn()
+  const fence = new RuntimeSourceFence(expected, probe)
+  const metadata = {
+    runtimeId: 'runtime-guest',
+    pid: 1,
+    transports: [],
+    authToken: null,
+    startedAt: 0
+  }
+
+  await expect(fence.check(metadata, 'terminal.list')).resolves.toBeUndefined()
+  expect(probe).not.toHaveBeenCalled()
 })
 
-type FakeRuntime = { userDataPath: string; methods: string[]; expectations: unknown[] }
+it('drops a Windows pane handle in a guest CLI so callers infer from cwd', () => {
+  const env = paneEnv()
+  dropForeignTerminalHandle(env, () => '/home/u/.config/orca', 'linux')
 
-async function startRuntime(args: {
-  runtimeId: string
-  installationId?: string
-}): Promise<FakeRuntime> {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-source-fence-'))
-  const isWindows = process.platform === 'win32'
-  const endpoint = isWindows
-    ? `\\\\.\\pipe\\orca-source-fence-${randomUUID()}`
-    : join(userDataPath, 'runtime.sock')
-  const methods: string[] = []
-  const expectations: unknown[] = []
-  const server = createServer((socket) => {
-    let buffer = ''
-    socket.setEncoding('utf8')
-    socket.on('data', (chunk: string) => {
-      buffer += chunk
-      const newline = buffer.indexOf('\n')
-      if (newline === -1) {
-        return
-      }
-      const request: { id: string; method: string; expectedRuntimeSource?: unknown } = JSON.parse(
-        buffer.slice(0, newline)
-      )
-      methods.push(request.method)
-      expectations.push(request.expectedRuntimeSource)
-      const result =
-        request.method === 'status.get'
-          ? {
-              runtimeId: args.runtimeId,
-              ...(args.installationId
-                ? { hostDescriptor: { installationId: args.installationId } }
-                : {})
-            }
-          : { ok: true }
-      socket.end(
-        `${JSON.stringify({ id: request.id, ok: true, result, _meta: { runtimeId: args.runtimeId } })}\n`
-      )
-    })
-  })
-  servers.add(server)
-  await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-  writeFileSync(
-    join(userDataPath, 'orca-runtime.json'),
-    JSON.stringify({
-      runtimeId: args.runtimeId,
-      pid: 1,
-      transports: [{ kind: isWindows ? 'named-pipe' : 'unix', endpoint }],
-      authToken: 'token',
-      startedAt: 1
-    })
-  )
-  return { userDataPath, methods, expectations }
-}
+  expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
+  // A Codex caller must not be told its env policy removed the handle.
+  vi.stubEnv('CODEX_THREAD_ID', 'thread-1')
+  expect(() => throwNoActiveSenderTerminal()).toThrow(/opened by a different Orca/)
+  vi.unstubAllEnvs()
+})
 
-function launchedBy(sourceId: string, incarnation: string, profilePath?: string): void {
-  process.env[RUNTIME_SOURCE_ID_ENV] = sourceId
-  process.env[RUNTIME_SOURCE_INCARNATION_ENV] = incarnation
-  restoreEnv(RUNTIME_SOURCE_PROFILE_PATH_ENV, profilePath)
-}
-
-async function expectRefusal(promise: Promise<unknown>, code: string): Promise<void> {
-  const error = await promise.then(
-    () => null,
-    (caught: unknown) => caught
-  )
-  expect(error).toBeInstanceOf(RuntimeClientError)
-  expect(error).toMatchObject({ code })
-}
-
-describe('RuntimeClient runtime-source fence', () => {
-  it('refuses another live runtime before the request reaches it', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-b', installationId: SOURCE_B })
-    launchedBy(SOURCE_A, 'runtime-a')
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await expectRefusal(
-      client.call('terminal.send', { terminal: 't1', text: 'hi' }),
-      'runtime_source_mismatch'
-    )
-    await expectRefusal(client.call('worktree.list'), 'runtime_source_mismatch')
-    expect(runtime.methods).toEqual(['status.get', 'status.get'])
+it('keeps the handle when the profile path cannot be resolved', () => {
+  const env = paneEnv()
+  dropForeignTerminalHandle(env, () => {
+    throw new Error('APPDATA is not set')
   })
 
-  it('accepts a restarted runtime of the same source and carries its verified identity', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-a2', installationId: SOURCE_A })
-    launchedBy(SOURCE_A, 'runtime-a1')
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
+  expect(env.ORCA_TERMINAL_HANDLE).toBe('term_win')
+})
 
-    await client.call('terminal.send', { terminal: 't1', text: 'hi' })
-    expect(runtime.methods).toEqual(['status.get', 'terminal.send'])
-    // The host must recheck identity if it changes after the probe.
-    const expected = { sourceId: SOURCE_A, runtimeId: 'runtime-a2' }
-    expect(runtime.expectations).toEqual([undefined, expected])
-  })
+it('keeps the handle for a Windows CLI on the runtime that stamped its pane', () => {
+  const env = paneEnv()
+  dropForeignTerminalHandle(env, () => windowsStamp.profilePath, 'win32')
 
-  it('refuses when the live runtime cannot say which profile it serves', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-old' })
-    launchedBy(SOURCE_A, 'runtime-a')
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await expectRefusal(client.call('worktree.list'), 'runtime_source_unverifiable')
-    expect(runtime.methods).toEqual(['status.get'])
-  })
-
-  it('lets an explicit switch to another profile through, e.g. orca-dev from a packaged terminal', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-dev', installationId: SOURCE_B })
-    launchedBy(SOURCE_A, 'runtime-a', join(tmpdir(), 'orca-packaged-profile'))
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await client.call('worktree.list')
-    expect(runtime.methods).toEqual(['worktree.list'])
-  })
+  expect(env.ORCA_TERMINAL_HANDLE).toBe('term_win')
 })

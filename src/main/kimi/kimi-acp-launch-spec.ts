@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { KIMI_ACP_DIALECT } from '../acp/acp-dialects/kimi-dialect'
+import { KIMI_TRANSCRIPT_IMPORT } from './kimi-transcript-import'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
+import { deliverKimiInstructions } from '../acp/launch/acp-instructions'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   resumeInvocationFromOptions,
@@ -39,8 +41,10 @@ export const KIMI_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   // Session discovery deletes its listing session.
   modelDiscovery: { kind: 'session', listingNamesConfiguredModel: false },
+  instructions: deliverKimiInstructions,
+  instructionsInWorkspace: true,
   compaction: true,
   compactionInstructions: true,
-  transcriptImport: null,
+  transcriptImport: KIMI_TRANSCRIPT_IMPORT,
   sessionHistory: KIMI_SESSION_HISTORY
 }

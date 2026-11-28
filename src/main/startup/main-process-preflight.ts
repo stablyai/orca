@@ -27,13 +27,7 @@ import {
 } from './process-failure/main-process-error-guards'
 import { hydrateShellPath, mergePathSegments } from './shell-environment/hydrate-shell-path'
 import { configureRemoteServerUpdater } from '../runtime/hosts/management/remote-server-updater'
-import {
-  getRemoteServerUpdaterSnapshot,
-  checkForRemoteServerUpdate,
-  downloadRemoteServerUpdate,
-  installRemoteServerUpdate,
-  isQuittingForUpdate
-} from '../updater/updater-service'
+import { isQuittingForUpdate, loadUpdaterService } from '../updater/updater-service-slot'
 import {
   getDevInstanceIdentity,
   shouldApplyPreReadyAppName
@@ -52,6 +46,8 @@ import {
   startMainThreadChurnProbe
 } from '../diagnostics/main-thread-churn-probe'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { setDefaultProcessLauncher } from '@orca/process-host'
+import { launchPlainProcessSpecOnPosixWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
@@ -170,10 +166,13 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Expose version without Electron imports for main/daemon TERM_PROGRAM_VERSION.
   process.env.ORCA_APP_VERSION = app.getVersion()
   configureRemoteServerUpdater({
-    getSnapshot: getRemoteServerUpdaterSnapshot,
-    check: checkForRemoteServerUpdate,
-    download: downloadRemoteServerUpdate,
-    install: installRemoteServerUpdate
+    getSnapshot: async (runtimeId) =>
+      (await loadUpdaterService()).getRemoteServerUpdaterSnapshot(runtimeId),
+    check: async (runtimeId, options) =>
+      (await loadUpdaterService()).checkForRemoteServerUpdate(runtimeId, options),
+    download: async (runtimeId) =>
+      (await loadUpdaterService()).downloadRemoteServerUpdate(runtimeId),
+    install: async (runtimeId) => (await loadUpdaterService()).installRemoteServerUpdate(runtimeId)
   })
   patchPackagedProcessPath()
   // The synchronous seed covers early IPC; packaged login-shell hydration adds rc PATH later.
@@ -222,6 +221,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (isMainThreadDiagnosticsEnabled()) {
     // Include process-host spawns too; Git-only probe sites miss rg/ps/PTY helpers.
     setSpawnObserver(recordSubprocessSpawn)
+  }
+  // posix_spawn blocks its caller; under memory/disk pressure a launch on main froze the window for minutes.
+  if (process.platform !== 'win32' && process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED !== '1') {
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
   }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Lock after userData override so dev/packaged namespaces differ; concurrent dev copies also need separate profiles to avoid store corruption (#1326, #1312).

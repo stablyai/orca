@@ -1,5 +1,9 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import type {
+  WslHostAddStage,
+  WslHostDeferredUpdate,
+  WslHostPastUncountedTerminals
+} from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { InstallLockWait } from '../../managed-server/install/remote-install-lock'
@@ -14,6 +18,10 @@ export type WslOrcadLaunch =
       distro: string
       /** The Lxss registration GUID for the deployment record's `distroId`; null if unreadable. */
       distroId: string | null
+      /** The Linux account orcad runs as, which the host's record pins; null if unreadable. */
+      linuxUser: string | null
+      /** The distro's default account when it isn't `linuxUser`, for the host's "runs as" note. */
+      defaultLinuxUser: string | null
       /** The loopback port orcad bound inside the distro (another one when the preferred was taken). */
       port: number
       fullVersion: string
@@ -33,6 +41,8 @@ export type WslOrcadDeployOptions = {
   label?: string
   /** Defaults to a connect. */
   intent?: OrcadUpdateIntent
+  /** With intent `update`: force past an uncounted census, but only over this confirmed build. */
+  pastUncountedTerminals?: WslHostPastUncountedTerminals
   signal?: AbortSignal
   /** Defaults to one created over `userData`; the app should pass its shared instance. */
   holder?: WslDistroHolder
@@ -46,4 +56,6 @@ export type WslOrcadDeployOptions = {
   /** A no-boot connect's running check (E9), re-read before any further wake. */
   requireRunning?: () => Promise<boolean>
   onInstallLockWait?: (wait: InstallLockWait | null) => void
+  /** Each step of the launch as it starts, for an Add's progress. */
+  onStage?: (stage: WslHostAddStage) => void
 }

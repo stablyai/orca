@@ -2,7 +2,6 @@ import { ephemeralDrafts, clearDraftMemoryForTests } from './native-chat-compose
 import { resetNativeChatComposerDraftPersistenceForTests } from './native-chat-composer-draft-persistence'
 import { resetNativeChatComposerDraftLoadForTests } from './native-chat-composer-draft-load'
 import { setNativeChatComposerDraftStorageForTests } from './native-chat-composer-draft-storage'
-import { clearNativeChatPendingAttachmentsForTests } from '../attachments/chips/native-chat-pending-attachment-cache'
 
 export function clearNativeChatComposerDraftsForTests(): void {
   ephemeralDrafts.clear()
@@ -10,9 +9,4 @@ export function clearNativeChatComposerDraftsForTests(): void {
   resetNativeChatComposerDraftPersistenceForTests()
   resetNativeChatComposerDraftLoadForTests()
   setNativeChatComposerDraftStorageForTests(null)
-}
-
-export function clearNativeChatAttachmentCacheForTests(): void {
-  clearNativeChatComposerDraftsForTests()
-  clearNativeChatPendingAttachmentsForTests()
 }

@@ -1,4 +1,5 @@
-import { setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { getLocalPtyProvider, setLocalPtyProvider } from '../../../ipc/pty/provider/registry'
+import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
 import {
   setKnownLocalDaemonPidReader,
   setLocalDaemonPidReader
@@ -8,7 +9,9 @@ import { DaemonPtyRouter } from '../routing/daemon-pty-router'
 import { getDaemonRuntimeDir as getRuntimeDir } from '../../launch/daemon-launch-paths'
 import { readDaemonPidRecord as readDaemonPidRecordAt } from '../../endpoint/identity/daemon-endpoint-incarnation'
 import type { ParsedDaemonPid } from '../../endpoint/identity/daemon-pid-file-parse'
+import type { DaemonClient } from '../../transport/client/daemon-client'
 import {
+  getAllDaemonAdapters,
   getCurrentDaemonAdapter,
   getLegacyDaemonAdapters,
   listEveryDaemonGeneration,
@@ -141,6 +144,17 @@ export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
   return sessions?.map(({ protocolVersion: _protocolVersion, ...session }) => session) ?? null
 }
 
+/** Live sessions plus chat relays across every daemon generation; null when one cannot answer. */
+export async function countLiveDaemonSessionsAndRelays(): Promise<number | null> {
+  const counts = adapter
+    ? await listEveryDaemonGeneration(adapter, async (a) => {
+        const { sessions, liveRelays } = await a.listSessionsAndRelays()
+        return [sessions.length + liveRelays]
+      })
+    : null
+  return counts?.reduce((sum, count) => sum + count, 0) ?? null
+}
+
 /** Like listLiveDaemonSessions, with the protocol of the daemon generation owning each session. */
 export async function listLiveDaemonSessionsWithProtocol(): Promise<DaemonSessionInfo[] | null> {
   return adapter
@@ -158,6 +172,19 @@ export async function countInProcessFallbackTerminals(): Promise<number> {
   return adapter instanceof DegradedDaemonPtyProvider
     ? (await adapter.fallback.listProcesses()).length
     : 0
+}
+
+/** Every terminal that ends with this process: degraded fallback ones, or all of them when no daemon is installed. */
+export async function countInProcessTerminals(): Promise<number> {
+  if (adapter) {
+    return countInProcessFallbackTerminals()
+  }
+  const local = getLocalPtyProvider()
+  // A disconnected daemon provider stays installed as the local provider; it cannot be counted here.
+  if (!(local instanceof LocalPtyProvider)) {
+    throw new Error('No daemon is installed, and terminals do not run on the in-process provider')
+  }
+  return (await local.listProcesses()).length
 }
 
 /** Atomically fence new daemon terminals and retire only an idle, single-generation daemon. */
@@ -195,6 +222,23 @@ export function releaseDaemonRetirementFence(): void {
   if (adapter && !(adapter instanceof DegradedDaemonPtyProvider)) {
     adapter.releaseIdleRetirementFence()
   }
+}
+
+/** The current daemon's client when it can relay chat agents. */
+export function getProviderRelayHostClient(): DaemonClient | null {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? getCurrentDaemonAdapter(adapter).getProviderRelayClient()
+    : null
+}
+
+/** Every daemon generation's relay-capable client, current first. */
+export function getProviderRelayHostClients(): DaemonClient[] {
+  if (!adapter) {
+    return []
+  }
+  return getAllDaemonAdapters(adapter)
+    .map((each) => each.getProviderRelayClient())
+    .filter((client): client is DaemonClient => client !== null)
 }
 
 export function getProviderProcessHostClient() {

@@ -13,6 +13,7 @@ import type {
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
+import { touchMobileSessionStatus } from './mobile-session-status-touch'
 
 export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   protected abstract createMobileSessionTabsDelivery(): ReturnType<
@@ -28,6 +29,8 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     clientNavigationId?: string,
     candidates?: Iterable<MobileSessionTabSubscription>
   ): MobileSessionTabSubscription[]
+
+  protected abstract hasPaneStatusListeners(paneKey: string): boolean
 
   abstract getTerminalWorktreeIdForPaneKey(
     ...args: Parameters<GetTerminalInteractiveWaitMethods['getTerminalWorktreeIdForPaneKey']>
@@ -58,13 +61,24 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     })
   }
 
-  /** Bump snapshotVersion before emitting (coalesced unless immediate); clients discard re-emits at the same version. */
+  /** Bump snapshotVersion before emitting (coalesced and owed until a client frame unless immediate); clients discard re-emits at the same version. */
   touchMobileSessionTabsForWorktree(
     worktreeId: string,
-    options: { immediate?: boolean } = {}
+    options: { immediate?: boolean; statusPaneKeys?: readonly string[] } = {}
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
+      return
+    }
+    if (!options.immediate && snapshot.worktree === worktreeId) {
+      const listened = options.statusPaneKeys
+        ? options.statusPaneKeys.some((paneKey) => this.hasPaneStatusListeners(paneKey))
+        : this.mobileSessionTabListeners.size > 0
+      touchMobileSessionStatus(worktreeId, listened, {
+        heartbeat: this.mobileSessionTabsAgentStatusHeartbeat,
+        snapshots: this.mobileSessionTabsByWorktree,
+        schedule: (id) => this.scheduleMobileSessionTabsChanged(id)
+      })
       return
     }
     this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
@@ -81,8 +95,33 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     this.scheduleMobileSessionTabsChanged(worktreeId)
   }
 
-  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void {
-    if (this.mobileSessionTabListeners.size === 0) {
+  /** Pays a deferred status bump before a stored snapshot is projected: at most one store per owed bump. */
+  protected settleOwedMobileSessionSnapshotVersion(
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const worktreeId = snapshot.worktree
+    if (this.mobileSessionTabsByWorktree.get(worktreeId) !== snapshot) {
+      return snapshot
+    }
+    return (
+      this.mobileSessionTabsByWorktree.payOwedVersion(worktreeId, () =>
+        this.storeMobileSessionSnapshot(worktreeId, {
+          ...snapshot,
+          snapshotVersion: snapshot.snapshotVersion + 1
+        })
+      ) ?? snapshot
+    )
+  }
+
+  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(
+    worktreeId: string,
+    paneKey?: string
+  ): void {
+    if (
+      paneKey === undefined
+        ? this.mobileSessionTabListeners.size === 0
+        : !this.hasPaneStatusListeners(paneKey)
+    ) {
       return
     }
     this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(worktreeId)

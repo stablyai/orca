@@ -5,10 +5,6 @@
  */
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
-import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { findWslHostDeployment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent
@@ -20,17 +16,10 @@ import {
   listLiveDaemonSessions
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { HistoryReader } from '../../daemon/history/restoration/history-reader'
-import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../../persistence/loading-store/store'
 import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-manifest-export'
-import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-browser-cookie-copy'
-import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
-import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
 import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
-import type {
-  WslMoveDriverDeps,
-  WslMoveHost
-} from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import type { WslMoveDriverDeps } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-exit-proof'
 import { wslMoveSleepFailures } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-sleep-failures'
 import {
@@ -66,7 +55,8 @@ import { registerWslMoveHandlers } from './wsl-move-handlers'
 import { wslMoveMappedDrivePorts } from './wsl-move-mapped-drive-ports'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
-import { connectWslMoveHostService, type WslMoveHostConnectMode } from './wsl-move-host-connect'
+import type { WslMoveHostConnectMode } from './wsl-move-host-connect'
+import { connectWslMoveHost } from './wsl-move-host-wiring'
 import {
   leaveSettingsForWslMoveReload,
   wslMoveReloadableWindow
@@ -75,19 +65,12 @@ import {
   setWslMoveReloadLanding,
   setWslMoveReloadableWindow
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
-import { commitRemoteOrcadMigrationCatalog } from '../../managed-server/migration/catalog/orcad-migration-catalog-client'
-import { listRemoteOrcadRepositories } from '../../managed-server/migration/linking/orcad-server-repositories'
-import { stageRemoteOrcadMigrationBlobChunk } from '../../managed-server/migration/transfers/orcad-migration-chunk-client'
-import { listRemoteOrcadFolderCatalog } from '../../managed-server/migration/linking/orcad-server-folder-workspaces'
 import { makeTerminalScrollbackSnapshotRef } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { pauseWorkspacesForProjectMove } from '../../window/renderer-relays/project-move-pause'
-import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../../wsl/execution/wsl-guest-process-table'
 import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-id'
-import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from '../pty/pane/key-state'
 import { tryGetProviderForPty } from '../pty/provider/registry'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
 /** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {
@@ -260,56 +243,5 @@ export function createWslMoveDriverDeps(
     },
     newMigrationId: () => randomUUID(),
     now: () => new Date()
-  }
-}
-
-async function connectWslMoveHost(
-  userDataPath: string,
-  distro: string,
-  mode: WslMoveHostConnectMode
-): Promise<WslMoveHost | null> {
-  const service = getWslHostService()
-  const environmentId = defaultWslOrcadEnvironmentId(distro)
-  if (!service || !(await connectWslMoveHostService(service, userDataPath, distro, mode))) {
-    return null
-  }
-  const { environment, notCarried } = await ensureWslMoveDestinationBrowserLogins({
-    resolveEnvironment: async () => await resolveEnvironment(userDataPath, environmentId),
-    resaveConnection: () => service.resaveConnection(environmentId),
-    orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
-    resolveHostStorage: wslHostBrowserRouteStorage
-  })
-  const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId)
-  if (!status.ok) {
-    return null
-  }
-  const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
-  const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
-  const distroGuid =
-    (await findWslHostDeployment(userDataPath, environmentId))?.distroId ?? undefined
-  return {
-    environmentId,
-    name: environment.name,
-    ...(distroGuid ? { distroGuid } : {}),
-    capabilities: status.result.capabilities ?? [],
-    ...(notCarried ? { browserLoginsNotCarried: notCarried } : {}),
-    catalog: orcadMigrationDestinationFor(environment),
-    commitWithBlobs: (manifest, expectedBlobs) =>
-      commitRemoteOrcadMigrationCatalog(pairingCode, manifest, { ...options, expectedBlobs }),
-    blobs: {
-      stageChunk: (request) => stageRemoteOrcadMigrationBlobChunk(pairingCode, request, options)
-    },
-    readHolding: async () => {
-      const [repositories, folders] = await Promise.all([
-        listRemoteOrcadRepositories(pairingCode, options),
-        listRemoteOrcadFolderCatalog(pairingCode, options)
-      ])
-      return {
-        repoIds: repositories.map((repo) => repo.id),
-        folderWorkspaceIds: folders.folderWorkspaces.map((folder) => folder.id),
-        // The host keeps no per-distro generation it can report yet.
-        highestGeneration: 0
-      }
-    }
   }
 }

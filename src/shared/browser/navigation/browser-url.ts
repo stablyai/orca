@@ -1,6 +1,8 @@
 import '../../orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
+import { kagiQueryWithoutToken } from './kagi-token-query'
 import { getCurrentLocalPlatform } from '../../execution-host/execution-host'
+import { encodeWellFormedURIComponent } from '../../text/well-formed-uri-component'
 
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
@@ -32,9 +34,6 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 }
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
-
-// Lone surrogates make encodeURIComponent throw. Not toWellFormed() (Android WebView <111) and no lookbehind (WebKit <16.4).
-const LONE_SURROGATE = /[\uD800-\uDFFF]/gu
 
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()
@@ -177,17 +176,25 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
 }
 
 export function redactKagiSessionToken(rawUrl: string): string {
+  if (!rawUrl.includes('?')) {
+    return rawUrl
+  }
   try {
-    const parsed = new URL(rawUrl)
+    const parsed = new URL(normalizeBrowserNavigationUrl(rawUrl) ?? rawUrl)
     const hostname = parsed.hostname.toLowerCase()
     if (
       parsed.protocol === 'https:' &&
       (hostname === 'kagi.com' || hostname === 'www.kagi.com') &&
-      (parsed.pathname === '/search' || parsed.pathname === '/search/') &&
       parsed.searchParams.has('token')
     ) {
-      // Strip Kagi bearer tokens before display, history or persisted tab state.
-      parsed.searchParams.delete('token')
+      // Strip Kagi bearer tokens before display, history or persisted tab state, keeping the
+      // rest of the query as written; an undecodable query falls back to re-serializing it.
+      const kept = kagiQueryWithoutToken(parsed.search)
+      if (kept === null) {
+        parsed.searchParams.delete('token')
+      } else {
+        parsed.search = kept
+      }
       return parsed.toString()
     }
   } catch {
@@ -223,7 +230,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.replace(LONE_SURROGATE, '\uFFFD'))}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeWellFormedURIComponent(query)}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {

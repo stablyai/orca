@@ -18,7 +18,7 @@ const MAX_OPENER_NAME = 80
 export function conversationOpener(asker: ConnectorAsker): ExternalConversationOpener {
   const name = asker.name?.slice(0, MAX_OPENER_NAME)
   return {
-    role: asker.role,
+    role: asker.app ? 'member' : asker.role,
     ...(name ? { name } : {}),
     ...(asker.place.kind === 'direct_message' ? { dm: true as const } : {})
   }
@@ -99,7 +99,7 @@ const SLACK_ID = /^[A-Z0-9]+$/
 const SLACK_TS = /^\d+(?:\.\d+)?$/
 
 /** A Slack conversation's team, channel and thread from its external id (`T:C:ts:UBOT` for a
- *  thread, `T:D:UBOT` for a DM); null for an id this build can't read. Group DMs never arrive: the
+ *  thread, `T:D:D:UBOT` for a DM); null for an id this build can't read. Group DMs never arrive: the
  *  app has no mpim scope. */
 export function slackPlaceOf(externalId: string): SlackPlace | null {
   const parts = externalId.split(':')
@@ -119,6 +119,16 @@ export function slackThreadUrl(externalId: string): string | null {
   }
   const base = `https://app.slack.com/client/${place.teamId}/${place.channelId}`
   return place.threadTs ? `${base}/thread/${place.channelId}-${place.threadTs}` : base
+}
+
+// The thread link slackThreadUrl writes, the same one Orca Cloud puts on a Slack message it delivers.
+const SLACK_THREAD_LINK =
+  /^https:\/\/app\.slack\.com\/client\/([A-Z0-9]+)\/([CG][A-Z0-9]+)\/thread\/\2-(\d+\.\d+)$/
+
+/** The thread a Slack thread link opens, as the ref `slack post` posts in; null for any other link. */
+export function slackThreadRefOfLink(link: string): string | null {
+  const match = SLACK_THREAD_LINK.exec(link)
+  return match ? `slack:${match[1]}:${match[2]}:${match[3]}` : null
 }
 
 /** The "You · Slack" tag's facts for the owner's message posted to the thread from Orca. */

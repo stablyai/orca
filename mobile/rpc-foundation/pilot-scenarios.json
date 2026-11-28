@@ -6246,7 +6246,6 @@
             "page": "page-1",
             "worktree": "id:worktree-1",
             "button": "left",
-            "modifiers": [],
             "radius": 14,
             "x": 40,
             "y": 80
@@ -6368,6 +6367,39 @@
         },
         {
           "checkpoint": "degraded-to-legacy"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-chat-owned",
+      "operation": "aiVault.resume-preparation",
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "claude",
+            "codexHome": null,
+            "executionHostId": "local",
+            "filePath": "/sessions/claude-session-1.jsonl",
+            "sessionId": "claude-session-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "agent_session_conflict",
+              "message": "agent_session_conflict"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused-before-launch"
         }
       ]
     },

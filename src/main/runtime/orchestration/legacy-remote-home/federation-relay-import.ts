@@ -23,6 +23,7 @@ export function importFederatedRelayItem(
       type: MessageType
       priority: MessagePriority
       threadId?: string
+      replyTo?: string
       payload?: string
     }
     lifecycle:
@@ -66,7 +67,7 @@ export function importFederatedRelayItem(
 
     let message = this.getMessageById(params.message.id)
     if (!message) {
-      message = this.insertMessage(params.message)
+      message = this.insertMessage({ ...params.message, senderDispatchId: params.dispatchId })
     } else if (
       message.run_id !== params.message.runId ||
       message.to_handle !== params.message.to ||

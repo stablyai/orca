@@ -13,6 +13,8 @@ export type PendingEditorFocusRequest = {
   fileId: string
   worktreeId: string
   viewStateId: string
+  /** What held focus when the open asked; weak so a stale request cannot keep a removed node alive. */
+  focusedAtOpen: WeakRef<Element> | null
   expiresAt: number
   token: number
 }

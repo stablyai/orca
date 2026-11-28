@@ -57,6 +57,11 @@ export function buildClaudeStatusPayload(
     sessionBoundary: options.sessionBoundary,
     turnCompletedAt: mainAgentRecord?.turnCompletedAt,
     subagents: claudeRosterToSnapshots(state.claudeSubagentRosterByPaneKey.get(paneKey)),
+    // Only a row its background shells hold open names them; a turn in progress does not.
+    backgroundCommands:
+      options.workingMode === 'monitoring'
+        ? state.claudeRunningNonAgentTasksByPaneKey.get(paneKey)
+        : undefined,
     mainAgent: mainAgentRecord ? claudeMainAgentStatusForPayload(mainAgentRecord) : undefined
   })
 }
