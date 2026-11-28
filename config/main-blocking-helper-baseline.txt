@@ -397,7 +397,7 @@
 1 src/main/daemon/executable-host/macos/macos-daemon-bundle.ts
 3 src/main/daemon/executable-host/macos/macos-daemon-launchd.ts
 5 src/main/daemon/executable-host/macos/macos-retired-daemon-recovery.ts
-4 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts
+5 src/main/daemon/executable-host/windows/daemon-host-build-inventory.ts # down from 11; sync getRelocatedDaemonHost path keeps inventoryRoots
 2 src/main/daemon/executable-host/windows/daemon-host-file-hash-cache.ts
 1 src/main/daemon/executable-host/windows/daemon-host-pinned-versions.ts # moved unchanged from daemon-host-relocation.ts, whose row shrank by more; once per daemon provider init
 18 src/main/daemon/executable-host/windows/daemon-host-relocation.ts
