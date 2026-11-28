@@ -82,7 +82,8 @@ export function useArtifactDeletion({
     if (items.length === 0) {
       return
     }
-    const bulk = items.length > 1
+    // From the request, not the filtered list: a bulk action keeps its confirm even when busy rows leave one.
+    const bulk = requested.length > 1
     // Why: "Don't ask again" was given for one artifact at a time; it never waives a bulk confirm.
     if (bulk || !settings?.skipDeleteArtifactConfirm) {
       const accepted = await confirm({
