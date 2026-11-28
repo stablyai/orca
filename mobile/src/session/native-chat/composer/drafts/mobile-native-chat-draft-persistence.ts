@@ -79,7 +79,10 @@ function legacyBackend(key: string): DurableDraftRowBackend {
         (encoded) => (encoded?.length ?? 0) <= PAGE_STORAGE_MAX_VALUE_CHARS
       )
       // Page stores can resolve a dropped write; reading back what stuck makes the next save retry it.
-      return (await persistMirroredReadBack(key, fitted)) === fitted
+      return (
+        (await persistMirroredReadBack(key, fitted)) === fitted &&
+        fitted === encodeLegacySlot(savedDraftsValue(parseSavedDrafts(value)))
+      )
     }
   }
 }
@@ -107,14 +110,17 @@ function deviceStoreBackend(workspace: Workspace, legacyKey: string): DurableDra
       }
       return { ok: true, value }
     },
-    write: (value) =>
-      row.write(
-        fitSavedDrafts(
-          value,
-          (fitted) => fitted,
-          (fitted) => encodeDeviceStoreValue(fitted).length <= DEVICE_STORE_MAX_VALUE_LENGTH
-        )
+    write: async (value) => {
+      const fitted = fitSavedDrafts(
+        value,
+        (next) => next,
+        (next) => encodeDeviceStoreValue(next).length <= DEVICE_STORE_MAX_VALUE_LENGTH
       )
+      return (
+        (await row.write(fitted)) &&
+        JSON.stringify(fitted) === JSON.stringify(savedDraftsValue(parseSavedDrafts(value)))
+      )
+    }
   }
 }
 
@@ -208,4 +214,11 @@ export function closeSavedMobileNativeChatDraft(scope: string): void {
     }
     tab.workspace.row.save('immediate')
   }
+}
+
+export function persistMobileNativeChatDrafts(
+  hostId: string,
+  worktreeId: string
+): Promise<boolean> {
+  return workspaceFor(hostId, worktreeId).row.persist()
 }

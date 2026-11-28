@@ -187,3 +187,24 @@ export function assertTerminalSendExactPtyBinding(
   }
   throw new Error('terminal_guard_not_writable')
 }
+
+export function reserveTerminalSendInput(
+  runtime: Pick<OrcaRuntimeService, 'beginMobileInputFloor'>,
+  claim: MobileInputFloorClaimHolder,
+  mobileClientId: string | null | undefined,
+  reserveReply?: (ptyId: string) => void
+): ((ptyId: string) => void) | undefined {
+  if (!reserveReply && !mobileClientId) {
+    return undefined
+  }
+  return (ptyId) => {
+    reserveReply?.(ptyId)
+    if (mobileClientId) {
+      const next = runtime.beginMobileInputFloor(ptyId, mobileClientId)
+      if (!next) {
+        throw new Error('mobile_input_floor_unavailable')
+      }
+      claim.current = next
+    }
+  }
+}

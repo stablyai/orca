@@ -2441,6 +2441,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "에이전트가 내 응답을 기다릴 때만",
       "sound": "알림음"
+    },
+    "reply": {
+      "failed": "답장을 보내지 못했습니다",
+      "unconfirmed": "전달을 확인할 수 없습니다. 다시 보내기 전에 채팅을 확인하세요.",
+      "refused": "호스트가 답장을 거부했습니다. 채팅을 확인하세요.",
+      "unreachable": "호스트에 연결할 수 없습니다. 답장이 저장되었습니다."
     }
   },
   "onboarding": {

@@ -1,5 +1,4 @@
 // Send background push after socket fan-out without making sockets wait or fail on gateway results.
-import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
 import {
   allowsMobilePushDelivery,
   mobilePushAlertContent
@@ -10,43 +9,34 @@ import {
   pushBurstSubject,
   type ExecutionHostPushCoverage
 } from './push-burst-slots'
+import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
+import type { MobilePushRegistration } from '../../../shared/notifications/mobile-push-contract'
+import { captureNotificationReplyTarget } from './notification-reply-target'
 import type { PushGatewayClient, PushSendNotification } from './push-gateway-client'
 import { PushOutcomeCounters } from './push-outcome-counters'
 import {
   NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
   type NotificationPushCoverageRequest
 } from '../../../shared/rpc-contract/notifications/notifications-params'
-import type { MobilePushDeliveryMode } from './mobile-push-delivery-policy'
+import {
+  notificationReplyFields,
+  type NotificationReplyTarget
+} from '../../../shared/notifications/notification-reply'
+import type {
+  PushDispatcherOptions,
+  PushDispatcherRegistry,
+  PushTarget
+} from './push-dispatch-contract'
+export type { PushDispatcherRegistry } from './push-dispatch-contract'
 
 const PUSH_RETRY_DELAY_MS = 2_000
 // Split requests at the gateway's per-send limit so extra paired phones still receive notifications.
 export const MAX_REGISTRATIONS_PER_SEND = 20
 
-export type PushDispatcherRegistry = {
-  listDevices(): readonly { deviceId: string; pushRegistration?: MobilePushRegistration }[]
-  setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean
-}
-
-type PushDispatcherOptions = {
-  client: PushGatewayClient
-  registry: PushDispatcherRegistry
-  deliveryMode?: MobilePushDeliveryMode
-  /** Test seam: lets a suite drive the single retry without real time. */
-  scheduleRetry?: (run: () => void, delayMs: number) => void
-  coverage?: ExecutionHostPushCoverage
-}
-
 export type PushCoverageRequest = NotificationPushCoverageRequest
 
 const NO_COVERAGE: ReadonlySet<string> = new Set()
 const NOTHING_QUEUED: ReadonlySet<string> = new Set()
-
-type PushTarget = {
-  deviceId: string
-  registration: MobilePushRegistration
-  /** The burst slot this push holds, so another host can learn whether it went out. */
-  slot?: string
-}
 
 export class PushDispatcher {
   private readonly slots = new PushBurstSlots()
@@ -57,9 +47,13 @@ export class PushDispatcher {
   private readonly deliveryMode: MobilePushDeliveryMode
   private readonly scheduleRetry: (run: () => void, delayMs: number) => void
   private readonly coverage: ExecutionHostPushCoverage | undefined
+  private readonly replyFor: PushDispatcherOptions['replyFor']
+  private readonly replyCategory: PushDispatcherOptions['replyCategory']
 
   constructor(options: PushDispatcherOptions) {
     this.coverage = options.coverage
+    this.replyFor = options.replyFor
+    this.replyCategory = options.replyCategory
     this.client = options.client
     this.registry = options.registry
     this.deliveryMode = options.deliveryMode ?? 'full'
@@ -84,6 +78,7 @@ export class PushDispatcher {
     if (this.stopped || this.deliveryMode === 'disabled') {
       return
     }
+    const replyTarget = captureNotificationReplyTarget(event, this.replyFor)
     const executionHost = event.type === 'notification' ? event.executionHost : undefined
     const tokenDigests = this.registry
       .listDevices()
@@ -96,7 +91,7 @@ export class PushDispatcher {
           : []
       )
     if (!this.coverage || event.type !== 'notification' || !executionHost || !tokenDigests.length) {
-      this.send(event, NO_COVERAGE)
+      this.send(event, NO_COVERAGE, replyTarget)
       return
     }
     // A mirrored session's own host may already have pushed the phones it has; this copy is for the rest.
@@ -112,7 +107,7 @@ export class PushDispatcher {
       })
       .then((covered) => {
         if (!this.stopped) {
-          this.send(event, covered)
+          this.send(event, covered, replyTarget)
         }
       })
   }
@@ -124,9 +119,13 @@ export class PushDispatcher {
       : []
   }
 
-  private send(event: MobileNotificationEvent, covered: ReadonlySet<string>): void {
+  private send(
+    event: MobileNotificationEvent,
+    covered: ReadonlySet<string>,
+    replyTarget: NotificationReplyTarget | null
+  ): void {
     try {
-      const plan = this.planSend(event, covered)
+      const plan = this.planSend(event, covered, replyTarget)
       if (!plan) {
         return
       }
@@ -160,7 +159,8 @@ export class PushDispatcher {
 
   private planSend(
     event: MobileNotificationEvent,
-    covered: ReadonlySet<string>
+    covered: ReadonlySet<string>,
+    capturedReplyTarget: NotificationReplyTarget | null
   ): { targets: PushTarget[]; notification: PushSendNotification } | null {
     if (event.type === 'dismiss') {
       const target = event.dismissedDelivery ?? event
@@ -211,16 +211,21 @@ export class PushDispatcher {
     if (targets.length === 0) {
       return null
     }
+    this.replyCategory?.refresh()
+    const replyTarget = this.replyCategory?.allows()
+      ? captureNotificationReplyTarget(event, this.replyFor, capturedReplyTarget)
+      : null
+    const notification: PushSendNotification = {
+      expiresAt: Date.now() + 300_000,
+      ...(event.notificationId ? { notificationId: event.notificationId } : {}),
+      ...content,
+      ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
+      ...(event.paneKey ? { paneKey: event.paneKey } : {}),
+      ...(event.executionHost ? { executionHost: event.executionHost } : {})
+    }
     return {
       targets,
-      notification: {
-        expiresAt: Date.now() + 300_000,
-        ...(event.notificationId ? { notificationId: event.notificationId } : {}),
-        ...content,
-        ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),
-        ...(event.paneKey ? { paneKey: event.paneKey } : {}),
-        ...(event.executionHost ? { executionHost: event.executionHost } : {})
-      }
+      notification: { ...notification, ...notificationReplyFields(notification, replyTarget) }
     }
   }
 

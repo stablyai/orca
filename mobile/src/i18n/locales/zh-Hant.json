@@ -2432,6 +2432,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "僅在代理程式需要我時",
       "sound": "通知音效"
+    },
+    "reply": {
+      "failed": "回覆未傳送",
+      "unconfirmed": "無法確認送達。重新傳送前請檢查聊天。",
+      "refused": "主機拒絕了回覆。請檢查聊天。",
+      "unreachable": "無法連線至主機。您的回覆已儲存。"
     }
   },
   "onboarding": {

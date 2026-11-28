@@ -52,7 +52,7 @@ const itemsOpened = bindDeferredRpcOperation(
   })
 )
 
-const itemComment = bindDeferredRpcOperation(
+export const itemComment = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'bots.items.owner.comment',
     method: 'bots.items.owner.comment',

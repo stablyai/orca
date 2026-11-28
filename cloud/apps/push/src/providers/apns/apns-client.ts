@@ -41,7 +41,8 @@ export function apnsBody(delivery: PushDelivery): string {
             alert: { title: delivery.title, body: delivery.body },
             ...(delivery.badge === undefined ? {} : { badge: delivery.badge }),
             ...(delivery.sound === false ? {} : { sound: 'default' }),
-            'thread-id': delivery.hostFingerprint
+            'thread-id': delivery.hostFingerprint,
+            ...(delivery.orca.category ? { category: delivery.orca.category } : {})
           },
     orca: delivery.orca
   })

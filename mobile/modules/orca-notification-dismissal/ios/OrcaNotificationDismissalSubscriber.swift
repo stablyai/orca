@@ -1,7 +1,16 @@
 import ExpoModulesCore
 import UserNotifications
+import ExpoNotifications
 
 public class OrcaNotificationDismissalSubscriber: ExpoAppDelegateSubscriber {
+  public func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    NotificationCenterManager.shared.addDelegate(NotificationReplyBackgroundExecution.shared)
+    return true
+  }
+
   public func application(
     _ application: UIApplication,
     didReceiveRemoteNotification userInfo: [AnyHashable: Any],

@@ -1,3 +1,4 @@
+import { captureTerminalInputScreen } from './terminal/output/terminal-input-screen-observation'
 import { announceAgentCliUpdatesFinished } from '../agent-cli-update/agent-cli-update-events'
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
 import { chatMailPlace } from '../external-conversations/external-conversation-links'
@@ -194,6 +195,9 @@ class OrcaRuntimeService extends OrcaRuntimeWithRelayHostNotices {
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithRelayHostNotices>) {
     super(...args)
+    this.terminalRunFacts.setInputScreenReader((ptyId) =>
+      captureTerminalInputScreen(this.headlessTerminals.get(ptyId))
+    )
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))

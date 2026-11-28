@@ -160,7 +160,7 @@ export function buildVisibleSnapshotReadFallback(
           .slice(charBoundedTail.omittedLineCount)
           .map((row, index) => ({ ...row, wrapped: index > 0 && row.wrapped }))
       : undefined
-  const { tailRows: _priorRows, ...streamRead } = read
+  const { tailRows: _priorRows, draft: _priorDraft, ...streamRead } = read
   return {
     ...streamRead,
     tail: charBoundedTail.tail,
@@ -169,7 +169,7 @@ export function buildVisibleSnapshotReadFallback(
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
     returnedLineCount: charBoundedTail.tail.length,
     source: 'screen',
-    ...(draft ? { draft } : {})
+    ...(draft !== undefined ? { draft } : {})
   }
 }
 

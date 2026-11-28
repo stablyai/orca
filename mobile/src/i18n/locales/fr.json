@@ -2506,6 +2506,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "Uniquement quand un agent a besoin de moi",
       "sound": "Son des notifications"
+    },
+    "reply": {
+      "failed": "Réponse non envoyée",
+      "unconfirmed": "Envoi non confirmé. Vérifiez le chat avant de renvoyer.",
+      "refused": "L’hôte a refusé la réponse. Vérifiez le chat.",
+      "unreachable": "L’hôte est injoignable. Votre réponse a été enregistrée."
     }
   },
   "onboarding": {

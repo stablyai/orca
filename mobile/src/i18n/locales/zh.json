@@ -2550,6 +2550,12 @@
     "notificationDeliverySection": {
       "onlyWhenAgentNeedsInput": "仅在智能体需要我时",
       "sound": "通知声音"
+    },
+    "reply": {
+      "failed": "回复未发送",
+      "unconfirmed": "无法确认送达。重新发送前请检查聊天。",
+      "refused": "主机拒绝了回复。请检查聊天。",
+      "unreachable": "无法连接主机。您的回复已保存。"
     }
   },
   "onboarding": {

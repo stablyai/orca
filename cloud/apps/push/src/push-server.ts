@@ -148,6 +148,7 @@ export function createPushServer(
   app.get('/health', (context) =>
     context.json({ ok: true, pushProtocol: 1, deliveryProtocol: 2, mode: config.mode })
   )
+  app.get('/v1/capabilities', (context) => context.json({ replyCategory: true }))
   app.get('/ready', limitUnauthenticatedIp, async (context) =>
     (await ready())
       ? context.json({ ok: true })
