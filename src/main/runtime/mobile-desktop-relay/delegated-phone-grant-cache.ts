@@ -69,15 +69,18 @@ export class DelegatedPhoneGrantCache {
       return
     }
     const listed = new Set(phones.map((phone) => phone.phoneKey))
+    const checked = new Set<string>()
     for (const [environmentId, entry] of this.entries) {
       if ([...entry.sent].some((phoneKey) => !listed.has(phoneKey))) {
+        checked.add(environmentId)
         this.check(environmentId)
       }
     }
     // Recorded servers with no answer here: a failed sync, or contact before phones were readable.
     void this.servers.list().then((environmentIds) => {
       for (const environmentId of environmentIds) {
-        if (!this.entries.has(environmentId)) {
+        const entry = this.entries.get(environmentId)
+        if (!checked.has(environmentId) && (!entry || entry.result?.kind === 'update-needed')) {
           this.check(environmentId)
         }
       }
@@ -216,8 +219,9 @@ export class DelegatedPhoneGrantCache {
     void this.servers
       .list()
       .then(async (recorded) => {
-        if (recorded.length > 0 && this.hosts.configuredIds) {
-          await this.servers.retain(new Set(await this.hosts.configuredIds()))
+        const { configuredIds } = this.hosts
+        if (recorded.length > 0 && configuredIds) {
+          await this.servers.retain(async () => new Set(await configuredIds()))
         }
       })
       .catch(() => {})

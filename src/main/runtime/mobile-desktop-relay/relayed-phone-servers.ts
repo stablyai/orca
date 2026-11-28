@@ -41,19 +41,23 @@ export class RelayedPhoneServers {
     })
   }
 
-  /** Forget servers no longer configured here: this desktop can never reach them again. */
-  retain(configured: ReadonlySet<string>): Promise<void> {
-    return this.update((ids) =>
-      [...ids].every((id) => configured.has(id))
+  /** Forget servers no longer configured here: this desktop can never reach them again. Read in
+   *  the write queue, so a server recorded meanwhile is already in the configured list. */
+  retain(readConfigured: () => Promise<ReadonlySet<string>>): Promise<void> {
+    return this.update(async (ids) => {
+      const configured = await readConfigured()
+      return [...ids].every((id) => configured.has(id))
         ? null
         : new Set([...ids].filter((id) => configured.has(id)))
-    )
+    })
   }
 
   // `change` returns null when the record already says so: nothing is copied or written.
-  private update(change: (ids: ReadonlySet<string>) => Set<string> | null): Promise<void> {
+  private update(
+    change: (ids: ReadonlySet<string>) => Set<string> | null | Promise<Set<string> | null>
+  ): Promise<void> {
     const write = this.writes.then(async () => {
-      const next = change(await this.ids)
+      const next = await change(await this.ids)
       if (!next) {
         return
       }
