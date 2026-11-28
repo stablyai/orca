@@ -65,7 +65,9 @@ describe('tabContrastMix', () => {
 
   it('derives an opaque readable active label for unfocused split groups', () => {
     const { styles } = paint({}, 'light')
-    expect(styles['--tab-unfocused-active-foreground']).toContain('var(--tab-active-foreground)')
+    expect(styles['--tab-unfocused-active-foreground']).toContain(
+      'var(--tab-active-foreground, var(--foreground))'
+    )
     expect(styles['--tab-unfocused-active-foreground']).not.toContain('opacity')
   })
 
