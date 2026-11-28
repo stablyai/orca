@@ -70,11 +70,16 @@ function getProjectHeaderHostScope(
     return {}
   }
   const hostWorktreeIds = getHostWorktreeIds(group.items, ctx.repoOf, ctx.defaultHostId)
+  let hostWorktreeCounts: Map<ExecutionHostId, number> | undefined
+  if (hostWorktreeIds) {
+    hostWorktreeCounts = new Map()
+    for (const [hostId, ids] of hostWorktreeIds) {
+      hostWorktreeCounts.set(hostId, ids.length)
+    }
+  }
   return {
     hostRepos,
-    hostWorktreeCounts: hostWorktreeIds
-      ? new Map([...hostWorktreeIds].map(([hostId, ids]) => [hostId, ids.length]))
-      : undefined,
+    hostWorktreeCounts,
     hostWorktreeIds
   }
 }
