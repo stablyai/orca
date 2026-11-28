@@ -229,7 +229,7 @@ describe('a home on a slow disk', () => {
       .mockImplementation(() => (tick += 1) + 5 * (listingsOf() - before))
     try {
       const offered = new Set<string>()
-      for (let launch = 0; launch < 30; launch += 1) {
+      for (let launch = 0; launch < 40; launch += 1) {
         const result = await verifyCodexAccountCopies({
           accountHome: home,
           storeHome: store,
@@ -380,30 +380,35 @@ describe('a launch with nothing left of its budget', () => {
     expect((await verify(Date.now() + 60_000)).verified.map((item) => item.copy)).toEqual([copy])
   })
 
-  it('gives an oversized copy no slice once the launch has its 5,000', async () => {
-    const day = '2026/11/20'
-    const name = (i: number) =>
-      `${day}/rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-${i.toString(16).padStart(12, '0')}.jsonl`
-    const big = LINE_1.repeat(20_000)
-    put(storeFile(name(0)), big)
-    const bigCopy = put(conflictCopy(name(0)), big)
-    for (let i = 1; i <= 5_001; i += 1) {
-      put(storeFile(name(i)), LINE_1)
-      put(conflictCopy(name(i)), LINE_1)
-    }
+  it(
+    'gives an oversized copy no slice once the launch has its 5,000',
+    async () => {
+      const day = '2026/11/20'
+      const name = (i: number) =>
+        `${day}/rollout-2026-11-20T10-00-00-0199a1b2-c3d4-7e5f-8a9b-${i.toString(16).padStart(12, '0')}.jsonl`
+      const big = LINE_1.repeat(20_000)
+      put(storeFile(name(0)), big)
+      const bigCopy = put(conflictCopy(name(0)), big)
+      for (let i = 1; i <= 5_001; i += 1) {
+        put(storeFile(name(i)), LINE_1)
+        put(conflictCopy(name(i)), LINE_1)
+      }
 
-    const { verified } = await verifyCodexAccountCopies({
-      accountHome: home,
-      storeHome: store,
-      // Room for 5,000 small pairs, not the big one.
-      budget: { maxBytes: 5_000 * (LINE_1.length * 2 + 1) + 100, deadline: Date.now() + 600_000 },
-      version: 'test-full',
-      managedAccountsRoot: join(root, 'codex-accounts')
-    })
+      const { verified } = await verifyCodexAccountCopies({
+        accountHome: home,
+        storeHome: store,
+        // Room for 5,000 small pairs, not the big one.
+        budget: { maxBytes: 5_000 * (LINE_1.length * 2 + 1) + 100, deadline: Date.now() + 600_000 },
+        version: 'test-full',
+        managedAccountsRoot: join(root, 'codex-accounts')
+      })
 
-    expect(verified).toHaveLength(5_000)
-    expect(verified.some((item) => item.copy === bigCopy)).toBe(false)
-  }, 120_000)
+      expect(verified).toHaveLength(5_000)
+      expect(verified.some((item) => item.copy === bigCopy)).toBe(false)
+    },
+    // 10,000 real files: several seconds on CI disks.
+    120_000
+  )
 })
 
 describe('a walk that meets trouble', () => {

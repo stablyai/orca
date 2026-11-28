@@ -71,6 +71,9 @@ const conflictCopy = (rel = REL): string => join(home, 'sessions.orca-profile-me
 const storeFile = (rel = REL): string => join(store, 'sessions', rel)
 const otherThread = (n: number): string => REL.replace('0199a1b2', `0199a1b${n}`)
 
+// Fails a lock that's still being taken, once the test says so.
+const failTaking: { now?: () => void } = {}
+
 function run(
   options: {
     outcome?: CodexHistoryMoveOutcome
@@ -112,7 +115,7 @@ function run(
       }
       if (options.hang === 'locks-then-fail') {
         return new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('lock helper failed')), 50)
+          failTaking.now = () => reject(new Error('lock helper failed'))
         })
       }
       if (options.locks === false) {
@@ -527,7 +530,9 @@ describe('a step that never answers', () => {
 
     expect(await run({ hang: 'locks-then-fail' })).toBeNull()
     // The failure lands after the run returned; an unhandled one would fail this test file.
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    failTaking.now?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
   it('abandons the run when taking the locks never answers', async () => {
@@ -677,6 +682,8 @@ describe('the key a move records', () => {
     expect(wrote).toBe(true)
 
     expect(await afterGrace()).toMatchObject({ deleted: 0, restored: 1 })
-    expect(readFileSync(copy, 'utf8')).toBe(LINE_1 + LINE_2)
+    // Back in place, then verified again and moved by the same launch: either way still kept.
+    const kept = [copy, ...trashed()].filter((path) => existsSync(path))
+    expect(kept.map((path) => readFileSync(path, 'utf8'))).toEqual([LINE_1 + LINE_2])
   })
 })
