@@ -26,6 +26,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostSidebarReveal } from '../layout/host-sidebar-reveal'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useTopChromeSpace } from '../layout/use-top-chrome-space'
+import { useReleasedSideInset } from '../layout/released-side-inset'
 import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
 /** One 52 pt bar: back, the open tab (the workspace under it), ⋯, and the tab count that opens the sidebar. */
@@ -70,6 +71,7 @@ export function MobileSessionHeader({
   const moreRef = useRef<HostInstance>(null)
   const revealSidebar = useHostSidebarReveal()
   const topChrome = useTopChromeSpace()
+  const releasedStrip = useReleasedSideInset()
   // Why: the first tap must reach the bar with the keyboard open instead of only dismissing it (#5106).
   const keepsKeyboard = useKeyboardPersistingTaps('handled')
   // The clock only re-reads agent states; with no tabs there is nothing to age.
@@ -153,6 +155,12 @@ export function MobileSessionHeader({
       />
     </>
   )
+  // Why: keep the larger of the strip and the top-chrome clearance so controls stay off the clock/camera.
+  const releasedStripPadding = releasedStrip
+    ? releasedStrip.side === 'right'
+      ? { paddingRight: Math.max(releasedStrip.width, topChrome.space?.right ?? 0) }
+      : { paddingLeft: Math.max(releasedStrip.width, topChrome.space?.left ?? 0) }
+    : null
   return (
     <View ref={topChrome.ref} onLayout={topChrome.onLayout}>
       {/* Dragging the bar left opens the sidebar; nothing else in it moves sideways. */}
@@ -167,7 +175,9 @@ export function MobileSessionHeader({
                 paddingLeft: topChrome.space.left,
                 paddingRight: topChrome.space.right,
                 minHeight: topChrome.space.minHeight
-              }
+              },
+              // The background reaches the Duo's status column; tabs and buttons stay clear of it.
+              releasedStripPadding
             ]}
             edges={topChrome.space ? [] : ['top']}
           >

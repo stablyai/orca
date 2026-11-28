@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { BackHandler, Platform } from 'react-native'
 
+export { useShellDuoSideRelease } from '../use-shell-duo-side-release'
+
 type GestureOptions = { setOptions: (options: { gestureEnabled: boolean }) => void }
 
 const parentClaims = new WeakMap<GestureOptions, number>()

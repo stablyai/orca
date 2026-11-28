@@ -3,7 +3,7 @@ import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
-  focusMobileNativeChatTextDestination,
+  composerFieldFocus,
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
@@ -46,6 +46,7 @@ import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-ch
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
+import { composerCornerStyles } from './MobileNativeChatWidthToggle'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useThemedStyles } from '../../../theme/themed-styles'
 
@@ -99,10 +100,13 @@ export function MobileNativeChatComposer({
   onNeedSkills,
   stop = null,
   sendFollowUp = null,
+  fitScreenCorners = false,
+  widthToggle = null,
   steerHead
 }: Props): React.JSX.Element {
   const inputStyles = useThemedStyles(inputStylesSheet)
-  const styles = useThemedStyles(stylesSheet)
+  const styles = composerCornerStyles(useThemedStyles(stylesSheet), fitScreenCorners)
+  const gap = { agent: editSession ? null : (agent ?? null), ring: null, toggle: widthToggle }
   const colors = useMobileColors()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -307,12 +311,7 @@ export function MobileNativeChatComposer({
                     headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
                   }
                 }}
-                onFocus={() => {
-                  setFocused(true)
-                  if (draftScopeKey) {
-                    focusMobileNativeChatTextDestination(draftScopeKey)
-                  }
-                }}
+                onFocus={composerFieldFocus(setFocused, draftScopeKey)}
                 onBlur={() => setFocused(false)}
                 onWebPaste={onWebPaste}
                 // Controlled only transiently right after an autocomplete insert.
@@ -340,7 +339,7 @@ export function MobileNativeChatComposer({
               testID="native-chat-composer-actions"
             >
               <MobileNativeChatDictationLeading
-                {...{ micActive, micStarting, micProcessing, cancelRef }}
+                {...{ micActive, micStarting, micProcessing, cancelRef, gap }}
               >
                 <MobileNativeChatComposerAttachButton
                   onAttachImage={onAttachImage}
