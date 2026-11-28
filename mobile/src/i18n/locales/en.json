@@ -70,7 +70,10 @@
     },
     "nativeChatSettingsScreen": {
       "defaultViewFooter": "Switch one session from its long-press menu.",
-      "openInChat": "Open agent sessions in chat"
+      "openInChat": "Open agent sessions in chat",
+      "composerHeading": "Composer",
+      "hardwareEnterToSend": "Enter to send (hardware keyboard)",
+      "hardwareEnterDescription": "Return sends a chat message; Shift+Return adds a new line. The on-screen keyboard always adds a new line. Terminal keys are unchanged."
     },
     "nativeChatText": {
       "heading": "Text",

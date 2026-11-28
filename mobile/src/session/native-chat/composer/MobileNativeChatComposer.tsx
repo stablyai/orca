@@ -296,13 +296,14 @@ export function MobileNativeChatComposer({
                 value={menu.display.text}
                 skillToken={menu.skillToken}
                 onChangeText={menu.onFieldChange}
-                onKeyboardSubmit={() => {
+                dictating={micLive}
+                onKeyboardSubmit={(alternate) => {
                   const first = menu.rows[0]
                   if (first) {
                     menu.pick(first)
                   } else if (editSession || value.trim() !== '' || attachmentCount > 0) {
-                    void handleSend(editSession ? undefined : { alternate: true }, true)
-                  } else {
+                    void handleSend(alternate && !editSession ? { alternate } : undefined, true)
+                  } else if (alternate) {
                     // Nothing of its own to send, so the head card goes; the queue decides whether it may.
                     headChord?.run(followUp?.action === 'queue' && followUp.offersChoice)
                   }

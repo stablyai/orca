@@ -8,7 +8,8 @@ export type MobileNativeChatComposerFieldProps = Omit<
 > & {
   value: string
   skillToken: string | null
-  onKeyboardSubmit?: () => void
+  onKeyboardSubmit?: (alternate: boolean) => void
+  dictating?: boolean
   /** The page's DOM paste event; native fields have none. */
   onWebPaste?: (event: ClipboardEvent) => void
   // Dictation heard so far, shown between the draft's halves without becoming part of its value.
