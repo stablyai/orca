@@ -1643,6 +1643,8 @@
       "children_other": "{{count}} 件の子ワークスペース",
       "unsavedName": "未保存の名前: {{name}}",
       "folder": "フォルダー",
+      "filterHidden": "非表示",
+      "filterHiddenHint": "サイドバーのフィルターで非表示",
       "project": "プロジェクト {{repo}}",
       "remoteHost": "リモートホスト"
     },

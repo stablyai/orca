@@ -44,6 +44,8 @@ export type SidebarListModelArgs = {
 
 export type SidebarListModel = {
   visibleWorktrees: Worktree[]
+  /** Host identities listed although the filters hide them; their rows say so. */
+  filterHiddenIdentities: ReadonlySet<string>
   visibleScope: ReturnType<typeof useSidebarHostVisibleScope>
   externalWorktreeCards: ReturnType<typeof useSidebarExternalWorktreeCards>
   rowModel: ReturnType<typeof useSidebarSectionRows>

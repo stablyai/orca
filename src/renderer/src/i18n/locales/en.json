@@ -113,6 +113,10 @@
       "confirm": "Adjust & reveal",
       "cancel": "Keep filters"
     },
+    "filterHidden": {
+      "label": "Hidden",
+      "hint": "Hidden by sidebar filters"
+    },
     "revealCurrent": {
       "label": "Reveal current",
       "noWorkspace": "Nothing is open",
@@ -3146,9 +3150,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
-      },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "This worktree is hidden by sidebar filters. The workspace was opened, but it is not shown in Spaces."
       },
       "file": {
         "preview": {

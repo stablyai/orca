@@ -70,8 +70,7 @@ export async function switchGitGraphWorkspace(
     if (workspace) {
       activateAndRevealWorktree(workspace.id, {
         navigationIntent: 'user-open',
-        executionHostId: hostId,
-        clearSidebarFilters: false
+        executionHostId: hostId
       })
     } else {
       toast.message(

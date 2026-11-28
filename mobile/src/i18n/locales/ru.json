@@ -1811,6 +1811,8 @@
       "children_one": "{{count}} дочернее",
       "children_other": "{{count}} дочернего",
       "folder": "Папка",
+      "filterHidden": "Скрыто",
+      "filterHiddenHint": "Скрыто фильтрами боковой панели",
       "project": "Проект {{repo}}",
       "remoteHost": "Удалённый сервер",
       "unsavedName": "Несохранённое название: {{name}}"

@@ -532,6 +532,10 @@
       "confirm": "Ajustar e mostrar",
       "cancel": "Manter filtros"
     },
+    "filterHidden": {
+      "label": "Oculto",
+      "hint": "Oculto pelos filtros da barra lateral"
+    },
     "revealCurrent": {
       "label": "Mostrar atual",
       "noWorkspace": "Nada está aberto",
@@ -4235,9 +4239,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Receitas de raiz provisionada não suportam sparse checkout."
-      },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "Esta worktree está oculta pelos filtros da barra lateral. O espaço de trabalho foi aberto, mas não é exibido em Espaços."
       },
       "file": {
         "preview": {

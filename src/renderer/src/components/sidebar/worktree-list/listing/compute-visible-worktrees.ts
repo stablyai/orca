@@ -10,7 +10,8 @@ import type {
 } from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
-  selectVisibleSidebarWorktrees,
+  selectVisibleSidebarWorktreesMarkingHidden,
+  type VisibleSidebarWorktrees,
   withoutBotListedWorktrees
 } from '../../../../../../shared/sidebar-list/selection/visible-worktrees'
 import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
@@ -46,6 +47,7 @@ export type VisibleWorktreeOptions = {
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
   forcedVisibleWorktreeIds?: readonly string[]
+  forcedVisibleWorktreeIdentities?: readonly string[]
   /** The sorted keys are host identities (the stamp sort's), not bare ids, so a same-id pair keeps two ranks. */
   sortedByHostIdentity?: boolean
   /** Exempt from the sleeping sweep only; unlike forcedVisibleWorktreeIds, every other filter still applies. */
@@ -59,11 +61,19 @@ export function computeVisibleWorktrees(
   sortedKeys: readonly string[],
   opts: VisibleWorktreeOptions
 ): Worktree[] {
+  return computeVisibleWorktreesMarkingHidden(worktreesByRepo, sortedKeys, opts).worktrees
+}
+
+export function computeVisibleWorktreesMarkingHidden(
+  worktreesByRepo: Record<string, Worktree[]>,
+  sortedKeys: readonly string[],
+  opts: VisibleWorktreeOptions
+): VisibleSidebarWorktrees {
   const rankByKey = getSortedWorktreeRankIndex(sortedKeys)
   const keyOf = opts.sortedByHostIdentity
     ? getWorktreeHostIdentity
     : (worktree: Worktree) => worktree.id
-  return selectVisibleSidebarWorktrees({
+  return selectVisibleSidebarWorktreesMarkingHidden({
     rows: withoutBotListedWorktrees(
       getIndexedAllWorktrees(worktreesByRepo),
       opts.botListedWorktreeIdentities
@@ -77,7 +87,8 @@ export function computeVisibleWorktrees(
     filterRepoIds: opts.filterRepoIds,
     injectLineageAncestors: opts.injectLineageAncestors,
     preserveLineageParentOrder: opts.preserveLineageParentOrder,
-    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds
+    forcedVisibleWorktreeIds: opts.forcedVisibleWorktreeIds,
+    forcedVisibleWorktreeIdentities: opts.forcedVisibleWorktreeIdentities
   })
 }
 

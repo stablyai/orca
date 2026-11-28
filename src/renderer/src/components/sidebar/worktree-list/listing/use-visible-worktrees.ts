@@ -12,7 +12,8 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import './visible-worktrees'
-import { computeVisibleWorktrees } from './compute-visible-worktrees'
+import { computeVisibleWorktreesMarkingHidden } from './compute-visible-worktrees'
+import { useForcedVisibleSidebarRows } from './use-forced-visible-sidebar-rows'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
@@ -127,8 +128,9 @@ export function useVisibleSidebarWorktrees(args: {
   })
 
   const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
-  const recomputedVisibleWorktrees = useMemo(() => {
-    const visible = computeVisibleWorktrees(worktreesByRepo, sortedIds, {
+  const forcedVisible = useForcedVisibleSidebarRows(args.agentSendTargetWorktreeId)
+  const recomputed = useMemo(() => {
+    const visible = computeVisibleWorktreesMarkingHidden(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
       tabsByWorktree,
@@ -155,14 +157,12 @@ export function useVisibleSidebarWorktrees(args: {
       preserveLineageParentOrder: sortBy === 'manual',
       // Both sorts rank by host identity (use-sort-order.ts).
       sortedByHostIdentity: true,
-      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-        ? [args.agentSendTargetWorktreeId]
-        : undefined
+      ...forcedVisible
     })
-    return withoutHiddenVmWorktrees(visible, hiddenVmCheckouts)
+    return { ...visible, worktrees: withoutHiddenVmWorktrees(visible.worktrees, hiddenVmCheckouts) }
   }, [
     hiddenVmCheckouts,
-    args.agentSendTargetWorktreeId,
+    forcedVisible,
     worktreeIdsWithLiveAgent,
     sleepingSweepExemptWorktreeIds,
     botListedWorktreeIdentities,
@@ -191,7 +191,13 @@ export function useVisibleSidebarWorktrees(args: {
     worktreeIdsWithStructuredChat
   ])
   // Reuse equal visibility results across epochs to avoid churning the entire row-model chain.
-  const visibleWorktrees = useReusedArrayIdentity(recomputedVisibleWorktrees)
+  const visibleWorktrees = useReusedArrayIdentity(recomputed.worktrees)
+  const { filterHiddenIdentities } = recomputed
 
-  return { visibleWorktrees, pairedDeviceIdsByEnvironment, botListedWorktreeIdentities }
+  return {
+    visibleWorktrees,
+    filterHiddenIdentities,
+    pairedDeviceIdsByEnvironment,
+    botListedWorktreeIdentities
+  }
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
@@ -8,19 +9,28 @@ import {
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { hasRenderedSidebarRowKey } from '../listing/rendered-row-keys'
 import { getKnownSidebarWorktreeById } from './folder-reveal'
 import { readSidebarRevealTarget } from '../../sidebar-reveal-target-state'
 import { runWithFinally } from '@/lib/run-with-finally'
-import {
-  confirmRevealHiddenWorkspace,
-  workspacePassesFilters
-} from './hidden-workspace-reveal-confirmation'
-import { useOpenedWorkspaceRevealPrompt } from './use-opened-workspace-reveal-prompt'
 
 const getAppStoreState = (): ReturnType<typeof useAppStore.getState> => useAppStore.getState()
+
+function workspacePassesFilters(
+  worktree: Worktree,
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly FolderWorkspace[]
+): boolean {
+  const identity = getWorktreeHostIdentity(worktree)
+  return (
+    worktrees.some((candidate) => getWorktreeHostIdentity(candidate) === identity) ||
+    folderWorkspaces.some((workspace) => folderWorkspaceKey(workspace.id) === worktree.id)
+  )
+}
 
 // Adjust grouping and filters before scheduling the requested workspace’s viewport reveal.
 export function useSidebarRevealRequests(args: {
@@ -57,7 +67,6 @@ export function useSidebarRevealRequests(args: {
   useLayoutEffect(() => {
     latestArgs.current = args
   })
-  useOpenedWorkspaceRevealPrompt(args, confirm, confirmationPending)
 
   useEffect(() => {
     if (
@@ -145,7 +154,17 @@ export function useSidebarRevealRequests(args: {
         }
         confirmationPending.current = true
         const confirmed = await runWithFinally(
-          () => confirmRevealHiddenWorkspace(confirm),
+          () =>
+            confirm({
+              initialFocus: 'confirm',
+              title: translate('sidebar.revealFiltered.title', 'Reveal hidden workspace?'),
+              description: translate(
+                'sidebar.revealFiltered.description',
+                'The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.'
+              ),
+              confirmLabel: translate('sidebar.revealFiltered.confirm', 'Adjust & reveal'),
+              cancelLabel: translate('sidebar.revealFiltered.cancel', 'Keep filters')
+            }),
           () => {
             confirmationPending.current = false
           }

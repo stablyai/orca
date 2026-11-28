@@ -29,6 +29,8 @@ import {
   HighlightedText,
   PaletteHostBadgeChip
 } from './worktree-jump-palette-row-content'
+import { useFilterHiddenCopy } from '@/components/sidebar/filter-hidden-badge'
+import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 
 export function WorktreeJumpPaletteWorktreeRow({
   entry,
@@ -40,6 +42,7 @@ export function WorktreeJumpPaletteWorktreeRow({
   controller: WorktreeJumpPaletteController
 }): React.JSX.Element {
   const t = useTranslate()
+  const filterHiddenCopy = useFilterHiddenCopy()
   const {
     repoMap,
     activeWorktreeId,
@@ -133,6 +136,16 @@ export function WorktreeJumpPaletteWorktreeRow({
               {worktree.isMainWorktree && (
                 <span className="shrink-0 self-center rounded border border-muted-foreground/30 bg-muted-foreground/5 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground">
                   {t('auto.components.WorktreeJumpPalette.739bda980c', 'primary')}
+                </span>
+              )}
+              {controller.filterHiddenIdentities.has(getWorktreeHostIdentity(worktree)) && (
+                <span
+                  aria-label={filterHiddenCopy.hint}
+                  title={filterHiddenCopy.hint}
+                  data-filter-hidden-badge=""
+                  className="shrink-0 self-center rounded border border-dashed border-muted-foreground/30 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground"
+                >
+                  {filterHiddenCopy.label}
                 </span>
               )}
               {branch.trim().length > 0 ? (

@@ -113,6 +113,10 @@
       "confirm": "調整並顯示",
       "cancel": "保留篩選條件"
     },
+    "filterHidden": {
+      "label": "已隱藏",
+      "hint": "已被側邊欄篩選條件隱藏"
+    },
     "revealCurrent": {
       "label": "顯示目前項目",
       "noWorkspace": "沒有開啟任何項目",
@@ -3098,9 +3102,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "使用已佈建根目錄的環境範本不支援稀疏檢出。"
-      },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "此工作樹被側邊欄篩選器隱藏。工作區已開啟，但未在空間中顯示。"
       },
       "file": {
         "preview": {

@@ -1699,6 +1699,8 @@
       "children_other": "{{count}} enfants",
       "unsavedName": "Nom non enregistré : {{name}}",
       "folder": "Dossier",
+      "filterHidden": "Masqué",
+      "filterHiddenHint": "Masqué par les filtres de la barre latérale",
       "project": "Projet {{repo}}",
       "remoteHost": "Hôte distant"
     },

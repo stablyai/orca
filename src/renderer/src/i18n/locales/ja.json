@@ -2385,9 +2385,6 @@
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "プロビジョニングされたルートレシピはスパースチェックアウトをサポートしません。"
       },
-      "worktreeJumpNavigation": {
-        "filteredNotice": "このワークツリーはサイドバーフィルターによって非表示になります。ワークスペースが開かれましたが、スペースに表示されません。"
-      },
       "file": {
         "preview": {
           "webClientUnavailable": "Web クライアントではドキュメントのプレビューを利用できません。"
@@ -24116,6 +24113,10 @@
       "description": "アクティブなワークスペースはサイドバーに表示されません。これを表示すると、それを非表示にしているフィルターのみが調整されます。",
       "confirm": "調整して表示",
       "cancel": "フィルタを保持する"
+    },
+    "filterHidden": {
+      "label": "非表示",
+      "hint": "サイドバーのフィルターで非表示"
     },
     "revealCurrent": {
       "label": "現在の項目を表示",

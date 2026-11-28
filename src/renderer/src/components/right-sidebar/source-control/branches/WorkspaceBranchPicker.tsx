@@ -55,8 +55,7 @@ function createEnvironmentNameSelector(environmentId: string | null) {
 function openBranchWorkspace(workspace: BranchWorkspace): void {
   activateAndRevealWorktree(workspace.id, {
     navigationIntent: 'user-open',
-    executionHostId: workspace.hostId,
-    clearSidebarFilters: false
+    executionHostId: workspace.hostId
   })
 }
 
