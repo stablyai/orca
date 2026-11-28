@@ -263,6 +263,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   protected abstract controllerKnowsPtyIsLive(ptyId: string): boolean
   protected abstract isLeafPtyProvenAbsent(ptyId: string): Promise<boolean>
   protected abstract checkDeliverySettledAndArmRecheck(ptyId: string): boolean
+  protected abstract armDeliveryRecheck(ptyId: string): void
   protected abstract isPtyAwaitingUserInput(ptyId: string): boolean
   abstract getTerminalOrchestrationCliTarget(handle: string): OrchestrationCliTarget
   protected abstract resolveOrchestrationPointerSubmitTarget(
