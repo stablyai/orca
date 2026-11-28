@@ -1,4 +1,4 @@
-// How a bot's Items tab groups its items: Needs you, In progress, Waiting, Planned, Snoozed, Stale and
+// How a bot's Items tab groups its items: Needs you, In progress, Planned, Waiting, Snoozed, Stale and
 // Closed. Rows changed since the owner last opened the tab come first, then the latest change; Snoozed,
 // soonest back first.
 import type { BotItemsStale } from '../bot-types'
@@ -18,8 +18,9 @@ export const BOT_ITEM_GROUP_ROWS = 5
 export const BOT_ITEM_GROUP_IDS = [
   'needs_you',
   'working',
-  'waiting',
+  // Planned work is schedulable; Waiting work is blocked, so planned rows come first.
   'planned',
+  'waiting',
   'snoozed',
   'stale',
   'closed'
