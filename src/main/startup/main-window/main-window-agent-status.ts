@@ -8,7 +8,12 @@ import { mainProcessState as state } from '../main-process-state'
 import { pickHostTurnEnd } from '../../../shared/agent-status/contracts/agent-status-types'
 import { cliWriterTopology } from '../../agent-hooks/server/cli-writer-topology'
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
-import { ownerWindowShowsAgentPane } from '../../agent-hooks/window/owner-window-agent-status'
+import {
+  ownerWindowHearsClear,
+  ownerWindowHearsMigrationClear,
+  ownerWindowHearsMigrationNotice,
+  ownerWindowHearsStatus
+} from '../../agent-hooks/window/owner-window-agent-status'
 
 export type MainWindowAgentStatusOptions = {
   window: BrowserWindow
@@ -59,7 +64,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       return
     }
     // Renderer still owns structured rows; forwarding would give each pane key two writers until that bridge retires.
-    if (structuredHost || !ownerWindowShowsAgentPane(state.core.runtime, { paneKey, worktreeId })) {
+    if (structuredHost || !ownerWindowHearsStatus(state.core.runtime, { paneKey, worktreeId })) {
       return
     }
     const launchConfig = state.core.runtime?.getLaunchStatementForPaneKey(
@@ -137,17 +142,19 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
   agentHookServer.setPaneStatusClearListener((clear) => {
     if (
       state.mainWindow?.isDestroyed() ||
-      ('paneKey' in clear && !ownerWindowShowsAgentPane(state.core.runtime, clear))
+      ('paneKey' in clear && !ownerWindowHearsClear(state.core.runtime, clear))
     ) {
       return
     }
     sendAgentStatus('agentStatus:clear', clear, { popout: true })
   })
   setMigrationUnsupportedPtyListener((event) => {
-    const ptyId = event.type === 'set' ? event.entry.ptyId : event.ptyId
+    const runtime = state.core.runtime
     if (
       state.mainWindow?.isDestroyed() ||
-      !ownerWindowShowsAgentPane(state.core.runtime, { ptyId })
+      !(event.type === 'set'
+        ? ownerWindowHearsMigrationNotice(runtime, event.entry)
+        : ownerWindowHearsMigrationClear(runtime, event.ptyId))
     ) {
       return
     }

@@ -31,10 +31,9 @@ export abstract class RuntimeNotifierBinding extends OrcaRuntimeWithPtyControlle
     return typeof of === 'string' ? of : tabListOfPty(of)
   }
 
-  /** The workspace whose tabs hold a live terminal (`tabListOfPty`); null for none by that id. */
-  tabListOfPtyId(ptyId: string): string | null {
-    const pty = this.ptysById.get(ptyId)
-    return pty ? tabListOfPty(pty) : null
+  /** A live terminal's record, for the classifiers that place its facts (`hostListPty`). */
+  ptyRecordOf(ptyId: string): Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined {
+    return this.ptysById.get(ptyId)
   }
 
   protected countTerminalSideEffectConsumingClientEventListeners(): number {

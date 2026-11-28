@@ -14,7 +14,15 @@ import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/ser
 import { paneKeyPtyId } from '../../ipc/pty/pane/key-state'
 import { registerAgentHookHandlers } from '../../ipc/agent-hooks/agent-hooks'
 import { ownerWindowProbe } from './owner-window-probe.test-support'
-import { rig, settleTeammateRig } from './teammate-tabs.test-support'
+import { rig, settleTeammateRig, TEAMMATE } from './teammate-tabs.test-support'
+import { personWorkspaceKey } from '../../../shared/workspace/identity/person-workspace-key'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import { TEAMMATE_HOMES_SESSION_PARTITION as TEAM } from '../../../shared/workspace-session/teammate-homes-session-partition'
+import { mobileTerminalTabPaneKey } from '../../runtime/session-lifecycle/projection/runtime-mobile-session-projection'
+import {
+  clearMigrationUnsupportedPty,
+  setMigrationUnsupportedPty
+} from '../../agent-hooks/observations/migration-unsupported-pty-state'
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => unknown>())
 vi.mock('electron', () => ({
@@ -52,7 +60,9 @@ function startTerminalsOnTheHost(r: Rig, onKill: (ptyId: string) => void) {
   })
 }
 
-const Terminal = z.object({ tab: z.looseObject({ id: z.string(), ptyId: z.string() }) })
+const Terminal = z.object({
+  tab: z.looseObject({ id: z.string(), ptyId: z.string(), terminal: z.string() })
+})
 
 /** A terminal a device opens, bound to its pane as the provider binds a spawn. */
 async function openTerminal(r: Rig, deviceId: string) {
@@ -191,6 +201,130 @@ it('keeps a teammate’s agent terminal and its launch recipe off the owner’s 
     // The owner's own opens in the window, as the window owns the layout.
     await launch('owner-desk')
     expect(owner.probe.relays.map((relay) => relay.name)).toEqual(['revealTerminalSession'])
+  } finally {
+    owner.close()
+  }
+})
+
+it('leaves a teammate’s status no live terminal places out of the pulled snapshot, and keeps the owner’s restored one', async () => {
+  const r = await rig()
+  const K = personWorkspaceKey({ folderWorkspaceId: r.home.slice('folder:'.length), ...TEAMMATE })
+  const LEAF = '0f8fad5b-d9cb-469f-a165-70867728950e'
+  // The owner's terminal restored from their saved layout, with no process or window pane yet.
+  const ownersTab = {
+    id: 'owner-tab',
+    ptyId: null,
+    worktreeId: r.workspace,
+    title: 'Terminal 1',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 1
+  }
+  r.profile.setWorkspaceSession({
+    ...getDefaultWorkspaceSession(),
+    tabsByWorktree: {
+      [r.workspace]: [ownersTab]
+    }
+  })
+  // A teammate's terminal in their own workspace, restored with no process.
+  r.profile.setWorkspaceSession(
+    {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [K]: [{ ...ownersTab, id: 'mate-saved', worktreeId: K }] }
+    },
+    TEAM
+  )
+  const listed = await r.runtime.listMobileSessionTabs(`id:${K}`)
+  const matesSaved = listed.tabs.find((tab) => tab.type === 'terminal')
+  expect(matesSaved).toBeDefined()
+  registerAgentHookHandlers(r.runtime)
+  const row = (paneKey: string, worktreeId?: string) => ({
+    paneKey,
+    ...(worktreeId ? { worktreeId } : {}),
+    payload: { state: 'done', agentType: 'claude' }
+  })
+  vi.spyOn(agentHookServer, 'getStatusSnapshot').mockReturnValue(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pull reads only these fields.
+    [
+      row(`owner-tab:${LEAF}`, r.workspace),
+      // A teammate's, saved across a restart: its terminal is gone, nothing places its pane.
+      row(`gone-tab:${LEAF}`, r.workspace),
+      row(`mate-tab:${LEAF}`, K),
+      // A hook that names no workspace: the pane is placed in the teammate's list.
+      row(mobileTerminalTabPaneKey(matesSaved!)!)
+    ] as unknown as ReturnType<typeof agentHookServer.getStatusSnapshot>
+  )
+
+  const pulled = z
+    .array(z.looseObject({ paneKey: z.string() }))
+    .parse(handlers.get('agentStatus:getSnapshot')?.())
+  expect(pulled.map((status) => status.paneKey)).toEqual([`owner-tab:${LEAF}`])
+})
+
+it('keeps a teammate’s terminal migration notice off the owner’s window, pushed and pulled', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r, (ptyId) => void r.runtime.onPtyExit(ptyId, 0))
+  const ownersTerminal = await openTerminal(r, 'owner-desk')
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  registerAgentHookHandlers(r.runtime)
+  const owner = await besideOwnersWindow(r)
+  const notice = (terminal: { ptyId: string; tabId: string }) => ({
+    ptyId: terminal.ptyId,
+    worktreeId: r.workspace,
+    tabId: terminal.tabId,
+    reason: 'legacy-numeric-pane-key' as const,
+    source: 'local' as const,
+    updatedAt: 1
+  })
+  try {
+    setMigrationUnsupportedPty(notice(matesTerminal))
+    clearMigrationUnsupportedPty(matesTerminal.ptyId)
+    setMigrationUnsupportedPty(notice(matesTerminal))
+    expect(owner.probe.relays).toEqual([])
+    setMigrationUnsupportedPty(notice(ownersTerminal))
+    expect(owner.probe.relays.map((relay) => relay.name)).toEqual([
+      'sendToWindow:agentStatus:migrationUnsupported'
+    ])
+
+    const pulled = z
+      .array(z.looseObject({ ptyId: z.string() }))
+      .parse(handlers.get('agentStatus:getMigrationUnsupportedSnapshot')?.())
+    expect(pulled.map((entry) => entry.ptyId)).toEqual([ownersTerminal.ptyId])
+  } finally {
+    clearMigrationUnsupportedPty(matesTerminal.ptyId)
+    clearMigrationUnsupportedPty(ownersTerminal.ptyId)
+    owner.close()
+  }
+})
+
+it('closes a teammate’s terminal by its handle without telling the owner’s window', async () => {
+  const r = await rig()
+  startTerminalsOnTheHost(r, (ptyId) => void r.runtime.onPtyExit(ptyId, 0))
+  const matesTerminal = await openTerminal(r, 'mate-desk')
+  await chatTabCommandsSettled()
+  const K = personWorkspaceKey({ folderWorkspaceId: r.home.slice('folder:'.length), ...TEAMMATE })
+  // A launch draft in their terminal's tab is their workspace's.
+  const issued = r.runtime['handles']
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's handle table is a Map.
+  const handles = issued as Map<string, NonNullable<ReturnType<typeof issued.get>>>
+  const record = handles.get(matesTerminal.terminal)!
+  handles.set('mate-draft', { ...record, handle: 'mate-draft', tabId: matesTerminal.tabId })
+  expect(r.runtime['resolveNativeChatLaunchDraftOwner']('mate-draft')?.worktreeId).toBe(K)
+  handles.delete('mate-draft')
+  // Its pane, as the launch records it.
+  Object.assign(r.runtime['ptysById'].get(matesTerminal.ptyId)!, {
+    tabId: matesTerminal.tabId,
+    paneKey: matesTerminal.paneKey
+  })
+  const owner = await besideOwnersWindow(r)
+  const warn = vi.spyOn(console, 'warn')
+  try {
+    await r.runtime.closeTerminal(matesTerminal.terminal)
+    await chatTabCommandsSettled()
+    expect(owner.probe.relays).toEqual([])
+    expect(warn.mock.calls.flat().map(String).join('\n')).not.toMatch(/window_relay/)
   } finally {
     owner.close()
   }

@@ -45,7 +45,7 @@ export abstract class RuntimeTerminalNames extends RuntimeWorkspaceArchive {
       // A window without this pane cannot publish the rename for paired clients.
       if (this.notifier?.renameTerminal && tabId) {
         this.publishUnrenderedTerminalTitle(pty.pty.worktreeId, tabId, customTitle)
-        this.notifier.renameTerminal(tabId, title, pty.pty.worktreeId)
+        this.notifier.renameTerminal(tabId, title, list)
       }
       return { handle, tabId, title }
     }

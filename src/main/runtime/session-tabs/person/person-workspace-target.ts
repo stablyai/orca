@@ -55,3 +55,11 @@ export function tabListOfPty(pty: Pick<RuntimePtyWorktreeRecord, 'worktreeId' | 
     ...tabListTeammate(pty.holder)
   })
 }
+
+/** Whether a PTY's facts (output, use, liveness) feed the owner's sidebar, notifications and
+ *  devices: the host list's alone, and never one whose list is unknown (no record). */
+export function hostListPty(
+  pty: Pick<RuntimePtyWorktreeRecord, 'holder' | 'worktreeId'> | undefined
+): boolean {
+  return pty !== undefined && windowOwns(tabListOfPty(pty))
+}

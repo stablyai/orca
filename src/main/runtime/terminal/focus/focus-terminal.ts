@@ -85,7 +85,7 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
           }
           const recorded = this.paneOfPty(live.pty)
           const parsedPaneKey = parsePaneKey(recorded.paneKey ?? '')
-          const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
+          const revealed = await notifier.revealTerminalSession(this.tabWorkspaceOf(live.pty), {
             ptyId: live.pty.ptyId,
             title:
               this.getPtyManualTitle(live.pty, false) ??
