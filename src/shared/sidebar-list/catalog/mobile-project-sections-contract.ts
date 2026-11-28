@@ -35,7 +35,7 @@ export type MobileProjectSectionCatalog = {
   projectGroups?: ProjectGroup[]
 }
 
-/** Null until a desktop window has published its sidebar catalog. */
+/** Null until a window has published its sidebar catalog; a headless host (serve, orcad) builds its own. */
 export type MobileProjectSectionsResult = { catalog: MobileProjectSectionCatalog | null }
 
 function sectionRepo(repo: Repo): MobileProjectSectionRepo {
