@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import {
   cleanupCalls,
@@ -14,9 +14,15 @@ vi.mock('sonner', () => ({
 }))
 
 beforeEach(() => {
+  // Only Date: the host fake and write queue settle through real promises.
+  vi.useFakeTimers({ now: 1_000_000, toFake: ['Date'] })
   vi.clearAllMocks()
   host.ignoresCleanup = false
   host.gate = null
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 // Counts id reads on copies of the notes, so a scan of every note shows up as reads.

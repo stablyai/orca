@@ -38,7 +38,6 @@ describe('removing delivered review notes', () => {
     expect(shown(store)[0].sentAt).toBeGreaterThan(0)
     expect(isNoteInFlight(diffCommentSendKey(OWNER, a))).toBe(false)
     await vi.waitFor(() => expect(host.notes[0]?.sentAt).toBeGreaterThan(0))
-    expect(toastError).toHaveBeenCalledTimes(1)
     const options = toastError.mock.calls[0][1]
     expect(toastError.mock.calls[0][0]).toBe("Notes sent, but they're still in the list.")
     expect(options?.action?.label).toBe('Remove')

@@ -187,14 +187,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     // Why: some launch paths report one success twice; only unchanged notes not already being removed need the host.
-    const notInFlight = comments.filter(
-      (snapshot) => !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot))
+    const isShownUnchanged = createDeliveredDiffCommentMatcher(shown)
+    const pending = comments.filter(
+      (snapshot) =>
+        !cleanupsInFlight.has(diffCommentSendKey(owner, snapshot)) && isShownUnchanged(snapshot)
     )
-    // Index shown notes only when something was admitted, so a repeated report stays O(reported).
-    const pending =
-      notInFlight.length === 0
-        ? notInFlight
-        : notInFlight.filter(createDeliveredDiffCommentMatcher(shown))
     if (pending.length === 0) {
       return true
     }

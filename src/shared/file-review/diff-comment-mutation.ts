@@ -31,17 +31,24 @@ export function matchesDeliveredDiffComment(
 export function createDeliveredDiffCommentMatcher(
   revisions: readonly DiffCommentDeliverySnapshot[]
 ): (note: DiffCommentDeliverySnapshot) => boolean {
-  const byId = new Map<string, DiffCommentDeliverySnapshot[]>()
-  for (const revision of revisions) {
-    const bucket = byId.get(revision.id)
-    if (bucket) {
-      bucket.push(revision)
-    } else {
-      byId.set(revision.id, [revision])
+  // Built on the first query: callers often pass it to an empty or short-circuiting scan.
+  let byId: Map<string, DiffCommentDeliverySnapshot[]> | undefined
+  return (note) => {
+    if (!byId) {
+      byId = new Map()
+      for (const revision of revisions) {
+        const bucket = byId.get(revision.id)
+        if (bucket) {
+          bucket.push(revision)
+        } else {
+          byId.set(revision.id, [revision])
+        }
+      }
     }
+    return (
+      byId.get(note.id)?.some((revision) => matchesDeliveredDiffComment(note, revision)) ?? false
+    )
   }
-  return (note) =>
-    byId.get(note.id)?.some((revision) => matchesDeliveredDiffComment(note, revision)) ?? false
 }
 
 // Why: a writer's list can predate another device's edits, so apply only what it changed since its base.
