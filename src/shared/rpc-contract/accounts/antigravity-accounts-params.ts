@@ -35,6 +35,17 @@ export const AntigravityAccountSelectParams = lazyZodSchema(() =>
     .strict()
 )
 
+export const AntigravityUnheldTerminalsParams = lazyZodSchema(() =>
+  z
+    .object({
+      previousAccountId: z.string().min(1).max(128).nullable(),
+      accountId: z.string().min(1).max(128),
+      ptyIds: z.array(z.string().min(1).max(512)).max(4096),
+      runningSessions: z.enum(['ask', 'restart', 'keep'])
+    })
+    .strict()
+)
+
 export const AntigravityChatSignInStartParams = lazyZodSchema(() =>
   z.strictObject({
     intent: z.enum(['signIn', 'changeAccount']).optional()

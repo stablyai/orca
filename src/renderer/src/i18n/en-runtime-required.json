@@ -6,6 +6,8 @@
         "bodyFreshCount_other": "{{count}} of them start new conversations, because Orca doesn't know which ones they were in.",
         "body_one": "{{count}} Antigravity session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "body_other": "{{count}} Antigravity sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "freshRestarts_one": "{{count}} starts a new conversation, because Orca doesn't know which one it was in.",
+        "freshRestarts_other": "{{count}} start new conversations, because Orca doesn't know which ones they were in.",
         "reviewBody_one": "{{count}} Antigravity session wasn't moved to {{next}}.",
         "reviewBody_other": "{{count}} Antigravity sessions weren't moved to {{next}}."
       }
@@ -3859,11 +3861,11 @@
         "orcadUnanswered": "Orca’s server in the distro didn’t answer.",
         "peerCheckFailed": "Orca couldn’t ask the WSL host whether another Orca on this computer still uses it: {{detail}}",
         "removalUnrecorded": "Orca couldn’t record what this Remove left running: {{detail}}",
-        "serverIdentityReset": "It runs a reset or reinstalled server, not the one this desktop paired with. Add the host again to pair with it.",
         "restartGaveUp_one": "Could not restart the Orca server in {{distro}} after {{count}} attempt",
         "restartGaveUp_other": "Could not restart the Orca server in {{distro}} after {{count}} attempts",
         "runningListUnavailable": "Windows didn’t report whether the distro is running.",
         "runsAsOtherUser": "Runs as {{user}}. To use {{defaultUser}}, remove the host and add it again.",
+        "serverIdentityReset": "It runs a reset or reinstalled server, not the one this desktop paired with. Add the host again to pair with it.",
         "serviceUnconfirmed": "The WSL service did not confirm whether the distro runs."
       }
     }

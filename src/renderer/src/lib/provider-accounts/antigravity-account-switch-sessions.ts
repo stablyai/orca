@@ -13,6 +13,7 @@ import type {
   AntigravityAccountTarget
 } from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { ClaudeHostRunningSessionsMove } from '../../../../shared/agent-accounts/managed-account-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { antigravityAccountSwitchCopy } from './account-switch-copy'
@@ -101,15 +102,18 @@ export function handleRunningAntigravityTerminalsAfterSwitch(
 ): 'show-confirmation' | 'handled' {
   const generation = ++switchGeneration
   promptStore.set(null)
+  dropRestartsOnSelectedAccount(change)
   const policy = readAntigravityRunningSessionsPolicy(madeElsewhere)
   if (policy === 'keep') {
     return 'show-confirmation'
   }
   const state = useAppStore.getState()
   const sessions: AccountSwitchPromptSessions = { onAccount: [], elsewhere: [], cantMove: [] }
+  const unheld: string[] = []
   for (const terminal of change.terminals) {
     const pane = findPane(state, terminal.ptyId)
     if (!pane) {
+      unheld.push(terminal.ptyId)
       continue
     }
     if (terminal.accountId !== change.previousAccountId) {
@@ -129,15 +133,19 @@ export function handleRunningAntigravityTerminalsAfterSwitch(
     // Why a reason, not a refusal: agy restarts fine without its conversation, only fresh.
     sessions.onAccount.push(resumable ? pane : { ...pane, reason: 'new-conversation' })
   }
-  // Why: terminals kept on another account are listed only alongside a move, as Claude's are.
-  if (sessions.onAccount.length === 0) {
-    return 'show-confirmation'
-  }
   const previousAccountLabel = antigravityAccountLabel(
     change.previousAccountId,
     change.accountEmails
   )
   const nextAccountLabel = antigravityAccountLabel(change.accountId, change.accountEmails)
+  moveUnheldTerminals(change, unheld, policy, {
+    previous: previousAccountLabel,
+    next: nextAccountLabel
+  })
+  // Why: terminals kept on another account are listed only alongside a move, as Claude's are.
+  if (sessions.onAccount.length === 0) {
+    return 'show-confirmation'
+  }
   if (policy === 'restart') {
     queueAntigravityRestarts(sessions.onAccount.map((session) => session.ptyId))
     const review =
@@ -159,12 +167,75 @@ export function handleRunningAntigravityTerminalsAfterSwitch(
       sessions.onAccount.length,
       nextAccountLabel,
       sessions.elsewhere.length,
-      review
+      review,
+      sessions.onAccount.filter((session) => session.reason).length
     )
     return 'handled'
   }
   promptStore.set({ id: generation, sessions, previousAccountLabel, nextAccountLabel })
   return 'handled'
+}
+
+/** An accepted restart relaunches on whatever is selected when it runs; one for a terminal the
+ *  host no longer lists (back on the selected account, or out of agy) must not run at all. */
+function dropRestartsOnSelectedAccount(change: AntigravityAccountSelectionChange): void {
+  const store = useAppStore.getState()
+  const listed = new Set(change.terminals.map((terminal) => terminal.ptyId))
+  for (const [ptyId, agent] of Object.entries(store.pendingPaneAccountRestarts)) {
+    if (agent === 'antigravity' && !listed.has(ptyId)) {
+      store.consumePendingPaneAccountRestart(ptyId)
+    }
+  }
+}
+
+/** Terminals the host listed that no pane here shows, such as an agy a background launch started
+ *  in a workspace this window never opened: the host moves them by this window's rule. */
+function moveUnheldTerminals(
+  change: AntigravityAccountSelectionChange,
+  ptyIds: readonly string[],
+  policy: ClaudeAccountSwitchRunningSessions,
+  labels: { previous: string; next: string }
+): void {
+  if (ptyIds.length === 0) {
+    return
+  }
+  const local: RuntimeClientTarget = { kind: 'local' }
+  void callRuntimeRpc<ClaudeHostRunningSessionsMove | undefined>(
+    local,
+    'accounts.antigravityMoveUnheldTerminals',
+    {
+      previousAccountId: change.previousAccountId,
+      accountId: change.accountId,
+      ptyIds,
+      runningSessions: policy
+    },
+    { timeoutMs: 30_000 }
+  ).then(
+    (move) =>
+      announceHostAccountMove(antigravityAccountSwitchCopy(), move ?? undefined, labels, () =>
+        answerHostAsk(local, change.accountId)
+      ),
+    (error: unknown) =>
+      console.warn(
+        '[antigravity-account-switch] could not move terminals this window lacks:',
+        error
+      )
+  )
+}
+
+/** Answers the Ask the host left open; it does nothing once a later switch has replaced it. */
+async function answerHostAsk(
+  owner: RuntimeClientTarget,
+  accountId: string,
+  target: AntigravityAccountTarget = { runtime: 'host' }
+): Promise<ClaudeHostRunningSessionsMove | undefined> {
+  const reply = await callRuntimeRpc<AntigravityAccountSelectResult>(
+    owner,
+    'accounts.antigravitySelect',
+    { target, accountId, answersAsk: true },
+    { timeoutMs: 30_000 }
+  )
+  return reply.runningSessions
 }
 
 function savedAccountLabel(
@@ -199,15 +270,6 @@ export function handleRunningAntigravityTerminalsAfterSelect(args: {
       previous: savedAccountLabel(args.previous, args.previous?.selectedAccountId ?? null),
       next: savedAccountLabel(next, accountId)
     },
-    async () => {
-      // Answers the Ask the server left open; it does nothing once a later switch has replaced it.
-      const reply = await callRuntimeRpc<AntigravityAccountSelectResult>(
-        owner,
-        'accounts.antigravitySelect',
-        { target, accountId, answersAsk: true },
-        { timeoutMs: 30_000 }
-      )
-      return reply.runningSessions
-    }
+    () => answerHostAsk(owner, accountId, target)
   )
 }

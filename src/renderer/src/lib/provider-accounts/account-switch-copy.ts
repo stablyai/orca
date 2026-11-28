@@ -16,6 +16,8 @@ export type AccountSwitchCopy = {
   /** Why a listed session can't move, or what its restart does differently. */
   reasonLabel: (reason: string) => string | undefined
   restarting: (count: number, account: string) => string
+  /** For agents that restart without a known conversation, by starting a new one. */
+  freshRestarts?: (count: number) => string
   hostAsk: (count: number, previous: string) => string
   stranded: (count: number, previous: string) => string
   settingTitle: string
@@ -186,6 +188,16 @@ export function antigravityAccountSwitchCopy(t: Translate = translate): AccountS
             'Restarting {{count}} Antigravity sessions on {{account}}',
             { count, account }
           ),
+    freshRestarts: (count) =>
+      t(
+        'accounts.antigravity.switchSessions.freshRestarts',
+        "{{count}} start new conversations, because Orca doesn't know which ones they were in.",
+        {
+          count,
+          defaultValue_one:
+            "{{count}} starts a new conversation, because Orca doesn't know which one it was in."
+        }
+      ),
     hostAsk: (count, previous) =>
       count === 1
         ? t(

@@ -158,6 +158,8 @@ export type ClaudeHostRunningSessionsMove = {
   canRestart?: number
   /** Identifies this Ask so only a reply to this exact toast can restart the sessions it counted. */
   askId?: string
+  /** Of `restarting`, those starting a new conversation because the server doesn't know theirs. */
+  fresh?: number
 }
 
 /** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */

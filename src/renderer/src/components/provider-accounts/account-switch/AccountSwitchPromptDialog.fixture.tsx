@@ -10,7 +10,7 @@ const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 const LEAF_C = '33333333-3333-4333-8333-333333333333'
 
-const store = {
+const rows = {
   worktreesByRepo: {
     'repo-1': [
       { id: 'wt-api', repoId: 'repo-1', path: '/src/api', branch: 'refs/heads/fix-auth' },
@@ -24,8 +24,9 @@ const store = {
     ],
     'wt-web': [{ id: 'tab-c', worktreeId: 'wt-web', title: 'agy' }]
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dialog's rows read only these fields.
-} as never
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dialog's rows read only these fields.
+const store = rows as never
 
 const session = (ptyId: string, worktreeId: string, tabId: string, leafId: string) => ({
   ptyId,

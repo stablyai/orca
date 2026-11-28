@@ -25774,7 +25774,9 @@
         "strandedOther": "{{count}} Antigravity sessions may still be on {{previous}}. Restart them manually to switch.",
         "settingTitle": "When you switch accounts while agy is running in terminals",
         "settingDescription": "Restarting continues each terminal conversation on the new account, or starts a new one when Orca doesn't know it. Busy sessions stop their current work.",
-        "unsavedLogin": "agy's earlier login"
+        "unsavedLogin": "agy's earlier login",
+        "freshRestarts_one": "{{count}} starts a new conversation, because Orca doesn't know which one it was in.",
+        "freshRestarts_other": "{{count}} start new conversations, because Orca doesn't know which ones they were in."
       }
     },
     "claude": {

@@ -5,6 +5,7 @@ import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { readAgentPaneForeground } from './agent-pane-foreground-read'
 import { AGY_HOST_SELECTION } from '../../../antigravity/agy-account-selection'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
@@ -20,61 +21,102 @@ const NO_ACCOUNT = ''
 
 type AgyTerminal = {
   pty: RuntimePtyWorktreeRecord
+  /** Null when no hook or record named its conversation: a restart starts a new one. */
   session: AgentProviderSessionMetadata | null
   /** The saved account it runs on. */
   account: string
 }
 
+/** The account one agy invocation runs on, and the conversation that invocation reported. */
+type AgyTerminalNote = { account: string; conversationId: string | null }
+
 export type AntigravityHostSwitch = {
   from: string | null
   to: string
-  /** The window that switched restarts its own terminals; the host only lists them. */
+  /** The window that switched restarts the terminals it shows; the host only lists them. */
   movesRunningSessions?: true
   /** The switching client's choice; absent, this host's setting decides. */
   runningSessions?: ClaudeAccountSwitchRunningSessions
 }
 
+export type AntigravityUnheldTerminalsMove = {
+  previousAccountId: string | null
+  accountId: string
+  /** Terminals the window listed but shows no pane for. */
+  ptyIds: readonly string[]
+  runningSessions: ClaudeAccountSwitchRunningSessions
+}
+
 /** agy keeps one login per host, so a switch leaves every agy already running in a terminal on the
- *  previous account until it restarts. A window restarts the ones it shows; a host without one
- *  restarts them itself. */
+ *  previous account until it restarts. A window restarts the ones it shows; the host restarts the
+ *  rest, and all of them when it has no window. */
 export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends OrcaRuntimeWithClaudeRunningPaneAccountMove {
-  /** The account each live agy terminal runs on, noted at every switch it outlived. */
-  private readonly agyTerminalAccounts = new Map<string, string>()
+  /** The account each live agy terminal runs on, noted at every switch its invocation outlived. */
+  private readonly agyTerminalNotes = new Map<string, AgyTerminalNote>()
   private agyPanePlans: Promise<unknown> = Promise.resolve()
   private agyPaneRestarts: Promise<unknown> = Promise.resolve()
-  /** The last switch a host without a window left terminals running under Ask, for its answer. */
-  private askedAgyMove: { from: string; to: string } | undefined
+  /** The last switch that left terminals here running under Ask, for its answer. */
+  private askedAgyMove: { from: string; to: string; ptyIds?: ReadonlySet<string> } | undefined
 
   /** After agy's login switched to `to`: what happens to the host's terminals still running agy. */
   onAntigravityAccountSwitched(
     change: AntigravityHostSwitch
   ): Promise<Pick<AntigravityAccountSelectResult, 'runningTerminals' | 'runningSessions'>> {
-    const planned = this.agyPanePlans
-      .then(() => this.planAgyPaneMove(change))
-      .catch((error: unknown) => {
-        // The switch is already saved: a failed plan must not fail its reply.
-        console.warn('[runtime] could not plan moving running agy terminals', error)
-        return {}
+    return this.planAgy(() => this.planAgyPaneMove(change), {})
+  }
+
+  /** The window's switch left these terminals, which it shows no pane for, to the host. */
+  moveUnheldAntigravityTerminals(
+    move: AntigravityUnheldTerminalsMove
+  ): Promise<ClaudeHostRunningSessionsMove | undefined> {
+    return this.planAgy(async () => {
+      // A later switch replaced this one: its own listing covers these terminals.
+      if (AGY_HOST_SELECTION.current() !== move.accountId) {
+        return undefined
+      }
+      const ptyIds = new Set(move.ptyIds)
+      // A terminal started since the switch launched on the account selected now.
+      const off = (await this.listAgyTerminals(move.accountId)).filter(
+        (terminal) => ptyIds.has(terminal.pty.ptyId) && terminal.account !== move.accountId
+      )
+      return this.moveAgyTerminals(off, {
+        from: move.previousAccountId ?? NO_ACCOUNT,
+        to: move.accountId,
+        policy: move.runningSessions,
+        ptyIds
       })
-    this.agyPanePlans = planned
-    return planned
+    }, undefined)
   }
 
   /** Answers the Ask a switch to `accountId` left open, unless a later switch replaced it. */
   answerAntigravityAsk(accountId: string): Promise<ClaudeHostRunningSessionsMove | undefined> {
-    const planned = this.agyPanePlans.then(async () => {
+    return this.planAgy(async () => {
       const asked = this.askedAgyMove
       if (!asked || asked.to !== accountId || AGY_HOST_SELECTION.current() !== accountId) {
         return undefined
       }
       this.askedAgyMove = undefined
-      // A terminal started since the switch launched on the account selected now.
       const left = (await this.listAgyTerminals(accountId)).filter(
-        (terminal) => terminal.account === asked.from
+        (terminal) =>
+          terminal.account === asked.from && (!asked.ptyIds || asked.ptyIds.has(terminal.pty.ptyId))
       )
       return this.restartAgyTerminals(left)
+    }, undefined)
+  }
+
+  /** The terminal's command finished or the terminal exited: a later agy there launches on the
+   *  account selected then. */
+  protected forgetAgyInvocation(ptyId: string): void {
+    this.agyTerminalNotes.delete(ptyId)
+  }
+
+  /** One plan at a time, in switch order; a failed plan never fails the switch, already saved. */
+  private planAgy<T>(plan: () => Promise<T>, fallback: T): Promise<T> {
+    const planned = this.agyPanePlans.then(plan).catch((error: unknown) => {
+      console.warn('[runtime] could not plan moving running agy terminals', error)
+      return fallback
     })
-    this.agyPanePlans = planned.catch(() => undefined)
+    this.agyPanePlans = planned
     return planned
   }
 
@@ -86,9 +128,6 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
     const off = (await this.listAgyTerminals(from)).filter(
       (terminal) => terminal.account !== change.to
     )
-    if (off.length === 0) {
-      return {}
-    }
     const accountEmails: Record<string, string> = {}
     for (const account of [from, change.to, ...off.map((terminal) => terminal.account)]) {
       const email = account === NO_ACCOUNT ? null : AGY_HOST_SELECTION.email(account)
@@ -96,6 +135,7 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
         accountEmails[account] = email
       }
     }
+    // Sent even when empty: a window's open question about an earlier switch is answered by this one.
     const runningTerminals: AntigravityAccountSelectionChange = {
       previousAccountId: change.from,
       accountId: change.to,
@@ -117,52 +157,72 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
       change.runningSessions ??
       this.store?.getSettings().antigravityAccountSwitchRunningSessions ??
       'ask'
-    // As in a window, only the terminals on the account just left move; others were kept on theirs.
-    const onPrevious = off.filter((terminal) => terminal.account === from)
-    if (policy === 'keep' || onPrevious.length === 0) {
-      return {}
-    }
-    if (policy === 'ask') {
-      // Nobody here can answer Ask, and a restart stops a turn mid-work: only an explicit choice does that.
-      const canRestart = onPrevious.filter((terminal) => this.agyTerminalRestartable(terminal))
-      if (canRestart.length > 0) {
-        this.askedAgyMove = { from, to: change.to }
-      }
-      return {
-        runningSessions: {
-          restarting: 0,
-          notMoved: onPrevious.length,
-          ...(canRestart.length > 0 ? { canRestart: canRestart.length } : {})
-        }
-      }
-    }
-    return { runningSessions: this.restartAgyTerminals(onPrevious) }
+    const runningSessions = this.moveAgyTerminals(off, { from, to: change.to, policy })
+    return runningSessions ? { runningSessions } : {}
   }
 
-  /** Restarts each terminal that can resume its conversation, one at a time; says what it did. */
+  /** As in a window, only the terminals on the account just left move; others were kept on theirs. */
+  private moveAgyTerminals(
+    terminals: readonly AgyTerminal[],
+    move: {
+      from: string
+      to: string
+      policy: ClaudeAccountSwitchRunningSessions
+      ptyIds?: ReadonlySet<string>
+    }
+  ): ClaudeHostRunningSessionsMove | undefined {
+    const onPrevious = terminals.filter((terminal) => terminal.account === move.from)
+    if (move.policy === 'keep' || onPrevious.length === 0) {
+      return undefined
+    }
+    if (move.policy === 'restart') {
+      return this.restartAgyTerminals(onPrevious)
+    }
+    // Nobody here can answer Ask, and a restart stops a turn mid-work: only an explicit choice does that.
+    const canRestart = onPrevious.filter((terminal) => this.agyTerminalRestartable(terminal)).length
+    if (canRestart > 0) {
+      this.askedAgyMove = {
+        from: move.from,
+        to: move.to,
+        ...(move.ptyIds ? { ptyIds: move.ptyIds } : {})
+      }
+    }
+    return {
+      restarting: 0,
+      notMoved: onPrevious.length,
+      ...(canRestart > 0 ? { canRestart } : {})
+    }
+  }
+
+  /** Restarts each terminal one at a time, resuming its conversation or starting a new one when
+   *  none is known; says what it did. */
   private restartAgyTerminals(terminals: readonly AgyTerminal[]): ClaudeHostRunningSessionsMove {
     const restart = terminals.filter((terminal) => this.agyTerminalRestartable(terminal))
-    const previous = this.agyPaneRestarts
+    const fresh = restart.filter((terminal) => terminal.session === null).length
     // Why not awaited by the switch: each stop can take seconds, past the client's timeout.
-    this.agyPaneRestarts = previous
+    this.agyPaneRestarts = this.agyPaneRestarts
       .then(async () => {
         for (const { pty, session } of restart) {
-          await this.restartAgyTerminal(pty.ptyId, session!)
+          await this.restartAgyTerminal(pty.ptyId, session)
         }
       })
       .catch((error: unknown) =>
         console.warn('[runtime] could not move running agy terminals', error)
       )
-    return { restarting: restart.length, notMoved: terminals.length - restart.length }
+    return {
+      restarting: restart.length,
+      notMoved: terminals.length - restart.length,
+      ...(fresh > 0 ? { fresh } : {})
+    }
   }
 
   private agyTerminalRestartable(terminal: AgyTerminal): boolean {
-    return terminal.session !== null && this.restartRefusalBeforeStop(terminal.pty) === null
+    return this.restartRefusalBeforeStop(terminal.pty) === null
   }
 
   private async restartAgyTerminal(
     ptyId: string,
-    session: AgentProviderSessionMetadata
+    session: AgentProviderSessionMetadata | null
   ): Promise<void> {
     try {
       const result = await this.restartAgentPaneInPlace(
@@ -177,7 +237,7 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
         })
         return
       }
-      this.agyTerminalAccounts.delete(ptyId)
+      this.agyTerminalNotes.delete(ptyId)
     } catch (error) {
       console.warn('[runtime] could not move a running agy terminal', { ptyId, error })
     }
@@ -187,57 +247,71 @@ export abstract class OrcaRuntimeWithAntigravityRunningPaneAccountMove extends O
    *  another conversation, or a later switch can bring the host back to its account. */
   private async agyTerminalStillMoves(
     ptyId: string,
-    session: AgentProviderSessionMetadata
+    session: AgentProviderSessionMetadata | null
   ): Promise<boolean> {
     const pty = this.ptysById.get(ptyId)
     const terminal = pty?.connected ? this.agyTerminalOf(pty) : null
     const selected = AGY_HOST_SELECTION.current()
+    const noted = this.agyTerminalNotes.get(ptyId)
     if (
       !terminal ||
-      terminal.session?.id !== session.id ||
+      (terminal.session?.id ?? null) !== (session?.id ?? null) ||
       selected === null ||
-      (this.agyTerminalAccounts.get(ptyId) ?? selected) === selected
+      !noted ||
+      noted.account === selected
     ) {
       return false
     }
-    return (await readAgentPaneForeground(this.ptyController, ptyId, 'antigravity')) === true
+    return (await this.agyInFront(ptyId)) === true
   }
 
   /** The host's own terminals with agy in front, each with the account it runs on: the one noted at
-   *  an earlier switch, else `unnoted` (the account selected while it started). */
+   *  an earlier switch its invocation outlived, else `unnoted` (the account selected as it started).
+   *  Read one at a time, since a fresh foreground read can scan the whole process table. */
   private async listAgyTerminals(unnoted: string): Promise<AgyTerminal[]> {
-    const candidates: Omit<AgyTerminal, 'account'>[] = []
-    for (const [ptyId, pty] of this.ptysById) {
-      const terminal = pty.connected ? this.agyTerminalOf(pty) : null
-      if (terminal) {
-        candidates.push(terminal)
-      } else {
-        this.agyTerminalAccounts.delete(ptyId)
+    for (const ptyId of this.agyTerminalNotes.keys()) {
+      if (!this.ptysById.get(ptyId)?.connected) {
+        this.agyTerminalNotes.delete(ptyId)
       }
     }
-    for (const ptyId of this.agyTerminalAccounts.keys()) {
-      if (!this.ptysById.has(ptyId)) {
-        this.agyTerminalAccounts.delete(ptyId)
-      }
-    }
-    const running = await Promise.all(
-      candidates.map((terminal) =>
-        readAgentPaneForeground(this.ptyController, terminal.pty.ptyId, 'antigravity')
-      )
-    )
     const listed: AgyTerminal[] = []
-    candidates.forEach((terminal, index) => {
-      const { ptyId } = terminal.pty
-      // An agy started again in that shell later launches on the account selected then.
-      if (running[index] !== true) {
-        this.agyTerminalAccounts.delete(ptyId)
-        return
+    // A snapshot: the reads below await, while terminals come and go.
+    const ptys = Array.from(this.ptysById.entries())
+    for (const [ptyId, pty] of ptys) {
+      const terminal = pty.connected ? this.agyTerminalOf(pty) : null
+      const running = terminal ? await this.agyInFront(ptyId) : false
+      if (running === false) {
+        this.agyTerminalNotes.delete(ptyId)
       }
-      const account = this.agyTerminalAccounts.get(ptyId) ?? unnoted
-      this.agyTerminalAccounts.set(ptyId, account)
+      // An unreadable foreground keeps its note for the next switch, but nothing moves blind.
+      if (!terminal || running !== true) {
+        continue
+      }
+      const conversationId = terminal.session?.id ?? null
+      const noted = this.agyTerminalNotes.get(ptyId)
+      // Another conversation is a later invocation, which launched on the account selected then.
+      const sameInvocation =
+        noted !== undefined &&
+        (noted.conversationId === null ||
+          conversationId === null ||
+          noted.conversationId === conversationId)
+      const account = sameInvocation ? noted.account : unnoted
+      this.agyTerminalNotes.set(ptyId, {
+        account,
+        conversationId: conversationId ?? noted?.conversationId ?? null
+      })
       listed.push({ ...terminal, account })
-    })
+    }
     return listed
+  }
+
+  /** Whether agy is in front: a shell there (from the cached name) needs no fresh process scan. */
+  private async agyInFront(ptyId: string): Promise<boolean | 'unchecked' | 'team'> {
+    const name = await this.ptyController?.getForegroundProcess(ptyId).catch(() => null)
+    if (name && isShellProcess(name.replace(/^-/, ''))) {
+      return false
+    }
+    return readAgentPaneForeground(this.ptyController, ptyId, 'antigravity')
   }
 
   private agyTerminalOf(pty: RuntimePtyWorktreeRecord): Omit<AgyTerminal, 'account'> | null {

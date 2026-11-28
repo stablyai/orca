@@ -52,6 +52,20 @@ it('asks before restarting a switch made in this window, and restarts what the a
   expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'antigravity' })
 })
 
+it('drops a queued restart once a switch back leaves its terminal on the selected account', () => {
+  withPolicy('restart')
+  handleRunningAntigravityTerminalsAfterSwitch(SWITCH)
+  expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ 'pty-1': 'antigravity' })
+
+  handleRunningAntigravityTerminalsAfterSwitch({
+    ...SWITCH,
+    previousAccountId: 'next',
+    accountId: 'prev',
+    terminals: []
+  })
+  expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+})
+
 it.each([undefined, true as const])(
   'never restarts under Keep (made elsewhere: %s)',
   (elsewhere) => {

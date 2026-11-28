@@ -6,6 +6,7 @@ import {
   AntigravityAccountMutationParams,
   AntigravityAccountSelectParams,
   AntigravityAccountTargetParams,
+  AntigravityUnheldTerminalsParams,
   AntigravityChatApiKeySaveParams,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams,
@@ -13,7 +14,6 @@ import {
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
-import { AGY_HOST_SELECTION } from '../../../../antigravity/agy-account-selection'
 import type { AntigravityAccountSelectResult } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   readAgySignInInBackground,
@@ -195,29 +195,38 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
         throw new Error('Antigravity is signing in. Select an account after it finishes.')
       }
       // Agy already running in a terminal holds the login it started with.
-      const previous = target.runtime === 'host' ? await AGY_HOST_SELECTION.atLaunch() : null
-      let switched = false
+      // Undefined until agy's login is written; the selection it replaced, read in the same step.
+      const switched: { previous?: string | null } = {}
       // New chats use the account at once; running ones move at their next send (the selection
       // noted by the host's vault drives that).
-      const state = await service.selectAccount(accountId, () => (switched = true))
+      const state = await service.selectAccount(accountId, (previous) => {
+        switched.previous = previous
+      })
       if (target.runtime === 'host') {
         // agy's login now verifiably holds it: chats a failed move held back follow at their next send.
         AGY_HOST_SELECTION.prepared({ key: accountId, target: accountId })
       }
       // Chats and terminals here run only on the host's agy; a WSL distro's run their own.
-      if (target.runtime !== 'host' || !switched) {
+      if (target.runtime !== 'host' || switched.previous === undefined) {
         return withAntigravityChatBackend(ctx.runtime, target, state)
       }
       // What chats listed belongs to the previous account.
       forgetAgyLogin(ctx.runtime)
       const terminals = await ctx.runtime.onAntigravityAccountSwitched({
-        from: previous || null,
+        from: switched.previous,
         to: accountId,
         ...(movesRunningSessions ? { movesRunningSessions } : {}),
         ...(runningSessions ? { runningSessions } : {})
       })
       return { ...(await withAntigravityChatBackend(ctx.runtime, target, state)), ...terminals }
     }
+  }),
+  defineMethod({
+    // The window that switched shows no pane for these: the host moves them by its rule.
+    name: 'accounts.antigravityMoveUnheldTerminals',
+    permission: 'accounts-admin',
+    params: AntigravityUnheldTerminalsParams,
+    handler: (move, ctx) => ctx.runtime.moveUnheldAntigravityTerminals(move)
   }),
   defineMethod({
     name: 'accounts.antigravityRemove',

@@ -21,7 +21,7 @@ export function announceHostAccountMove(
   toastId?: string
 ): 'show-confirmation' | 'handled' {
   if (move && move.restarting > 0) {
-    announceAccountRestart(copy, move.restarting, labels.next, move.notMoved)
+    announceAccountRestart(copy, move.restarting, labels.next, move.notMoved, undefined, move.fresh)
     return 'handled'
   }
   if (move?.canRestart && restart) {
@@ -76,24 +76,31 @@ export function announceAccountRestart(
   count: number,
   account: string,
   others: number,
-  review?: () => void
+  review?: () => void,
+  /** Of `count`, those starting a new conversation because Orca doesn't know theirs. */
+  fresh = 0
 ): void {
   const title = copy.restarting(count, account)
-  if (others === 0) {
-    toast.success(title)
-    return
-  }
-  toast.success(title, {
-    description:
-      others === 1
+  const notes = [
+    fresh > 0 ? copy.freshRestarts?.(fresh) : undefined,
+    others === 0
+      ? undefined
+      : others === 1
         ? translate('accounts.claude.switchSessions.notMovedOne', "1 other session wasn't moved.")
         : translate(
             'accounts.claude.switchSessions.notMovedOther',
             "{{count}} other sessions weren't moved.",
             { count: others }
-          ),
+          )
+  ].filter((note): note is string => Boolean(note))
+  if (notes.length === 0) {
+    toast.success(title)
+    return
+  }
+  toast.success(title, {
+    description: notes.join(' '),
     // A server's sessions have no rows here to review.
-    ...(review ? reviewAction(review) : {})
+    ...(review && others > 0 ? reviewAction(review) : {})
   })
 }
 

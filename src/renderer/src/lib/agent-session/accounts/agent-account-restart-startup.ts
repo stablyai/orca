@@ -132,7 +132,31 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'claude' ? null : buildFreshAccountRestartStartup(agent, args))
+  if (resume || agent === 'claude') {
+    return resume
+  }
+  // Why: a fresh agy replaces whatever runs there, so the pane must still show agy, not another agent or its shell.
+  if (agent === 'antigravity' && !paneStillRunsAgent(agent, args)) {
+    return null
+  }
+  return buildFreshAccountRestartStartup(agent, args)
+}
+
+function paneStillRunsAgent(agent: AccountRestartAgent, args: AccountRestartPane): boolean {
+  const state = useAppStore.getState()
+  const paneKey = makePaneKey(args.tabId, args.leafId)
+  const entry = state.agentStatusByPaneKey.get(paneKey)
+  const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+  if (foreground?.shellForeground || (foreground?.agent && foreground.agent !== agent)) {
+    return false
+  }
+  if (entry) {
+    return entry.agentType === agent
+  }
+  const tab = state.tabsByWorktree[args.worktreeId]?.find(
+    (candidate) => candidate.id === args.tabId
+  )
+  return foreground?.agent === agent || tab?.launchAgent === agent
 }
 
 export function buildFreshAccountRestartStartup(

@@ -73,7 +73,14 @@ export const restartingTerminals = defineFixture({
   width: 420,
   render: () => <Stage />,
   interact: async (frame) => {
-    announceAccountRestart(antigravityAccountSwitchCopy(), 2, 'personal@example.com', 1, () => {})
+    announceAccountRestart(
+      antigravityAccountSwitchCopy(),
+      2,
+      'personal@example.com',
+      1,
+      () => {},
+      1
+    )
     await waitForToast(frame)
   }
 })

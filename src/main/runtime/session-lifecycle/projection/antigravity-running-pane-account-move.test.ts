@@ -29,10 +29,17 @@ function selectHostAccount(accountId: string): void {
   AGY_HOST_SELECTION.note({ selectedAccountId: accountId, accounts: [] })
 }
 
-/** One local terminal running agy in conversation `conv`; `events` records stops and relaunches. */
+/** One local terminal running agy in conversation `conv` (or one Orca doesn't know, with null);
+ *  `events` records stops and relaunches. */
 async function runtimeWithAgyTerminal(
-  options: { settings?: Partial<GlobalSettings>; connectionId?: string; isWsl?: boolean } = {}
+  options: {
+    settings?: Partial<GlobalSettings>
+    connectionId?: string
+    isWsl?: boolean
+    conversation?: string | null
+  } = {}
 ) {
+  const conversation = options.conversation === undefined ? 'conv' : options.conversation
   folder = mkdtempSync(join(tmpdir(), 'orca-agy-switch-'))
   const session: WorkspaceSessionState = {
     ...getDefaultWorkspaceSession(),
@@ -58,19 +65,21 @@ async function runtimeWithAgyTerminal(
         ptyIdsByLeafId: { [LEAF]: AGY }
       }
     },
-    sleepingAgentSessionsByPaneKey: {
-      [`${TAB}:${LEAF}`]: {
-        paneKey: `${TAB}:${LEAF}`,
-        tabId: TAB,
-        worktreeId: WORKSPACE,
-        agent: 'antigravity',
-        providerSession: { key: 'conversation_id', id: 'conv' },
-        prompt: '',
-        state: 'working',
-        capturedAt: 1,
-        updatedAt: 1
-      }
-    }
+    sleepingAgentSessionsByPaneKey: conversation
+      ? {
+          [`${TAB}:${LEAF}`]: {
+            paneKey: `${TAB}:${LEAF}`,
+            tabId: TAB,
+            worktreeId: WORKSPACE,
+            agent: 'antigravity',
+            providerSession: { key: 'conversation_id', id: conversation },
+            prompt: '',
+            state: 'working',
+            capturedAt: 1,
+            updatedAt: 1
+          }
+        }
+      : {}
   }
   const workspace = storeFolderWorkspace({ id: 'ws', projectGroupId: 'group', folderPath: folder })
   const store = withDurableRuntimeStore(
@@ -115,7 +124,14 @@ async function runtimeWithAgyTerminal(
     { tabId: TAB, leafId: LEAF },
     options.isWsl
   )
-  return { runtime, events, restarts }
+  if (!conversation) {
+    // An agy Orca launched, before any hook named its conversation.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the PTY record map is the runtime's own; only its launch agent is set.
+    const records = runtime as unknown as { ptysById: Map<string, { launchAgent: string }> }
+    records.ptysById.get(AGY)!.launchAgent = 'antigravity'
+  }
+  const sleeping = session.sleepingAgentSessionsByPaneKey!
+  return { runtime, events, restarts, sleeping }
 }
 
 type CreateTerminal = (
@@ -220,46 +236,83 @@ it('hands a CLI switch on a desktop host to its window, which restarts its own t
   })
 })
 
+/** What a switch made in the window lists for it: the host's agy terminals off the new account. */
+async function listedForWindow(
+  runtime: OrcaRuntimeService,
+  from: string,
+  to: string
+): Promise<unknown> {
+  selectHostAccount(to)
+  const reply = await runtime.onAntigravityAccountSwitched({ from, to, movesRunningSessions: true })
+  return reply.runningTerminals?.terminals
+}
+
 it.each([
   ['an SSH terminal', { connectionId: 'ssh-1' }],
   ['a WSL terminal', { isWsl: true }]
 ])('skips %s, which keeps its own agy login', async (_case, terminal) => {
   const { runtime } = await runtimeWithAgyTerminal(terminal)
-  selectHostAccount('next')
-
-  expect(
-    await runtime.onAntigravityAccountSwitched({
-      from: 'prev',
-      to: 'next',
-      movesRunningSessions: true
-    })
-  ).toEqual({})
+  expect(await listedForWindow(runtime, 'prev', 'next')).toEqual([])
 })
 
 it('lists a kept terminal on the account it runs on, so switching back moves nothing', async () => {
   const { runtime } = await runtimeWithAgyTerminal()
+  expect(await listedForWindow(runtime, 'prev', 'next')).toEqual([
+    { ptyId: AGY, accountId: 'prev' }
+  ])
+  expect(await listedForWindow(runtime, 'next', 'third')).toEqual([
+    { ptyId: AGY, accountId: 'prev' }
+  ])
+  expect(await listedForWindow(runtime, 'third', 'prev')).toEqual([])
+})
+
+it('lists agy started again in a kept terminal on the account selected as it started', async () => {
+  const { runtime, sleeping } = await runtimeWithAgyTerminal()
+  expect(await listedForWindow(runtime, 'prev', 'next')).toEqual([
+    { ptyId: AGY, accountId: 'prev' }
+  ])
+
+  // The user quit agy and ran it again: its hooks name a new conversation.
+  sleeping[`${TAB}:${LEAF}`]!.providerSession = { key: 'conversation_id', id: 'conv-2' }
+
+  expect(await listedForWindow(runtime, 'next', 'third')).toEqual([
+    { ptyId: AGY, accountId: 'next' }
+  ])
+})
+
+it('restarts agy with no known conversation by starting a new one, and says so', async () => {
+  const { runtime, events } = await runtimeWithAgyTerminal({
+    conversation: null,
+    settings: { antigravityAccountSwitchRunningSessions: 'restart' }
+  })
   selectHostAccount('next')
-  const listed = await runtime.onAntigravityAccountSwitched({
-    from: 'prev',
-    to: 'next',
-    movesRunningSessions: true
-  })
-  expect(listed.runningTerminals?.terminals).toEqual([{ ptyId: AGY, accountId: 'prev' }])
 
-  selectHostAccount('third')
-  const kept = await runtime.onAntigravityAccountSwitched({
-    from: 'next',
-    to: 'third',
-    movesRunningSessions: true
+  expect(await runtime.onAntigravityAccountSwitched({ from: 'prev', to: 'next' })).toEqual({
+    runningSessions: { restarting: 1, notMoved: 0, fresh: 1 }
   })
-  expect(kept.runningTerminals?.terminals).toEqual([{ ptyId: AGY, accountId: 'prev' }])
+  await vi.waitFor(() => expect(events).toHaveLength(3))
+  // A new agy, launched as Orca launches one by default.
+  expect(events).toEqual([
+    `stop ${AGY}`,
+    `exited ${AGY}`,
+    "launch agy '--dangerously-skip-permissions'"
+  ])
+})
 
-  selectHostAccount('prev')
+it('moves, by the window’s rule, the terminals its window shows no pane for', async () => {
+  const { runtime, events } = await runtimeWithAgyTerminal()
+  runtime.attachWindow(1)
+  expect(await listedForWindow(runtime, 'prev', 'next')).toEqual([
+    { ptyId: AGY, accountId: 'prev' }
+  ])
+
   expect(
-    await runtime.onAntigravityAccountSwitched({
-      from: 'third',
-      to: 'prev',
-      movesRunningSessions: true
+    await runtime.moveUnheldAntigravityTerminals({
+      previousAccountId: 'prev',
+      accountId: 'next',
+      ptyIds: [AGY],
+      runningSessions: 'restart'
     })
-  ).toEqual({})
+  ).toEqual({ restarting: 1, notMoved: 0 })
+  await vi.waitFor(() => expect(events[0]).toBe(`stop ${AGY}`))
 })
