@@ -21859,6 +21859,7 @@
         "thinking": "Denkt nach",
         "workingFor": "Arbeitet seit {{value0}}",
         "workedFor": "{{value0}} lang gearbeitet",
+        "continuedFor": "{{value0}} lang weitergearbeitet",
         "interruptedAfter": "Nach {{value0}} unterbrochen",
         "failedAfter": "Nach {{value0}} fehlgeschlagen",
         "toggleDetails": "Details zum Durchgang ein-/ausblenden"

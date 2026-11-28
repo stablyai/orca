@@ -9,7 +9,6 @@ import { nativeChatActingTurnKeys } from '../../../../../../shared/native-chat/t
 import { isNativeChatOrcaCard } from '../../../../../../shared/native-chat/native-chat-orca-card'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
-import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
@@ -44,6 +43,7 @@ import {
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
 import { nativeChatBotIntroTurn, nativeChatShownRows } from './native-chat-quiet-turn-rows'
+import { nativeChatTranscriptTurnBars, type NativeChatBarStatus } from './native-chat-turn-segments'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -70,9 +70,14 @@ export type NativeChatMessageSlot = {
   /** Resolved approval/question stands in for the message it answered. */
   receipt: NativeChatResolvedPrompt | undefined
   /** Turn timing shown under this row, already filtered to "should render". */
-  status: NativeChatTurnStatus | undefined
+  status: NativeChatBarStatus | undefined
   /** Provider-opened turns have no prompt; draw their bar at the turn position. */
   statusAbove?: boolean
+  /** The turn's own bar above this row while `status` is the stretch's under it: the turn's first
+   *  loaded row is the person's message mid-turn (`nativeChatTurnSegments`). */
+  leadStatus?: NativeChatTurnStatus
+  /** The fold `status` opens when it is a stretch's, not the whole turn's. */
+  foldKey?: string
   /** In a quiet turn that just settled, what fades out and then goes: the row, or only its bar. */
   leaving?: 'row' | 'bar'
   /** Fold prose/tools behind turn status while retaining work that outlives the turn. */
@@ -159,15 +164,22 @@ export function buildNativeChatTranscript(
   const trailingRunIndex = messages.findLastIndex((message) =>
     nativeChatRowSpeaksOrActs(message, nativeChatRowRendersProse(message), receipts)
   )
+  const introTurn = nativeChatBotIntroTurn(input, messages)
+  // The person's messages mid-turn cut a turn: each carries the bar of the stretch after it.
+  const turnBars = nativeChatTranscriptTurnBars(
+    { messages, turnKeys, foldRows, liveTurnKey, turnStatuses, quiet, introTurn },
+    input.turnBarsOnRows !== false
+  )
+  const { segments } = turnBars
   const { foldedRows, foldableTurnKeys } = nativeChatTurnFold({
     rows: foldRows,
     settledTurnKeys,
-    expandedTurnKeys
+    expandedTurnKeys,
+    foldsBefore: segments.foldsBefore,
+    foldKeys: segments.foldKeys
   })
-  const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
   const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
-  const introTurn = nativeChatBotIntroTurn(input, messages)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
   turnKeys.forEach((turnKey, index) => {
@@ -200,14 +212,7 @@ export function buildNativeChatTranscript(
     pushHeadsBefore(message)
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
-    const bar = turnKey === undefined || turnKey === introTurn ? undefined : bars.get(turnKey)
-    // A turn's bar draws at its first row, so a message folded into it (a steer) carries none.
-    const status =
-      turnKey === undefined || bar?.index !== index || quiet.turns.has(turnKey)
-        ? undefined
-        : turnKey === liveTurnKey
-          ? (turnStatuses.active ?? undefined)
-          : (turnStatuses.completedByTurn[turnKey] ?? undefined)
+    const { status, statusAbove, leadStatus, foldKey } = turnBars.row(index)
     const endsTurn = turnKey !== undefined && lastRowByTurn.get(turnKey) === index
     const turnDiff = endsTurn ? turnDiffs.get(turnKey) : undefined
     const openedPullRequests = endsTurn ? openedPullRequestsByTurn?.get(turnKey) : undefined
@@ -233,21 +238,23 @@ export function buildNativeChatTranscript(
         activeTurnIsWorking,
         trailingRun: index === trailingRunIndex,
         receipt,
-        status: status ?? undefined,
-        statusAbove: bar?.above === true && status !== undefined,
+        status,
+        statusAbove,
+        ...(leadStatus && { leadStatus }),
+        ...(foldKey !== undefined && { foldKey }),
         ...(leaving.rows.has(index)
           ? { leaving: 'row' as const }
           : status !== undefined && leaving.turns.has(turnKey!) && { leaving: 'bar' as const }),
         folded,
         drawsMessage: drawsRow,
-        turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
+        turnFolds: turnKey !== undefined && foldableTurnKeys.has(foldKey ?? turnKey),
         ...(turnKey !== undefined && automationTurns.has(turnKey) && { inAutomationTurn: true }),
         ...(turnKey !== undefined && actingTurns.has(turnKey) && { inActingTurn: true }),
         turnDiff,
         openedPullRequests,
         estimatedHeight: nativeChatMessageSlotHeight(
           message,
-          { receipt, status: status ?? undefined, turnDiff, openedPullRequests, folded },
+          { receipt, status, leadStatus, turnDiff, openedPullRequests, folded },
           typography
         )
       })

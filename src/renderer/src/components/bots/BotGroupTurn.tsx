@@ -169,6 +169,8 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           completedByTurn: working || subagentOpen ? {} : { [turn.operationId]: status }
         },
         expandedTurnKeys: expandedKeys,
+        // The header draws the turn's status and opens it whole.
+        turnBarsOnRows: false,
         turnDiffs: new Map(),
         isWorking: scope.working,
         lifecycleWorking: scope.working,

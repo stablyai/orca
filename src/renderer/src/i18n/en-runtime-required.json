@@ -3033,6 +3033,7 @@
         }
       },
       "status": {
+        "continuedFor": "Continued for {{value0}}",
         "failedAfter": "Failed after {{value0}}",
         "interruptedAfter": "Interrupted after {{value0}}",
         "queueAfterStop": "Queue a message to run after the stop",

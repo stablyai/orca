@@ -21607,6 +21607,7 @@
         "thinking": "Réflexion en cours",
         "workingFor": "En cours depuis {{value0}}",
         "workedFor": "A travaillé pendant {{value0}}",
+        "continuedFor": "A continué pendant {{value0}}",
         "interruptedAfter": "Interrompu après {{value0}}",
         "failedAfter": "Échoué après {{value0}}",
         "toggleDetails": "Basculer les détails du tour"

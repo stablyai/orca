@@ -157,7 +157,7 @@ function deriveTurnFoldRow(
 export type NativeChatTurnFold = {
   /** Rows a folded turn must not draw, by index. */
   foldedRows: ReadonlySet<number>
-  /** Offer disclosure only for turns that actually hide rows. */
+  /** Offer disclosure only for turns (or stretches, by `foldKeys`) that actually hide rows. */
   foldableTurnKeys: ReadonlySet<string>
 }
 
@@ -230,15 +230,23 @@ export function nativeChatTurnAnswerRows(
   return answers
 }
 
-/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open; newly settled turns start collapsed without separate disclosure cleanup. */
+/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open, but for work before a message the person sent into one; newly settled turns start collapsed without separate disclosure cleanup. */
 export function nativeChatTurnFold({
   rows,
   settledTurnKeys,
-  expandedTurnKeys
+  expandedTurnKeys,
+  foldsBefore,
+  foldKeys
 }: {
   rows: readonly NativeChatTurnFoldRow[]
   settledTurnKeys: ReadonlySet<string>
+  /** Opened folds: turns, and the stretches `foldKeys` names. */
   expandedTurnKeys: ReadonlySet<string>
+  /** A running turn the person wrote into: its work before this row index folds as if settled. */
+  foldsBefore?: ReadonlyMap<string, number>
+  /** Rows that fold and open with a stretch of their turn (after the person's message mid-turn)
+   *  rather than the whole turn, by index. */
+  foldKeys?: ReadonlyMap<number, string>
 }): NativeChatTurnFold {
   const answers = nativeChatTurnAnswerRows(rows)
   const lastWorkByTurn = new Map<string, number>()
@@ -258,7 +266,7 @@ export function nativeChatTurnFold({
       !row.draws ||
       row.outlivesTurn ||
       row.explainsTurn ||
-      !settledTurnKeys.has(turnKey)
+      !(settledTurnKeys.has(turnKey) || index < (foldsBefore?.get(turnKey) ?? -1))
     ) {
       continue
     }
@@ -266,8 +274,9 @@ export function nativeChatTurnFold({
     if (answers.has(index) || (row.failedHook && index > (lastWorkByTurn.get(turnKey) ?? -1))) {
       continue
     }
-    foldableTurnKeys.add(turnKey)
-    if (!expandedTurnKeys.has(turnKey)) {
+    const foldKey = foldKeys?.get(index) ?? turnKey
+    foldableTurnKeys.add(foldKey)
+    if (!expandedTurnKeys.has(foldKey)) {
       foldedRows.add(index)
     }
   }

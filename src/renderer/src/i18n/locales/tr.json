@@ -21859,6 +21859,7 @@
         "thinking": "Düşünüyor",
         "workingFor": "{{value0}} süredir çalışıyor",
         "workedFor": "{{value0}} boyunca çalıştı",
+        "continuedFor": "{{value0}} boyunca devam etti",
         "interruptedAfter": "{{value0}} sonra kesildi",
         "failedAfter": "{{value0}} sonra başarısız oldu",
         "toggleDetails": "Tur ayrıntılarını aç/kapat"

@@ -21580,6 +21580,7 @@
         "thinking": "思考",
         "workingFor": "已執行 {{value0}}",
         "workedFor": "工作時間 {{value0}}",
+        "continuedFor": "繼續工作 {{value0}}",
         "interruptedAfter": "{{value0}} 後中斷",
         "failedAfter": "{{value0}} 後失敗",
         "toggleDetails": "切換回合詳細資訊"

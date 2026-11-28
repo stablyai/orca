@@ -72,7 +72,7 @@ function newRowsMarkerSpacing(
 ): string {
   if (place === 'above-row') {
     // A turn with no prompt opens on its bar, which needs the deeper trim too.
-    return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
+    return (slot.statusAbove && slot.status) || slot.leadStatus ? '-mb-3' : '-mb-1.5'
   }
   // Only where your bubble's hover row is the last thing drawn: no delivery or Slack post line under it.
   const afterHoverMeta =
@@ -144,7 +144,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     slot
   const deliveryNotice = context.deliveryNotices?.get(message.id)
   const predecessors = context.taskListPredecessors.get(message.id)
-  const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
+  // A stretch after the person's message mid-turn opens on its own; any other bar opens its turn.
+  const foldKey = slot.foldKey ?? turnKey
+  const expanded = foldKey ? context.expandedTurnIds.has(foldKey) : undefined
   const marker = newRowsMarker ? (
     <NativeChatRowNewRowsMarker
       marker={newRowsMarker}
@@ -162,10 +164,20 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       startedAt={status.startedAt}
       workedSeconds={status.workedSeconds}
       verdict={status.verdict}
+      continued={status.continued === true}
       expanded={expanded === true}
       onToggleExpanded={
-        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+        slot.turnFolds && foldKey ? () => context.onToggleExpandedTurn(foldKey) : undefined
       }
+    />
+  ) : null
+  // Its turn's opener isn't loaded, so this bar hides nothing to open.
+  const leadBar = slot.leadStatus ? (
+    <NativeChatWorkingStatus
+      bot={context.turnBot}
+      startedAt={slot.leadStatus.startedAt}
+      workedSeconds={slot.leadStatus.workedSeconds}
+      verdict={slot.leadStatus.verdict}
     />
   ) : null
   const statusRow =
@@ -195,7 +207,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
     >
       {newRowsMarker?.place === 'above-row' ? marker : null}
       {/* A turn with no user bubble carries its bar above its first row. */}
-      {slot.statusAbove ? statusRow : null}
+      {slot.statusAbove ? statusRow : leadBar}
       {!slot.drawsMessage ? null : itemNotes ? (
         <div className="flex flex-col gap-1.5">
           {itemNotes.map((note) => (
