@@ -25754,7 +25754,28 @@
       "agyCli": "agy CLI",
       "agyUpdateAvailable": "v{{installed}} · v{{latest}} available",
       "agyNotInstalled": "Not installed on this host.",
-      "agyInstallLink": "Install it with Google's installer"
+      "agyInstallLink": "Install it with Google's installer",
+      "switchSessions": {
+        "bodyFresh": "1 Antigravity session is still running on {{previous}}. Orca doesn't know its conversation, so restarting starts a new one on {{next}}. A busy session stops its current work and restarts now.",
+        "body_one": "{{count}} Antigravity session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "body_other": "{{count}} Antigravity sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "bodyFreshCount_one": "{{count}} of them starts a new conversation, because Orca doesn't know its own.",
+        "bodyFreshCount_other": "{{count}} of them start a new conversation, because Orca doesn't know theirs.",
+        "reviewBody_one": "{{count}} Antigravity session wasn't moved to {{next}}.",
+        "reviewBody_other": "{{count}} Antigravity sessions weren't moved to {{next}}.",
+        "listLabel": "Antigravity sessions to restart",
+        "session": "Antigravity session",
+        "reasonNewConversation": "Starts a new conversation",
+        "restartingOne": "Restarting 1 Antigravity session on {{account}}",
+        "restartingOther": "Restarting {{count}} Antigravity sessions on {{account}}",
+        "hostAskOne": "1 Antigravity session is still on {{previous}}.",
+        "hostAskOther": "{{count}} Antigravity sessions are still on {{previous}}.",
+        "strandedOne": "1 Antigravity session may still be on {{previous}}. Restart it manually to switch.",
+        "strandedOther": "{{count}} Antigravity sessions may still be on {{previous}}. Restart them manually to switch.",
+        "settingTitle": "When you switch accounts while agy is running in terminals",
+        "settingDescription": "Restarting continues each terminal conversation on the new account, or starts a new one when Orca doesn't know it. Busy sessions stop their current work.",
+        "unsavedLogin": "agy's earlier login"
+      }
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

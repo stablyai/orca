@@ -4,6 +4,7 @@ import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
+  AntigravityAccountSelectParams,
   AntigravityAccountTargetParams,
   AntigravityChatApiKeySaveParams,
   AntigravityChatSignInCompleteParams,
@@ -12,6 +13,8 @@ import {
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
+import { AGY_HOST_SELECTION } from '../../../../antigravity/agy-account-selection'
+import type { AntigravityAccountSelectResult } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import {
   readAgySignInInBackground,
   restartIdleAgyChats,
@@ -172,13 +175,27 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
-    params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }, ctx) => {
+    params: AntigravityAccountSelectParams,
+    handler: async (
+      { target, accountId, movesRunningSessions, runningSessions, answersAsk },
+      ctx
+    ): Promise<AntigravityAccountSelectResult> => {
+      const service = await getAntigravityAccountService(target)
+      // An answer to Ask selects nothing, so it can never undo a later switch.
+      if (answersAsk) {
+        const moved =
+          target.runtime === 'host' ? await ctx.runtime.answerAntigravityAsk(accountId) : undefined
+        return {
+          ...(await withAntigravityChatBackend(ctx.runtime, target, await service.listAccounts())),
+          ...(moved ? { runningSessions: moved } : {})
+        }
+      }
       // The sign-in writes agy's login itself; a switch now would race it.
       if (target.runtime === 'host' && antigravitySignInHoldsNativeLogin()) {
         throw new Error('Antigravity is signing in. Select an account after it finishes.')
       }
-      const service = await getAntigravityAccountService(target)
+      // Agy already running in a terminal holds the login it started with.
+      const previous = target.runtime === 'host' ? await AGY_HOST_SELECTION.atLaunch() : null
       let switched = false
       // New chats use the account at once; running ones move at their next send (the selection
       // noted by the host's vault drives that).
@@ -186,12 +203,20 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
       if (target.runtime === 'host') {
         // agy's login now verifiably holds it: chats a failed move held back follow at their next send.
         AGY_HOST_SELECTION.prepared({ key: accountId, target: accountId })
-        // Chats run only on the host's agy; what they listed belongs to the previous account.
-        if (switched) {
-          forgetAgyLogin(ctx.runtime)
-        }
       }
-      return withAntigravityChatBackend(ctx.runtime, target, state)
+      // Chats and terminals here run only on the host's agy; a WSL distro's run their own.
+      if (target.runtime !== 'host' || !switched) {
+        return withAntigravityChatBackend(ctx.runtime, target, state)
+      }
+      // What chats listed belongs to the previous account.
+      forgetAgyLogin(ctx.runtime)
+      const terminals = await ctx.runtime.onAntigravityAccountSwitched({
+        from: previous || null,
+        to: accountId,
+        ...(movesRunningSessions ? { movesRunningSessions } : {}),
+        ...(runningSessions ? { runningSessions } : {})
+      })
+      return { ...(await withAntigravityChatBackend(ctx.runtime, target, state)), ...terminals }
     }
   }),
   defineMethod({

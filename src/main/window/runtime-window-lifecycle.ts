@@ -252,7 +252,7 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
     clientHostedBrowserRowsChanged: (event) =>
       send('runtime:clientHostedBrowserRowsChanged', event),
-    claudeAccountSelected: (change) => send('claudeAccounts:selectedElsewhere', change)
+    accountSelectedElsewhere: (agent, change) => send(`${agent}Accounts:selectedElsewhere`, change)
   })
   const detachClientNotices = runtime.onClientEvent(
     (event) => {

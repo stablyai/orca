@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/index'
 import { singlePaneLayoutSnapshot } from '@/store/terminals/layout/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
-  buildCodexAccountRestartStartup,
+  buildFreshAccountRestartStartup,
   buildPaneAccountRestartStartup
 } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import { isForeignMachineCodexPtyId } from '@/lib/agent-session/accounts/codex-pane-selection-lane'
@@ -128,8 +128,8 @@ async function executeDetachedCodexPaneRestart(
 ): Promise<void> {
   const state = useAppStore.getState()
   if (!located.leafId) {
-    // Why: Claude cannot resume without a leaf's session, and a fresh Claude would lose the conversation.
-    if (agent === 'claude') {
+    // Why: Claude and agy cannot resume without a leaf's session, and a fresh one would lose the conversation.
+    if (agent !== 'codex') {
       return
     }
     // Without a usable layout leaf, stop the old PTY and let the next mount run Codex startup.
@@ -137,7 +137,7 @@ async function executeDetachedCodexPaneRestart(
       reopenCurrentCodexRestartPrompt(located, ptyId)
       return
     }
-    const startup = buildCodexAccountRestartStartup({
+    const startup = buildFreshAccountRestartStartup('codex', {
       worktreeId: located.worktreeId,
       shellOverride: located.tab.shellOverride
     })

@@ -14,7 +14,8 @@ import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/accounts/provider-icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
-import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
+import { RunningSessionSwitchSetting } from '../running-session-switch-setting'
+import { claudeAccountSwitchCopy } from '@/lib/provider-accounts/account-switch-copy'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import {
   canOfferClaudeSignInLink,
@@ -287,7 +288,11 @@ export function renderClaudeAccountsSection(
           />
         )}
         {isRemoteAccountScope ? null : (
-          <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
+          <RunningSessionSwitchSetting
+            copy={claudeAccountSwitchCopy(t)}
+            value={settings.claudeAccountSwitchRunningSessions}
+            onChange={(value) => updateSettings({ claudeAccountSwitchRunningSessions: value })}
+          />
         )}
       </SettingsGroup>
     </div>

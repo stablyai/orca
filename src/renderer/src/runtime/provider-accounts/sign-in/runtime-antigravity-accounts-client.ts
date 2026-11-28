@@ -1,12 +1,16 @@
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import {
   ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS,
+  type AntigravityAccountSelectResult,
   type AntigravityAccountState,
   type AntigravityChatSignInIntent,
   type AntigravityAccountTarget
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_RUNNING_TERMINALS_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_AUTH_DETECT_RUNTIME_CAPABILITY,
@@ -49,6 +53,41 @@ export async function callAntigravityAccounts(
     action === 'Select' || action === 'Remove' ? { target, accountId } : target,
     // Every action but List may wait on the keychain dialog that reading agy's login can raise.
     { timeoutMs: action === 'List' ? 20_000 : ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS }
+  )
+}
+
+/** Selects a saved account. This desktop window restarts its own agy terminals, so its host only
+ *  lists them; any other client hands the host its own choice for the host's terminals. */
+export async function selectAntigravityAccount(
+  owner: RuntimeClientTarget,
+  target: AntigravityAccountTarget,
+  accountId: string,
+  runningSessions: ClaudeAccountSwitchRunningSessions
+): Promise<AntigravityAccountSelectResult> {
+  if (owner.kind === 'environment') {
+    await assertRuntimeEnvironmentCapability(
+      owner.environmentId,
+      ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
+      'This execution host does not support native Antigravity Accounts yet. Update Orca on that host.'
+    )
+  }
+  const terminals =
+    owner.kind === 'local' && !isWebClientLocation()
+      ? { movesRunningSessions: true as const }
+      : { runningSessions }
+  return callRuntimeRpc(
+    owner,
+    'accounts.antigravitySelect',
+    { target, accountId, ...terminals },
+    {
+      timeoutMs: ANTIGRAVITY_ACCOUNT_ACTION_TIMEOUT_MS,
+      // Older hosts reject a switch that says what to do with running terminals.
+      paramsForStatus: (status) =>
+        owner.kind === 'local' ||
+        status?.capabilities?.includes(ANTIGRAVITY_RUNNING_TERMINALS_RUNTIME_CAPABILITY)
+          ? { target, accountId, ...terminals }
+          : { target, accountId }
+    }
   )
 }
 

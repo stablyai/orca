@@ -2,8 +2,18 @@ import { useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import {
+  callAntigravityAccounts,
+  selectAntigravityAccount
+} from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import { useAppStore } from '@/store/index'
+import {
+  handleRunningAntigravityTerminalsAfterSelect,
+  readAntigravityRunningSessionsPolicy
+} from '@/lib/provider-accounts/antigravity-account-switch-sessions'
+import { antigravityAccountSwitchCopy } from '@/lib/provider-accounts/account-switch-copy'
+import { RunningSessionSwitchSetting } from '../running-session-switch-setting'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityAccountState,
@@ -41,6 +51,10 @@ export function AntigravityAccountsSection({
   ownerPlatform?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const runningSessionsPolicy = useAppStore(
+    (s) => s.settings?.antigravityAccountSwitchRunningSessions
+  )
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const [state, setState] = useState<AntigravityAccountState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const mounted = useRef(true)
@@ -113,12 +127,33 @@ export function AntigravityAccountsSection({
       setError(null)
     }
     try {
+      if (action === 'Select' && accountId) {
+        const previous = state
+        const next = await selectAntigravityAccount(
+          owner,
+          target,
+          accountId,
+          readAntigravityRunningSessionsPolicy()
+        )
+        if (mounted.current) {
+          setState(next)
+        }
+        if (
+          handleRunningAntigravityTerminalsAfterSelect({
+            owner,
+            target,
+            previous,
+            next,
+            accountId
+          }) !== 'handled'
+        ) {
+          announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
+        }
+        return
+      }
       const next = await callAntigravityAccounts(owner, target, action, accountId)
       if (mounted.current) {
         setState(next)
-      }
-      if (action === 'Select' && accountId) {
-        announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
       }
     } catch (cause) {
       if (action === 'Select') {
@@ -223,6 +258,14 @@ export function AntigravityAccountsSection({
               }
               void run('List')
             }}
+          />
+        ) : null}
+        {/* A server's own setting applies there; this window passes its choice along. */}
+        {owner.kind === 'local' && runtime === 'host' ? (
+          <RunningSessionSwitchSetting
+            copy={antigravityAccountSwitchCopy(t)}
+            value={runningSessionsPolicy}
+            onChange={(value) => updateSettings({ antigravityAccountSwitchRunningSessions: value })}
           />
         ) : null}
       </SettingsGroup>

@@ -5,12 +5,11 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import type { ClaudeAccountSwitchPromptSessions } from '@/lib/provider-accounts/claude-account-switch-sessions'
-import {
-  isClaudePaneMidTurn,
-  type ClaudeSessionCantMoveReason,
-  type ClaudeSessionMoveCandidate
-} from '@/lib/agent-session/accounts/claude/claude-session-account-move'
+import type {
+  AccountSwitchPromptSessions,
+  AccountSwitchSessionCandidate
+} from '@/lib/provider-accounts/account-switch-prompt'
+import type { AccountSwitchCopy } from '@/lib/provider-accounts/account-switch-copy'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
@@ -24,7 +23,7 @@ import {
 } from '../../native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
 import { moveInTree } from '../../native-chat-recovery/tree/native-chat-resume-tree-keys'
 
-type SessionRowData = ClaudeSessionMoveCandidate & { reason?: string }
+type SessionRowData = AccountSwitchSessionCandidate & { reason?: string }
 
 type SessionGroup = {
   key: string
@@ -39,17 +38,19 @@ type SessionTreeProps = {
   onToggle: (ptyId: string, checked: boolean) => void
 }
 
-export function ClaudeAccountSwitchSessionTree({
+export function AccountSwitchSessionTree({
+  copy,
   sessions,
   previousAccountLabel,
   selected,
   onToggle
 }: SessionTreeProps & {
-  sessions: ClaudeAccountSwitchPromptSessions
+  copy: AccountSwitchCopy
+  sessions: AccountSwitchPromptSessions
   previousAccountLabel: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const groups = sessionGroups(sessions, previousAccountLabel, t)
+  const groups = sessionGroups(sessions, previousAccountLabel, copy, t)
   const treeRef = useRef<HTMLDivElement>(null)
   const pinnedIndex = useNextGroupBelowFold(treeRef, groups.length)
   return (
@@ -57,7 +58,7 @@ export function ClaudeAccountSwitchSessionTree({
       ref={treeRef}
       role="tree"
       tabIndex={0}
-      aria-label={t('accounts.claude.switchSessions.listLabel', 'Claude sessions to restart')}
+      aria-label={copy.listLabel}
       className="relative max-h-64 min-h-0 scroll-py-8 overflow-y-auto scrollbar-sleek rounded-md bg-worktree-sidebar p-1.5 pb-2"
       onKeyDown={moveInTree}
     >
@@ -77,6 +78,7 @@ export function ClaudeAccountSwitchSessionTree({
               {workspaceSessions.map((session) => (
                 <SessionRow
                   key={session.ptyId}
+                  copy={copy}
                   session={session}
                   fixed={group.fixed}
                   checked={selected.has(session.ptyId)}
@@ -120,8 +122,9 @@ function useNextGroupBelowFold(
 }
 
 function sessionGroups(
-  sessions: ClaudeAccountSwitchPromptSessions,
+  sessions: AccountSwitchPromptSessions,
   previousAccountLabel: string,
+  copy: AccountSwitchCopy,
   t: Translate = translate
 ): SessionGroup[] {
   const groups: SessionGroup[] = [
@@ -130,7 +133,10 @@ function sessionGroups(
       title: t('accounts.claude.switchSessions.groupOnAccount', 'Running on {{account}}', {
         account: previousAccountLabel
       }),
-      sessions: sessions.onAccount
+      sessions: sessions.onAccount.map((session) => ({
+        ...session,
+        reason: session.reason === undefined ? undefined : copy.reasonLabel(session.reason)
+      }))
     },
     {
       key: 'elsewhere',
@@ -144,30 +150,12 @@ function sessionGroups(
       title: t('accounts.claude.switchSessions.groupCantMove', "Can't move"),
       sessions: sessions.cantMove.map((session) => ({
         ...session,
-        reason: cantMoveReasonLabel(session.reason, t)
+        reason: copy.reasonLabel(session.reason)
       })),
       fixed: true
     }
   ]
   return groups.filter((group) => group.sessions.length > 0)
-}
-
-function cantMoveReasonLabel(
-  reason: ClaudeSessionCantMoveReason,
-  t: Translate = translate
-): string {
-  switch (reason) {
-    case 'wsl-terminal':
-      return t('accounts.claude.switchSessions.reasonWsl', 'WSL terminal')
-    case 'own-folder':
-      return t('accounts.claude.switchSessions.reasonOwnFolder', 'Uses your own Claude folder')
-    case 'unknown-account':
-      return t('accounts.claude.switchSessions.reasonUnknownAccount', 'Account unknown')
-    case 'no-session':
-      return t('accounts.claude.switchSessions.reasonNoSession', "Can't resume")
-    case 'shared-session':
-      return t('accounts.claude.switchSessions.reasonSharedSession', 'Also open in another pane')
-  }
 }
 
 function groupByWorkspace(sessions: readonly SessionRowData[]): [string, SessionRowData[]][] {
@@ -257,11 +245,13 @@ function WorkspaceRow({
 }
 
 function SessionRow({
+  copy,
   session,
   fixed,
   checked,
   onToggle
 }: {
+  copy: AccountSwitchCopy
   session: SessionRowData
   fixed?: true
   checked: boolean
@@ -276,9 +266,11 @@ function SessionRow({
     return tab?.customTitle || tab?.title || ''
   })
   const lastPrompt = useAgentStatus(paneKey)?.prompt?.trim()
-  const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
-  const title =
-    lastPrompt || tabTitle || t('accounts.claude.switchSessions.session', 'Claude session')
+  const busy = useAppStore((store) => {
+    const entry = store.agentStatusByPaneKey.get(paneKey)
+    return entry?.agentType === copy.agent && entry.state !== 'done'
+  })
+  const title = lastPrompt || tabTitle || copy.session
   return (
     <ResumeTreeRow
       depth={2}
@@ -290,8 +282,12 @@ function SessionRow({
       onCheckedChange={(next) => onToggle(session.ptyId, next)}
       checkboxLabel={title}
     >
-      <span role="img" aria-label={formatAgentTypeLabel('claude')} className="inline-flex shrink-0">
-        <AgentIcon agent="claude" size={13} />
+      <span
+        role="img"
+        aria-label={formatAgentTypeLabel(copy.agent)}
+        className="inline-flex shrink-0"
+      >
+        <AgentIcon agent={copy.agent} size={13} />
       </span>
       <span
         data-fixed={Boolean(fixed)}

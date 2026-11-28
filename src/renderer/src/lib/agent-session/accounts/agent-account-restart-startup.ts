@@ -113,7 +113,7 @@ export function resolveAgentAccountRestartResumeStartup(
   }
 }
 
-/** Account-switch startup: Codex can relaunch fresh; Claude requires its recorded conversation. */
+/** Account-switch startup: Codex and Antigravity can relaunch fresh; Claude requires its recorded conversation. */
 export function buildPaneAccountRestartStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane
@@ -132,10 +132,11 @@ export function buildPaneAccountRestartStartup(
   ) {
     return null
   }
-  return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)
+  return resume ?? (agent === 'claude' ? null : buildFreshAccountRestartStartup(agent, args))
 }
 
-export function buildCodexAccountRestartStartup(
+export function buildFreshAccountRestartStartup(
+  agent: Exclude<AccountRestartAgent, 'claude'>,
   args: AccountRestartTarget
 ): AgentAccountRestartStartup {
   const state = useAppStore.getState()
@@ -145,7 +146,7 @@ export function buildCodexAccountRestartStartup(
     getLocalProjectExecutionRuntimeContext(state, args.worktreeId)
   )
   const command = resolveAgentLaunchCommand({
-    agent: 'codex',
+    agent,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: target.platform,
     agentHostPlatform: target.agentHostPlatform,
@@ -157,7 +158,7 @@ export function buildCodexAccountRestartStartup(
   return {
     command: command.command,
     startupCommandDelivery: 'shell-ready',
-    launchAgent: 'codex'
+    launchAgent: agent
   }
 }
 

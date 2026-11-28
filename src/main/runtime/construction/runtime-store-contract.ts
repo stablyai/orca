@@ -213,6 +213,7 @@ export type RuntimeStore = {
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
     claudeAccountSwitchRunningSessions?: GlobalSettings['claudeAccountSwitchRunningSessions']
+    antigravityAccountSwitchRunningSessions?: GlobalSettings['antigravityAccountSwitchRunningSessions']
     // Read query-responder kill switches per ingested chunk to capture reply ownership.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']

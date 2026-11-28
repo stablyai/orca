@@ -18,16 +18,10 @@ import {
   type ClaudeSessionMoveCandidate,
   type LocalClaudePane
 } from './claude-pane-inventory'
-import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ClaudeManagedAccount } from '../../../../../../shared/agent-accounts/managed-account-types'
 
 export type { ClaudeSessionMoveCandidate } from './claude-pane-inventory'
-
-export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
-  const entry = state.agentStatusByPaneKey.get(paneKey)
-  return entry?.agentType === 'claude' && entry.state !== 'done'
-}
 
 export function findQueuedClaudeRestartsOnAccount(args: {
   owner: RuntimeClientTarget

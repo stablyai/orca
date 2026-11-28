@@ -1,5 +1,5 @@
 import { access } from 'node:fs/promises'
-import { OrcaRuntimeWithClaudeRunningPaneAccountMove } from './claude-running-pane-account-move'
+import { OrcaRuntimeWithAntigravityRunningPaneAccountMove } from './antigravity-running-pane-account-move'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isResumableTuiAgent,
@@ -36,7 +36,7 @@ const RESTARTS_AT_ONCE = 3
 
 /** This host's own agent terminals still on an older MCP server list than the host's now, and
  *  restarting them in place, their conversation resumed. Chats pick a change up on their next turn. */
-export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithClaudeRunningPaneAccountMove {
+export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithAntigravityRunningPaneAccountMove {
   private async staleMcpTerminals(): Promise<StaleTerminal[]> {
     const live: { pty: RuntimePtyWorktreeRecord; pane: TerminalMcpPaneLaunch }[] = []
     for (const [ptyId, pane] of await terminalMcpPanes.all()) {

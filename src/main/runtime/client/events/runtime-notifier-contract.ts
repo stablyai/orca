@@ -7,6 +7,7 @@ import type {
   RuntimeFileOpenPosition
 } from '../../../../shared/file-access/runtime-editor-file-open'
 import type { ClaudeAccountSelectionChange } from '../../../../shared/agent-accounts/managed-account-types'
+import type { AntigravityAccountSelectionChange } from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -207,5 +208,14 @@ export type RuntimeNotifier = {
   browserDriverChanged?(browserPageId: string, driver: RuntimeTerminalDriverState): void
   browserRemoteViewersChanged?(browserPageId: string, hasRemoteViewers: boolean): void
   clientHostedBrowserRowsChanged?(event: ClientHostedBrowserRowsEvent): void
-  claudeAccountSelected?(change: ClaudeAccountSelectionChange): void
+  /** The CLI, a phone or another client switched an agent's account on this host. */
+  accountSelectedElsewhere?<A extends keyof AccountSelectedElsewhere>(
+    agent: A,
+    change: AccountSelectedElsewhere[A]
+  ): void
+}
+
+type AccountSelectedElsewhere = {
+  claude: ClaudeAccountSelectionChange
+  antigravity: AntigravityAccountSelectionChange
 }

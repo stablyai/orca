@@ -10,18 +10,23 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { ClaudeAccountSwitchSessionTree } from './ClaudeAccountSwitchSessionTree'
-import {
-  answerClaudeAccountSwitchPrompt,
-  type ClaudeAccountSwitchPrompt
-} from '@/lib/provider-accounts/claude-account-switch-sessions'
+import { useTranslate } from '@/i18n/use-translate'
+import { AccountSwitchSessionTree } from './AccountSwitchSessionTree'
+import type {
+  AccountSwitchPrompt,
+  AccountSwitchPromptAnswer
+} from '@/lib/provider-accounts/account-switch-prompt'
+import type { AccountSwitchCopy } from '@/lib/provider-accounts/account-switch-copy'
 
-export default function ClaudeAccountSwitchPromptDialog({
-  prompt
+/** Asks, after an account switch, which terminals still running the agent on the old account restart. */
+export default function AccountSwitchPromptDialog({
+  prompt,
+  copy,
+  onAnswer
 }: {
-  prompt: ClaudeAccountSwitchPrompt
+  prompt: AccountSwitchPrompt
+  copy: AccountSwitchCopy
+  onAnswer: AccountSwitchPromptAnswer
 }): React.JSX.Element {
   const t = useTranslate()
   const [dontAskAgain, setDontAskAgain] = useState(false)
@@ -45,13 +50,21 @@ export default function ClaudeAccountSwitchPromptDialog({
       return next
     })
   }
+  const description = prompt.review
+    ? copy.reviewBody(elsewhere.length + cantMove.length, prompt.nextAccountLabel)
+    : copy.body({
+        count: onAccount.length,
+        fresh: onAccount.filter((session) => session.reason).length,
+        previous: prompt.previousAccountLabel,
+        next: prompt.nextAccountLabel
+      })
   return (
     <Dialog
       open
       onOpenChange={(open) => {
         // Closing keeps sessions as-is without undoing the account switch.
         if (!open) {
-          answerClaudeAccountSwitchPrompt('keep', { dontAskAgain })
+          onAnswer('keep', { dontAskAgain })
         }
       }}
     >
@@ -66,10 +79,11 @@ export default function ClaudeAccountSwitchPromptDialog({
               account: prompt.nextAccountLabel
             })}
           </DialogTitle>
-          <DialogDescription>{promptDescription(prompt, t)}</DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {(listedCount > 1 || prompt.review) && (
-          <ClaudeAccountSwitchSessionTree
+          <AccountSwitchSessionTree
+            copy={copy}
             sessions={prompt.sessions}
             previousAccountLabel={prompt.previousAccountLabel}
             selected={ticked}
@@ -105,7 +119,7 @@ export default function ClaudeAccountSwitchPromptDialog({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => answerClaudeAccountSwitchPrompt('keep', { dontAskAgain })}
+            onClick={() => onAnswer('keep', { dontAskAgain })}
           >
             {t('accounts.claude.switchSessions.keep', 'Keep as is')}
           </Button>
@@ -114,9 +128,7 @@ export default function ClaudeAccountSwitchPromptDialog({
             size="sm"
             autoFocus
             disabled={chosen.length === 0}
-            onClick={() =>
-              answerClaudeAccountSwitchPrompt('restart', { ptyIds: chosen, dontAskAgain })
-            }
+            onClick={() => onAnswer('restart', { ptyIds: chosen, dontAskAgain })}
           >
             <RefreshCw className="size-3.5" aria-hidden="true" />
             {chosen.length <= 1
@@ -129,29 +141,5 @@ export default function ClaudeAccountSwitchPromptDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
-
-function promptDescription(prompt: ClaudeAccountSwitchPrompt, t: Translate = translate): string {
-  const { onAccount, elsewhere, cantMove } = prompt.sessions
-  const next = prompt.nextAccountLabel
-  if (prompt.review) {
-    const count = elsewhere.length + cantMove.length
-    return t(
-      'accounts.claude.switchSessions.reviewBody',
-      "{{count}} Claude sessions weren't moved to {{next}}.",
-      { count, next, defaultValue_one: "{{count}} Claude session wasn't moved to {{next}}." }
-    )
-  }
-  return t(
-    'accounts.claude.switchSessions.body',
-    '{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.',
-    {
-      count: onAccount.length,
-      previous: prompt.previousAccountLabel,
-      next,
-      defaultValue_one:
-        '{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.'
-    }
   )
 }

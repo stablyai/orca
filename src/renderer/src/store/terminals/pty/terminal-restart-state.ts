@@ -53,7 +53,7 @@ export function createTerminalRestartActions(
           ...s.pendingPaneAccountRestarts,
           ...Object.fromEntries(ptyIds.map((ptyId) => [ptyId, agent] as const))
         }
-        if (agent === 'claude') {
+        if (agent !== 'codex') {
           return { pendingPaneAccountRestarts }
         }
         // Restart request answers the prompt immediately; unmounted tabs wait for mount and must not show an inert restart button.
