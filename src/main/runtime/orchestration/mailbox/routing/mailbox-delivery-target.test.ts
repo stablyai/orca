@@ -87,4 +87,29 @@ describe('deferForTerminalProbe', () => {
       vi.useRealTimers()
     }
   })
+  it('re-reads once per batch of joiners, so a steady stream of deliveries still types', async () => {
+    vi.useFakeTimers()
+    try {
+      let reads = 0
+      const typed: string[] = []
+      let delivery: OrchestrationMailboxDeliveryTarget
+      const deliver = (mailbox: string): void => {
+        delivery.deferForTerminalProbe('pty-1', mailbox, false, (probed, reprobe) =>
+          reprobe ? deliver(probed) : typed.push(probed)
+        )
+      }
+      // Every read sees a new delivery join it while it is in flight.
+      delivery = target(async () => {
+        reads += 1
+        await Promise.resolve()
+        deliver(`run:r${reads}`)
+        return false
+      })
+      deliver('term_a')
+      await vi.runAllTimersAsync()
+      expect({ reads, typed }).toEqual({ reads: 2, typed: ['term_a', 'run:r1', 'run:r2'] })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

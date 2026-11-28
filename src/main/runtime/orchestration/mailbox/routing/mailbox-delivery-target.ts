@@ -14,6 +14,8 @@ type ProbeDeferral = {
   mailboxes: Map<string, ReservedTypes>
   started: boolean
   joinedInFlight: boolean
+  /** This read was forced by joiners; its own joiners don't force another, so a stream of deliveries can't loop. */
+  forced: boolean
 }
 
 type OrchestrationMailboxDeliveryTargetDependencies = {
@@ -34,6 +36,7 @@ type OrchestrationMailboxDeliveryTargetDependencies = {
 
 export class OrchestrationMailboxDeliveryTarget {
   private readonly probeDeferrals = new Map<string, ProbeDeferral>()
+  private readonly forcedRereads = new Set<string>()
 
   constructor(private readonly deps: OrchestrationMailboxDeliveryTargetDependencies) {}
 
@@ -138,7 +141,8 @@ export class OrchestrationMailboxDeliveryTarget {
         [mailboxHandle, mergeDeferredReservedTypes(false, undefined, reservedTypes)]
       ]),
       started: false,
-      joinedInFlight: false
+      joinedInFlight: false,
+      forced: this.forcedRereads.delete(ptyId)
     }
     this.probeDeferrals.set(ptyId, deferral)
     queueMicrotask(() => {
@@ -153,8 +157,9 @@ export class OrchestrationMailboxDeliveryTarget {
         if (absent) {
           return
         }
+        const joined = deferral.joinedInFlight && !deferral.forced
         // Held mail stays unread for the next agent status edge, unless one already arrived.
-        if (shellInFront && !deferral.joinedInFlight) {
+        if (shellInFront && !joined) {
           return
         }
         // One turn for every mailbox, so a re-probe coalesces them again instead of joining itself.
@@ -163,12 +168,17 @@ export class OrchestrationMailboxDeliveryTarget {
           // have exited meanwhile, which leaves the PTY's incarnation unchanged.
           const stale =
             shellInFront ||
-            deferral.joinedInFlight ||
+            joined ||
             (probeShell !== null &&
               this.deps.foregroundShellProbe(ptyId)?.incarnationId !== probeShell.incarnationId)
+          if (joined) {
+            this.forcedRereads.add(ptyId)
+          }
           for (const [deferredMailbox, reserved] of deferral.mailboxes) {
             redeliver(deferredMailbox, stale, reserved)
           }
+          // The re-read took it synchronously, or no delivery reached a read.
+          this.forcedRereads.delete(ptyId)
         }, 0)
       })
       .catch(() => this.probeDeferrals.delete(ptyId))
