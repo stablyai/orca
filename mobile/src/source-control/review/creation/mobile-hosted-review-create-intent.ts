@@ -3,7 +3,6 @@ import { requestMobileCommitMessage } from '../../commits/mobile-commit-message-
 import { getStageablePaths } from '../../changes/mobile-git-status'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../git/git-status-reply-schema'
 import { getMobilePrEligibilityReadiness } from './mobile-open-pr-prefill'
-import './mobile-pr-create'
 import { resolveMobileHostedReviewPrefill as resolveMobilePrPrefill } from './mobile-hosted-review-service'
 import type { MobileHostedReviewPrefill as MobilePrPrefill } from './mobile-hosted-review-service'
 import { isBehindOnlyUpstream } from '../../../../../src/shared/git/remotes/git-upstream-status'
@@ -16,8 +15,6 @@ import {
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
-
-import './hosted-review-copy'
 
 export type MobileHostedReviewCreateIntentProgress =
   | 'fast_forwarding'

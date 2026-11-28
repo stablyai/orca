@@ -26,6 +26,7 @@ import {
 } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { folderWorkspaceOwnerTarget } from './folder-workspace-routing'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { forgetNativeChatCliForkOriginsForWorktree } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-origins'
 
 export function createFolderWorkspaceDeleteAction(
   set: Parameters<StateCreator<AppState>>[0],
@@ -87,6 +88,7 @@ export function createFolderWorkspaceDeleteAction(
         // Why here too: a server-hosted folder's local pages use this desktop's profile, which the server can't reach.
         void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: workspaceKey })
         get().purgeWorktreeTerminalState([workspaceKey])
+        forgetNativeChatCliForkOriginsForWorktree(workspaceKey)
         chatDrafts.deleteWorkspaceChatDrafts(chatDraftKeys)
       }
       return true

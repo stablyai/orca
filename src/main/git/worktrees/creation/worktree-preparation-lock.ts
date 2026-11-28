@@ -1,10 +1,11 @@
 import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import type { WorktreePreparationOperation } from './worktree-preparation-operation'
-import { readFile, realpath, unlink, writeFile } from 'node:fs/promises'
-import { dirname, posix, win32 } from 'node:path'
+import { lstat, readFile, realpath, unlink, writeFile } from 'node:fs/promises'
+import { dirname, join, posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   resolveGitMetadataPath,
+  resolveWorktreeHostPath,
   type GitMetadataPathOptions
 } from '../../../../shared/git/metadata/git-metadata-path'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
@@ -76,6 +77,65 @@ async function readPreparationLockPath(
   )
 }
 
+const CHECKOUT_IDENTITY_FILE = 'orca-checkout-identity'
+
+type CheckoutIdentity = { dev: bigint; ino: bigint; birthtimeNs: bigint }
+
+async function readCheckoutIdentity(
+  hostPath: string,
+  signal?: AbortSignal
+): Promise<CheckoutIdentity | null> {
+  const stats = await lstat(toHostFilesystemPath(hostPath), { bigint: true })
+  signal?.throwIfAborted()
+  if (!stats.isDirectory() || stats.ino <= 0n) {
+    return null
+  }
+  return {
+    dev: stats.dev,
+    ino: stats.ino,
+    birthtimeNs: stats.birthtimeNs > 0n ? stats.birthtimeNs : 0n
+  }
+}
+
+function parseCheckoutIdentity(raw: string): CheckoutIdentity | null {
+  const match = /^(\d+):(\d+):(\d+)\r?\n?$/.exec(raw)
+  if (!match) {
+    return null
+  }
+  const ino = BigInt(match[2])
+  if (ino <= 0n) {
+    return null
+  }
+  return { dev: BigInt(match[1]), ino, birthtimeNs: BigInt(match[3]) }
+}
+
+/** Proves a directory missing its .git file is still the original prepared checkout, not a replacement. */
+export async function matchesRecordedPreparationCheckoutIdentity(
+  gitDir: string,
+  hostPath: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  try {
+    const raw = await readFile(toHostFilesystemPath(join(gitDir, CHECKOUT_IDENTITY_FILE)), 'utf8')
+    signal?.throwIfAborted()
+    const recorded = parseCheckoutIdentity(raw)
+    if (!recorded) {
+      return false
+    }
+    const current = await readCheckoutIdentity(hostPath, signal)
+    return (
+      current !== null &&
+      current.dev === recorded.dev &&
+      current.ino === recorded.ino &&
+      (recorded.birthtimeNs === 0n ||
+        current.birthtimeNs === 0n ||
+        current.birthtimeNs === recorded.birthtimeNs)
+    )
+  } catch {
+    return false
+  }
+}
+
 export async function lockWorktreePreparation(
   worktreePath: string,
   lockReason: string,
@@ -93,6 +153,18 @@ export async function lockWorktreePreparation(
       throw new WorktreePreparationLockOwnershipError()
     }
     throw error
+  }
+  const hostPath = resolveWorktreeHostPath(worktreePath, options)
+  if (hostPath) {
+    const identity = await readCheckoutIdentity(hostPath, options.signal).catch(() => null)
+    if (identity) {
+      const writingIdentity = writeFile(
+        toHostFilesystemPath(join(dirname(lockPath), CHECKOUT_IDENTITY_FILE)),
+        `${identity.dev}:${identity.ino}:${identity.birthtimeNs}\n`,
+        { flag: 'wx' }
+      ).catch(() => {})
+      await (operation ? operation.trackWriter(writingIdentity) : writingIdentity)
+    }
   }
   return lockPath
 }

@@ -17,7 +17,7 @@ import {
 import { sessionTabActivate } from '../../tabs/mobile-session-tab-write-operations'
 import { readWhileBotLinkConnected } from '../../../bots/bot-link-connection-read'
 import type { SendRequestOptions } from '../../../transport/rpc/unvalidated-rpc-request-port'
-import { chatPaneKey } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
+import { chatPaneKey } from '../../../../../src/shared/agent-session/view/chat-pane-address'
 
 /** The workspace client already carries executionHost; a single budget includes connect waits. */
 export async function openMobileStructuredSession(args: {

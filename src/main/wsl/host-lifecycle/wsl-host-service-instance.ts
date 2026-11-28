@@ -10,6 +10,7 @@ export function getWslHostService(): WslHostService | null {
 
 const statusListeners = new Set<() => void>()
 let stopForwardingStatuses: (() => void) | null = null
+const serviceListeners = new Set<(service: WslHostService) => void>()
 
 export function setWslHostService(service: WslHostService | null): void {
   stopForwardingStatuses?.()
@@ -20,6 +21,25 @@ export function setWslHostService(service: WslHostService | null): void {
         listener()
       }
     }) ?? null
+  if (service) {
+    for (const listener of serviceListeners) {
+      listener(service)
+    }
+  }
+}
+
+/** Once, with the installed service or the next one: startup installs it after its consumers register. */
+export function whenWslHostServiceSet(listener: (service: WslHostService) => void): () => void {
+  if (instance) {
+    listener(instance)
+    return () => {}
+  }
+  const once = (service: WslHostService): void => {
+    serviceListeners.delete(once)
+    listener(service)
+  }
+  serviceListeners.add(once)
+  return () => serviceListeners.delete(once)
 }
 
 /** Statuses of whichever service is installed, now or later. */

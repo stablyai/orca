@@ -10,7 +10,6 @@ import {
   withCliRuntimeOnPathAsync
 } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 import {
-  expandHomeArgs,
   isSpawnableCommand,
   type ResolveCommandOptions
 } from '../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -26,7 +25,12 @@ const inFlight = new Map<string, Promise<ZCodeInteractiveCapability>>()
 
 type ZCodeCommand = { program: string; prefixArgs: string[] }
 
-/** Resolve what a ZCode pane runs as chats do; null when nothing runnable exists, so no spawn can misreport it. */
+function isDirectZCodeExecutable(program: string, platform: NodeJS.Platform): boolean {
+  const name = program.split(/[\\/]/).pop() ?? ''
+  return platform === 'win32' ? /^zcode(?:\.(?:exe|cmd|bat|ps1))?$/i.test(name) : name === 'zcode'
+}
+
+/** Resolve a bare zcode executable to probe; skip user launch wrappers and custom flags so advisory probes never execute them. */
 async function resolveZCodeCommand(
   settings: Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined,
   options: ResolveCommandOptions
@@ -36,10 +40,15 @@ async function resolveZCodeCommand(
   const plan = override
     ? structuredAgentCommandPlan(override, platform)
     : { program: 'zcode', prefixArgs: [] }
-  const program = plan && (await resolveExecutableCommandAsync(plan.program, options))
-  return plan && program && isSpawnableCommand(platform, program)
-    ? { program, prefixArgs: expandHomeArgs(plan.prefixArgs, options.homePath) }
-    : null
+  if (
+    !plan ||
+    plan.prefixArgs.length > 0 ||
+    (override && !isDirectZCodeExecutable(plan.program, platform))
+  ) {
+    return null
+  }
+  const program = await resolveExecutableCommandAsync(plan.program, options)
+  return program && isSpawnableCommand(platform, program) ? { program, prefixArgs: [] } : null
 }
 
 async function probe({ program, prefixArgs }: ZCodeCommand): Promise<ZCodeInteractiveCapability> {

@@ -26,3 +26,43 @@ it('caps desktop acknowledgements at hydration when a saved alias has no matchin
     vi.unstubAllGlobals()
   }
 })
+
+it('retains a live chat cleared-at cutoff across hydration even after 500 newer clears', () => {
+  vi.stubGlobal('window', undefined)
+  try {
+    const liveChat = chatPaneKey('live-chat')
+    const cleared: Record<string, number> = { [liveChat]: 1 }
+    for (let index = 1; index <= 500; index++) {
+      cleared[`terminal-${index}:pane`] = index + 10
+    }
+    const store = createUIStore()
+    store.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'tab-1',
+            entityId: 'live-chat',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'Chat',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+    store
+      .getState()
+      .hydratePersistedUI(makePersistedUI({ activityClearedAtByPaneKey: cleared }), 'startup')
+
+    const hydrated = store.getState().activityClearedAtByPaneKey
+    expect(hydrated[liveChat]).toBe(1)
+    expect(Object.keys(hydrated)).toHaveLength(500)
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})

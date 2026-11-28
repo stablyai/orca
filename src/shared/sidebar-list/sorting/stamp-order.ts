@@ -34,9 +34,17 @@ function tierRank(row: StampOrderRow): number {
 export function compareSmartStamps(a: StampOrderRow, b: StampOrderRow): number {
   const rankA = tierRank(a)
   const rankB = tierRank(b)
-  return (
-    rankA - rankB ||
-    (rankA < REST_RANK ? finiteOr0(b.smartAt) - finiteOr0(a.smartAt) : 0) ||
-    recentStamp(b) - recentStamp(a)
-  )
+  if (rankA !== rankB) {
+    return rankA - rankB
+  }
+  if (rankA < REST_RANK) {
+    const smartA = finiteOr0(a.smartAt)
+    const smartB = finiteOr0(b.smartAt)
+    if (smartA !== smartB) {
+      return smartA > smartB ? -1 : 1
+    }
+  }
+  const recA = recentStamp(a)
+  const recB = recentStamp(b)
+  return recA > recB ? -1 : recA < recB ? 1 : 0
 }

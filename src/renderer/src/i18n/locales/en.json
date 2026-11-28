@@ -800,7 +800,12 @@
         "customCommandDescription": "Command line shared by recipes that select Custom command. Use {prompt} to pass the input as an argument; otherwise it is piped to stdin.",
         "saveFailed": "Could not save chat name settings.",
         "searchAgent": "agent",
-        "searchTemplate": "command template"
+        "searchTemplate": "command template",
+        "antigravity": "Generate chat titles with Antigravity",
+        "antigravityEnterprise": "Sends each chat’s first message to Antigravity to name it, which uses your Gemini Enterprise quota.",
+        "antigravityApiKey": "Sends each chat’s first message to Antigravity to name it, billed to your Gemini API key.",
+        "antigravityAgentPlatform": "Sends each chat’s first message to Antigravity to name it, billed to your Google Cloud project.",
+        "antigravityGoogle": "Sends each chat’s first message to Antigravity to name it, which uses your Antigravity quota on your Google account."
       },
       "providers": {
         "title": "Providers",
@@ -5795,7 +5800,8 @@
             "startChat": "Start a chat with {{value0}}",
             "cliTag": "(CLI)",
             "agentsLoading": "Loading agents",
-            "chatNotOnWindows": "No chat on Windows yet"
+            "chatNotOnWindows": "No chat on Windows yet",
+            "chatUpdateRequired": "Update CLI for chat"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -23108,10 +23114,7 @@
         "refused": "Google refused this chat's credentials.",
         "usageLimit": "This sign-in reached its usage limit.",
         "signInGoogle": "Sign in with Google",
-        "yourAgy": "Your agy",
         "yourAgyVersion": "Your agy · v{{version}}",
-        "orcasAgy": "Orca's agy",
-        "orcasAgyVersion": "Orca's agy · v{{version}}",
         "runsOn": "Runs on: {{program}}",
         "keepsOwnLogin": "This chat keeps agy's own Google login. New chats use {{method}}.",
         "apiKeyEnvironment": "From your environment",
@@ -24252,7 +24255,9 @@
           "updateFailed": "Couldn't update notifications on {{host}}.",
           "unsupported": "Update Orca on {{host}} to change its notifications here.",
           "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones.",
-          "sectionDescription": "Alerts {{host}} sends for its agents and terminals."
+          "sectionDescription": "Alerts {{host}} sends for its agents and terminals.",
+          "loadFailed": "Couldn't load notifications from {{host}}.",
+          "retry": "Try again"
         }
       },
       "orcaAccount": {
@@ -25717,7 +25722,6 @@
       "noEmailNotSaved": "agy didn't report an email · not saved",
       "saveShort": "Save",
       "active": "Active",
-      "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
       "terminalTitle": "agy in the terminal",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
@@ -25739,7 +25743,11 @@
       "loginNow": "agy's login right now",
       "signedInUnread": "agy is signed in",
       "unreadDetail": "Show the account to see which one. macOS may ask you to allow keychain access.",
-      "showAccount": "Show account"
+      "showAccount": "Show account",
+      "agyCli": "agy CLI",
+      "agyUpdateAvailable": "v{{installed}} · v{{latest}} available",
+      "agyNotInstalled": "Not installed on this host.",
+      "agyInstallLink": "Install it with Google's installer"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -31382,6 +31390,7 @@
     "qwenCodeProduct": "Qwen Code",
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
+    "antigravityProduct": "Antigravity CLI",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",

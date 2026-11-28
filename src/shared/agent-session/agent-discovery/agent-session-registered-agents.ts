@@ -5,7 +5,10 @@ import { lazyZodSchema } from '../../schema/lazy-zod-schema'
 import type { AgentSessionCapabilities } from '../capabilities/agent-session-capabilities'
 import { isStructuredAgentId } from '../lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { openEnum } from '../../validation/zod-salvage'
-import { MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY } from '../../agent-launch/installation/managed-runtime-install'
+import {
+  MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
+  managedRuntimeRetired
+} from '../../agent-launch/installation/managed-runtime-install'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 
@@ -70,7 +73,8 @@ export function decodeAgentSessionAgentsResult(
     const parsed = registeredAgentSchema.safeParse(row)
     if (parsed.success && !seen.has(parsed.data.agent)) {
       seen.add(parsed.data.agent)
-      decoded.push(parsed.data)
+      const { managedRuntime, ...row } = parsed.data
+      decoded.push(managedRuntime && !managedRuntimeRetired(row.agent) ? parsed.data : row)
     }
   }
   return decoded

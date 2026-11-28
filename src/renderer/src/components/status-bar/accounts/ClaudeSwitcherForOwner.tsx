@@ -245,6 +245,9 @@ export function ClaudeSwitcherForOwner({
     signedInClaudeAccountCount(roster),
     isSwitching
   )
+  if (chatAction && ownerUsage.remoteUnreachable) {
+    return null
+  }
   if (accountControl?.add) {
     return runtimeTarget.kind === 'local' ? accountControl.button : null
   }

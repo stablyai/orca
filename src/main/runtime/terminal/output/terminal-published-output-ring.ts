@@ -14,6 +14,7 @@ export type PublishedTerminalOutput = {
 export type PublishedOutputPoint = { seq: number; epoch: number; size: TerminalSize }
 
 const RING_MAX_UNITS = 64 * 1024
+const RING_MAX_CHUNKS = 2048
 
 // Global so a ring recreated for the same PTY never repeats an epoch a stale ledger recorded.
 let nextCoverageEpoch = 1
@@ -46,7 +47,10 @@ export class TerminalPublishedOutputRing {
     this.units += chunk.data.length
     this.endSeq = chunk.seq
     let head = this.head
-    while (this.units > RING_MAX_UNITS && head < this.chunks.length) {
+    while (
+      (this.units > RING_MAX_UNITS || this.chunks.length - head > RING_MAX_CHUNKS) &&
+      head < this.chunks.length
+    ) {
       this.units -= this.chunks[head]!.data.length
       head += 1
     }

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useWorkspaceReferenceDetails } from '../review/use-workspace-reference-details'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { summarizeWorkspaceReviewChecks } from '../../../../../../shared/workspace-attachments/workspace-review-checks'
 import { canShowWorkspaceDeleteQuickAction } from '../../workspace-actions/deletion/workspace-delete-quick-action'
 import { useWorktreeCardDetailsHoverControl } from '../details/worktree-card-details-hover-state'
@@ -15,13 +15,13 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 import { useAutoNameFailure } from '../identity/use-auto-name-failure'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
-  const { worktree, repo, compactLine } = props
-  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine })
+  const { worktree, repo, compactLine, renameRowKey } = props
+  const foundation = useWorktreeCardFoundation({ worktree, repo, compactLine, renameRowKey })
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
     settings: foundation.settings,
-    projectGroups: foundation.projectGroups,
+    hasProjectGroups: foundation.hasProjectGroups,
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })
@@ -76,7 +76,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     hoverDetailsOpen
   )
   const reviewChecks = summarizeWorkspaceReviewChecks(
-    getWorkspaceAttachments(worktree),
+    getReadonlyWorkspaceAttachments(worktree),
     referenceDetails
   )
 

@@ -2,10 +2,6 @@
 
 import { delimiter, isAbsolute } from 'node:path'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
-import {
-  isManagedAgentCopyPath,
-  managedAgentCommandFor
-} from '../../managed-agent-cli/managed-agent-cli-registry'
 import { homedir } from 'node:os'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -48,7 +44,6 @@ export function resolveAcpLaunchCommand(
     .filter((entry): entry is string => Boolean(entry))
     .join(delimiter)
   const settings = spec.ignoreAgentCommandSetting ? {} : (options.commandSettings ?? {})
-  const managedCopy = spec.managedCopyAllowed?.(options.commandSettings ?? {}) !== false
   const resolve = (searchPath: string) =>
     resolveStructuredAgentCommand(
       spec.agent,
@@ -56,7 +51,6 @@ export function resolveAcpLaunchCommand(
       { pathEnv: searchPath, homePath },
       {
         command: spec.command,
-        managedCopy,
         ...(options.resolveCommand ? { resolve: options.resolveCommand } : {})
       }
     )
@@ -202,14 +196,8 @@ export async function acpHostBackendInput(
     env,
     backend.spec.installDirectories({ env, homePath })
   )
-  // The user's own program wins; Orca's copy serves hosts that have none, where it may run. A copy
-  // found on PATH (inherited from an Orca terminal) is Orca's, never the user's own.
-  const managedCopy = managedAgentCommandFor(spec.agent, command, { use: false })
-  const allowed = backend.spec.managedCopyAllowed?.(settings) !== false
-  const own = found !== null && !isManagedAgentCopyPath(spec.agent, found) ? found : null
-  const program = own ?? (allowed ? managedCopy : null) ?? command
   return {
-    command: program,
+    command: found ?? command,
     env,
     envToDelete,
     homePath,
@@ -229,7 +217,7 @@ export async function selectAcpHostAccountHome(
   question: AcpHostQuestion = {}
 ): Promise<AgentSessionAccountHome | null> {
   const input = await acpHostBackendInput(spec, shellEnv, stateDirectory, settings, question)
-  // A backend may pin new chats to a program not installed yet, so Install lands where they run.
+  // A backend may pin new chats to a program not installed yet, so a later install lands where they run.
   return input && spec.hostBackend ? spec.hostBackend.select(input) : null
 }
 

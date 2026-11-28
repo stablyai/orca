@@ -14,7 +14,6 @@ import {
   hostedReviewCopy,
   mobileHostedReviewCreateIntentProgressMessage
 } from '../../creation/hosted-review-copy'
-import '../../creation/mobile-hosted-review-create-intent'
 import type { MobileHostedReviewCreateIntentProgress } from '../../creation/mobile-hosted-review-create-intent'
 
 import {

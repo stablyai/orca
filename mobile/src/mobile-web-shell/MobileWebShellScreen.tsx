@@ -22,7 +22,7 @@ import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-br
 import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
-import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
+import { useNativeHostFileVerbs } from '../platform/host-file-handoff/use-native-host-file-verbs'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
@@ -165,14 +165,14 @@ export function MobileWebShellScreen({
   } = usePageHostSnapshot(hostId, route.pathname, ownsHostArea)
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
-  const servePdfView = useNativePdfViewer(hostId, readySessionId)
+  const serveHostFile = useNativeHostFileVerbs(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
-      : verb === 'native.pdf.view'
-        ? servePdfView(params)
+      : verb === 'native.pdf.view' || verb === 'native.file.share'
+        ? serveHostFile(verb, params)
         : verb === 'native.image.act'
           ? serveImageAction(params)
           : verb === BRIDGE_STORE_VERB

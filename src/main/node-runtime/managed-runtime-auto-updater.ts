@@ -65,7 +65,7 @@ export class ManagedRuntimeAutoUpdater {
   }
 
   /** Bring Orca's own copy to the latest or pinned release; never installs one nobody asked for,
-   *  touches a user's own, or updates a copy new chats don't run (another program, a signed-in agy). */
+   *  touches a user's own, or updates a copy new chats don't run. */
   async updateIfBehind(publishedRelease: () => Promise<boolean>): Promise<void> {
     const { reportedPending } = this
     this.checked = true

@@ -16769,7 +16769,7 @@
           "runStatusDispatchFailed": "Falhou"
         },
         "runContent": {
-          "noOutput": "Nenhum conteúdo de saída disponível."
+          "noOutput": "Sem saída."
         },
         "runViewState": {
           "viewRun": "Ver execução",
@@ -23992,10 +23992,7 @@
         "refused": "O Google recusou as credenciais deste chat.",
         "usageLimit": "Este login atingiu o limite de uso.",
         "signInGoogle": "Entrar com o Google",
-        "yourAgy": "Seu agy",
         "yourAgyVersion": "Seu agy · v{{version}}",
-        "orcasAgy": "agy do Orca",
-        "orcasAgyVersion": "agy do Orca · v{{version}}",
         "runsOn": "Executa em: {{program}}",
         "keepsOwnLogin": "Este chat mantém o login do Google do próprio agy. Os novos chats usam {{method}}.",
         "apiKeyEnvironment": "Do seu ambiente",
@@ -26117,7 +26114,6 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "active": "Ativo",
-      "runtime": "Runtime",
       "chatTitle": "Chat do Antigravity",
       "terminalTitle": "agy no terminal",
       "terminalDescription": "Usa as contas salvas do próprio agy. A troca vale para novas sessões do agy.",

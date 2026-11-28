@@ -21,6 +21,7 @@ export type RuntimeProjectGroupDependencies = {
   ) => Promise<{ finish(removed: boolean): Promise<void> }>
   cleanupRemovedFolderWorkspaceState: (worktreeId: string) => void | Promise<void>
   emitWorktreeLifecycle: (event: RuntimeWorktreeLifecycleEvent) => void
+  isBotGroupHome?: (folderWorkspaceId: string) => boolean | Promise<boolean>
   finishFolderCreation?: (
     input: RuntimeGroupFolderCreateInput,
     group: ProjectGroup,

@@ -36,9 +36,13 @@ export type WorkspaceRowSortReader<Row> = {
   compareSmart: (a: Row, b: Row) => number
 }
 
+function compareDesc(a: number, b: number): number {
+  return a > b ? -1 : a < b ? 1 : 0
+}
+
 function compareManualRank(a: number | null, b: number | null): number {
   if (a !== null && b !== null) {
-    return b - a
+    return compareDesc(a, b)
   }
   if (a !== null) {
     return -1
@@ -60,7 +64,7 @@ export function buildWorkspaceRowComparator<Row>(
     case 'smart':
       return (a, b) => read.compareSmart(a, b) || byLabel(a, b)
     case 'recent':
-      return (a, b) => read.recentActivity(b) - read.recentActivity(a) || byLabel(a, b)
+      return (a, b) => compareDesc(read.recentActivity(a), read.recentActivity(b)) || byLabel(a, b)
     case 'repo':
       return (a, b) => compareText(read.repoLabel(a), read.repoLabel(b)) || byLabel(a, b)
     case 'manual':

@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
+import { getReadonlyWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { LinearIssue } from '../../../../../../shared/linear/issue-types'
 import { getWorktreeCardJiraIssueDisplay } from '../review/worktree-card-jira-issue-display'
@@ -61,7 +61,7 @@ export function useWorktreeCardLinkedDetails({
 
   let linearIssueUrlFallback: string | undefined
   if (worktree.linkedLinearIssue && !linearIssue) {
-    const attachments = getWorkspaceAttachments(worktree)
+    const attachments = getReadonlyWorkspaceAttachments(worktree)
     let matchCount = 0
     for (let i = 0; i < attachments.length; i += 1) {
       const item = attachments[i]
@@ -106,18 +106,18 @@ export function useWorktreeCardLinkedDetails({
         }
     : null
   const jiraIssueDisplay = getWorktreeCardJiraIssueDisplay(worktree)
-  const cardTitleDisplay = getWorktreeCardTitleDisplay({
-    storedDisplayName: worktree.displayName,
-    displayNameMode: worktree.displayNameMode,
-    branchName: branch,
-    // Fetched titles only: display fallbacks hold localized loading/unavailable placeholders.
-    linearIssueTitle: linearIssue?.title,
-    jiraIssueTitle: jiraIssueDisplay?.title,
-    issueTitle: issue?.title,
-    reviewTitle: prDisplay?.title
-  })
-  const legacyCardTitleDisplay = coerceWorktreeCardVisibleTitle(worktree.displayName)
-  const visibleCardTitle = newCardStyle ? cardTitleDisplay : legacyCardTitleDisplay
+  const visibleCardTitle = newCardStyle
+    ? getWorktreeCardTitleDisplay({
+        storedDisplayName: worktree.displayName,
+        displayNameMode: worktree.displayNameMode,
+        branchName: branch,
+        // Fetched titles only: display fallbacks hold localized loading/unavailable placeholders.
+        linearIssueTitle: linearIssue?.title,
+        jiraIssueTitle: jiraIssueDisplay?.title,
+        issueTitle: issue?.title,
+        reviewTitle: prDisplay?.title
+      })
+    : coerceWorktreeCardVisibleTitle(worktree.displayName)
   const isDeleting = deleteState?.isDeleting ?? false
   const isQueuedForDeletion = deleteState?.phase === 'queued'
   const deleteLabel = isDeleting

@@ -9,6 +9,9 @@ const LOCAL_ADDRESS_PATTERN =
 
 // Treat dotted domain-like inputs as navigation; bare prose such as react hooks remains search.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
+// Single-label internal hosts with an explicit path, query, or fragment (e.g. intranet/docs?token=x, go/design) must navigate rather than leak to search.
+const SINGLE_LABEL_HOST_URL_PATTERN =
+  /^(?=[a-z0-9-]{0,62}[a-z])[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\/.*|\?[^\s]+|#[^\s]*)$/i
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
 const UNIX_ABSOLUTE_PATH_PATTERN = /^\/.*$/
@@ -65,7 +68,11 @@ function isValidDnsName(name: string): boolean {
     )
 }
 
-/** Avoids parsing a dotted host and port as a scheme; .localhost defaults to HTTP. */
+function isHttpDefaultLocalHostname(hostname: string): boolean {
+  return hostname.endsWith('.localhost') || hostname.endsWith('.local')
+}
+
+/** Avoids parsing a dotted host and port as a scheme; .localhost and .local default to HTTP. */
 function classifySchemeLessDomainPortAddress(input: string): URL | null {
   const match = /^([^\s/\\:@?#]+):\d+(?:[/?#].*)?$/.exec(input)
   if (!match || !match[1].includes('.')) {
@@ -77,7 +84,7 @@ function classifySchemeLessDomainPortAddress(input: string): URL | null {
     if (!isValidDnsName(hostname)) {
       return null
     }
-    return hostname.endsWith('.localhost') ? new URL(`http://${input}`) : url
+    return isHttpDefaultLocalHostname(hostname) ? new URL(`http://${input}`) : url
   } catch {
     return null
   }
@@ -207,10 +214,7 @@ function buildKagiSessionSearchUrl(
   query: string,
   sessionLink: string | null | undefined
 ): string | null {
-  if (!sessionLink) {
-    return null
-  }
-  const normalized = normalizeKagiSessionLink(sessionLink)
+  const normalized = sessionLink ? normalizeKagiSessionLink(sessionLink) : null
   if (!normalized) {
     return null
   }
@@ -234,16 +238,13 @@ export function buildSearchUrl(
 }
 
 export function looksLikeSearchQuery(input: string): boolean {
-  if (input.includes(' ')) {
-    return true
-  }
-  if (LOOKS_LIKE_URL_PATTERN.test(input)) {
-    return false
-  }
-  if (input.includes('.') || input.includes(':')) {
-    return false
-  }
-  return true
+  return (
+    input.includes(' ') ||
+    (!LOOKS_LIKE_URL_PATTERN.test(input) &&
+      !SINGLE_LABEL_HOST_URL_PATTERN.test(input) &&
+      !input.includes('.') &&
+      !input.includes(':'))
+  )
 }
 
 /** True for input shaped like an absolute filesystem path (POSIX, Windows drive, or UNC). */
@@ -318,7 +319,10 @@ export function normalizeBrowserNavigationUrl(
     try {
       const withScheme = new URL(`https://${trimmed}`)
       if (!searchEnabled || !looksLikeSearchQuery(trimmed)) {
-        return withScheme.toString()
+        const hostname = normalizeCertificateHostname(withScheme.hostname)
+        return isValidDnsName(hostname) && isHttpDefaultLocalHostname(hostname)
+          ? new URL(`http://${trimmed}`).toString()
+          : withScheme.toString()
       }
     } catch {
       // Not a valid URL even with https:// prefix

@@ -406,6 +406,10 @@
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
       "useReset": "Use reset",
+      "antigravitySaved": "Saved Google account",
+      "antigravityLaunchesUse": "New agy launches use this account",
+      "antigravityLoginNow": "agy's login right now",
+      "antigravityChanged": "The native account changed. Select a saved account again before launching agy.",
       "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
       "otherAgents": "Other agents",
       "fableWindow": "Fable",
@@ -2220,7 +2224,9 @@
       "loading": "Loading files…",
       "searching": "Searching…",
       "searchPlaceholder": "Search files",
-      "inFiles": "In files"
+      "inFiles": "In files",
+      "more": "More",
+      "newEntry": "New"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2300,7 +2306,28 @@
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
-      "copyRelativePath": "Copy Relative Path"
+      "copyRelativePath": "Copy Relative Path",
+      "newFile": "New File",
+      "newFolder": "New Folder",
+      "rename": "Rename",
+      "duplicate": "Duplicate",
+      "create": "Create",
+      "fileName": "File name",
+      "folderName": "Folder name",
+      "deleteTitle": "Delete {{name}}?",
+      "deleteFileDetail": "This permanently deletes the file. This cannot be undone.",
+      "deleteFolderDetail": "This permanently deletes the folder and its contents. This cannot be undone.",
+      "duplicateFailed": "Couldn't duplicate {{name}}. {{reason}}",
+      "duplicateUnconfirmed": "The copy may not be complete. Check it and try again.",
+      "deleteFailed": "Couldn't delete {{name}}. {{reason}}",
+      "deleteUnconfirmed": "It's still there. Check the folder and try again.",
+      "renameFailed": "Couldn't rename {{name}}. {{reason}}",
+      "newFileFailed": "Couldn't create the file. {{reason}}",
+      "newFolderFailed": "Couldn't create the folder. {{reason}}",
+      "share": "Share",
+      "shareFailed": "Couldn't share {{name}}",
+      "shareTooLarge": "Files larger than 256 MB can’t be shared from the phone",
+      "shareHostOutdated": "Update Orca where this workspace runs to share files"
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."

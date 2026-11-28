@@ -23,6 +23,10 @@ export const HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY = 'accounts.host-launch-
 export const HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY =
   'settings.native-chat-auto-name.v1' as const
 
+// settings.update accepts antigravityChatNaming, so a WSL host's Antigravity naming follows the desktop switch.
+export const HOST_ANTIGRAVITY_CHAT_NAMING_SETTING_RUNTIME_CAPABILITY =
+  'settings.antigravity-chat-naming.v1' as const
+
 // Older orcads reject --reclaim-stale-lock; without this capability offer manual instructions.
 export const ORCAD_STALE_LOCK_RECLAIM_RUNTIME_CAPABILITY = 'orcad.stale-lock-reclaim.v1' as const
 
@@ -49,6 +53,7 @@ export const ORCAD_RUNTIME_CAPABILITIES = [
   ORCAD_MIGRATION_CATALOG_ABORT_BY_REFERENCE_RUNTIME_CAPABILITY,
   HOST_ACCOUNT_LAUNCH_ENV_RUNTIME_CAPABILITY,
   HOST_CHAT_AUTO_NAME_SETTING_RUNTIME_CAPABILITY,
+  HOST_ANTIGRAVITY_CHAT_NAMING_SETTING_RUNTIME_CAPABILITY,
   ORCAD_PEER_DESKTOPS_RUNTIME_CAPABILITY,
   ORCAD_IDLE_PASSIVE_CLIENTS_RUNTIME_CAPABILITY,
   ORCAD_IDLE_PASSIVE_CONTROL_RUNTIME_CAPABILITY

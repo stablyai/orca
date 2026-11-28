@@ -46,7 +46,6 @@ import { useNativeChatTranscriptScroll } from './viewport/scroll/use-native-chat
 import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
 import { useNativeChatMessageRail } from './viewport/rail/use-native-chat-message-rail'
-import { useNativeChatRailWake } from './viewport/rail/use-native-chat-rail-wake'
 import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
@@ -314,12 +313,11 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
-  const { railRef, wake: wakeRail, onScroll: onTranscriptScroll } = useNativeChatRailWake(onScroll)
+  const railRef = useRef<HTMLDivElement | null>(null)
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
-    wakeRail()
-  }, [beginNavigation, recordReaderScroll, wakeRail])
+  }, [beginNavigation, recordReaderScroll])
   const readerInput = useNativeChatReaderScrollInput(scrollRef, {
     onReaderScroll,
     onTakeScroll: transcriptWindow.cancelAlign,
@@ -378,7 +376,7 @@ export function NativeChatMessageList({
           {scope.header}
           <NativeChatTranscriptViewport
             scrollRef={scrollRef}
-            scrollerProps={{ onScroll: onTranscriptScroll, ...readerInput.scrollerProps }}
+            scrollerProps={{ onScroll, ...readerInput.scrollerProps }}
             toolRunScroll={toolRunScroll}
             forwardedGesture={readerInput.forwardedGesture}
             showJump={showJump}

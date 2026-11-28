@@ -9,7 +9,16 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { WorkerBackgroundWaits } from './worker-background-waits'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  chatPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
 const HANDLE = 'term_worker'
@@ -50,6 +59,7 @@ describe('a worker waiting on its own background task', () => {
   let runId: string
   let timers: Timer[]
   let row: AgentStatusIpcPayload | null
+  let stopRequestedSince: (sessionId: string, since: number) => boolean
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
@@ -71,6 +81,7 @@ describe('a worker waiting on its own background task', () => {
     }).id
     timers = []
     row = null
+    stopRequestedSince = () => false
   })
 
   afterEach(() => {
@@ -84,6 +95,7 @@ describe('a worker waiting on its own background task', () => {
       getDb: () => db,
       isWaitingForMail: () => false,
       notify: () => {},
+      backgroundStopRequestedSince: (sessionId, since) => stopRequestedSince(sessionId, since),
       readHookRow: () => row,
       getHandle: () => HANDLE,
       getProcessIncarnation: () => incarnation,
@@ -326,5 +338,105 @@ describe('a worker waiting on its own background task', () => {
     row = leadWorkingRow(TURN_END + 121 * MINUTE)
     restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
     expect(readWorkerPresence(db, dispatchId)?.presence).toBe('working')
+  })
+
+  describe('a chat worker whose background task ends while its chat is idle', () => {
+    const SESSION = '22222222-2222-4222-8222-222222222222'
+    const CHAT_PANE = chatPaneKey(SESSION)
+    let chatDispatch: string
+
+    beforeEach(() => {
+      if (!isOrcaSessionId(SESSION)) {
+        throw new Error('test session id must be an Orca session id')
+      }
+      chatDispatch = db.createDispatchContext({
+        taskId: db.createTask({ spec: 'watch CI', runId }).id,
+        assigneeHandle: formatOrcaSessionAddress(SESSION),
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      }).id
+    })
+
+    function chatRow(
+      state: 'working' | 'done',
+      agentType: string,
+      outcome: 'success' | 'cancellation' = 'success'
+    ): AgentStatusIpcPayload {
+      return {
+        ...heldRow(TURN_END),
+        paneKey: CHAT_PANE,
+        tabId: structuredAgentSessionTabId(SESSION),
+        structuredHost: 'owned',
+        agentType,
+        backgroundCommands: ['gh pr checks 1 --watch'],
+        ...(state === 'done' ? { state: 'done', workingMode: undefined } : {}),
+        mainAgent: { state: 'done', outcome, stateStartedAt: TURN_END }
+      }
+    }
+
+    /** The wait is seen, then its tasks end with the chat idle on `ended`. */
+    function endWait(agentType: string, ended = chatRow('done', agentType)): void {
+      const orca = startOrca()
+      row = chatRow('working', agentType)
+      orca.observe({
+        kind: 'observed',
+        paneKey: CHAT_PANE,
+        workspace: null,
+        phase: 'working',
+        at: 0
+      })
+      row = ended
+      const workspace = { worktreeId: 'repo::/w', sshHostId: null }
+      orca.observe({
+        kind: 'moved',
+        paneKey: CHAT_PANE,
+        workspace,
+        from: 'working',
+        to: 'done',
+        at: 1,
+        transition: null
+      })
+      orca.observe({ kind: 'observed', paneKey: CHAT_PANE, workspace: null, phase: 'done', at: 2 })
+    }
+
+    const workerMail = () =>
+      db.db
+        .prepare('SELECT from_handle, body FROM messages WHERE to_handle = ? ORDER BY sequence')
+        .all(`dispatch:${chatDispatch}`)
+        .map((m) => ({ from: String(m.from_handle), body: String(m.body) }))
+
+    it('wakes a Codex worker once through its own Dispatch, naming the command', () => {
+      endWait('codex')
+      expect(workerMail()).toEqual([
+        { from: BACKGROUND_WAKE_SENDER, body: expect.stringContaining('gh pr checks 1 --watch') }
+      ])
+    })
+
+    it('leaves a Claude worker to wake itself', () => {
+      endWait('claude')
+      expect(workerMail()).toEqual([])
+    })
+
+    it('adds nothing when mail already waiting will wake the worker', () => {
+      db.insertMessage({
+        from: 'orca-bg-wake',
+        to: `dispatch:${chatDispatch}`,
+        subject: 'WAKE',
+        runId
+      })
+      endWait('codex')
+      expect(workerMail().map((m) => m.from)).toEqual(['orca-bg-wake'])
+    })
+
+    it('does not wake a worker whose background task a person stopped', () => {
+      stopRequestedSince = (sessionId, since) => sessionId === SESSION && since === TURN_END
+      endWait('codex')
+      expect(workerMail()).toEqual([])
+    })
+
+    it('does not wake a worker whose turn was stopped', () => {
+      endWait('codex', chatRow('done', 'codex', 'cancellation'))
+      expect(workerMail()).toEqual([])
+    })
   })
 })

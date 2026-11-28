@@ -83,8 +83,9 @@ export type LeaveLines = {
 let installed: LeaveLines | null = null
 
 /** The process's lines, set as its conversations are installed; a turn's end posts through them. */
-export function installLeaveLines(lines: LeaveLines | null): void {
+export function installLeaveLines<T extends LeaveLines | null>(lines: T): T {
   installed = lines
+  return lines
 }
 
 export function installedLeaveLines(): LeaveLines | null {
