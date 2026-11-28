@@ -1,0 +1,125 @@
+// Guards #51086's per-call daemon work: an app that stopped reading its stream gets a bounded
+// backlog of front notices, and a tool call's own daemon connection runs no idle check (which
+// reads every terminal session) when it closes.
+import '../pty-subprocess/testing/mock-descendant-sweep'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { connect, createServer, type Server, type Socket } from 'node:net'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DaemonClient } from '../transport/client/daemon-client'
+import { openDaemonToolRelayConnection } from '../transport/client/daemon-client-tool-relay-connection'
+import { DaemonServer } from '../server/daemon-server'
+import { DaemonServerLifecycle } from '../server/daemon-server-lifecycle'
+import { getDaemonSocketPath } from '../launch/daemon-spawner'
+import { jsonProperty } from '../../../shared/json-stream/json-value-property'
+import type { ToolRelayFrontOpenResult } from '../protocol/daemon-tool-relay-front-protocol'
+import { DaemonToolRelayFront } from './daemon-tool-relay-front'
+import {
+  answerToolRelayFrontRequest,
+  MAX_UNREAD_STREAM_BYTES
+} from './daemon-tool-relay-front-requests'
+
+const cleanups: (() => Promise<void> | void)[] = []
+
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).toReversed()) {
+    await cleanup()
+  }
+})
+
+/** A connected socket whose far end never reads, so everything written to it stays queued. */
+async function unreadStream(): Promise<Socket> {
+  const server: Server = createServer((peer) => peer.pause())
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const address = server.address()
+  const port = address && typeof address === 'object' ? address.port : 0
+  const socket = connect(port, '127.0.0.1')
+  await new Promise((resolve) => socket.once('connect', resolve))
+  cleanups.push(() => {
+    socket.destroy()
+    server.close()
+  })
+  return socket
+}
+
+describe.skipIf(process.platform === 'win32')('front notices on a stalled app stream', () => {
+  it('stop queueing past the unread bound, however many relay ends follow', async () => {
+    const front = new DaemonToolRelayFront('start-1')
+    cleanups.push(() => front.dispose())
+    const control = await unreadStream()
+    const stream = await unreadStream()
+    const client = {
+      clientId: 'app',
+      controlSocket: control,
+      streamSocket: stream,
+      authenticatedPairEstablished: true
+    }
+    await answerToolRelayFrontRequest(
+      { id: '1', type: 'toolRelayFrontServe' },
+      client,
+      control,
+      front
+    )
+    // Each relay end is announced on the stream; far more than the socket and the bound can hold.
+    const grant = { owner: 'scout', token: 'tok', folders: { bot: '/bots/scout' } }
+    for (let relay = 0; relay < 300_000; relay += 1) {
+      front.kept.keep(`r-${relay}`, `chat-${relay}`, { grants: [grant] })
+      front.forgetKept(`r-${relay}`)
+    }
+    // At most one notice past the bound (the write that crossed it) is queued.
+    expect(stream.writableLength).toBeLessThanOrEqual(MAX_UNREAD_STREAM_BYTES + 1024)
+  })
+
+  it("a tool call's daemon connection closing runs no idle check", async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tool-relay-idle-'))
+    const socketPath = getDaemonSocketPath(dir)
+    const tokenPath = join(dir, 'test.token')
+    const server = new DaemonServer({
+      socketPath,
+      tokenPath,
+      spawnSubprocess: () => {
+        throw new Error('no terminals here')
+      }
+    })
+    await server.start()
+    const client = new DaemonClient({ socketPath, tokenPath })
+    await client.ensureConnected()
+    cleanups.push(async () => {
+      client.disconnect()
+      await server.shutdown()
+      rmSync(dir, { recursive: true, force: true })
+    })
+    const announced = new Promise<string>((resolve) =>
+      client.onEvent((event) => {
+        const id = jsonProperty(jsonProperty(event, 'payload'), 'frontConnectionId')
+        if (typeof id === 'string') {
+          resolve(id)
+        }
+      })
+    )
+    const { port } = await client.request<ToolRelayFrontOpenResult>('toolRelayFrontOpen', undefined)
+    await client.request('toolRelayFrontServe', undefined)
+    const agent = connect(port, '127.0.0.1')
+    agent.on('error', () => {})
+    agent.write('POST /bot-tools/x/mcp HTTP/1.1\r\n\r\n')
+    cleanups.push(() => {
+      agent.destroy()
+    })
+    const id = await announced
+    const idleChecks = vi.spyOn(DaemonServerLifecycle.prototype, 'reevaluateIdleShutdown')
+    cleanups.push(() => idleChecks.mockRestore())
+    const { socket: app } = await openDaemonToolRelayConnection(client, id)
+    const answered = new Promise((resolve) => agent.once('close', resolve))
+    app.resume()
+    app.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}')
+    await answered
+    if (!app.destroyed) {
+      await new Promise((resolve) => app.once('close', resolve))
+    }
+    // The daemon's end closes a moment after this one, with nothing outside it to wait on.
+    // ast-grep-ignore: test-no-real-time-wait -- the daemon-side close has no observable signal here
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(idleChecks).not.toHaveBeenCalled()
+  })
+})

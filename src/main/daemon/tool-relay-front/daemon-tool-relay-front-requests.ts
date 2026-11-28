@@ -12,6 +12,9 @@ import {
 import { streamFramesFor } from '../transport/framing/daemon-stream-data-split'
 import type { DaemonToolRelayFront } from './daemon-tool-relay-front'
 
+/** Past this much unread on the app's stream, front notices are dropped rather than queued. */
+export const MAX_UNREAD_STREAM_BYTES = 1024 * 1024
+
 /** Undefined leaves every other request to the router. */
 export function answerToolRelayFrontRequest(
   request: DaemonRequest,
@@ -39,7 +42,9 @@ export function answerToolRelayFrontRequest(
   }
   const port = front.serve(client.clientId, socket, (payload) => {
     const stream = client.streamSocket
-    if (!stream || stream.destroyed) {
+    // An app that stopped reading gets no more: a held connection it never hears of gets the 503
+    // when its hold runs out, and a relay end it misses is settled by its next serve.
+    if (!stream || stream.destroyed || stream.writableLength > MAX_UNREAD_STREAM_BYTES) {
       return
     }
     const event: ToolRelayFrontConnectionEvent = {
