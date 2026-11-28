@@ -1,4 +1,7 @@
-import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { dispatchReportMailbox } from '../../workers/reports/dispatch-report-mailbox'
 import { isDispatchAssignee } from '../dispatch-context/dispatch-lookup'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -160,14 +163,15 @@ export function coordinatorReach(
 ): (to: string) => boolean {
   const byRun = new Map<string, boolean>()
   const liveWorkers = new Set(
-    nonCreatorRunWorkers(db, dispatch.id)
-      .filter((worker) => Number.isNaN(worker.completedAt))
-      .flatMap((worker) => [
-        worker.assignee_handle,
-        ...(worker.assignee_orca_session_id
-          ? [formatOrcaSessionAddress(worker.assignee_orca_session_id)]
-          : [])
-      ])
+    nonCreatorRunWorkers(db, dispatch.id).flatMap((worker) => {
+      if (!Number.isNaN(worker.completedAt)) {
+        return []
+      }
+      const session = worker.assignee_orca_session_id
+      return session && isOrcaSessionId(session)
+        ? [worker.assignee_handle, formatOrcaSessionAddress(session)]
+        : [worker.assignee_handle]
+    })
   )
   const reachesRun = (runId: string): boolean => {
     const run = db.getRun(runId)
