@@ -1,4 +1,4 @@
-import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -61,5 +61,14 @@ describe('copyPath on Windows', () => {
     await expect(
       copyPath(path.join(root, 'missing'), path.join(root, 'out'), { recursive: true })
     ).rejects.toMatchObject({ code: 'ENOENT' })
+
+    await writeFile(path.join(source, 'top.txt'), 'changed')
+    await copyPath(source, path.join(root, 'actual'), { recursive: true })
+    expect(await readFile(path.join(root, 'actual', 'top.txt'), 'utf8')).toBe('changed')
+
+    await symlink(source, path.join(root, 'alias'), 'junction')
+    await expect(
+      copyPath(source, path.join(root, 'alias', 'out'), { recursive: true })
+    ).rejects.toMatchObject({ code: 'ERR_FS_CP_EINVAL' })
   })
 })
