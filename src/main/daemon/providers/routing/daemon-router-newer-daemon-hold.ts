@@ -34,8 +34,8 @@ export async function routeSpawnOrHold(
 export async function attachOrHold(
   opts: PtySpawnOptions,
   sessionId: string,
-  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>,
-  current: DaemonPtyAdapter
+  ownerResolver: Pick<DaemonSessionOwnerResolver<DaemonPtyAdapter>, 'spawnAttachOnly'>,
+  current: Pick<DaemonPtyAdapter, 'hasRestorableHistory'>
 ): Promise<PtySpawnResult> {
   try {
     return await ownerResolver.spawnAttachOnly({ ...opts, sessionId })

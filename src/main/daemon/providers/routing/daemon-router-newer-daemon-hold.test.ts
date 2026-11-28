@@ -8,10 +8,8 @@ import { getDaemonPidPath, getDaemonSocketPath } from '../../launch/daemon-spawn
 import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
-import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { discoverNewerProtocolHolds } from './daemon-newer-protocol-hold'
 import { attachOrHold } from './daemon-router-newer-daemon-hold'
-import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 
 const SESSION = 'wt::/repo@@held'
 const NEWER = PROTOCOL_VERSION + 1
@@ -42,14 +40,14 @@ describe('attach-only lookups while a newer daemon may run the session', () => {
 
   function attach(outcome: PtySpawnResult | Error, restorable: boolean): Promise<PtySpawnResult> {
     const resolver = {
-      spawnAttachOnly: async () => {
+      spawnAttachOnly: async (): Promise<PtySpawnResult> => {
         if (outcome instanceof Error) {
           throw outcome
         }
         return outcome
       }
-    } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
-    const current = { hasRestorableHistory: () => restorable } as unknown as DaemonPtyAdapter
+    }
+    const current = { hasRestorableHistory: () => restorable }
     return attachOrHold({ cols: 80, rows: 24 }, SESSION, resolver, current)
   }
 
@@ -77,7 +75,7 @@ describe('attach-only lookups while a newer daemon may run the session', () => {
 
   it('passes live attaches and other errors through unchanged', async () => {
     await holdForNewerDaemon()
-    const live = { id: SESSION, isReattach: true } as PtySpawnResult
+    const live: PtySpawnResult = { id: SESSION, isReattach: true }
     await expect(attach(live, true)).resolves.toBe(live)
     const other = new Error('terminal_pane_owner_unverified')
     await expect(attach(other, true)).rejects.toBe(other)
