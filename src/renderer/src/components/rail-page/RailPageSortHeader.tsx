@@ -2,18 +2,25 @@ import React from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { AutomationListSort, AutomationListSortField } from './automation-list-view'
 
-export function AutomationListSortHeader({
+export type RailPageSortDirection = 'asc' | 'desc'
+
+export type RailPageSort<F extends string> = {
+  field: F
+  direction: RailPageSortDirection
+}
+
+/** A list-table header label that orders its column; the arrow marks the active column's direction. */
+export function RailPageSortHeader<F extends string>({
   field,
   label,
   sort,
   onSort
 }: {
-  field: AutomationListSortField
+  field: F
   label: string
-  sort: AutomationListSort | null
-  onSort: (field: AutomationListSortField) => void
+  sort: RailPageSort<F> | null
+  onSort: (field: F) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const active = sort?.field === field

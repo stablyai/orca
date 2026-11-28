@@ -11,6 +11,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -32,6 +33,7 @@ import {
   isPortaledRowMenuClick,
   isRowActivationKey
 } from '@/lib/list-interaction/list-row-interaction'
+import { getSelectionIntent } from '@/lib/list-interaction/list-multi-selection'
 import {
   artifactName,
   artifactTypeLabel,
@@ -92,16 +94,24 @@ export function ArtifactListRow({
   item,
   deleting,
   isSelected,
+  checked,
+  selecting,
   showDivider,
   selectArtifact,
+  toggleChecked,
   deleteArtifact
 }: {
   item: ArtifactListItem
   deleting: boolean
   isSelected: boolean
+  /** Checked for a bulk action; separate from `isSelected`, the row open in the drawer. */
+  checked: boolean
+  /** Any row is checked, so checkboxes replace type icons on every row. */
+  selecting: boolean
   /** Omit only the final divider; the next Load more block or table border supplies that edge. */
   showDivider: boolean
   selectArtifact: (slug: string) => void
+  toggleChecked: (slug: string, range: boolean) => void
   deleteArtifact: (item: ArtifactListItem) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -124,8 +134,19 @@ export function ArtifactListRow({
           role="button"
           tabIndex={0}
           data-current={isSelected ? 'true' : undefined}
+          onMouseDown={(event) => {
+            // Shift-click extends the check range; keep it from also selecting row text.
+            if (event.shiftKey) {
+              event.preventDefault()
+            }
+          }}
           onClick={(event) => {
             if (isPortaledRowMenuClick(event)) {
+              return
+            }
+            const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
+            if (intent !== 'replace') {
+              toggleChecked(item.artifact.slug, intent === 'range')
               return
             }
             selectArtifact(item.artifact.slug)
@@ -145,7 +166,41 @@ export function ArtifactListRow({
           )}
         >
           <div className="flex min-w-0 items-center gap-2">
-            <TypeIcon aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+            {/* The checkbox swaps in over the type icon, so checking never shifts the Name column. */}
+            <span className="relative flex size-4 shrink-0 items-center justify-center">
+              <TypeIcon
+                aria-hidden="true"
+                className={cn(
+                  'size-4 text-muted-foreground',
+                  selecting
+                    ? 'invisible'
+                    : 'group-hover/list-table-row:invisible group-focus-within/list-table-row:invisible'
+                )}
+              />
+              <span
+                className={cn(
+                  'absolute inset-0 flex items-center justify-center',
+                  !selecting &&
+                    'opacity-0 group-hover/list-table-row:opacity-100 group-focus-within/list-table-row:opacity-100'
+                )}
+              >
+                <Checkbox
+                  checked={checked}
+                  aria-label={t(
+                    'auto.components.artifacts.ArtifactListRow.select',
+                    'Select {{name}}',
+                    {
+                      name
+                    }
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    event.preventDefault()
+                    toggleChecked(item.artifact.slug, event.shiftKey)
+                  }}
+                />
+              </span>
+            </span>
             <span className="min-w-0 truncate font-medium" title={name}>
               {name}
             </span>
