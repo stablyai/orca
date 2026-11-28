@@ -27,7 +27,7 @@ import {
   type RelayFolders
 } from './bot-tool-relay-grants'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
-import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-answer'
+import * as answers from './bot-tool-relay-sign-in-answer'
 import {
   sendUpstream,
   streamUpstreamResponse,
@@ -42,6 +42,7 @@ const MAX_TRACKED_PROBLEMS = 1_000
 const AGENT_LEFT = Symbol('agent left')
 const CREDENTIAL_ENDED = Symbol('credential ended')
 
+type Forwarded = { owner: string; scope: keyof RelayFolders; folder: string; credentialId: string }
 const credentialKey = (folder: string, credentialId: string) => `${folder}\0${credentialId}`
 const SESSION_ENDED = 'This tool’s session ended. Start a new one.'
 
@@ -191,7 +192,8 @@ export class BotToolRelay {
       })
       const { credentialId, process: serverId } = match
       if (serverId === undefined) {
-        await this.forward(req, res, { owner: grant.owner, folder, credentialId }, abort.signal)
+        const forwarded = { owner: grant.owner, scope: match.scope, folder, credentialId }
+        await this.forward(req, res, forwarded, abort.signal)
         return
       }
       // A host list command server Orca runs once: its child answers, not an upstream address.
@@ -238,7 +240,7 @@ export class BotToolRelay {
   private async forward(
     req: IncomingMessage,
     res: ServerResponse,
-    { owner, folder, credentialId }: { owner: string; folder: string; credentialId: string },
+    { owner, scope, folder, credentialId }: Forwarded,
     signal: AbortSignal
   ): Promise<void> {
     const body = req.method === 'POST' ? await readBody(req) : undefined
@@ -248,15 +250,15 @@ export class BotToolRelay {
     let upstream: Response
     for (let tries = 1; ; tries += 1) {
       if (answer.kind === 'sign-in-needed') {
-        answerSignInNeeded(req, res, body)
+        answers.answerSignInNeeded(req, res, body)
         return
       }
       if (answer.kind === 'unavailable') {
-        answerUnavailable(req, res, body)
+        answers.answerUnavailable(req, res, body)
         return
       }
-      if (answer.kind === 'missing') {
-        throw new RelayRefusal(404, 'This bot has no such tool.')
+      if (answer.kind === 'missing' || answer.kind === 'unreadable') {
+        return answers.answerToolGone(req, res, body, scope, answer.kind)
       }
       this.checkSession(req, key, answer)
       upstream = await sendUpstream(this.fetchUpstream, req, answer, body, signal)
@@ -267,7 +269,7 @@ export class BotToolRelay {
       await upstream.body?.cancel()
       if (tries === 2) {
         // A token fresh from the app was refused too: only a new sign-in helps.
-        answerSignInNeeded(req, res, body)
+        answers.answerSignInNeeded(req, res, body)
         return
       }
       answer = await this.ask({ ...request, rejected: answer.bearer })

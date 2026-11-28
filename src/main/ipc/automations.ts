@@ -15,6 +15,7 @@ import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
 } from '../../shared/automations/external/external-automation-scope'
+import type { IpcHandleRegistrar } from './lazy-ipc-handle-group'
 
 /** Refuse uncaptured owners instead of using the active host; malformed input remains a plain Error, not an ownership conflict. */
 function requireCapturedOwner<T extends { owner?: AutomationOwnerRef | null }>(
@@ -45,7 +46,11 @@ function underOrcaPriority<T>(scheduler: ExternalAutomationProbeScheduler, run: 
   }
 }
 
-export function registerAutomationHandlers(store: Store, service: AutomationService): void {
+export function registerAutomationHandlers(
+  store: Store,
+  service: AutomationService,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   // Cache TTL and probe concurrency need registration-long state, not per-request instances.
   const probeScheduler = new ExternalAutomationProbeScheduler()
   const managerCache = new ExternalAutomationManagerCache()
@@ -58,7 +63,7 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
   // Runtime RPC CRUD takes the service-installed priority lease.
   service.externalProbePriority = (run) => underOrcaPriority(probeScheduler, run)
   // Guard derives one host and manager ID from the captured owner.
-  ipcMain.handle(
+  ipc.handle(
     'automations:listExternalManagerForOwner',
     (
       _event,
@@ -66,19 +71,19 @@ export function registerAutomationHandlers(store: Store, service: AutomationServ
     ): Promise<ExternalAutomationManagerCacheEntry> =>
       scopedExternal.listManager(requireCapturedOwner(request))
   )
-  ipcMain.handle(
+  ipc.handle(
     'automations:runExternalActionForOwner',
     (_event, request: ScopedExternalManagerActionRequest): Promise<void> =>
       scopedExternal.runAction(requireCapturedOwner(request))
   )
   // Cancel scopes no longer viewed; an empty retained set cancels all.
-  ipcMain.handle(
+  ipc.handle(
     'automations:retainExternalScopes',
     (_event, request?: { owners?: readonly AutomationOwnerRef[] } | null): void => {
       probeScheduler.retainScopes((request?.owners ?? []).map(ownerKey))
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'automations:snapshotWorkspaceName',
     (_event, args: { workspaceId: string; hostId?: string; displayName: string }): number => {
       const host = parseExecutionHostId(args.hostId)

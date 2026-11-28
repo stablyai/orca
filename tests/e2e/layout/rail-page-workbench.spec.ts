@@ -365,7 +365,7 @@ test('Tasks retains keyboard view selection, draft filtering and rail history', 
 
   const issues = toolbar.getByRole('radio', { name: 'Issues', exact: true })
   await issues.focus()
-  await orcaPage.keyboard.press('ArrowRight')
+  await orcaPage.keyboard.press('ArrowLeft')
   const prs = toolbar.getByRole('radio', { name: 'PRs', exact: true })
   await expect(prs).toBeFocused()
   await expect(issues).toHaveAttribute('aria-checked', 'true')

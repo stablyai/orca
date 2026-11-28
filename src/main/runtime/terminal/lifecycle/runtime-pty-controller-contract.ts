@@ -229,6 +229,7 @@ export type RuntimePtyController = {
     opts?: PtyProviderBufferSnapshotOptions
   ): Promise<PtyProviderBufferSnapshot | null>
   supportsVisibleProjectionSnapshot?(ptyId: string): boolean
+  canProvideAuthoritativeBufferSnapshot?(ptyId: string): boolean
   // Probe renderer authority before hydration (docs/mobile-prefer-renderer-scrollback.md).
   hasRendererSerializer?(ptyId: string): boolean
   getRendererSerializerGeneration?(ptyId: string): number

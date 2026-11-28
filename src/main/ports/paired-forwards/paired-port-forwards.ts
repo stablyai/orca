@@ -6,11 +6,16 @@ import {
   SshPortForwardManager
 } from '../../ssh/port-forwarding/ssh-port-forward'
 import {
-  addForwardOnFreeLocalPort,
   assertLoopbackPortFree,
   registerForwardPortHolder
 } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { forwardKey, type ForwardMapping } from '../../ssh/port-forwarding/saved-port-forward-list'
+import {
+  dropPairedPortForwardSession,
+  forwardsPortFor,
+  ownPairedPortForward,
+  type SessionForwardRemoval
+} from './paired-port-forward-sessions'
 import {
   forgetSavedPairedPortForwards,
   recordRestoredPortForwardMove,
@@ -23,7 +28,8 @@ import {
 } from './paired-port-forward-saved'
 import { runtimeHostKeyFingerprint } from '../../ipc/runtime-environments/catalog/runtime-environment-host-key'
 import { serializePortForwardChange } from '../../ipc/ssh/ssh-managed-port-forward-restore'
-import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
+import { PairedPortForwardProvider } from './paired-port-forward-provider'
+import { addPairedForwardOnFirstFreePort } from './paired-port-forward-free-port'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 import {
   disposeAllPairedForwardTunnels,
@@ -120,6 +126,7 @@ export function updatePairedPortForward(
         spec.remotePort,
         spec.label
       )
+      dropPairedPortForwardSession(spec.id)
       save(spec.environmentId, hostKey, [current])
       return entry
     } catch (error) {
@@ -134,14 +141,20 @@ export function updatePairedPortForward(
   })
 }
 
-export async function removePairedPortForward(id: string): Promise<boolean> {
-  const environmentId = manager.listForwards().find((entry) => entry.id === id)?.connectionId
+/** `only`: a session's removal, decided in the server's queue after every change queued before it. */
+export async function removePairedPortForward(id: string, only?: SessionForwardRemoval) {
+  const environmentId =
+    only?.environmentId ?? manager.listForwards().find((entry) => entry.id === id)?.connectionId
   if (!environmentId) {
     return false
   }
   return serializePortForwardChange(forwardChangeKey(environmentId), async () => {
+    if (only && !only.when()) {
+      return false
+    }
     const hostKey = pairedForwardTunnel(environmentId)?.hostKeyFingerprint
     const removed = await manager.removeForwardAndWait(id)
+    dropPairedPortForwardSession(id)
     retireIdleTunnel(environmentId)
     save(environmentId, hostKey, removed ? [removed] : [])
     deps?.onChanged(environmentId)
@@ -154,23 +167,33 @@ export function ensurePairedPortForward(args: {
   environmentId: string
   remotePort: number
   label?: string
+  /** The running session (one Mobile Emulator attach) whose own forward this is: never shared or
+   *  saved, on a port the OS picks (the server's helper port number is one this computer's own
+   *  simulators start on), closed when the session ends. */
+  session?: string
 }): Promise<{ entry: PortForwardEntry; created: boolean }> {
   return serializePortForwardChange(forwardChangeKey(args.environmentId), async () => {
     const hostKey = await requireForwardableServer(args.environmentId)
-    // Every paired forward dials the server's own loopback, so its port alone names the service.
+    // Every paired forward dials the server's own loopback, so its port and owner name the service.
     const existing = manager
       .listForwards(args.environmentId)
-      .find((entry) => entry.remotePort === args.remotePort)
+      .find((entry) => forwardsPortFor(entry, args.remotePort, args.session))
     if (existing) {
       return { entry: existing, created: false }
     }
     const tunnel = tunnelFor(args.environmentId, hostKey)
-    const entry = await addOnFirstFreePort(tunnel, {
-      localPort: args.remotePort,
+    const entry = await addPairedForwardOnFirstFreePort(manager, tunnel, {
+      localPort: args.session ? 0 : args.remotePort,
       remoteHost: 'localhost',
       remotePort: args.remotePort,
       label: args.label
     }).catch(retireIdleTunnelAfter(args.environmentId))
+    // A session that ended while this bound opens nothing.
+    if (args.session && !ownPairedPortForward(entry.id, args.session, args.environmentId)) {
+      await manager.removeForwardAndWait(entry.id)
+      retireIdleTunnel(args.environmentId)
+      throw new Error('This emulator session has ended.')
+    }
     save(args.environmentId, hostKey)
     deps?.onChanged(args.environmentId)
     return { entry, created: true }
@@ -198,12 +221,14 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
     const reserved = savedForwardLocalPorts()
     for (const forward of pending) {
       reserved.delete(forward.localPort)
-      const entry = await addOnFirstFreePort(tunnel, forward, reserved).catch((error: unknown) => {
-        if (!(error instanceof PortForwardTornDownError)) {
-          console.warn(`[port-forwards] Could not restore forward :${forward.localPort}:`, error)
+      const entry = await addPairedForwardOnFirstFreePort(manager, tunnel, forward, reserved).catch(
+        (error: unknown) => {
+          if (!(error instanceof PortForwardTornDownError)) {
+            console.warn(`[port-forwards] Could not restore forward :${forward.localPort}:`, error)
+          }
+          return null
         }
-        return null
-      })
+      )
       reserved.add(forward.localPort)
       // Cancelled: nothing is saved or announced, so the next restore starts from the saved ports.
       if (tunnel.isDisposed()) {
@@ -224,30 +249,6 @@ export function restorePairedPortForwards(environmentId: string): Promise<void> 
     if (!(error instanceof PortForwardTornDownError)) {
       console.warn(`[port-forwards] Could not restore forwards for ${environmentId}:`, error)
     }
-  })
-}
-
-/** The forward on `preferred.localPort` when nothing here answers there, else the next free port. */
-function addOnFirstFreePort(
-  tunnel: PairedPortForwardTunnel,
-  preferred: ForwardMapping & { label?: string },
-  reserved: ReadonlySet<number> = savedForwardLocalPorts()
-): Promise<PortForwardEntry> {
-  return addForwardOnFreeLocalPort({
-    remotePort: preferred.remotePort,
-    preferredLocalPort: preferred.localPort,
-    add: (localPort) =>
-      manager.addForward(
-        tunnel.environmentId,
-        tunnel,
-        localPort,
-        preferred.remoteHost,
-        preferred.remotePort,
-        preferred.label
-      ),
-    remove: (id) => manager.removeForwardAndWait(id),
-    holdsIpv6Loopback: holdsIpv6Loopback(process.platform),
-    reservedLocalPorts: reserved
   })
 }
 
@@ -273,9 +274,10 @@ export function forgetPairedPortForwards(environmentId: string): Promise<void> {
 
 async function stopForwards(environmentId: string): Promise<void> {
   disposePairedForwardTunnel(environmentId)
-  const hadForwards = manager.listForwards(environmentId).length > 0
+  const forwards = manager.listForwards(environmentId)
   await manager.removeAllForwards(environmentId)
-  if (hadForwards) {
+  forwards.forEach((entry) => dropPairedPortForwardSession(entry.id))
+  if (forwards.length > 0) {
     deps?.onChanged(environmentId)
   }
 }

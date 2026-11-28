@@ -6,6 +6,7 @@ import {
   unsubscribeLocalWatcher
 } from './filesystem-watcher-local-subscription'
 import type { WatchWorktreeResult } from '../../../../shared/file-watch/watch-worktree-result'
+import type { FsChangedPayload } from '../../../../shared/file-watch/filesystem-change-event'
 
 export function registerFilesystemWatcherHandlers(): void {
   ipcMain.handle(
@@ -28,11 +29,14 @@ export function registerFilesystemWatcherHandlers(): void {
 
   ipcMain.handle(
     'fs:unwatchWorktree',
-    (event, args: { worktreePath: string; connectionId?: string }): void => {
+    (
+      event,
+      args: { worktreePath: string; connectionId?: string; handOver?: boolean }
+    ): FsChangedPayload | undefined => {
       if (args.connectionId) {
-        return
+        return undefined
       }
-      unsubscribeLocalWatcher(args.worktreePath, event.sender.id)
+      return unsubscribeLocalWatcher(args.worktreePath, event.sender.id, args.handOver === true)
     }
   )
 }

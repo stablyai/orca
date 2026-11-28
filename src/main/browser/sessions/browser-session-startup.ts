@@ -1,17 +1,14 @@
 import { browserSessionRegistry } from './profiles/browser-session-registry'
 import type { BrowserSessionRegistryProfileOptions } from './profiles/browser-session-registry'
-import { collectOrphanedBrowserRoutePartitionStorage } from '../routing/partitions/browser-route-partition-storage-runtime'
 // Initialize route registries and ownership probes before profile startup.
 import '../routing/sessions/browser-route-session-runtime'
 import { configureBrowserRoutePartitionBindingsForOrcaProfile } from '../routing/partitions/browser-route-partition-binding-runtime'
 import { configureBrowserSitePermissionStore } from '../site-settings/permissions/browser-site-permission-store'
 import { configureBrowserSiteDisplayStore } from '../site-settings/display/browser-site-display-store'
 import { configureBrowserExtensionProfileDataDirectory } from '../extensions/profile-storage/browser-extension-profile-data-directory'
-import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-state'
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
-import { restoreBrowserSessionCookies } from '../cookies/session-restore/browser-session-cookie-restore'
 import { configureBrowserSessionCookieSnapshots } from '../cookies/session-restore/browser-session-cookie-snapshot-file'
-import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
 import { listenForBrowserSystemDialogs } from '../guest-lifecycle/prompts/browser-system-dialogs'
@@ -46,11 +43,13 @@ export function initializeBrowserSessionsForApp(
     configurePairedRuntimeBrowserClientHostsForOrcaProfile({
       orcaProfileId: activeProfile.orcaProfileId
     })
-    void collectOrphanedBrowserRoutePartitionStorage(activeProfile.listLocalSshTargetIds).catch(
-      (error) => {
+    void import('../routing/partitions/browser-route-partition-storage-runtime')
+      .then(({ collectOrphanedBrowserRoutePartitionStorage }) =>
+        collectOrphanedBrowserRoutePartitionStorage(activeProfile.listLocalSshTargetIds)
+      )
+      .catch((error) => {
         console.warn('[browser-route-partition] orphan collection failed:', error)
-      }
-    )
+      })
   }
 
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
@@ -72,6 +71,10 @@ export function browserSessionProfilesReadAtStartup(): boolean {
 /** Restored tabs must load through their proxy and signed in. Extensions start with each profile's first page. */
 export async function whenBrowserSessionsReadyForRestoredTabs(): Promise<void> {
   const profiles = browserSessionRegistry.listProfiles()
+  const [{ restoreBrowserSessionCookies }, { awaitBrowserSessionProxies }] = await Promise.all([
+    import('../cookies/session-restore/browser-session-cookie-restore'),
+    import('./proxy/browser-session-proxy')
+  ])
   // Why bounded: a slow cookie restore never blocks launch. Cookie writes need no proxy.
   const cookiesRestored = withTimeout(restoreBrowserSessionCookies(profiles), 3_000, undefined)
   try {

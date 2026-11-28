@@ -1,21 +1,40 @@
 import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
 
-/** Stream growing ledgers to avoid blocking the main thread with whole-file reads. */
-export async function* streamCodexSessionLedgerRecords(
+const LEDGER_READ_CHUNK_BYTES = 64 * 1024
+
+/** Stream growing ledgers in 64 KiB chunks to avoid whole-file reads and per-line promise churn. */
+export async function forEachCodexSessionLedgerRecord(
   filePath: string,
+  onRecord: (record: Record<string, unknown>) => void,
   options: { throwOnReadFailure?: boolean } = {}
-): AsyncGenerator<Record<string, unknown>> {
-  const lines = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
+): Promise<void> {
+  const stream = createReadStream(filePath, {
+    encoding: 'utf-8',
+    highWaterMark: LEDGER_READ_CHUNK_BYTES
   })
+  let remainder = ''
   try {
-    for await (const raw of lines) {
-      const record = parseLedgerRecord(raw)
-      if (record) {
-        yield record
+    for await (const chunk of stream) {
+      const text = typeof chunk === 'string' ? chunk : chunk.toString('utf-8')
+      let start = 0
+      while (start < text.length) {
+        const newlineIndex = text.indexOf('\n', start)
+        if (newlineIndex === -1) {
+          remainder += text.slice(start)
+          break
+        }
+        if (remainder.length > 0) {
+          const line = remainder + text.slice(start, newlineIndex)
+          remainder = ''
+          emitLedgerLine(line, onRecord)
+        } else if (newlineIndex > start) {
+          emitLedgerLine(text.slice(start, newlineIndex), onRecord)
+        }
+        start = newlineIndex + 1
       }
+    }
+    if (remainder.length > 0) {
+      emitLedgerLine(remainder, onRecord)
     }
   } catch (error) {
     if (options.throwOnReadFailure && !isNotFoundError(error)) {
@@ -23,12 +42,19 @@ export async function* streamCodexSessionLedgerRecords(
       throw error
     }
   } finally {
-    lines.close()
+    stream.destroy()
+  }
+}
+
+function emitLedgerLine(raw: string, onRecord: (record: Record<string, unknown>) => void): void {
+  const record = parseLedgerRecord(raw)
+  if (record) {
+    onRecord(record)
   }
 }
 
 function parseLedgerRecord(raw: string): Record<string, unknown> | null {
-  if (!raw.trim()) {
+  if (raw.length === 0 || (raw.length === 1 && raw.charCodeAt(0) === 13)) {
     return null
   }
   try {

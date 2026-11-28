@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle2, Download, Loader2, ServerOff, Wrench } from 
 import type {
   RemoteServerUpdateEntry,
   RemoteServerUpdatePhase
-} from '@/runtime/hosts/updates/remote-server-update-coordinator'
+} from '../../../../../../shared/remote-runtime/host-updates/remote-server-update-coordinator'
 import { Badge } from '@/components/ui/badge'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

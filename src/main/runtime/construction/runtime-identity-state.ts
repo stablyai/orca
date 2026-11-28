@@ -61,7 +61,6 @@ import {
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
 import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint-record'
 import {
-  TUI_IDLE_DEFAULT_TIMEOUT_MS,
   TUI_IDLE_POLL_INTERVAL_MS,
   TUI_IDLE_QUIESCENCE_MS
 } from '../terminal/wait/terminal-idle-policy'
@@ -354,6 +353,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
     isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId),
+    hasEmptyInputComposer: (ptyId) =>
+      this.readCaughtUpComposerTypedText(ptyId) === '' && !this.isPtyAwaitingUserInput(ptyId),
     readScreenClearingBlockedTail: (ptyId) => this.readScreenClearingBlockedTailForPty(ptyId)
   }
 
@@ -377,7 +378,6 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
   protected readonly terminalWait = new RuntimeTerminalWaitController(
     {
       ...this.tuiIdleEvidenceSource,
-      defaultTimeoutMs: TUI_IDLE_DEFAULT_TIMEOUT_MS,
       getTerminalPty: (handle, condition) =>
         condition === 'exit'
           ? this.getExitWaitPtyForHandle(handle)

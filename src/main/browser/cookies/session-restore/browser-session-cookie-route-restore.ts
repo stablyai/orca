@@ -1,5 +1,4 @@
 import { isBrowserRoutePartition } from '../../routing/partitions/browser-route-identity'
-import { restoreSnapshotTargets } from './browser-session-cookie-restore'
 import {
   removeSessionCookieSnapshot,
   routeSnapshotPath,
@@ -18,10 +17,13 @@ export async function restoreBrowserRoutePartitionSessionCookies(partition: stri
   let restore = routeRestores.get(filePath)
   if (!restore) {
     // Never rejects: a jar that can't be restored still opens, signed out.
-    restore = restoreSnapshotTargets([{ label: 'route partition', filePath, partition }]).catch(
-      (error: unknown) =>
+    restore = import('./browser-session-cookie-restore')
+      .then(({ restoreSnapshotTargets }) =>
+        restoreSnapshotTargets([{ label: 'route partition', filePath, partition }])
+      )
+      .catch((error: unknown) =>
         console.warn('[browser-session-cookies] Route partition restore failed:', error)
-    )
+      )
     routeRestores.set(filePath, restore)
   }
   return restore

@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog } from 'electron'
+import { BrowserWindow, dialog, ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../lazy-ipc-handle-group'
 import { readFile, stat } from 'node:fs/promises'
 import type { BrowserPasswordImportResult } from '../../../shared/browser/passwords/browser-passwords-types'
 import { CHROMIUM_BROWSERS } from '../../browser/cookies/sources/browser-cookie-source-profiles'
@@ -12,7 +13,7 @@ import {
 
 const CSV_MAX_BYTES = 1024 * 1024
 
-export function registerBrowserPasswordsImportHandlers(): void {
+export function registerBrowserPasswordsImportHandlers(ipc: IpcHandleRegistrar = ipcMain): void {
   handleBrowserPasswordsChannel(
     'browserPasswords:importCsv',
     async (event, raw): Promise<BrowserPasswordImportResult> => {
@@ -59,7 +60,8 @@ export function registerBrowserPasswordsImportHandlers(): void {
       } catch {
         return { ok: false, reason: 'failed' }
       }
-    }
+    },
+    ipc
   )
 
   handleBrowserPasswordsChannel(
@@ -88,6 +90,7 @@ export function registerBrowserPasswordsImportHandlers(): void {
       return imported.ok
         ? { ok: true, summary: { ...imported.value, undecryptable: read.undecryptable } }
         : { ok: false, reason: 'failed' }
-    }
+    },
+    ipc
   )
 }

@@ -117,7 +117,7 @@ async function closeLastTerminalBehindEmptySnapshot(pick: PendingSessionSelectio
   const { model, state, reply } = mountSession(pick)
   expect(state.activeHandle).toBe('pty-1')
 
-  let closing!: Promise<void>
+  let closing!: Promise<boolean>
   act(() => {
     closing = model.handleCloseSessionTab(terminalTab('tab-1', 'pty-1', true))
   })

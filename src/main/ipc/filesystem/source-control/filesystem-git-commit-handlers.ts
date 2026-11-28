@@ -2,6 +2,7 @@ import type { GitCommitAction } from '../../../../shared/git/commands/git-commit
 import { applyCommit, recoverSequencer } from '../../../git/worktrees/checkout/commit-actions'
 import { createBranch } from '../../../git/worktrees/checkout/create-branch'
 import { ipcMain } from 'electron'
+import type { IpcHandleRegistrar } from '../../lazy-ipc-handle-group'
 import { commitChanges, completeMerge } from '../../../git/source-control/mutations/commit-changes'
 import { resolveRegisteredWorktreePath } from '../../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
@@ -9,9 +10,12 @@ import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
-export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
+export function registerFilesystemGitCommitHandlers(
+  context: FilesystemHandlerContext,
+  ipc: IpcHandleRegistrar = ipcMain
+): void {
   const { store } = context
-  ipcMain.handle(
+  ipc.handle(
     'git:createBranch',
     async (
       _event,
@@ -27,7 +31,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
   )
   for (const action of ['abort', 'continue'] as const) {
     const method = action === 'abort' ? 'sequencerAbort' : 'sequencerContinue'
-    ipcMain.handle(
+    ipc.handle(
       `git:${method}`,
       async (
         _event,
@@ -51,7 +55,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
     ['cherryPick', 'cherry-pick'],
     ['revert', 'revert']
   ] as const) {
-    ipcMain.handle(
+    ipc.handle(
       `git:${method}`,
       async (_event, args: { worktreePath: string; commitId: string; connectionId?: string }) => {
         requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
@@ -68,7 +72,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       }
     )
   }
-  ipcMain.handle(
+  ipc.handle(
     'git:commit',
     async (
       _event,
@@ -91,7 +95,7 @@ export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerCo
       })
     }
   )
-  ipcMain.handle(
+  ipc.handle(
     'git:completeMerge',
     async (
       _event,
