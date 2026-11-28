@@ -363,7 +363,7 @@ function ReferencePeek({
           ref={triggerRef}
           onKeyDown={(event) => {
             const list = listRef.current
-            const top = list ? peekScrollTarget(list, event.key) : undefined
+            const top = list ? peekScrollTarget(list, event) : undefined
             if (list && top !== undefined && list.scrollHeight > list.clientHeight) {
               // Why: scroll keys move the open peek instead of sidebar focus.
               event.preventDefault()
