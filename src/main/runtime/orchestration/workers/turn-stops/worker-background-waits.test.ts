@@ -9,6 +9,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import { WorkerBackgroundWaits } from './worker-background-waits'
+import { BACKGROUND_WAKE_SENDER } from '../../../../../shared/orchestration/mailbox/background-wake-sender'
 import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import {
   formatOrcaSessionAddress,
@@ -334,73 +335,97 @@ describe('a worker waiting on its own background task', () => {
     expect(readWorkerPresence(db, dispatchId)?.presence).toBe('working')
   })
 
-  it('wakes a Codex chat worker through its own Dispatch when its background task ends, not the coordinator', () => {
-    const sessionId = '22222222-2222-4222-8222-222222222222'
-    expect(isOrcaSessionId(sessionId)).toBe(true)
-    if (!isOrcaSessionId(sessionId)) {
-      return
-    }
-    const chatPane = structuredAgentSessionStatusPaneKey(sessionId)
-    const task = db.createTask({ spec: 'watch CI', runId })
-    const chatDispatch = db.createDispatchContext({
-      taskId: task.id,
-      assigneeHandle: formatOrcaSessionAddress(sessionId),
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER
-    }).id
-    const notified: string[] = []
-    const orca = new WorkerBackgroundWaits({
-      getDb: () => db,
-      isWaitingForMail: () => false,
-      notify: (handle) => notified.push(handle),
-      readHookRow: () => row,
-      getHandle: () => null,
-      getProcessIncarnation: () => null,
-      setTimer: (run, delayMs) => {
-        const timer = { at: Date.now() + delayMs, run, cancelled: false }
-        timers.push(timer)
-        return { cancel: () => (timer.cancelled = true) }
+  describe('a chat worker whose background task ends while its chat is idle', () => {
+    const SESSION = '22222222-2222-4222-8222-222222222222'
+    const CHAT_PANE = structuredAgentSessionStatusPaneKey(SESSION)
+    let chatDispatch: string
+
+    beforeEach(() => {
+      if (!isOrcaSessionId(SESSION)) {
+        throw new Error('test session id must be an Orca session id')
       }
+      chatDispatch = db.createDispatchContext({
+        taskId: db.createTask({ spec: 'watch CI', runId }).id,
+        assigneeHandle: formatOrcaSessionAddress(SESSION),
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      }).id
     })
-    const chatRow = (state: 'working' | 'done'): AgentStatusIpcPayload => ({
-      ...heldRow(TURN_END),
-      paneKey: chatPane,
-      tabId: structuredAgentSessionTabId(sessionId),
-      structuredHost: 'owned',
-      agentType: 'codex',
-      backgroundCommands: ['gh pr checks 1 --watch'],
-      ...(state === 'done' ? { state: 'done', workingMode: undefined } : {})
-    })
-    const mailTo = (to: string) =>
-      db.db.prepare('SELECT subject, body FROM messages WHERE to_handle = ?').all(to)
 
-    row = chatRow('working')
-    orca.observe({ kind: 'observed', paneKey: chatPane, workspace: null, phase: 'working', at: 0 })
-    row = chatRow('done')
-    orca.observe({
-      kind: 'moved',
-      paneKey: chatPane,
-      workspace: { worktreeId: 'repo::/w', sshHostId: null },
-      from: 'working',
-      to: 'done',
-      at: 1,
-      transition: null
-    })
-    // Seen again, the same ended wait wakes nothing more.
-    orca.observe({ kind: 'observed', paneKey: chatPane, workspace: null, phase: 'done', at: 2 })
-
-    const wakes = mailTo(`dispatch:${chatDispatch}`)
-    expect(wakes).toHaveLength(1)
-    expect(String(wakes[0].body)).toContain('gh pr checks 1 --watch')
-    expect(notified).toEqual([`dispatch:${chatDispatch}`])
-    // The wake turn starts within the quiet period, so its finish is never reported either.
-    row = {
-      ...chatRow('working'),
-      workingMode: undefined,
-      backgroundCommands: undefined,
-      mainAgent: { state: 'working', stateStartedAt: TURN_END + MINUTE }
+    function chatRow(
+      state: 'working' | 'done',
+      agentType: string,
+      outcome: 'success' | 'cancellation' = 'success'
+    ): AgentStatusIpcPayload {
+      return {
+        ...heldRow(TURN_END),
+        paneKey: CHAT_PANE,
+        tabId: structuredAgentSessionTabId(SESSION),
+        structuredHost: 'owned',
+        agentType,
+        backgroundCommands: ['gh pr checks 1 --watch'],
+        ...(state === 'done' ? { state: 'done', workingMode: undefined } : {}),
+        mainAgent: { state: 'done', outcome, stateStartedAt: TURN_END }
+      }
     }
-    advanceTo(TURN_END + 10 * MINUTE)
-    expect(mailTo(`run:${runId}`)).toEqual([])
+
+    /** The wait is seen, then its tasks end with the chat idle on `ended`. */
+    function endWait(agentType: string, ended = chatRow('done', agentType)): void {
+      const orca = startOrca()
+      row = chatRow('working', agentType)
+      orca.observe({
+        kind: 'observed',
+        paneKey: CHAT_PANE,
+        workspace: null,
+        phase: 'working',
+        at: 0
+      })
+      row = ended
+      const workspace = { worktreeId: 'repo::/w', sshHostId: null }
+      orca.observe({
+        kind: 'moved',
+        paneKey: CHAT_PANE,
+        workspace,
+        from: 'working',
+        to: 'done',
+        at: 1,
+        transition: null
+      })
+      orca.observe({ kind: 'observed', paneKey: CHAT_PANE, workspace: null, phase: 'done', at: 2 })
+    }
+
+    const workerMail = () =>
+      db.db
+        .prepare('SELECT from_handle, body FROM messages WHERE to_handle = ? ORDER BY sequence')
+        .all(`dispatch:${chatDispatch}`)
+        .map((m) => ({ from: String(m.from_handle), body: String(m.body) }))
+
+    it('wakes a Codex worker once through its own Dispatch, naming the command', () => {
+      endWait('codex')
+      expect(workerMail()).toEqual([
+        { from: BACKGROUND_WAKE_SENDER, body: expect.stringContaining('gh pr checks 1 --watch') }
+      ])
+    })
+
+    it('leaves a Claude worker to wake itself', () => {
+      endWait('claude')
+      expect(workerMail()).toEqual([])
+    })
+
+    it('adds nothing when mail already waiting will wake the worker', () => {
+      db.insertMessage({
+        from: 'orca-bg-wake',
+        to: `dispatch:${chatDispatch}`,
+        subject: 'WAKE',
+        runId
+      })
+      endWait('codex')
+      expect(workerMail().map((m) => m.from)).toEqual(['orca-bg-wake'])
+    })
+
+    it('does not wake a worker whose turn was stopped', () => {
+      endWait('codex', chatRow('done', 'codex', 'cancellation'))
+      expect(workerMail()).toEqual([])
+    })
   })
 })
