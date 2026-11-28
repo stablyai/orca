@@ -111,6 +111,18 @@ export type AgentLaunchSettingsMutation =
   | { type: 'environment-set'; agent: TuiAgent; name: string; value: string }
   | { type: 'environment-remove'; agent: TuiAgent; name: string }
 
+/** The hidden-agents list with its marker; lists saved before the marker existed were set by the user. */
+export function projectDisabledTuiAgents(
+  settings: Pick<AgentLaunchSettingsSource, 'disabledTuiAgents' | 'disabledTuiAgentsCustomized'>
+): Pick<AgentLaunchSettings, 'disabledTuiAgents' | 'disabledTuiAgentsCustomized'> {
+  const disabledTuiAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  return {
+    disabledTuiAgents,
+    disabledTuiAgentsCustomized:
+      settings.disabledTuiAgentsCustomized ?? disabledTuiAgents.length > 0
+  }
+}
+
 export function projectAgentLaunchSettings(
   settings: AgentLaunchSettingsSource,
   platform?: NodeJS.Platform
@@ -129,11 +141,7 @@ export function projectAgentLaunchSettings(
   return {
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
     newWorkspaceSetupOnly: false,
-    disabledTuiAgents: normalizeDisabledTuiAgents(settings.disabledTuiAgents),
-    // Lists saved before the marker existed were set by the user.
-    disabledTuiAgentsCustomized:
-      settings.disabledTuiAgentsCustomized ??
-      normalizeDisabledTuiAgents(settings.disabledTuiAgents).length > 0,
+    ...projectDisabledTuiAgents(settings),
     agentCmdOverrides: { ...settings.agentCmdOverrides },
     agentDefaultArgs: normalizeTuiAgentArgsRecord(composed.agentDefaultArgs),
     environmentNames: Object.fromEntries(

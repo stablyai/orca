@@ -14,6 +14,7 @@ export type RuntimeClientSettings = Pick<
   | 'defaultTuiAgent'
   | 'newWorkspaceSetupOnly'
   | 'disabledTuiAgents'
+  | 'disabledTuiAgentsCustomized'
   | 'agentCmdOverrides'
   | 'agentDefaultArgs'
   | 'agentDefaultEnv'

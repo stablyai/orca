@@ -29,6 +29,7 @@ import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
+  projectDisabledTuiAgents,
   type AgentLaunchSettings,
   type AgentLaunchSettingsMutation
 } from '../../../../shared/agent-launch/choices/agent-launch-settings'
@@ -78,7 +79,7 @@ export class RuntimeClientSettingsController {
       ...projectHostOwnedSettings(settings),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
-      disabledTuiAgents: settings.disabledTuiAgents ?? [],
+      ...projectDisabledTuiAgents(settings),
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
