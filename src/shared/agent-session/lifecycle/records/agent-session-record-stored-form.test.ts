@@ -320,3 +320,19 @@ it('stores a delivered kill in the form older builds read and reads only that ex
     expect(decodePersistedAgentSessionRecord(row).record.lease.deathEvidence).toEqual(read)
   }
 })
+
+it('keeps a saved badge and drops one no image source may hold, keeping the chat', () => {
+  const stored = encodeAgentSessionRecord(agentSessionRecordFixture())
+  const badge = {
+    label: 'Linked to Blender',
+    icon: 'data:image/png;base64,iVBORw0KGgo='
+  }
+  expect(decodePersistedAgentSessionRecord({ ...stored, badge }).record.badge).toEqual(badge)
+  const remote = { label: 'Tracker', icon: 'https://example.com/pixel.png' }
+  const decoded = decodePersistedAgentSessionRecord({
+    ...stored,
+    badge: remote
+  }).record
+  expect(decoded.sessionId).toBe(stored.sessionId)
+  expect(decoded).not.toHaveProperty('badge')
+})

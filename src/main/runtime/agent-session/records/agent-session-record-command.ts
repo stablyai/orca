@@ -8,6 +8,10 @@ import {
 import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionLastTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import {
+  agentSessionBadgesEqual,
+  type AgentSessionBadge
+} from '../../../../shared/agent-session/conversation-naming/agent-session-badge'
+import {
   withMovedAccountHome,
   type createAgentSessionOwnerProof
 } from '../ownership/agent-session-owner-proof'
@@ -80,6 +84,7 @@ export type AgentSessionRecordCommand =
     }
   | { kind: 'cancel-continue'; cut: UsageLimitContinueIdentity }
   | { kind: 'skip-async-questions'; itemId: string }
+  | { kind: 'badge'; badge: AgentSessionBadge | null; now: number }
   | { kind: 'last-turn'; lastTurn?: AgentSessionLastTurn }
   | { kind: 'rewind'; fence: number; rewind: AgentSessionRewindRecord }
   | { kind: 'sleep'; now: number; fence: number }
@@ -193,6 +198,18 @@ export function applyAgentSessionRecordCommand(
     case 'skip-async-questions':
       next = { ...record, asyncQuestionsSkippedThrough: command.itemId }
       break
+    case 'badge': {
+      const { badge: previous, ...rest } = record
+      if (agentSessionBadgesEqual(previous, command.badge ?? undefined)) {
+        return { record, result: record }
+      }
+      next = {
+        ...rest,
+        ...(command.badge ? { badge: command.badge } : {}),
+        updatedAt: command.now
+      }
+      break
+    }
     case 'last-turn': {
       const { lastTurn: previous, ...rest } = record
       next = command.lastTurn ? { ...rest, lastTurn: command.lastTurn } : previous ? rest : record

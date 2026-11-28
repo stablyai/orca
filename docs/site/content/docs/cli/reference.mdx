@@ -271,6 +271,13 @@ orca chat rename --name "Migrate auth"
 
 Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
+```bash
+orca chat badge --session <sessionId> --icon blender.png --label "Linked to Blender"
+orca chat badge --session <sessionId> --clear
+```
+
+Pins a small picture beside a chat in the sidebar, with `--label` as its tooltip, until it is cleared or replaced. A program linked to a chat uses it to show the link: it sets the badge when it links and clears it when it lets go. `--icon` is a PNG, WebP or SVG file of at most about 6 KB. `--session` works as for `chat rename`.
+
 ## Files
 
 ```bash

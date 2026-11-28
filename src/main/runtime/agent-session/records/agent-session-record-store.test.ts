@@ -477,3 +477,24 @@ describe('chat delete', () => {
     expect(reopened.getRecord('session-alpha')).toBeNull()
   })
 })
+
+describe('chat badge', () => {
+  it('keeps a badge across a restart until it is cleared', async () => {
+    const store = await open()
+    await establishOwner(store)
+    const badge = {
+      label: 'Linked to Blender',
+      icon: 'data:image/png;base64,iVBORw0KGgo='
+    }
+    await store.updateRecord('session-alpha', { kind: 'badge', badge, now: NOW })
+    // The same badge again is no change: nothing is rewritten.
+    const before = store.recordStamp('session-alpha')
+    await store.updateRecord('session-alpha', { kind: 'badge', badge: { ...badge }, now: NOW + 1 })
+    expect(store.recordStamp('session-alpha')).toBe(before)
+
+    const reopened = await open()
+    expect(reopened.getRecord('session-alpha')?.badge).toEqual(badge)
+    await reopened.updateRecord('session-alpha', { kind: 'badge', badge: null, now: NOW + 2 })
+    expect((await open()).getRecord('session-alpha')).not.toHaveProperty('badge')
+  })
+})

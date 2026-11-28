@@ -1,4 +1,5 @@
 import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionBadge } from './conversation-naming/agent-session-badge'
 import type { AgentSessionUnavailable } from './failures/agent-session-availability'
 import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
@@ -309,6 +310,9 @@ export type AgentSessionConversationName = {
   namingError?: AgentSessionNamingError
   /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
   agent?: AgentSessionStatusSummary['agent']
+  /** Another program's picture on the chat (`orca chat badge`). Only naming notes carry it; a
+   *  status frame keeps the one before. Absent from older hosts. */
+  badge?: AgentSessionBadge
 } & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */

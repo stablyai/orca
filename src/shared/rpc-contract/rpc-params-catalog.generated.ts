@@ -962,6 +962,7 @@ import { CurrentRequestsParams } from './structured-agent-session/agent-session-
 import { ReadVisualParams } from './structured-agent-session/agent-session-visual-params'
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
+import { SetBadgeParams } from './structured-agent-session/structured-agent-session-badge-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
 import {
   AttachParams,
@@ -1257,6 +1258,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
   'agentSession.sendRecorded': SendRecordedParams,
+  'agentSession.setBadge': SetBadgeParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.skipAsyncQuestions': SkipAsyncQuestionsParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,

@@ -106,5 +106,12 @@ export const WORK_METHODS = [
   { method: 'agentSession.reveal', params: { sessionId: SESSION } },
   { method: 'agentSession.regenerateName', params: { sessionId: SESSION } },
   { method: 'agentSession.rename', params: { sessionId: SESSION, name: 'Release notes' } },
+  {
+    method: 'agentSession.setBadge',
+    params: {
+      sessionId: SESSION,
+      badge: { label: 'Linked to Blender', icon: 'data:image/png;base64,iVBORw0KGgo=' }
+    }
+  },
   { method: 'agentSession.subscribeStatus', params: null }
 ] as const

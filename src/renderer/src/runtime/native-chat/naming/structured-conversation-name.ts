@@ -6,6 +6,7 @@ import {
 import { useCallback, useEffect, useMemo } from 'react'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isAgentSessionConversationName } from '../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
+import type { AgentSessionBadge } from '../../../../../shared/agent-session/conversation-naming/agent-session-badge'
 import type {
   AgentSessionNamingError,
   AgentSessionConversationName
@@ -44,6 +45,8 @@ export type StructuredChatNaming = Readonly<{
   name: string | null
   /** The chat this one was forked from; null when it is not a fork or its host predates the mark. */
   forkSourceId: string | null
+  /** Another program's picture on the chat (`orca chat badge`); null when it has none. */
+  badge: AgentSessionBadge | null
 }>
 
 /** The chat's shown name and fork mark. Reads its source only for an older fork's title, so a plain
@@ -64,7 +67,8 @@ export function useStructuredChatNaming(
     const shown = note ? agentSessionShownName(note, sourceSavedName ?? undefined) : null
     return {
       name: isAgentSessionConversationName(shown) ? shown : null,
-      forkSourceId: structuredChatForkSourceId(note ?? undefined)
+      forkSourceId: structuredChatForkSourceId(note ?? undefined),
+      badge: note?.badge ?? null
     }
   }, [note, sourceSavedName])
 }

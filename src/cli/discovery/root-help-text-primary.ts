@@ -155,6 +155,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Chats:',
   '  chat rename               Rename a chat tab',
+  "  chat badge                Pin a small picture on a chat's sidebar row, or clear it",
   '',
   'Files:',
   '  file open                 Open a file as a tab, view stays put (--focus brings you to it)',

@@ -18,6 +18,7 @@ import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../../../shared/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { AgentRowChatBadge } from '@/components/dashboard/rows/AgentRowChatBadge'
 import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
 import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
 import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
@@ -145,7 +146,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const dotState = dotStateOverride ?? getAgentDotState(agent)
-  const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
+  const { name: conversationName, forked, badge } = useAgentRowConversationNaming(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const forkNamed = forked && conversationName !== null
   const isLineageChild = agent.lineage?.depth === 1
@@ -271,6 +272,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           ) : (
             line
           )}
+          <AgentRowChatBadge badge={badge} size={13} />
         </>
       )}
       {hasChildDisclosure && !childAgentsExpanded && (

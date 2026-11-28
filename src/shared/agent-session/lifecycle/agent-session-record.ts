@@ -144,6 +144,8 @@ export type AgentSessionRecord = {
   conversationNameSource?: 'user'
   /** When the user's Sleep stopped this chat; the next admitted send clears it. */
   sleptAt?: number
+  /** Another program's picture on the chat (`orca chat badge`), an AgentSessionBadge; sidebars draw it. */
+  badge?: Readonly<{ label: string; icon: string }>
   /** Latest turn edge for lists that must not open conversation history. */
   lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
