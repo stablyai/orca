@@ -1,3 +1,4 @@
+import { MarkdownImageLayout } from './blocks/MobileMarkdownImageRow'
 import { INLINE_TEXT_SELECTION } from '../../platform/text-selection/inline-text-selection'
 import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Text as NativeText, View } from 'react-native'
@@ -24,6 +25,7 @@ import { useMobileColors } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
+  centerImageRows?: boolean
   content?: string
   fallback?: string
   /** Makes paragraphs selectable; on native Android it instead turns block selection off. */
@@ -175,7 +177,9 @@ function MobileMarkdownInner(props: Props): React.JSX.Element | null {
   )
   return (
     <MarkdownTextContext.Provider value={setup}>
-      <MobileMarkdownContent {...props} />
+      <MarkdownImageLayout.Provider value={props.centerImageRows ? 'document' : 'blocks'}>
+        <MobileMarkdownContent {...props} />
+      </MarkdownImageLayout.Provider>
     </MarkdownTextContext.Provider>
   )
 }

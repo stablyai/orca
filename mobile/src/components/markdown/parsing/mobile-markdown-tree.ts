@@ -5,7 +5,7 @@ import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } fro
 import remend from 'remend'
 import { forEachGitHubCallout } from '../../../../../src/shared/github/markdown/github-callouts'
 import { codeNode, type Token } from '../blocks/mobile-markdown-code-nodes'
-import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
+import { BLOCK_PARENTS, inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
 import { numberChatListItem, readTaskMarker } from './mobile-markdown-list-item-markers'
 import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from '../blocks/mobile-markdown-details'
@@ -34,8 +34,6 @@ endLinkifyUrlsAtProsePunctuation(markdown.linkify)
 const PATH_FLANK = /[\w\\/]/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i
 const HEADING_DEPTHS = [1, 2, 3, 4, 5, 6] as const
-/** Parents that hold blocks; any other parent holds inline content. */
-const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition', 'details'])
 const CLOSING_TOKENS = new Set([
   'paragraph_close',
   'heading_close',

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { plainText } from './parsing/mobile-markdown-plain-text'
+import { parseMobileMarkdownTree } from './parsing/mobile-markdown-tree'
 import { normalizeMobileMarkdownPreviewHtml } from './parsing/mobile-markdown-preview-html'
 
 describe('normalizeMobileMarkdownPreviewHtml', () => {
@@ -215,4 +217,44 @@ describe('normalizeMobileMarkdownPreviewHtml', () => {
       `${'x'.repeat(4095)}\nx`
     )
   })
+})
+
+it('keeps a centered HTML image row together without absorbing the next block image', () => {
+  const tree = parseMobileMarkdownTree(
+    '<p align="center"><img src="https://example.org/a" width="64"><img src="https://example.org/b"></p>\n\n![Cover](cover.png)',
+    false
+  )
+
+  expect(tree.children).toMatchObject([
+    {
+      type: 'imageRow',
+      children: [
+        {
+          type: 'paragraph',
+          children: [{ type: 'image', url: 'https://example.org/a', data: { width: 64 } }]
+        },
+        { type: 'paragraph', children: [{ type: 'image', url: 'https://example.org/b' }] }
+      ]
+    },
+    { type: 'paragraph', children: [{ type: 'image', url: 'cover.png' }] }
+  ])
+})
+
+it('keeps adjacent image rows in one HTML block separate from surrounding prose', () => {
+  const tree = parseMobileMarkdownTree(
+    [
+      '<p>Before</p>',
+      '<p align="center"><img src="https://example.org/a" alt="A"><img src="https://example.org/b" alt="B"></p>',
+      '<p align="center"><img src="https://example.org/c" alt="C"><img src="https://example.org/d" alt="D"></p>',
+      '<p>After</p>'
+    ].join('\n'),
+    false
+  )
+
+  expect(tree.children.map((node) => [node.type, plainText(node)])).toEqual([
+    ['paragraph', 'Before'],
+    ['imageRow', 'AB'],
+    ['imageRow', 'CD'],
+    ['paragraph', 'After']
+  ])
 })

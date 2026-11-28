@@ -57,3 +57,5 @@ export function withImagesSplitOut(html: string): (string | Image)[] {
   pieces.push(html.slice(from))
   return pieces.filter((piece) => typeof piece !== 'string' || piece.trim())
 }
+
+export { TAG, VOID_TAGS }

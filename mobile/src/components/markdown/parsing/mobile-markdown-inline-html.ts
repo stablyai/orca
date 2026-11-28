@@ -90,3 +90,13 @@ export function inlineTagNode(
       return { type: 'htmlSpan', tag, children }
   }
 }
+
+/** Parents that hold blocks; any other parent holds inline content. */
+export const BLOCK_PARENTS = new Set([
+  'imageRow',
+  'root',
+  'blockquote',
+  'listItem',
+  'footnoteDefinition',
+  'details'
+])

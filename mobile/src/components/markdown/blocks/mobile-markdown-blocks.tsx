@@ -1,3 +1,4 @@
+import { MobileMarkdownImageRow } from './MobileMarkdownImageRow'
 import { renderImageParagraph } from './mobile-markdown-image-paragraph'
 import {
   mobileMarkdownBlockIsLiteral,
@@ -289,6 +290,12 @@ function renderBlock(
         >
           {renderInline(node.children, ctx)}
         </MarkdownText>
+      )
+    case 'imageRow':
+      return (
+        <MobileMarkdownImageRow key={key}>
+          {renderBlocks(node.children, ctx, text, depth)}
+        </MobileMarkdownImageRow>
       )
     case 'blockquote':
       // A GitHub alert's body is ordinary text, not a muted quote.

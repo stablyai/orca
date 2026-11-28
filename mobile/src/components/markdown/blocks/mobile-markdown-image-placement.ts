@@ -20,6 +20,8 @@ export function mobileMarkdownNestedBlocks(
     return []
   }
   switch (node.type) {
+    case 'imageRow':
+      return [{ nodes: node.children, depth }]
     case 'blockquote':
     case 'details':
     case 'footnoteDefinition':

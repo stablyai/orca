@@ -39,12 +39,13 @@ export function MobileFileMarkdownPreview({
     <ScrollView style={styles.scroll} contentContainerStyle={styles.markdownContent}>
       {truncated ? <MobileFilePreviewTruncatedNote byteLength={byteLength} /> : null}
       <MobileMarkdown
+        centerImageRows={Boolean(worktreeId)}
         content={content}
         textScale={MOBILE_MARKDOWN_DOCUMENT_SCALE}
         onOpenFile={onOpenFile}
         renderImage={
           worktreeId
-            ? (href, alt) => (
+            ? (href, alt, width) => (
                 <MobileMarkdownPreviewImage
                   key={`${worktreeId}:${relativePath}:${href}`}
                   client={client ?? null}
@@ -52,6 +53,7 @@ export function MobileFileMarkdownPreview({
                   documentPath={relativePath}
                   href={href}
                   alt={alt}
+                  width={width}
                 />
               )
             : undefined
