@@ -50,7 +50,10 @@ export function setChatHardwareEnterToSend(next: boolean): Promise<void> {
     .then((raw) => {
       if (revision === changed) {
         adopt(raw)
+        return
       }
+      // A page edit or a later toggle won. This write may have landed last, so store what that newer revision adopted.
+      return persistMirroredReadBack(CHAT_HARDWARE_ENTER_KEY, String(enabled)).then(() => undefined)
     })
     .catch(() => {
       if (revision === changed) {
