@@ -1,7 +1,9 @@
 import type { z } from 'zod'
+import type { Bot } from '../../shared/bot-types'
 import type {
   BotGroup,
   BotGroupCreate,
+  BotGroupMember,
   BotGroupRenameThread,
   BotGroupSend,
   BotGroupUpdate
@@ -23,6 +25,7 @@ import {
   removeBotFromGroups,
   updateBotGroup
 } from './bot-group-membership'
+import { rebuildGroupMembersForAgent, swapBotGroupMember } from './bot-group-member-agent'
 import {
   assertGroupQueuedMessageAllowed,
   readBotGroup,
@@ -174,6 +177,12 @@ export class BotGroupRuntime {
   update = (input: z.infer<typeof BotGroupUpdate>) => updateBotGroup(this, input).then(this.named)
   delete = (groupId: string) => deleteBotGroup(this, groupId)
   removeBot = (botId: string) => removeBotFromGroups(this, botId)
+  /** A room member chat replaced by the chat the bot runs on now, as its agent changed. */
+  swapMember = (groupId: string, threadId: string | undefined, member: BotGroupMember) =>
+    swapBotGroupMember(this, groupId, threadId, member)
+  /** Rebuilds this bot's room member chats after its agent changed, so none keeps the old agent. */
+  refreshMemberAgent = (bot: Bot, previousAgent: Bot['agent']) =>
+    rebuildGroupMembersForAgent(this, bot, previousAgent)
   send = (input: z.infer<typeof BotGroupSend>, options?: SendBotGroupMessageOptions) =>
     sendBotGroupMessage(this, input, options)
   newThread = (groupId: string) =>
