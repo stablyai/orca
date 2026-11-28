@@ -4,6 +4,7 @@ import { dirname, join, relative, sep } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { getAntigravityWindowsHome } from './native-windows-credentials'
 import { readAntigravityMacOSCredentialRevision } from './native-macos-credentials'
+import { forcesAntigravityFileStore } from './native-file-credentials'
 
 const SETTLE_MS = 500
 const REWATCH_MS = 1000
@@ -46,7 +47,8 @@ function agyLoginStores(home: string): AgyLoginStore[] {
       keychain: false
     }
   ]
-  if (process.platform === 'darwin') {
+  // On an SSH or WSL host agy keeps its login in the file only.
+  if (process.platform === 'darwin' && !forcesAntigravityFileStore(process.env)) {
     stores.push({
       dir: join(home, 'Library', 'Keychains'),
       file: 'login.keychain-db',

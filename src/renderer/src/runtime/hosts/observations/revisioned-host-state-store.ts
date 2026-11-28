@@ -31,6 +31,8 @@ export function createRevisionedHostStateStore<Subject, S extends { revision: nu
   key: (subject: Subject) => string
   /** Subjects with the same host key and a different key answer for a restarted host. */
   hostKey: (subject: Subject) => string
+  /** Drop a subject's answer once nothing observes it, so hosts seen once aren't kept. */
+  forgetUnobserved?: boolean
   /** A full state on subscribe, then one per newer revision, until unsubscribed or lost. */
   subscribe: (
     subject: Subject,
@@ -150,6 +152,9 @@ export function createRevisionedHostStateStore<Subject, S extends { revision: nu
         entry.observers -= 1
         if (entry.observers === 0) {
           close(entry)
+          if (options.forgetUnobserved && entries.get(options.key(subject)) === entry) {
+            entries.delete(options.key(subject))
+          }
         }
       }
     },

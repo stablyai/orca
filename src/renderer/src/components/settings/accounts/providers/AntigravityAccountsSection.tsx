@@ -175,16 +175,16 @@ export function AntigravityAccountsSection({
     : flowEnded
       ? `${flow.flowId ?? 'another client'}:${flow.phase}`
       : 'idle'
-  // A sign-in signs in the host's agy, not a WSL distro's.
-  useOnLaterChange(chats ? endedFlow : null, reread)
   // agy's login on the host doesn't change a WSL distro's.
-  useAgyLoginChange(owner, chats, state, reread, () => {
+  const shown = useAgyLoginChange(owner, chats, state, reread, () => {
     setError(null)
     // The sign-in store follows the host's agy, which a WSL distro's login doesn't change.
     if (chats) {
       clearAntigravityChatSignInError(owner)
     }
   })
+  // A sign-in signs in the host's agy, not a WSL distro's; a hidden window reads once shown again.
+  useOnLaterChange(chats && shown ? endedFlow : null, reread)
   const description = windowsHost
     ? t(
         'accounts.antigravity.descriptionWindows',

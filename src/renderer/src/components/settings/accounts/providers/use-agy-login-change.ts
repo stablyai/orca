@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import type { AntigravityAccountState } from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { agyLoginRevisions } from '@/runtime/provider-accounts/sign-in/agy-login-revision-store'
+import {
+  isDocumentVisibilityProvenStale,
+  registerStaleDocumentVisibilityRecovery
+} from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import { useOnLaterChange } from './use-on-later-change'
 
 // Saving the current login (as a sign-in does before it starts) changes the active account, not the
@@ -15,39 +19,56 @@ function loginKey(state: AntigravityAccountState | null): string | null {
 }
 
 function documentShown(): boolean {
-  return typeof document === 'undefined' || document.visibilityState === 'visible'
+  return (
+    typeof document === 'undefined' ||
+    document.visibilityState === 'visible' ||
+    isDocumentVisibilityProvenStale()
+  )
 }
 
-/** The host's count of changes to agy's stored login while `follow` and the window is shown; null
- *  before the host answers, and from older hosts. Showing the window again calls `shown`, since
- *  the host stops watching while nothing follows. */
-function useAgyLoginRevision(
-  owner: RuntimeClientTarget,
-  follow: boolean,
-  shown: () => void
-): number | null {
+/** Whether the window is shown, calling `shown` each time it is shown again. macOS can leave the
+ *  document reporting hidden after display sleep; input then proves it shown. */
+function useWindowShown(follow: boolean, shown: () => void): boolean {
   const [visible, setVisible] = useState(documentShown)
-  const [revision, setRevision] = useState<number | null>(null)
   const latestShown = useRef(shown)
   useEffect(() => {
     latestShown.current = shown
   })
-  const kind = owner.kind
-  const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   useEffect(() => {
     if (!follow) {
       return
     }
-    const onVisibility = () => {
+    let before = documentShown()
+    const update = () => {
       const now = documentShown()
-      setVisible(now)
-      if (now) {
-        latestShown.current()
+      if (now !== before) {
+        before = now
+        setVisible(now)
+        if (now) {
+          latestShown.current()
+        }
       }
     }
-    document.addEventListener('visibilitychange', onVisibility)
-    return () => document.removeEventListener('visibilitychange', onVisibility)
+    document.addEventListener('visibilitychange', update)
+    const unregister = registerStaleDocumentVisibilityRecovery(update)
+    return () => {
+      document.removeEventListener('visibilitychange', update)
+      unregister()
+    }
   }, [follow])
+  return visible
+}
+
+/** The host's stream and count of changes to agy's stored login while `follow` and `visible`;
+ *  null before the host answers, and from older hosts. */
+function useAgyLoginRevision(
+  owner: RuntimeClientTarget,
+  follow: boolean,
+  visible: boolean
+): string | null {
+  const [login, setLogin] = useState<string | null>(null)
+  const kind = owner.kind
+  const environmentId = owner.kind === 'environment' ? owner.environmentId : null
   useEffect(() => {
     if (!follow || !visible) {
       return
@@ -58,7 +79,7 @@ function useAgyLoginRevision(
         : { kind: 'local' }
     const read = () => {
       const snapshot = agyLoginRevisions.read(target)
-      setRevision(snapshot.kind === 'known' ? snapshot.state.revision : null)
+      setLogin(snapshot.kind === 'known' ? snapshot.state.login : null)
     }
     const unsubscribe = agyLoginRevisions.subscribe(read)
     const release = agyLoginRevisions.observe(target)
@@ -68,20 +89,23 @@ function useAgyLoginRevision(
       unsubscribe()
     }
   }, [follow, visible, kind, environmentId])
-  return revision
+  return login
 }
 
 /** Re-reads the rows each time the host sees agy's stored login change (a terminal sign-in, a
  *  token refresh), and calls `loginChanged` once they show another login, so errors about the
- *  previous one clear. `follow`: the rows are the host's, whose login agy's stores hold. */
+ *  previous one clear. `follow`: the rows are the host's, whose login agy's stores hold. Returns
+ *  whether the window is shown. */
 export function useAgyLoginChange(
   owner: RuntimeClientTarget,
   follow: boolean,
   state: AntigravityAccountState | null,
   reread: () => void,
   loginChanged: () => void
-): void {
-  const loginRevision = useAgyLoginRevision(owner, follow, reread)
-  useOnLaterChange(loginRevision === null ? null : String(loginRevision), reread)
+): boolean {
+  // The host stops watching while nothing follows, so showing the window again reads once.
+  const visible = useWindowShown(follow, reread)
+  useOnLaterChange(useAgyLoginRevision(owner, follow, visible), reread)
   useOnLaterChange(loginKey(state), loginChanged)
+  return visible
 }
