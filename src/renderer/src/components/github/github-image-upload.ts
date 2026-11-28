@@ -5,13 +5,18 @@ import {
   assertGitHubImage,
   GITHUB_IMAGE_ATTACHMENT_CAPABILITY
 } from '../../../../shared/github/attachments/image-attachment'
-import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard/clipboard-params'
+import {
+  appendClipboardImageUploadChunks,
+  type ClipboardImageUploadSlot
+} from '../../../../shared/clipboard/clipboard-image-chunk-upload'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { readStoredWebRuntimeEnvironment } from '@/web/pairing/web-runtime-environment'
 import { callAbortableGitHubImageUpload } from './github-image-upload-local-call'
 import { blobToBase64 } from '@/lib/clipboard/images/image-blob-png'
+
+const GITHUB_IMAGE_UPLOAD_TIMEOUT_MS = 120_000
 
 export type GitHubImageUploadAddress = {
   runtime: RuntimeClientTarget
@@ -38,10 +43,15 @@ export function captureGitHubImageUpload(
         ? getRuntimeEnvironmentRevision(runtime.environmentId)
         : undefined
   }
-  const call = <T>(method: string, params?: unknown, signal?: AbortSignal) =>
+  const call = <T>(
+    method: string,
+    params?: unknown,
+    signal?: AbortSignal,
+    timeoutMs = GITHUB_IMAGE_UPLOAD_TIMEOUT_MS
+  ) =>
     runtime.kind === 'local' && signal
       ? callAbortableGitHubImageUpload<T>(method, params, signal)
-      : callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs: 120_000, signal })
+      : callRuntimeRpc<T>(runtime, method, params, { ...options, timeoutMs, signal })
   let supported: Promise<void> | undefined
   return async (file, signal) => {
     signal?.throwIfAborted()
@@ -57,30 +67,19 @@ export function captureGitHubImageUpload(
     const contentBase64 = await blobToBase64(file, signal)
     signal?.throwIfAborted()
     // Keep the allocation response so retirement can release even a late staging ID.
-    const { uploadId } = await call<{ uploadId: string }>('clipboard.startImageUpload', {
+    const slot = await call<ClipboardImageUploadSlot>('clipboard.startImageUpload', {
       expectedBase64Length: contentBase64.length,
       fileName: file.name
     })
+    const { uploadId } = slot
     try {
       signal?.throwIfAborted()
-      for (
-        let offset = 0;
-        offset < contentBase64.length;
-        offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-      ) {
-        await call(
-          'clipboard.appendImageUploadChunk',
-          {
-            uploadId,
-            offset,
-            contentBase64: contentBase64.slice(
-              offset,
-              offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
-            )
-          },
-          signal
-        )
-      }
+      await appendClipboardImageUploadChunks(
+        slot,
+        contentBase64,
+        (chunk, timeoutMs) => call('clipboard.appendImageUploadChunk', chunk, signal, timeoutMs),
+        GITHUB_IMAGE_UPLOAD_TIMEOUT_MS
+      )
       const result = await call<{ url: string }>(
         'github.uploadAttachment',
         {
