@@ -80,6 +80,19 @@ export class JournalSqlConversions {
     )
   }
 
+  /** The chat's epoch when it is already in this store, else null; never copies or waits for idle. */
+  async copiedEpoch(sessionId: string): Promise<string | null> {
+    const ready = this.ready.get(sessionId)
+    if (ready !== undefined || this.closed) {
+      return ready ?? null
+    }
+    const state = await this.readers.importState(sessionId)
+    if (state.state === 'ready') {
+      this.rememberReady(sessionId, state.epoch)
+    }
+    return state.state === 'ready' ? state.epoch : null
+  }
+
   async ensure(sessionId: string, foreground = true): Promise<string | null> {
     if (this.closed) {
       throw new Error('journal conversions are closed')

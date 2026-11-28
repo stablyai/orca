@@ -13,6 +13,11 @@ import {
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
 
+// A positive check covers the next few chats of the same folder: each check re-reads the whole
+// catalog and lists the parent folder, which a large purge would otherwise repeat per chat.
+const GONE_CHECK_BATCH = 32
+const GONE_CHECK_BATCH_MS = 250
+
 export type GoneFolderSweepScope = {
   store: RuntimeStore
   signal?: AbortSignal
@@ -92,11 +97,30 @@ export async function sweepGoneWorkspaceFolderGroups<T>(
     scope.isEnabled() &&
     (await isUnclaimed(key, folder)) &&
     (await isStillGone(folder))
+  let batch: { key: string; at: number; uses: number } | null = null
+  const stillGoneInBatch = async (key: string, folder: GoneFolder): Promise<boolean> => {
+    if (scope.signal?.aborted || !scope.isEnabled()) {
+      return false
+    }
+    if (
+      batch?.key === key &&
+      batch.uses < GONE_CHECK_BATCH &&
+      performance.now() - batch.at < GONE_CHECK_BATCH_MS
+    ) {
+      batch.uses++
+      return true
+    }
+    const gone = await stillGone(key, folder)
+    // Only a positive answer is reused; a folder that came back is read again at once.
+    batch = gone ? { key, at: performance.now(), uses: 1 } : null
+    return gone
+  }
   for (const [key, { folder, chats: group }] of byFolder) {
+    batch = null
     if (!(await stillGone(key, folder))) {
       continue
     }
-    const removed = await remove(key, group, () => stillGone(key, folder))
+    const removed = await remove(key, group, () => stillGoneInBatch(key, folder))
     result.deleted += removed.deleted
     result.failed += removed.failed
     result.freedBytes += removed.freedBytes

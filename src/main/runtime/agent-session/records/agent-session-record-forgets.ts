@@ -53,9 +53,11 @@ export abstract class AgentSessionRecordForgets extends AgentSessionRecordTabs {
     forget: AgentSessionIdleForget,
     stillWanted: () => Promise<boolean>
   ): Promise<boolean> => {
-    // Nobody waits on a cleanup: an old chat is copied in first like idle conversion, outside the
-    // chat's lane (which holds the activity it waits out), and fails rather than fill the disk.
-    await this.journalDatabase.conversions.ensure(forget.sessionId, false)
+    // Cleanup never copies a chat an older Orca saved: it waits until idle conversion has copied it,
+    // so nothing here waits for idle, holds a lane meanwhile, or writes during a low-disk backoff.
+    if ((await this.journalDatabase.conversions.copiedEpoch(forget.sessionId)) === null) {
+      return false
+    }
     return this.journalDatabase.forgetChat(
       forget.sessionId,
       async () =>
