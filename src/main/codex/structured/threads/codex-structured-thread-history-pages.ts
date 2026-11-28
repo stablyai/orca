@@ -113,7 +113,10 @@ export async function discoverCodexHistory(
         turn.items.some((item) => readCodexJournalRecord(item).type === 'agentMessage')
       if (
         !selectCodexHistoryTurn(turn, anchor) ||
-        (anchor.known.has(id) && anchor.terminal?.has(id) && !missingAnswer)
+        (anchor.known.has(id) &&
+          anchor.terminal?.has(id) &&
+          !missingAnswer &&
+          !anchor.openTools?.has(id))
       ) {
         continue
       }
