@@ -22,6 +22,11 @@ import {
   formatDataAccounts
 } from './account-list-format'
 import { assertDataAccountsSupported, listDataAccounts } from './data-account-commands'
+import {
+  printProviderAccounts,
+  readAccountsSnapshot,
+  type AccountsListSnapshot
+} from './account-refresh-read'
 
 const ACCOUNT_AGENTS = ['claude', 'codex', 'opencode', 'devin', 'antigravity'] as const
 type AccountAgent = (typeof ACCOUNT_AGENTS)[number]
@@ -42,18 +47,14 @@ type ProviderAccounts = {
   /** Whether `system` (the provider's own sign-in, outside Orca's vault) can be selected. */
   hasSystemDefault: boolean
   choices: () => Promise<AccountChoice[]>
-  list: () => Promise<void>
+  list: (refresh: boolean) => Promise<void>
   select: (accountId: string | null) => Promise<void>
   remove: (accountId: string) => Promise<void>
 }
 
-type ClaudeCodexSnapshot = {
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
-}
-
 function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
-  const read = () => client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: false })
+  const read = (refresh = false) =>
+    readAccountsSnapshot<AccountsListSnapshot>(client, refresh, {}, 'claude')
   const print = async (method: string, accountId: string | null) =>
     printResult(
       await client.call<ClaudeRateLimitAccountsState>(method, { accountId }),
@@ -64,29 +65,28 @@ function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
     label: 'Claude',
     hasSystemDefault: true,
     choices: async () => getManagedAccountLookupNames((await read()).result.claude.accounts),
-    list: async () => {
-      const response = await read()
-      printResult({ ...response, result: response.result.claude }, json, (state) =>
+    list: async (refresh) =>
+      printProviderAccounts(await read(refresh), 'claude', refresh, json, (state) =>
         formatAccountsBlock('Claude', state)
-      )
-    },
+      ),
     select: (accountId) => print('accounts.selectClaude', accountId),
     remove: (accountId) => print('accounts.removeClaude', accountId)
   }
 }
 
 function codexAccounts({ client, cwd, json }: HandlerContext): ProviderAccounts {
-  const read = () => client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: false })
+  const read = (refresh = false) =>
+    readAccountsSnapshot<AccountsListSnapshot>(client, refresh, {}, 'codex')
   const format = (state: CodexRateLimitAccountsState) => formatAccountsBlock('Codex', state)
   const wslTarget = getWslAccountTarget(cwd)
   return {
     label: 'Codex',
     hasSystemDefault: true,
     choices: async () => getManagedAccountLookupNames((await read()).result.codex.accounts),
-    list: async () => {
-      const response = await read()
-      printResult({ ...response, result: response.result.codex }, json, format)
-    },
+    list: async (refresh) =>
+      printProviderAccounts(await read(refresh), 'codex', refresh, json, (state) =>
+        formatAccountsBlock('Codex', state)
+      ),
     // Why ForTarget from WSL: plain selectCodex always writes the Windows host slot.
     select: async (accountId) =>
       printResult(
@@ -324,7 +324,7 @@ export async function listAgentAccounts(ctx: HandlerContext, agentFlag: unknown)
   if (typeof agentFlag !== 'string' || !isAccountAgent(agentFlag)) {
     throw new RuntimeClientError('invalid_argument', AGENT_FLAG_HINT)
   }
-  await providerAccounts(ctx, agentFlag).list()
+  await providerAccounts(ctx, agentFlag).list(ctx.flags.get('refresh') === true)
 }
 
 /** The Antigravity block for the full `orca account list`, or null on a host that cannot read it. */

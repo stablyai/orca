@@ -1,5 +1,6 @@
 import type { AntigravityAccountState } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type { ManagedDataAccountsState } from '../../shared/agent-accounts/managed-account-types'
+import type { ProviderRateLimits } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { getManagedAccountInlineLabel } from '../../shared/agent-accounts/managed-account-display-names'
 
 type AccountsBlock = {
@@ -43,6 +44,30 @@ export function formatAccountsBlock(label: string, block: AccountsBlock): string
       }`
   )
   return `Managed ${label} accounts (${block.accounts.length}):\n${system}\n${lines.join('\n')}`
+}
+
+/** Usage lines appended to a refreshed provider's account table. */
+export function formatProviderUsage(limits: ProviderRateLimits | null): string {
+  if (!limits) {
+    return '\n  Usage: unavailable after refresh.'
+  }
+  const lines = [`\n  Usage: ${limits.status}${limits.error ? ` — ${limits.error}` : ''}`]
+  if (limits.status === 'error' || limits.status === 'unavailable') {
+    return lines.join('\n')
+  }
+  for (const [label, window] of [
+    ['5h', limits.session],
+    ['7d', limits.weekly]
+  ] as const) {
+    if (window) {
+      lines.push(
+        `    ${label}: ${Math.round(window.usedPercent)}% used${
+          window.resetDescription ? `, resets ${window.resetDescription}` : ''
+        }`
+      )
+    }
+  }
+  return lines.join('\n')
 }
 
 /** Antigravity has no system default: one saved account always owns the native login. */

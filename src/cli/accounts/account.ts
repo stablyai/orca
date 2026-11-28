@@ -28,8 +28,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState,
-  ManagedDataAccountsState
+  CodexRateLimitAccountsState
 } from '../../shared/agent-accounts/managed-account-types'
 import {
   type InteractiveLoginSession,
@@ -53,15 +52,7 @@ import {
   removeAgentAccount,
   selectAgentAccount
 } from './account-selection'
-import type { AntigravityAccountState } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
-
-type AccountsListSnapshot = {
-  opencode?: ManagedDataAccountsState
-  devin?: ManagedDataAccountsState
-  claude: ClaudeRateLimitAccountsState
-  codex: CodexRateLimitAccountsState
-  antigravity?: AntigravityAccountState
-}
+import { readAccountsSnapshot, type AccountsListSnapshot } from './account-refresh-read'
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const pathKey =
@@ -279,11 +270,13 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const { client, json } = ctx
-    // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
-    const response = await client.call<AccountsListSnapshot>('accounts.list', {
-      refreshUsage: false,
-      ...(json ? { refreshStaleUsage: true } : {})
-    })
+    const refresh = ctx.flags.get('refresh') === true
+    // JSON carries usage: refresh stale windows within throttles; --refresh bypasses Retry-After.
+    const response = await readAccountsSnapshot<AccountsListSnapshot>(
+      client,
+      refresh,
+      json && !refresh ? { refreshStaleUsage: true } : {}
+    )
     // Why separate: Antigravity accounts live in their own native vault, not in the
     // accounts.list snapshot, and an older host simply has none to show.
     const antigravity = await readAntigravityAccountsForList(ctx)

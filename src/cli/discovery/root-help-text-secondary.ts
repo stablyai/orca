@@ -43,7 +43,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '  orca search <query> [--scope conversation|all] [--fresh] [--limit <n>] [--cursor <c>] [--agent <id>] [--path <p>] [--since <iso>] [--sort relevance|newest] [--debug] [--json]',
   '  orca search --index-status [--json]',
   '  orca account add [--agent claude|codex] [--json]',
-  '  orca account list [--json]',
+  '  orca account list [--refresh] [--json]',
   '  orca account select --agent claude --account <id|email|system> [--json]',
   '  orca host list [--json]',
   '  orca host rm --host ssh:<target-id> [--json]',
