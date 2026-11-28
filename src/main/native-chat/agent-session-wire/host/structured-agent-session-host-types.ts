@@ -198,6 +198,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   /** Execution-host path for a new floating session. */
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
+  /** Whether picking another saved Antigravity account moves this usage-limited chat; absent: never. */
+  canSwitchAntigravityAccount?: (record: AgentSessionRecord) => Promise<boolean>
   now?: () => number
   idleSweep?: Pick<StructuredAgentSessionIdleSweepDeps, 'intervalMs' | 'idleMs'>
   usageLimitAutoContinue?: {
@@ -211,6 +213,16 @@ export type StructuredAgentSessionHostDeps = {
     ) => Promise<UsageLimitAccountScope | undefined>
     /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
+    /** The saved account a start of this chat would launch on now, where one home holds several
+     *  (agy's); undefined when its agent names none. */
+    launchAccountId?: (record: AgentSessionRecord) => string | undefined
+    /** A saved account's name for the person, as the row shows it. */
+    accountLabel?: (
+      provider: AgentSessionRecord['provider'],
+      accountId: string
+    ) => string | undefined
+    /** Called when the provider's selected saved account changed; returns the unsubscribe. */
+    subscribeAccounts?: (changed: () => void) => () => void
   }
   assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>

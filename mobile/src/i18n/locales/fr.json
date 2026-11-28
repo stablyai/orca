@@ -18,7 +18,10 @@
       "title": "Comptes",
       "useReset": "Utiliser une réinitialisation",
       "pairingInvalidMessage": "Appairez de nouveau ce téléphone avec votre ordinateur pour voir ses comptes.",
-      "weeklyWindow": "7 j"
+      "weeklyWindow": "7 j",
+      "signedOut": "Déconnecté",
+      "addAccount": "Ajouter un compte",
+      "signIn": "Se connecter"
     },
     "claude": {
       "usageSignInLabel": "Se reconnecter",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}} % restant"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "L’appareil à l’origine de cette connexion ne répond plus.",
+        "superseded": "Un changement de compte sur cet hôte a interrompu la connexion. Relancez-la.",
+        "noPrompt": "La commande de connexion du serveur n’a affiché aucun lien de connexion en une minute. Mettez à jour Orca sur le serveur, puis réessayez.",
+        "failed": "Échec de la connexion. Réessayez."
+      },
+      "starting": "Démarrage de la connexion sur {{host}}…",
+      "copied": "Copié",
+      "copyLink": "Copier le lien",
+      "continue": "Continuer",
+      "copyCode": "Copier le code",
+      "signingIn": "Connexion…",
+      "tryAgain": "Réessayer",
+      "titleClaude": "Se connecter à Claude",
+      "titleCodex": "Se connecter à Codex",
+      "savedOn": "Enregistré sur {{host}}",
+      "newCode": "Obtenir un nouveau code",
+      "openPage": "Ouvrir la page de connexion",
+      "pasteStep": "Coller le code",
+      "codePlaceholder": "Code de la page",
+      "enterCodeStep": "Saisir ce code",
+      "waitingForPage": "En attente de la fin sur la page",
+      "signedInAs": "Connecté en tant que {{email}}"
     }
   },
   "agentHistory": {
@@ -440,7 +468,10 @@
       "modelFallback": "Claude a changé de modèle : {{from}} → {{to}}.",
       "signIn": "Se connecter",
       "signInHint": "Ouvre un terminal sur l’ordinateur qui exécute ce chat",
-      "forkedFrom": "Branche créée à partir de"
+      "forkedFrom": "Branche créée à partir de",
+      "notSignedIn": "{{agent}} n’est pas connecté.",
+      "signInAccountHint": "Reconnecte ce compte sur l’ordinateur qui exécute ce chat",
+      "signedInSendAgain": "Connecté. Renvoyez votre message."
     },
     "ciResultLine": {
       "failingLead": "CI en échec sur",
@@ -1489,7 +1520,10 @@
       "connectHint": "Ajoutez votre site Jira dans Orca sur votre ordinateur, sous Paramètres → Intégrations, puis revérifiez.",
       "connectOnDesktop": "Connecter Jira sur votre ordinateur",
       "credentialUnreadable": "Les identifiants Jira sont enregistrés mais illisibles : {{credentialError}}",
-      "updateDesktop": "Mettre à jour Orca sur cet hôte"
+      "updateDesktop": "Mettre à jour Orca sur cet hôte",
+      "connectTitle": "Connecter votre compte Jira",
+      "connectMessage": "Parcourez vos tickets Jira assignés et commencez à travailler directement depuis Tâches.",
+      "connect": "Connecter Jira"
     },
     "markdownBlocks": {
       "copyCode": "Copier le code",
@@ -2108,8 +2142,8 @@
       "loadFailed": "Impossible de charger les fichiers",
       "title": "Fichiers",
       "truncatedList": "{{worktreeLabel}} - 5 000 premiers éléments affichés",
-      "more": "Plus",
-      "newEntry": "Nouveau"
+      "newEntry": "Nouveau",
+      "add": "Ajouter"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponible sur mobile",
@@ -2145,7 +2179,38 @@
       "share": "Partager",
       "shareFailed": "Impossible de partager {{name}}",
       "shareTooLarge": "Les fichiers de plus de 256 Mo ne peuvent pas être partagés depuis le téléphone",
-      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers"
+      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers",
+      "uploadHere": "Importer ici",
+      "uploadFiles": "Importer des fichiers",
+      "noFreeCopyName": "Aucun nom libre pour une copie de {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "En attente",
+      "waitingForConnection": "En attente de connexion",
+      "failed": "{{reason}} · Touchez pour réessayer",
+      "failedReason": "Échec de l'importation",
+      "dismiss": "Ne pas importer {{name}}",
+      "tooLarge": "Les fichiers de plus de {{max}} Mo ne peuvent pas encore être importés depuis le téléphone.",
+      "busy": "Vous pouvez importer jusqu'à {{max}} fichiers à la fois.",
+      "pickFailed": "Impossible d'ouvrir vos fichiers. {{reason}}",
+      "clashMessage": "Déjà dans {{folder}}",
+      "keepBoth": "Garder les deux",
+      "keepBothAs": "Enregistré sous {{name}}",
+      "keepBothCopies": "Enregistre chacun comme copie",
+      "skip": "Ignorer",
+      "skipAll": "Tout ignorer",
+      "uploaded_many": "{{count}} fichiers importés dans {{folder}}",
+      "uploaded_one": "{{count}} fichier importé dans {{folder}}",
+      "uploaded_other": "{{count}} fichiers importés dans {{folder}}",
+      "clashTitleSeveral_many": "{{count}} fichiers sont déjà dans {{folder}}",
+      "clashTitleSeveral_one": "{{count}} fichier est déjà dans {{folder}}",
+      "clashTitleSeveral_other": "{{count}} fichiers sont déjà dans {{folder}}",
+      "lost_many": "{{count}} fichiers n'ont pas été importés : le téléphone les a libérés. Choisissez-les à nouveau.",
+      "lost_one": "{{count}} fichier n'a pas été importé : le téléphone l'a libéré. Choisissez-le à nouveau.",
+      "lost_other": "{{count}} fichiers n'ont pas été importés : le téléphone les a libérés. Choisissez-les à nouveau.",
+      "nameTaken": "Nom déjà pris · Touchez pour choisir",
+      "workspaceRoot": "la racine de l’espace de travail",
+      "unconfirmed": "Impossible de confirmer l'importation. Vérifiez le dossier."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",
@@ -5107,6 +5172,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "Échec de la création de l'espace de travail"
+    },
+    "jiraConnect": {
+      "title": "Connecter Jira",
+      "siteUrl": "votre-equipe.atlassian.net",
+      "email": "E-mail Atlassian",
+      "apiToken": "Jeton d’API",
+      "storageHint": "Votre jeton est stocké sur cet hôte, chiffré si son système le permet.",
+      "createToken": "Créer un jeton d’API",
+      "failed": "Échec de la connexion",
+      "serverNeedsUpdate": "Ce serveur doit d’abord être mis à jour vers une version récente d’Orca. Connectez plutôt Jira depuis Orca sur ordinateur."
     }
   },
   "terminal": {

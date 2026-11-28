@@ -38,7 +38,9 @@ const RunSchema = lazyZodSchema(() =>
     error: z.string().optional(),
     alerted: z.literal(true).optional(),
     asleep: z.literal(true).optional(),
-    usageLimited: z.object({ resetsAt: z.number().optional() }).optional()
+    usageLimited: z
+      .object({ resetsAt: z.number().optional(), accountId: z.string().max(200).optional() })
+      .optional()
   })
 )
 

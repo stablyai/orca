@@ -31,6 +31,8 @@ type Flow<TProvider extends string, TPrompt, TCode, TResult extends object> = {
   codeSent: boolean
   listeners: Set<() => void>
   silence: ReturnType<typeof setTimeout> | null
+  /** When its owner last asked about it. */
+  touchedAt: number
 }
 
 /** Serialize host-local sign-ins; only the initiating client may inspect/answer/cancel.
@@ -76,7 +78,15 @@ export class CallerOwnedSignInFlows<
         this.touch(current)
         return view(current)
       }
-      if (!current.stop && this.policy.supersedes?.(current.status, provider)) {
+      const takeOverAfter = this.policy.ownerTakesOverAfterMs
+      const abandonedByOwner =
+        current.owner === owner &&
+        takeOverAfter !== undefined &&
+        Date.now() - current.touchedAt >= takeOverAfter
+      if (
+        !current.stop &&
+        (abandonedByOwner || this.policy.supersedes?.(current.status, provider))
+      ) {
         // Its owner's next wait reads it cancelled; its run stops on the abort.
         current.stop = 'cancelled'
         this.end(current)
@@ -109,7 +119,8 @@ export class CallerOwnedSignInFlows<
       code,
       codeSent: false,
       listeners: new Set(),
-      silence: null
+      silence: null,
+      touchedAt: Date.now()
     }
     this.active = flow
     this.latest.set(owner, flow)
@@ -261,6 +272,7 @@ export class CallerOwnedSignInFlows<
     if (settled(flow) || flow.stop) {
       return
     }
+    flow.touchedAt = Date.now()
     if (flow.silence) {
       clearTimeout(flow.silence)
     }

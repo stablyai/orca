@@ -16,10 +16,8 @@ import {
   terminateLaunchedDaemonChild
 } from './daemon-launched-child'
 import { getDaemonEntryPath, probeDaemonSocket as probeSocket } from './daemon-launch-paths'
-import {
-  materializeRelocatedDaemonHost,
-  pruneDaemonHostStaging
-} from '../executable-host/windows/daemon-host-relocation'
+import { materializeRelocatedDaemonHost } from '../executable-host/windows/daemon-host-relocation'
+import { pruneDaemonHostStaging } from '../executable-host/windows/daemon-host-prune'
 import {
   appImageDaemonIdentityPath,
   resolveAppImageDaemonLaunch
@@ -193,8 +191,9 @@ export function createOutOfProcessLauncher(
         return macHandle
       }
       // Lazily stage the Windows host outside the NSIS updater's kill zone; null falls back to the installed host.
-      const relocatedHost = materializeRelocatedDaemonHost()
-      pruneDaemonHostStaging()
+      const relocatedHost = await materializeRelocatedDaemonHost()
+      // Deleting an abandoned copy must not delay this launch.
+      void pruneDaemonHostStaging()
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       if (generation && 'fallback' in generation) {
         console.warn(

@@ -21,6 +21,9 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  /** Picking another of this host's saved Antigravity accounts moves this usage-limited chat to it.
+   *  Separate from canSwitchAccount, which older phones offer for any agent. */
+  canSwitchAntigravityAccount?: boolean
   accountUsage?: true
   /** Fresh host observation; absent means an older host or unknown conversation. */
   sessionNeverStarted?: boolean

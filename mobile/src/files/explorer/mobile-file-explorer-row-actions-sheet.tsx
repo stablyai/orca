@@ -1,5 +1,14 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { Copy, CopyPlus, Edit3, FilePlus2, FolderPlus, Share, Trash2 } from 'lucide-react-native'
+import {
+  Copy,
+  CopyPlus,
+  Edit3,
+  FilePlus2,
+  FolderPlus,
+  Share,
+  Trash2,
+  Upload
+} from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import {
   ActionSheetContent,
@@ -56,6 +65,8 @@ export type ExplorerWrites = {
   onMoved: (from: string, to: string) => void
   onRemoved: (relativePath: string) => void
   showToast: (message: string) => void
+  /** Null where the host or the phone can't take uploads. */
+  upload: ((parent: string) => void) | null
 }
 
 /** Which row's actions are open, the root's New File/New Folder, and the one drawer that shows them. */
@@ -153,6 +164,15 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
       )
   }
 
+  const rootUpload = (upload: (parent: string) => void): ActionSheetAction => ({
+    id: 'upload',
+    label: t('files.fileExplorerRowActions.uploadFiles', 'Upload Files'),
+    icon: Upload,
+    onPress: () => {
+      close()
+      upload('')
+    }
+  })
   let content: ReactNode = null
   if (view?.kind === 'menu') {
     content = (
@@ -170,6 +190,7 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
         }
         onOpen={open}
         onDuplicate={duplicate}
+        onUpload={writes.upload}
         onClose={close}
       />
     )
@@ -191,18 +212,23 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
     content = (
       <ActionSheetContent
         actions={[
-          {
-            id: 'newFile',
-            label: t('files.fileExplorerRowActions.newFile', 'New File'),
-            icon: FilePlus2,
-            onPress: () => open({ kind: 'create', parent: '', type: 'file' })
-          },
-          {
-            id: 'newFolder',
-            label: t('files.fileExplorerRowActions.newFolder', 'New Folder'),
-            icon: FolderPlus,
-            onPress: () => open({ kind: 'create', parent: '', type: 'folder' })
-          }
+          ...(writes.upload ? [rootUpload(writes.upload)] : []),
+          ...(canMutate
+            ? [
+                {
+                  id: 'newFile',
+                  label: t('files.fileExplorerRowActions.newFile', 'New File'),
+                  icon: FilePlus2,
+                  onPress: () => open({ kind: 'create', parent: '', type: 'file' })
+                },
+                {
+                  id: 'newFolder',
+                  label: t('files.fileExplorerRowActions.newFolder', 'New Folder'),
+                  icon: FolderPlus,
+                  onPress: () => open({ kind: 'create', parent: '', type: 'folder' })
+                }
+              ]
+            : [])
         ]}
       />
     )
@@ -243,13 +269,14 @@ export function useMobileFileExplorerRowActions(writes: ExplorerWrites) {
     openCreate: canMutate
       ? (type: CreateKind, parent: string) => open({ kind: 'create', parent, type })
       : null,
-    /** New File / New Folder at the root as a sheet, for a panel without the header menu; null without writes. */
-    openNewChoice: canMutate
-      ? () => {
-          void preloadNameSheet()
-          open({ kind: 'new' })
-        }
-      : null,
+    /** Upload / New File / New Folder at the root as a sheet, for a panel without the header menu; null without writes. */
+    openNewChoice:
+      canMutate || writes.upload
+        ? () => {
+            void preloadNameSheet()
+            open({ kind: 'new' })
+          }
+        : null,
     rowActionsSheet: (
       <BottomDrawer visible={view != null} onClose={close}>
         {content}
@@ -266,6 +293,7 @@ function RowActionsMenu({
   share,
   onOpen,
   onDuplicate,
+  onUpload,
   onClose
 }: {
   node: TreeNode
@@ -275,6 +303,7 @@ function RowActionsMenu({
   share: { loading: boolean; onPress: () => void } | null
   onOpen: (view: SheetView) => void
   onDuplicate: (node: TreeNode) => void
+  onUpload: ((parent: string) => void) | null
   onClose: () => void
 }) {
   const t = useMobileTranslation()
@@ -333,6 +362,20 @@ function RowActionsMenu({
             ])
       ]
   const actions: ActionSheetAction[] = [
+    ...(isDirectory && onUpload
+      ? [
+          {
+            id: 'upload',
+            group: 'new',
+            label: t('files.fileExplorerRowActions.uploadHere', 'Upload Here'),
+            icon: Upload,
+            onPress: () => {
+              onClose()
+              onUpload(node.relativePath)
+            }
+          }
+        ]
+      : []),
     ...(share
       ? [
           {

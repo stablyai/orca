@@ -413,7 +413,10 @@
       "pairingInvalidMessage": "Re-pair this phone with your desktop to see its accounts.",
       "otherAgents": "Other agents",
       "fableWindow": "Fable",
-      "mcpWindow": "MCP"
+      "mcpWindow": "MCP",
+      "signedOut": "Signed out",
+      "signIn": "Sign in",
+      "addAccount": "Add account"
     },
     "claude": {
       "usageSignInLabel": "Sign in again",
@@ -424,6 +427,31 @@
     },
     "usage": {
       "percentLeft": "{{value}}% left"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "The device that started this sign-in stopped answering.",
+        "superseded": "An account change on this host stopped the sign-in. Start it again.",
+        "noPrompt": "The server's login command didn't show a sign-in link within a minute. Update Orca on the server, then try again.",
+        "failed": "Sign-in failed. Try again."
+      },
+      "titleClaude": "Sign in to Claude",
+      "titleCodex": "Sign in to Codex",
+      "savedOn": "Saved on {{host}}",
+      "newCode": "Get a new code",
+      "tryAgain": "Try again",
+      "starting": "Starting sign-in on {{host}}…",
+      "openPage": "Open the sign-in page",
+      "copied": "Copied",
+      "copyLink": "Copy link",
+      "pasteStep": "Paste the code",
+      "codePlaceholder": "Code from the page",
+      "signingIn": "Signing in…",
+      "continue": "Continue",
+      "enterCodeStep": "Enter this code",
+      "copyCode": "Copy code",
+      "waitingForPage": "Waiting for you to finish on the page",
+      "signedInAs": "Signed in as {{email}}"
     }
   },
   "agentHistory": {
@@ -1236,7 +1264,10 @@
       "connectOnDesktop": "Connect Jira on your desktop",
       "credentialUnreadable": "Jira is saved but unreadable: {{credentialError}}",
       "connectHint": "Add your Jira site in Orca desktop under Settings → Integrations, then check again.",
-      "checkAgain": "Check again"
+      "checkAgain": "Check again",
+      "connectTitle": "Connect your Jira account",
+      "connectMessage": "Browse and start work on your assigned Jira issues directly from Tasks.",
+      "connect": "Connect Jira"
     },
     "dictationSetupSheet": {
       "loadFailed": "Failed to load",
@@ -2225,8 +2256,8 @@
       "searching": "Searching…",
       "searchPlaceholder": "Search files",
       "inFiles": "In files",
-      "more": "More",
-      "newEntry": "New"
+      "newEntry": "New",
+      "add": "Add"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -2327,7 +2358,38 @@
       "share": "Share",
       "shareFailed": "Couldn't share {{name}}",
       "shareTooLarge": "Files larger than 256 MB can’t be shared from the phone",
-      "shareHostOutdated": "Update Orca where this workspace runs to share files"
+      "shareHostOutdated": "Update Orca where this workspace runs to share files",
+      "uploadHere": "Upload Here",
+      "uploadFiles": "Upload Files",
+      "noFreeCopyName": "No free name for a copy of {{name}}"
+    },
+    "fileExplorerUpload": {
+      "waiting": "Waiting",
+      "waitingForConnection": "Waiting for connection",
+      "failed": "{{reason}} · Tap to retry",
+      "failedReason": "Upload failed",
+      "dismiss": "Don't upload {{name}}",
+      "tooLarge": "Files over {{max}} MB can't be uploaded from the phone yet.",
+      "busy": "You can upload up to {{max}} files at a time.",
+      "pickFailed": "Couldn't open your files. {{reason}}",
+      "clashMessage": "Already in {{folder}}",
+      "keepBoth": "Keep Both",
+      "keepBothAs": "Saves as {{name}}",
+      "keepBothCopies": "Saves each as a copy",
+      "skip": "Skip",
+      "skipAll": "Skip All",
+      "uploaded_one": "Uploaded {{count}} file to {{folder}}",
+      "uploaded_other": "Uploaded {{count}} files to {{folder}}",
+      "clashTitleSeveral_one": "{{count}} file is already in {{folder}}",
+      "clashTitleSeveral_other": "{{count}} files are already in {{folder}}",
+      "lost_one": "{{count}} file wasn't uploaded: the phone let go of it. Pick it again.",
+      "lost_other": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "nameTaken": "Name taken · Tap to choose",
+      "workspaceRoot": "the workspace root",
+      "lost": "{{count}} files weren't uploaded: the phone let go of them. Pick them again.",
+      "uploaded": "Uploaded {{count}} files to {{folder}}",
+      "clashTitleSeveral": "{{count}} files are already in {{folder}}",
+      "unconfirmed": "Couldn't confirm the upload. Check the folder."
     },
     "fileMutationOwnership": {
       "sshOwnerChanged": "Couldn't verify the SSH connection. Reconnect the host and try again."
@@ -3543,7 +3605,10 @@
       "modelFallback": "Claude switched models: {{from}} → {{to}}.",
       "forkedFrom": "Forked from",
       "signIn": "Sign in",
-      "signInHint": "Opens a terminal on the computer running this chat"
+      "signInHint": "Opens a terminal on the computer running this chat",
+      "notSignedIn": "{{agent}} isn't signed in.",
+      "signInAccountHint": "Signs this account in again on the computer running this chat",
+      "signedInSendAgain": "Signed in. Send again."
     },
     "ciResultLine": {
       "failingLead": "CI failing on",
@@ -5419,6 +5484,16 @@
       "checkSkipped": "Skipped",
       "checkPending": "Pending",
       "checkNeutral": "Neutral"
+    },
+    "jiraConnect": {
+      "title": "Connect Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian email",
+      "apiToken": "API token",
+      "storageHint": "Your token is stored on this host, encrypted where its OS supports it.",
+      "createToken": "Create an API token",
+      "failed": "Connection failed",
+      "serverNeedsUpdate": "This server needs an Orca update first. Connect Jira in Orca desktop instead."
     }
   },
   "terminal": {

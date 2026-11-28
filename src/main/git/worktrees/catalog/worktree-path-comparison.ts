@@ -18,6 +18,25 @@ export function canonicalWorktreePath(pathValue: string, platform = process.plat
     : canonicalPosixPath(pathValue, platform)
 }
 
+function hasDotSegment(pathValue: string): boolean {
+  const len = pathValue.length
+  let idx = pathValue.indexOf('/.')
+  while (idx !== -1) {
+    const after = idx + 2
+    if (after === len || pathValue.charCodeAt(after) === 47) {
+      return true
+    }
+    if (
+      pathValue.charCodeAt(after) === 46 &&
+      (after + 1 === len || pathValue.charCodeAt(after + 1) === 47)
+    ) {
+      return true
+    }
+    idx = pathValue.indexOf('/.', after)
+  }
+  return false
+}
+
 function isAlreadyNormalizedPosixAbsolutePath(pathValue: string): boolean {
   if (pathValue.charCodeAt(0) !== 47) {
     return false
@@ -28,7 +47,7 @@ function isAlreadyNormalizedPosixAbsolutePath(pathValue: string): boolean {
   return (
     pathValue.charCodeAt(pathValue.length - 1) !== 47 &&
     !pathValue.includes('//') &&
-    !pathValue.includes('/.')
+    !hasDotSegment(pathValue)
   )
 }
 
@@ -132,7 +151,7 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
 }
 
 function looksLikeWindowsPath(pathValue: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
+  return isWindowsAbsolutePathLike(pathValue)
 }
 
 // One leading slash only: `//server/share` and WSL UNC aliases are Windows roots, not POSIX paths.

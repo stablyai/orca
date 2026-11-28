@@ -1,6 +1,17 @@
 import { decodeGitCQuotedPath } from '../paths/git-cquoted-path'
 import type { GitWorktreeInfo } from '../../worktree/types'
 
+const utf8Encoder = new TextEncoder()
+const utf8Decoder = new TextDecoder()
+
+/** Copy substrings >= 13 chars so V8 SlicedStrings don't pin the full `git worktree list` stdout in memory. */
+function detachPorcelainString(value: string): string {
+  if (value.length < 13) {
+    return value
+  }
+  return utf8Decoder.decode(utf8Encoder.encode(value))
+}
+
 export function parseWorktreeList(
   output: string,
   options: { nulDelimited?: boolean } = {}
@@ -25,11 +36,11 @@ export function parseWorktreeList(
 
     for (const line of lines) {
       if (line.startsWith('worktree ')) {
-        path = line.slice('worktree '.length)
+        path = detachPorcelainString(line.slice('worktree '.length))
       } else if (line.startsWith('HEAD ')) {
-        head = line.slice('HEAD '.length)
+        head = detachPorcelainString(line.slice('HEAD '.length))
       } else if (line.startsWith('branch ')) {
-        branch = line.slice('branch '.length)
+        branch = detachPorcelainString(line.slice('branch '.length))
       } else if (line === 'bare') {
         isBare = true
       } else if (line === 'sparse') {
@@ -37,12 +48,16 @@ export function parseWorktreeList(
       } else if (line === 'locked' || line.startsWith('locked ')) {
         locked = true
         const rawReason = line.slice('locked'.length).trim()
-        lockReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+        lockReason = detachPorcelainString(
+          options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+        )
       } else if (line === 'prunable' || line.startsWith('prunable ')) {
         // Git 2.31+ marks missing-directory registrations; ignoring prunable shows stale worktrees as live (#8389).
         prunable = true
         const rawReason = line.slice('prunable'.length).trim()
-        prunableReason = options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+        prunableReason = detachPorcelainString(
+          options.nulDelimited ? rawReason : decodeGitCQuotedPath(rawReason)
+        )
       }
     }
 

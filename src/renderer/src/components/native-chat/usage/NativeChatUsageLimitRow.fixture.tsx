@@ -18,7 +18,7 @@ const OFFSET = 30_000
 const PANE_WIDTHS = [220, 320, 600] as const
 
 type State = {
-  agent: 'Codex' | 'Claude'
+  agent: 'Codex' | 'Claude' | 'Antigravity'
   window?: AgentSessionUsageLimitWindow
   /** Minutes until the provider's reset; undefined for an unknown reset. */
   resetIn?: number
@@ -28,6 +28,8 @@ type State = {
   account?: 'switch' | 'loading'
   handOff?: 'ready' | 'preparing' | 'none'
   frame?: boolean
+  /** The account a switch moved the chat to, itself out of quota for this many minutes. */
+  limitedAccount?: { email: string; resetIn: number }
 }
 
 function block(state: State, now: number): NativeChatTextBlock {
@@ -98,6 +100,12 @@ function UsageLimitPanes({
       continueNow: () => {},
       usageLimitTurnItemId: active ? 'cut-turn' : null,
       usageLimitAutoContinue: autoState(state, now),
+      ...(state.limitedAccount
+        ? {
+            usageLimitLimitedAccount: state.limitedAccount.email,
+            usageLimitContinueAt: now + state.limitedAccount.resetIn * MINUTE + OFFSET
+          }
+        : {}),
       continueUsageLimit: () => {}
     }),
     [active, state, now]
@@ -107,7 +115,7 @@ function UsageLimitPanes({
       account:
         state.account === undefined ? null : (
           <ProviderAccountChatButton
-            provider="claude"
+            provider={state.agent === 'Antigravity' ? 'antigravity' : 'claude'}
             target={{ kind: 'local' }}
             disabled={state.account === 'loading'}
             busy={state.account === 'loading'}
@@ -251,3 +259,21 @@ export const detailsExpanded = fixture(
     }
   }
 )
+
+// A switch moved the chat to an account that is itself out of quota: it waits for that account.
+export const antigravityAccountOutOfQuota = fixture({
+  agent: 'Antigravity',
+  window: 'session',
+  resetIn: 40,
+  account: 'switch',
+  limitedAccount: { email: 'personal@example.com', resetIn: 190 }
+})
+
+// The same, when the saved account it moved to has no email.
+export const antigravityUnnamedAccountOutOfQuota = fixture({
+  agent: 'Antigravity',
+  window: 'session',
+  resetIn: 40,
+  account: 'switch',
+  limitedAccount: { email: '', resetIn: 190 }
+})

@@ -5,8 +5,6 @@ import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColors } from '../theme/use-mobile-color-scheme'
-import { useThemedStyles } from '../theme/themed-styles'
-import { stylesSheet } from './mobile-accounts-screen-styles'
 
 export type ManagedDataProvider = 'opencode' | 'devin'
 
@@ -30,7 +28,6 @@ export function ManagedDataAccountSection({
 }) {
   const t = useMobileTranslation()
   const colors = useMobileColors()
-  const styles = useThemedStyles(stylesSheet)
   const state = snapshot[provider]
   if (!state || state.accounts.length === 0) {
     return null
@@ -55,7 +52,7 @@ export function ManagedDataAccountSection({
         title={TUI_AGENT_DISPLAY_NAMES[provider]}
         icon={<MobileAgentIcon agentId={provider} size={14} />}
       />
-      <ListGroup style={styles.group}>
+      <ListGroup>
         {rows.map((row) => {
           const selected = state.activeAccountId === row.id
           return (

@@ -31,12 +31,20 @@ export function sameAccountHome(
 export function usageLimitCutLaunch(
   launched: AgentSessionLaunchedAccount | undefined,
   fence: number | undefined
-): { home: AgentSessionAccountHome | null; relaunched: boolean; launchFence?: number } {
+): {
+  home: AgentSessionAccountHome | null
+  relaunched: boolean
+  launchFence?: number
+  /** The saved account the cut's launch ran on, where its home holds several. */
+  accountId?: string
+} {
   const relaunched = launched !== undefined && fence !== undefined && launched.fence > fence
+  const own = launched && launched.fence === fence ? launched : undefined
   return {
-    home: launched && launched.fence === fence ? launched.accountHome : null,
+    home: own ? own.accountHome : null,
     relaunched,
-    ...(relaunched ? { launchFence: launched.fence } : {})
+    ...(relaunched ? { launchFence: launched.fence } : {}),
+    ...(own?.accountId ? { accountId: own.accountId } : {})
   }
 }
 

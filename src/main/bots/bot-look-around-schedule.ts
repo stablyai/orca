@@ -28,7 +28,9 @@ export function lookAroundDueAt(
   state: BotLookState,
   now: number,
   /** False reads a slot waiting out its retry after a look sleep cut short as due, for Up next. */
-  retrySpacing = true
+  retrySpacing = true,
+  /** The bot agent's selected saved account (see `usageLimitedUntil`). */
+  selectedAccount?: string
 ): number | null {
   if (state.armedAt === undefined) {
     return null
@@ -39,7 +41,7 @@ export function lookAroundDueAt(
     slot < firstAllowedAt(setting, state.armedAt) ||
     slot < startOfLocalDay(now) ||
     slot < (setting.since ?? 0) ||
-    now < usageLimitedUntil(state.runs) ||
+    now < usageLimitedUntil(state.runs, selectedAccount) ||
     slot - lastRunStartedAt(state.runs) < LOOK_RECENT_MS ||
     slotTaken(state.runs, slot, retrySpacing ? now : Number.POSITIVE_INFINITY)
   ) {
@@ -52,13 +54,14 @@ export function lookAroundDueAt(
 export function lookAroundNextAt(
   setting: BotLookAround,
   state: BotLookState,
-  now: number
+  now: number,
+  selectedAccount?: string
 ): number | undefined {
   if (state.armedAt === undefined) {
     return undefined
   }
   // A usage limit holds looks until its reset, which then catches up a slot still owed that day.
-  const until = usageLimitedUntil(state.runs)
+  const until = usageLimitedUntil(state.runs, selectedAccount)
   const after = Math.max(now, firstAllowedAt(setting, state.armedAt) - 1, until)
   const next = nextAutomationOccurrenceAfter(lookAroundSchedule(setting), state.armedAt, after)
   if (until === 0) {
@@ -68,7 +71,11 @@ export function lookAroundNextAt(
   // comes first.
   const ended = state.runs.findLast((run) => run.endedAt !== undefined)?.endedAt ?? 0
   const catchUp = [until, ended + ASLEEP_RETRY_AFTER_MS].find(
-    (at) => at > now && at >= until && at < next && lookAroundDueAt(setting, state, at) !== null
+    (at) =>
+      at > now &&
+      at >= until &&
+      at < next &&
+      lookAroundDueAt(setting, state, at, true, selectedAccount) !== null
   )
   return catchUp ?? next
 }

@@ -18,7 +18,10 @@
       "title": "账户",
       "useReset": "使用重置额度",
       "pairingInvalidMessage": "请将此手机与桌面重新配对，以查看其账户",
-      "weeklyWindow": "7天"
+      "weeklyWindow": "7天",
+      "signedOut": "已退出登录",
+      "addAccount": "添加账户",
+      "signIn": "登录"
     },
     "claude": {
       "usageSignInLabel": "重新登录",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "剩余 {{value}}%"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "发起此次登录的设备已停止响应",
+        "superseded": "此主机上的账户变更中断了登录。请重新开始",
+        "noPrompt": "服务器上的登录命令在一分钟内没有显示登录链接。请更新服务器上的 Orca，然后重试。",
+        "failed": "登录失败。请重试"
+      },
+      "starting": "开始在 {{host}} 上登录...",
+      "copied": "已复制",
+      "copyLink": "复制链接",
+      "continue": "继续",
+      "copyCode": "复制代码",
+      "signingIn": "正在登录…",
+      "tryAgain": "重试",
+      "titleClaude": "登录 Claude",
+      "titleCodex": "登录 Codex",
+      "savedOn": "保存在 {{host}}",
+      "newCode": "获取新代码",
+      "openPage": "打开登录页面",
+      "pasteStep": "粘贴代码",
+      "codePlaceholder": "页面上的代码",
+      "enterCodeStep": "输入此代码",
+      "waitingForPage": "正在等待你在页面上完成",
+      "signedInAs": "已登录为 {{email}}"
     }
   },
   "agentHistory": {
@@ -450,7 +478,10 @@
       "modelFallback": "Claude 已切换模型：{{from}} → {{to}}",
       "signIn": "登录",
       "signInHint": "在运行此聊天的电脑上打开终端",
-      "forkedFrom": "分支来源"
+      "forkedFrom": "分支来源",
+      "notSignedIn": "{{agent}} 尚未登录",
+      "signInAccountHint": "在运行此聊天的电脑上重新登录此账户",
+      "signedInSendAgain": "已登录，请重新发送"
     },
     "ciResultLine": {
       "failingLead": "CI 失败:",
@@ -1524,7 +1555,10 @@
       "connectHint": "请在 Orca 桌面端的“设置 → 集成”中添加 Jira 站点，然后再次检查",
       "connectOnDesktop": "在桌面端连接 Jira",
       "credentialUnreadable": "Jira 凭据已保存，但无法读取：{{credentialError}}",
-      "updateDesktop": "更新此主机上的 Orca"
+      "updateDesktop": "更新此主机上的 Orca",
+      "connectTitle": "连接你的 Jira 账户",
+      "connectMessage": "直接在“任务”中浏览分配给你的 Jira 问题并开始工作。",
+      "connect": "连接 Jira"
     },
     "markdownBlocks": {
       "copyCode": "复制代码",
@@ -2141,8 +2175,8 @@
       "loadFailed": "无法加载文件",
       "title": "文件",
       "truncatedList": "{{worktreeLabel}} - 仅显示前 5000 项",
-      "more": "更多",
-      "newEntry": "新建"
+      "newEntry": "新建",
+      "add": "添加"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
@@ -2178,7 +2212,35 @@
       "share": "共享",
       "shareFailed": "无法共享 {{name}}",
       "shareTooLarge": "大于 256 MB 的文件无法从手机共享",
-      "shareHostOutdated": "请更新运行此工作区的 Orca 以共享文件"
+      "shareHostOutdated": "请更新运行此工作区的 Orca 以共享文件",
+      "uploadHere": "上传到这里",
+      "uploadFiles": "上传文件",
+      "noFreeCopyName": "没有可用于 {{name}} 副本的名称"
+    },
+    "fileExplorerUpload": {
+      "waiting": "等待中",
+      "waitingForConnection": "等待连接",
+      "failed": "{{reason}} · 轻点以重试",
+      "failedReason": "上传失败",
+      "dismiss": "不上传 {{name}}",
+      "tooLarge": "暂不支持从手机上传超过 {{max}} MB 的文件。",
+      "busy": "一次最多可上传 {{max}} 个文件。",
+      "pickFailed": "无法打开你的文件。{{reason}}",
+      "clashMessage": "{{folder}} 中已存在",
+      "keepBoth": "保留两者",
+      "keepBothAs": "另存为 {{name}}",
+      "keepBothCopies": "各自另存为副本",
+      "skip": "跳过",
+      "skipAll": "全部跳过",
+      "uploaded_one": "已将 {{count}} 个文件上传到 {{folder}}",
+      "uploaded_other": "已将 {{count}} 个文件上传到 {{folder}}",
+      "clashTitleSeveral_one": "{{count}} 个文件已在 {{folder}} 中",
+      "clashTitleSeveral_other": "{{count}} 个文件已在 {{folder}} 中",
+      "lost_one": "有 {{count}} 个文件未上传：手机已释放它。请重新选择。",
+      "lost_other": "有 {{count}} 个文件未上传：手机已释放它们。请重新选择。",
+      "nameTaken": "名称已被占用 · 轻点以选择",
+      "workspaceRoot": "工作区根目录",
+      "unconfirmed": "无法确认上传。请检查文件夹。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "复制已加载的 Markdown 源码",
@@ -5169,6 +5231,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "创建工作区失败"
+    },
+    "jiraConnect": {
+      "title": "连接 Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 邮箱",
+      "apiToken": "API 令牌",
+      "storageHint": "你的令牌存储在此主机上，并在其系统支持时加密。",
+      "createToken": "创建 API 令牌",
+      "failed": "连接失败",
+      "serverNeedsUpdate": "此服务器需要先更新 Orca。请改为在 Orca 桌面版中连接 Jira。"
     }
   },
   "terminal": {

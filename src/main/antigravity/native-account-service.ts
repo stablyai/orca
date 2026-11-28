@@ -87,8 +87,12 @@ export class AntigravityAccountService {
   }
 
   /** Reads only Orca's saved accounts, never agy's login, and waits on no other account work. */
-  async readSelection(): Promise<void> {
-    await this.store.read()
+  async readSelection(): Promise<{ selectedAccountId: string | null; accountIds: string[] }> {
+    const vault = await this.store.read()
+    return {
+      selectedAccountId: vault.selectedAccountId,
+      accountIds: vault.accounts.map((account) => account.id)
+    }
   }
 
   /** The saved account agy's login holds; only where reading it raises no dialog (Windows). */

@@ -19,8 +19,8 @@ import type {
 const LEDGER_FILE_NAME = 'codex-project-trust-created.json'
 // Catches a stuck worker only; the 20 s launch deadline already lets launch continue without waiting.
 const REQUEST_TIMEOUT_MS = 60_000
-// Grants come in launch bursts; an idle worker is released.
-const IDLE_TEARDOWN_MS = 60_000
+// Grants come in launch bursts; release the idle V8 isolate promptly.
+const IDLE_TEARDOWN_MS = 10_000
 
 let queue: WorkerThreadRequestQueue<
   CodexProjectTrustWorkerRequest,

@@ -135,6 +135,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** The account home a structured launch would pin right now, for catalog
    *  reads with no session record. Absent disables the catalog surface. */
   resolveAgentAccountHome?: RuntimeAgentAccountHomeResolver
+  canSwitchAntigravityAccount?: StructuredAgentSessionHostDeps['canSwitchAntigravityAccount']
   /** See `StructuredAgentSessionHostDeps.launchAccountHome`. */
   launchAccountHome?: StructuredAgentSessionHostDeps['launchAccountHome']
   /** See `StructuredAgentSessionHostDeps.launchTools`. */

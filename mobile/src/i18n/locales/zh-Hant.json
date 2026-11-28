@@ -18,7 +18,10 @@
       "title": "帳戶",
       "useReset": "使用重設額度",
       "pairingInvalidMessage": "請將這支手機與電腦重新配對，以查看其帳戶。",
-      "weeklyWindow": "7 天"
+      "weeklyWindow": "7 天",
+      "signedOut": "已登出",
+      "addAccount": "新增帳戶",
+      "signIn": "登入"
     },
     "claude": {
       "usageSignInLabel": "重新登入",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "剩餘 {{value}}%"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "發起這次登入的裝置已停止回應。",
+        "superseded": "此主機上的帳戶變更中斷了登入。請重新開始。",
+        "noPrompt": "伺服器的登入指令在一分鐘內沒有顯示登入連結。請更新伺服器上的 Orca，然後再試一次。",
+        "failed": "登入失敗。請再試一次。"
+      },
+      "starting": "正在 {{host}} 上啟動登入…",
+      "copied": "已複製",
+      "copyLink": "複製連結",
+      "continue": "繼續",
+      "copyCode": "複製代碼",
+      "signingIn": "正在登入…",
+      "tryAgain": "再試一次",
+      "titleClaude": "登入 Claude",
+      "titleCodex": "登入 Codex",
+      "savedOn": "儲存在 {{host}}",
+      "newCode": "取得新代碼",
+      "openPage": "開啟登入頁面",
+      "pasteStep": "貼上代碼",
+      "codePlaceholder": "頁面上的代碼",
+      "enterCodeStep": "輸入此代碼",
+      "waitingForPage": "正在等待你在頁面上完成",
+      "signedInAs": "已登入為 {{email}}"
     }
   },
   "agentHistory": {
@@ -433,7 +461,10 @@
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",
       "signIn": "登入",
       "signInHint": "在執行此聊天的電腦上開啟終端機",
-      "forkedFrom": "分支來源"
+      "forkedFrom": "分支來源",
+      "notSignedIn": "{{agent}} 尚未登入。",
+      "signInAccountHint": "在執行此聊天的電腦上重新登入此帳號",
+      "signedInSendAgain": "已登入。請重新傳送。"
     },
     "ciResultLine": {
       "failingLead": "CI 失敗於",
@@ -1435,7 +1466,10 @@
       "connectHint": "在 Orca 桌面版的「設定 → 整合」中新增 Jira 網站，然後再次檢查。",
       "connectOnDesktop": "在電腦上連線至 Jira",
       "credentialUnreadable": "Jira 憑證已儲存，但無法讀取：{{credentialError}}",
-      "updateDesktop": "更新此主機上的 Orca"
+      "updateDesktop": "更新此主機上的 Orca",
+      "connectTitle": "連接你的 Jira 帳號",
+      "connectMessage": "直接在「任務」中瀏覽指派給你的 Jira 問題並開始工作。",
+      "connect": "連接 Jira"
     },
     "markdownBlocks": {
       "copyCode": "複製程式碼",
@@ -2045,8 +2079,8 @@
       "loadFailed": "無法載入檔案",
       "title": "檔案",
       "truncatedList": "{{worktreeLabel}} - 僅顯示前 5000 筆",
-      "more": "更多",
-      "newEntry": "新增"
+      "newEntry": "新增",
+      "add": "新增"
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 無法在行動版使用",
@@ -2082,7 +2116,35 @@
       "share": "分享",
       "shareFailed": "無法分享 {{name}}",
       "shareTooLarge": "大於 256 MB 的檔案無法從手機分享",
-      "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案"
+      "shareHostOutdated": "請更新執行此工作區的 Orca 以分享檔案",
+      "uploadHere": "上傳到這裡",
+      "uploadFiles": "上傳檔案",
+      "noFreeCopyName": "沒有可用於 {{name}} 副本的名稱"
+    },
+    "fileExplorerUpload": {
+      "waiting": "等待中",
+      "waitingForConnection": "等待連線",
+      "failed": "{{reason}} · 點一下以重試",
+      "failedReason": "上傳失敗",
+      "dismiss": "不上傳 {{name}}",
+      "tooLarge": "暫不支援從手機上傳超過 {{max}} MB 的檔案。",
+      "busy": "一次最多可上傳 {{max}} 個檔案。",
+      "pickFailed": "無法開啟你的檔案。{{reason}}",
+      "clashMessage": "{{folder}} 中已存在",
+      "keepBoth": "保留兩者",
+      "keepBothAs": "另存為 {{name}}",
+      "keepBothCopies": "各自另存為副本",
+      "skip": "略過",
+      "skipAll": "全部略過",
+      "uploaded_one": "已將 {{count}} 個檔案上傳到 {{folder}}",
+      "uploaded_other": "已將 {{count}} 個檔案上傳到 {{folder}}",
+      "clashTitleSeveral_one": "{{count}} 個檔案已在 {{folder}} 中",
+      "clashTitleSeveral_other": "{{count}} 個檔案已在 {{folder}} 中",
+      "lost_one": "有 {{count}} 個檔案未上傳：手機已釋放它。請重新選擇。",
+      "lost_other": "有 {{count}} 個檔案未上傳：手機已釋放它們。請重新選擇。",
+      "nameTaken": "名稱已被使用 · 點一下以選擇",
+      "workspaceRoot": "工作區根目錄",
+      "unconfirmed": "無法確認上傳。請檢查資料夾。"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "複製已載入的 Markdown 原始碼",
@@ -4959,6 +5021,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "建立工作區失敗"
+    },
+    "jiraConnect": {
+      "title": "連接 Jira",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 電子郵件",
+      "apiToken": "API 權杖",
+      "storageHint": "你的權杖儲存在此主機上，並在其系統支援時加密。",
+      "createToken": "建立 API 權杖",
+      "failed": "連線失敗",
+      "serverNeedsUpdate": "此伺服器需要先更新 Orca。請改為在 Orca 桌面版中連接 Jira。"
     }
   },
   "terminal": {

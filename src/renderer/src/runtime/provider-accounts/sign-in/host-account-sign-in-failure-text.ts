@@ -16,22 +16,13 @@ function isHostAccountSignInFailureCode(code: unknown): code is HostAccountSignI
 }
 
 /** The host's failure in the UI language; the login's own (uncoded) errors stay verbatim. */
-export function hostAccountSignInFailureText(status: HostAccountSignInStatus): string {
+export function hostAccountSignInFailureText(
+  status: Pick<HostAccountSignInStatus, 'error' | 'errorCode'>
+): string {
   if (isHostAccountSignInFailureCode(status.errorCode)) {
     return FAILURE_COPY[status.errorCode]()
   }
   return (
     status.error ?? translate('accounts.hostSignIn.errors.failed', 'Sign-in failed. Try again.')
   )
-}
-
-/** After this client stops waiting for a link: a sign-in the host finished meanwhile still wins. */
-export function noPromptOutcome(
-  latest: HostAccountSignInStatus | null,
-  unprompted: HostAccountSignInStatus
-): HostAccountSignInStatus {
-  if (latest?.phase === 'signedIn') {
-    return latest
-  }
-  throw new Error(hostAccountSignInFailureText({ ...unprompted, errorCode: 'noPrompt' }))
 }

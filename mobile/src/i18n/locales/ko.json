@@ -18,7 +18,10 @@
       "title": "계정",
       "useReset": "재설정권 사용",
       "pairingInvalidMessage": "계정을 보려면 이 휴대폰을 데스크톱과 다시 페어링하세요.",
-      "weeklyWindow": "7일"
+      "weeklyWindow": "7일",
+      "signedOut": "로그아웃됨",
+      "addAccount": "계정 추가",
+      "signIn": "로그인"
     },
     "claude": {
       "usageSignInLabel": "다시 로그인",
@@ -29,6 +32,31 @@
     },
     "usage": {
       "percentLeft": "{{value}}% 남음"
+    },
+    "hostSignIn": {
+      "errors": {
+        "ownerSilent": "이 로그인을 시작한 기기가 더 이상 응답하지 않습니다.",
+        "superseded": "이 호스트에서 계정이 변경되어 로그인이 중단되었습니다. 다시 시작하세요.",
+        "noPrompt": "서버의 로그인 명령이 1분 안에 로그인 링크를 표시하지 않았습니다. 서버의 Orca를 업데이트한 후 다시 시도하세요.",
+        "failed": "로그인하지 못했습니다. 다시 시도하세요."
+      },
+      "starting": "{{host}}에서 로그인을 시작합니다…",
+      "copied": "복사됨",
+      "copyLink": "링크 복사",
+      "continue": "계속",
+      "copyCode": "코드 복사",
+      "signingIn": "로그인 중…",
+      "tryAgain": "다시 시도",
+      "titleClaude": "Claude에 로그인",
+      "titleCodex": "Codex에 로그인",
+      "savedOn": "{{host}}에 저장됨",
+      "newCode": "새 코드 받기",
+      "openPage": "로그인 페이지 열기",
+      "pasteStep": "코드 붙여넣기",
+      "codePlaceholder": "페이지의 코드",
+      "enterCodeStep": "이 코드 입력",
+      "waitingForPage": "페이지에서 완료하기를 기다리는 중",
+      "signedInAs": "{{email}}(으)로 로그인됨"
     }
   },
   "agentHistory": {
@@ -701,7 +729,10 @@
       "modelFallback": "Claude가 모델을 변경했습니다: {{from}} → {{to}}.",
       "signIn": "로그인",
       "signInHint": "이 채팅을 실행 중인 컴퓨터에서 터미널을 엽니다",
-      "forkedFrom": "분기 원본"
+      "forkedFrom": "분기 원본",
+      "notSignedIn": "{{agent}}에 로그인하지 않았습니다.",
+      "signInAccountHint": "이 채팅을 실행하는 컴퓨터에서 이 계정에 다시 로그인합니다",
+      "signedInSendAgain": "로그인했습니다. 다시 보내세요."
     },
     "ciResultLine": {
       "failingLead": "CI 실패:",
@@ -1434,7 +1465,10 @@
       "connectHint": "Orca 데스크톱의 설정 → 연동에서 Jira 사이트를 추가한 뒤 다시 확인하세요.",
       "connectOnDesktop": "데스크톱에서 Jira 연결",
       "credentialUnreadable": "Jira 인증 정보가 저장되어 있지만 읽을 수 없습니다: {{credentialError}}",
-      "updateDesktop": "이 호스트의 Orca 업데이트"
+      "updateDesktop": "이 호스트의 Orca 업데이트",
+      "connectTitle": "Jira 계정 연결",
+      "connectMessage": "할당된 Jira 이슈를 작업에서 바로 둘러보고 작업을 시작하세요.",
+      "connect": "Jira 연결"
     },
     "markdownBlocks": {
       "copyCode": "코드 복사",
@@ -2044,8 +2078,8 @@
       "loadFailed": "파일을 불러올 수 없습니다.",
       "title": "파일",
       "truncatedList": "{{worktreeLabel}} - 처음 5000개 표시",
-      "more": "더 보기",
-      "newEntry": "새로 만들기"
+      "newEntry": "새로 만들기",
+      "add": "추가"
     },
     "fileExplorerRow": {
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
@@ -2081,7 +2115,35 @@
       "share": "공유",
       "shareFailed": "{{name}}을(를) 공유하지 못했습니다",
       "shareTooLarge": "256MB보다 큰 파일은 휴대폰에서 공유할 수 없습니다",
-      "shareHostOutdated": "파일을 공유하려면 이 워크스페이스가 실행되는 곳의 Orca를 업데이트하세요"
+      "shareHostOutdated": "파일을 공유하려면 이 워크스페이스가 실행되는 곳의 Orca를 업데이트하세요",
+      "uploadHere": "여기에 업로드",
+      "uploadFiles": "파일 업로드",
+      "noFreeCopyName": "{{name}} 사본에 쓸 수 있는 이름이 없습니다"
+    },
+    "fileExplorerUpload": {
+      "waiting": "대기 중",
+      "waitingForConnection": "연결 대기 중",
+      "failed": "{{reason}} · 탭하여 다시 시도",
+      "failedReason": "업로드 실패",
+      "dismiss": "{{name}} 업로드 안 함",
+      "tooLarge": "{{max}}MB가 넘는 파일은 아직 휴대폰에서 업로드할 수 없습니다.",
+      "busy": "한 번에 최대 {{max}}개 파일을 업로드할 수 있습니다.",
+      "pickFailed": "파일을 열 수 없습니다. {{reason}}",
+      "clashMessage": "{{folder}}에 이미 있음",
+      "keepBoth": "둘 다 유지",
+      "keepBothAs": "{{name}}(으)로 저장",
+      "keepBothCopies": "각각 사본으로 저장",
+      "skip": "건너뛰기",
+      "skipAll": "모두 건너뛰기",
+      "uploaded_one": "{{folder}}에 파일 {{count}}개를 업로드했습니다",
+      "uploaded_other": "{{folder}}에 파일 {{count}}개를 업로드했습니다",
+      "clashTitleSeveral_one": "파일 {{count}}개가 {{folder}}에 이미 있습니다",
+      "clashTitleSeveral_other": "파일 {{count}}개가 {{folder}}에 이미 있습니다",
+      "lost_one": "파일 {{count}}개가 업로드되지 않았습니다. 휴대폰이 파일을 놓았습니다. 다시 선택하세요.",
+      "lost_other": "파일 {{count}}개가 업로드되지 않았습니다. 휴대폰이 파일을 놓았습니다. 다시 선택하세요.",
+      "nameTaken": "이름이 이미 있음 · 탭하여 선택",
+      "workspaceRoot": "워크스페이스 루트",
+      "unconfirmed": "업로드를 확인할 수 없습니다. 폴더를 확인하세요."
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "불러온 Markdown 소스 복사",
@@ -4965,6 +5027,16 @@
     },
     "worktreeCreateRetry": {
       "createFailed": "워크스페이스를 생성하지 못했습니다."
+    },
+    "jiraConnect": {
+      "title": "Jira 연결",
+      "siteUrl": "your-team.atlassian.net",
+      "email": "Atlassian 이메일",
+      "apiToken": "API 토큰",
+      "storageHint": "토큰은 이 호스트에 저장되며 OS가 지원하면 암호화됩니다.",
+      "createToken": "API 토큰 만들기",
+      "failed": "연결 실패",
+      "serverNeedsUpdate": "이 서버는 먼저 Orca 업데이트가 필요합니다. 대신 Orca 데스크톱에서 Jira를 연결하세요."
     }
   },
   "terminal": {
