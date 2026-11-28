@@ -233,9 +233,10 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       ).finally(release)
       const settled = settleRun(key, agent, result)
       if (late && settled) {
-        // A late answer still decides the row, unless a newer run has replaced it.
-        void late.then((answer) => {
-          if (get().agentCliUpdates.get(key)?.runs[agent] === settled) {
+        // A late answer from the host still decides the row, unless a newer run has replaced it; a
+        // drop after the ceiling says nothing new, and the host's finish event re-checks the CLI.
+        void late.then(({ result: answer, answered }) => {
+          if (answered && get().agentCliUpdates.get(key)?.runs[agent] === settled) {
             settleRun(key, agent, answer)
           }
         })

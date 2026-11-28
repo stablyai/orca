@@ -75,32 +75,33 @@ export function agentCliUpdateRunAfter(
   }
 }
 
+/** A run's result, and whether the host itself gave it; a dropped call or the ceiling did not. */
+export type AgentCliUpdateRunAnswer = { result: AgentCliUpdateRunResult; answered: boolean }
+
 /**
  * Calls `agentCliUpdate.run` under the client ceiling. `late` is set when the ceiling answered
- * first, so the caller can still settle the row with the host's real answer. `answered` is false
- * when the host's own answer never arrived (a dropped call or the ceiling), so the result is unknown.
+ * first, so the caller can still settle the row with whatever comes after, including a drop.
  */
-export async function callAgentCliUpdateRun(run: () => Promise<AgentCliUpdateRunResult>): Promise<{
-  result: AgentCliUpdateRunResult
-  late: Promise<AgentCliUpdateRunResult> | null
-  answered: boolean
-}> {
-  const timedOut: AgentCliUpdateRunResult = {
-    ok: false,
-    output: `The update did not finish within ${AGENT_CLI_UPDATE_RUN_TIMEOUT_MS / 60_000} minutes.`
+export async function callAgentCliUpdateRun(
+  run: () => Promise<AgentCliUpdateRunResult>
+): Promise<AgentCliUpdateRunAnswer & { late: Promise<AgentCliUpdateRunAnswer> | null }> {
+  const timedOut: AgentCliUpdateRunAnswer = {
+    result: {
+      ok: false,
+      output: `The update did not finish within ${AGENT_CLI_UPDATE_RUN_TIMEOUT_MS / 60_000} minutes.`
+    },
+    answered: false
   }
-  let answered = true
-  const call = run().catch((error: unknown): AgentCliUpdateRunResult => {
-    answered = false
-    return { ok: false, output: error instanceof Error ? error.message : String(error) }
-  })
+  const call = run().then(
+    (result): AgentCliUpdateRunAnswer => ({ result, answered: true }),
+    (error: unknown): AgentCliUpdateRunAnswer => ({
+      result: { ok: false, output: error instanceof Error ? error.message : String(error) },
+      answered: false
+    })
+  )
   // Some transports ignore a request timeout, so an updater that never exits would leave the row running for good.
-  const result = await withTimeout(call, AGENT_CLI_UPDATE_RUN_TIMEOUT_MS, timedOut)
-  return {
-    result,
-    late: result === timedOut ? call : null,
-    answered: answered && result !== timedOut
-  }
+  const first = await withTimeout(call, AGENT_CLI_UPDATE_RUN_TIMEOUT_MS, timedOut)
+  return { ...first, late: first === timedOut ? call : null }
 }
 
 /** Every update offered or run on a host, in the agent list's order. */

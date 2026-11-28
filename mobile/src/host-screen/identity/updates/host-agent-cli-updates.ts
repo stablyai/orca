@@ -12,7 +12,8 @@ import {
   callAgentCliUpdateRun,
   sameAgentCliUpdates,
   type AgentCliUpdateHost,
-  type AgentCliUpdateRun
+  type AgentCliUpdateRun,
+  type AgentCliUpdateRunAnswer
 } from '../../../../../src/shared/agent-launch/installation/agent-cli-update-runs'
 import { PrioritySemaphore } from '../../../../../src/shared/concurrency/priority-semaphore'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -33,8 +34,8 @@ type HostEntry = {
   check: Promise<void> | null
   checkedAt: number
   slots: PrioritySemaphore
-  /** Runs whose answer never arrived (a dropped connection), until a check reads them again. */
-  unanswered: Set<AgentCliUpdateAgent>
+  /** The failed rows of runs whose answer never arrived (a dropped connection), until a check reads them. */
+  unanswered: Map<AgentCliUpdateAgent, AgentCliUpdateRun>
 }
 
 // Kept per paired computer while the app runs, so leaving Edit computer never orphans a run.
@@ -49,7 +50,7 @@ function entryFor(hostId: string): HostEntry {
       check: null,
       checkedAt: 0,
       slots: new PrioritySemaphore(AGENT_CLI_UPDATES_AT_ONCE),
-      unanswered: new Set()
+      unanswered: new Map()
     }
     entries.set(hostId, entry)
   }
@@ -122,9 +123,10 @@ function checkEntry(
       write(hostId, entry, (host) => {
         // A run whose answer was lost is unknown, not failed: once the computer no longer offers that
         // update the row goes (its CLI may have updated, or no longer reads), never claiming success.
+        // Only that run's own row goes; a retry's failure since then is the host's real answer.
         const runs = { ...host.runs }
-        for (const agent of lost) {
-          if (runs[agent]?.phase === 'failed' && !updates.some((u) => u.agent === agent)) {
+        for (const [agent, row] of lost) {
+          if (runs[agent] === row && !updates.some((u) => u.agent === agent)) {
             delete runs[agent]
           }
         }
@@ -194,14 +196,41 @@ export async function runHostAgentCliUpdate(
     // A late answer still decides the row, unless a newer run has replaced it.
     void late.then((answer) => {
       if (entry.state.runs[agent] === settled) {
-        settleRun(hostId, entry, agent, answer)
+        settleAnswer(hostId, entry, client, agent, answer)
       }
     })
-  } else if (!answered) {
-    // The host joins a run already going, so the check after a reconnect reads it once finished.
-    entry.unanswered.add(agent)
-    void checkEntry(hostId, entry, client, true)
+  } else if (!answered && settled) {
+    markUnanswered(hostId, entry, client, agent, settled)
   }
+}
+
+function settleAnswer(
+  hostId: string,
+  entry: HostEntry,
+  client: RpcClient,
+  agent: AgentCliUpdateAgent,
+  answer: AgentCliUpdateRunAnswer
+): void {
+  if (answer.answered) {
+    settleRun(hostId, entry, agent, answer.result)
+    return
+  }
+  const row = entry.state.runs[agent]
+  if (row) {
+    markUnanswered(hostId, entry, client, agent, row)
+  }
+}
+
+/** The host joins a run already going, so the check after a reconnect reads it once finished. */
+function markUnanswered(
+  hostId: string,
+  entry: HostEntry,
+  client: RpcClient,
+  agent: AgentCliUpdateAgent,
+  row: AgentCliUpdateRun
+): void {
+  entry.unanswered.set(agent, row)
+  void checkEntry(hostId, entry, client, true)
 }
 
 /** Forgets a removed computer; a run still going settles into nothing. */
