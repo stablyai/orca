@@ -82,8 +82,11 @@ export function compareWalkPaths(a: string[], b: string[]): number {
 }
 
 export type WalkedCopy = { root: CopyRoot; copy: string; segments: string[] }
-/** Set when the deadline stopped the walk: the first folder it didn't list (home-relative). */
-export type WalkStop = { at?: string }
+/**
+ * `at`: set when the deadline stopped the walk, where the next launch resumes (home-relative).
+ * `errors`: folders that couldn't be listed and were skipped.
+ */
+export type WalkStop = { at?: string; errors: number }
 
 /**
  * Rollouts under `folder` in walk order, lazily; with `after`, only those past it, skipping whole
@@ -99,19 +102,21 @@ function* sortedRolloutFiles(
   stop: WalkStop
 ): Generator<WalkedCopy> {
   // Checked before each listing too: a tree of folders with no rollouts mustn't outrun it.
-  // Everything before this folder was walked, so the next launch resumes inside it.
+  // Everything before this folder was walked, so the next launch resumes inside it; on the
+  // cursor's own path, nothing past the cursor was reached yet, so the cursor stays.
   if (stop.at !== undefined || Date.now() > deadline) {
-    stop.at ??= segments.join('/')
+    stop.at ??= (after ?? segments).join('/')
     return
   }
   let entries = listed.get(folder)
   try {
     entries ??= readdirSync(folder, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))
   } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return
+    if (!isDefinitiveAbsence(error)) {
+      // Skipped this launch, not the whole walk: counted, so the home isn't settled.
+      stop.errors += 1
     }
-    throw error
+    return
   }
   // A folder on the cursor's path is listed again when the walk wraps round: kept, not reread.
   if (after) {
@@ -146,7 +151,7 @@ export function* walkCopies(
   storeHome: string,
   after: string | undefined,
   deadline = Infinity,
-  stop: WalkStop = {}
+  stop: WalkStop = { errors: 0 }
 ): Generator<WalkedCopy> {
   const cursor = after ? after.split('/') : null
   const listed = new Map<string, Dirent[]>()

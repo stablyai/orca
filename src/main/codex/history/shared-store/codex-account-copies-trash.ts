@@ -133,7 +133,8 @@ export function moveCheckedCopiesToTrash(
       tally[busyOnWindows(error) ? 'open' : 'error'] += 1
     }
   }
-  if (tally.trashed > 0) {
+  // Only when a key was added: otherwise the list already says everything it would.
+  if (moving.some((m) => m.entry.movedKey !== undefined)) {
     writeList(
       trash,
       listName,

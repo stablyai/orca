@@ -258,6 +258,31 @@ function recheckOne(
 }
 
 /**
+ * The last step for one rechecked copy: unlinked only if it and its original still have the keys
+ * that passed. Returns the bytes freed, or null when anything changed (it stays in the trash).
+ */
+function removeIfStillPassing(
+  accountHome: string,
+  trash: string,
+  copy: VerifiedCopy
+): number | null {
+  const stats = lstatOrNull(copy.copy)
+  const original = lstatOrNull(copy.original)
+  if (
+    dirname(copy.copy) !== trash ||
+    !stats ||
+    fileKey(stats) !== copy.copyKey ||
+    !original ||
+    fileKey(original) !== copy.originalKey ||
+    !safeToRemove(accountHome, copy.copy, stats)
+  ) {
+    return null
+  }
+  unlinkSync(copy.copy)
+  return Number(stats.size)
+}
+
+/**
  * Deletes each rechecked copy the open check then cleared, if it and its original are still as the
  * recheck saw them; the trash folder goes once nothing is left in it.
  */
@@ -271,26 +296,16 @@ export function deleteTrashedCopies(accountHome: string, copies: VerifiedCopy[])
   const deletedByList = new Map<string, Set<string>>()
   for (const copy of copies) {
     try {
-      const stats = lstatOrNull(copy.copy)
-      const original = lstatOrNull(copy.original)
-      if (
-        !copy.list ||
-        dirname(copy.copy) !== trash ||
-        !stats ||
-        fileKey(stats) !== copy.copyKey ||
-        !original ||
-        fileKey(original) !== copy.originalKey ||
-        !safeToRemove(accountHome, copy.copy, stats)
-      ) {
+      const removed = copy.list ? removeIfStillPassing(accountHome, trash, copy) : null
+      if (removed === null || copy.list === undefined) {
         tally.changed += 1
         continue
       }
-      unlinkSync(copy.copy)
       const deleted = deletedByList.get(copy.list) ?? new Set<string>()
       deleted.add(basename(copy.copy))
       deletedByList.set(copy.list, deleted)
       tally.deleted += 1
-      tally.bytesReclaimed += Number(stats.size)
+      tally.bytesReclaimed += removed
     } catch {
       tally.error += 1
     }

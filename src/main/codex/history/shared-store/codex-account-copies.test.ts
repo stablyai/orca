@@ -77,7 +77,7 @@ function run(
     hangOpen?: boolean
     /** Moves happen, but their answer never arrives: a move that lands after the locks went. */
     lateMove?: boolean
-    /** This step outside the locks never answers. */
+    /** This step outside the locks (or taking the locks: 'locks') never answers. */
     hang?: string
     events?: string[]
   } = {}
@@ -98,6 +98,9 @@ function run(
           : new Set(),
     findAcl: async (paths) => (options.acl ? options.acl([...paths]) : new Set()),
     holdLocks: async () => {
+      if (options.hang === 'locks') {
+        return new Promise<never>(() => {})
+      }
       if (options.locks === false) {
         return null
       }
@@ -503,6 +506,17 @@ describe('trashed copies', () => {
 })
 
 describe('a step that never answers', () => {
+  it('abandons the run when taking the locks never answers', async () => {
+    put(storeFile(), LINE_1)
+    const copy = put(conflictCopy(), LINE_1)
+    const events: string[] = []
+
+    expect(await run({ hang: 'locks', events })).toBeNull()
+
+    expect(events.at(-1)).toBe('stop')
+    expect(existsSync(copy)).toBe(true)
+  })
+
   it('abandons the run and deletes nothing when a delete outside the locks hangs', async () => {
     put(storeFile(), LINE_1)
     put(conflictCopy(), LINE_1)

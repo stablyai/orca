@@ -132,7 +132,7 @@ export async function verifyCodexAccountCopies(args: {
   // Each launch starts after the copy the last one stopped at, so a walk the deadline cuts short
   // still reaches every copy over a few launches; folders before it are skipped unread.
   let lastVisited: string | undefined
-  const walkStop: WalkStop = {}
+  const walkStop: WalkStop = { errors: 0 }
   for (const { root, copy, segments } of walkCopies(
     args.accountHome,
     args.storeHome,
@@ -229,6 +229,7 @@ export async function verifyCodexAccountCopies(args: {
     outOfTime = true
     tally.deferred += 1
   }
+  tally.error += walkStop.errors
   // With 5,000 verified this launch has no room for more, oversized or not.
   const full = verified.length >= MAX_VERIFIED_PER_HOME
   for (const [index, candidate] of oversized.entries()) {
@@ -262,7 +263,8 @@ export async function verifyCodexAccountCopies(args: {
   )
   verified.push(...turn.taken)
   tally.deferred += retry.length - turn.taken.length
-  if (outOfTime) {
+  // Entries the walk didn't reach (time ran out, or a folder couldn't be listed) are kept as-is.
+  if (outOfTime || walkStop.errors > 0) {
     for (const [name, key] of Object.entries(remembered)) {
       if (!visited.has(name)) {
         nextVerified[name] = key

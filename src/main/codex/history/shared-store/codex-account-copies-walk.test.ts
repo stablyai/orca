@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { writeCursor, writeKeptCopies } from './codex-account-copies-kept'
+import { readCursor, writeCursor, writeKeptCopies } from './codex-account-copies-kept'
 import { verifyCodexAccountCopies } from './codex-account-copies'
 import { runCodexAccountCopiesRequest } from './codex-account-copies-requests'
 import { TRASH_GRACE_MS } from './codex-account-copies-trash-entries'
@@ -19,10 +19,17 @@ import { recheckTrashedCopies } from './codex-account-copies-trash-recheck'
 import { originalHoldsCopy } from './codex-account-copy-content'
 import { HISTORY_CLEANUP_MANIFEST } from './codex-account-history-cleanup-manifest'
 
+// Folders whose listing fails as on a failing disk.
+const readdirFails = vi.hoisted(() => new Set<string>())
 // Lets a test count directory listings, and make each cost time as on a slow or network disk.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
-  const readdirSync = vi.fn(actual.readdirSync)
+  const readdirSync = vi.fn((...args: Parameters<typeof actual.readdirSync>) => {
+    if (readdirFails.has(String(args[0]))) {
+      throw Object.assign(new Error('EIO: i/o error, scandir'), { code: 'EIO' })
+    }
+    return actual.readdirSync(...args)
+  })
   return { ...actual, readdirSync, default: { ...actual, readdirSync } }
 })
 const listingsOf = (path?: string): number =>
@@ -56,6 +63,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  readdirFails.clear()
   rmSync(root, { recursive: true, force: true })
 })
 
@@ -396,4 +404,40 @@ describe('a launch with nothing left of its budget', () => {
     expect(verified).toHaveLength(5_000)
     expect(verified.some((item) => item.copy === bigCopy)).toBe(false)
   }, 120_000)
+})
+
+describe('a walk that meets trouble', () => {
+  const verify = (deadline = Date.now() + 60_000) =>
+    verifyCodexAccountCopies({
+      accountHome: home,
+      storeHome: store,
+      budget: { maxBytes: 4 * 1024 ** 3, deadline },
+      version: 'test-trouble',
+      managedAccountsRoot: join(root, 'codex-accounts')
+    })
+
+  it('skips a folder it cannot list and still checks the rest', async () => {
+    const later = REL.replace('2026/11/20', '2026/11/21')
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    put(storeFile(later), LINE_1)
+    const reached = put(conflictCopy(later), LINE_1)
+    readdirFails.add(dirname(conflictCopy()))
+
+    const result = await verify()
+
+    expect(result.verified.map((item) => item.copy)).toEqual([reached])
+    expect(result.tally.error).toBe(1)
+  })
+
+  it('keeps a deeper cursor when its time is up before reaching it', async () => {
+    put(storeFile(), LINE_1)
+    put(conflictCopy(), LINE_1)
+    const walkAfter = `sessions.orca-profile-merge/${REL}`
+    writeCursor(home, { walkAfter })
+
+    await verify(Date.now() - 1)
+
+    expect(readCursor(home).walkAfter).toBe(walkAfter)
+  })
 })

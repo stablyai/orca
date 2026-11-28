@@ -225,7 +225,14 @@ export async function cleanUpCodexAccountCopies(args: {
       }
       // While coordination is held no Codex can take a thread lock, so the open check and the
       // moves that follow see every writer that matters: none can start meanwhile.
-      const hold = await holdLocks(lockFolders)
+      const taking = holdLocks(lockFolders)
+      const held = await settle(taking)
+      if (!held) {
+        // A hold that still arrives later is let go at once.
+        void taking.then((late) => late?.release())
+        return null
+      }
+      const hold = held.value
       if (!hold) {
         total.busy += candidates.length
         continue
