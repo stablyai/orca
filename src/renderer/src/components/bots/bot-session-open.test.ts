@@ -1,17 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+/** The slice of the app store a bot open and a thread link's navigation watch read. */
+type StoreState = {
+  activeView: string
+  activeWorkspaceKey: string | null
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: string | null
+  activePendingCreationId: string | null
+  unifiedTabsByWorktree: Record<string, readonly string[]>
+  fetchFolderWorkspaces: (args: unknown) => Promise<void>
+}
+/** Called as zustand calls its listeners, with the state after and before the write. */
+type StoreListener = (state: StoreState, previous: StoreState) => void
+
 const mocks = vi.hoisted(() => {
-  /** Called as zustand calls its listeners, with the state after and before the write. */
-  const listeners = new Set<(state: object, previous: object) => void>()
-  const state: {
-    activeView: string
-    activeWorkspaceKey: string | null
-    activeWorktreeId: string | null
-    activeWorkspaceExecutionHostId: string | null
-    activePendingCreationId: string | null
-    unifiedTabsByWorktree: Record<string, readonly string[]>
-    fetchFolderWorkspaces: (args: unknown) => Promise<void>
-  } = {
+  const listeners = new Set<StoreListener>()
+  const state: StoreState = {
     activeView: 'terminal',
     activeWorkspaceKey: 'folder:elsewhere',
     activeWorktreeId: 'folder:elsewhere',
@@ -57,7 +61,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => mocks.state,
-    subscribe: (listener: (state: object, previous: object) => void) => {
+    subscribe: (listener: StoreListener) => {
       mocks.listeners.add(listener)
       return () => mocks.listeners.delete(listener)
     }
