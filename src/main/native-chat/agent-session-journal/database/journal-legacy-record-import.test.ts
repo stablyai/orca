@@ -87,11 +87,11 @@ it.each([false, true])(
     try {
       source
         .prepare('INSERT INTO agent_session_records VALUES (?,?)')
-        .run('owed', JSON.stringify(stored('owed', 'SQL chat')))
-      source.exec(`INSERT INTO agent_session_records VALUES('hidden','opaque SQL record');
-      INSERT INTO agent_session_tabs VALUES('owed-custom-tab','owed',0);
+        .run('owed-chat', JSON.stringify(stored('owed-chat', 'SQL chat')))
+      source.exec(`INSERT INTO agent_session_records VALUES('hidden-chat','opaque SQL record');
+      INSERT INTO agent_session_tabs VALUES('owed-custom-tab','owed-chat',0);
       INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1');
-      INSERT INTO agent_session_store_meta VALUES('journal.legacy-revision:owed','saved baseline');
+      INSERT INTO agent_session_store_meta VALUES('journal.legacy-revision:owed-chat','saved baseline');
       INSERT INTO journal_sessions VALUES('historical','workspace-1','epoch');
       INSERT INTO journal_rows VALUES('historical','epoch',1,10,'{}');`)
     } finally {
@@ -100,17 +100,17 @@ it.each([false, true])(
     saveRecords(
       primary,
       {
-        owed: stored('owed', 'Old JSON chat'),
-        hidden: stored('hidden'),
+        'owed-chat': stored('owed-chat', 'Old JSON chat'),
+        'hidden-chat': stored('hidden-chat'),
         historical: stored('historical'),
-        draft: stored('draft')
+        'draft-chat': stored('draft-chat')
       },
       explicit
         ? {
             sessionTabs: [
               { sessionId: 'historical', tabId: 'historical-custom-tab' },
-              { sessionId: 'owed', tabId: 'ignored-owed-tab' },
-              { sessionId: 'hidden', tabId: 'ignored-hidden-tab' }
+              { sessionId: 'owed-chat', tabId: 'ignored-owed-tab' },
+              { sessionId: 'hidden-chat', tabId: 'ignored-hidden-tab' }
             ]
           }
         : {}
@@ -119,23 +119,23 @@ it.each([false, true])(
     const db = new Database(await initializeJournalDomainDatabase(root))
     try {
       const loaded = loadAgentSessionStoreRows(db)
-      expect(loaded.records.get('owed')?.conversationName).toBe('SQL chat')
-      expect(loaded.unreadableRecords.get('hidden')?.raw).toBe('opaque SQL record')
-      expect(loaded.records.get('draft')?.conversationName).toBe('Saved chat')
+      expect(loaded.records.get('owed-chat')?.conversationName).toBe('SQL chat')
+      expect(loaded.unreadableRecords.get('hidden-chat')?.raw).toBe('opaque SQL record')
+      expect(loaded.records.get('draft-chat')?.conversationName).toBe('Saved chat')
       expect(
         db
           .prepare('SELECT key,value FROM agent_session_store_meta WHERE key LIKE ? ORDER BY key')
           .all('journal.legacy-revision:%')
       ).toEqual([
-        { key: 'journal.legacy-revision:draft', value: 'null' },
-        { key: 'journal.legacy-revision:hidden', value: 'null' },
+        { key: 'journal.legacy-revision:draft-chat', value: 'null' },
+        { key: 'journal.legacy-revision:hidden-chat', value: 'null' },
         { key: 'journal.legacy-revision:historical', value: '["epoch",1,null,null]' },
-        { key: 'journal.legacy-revision:owed', value: 'saved baseline' }
+        { key: 'journal.legacy-revision:owed-chat', value: 'saved baseline' }
       ])
       if (!explicit) {
         expect(agentSessionVisibleTabIndex(loaded)).toEqual({
           present: false,
-          sessionIds: ['owed']
+          sessionIds: ['owed-chat']
         })
         runJournalTransaction(db, () => {
           const { writes } = resolveJournalWriterStoreMutation(
@@ -153,10 +153,10 @@ it.each([false, true])(
         explicit
           ? [
               ['historical-custom-tab', 'historical'],
-              ['owed-custom-tab', 'owed']
+              ['owed-custom-tab', 'owed-chat']
             ]
           : [
-              ['owed-custom-tab', 'owed'],
+              ['owed-custom-tab', 'owed-chat'],
               [structuredAgentSessionTabId('historical'), 'historical']
             ]
       )
@@ -190,12 +190,12 @@ it('refuses indeterminate inputs before publishing, and leaves the same profile 
   await refusal(initializeJournalDomainDatabase(root), 'journalUnavailable')
   rmSync(primary, { recursive: true })
   const attempt = initializeJournalDomainDatabase(root)
-  saveRecords(primary, { latest: stored('latest') })
+  saveRecords(primary, { 'latest-chat': stored('latest-chat') })
   await refusal(attempt, 'journalUnavailable')
   expect(available()).toBe(true)
   const db = new Database(await initializeJournalDomainDatabase(root))
   try {
-    expect([...loadAgentSessionStoreRows(db).records.keys()]).toEqual(['latest'])
+    expect([...loadAgentSessionStoreRows(db).records.keys()]).toEqual(['latest-chat'])
   } finally {
     db.close()
   }
@@ -221,9 +221,9 @@ it.each([false, true])(
         primary,
         {
           recovered: { ...backupRecord, schemaVersion: 999, lease: { runtimeFence: 80 } },
-          opaque
+          'opaque-chat': opaque
         },
-        { sessionTabs: [{ tabId: 'opaque-tab', sessionId: 'opaque' }] }
+        { sessionTabs: [{ tabId: 'opaque-tab', sessionId: 'opaque-chat' }] }
       )
     }
     const db = new Database(await initializeJournalDomainDatabase(root))
@@ -238,9 +238,9 @@ it.each([false, true])(
       if (wholeBackup) {
         expect(state.sessionTabs).toBeNull()
       } else {
-        expect(state.sessionTabs?.entries()).toEqual([['opaque-tab', 'opaque']])
-        expect(state.unreadableRecords.get('opaque')?.raw).toEqual(opaque)
-        expect(() => requireWritableAgentSessionRecord(state, 'opaque')).toThrow(
+        expect(state.sessionTabs?.entries()).toEqual([['opaque-tab', 'opaque-chat']])
+        expect(state.unreadableRecords.get('opaque-chat')?.raw).toEqual(opaque)
+        expect(() => requireWritableAgentSessionRecord(state, 'opaque-chat')).toThrow(
           expect.objectContaining({
             refusal: expect.objectContaining({
               code: 'execution_owner_reconciling',
