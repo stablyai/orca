@@ -53,7 +53,10 @@ it.each([
     const originalCounts = desktop.map(({ events }) => events.length)
     const jobs = vi.spyOn(SubscriberDeliveryLane.prototype, 'providerReceived')
     try {
-      const sends = []
+      const sends: {
+        receive: ReturnType<AgentSessionSubscribers['providerReceipts']['bind']>
+        sequence: number
+      }[] = []
       for (let index = 0; index < count; index++) {
         await journal.appendItem(
           { provider: 'orca', clientMessageId: `covered-${index}` },

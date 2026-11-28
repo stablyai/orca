@@ -182,7 +182,7 @@ export function reduceStructuredAgentSession(
     }
   }
   if (action.type === 'older-page') {
-    return mergeOlderStructuredAgentSessionPage(state, action)
+    return mergeOlderStructuredAgentSessionPage(state, action, receivedAt)
   }
   const event = action.event
   if (event.type === 'end') {

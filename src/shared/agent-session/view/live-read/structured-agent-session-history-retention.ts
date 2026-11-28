@@ -9,7 +9,7 @@ import {
   ownItemCount,
   trimRetainedItems
 } from '../structured-agent-session-item-retention'
-import { mergeItems } from '../structured-agent-session-history-state'
+import { hostClockField, mergeItems } from '../structured-agent-session-history-state'
 import { foldStructuredAgentSubagentRosterPage } from '../structured-agent-session-subagent-roster'
 import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn-record'
 import { agentSessionHasOlderTranscript } from '../../conversation-context/agent-session-context-clear'
@@ -41,7 +41,8 @@ export function trimStructuredAgentSessionHistory(
 
 export function mergeOlderStructuredAgentSessionPage(
   state: StructuredAgentSessionState,
-  action: Extract<StructuredAgentSessionAction, { type: 'older-page' }>
+  action: Extract<StructuredAgentSessionAction, { type: 'older-page' }>,
+  receivedAt: number
 ): StructuredAgentSessionState {
   const requested = action.requestedCursor
   if (state.epoch !== requested.epoch || action.page.epoch !== requested.epoch) {
