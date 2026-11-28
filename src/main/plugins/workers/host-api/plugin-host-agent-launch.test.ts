@@ -9,6 +9,8 @@ import { settledWriteStub } from '../../../providers/testing/settled-pty-write-s
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { committingSpawn } from '../../../runtime/terminal/layout/bind-first-pane.test-fixture'
 import { AGENT_LAUNCH_METHODS } from '../../../runtime/rpc/methods/agent-launch/agent-launch'
+import { DEFAULT_RPC_DISPATCH_CONFIG } from '../../../runtime/rpc/methods/eager-rpc-method-registry'
+import type { DispatcherOptions } from '../../../runtime/rpc/dispatcher'
 import { makeStore } from '../../../runtime/rpc/server/runtime-rpc-worktree-store-fixtures'
 import { pluginRuntimeRpc } from '../../runtime/plugin-runtime-rpc'
 import { executePluginHostCall } from './plugin-host-methods'
@@ -48,7 +50,17 @@ class StartupPortsRuntime extends OrcaRuntimeService {
   }
 }
 
-function coldLaunch(withPrompt = true) {
+/**
+ * How a dispatcher gets `agent.launch`. `AGENT_LAUNCH_METHODS` lists it among the methods a
+ * dispatcher starts with; `DEFAULT_RPC_DISPATCH_CONFIG` is what `bindPluginRuntime` passes in
+ * production, which serves it from a lazy group instead.
+ */
+type LaunchDispatchConfig = Pick<DispatcherOptions, 'methods' | 'lazyGroups'>
+
+function coldLaunch(
+  withPrompt = true,
+  dispatch: LaunchDispatchConfig = { methods: AGENT_LAUNCH_METHODS }
+) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the repo/worktree storage used by terminal creation.
   const runtime = new StartupPortsRuntime(makeStore() as never)
   const logs: string[] = []
@@ -99,7 +111,7 @@ function coldLaunch(withPrompt = true) {
       listTerminals: (...args) => runtime.listTerminals(...args),
       sendTerminal: (...args) => runtime.sendTerminal(...args),
       dispatchPluginNotification: async () => ({ delivered: true }),
-      callRuntime: pluginRuntimeRpc(runtime, AGENT_LAUNCH_METHODS)
+      callRuntime: pluginRuntimeRpc(runtime, dispatch.methods, dispatch.lazyGroups)
     }
   })
   return {
@@ -145,9 +157,10 @@ describe('plugin launch prompt delivery', () => {
     vi.restoreAllMocks()
   })
 
-  it('submits once to the new terminal after its cold shell becomes an agent composer', async () => {
-    vi.useFakeTimers()
-    const launch = coldLaunch()
+  /** A cold launch with a prompt: its call returns once the terminal is published, and the prompt
+   *  lands once the composer is up. A call that waited for the whole launch hangs here, since
+   *  under fake timers the wait for the composer never ends. */
+  async function returnAtPublicationThenSubmit(launch: ReturnType<typeof coldLaunch>) {
     const receipt = await launch.launch()
     if (!receipt.ok) {
       throw new Error(receipt.error)
@@ -168,6 +181,16 @@ describe('plugin launch prompt delivery', () => {
       { ptyId: PTY_ID, text: '\x1b[200~Complete the Meego handoff.\x1b[201~' },
       { ptyId: PTY_ID, text: '\r' }
     ])
+  }
+
+  it('submits once to the new terminal after its cold shell becomes an agent composer', async () => {
+    vi.useFakeTimers()
+    await returnAtPublicationThenSubmit(coldLaunch())
+  })
+
+  it('returns at publication through the dispatch config production binds', async () => {
+    vi.useFakeTimers()
+    await returnAtPublicationThenSubmit(coldLaunch(true, DEFAULT_RPC_DISPATCH_CONFIG))
   })
 
   it('keeps a deferred prompt out of the terminal when its worker exits after the launch receipt', async () => {
