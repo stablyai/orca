@@ -2,6 +2,8 @@ import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands/qui
 import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { parsePaneKey, terminalRowId } from '../../../../src/shared/workspace-layout/stable-pane-id'
+import { isNativeChatSupportedAgent } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { launchAgentInExistingWorkspace } from './mobile-existing-agent-launch'
@@ -25,11 +27,7 @@ export const NOTES_UNCONFIRMED_MESSAGE =
 
 export type NewTabAgentLaunchOptions = MobileQuickCommandLaunch['options'] & {
   onPromptSent?: () => void
-}
-
-// Shell commands and unsent drafts require plain terminals rather than agent.launch.
-export function launchesThroughHost(options: NewTabAgentLaunchOptions | undefined): boolean {
-  return options?.startupCommand === undefined && options?.enter !== false
+  terminalView?: boolean
 }
 
 // Host placement uses the parent tab id for terminal panes.
@@ -53,6 +51,7 @@ export async function launchNewTabAgentThroughHost(args: {
   options: NewTabAgentLaunchOptions | undefined
   /** Chat or CLI from the New Tab sheet; a chat that can't open here starts the CLI. */
   nativeChatDefault?: boolean
+  onTerminalLanded: (tabId: string) => void
   lock: string
   activeSessionTabId?: string | null
   pendingSelectionRef: { current: PendingSessionSelection | null }
@@ -63,13 +62,28 @@ export async function launchNewTabAgentThroughHost(args: {
   setCreateError: (message: string) => void
 }): Promise<boolean> {
   const { options, pendingSelectionRef, showToast } = args
+  // Shell commands and unsent drafts require plain terminals.
+  if (options?.startupCommand !== undefined || options?.enter === false) {
+    return false
+  }
   const prompt = options?.agentPrompt ?? options?.initialPrompt
   const reservation = reserveMobileAgentLaunch(args.agent, args.hostCapabilities, randomV4Uuid)
   const afterTabId = args.hostCapabilities?.includes(AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY)
     ? hostTabIdOf(args.getSessionTabs(), args.activeSessionTabId)
     : undefined
+  let terminalViewSet = false
+  // The tab may land before the reply. Apply the CLI choice once so a later view switch wins.
+  const onTerminalLanded =
+    options?.terminalView && isNativeChatSupportedAgent(args.agent)
+      ? (tabId: string) => {
+          if (!terminalViewSet) {
+            terminalViewSet = true
+            args.onTerminalLanded(tabId)
+          }
+        }
+      : undefined
   // Arm selection before requesting: tabs publish before prompt delivery settles, and later user picks must win.
-  pendingSelectionRef.current = launchedSelection(args.lock, reservation, null)
+  pendingSelectionRef.current = launchedSelection(args.lock, reservation, null, onTerminalLanded)
   const launched = await launchAgentInExistingWorkspace({
     client: args.client,
     hostCapabilities: args.hostCapabilities,
@@ -126,6 +140,16 @@ export async function launchNewTabAgentThroughHost(args: {
   }
   const { outcome } = launched.result
   const warning = readAgentLaunchNotice(launched.result)
+  if (onTerminalLanded && !terminalViewSet && outcome.kind === 'terminal') {
+    const listed = args
+      .getSessionTabs()
+      .find((tab) => tab.type === 'terminal' && tab.terminal === outcome.handle)
+    const pane = outcome.paneKey ? parsePaneKey(outcome.paneKey) : null
+    const tabId = listed?.id ?? (pane ? terminalRowId(pane.tabId, pane.leafId) : null)
+    if (tabId) {
+      onTerminalLanded(tabId)
+    }
+  }
   // An older host ignores the reservation, so the reply's own ids are the fallback.
   pendingSelectionRef.current = withLaunchReply(
     pendingSelectionRef.current,

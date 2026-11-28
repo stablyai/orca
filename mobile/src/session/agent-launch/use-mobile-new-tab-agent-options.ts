@@ -135,9 +135,10 @@ export function useMobileNewTabAgentOptions(args: {
     [detected, loadState, settings.data]
   )
   // The host runs an agent as a chat only when its agents list has it.
-  const structuredHost =
-    args.hostCapabilities?.includes(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY) === true
-  const registered = useMobileRegisteredAgents(client, connected && structuredHost && open)
+  const structuredHost = args.hostCapabilities?.includes(
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  )
+  const registered = useMobileRegisteredAgents(client, connected && structuredHost === true && open)
   const picked = useSerializedStoredState<AgentLaunchSurface | null>(
     null,
     loadNewAgentSurface,
@@ -158,25 +159,23 @@ export function useMobileNewTabAgentOptions(args: {
   const hostDefaults = useMemo(() => nativeChatDefaultsOf(settings.data?.settings), [settings.data])
   const surfaces = useMemo(
     () =>
-      structuredHost
-        ? resolveNewTabAgentSurfaces({
-            agents: listed.map((option) => option.agent),
-            chatAgents: registered && new Set(registered.map((row) => row.agent)),
-            picked: picked.value,
-            hostDefaults
-          })
-        : null,
+      resolveNewTabAgentSurfaces({
+        structuredHost,
+        agents: listed.map((option) => option.agent),
+        chatAgents: registered && new Set(registered.map((row) => row.agent)),
+        picked: picked.value,
+        hostDefaults
+      }),
     [hostDefaults, listed, picked.value, registered, structuredHost]
   )
   const options = useMemo(
     () =>
-      surfaces
-        ? listed.map((option) => ({
-            ...option,
-            cliOnly: !surfaces.canChat(option.agent),
-            nativeChatDefault: surfaces.nativeChatDefaultFor(option.agent)
-          }))
-        : listed,
+      listed.map((option) => ({
+        ...option,
+        cliOnly: !surfaces.canChat(option.agent),
+        launchSurface: surfaces.surfaceFor(option.agent),
+        nativeChatDefault: surfaces.nativeChatDefaultFor(option.agent)
+      })),
     [listed, surfaces]
   )
   const onSelect = useCallback(
@@ -187,7 +186,7 @@ export function useMobileNewTabAgentOptions(args: {
     [persist, setValue]
   )
   const surfaceChoice = useMemo(
-    () => (surfaces ? { selected: surfaces.selected, onSelect } : null),
+    () => (surfaces.canChoose ? { selected: surfaces.selected, onSelect } : null),
     [onSelect, surfaces]
   )
   return { loadState, options, surfaceChoice }

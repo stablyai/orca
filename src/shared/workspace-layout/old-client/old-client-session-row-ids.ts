@@ -3,13 +3,8 @@
 import { isReopenedChatTabId } from '../../agent-session/view/structured-agent-session-host-tab-id'
 import type { LayoutTab } from '../workspace-layout-model'
 
-export const TERMINAL_ROW_SEPARATOR = '::'
+export { TERMINAL_ROW_SEPARATOR, terminalRowId } from '../stable-pane-id'
 export const AGENT_SESSION_ROW_PREFIX = 'agent-session:'
-
-/** One row per pane: `<terminal id>::<pane id>`, as the window and headless publishers write it. */
-export function terminalRowId(entityId: string, leafId: string): string {
-  return `${entityId}${TERMINAL_ROW_SEPARATOR}${leafId}`
-}
 
 /** Chat rows and group orders both use the provider session ID. */
 export function agentSessionRowId(sessionId: string, tabId?: string): string {

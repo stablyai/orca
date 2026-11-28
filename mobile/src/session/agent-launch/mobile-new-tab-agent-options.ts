@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import type { AgentLaunchSurface } from '../../../../src/shared/agent-launch/contracts/agent-launch-surface'
 import { filterEnabledMobileTuiAgents } from '../../agents/mobile-tui-agents'
 import { isTuiAgent as isMobileTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { TUI_AGENT_AUTO_PICK_ORDER as MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../../src/shared/agent-launch/catalog/tui-agent-selection'
@@ -14,6 +15,8 @@ export type MobileNewTabAgentOption = {
   label: string
   /** The host can't run this agent as a chat. */
   cliOnly?: boolean
+  /** The tapped agent's initial view, when the host and phone settings establish one. */
+  launchSurface?: AgentLaunchSurface
   /** Whether a tap asks for a chat; absent leaves it to the host. */
   nativeChatDefault?: boolean
 }

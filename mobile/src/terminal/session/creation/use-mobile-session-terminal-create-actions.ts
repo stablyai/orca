@@ -24,10 +24,7 @@ import {
 } from './mobile-session-terminal-create-request'
 import { isAgentSessionHandleProvider } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from '../../../session/native-chat/agent-session/mobile-structured-agent-session-launch'
-import {
-  launchesThroughHost,
-  launchNewTabAgentThroughHost
-} from '../../../session/agent-launch/new-tab-agent-host-launch'
+import { launchNewTabAgentThroughHost } from '../../../session/agent-launch/new-tab-agent-host-launch'
 import {
   launchedSelection,
   withLaunchReply,
@@ -73,6 +70,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     nativeChatDefault?: boolean
   ): Promise<CreateOutcome | undefined> {
     const sourceFork = options?.sourceChatFork
+    const terminalView = sourceFork || options?.terminalView
     const sourceOutcome = (value: CreateOutcome): CreateOutcome | undefined =>
       sourceFork ? value : undefined
     const agentName = sourceFork ? formatAgentTypeLabel(sourceFork.agent) : ''
@@ -107,7 +105,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     try {
       if (
         agent &&
-        launchesThroughHost(options) &&
         (await launchNewTabAgentThroughHost({
           client,
           hostCapabilities,
@@ -115,6 +112,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           agent,
           options,
           nativeChatDefault,
+          onTerminalLanded: (tabId) => {
+            if (isCurrent()) {
+              scope.nativeChatController.setTabView(tabId, 'launch-terminal')
+            }
+          },
           lock: clientMutationId,
           activeSessionTabId,
           pendingSelectionRef,
@@ -162,8 +164,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         options,
         shell: options?.shell,
         ...(sourceFork ? { sourceChatFork: { sessionId: sourceFork.sessionId } } : {}),
-        viewMode:
-          sourceFork || options?.terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
+        viewMode: terminalView ? undefined : await hostViewModeForNewAgentTab(agent)
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')
@@ -187,8 +188,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       if (prev) {
         unsubscribeTerminal(prev)
       }
-      if (sourceFork || options?.terminalView) {
-        scope.nativeChatController.setTabView(created.id, 'terminal')
+      if (terminalView) {
+        scope.nativeChatController.setTabView(created.id, agent ? 'launch-terminal' : 'terminal')
       }
       pendingSelectionRef.current = { kind: 'tab', tabId: created.id }
       activeSessionTabTypeRef.current = 'terminal'

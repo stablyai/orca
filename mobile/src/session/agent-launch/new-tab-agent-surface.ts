@@ -6,10 +6,12 @@ import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-a
 import type { AgentLaunchSurface } from '../../../../src/shared/agent-launch/contracts/agent-launch-surface'
 
 export type NewTabAgentSurfaces = {
+  canChoose: boolean
   /** The switch's segment; none when the host's own choice differs between the listed agents. */
   selected: AgentLaunchSurface | undefined
   /** False once the host's agents list lacks the agent. */
   canChat: (agent: TuiAgent) => boolean
+  surfaceFor: (agent: TuiAgent) => AgentLaunchSurface | undefined
   /** Sent as agent.launch's nativeChatDefault, a preference, so a chat that can't open here starts
    *  the CLI. Undefined leaves an unpicked launch to the host that owns that default. */
   nativeChatDefaultFor: (agent: TuiAgent) => boolean | undefined
@@ -21,30 +23,38 @@ export type NewTabAgentSurfaces = {
  * host lists them. Older hosts publish no choice and keep deciding each launch themselves.
  */
 export function resolveNewTabAgentSurfaces(args: {
+  structuredHost: boolean | undefined
   agents: readonly TuiAgent[]
   chatAgents: ReadonlySet<string> | undefined
   picked: AgentLaunchSurface | null
   hostDefaults: NativeChatDefaultSettings | null | undefined
-}): NewTabAgentSurfaces | null {
-  const { chatAgents, picked, hostDefaults } = args
-  if (hostDefaults === undefined) {
-    return null
-  }
-  const canChat = (agent: TuiAgent) => chatAgents?.has(agent) ?? true
+}): NewTabAgentSurfaces {
+  const { structuredHost, chatAgents, picked, hostDefaults } = args
+  const canUseDefaults = structuredHost === true && hostDefaults !== undefined
+  const canChat = (agent: TuiAgent) => structuredHost !== false && (chatAgents?.has(agent) ?? true)
   const listed = args.agents.filter(canChat)
-  if (listed.length === 0) {
-    return null
+  const canChoose = canUseDefaults && listed.length > 0
+  const surfaceFor = (agent: TuiAgent): AgentLaunchSurface | undefined => {
+    if (!canChat(agent)) {
+      return 'terminal'
+    }
+    if (!canUseDefaults) {
+      return undefined
+    }
+    const chat = picked !== null ? picked === 'chat' : hostStartsAgentAsChat(hostDefaults, agent)
+    return chat ? 'chat' : 'terminal'
   }
-  const startsAsChat = (agent: TuiAgent): boolean =>
-    canChat(agent) &&
-    (picked !== null ? picked === 'chat' : hostStartsAgentAsChat(hostDefaults, agent))
-  const surfaces = new Set(listed.map((agent) => (startsAsChat(agent) ? 'chat' : 'terminal')))
+  const surfaces = new Set(listed.map(surfaceFor))
   const [only] = surfaces
   return {
+    canChoose,
     selected: surfaces.size === 1 ? only : undefined,
     canChat,
+    surfaceFor,
     nativeChatDefaultFor: (agent) =>
-      picked !== null || hostDefaults === null ? startsAsChat(agent) : undefined
+      canChoose && (picked !== null || hostDefaults === null)
+        ? surfaceFor(agent) === 'chat'
+        : undefined
   }
 }
 
