@@ -24,6 +24,7 @@ import { openAnnotationLocation } from '@/components/editor/check-details/action
 import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'
+import { ChecksPanelPRReviewersAndAssignees } from './pr-reviewers-and-assignees'
 
 export function ChecksPanelActiveContent({
   model,
@@ -211,6 +212,10 @@ export function ChecksPanelActiveContent({
           />
         )}
       </div>
+
+      {activeReview.provider === 'github' && pr && repo ? (
+        <ChecksPanelPRReviewersAndAssignees repo={repo} pr={pr} isRefreshing={isRefreshing} />
+      ) : null}
 
       {shouldShowReviewTriageStrip && sourceControlAiActionsVisible && (
         <PRTriageStrip
