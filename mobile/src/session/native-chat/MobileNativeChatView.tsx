@@ -16,8 +16,8 @@ import {
 } from './transcript/viewport/mobile-native-chat-disclosure-store'
 import { type NativeScrollEvent, type NativeSyntheticEvent, View } from 'react-native'
 import { MobileNativeChatSendErrorBanner } from './status/MobileNativeChatSendErrorBanner'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { useChatBottomFit } from './composer/use-chat-bottom-fit'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import { stylesSheet } from './mobile-native-chat-view-styles'
@@ -151,8 +151,7 @@ export function MobileNativeChatView({
 }: Props): React.JSX.Element {
   const styles = useThemedStyles(stylesSheet)
   const t = useMobileTranslation()
-  const insets = useSafeAreaInsets()
-  const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
+  const { bottomPad, composerFit, transcriptInset } = useChatBottomFit(keyboardInset)
   const rootStyle = [styles.root, { paddingBottom: bottomPad }]
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
@@ -338,6 +337,7 @@ export function MobileNativeChatView({
       />
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
+          {...composerFit}
           draftScopeKey={composerScopeKey}
           structured={structuredActivityUi ? structured : null}
           draftKey={draftKey}
@@ -375,7 +375,7 @@ export function MobileNativeChatView({
         ) : firstScreen ? (
           <MobileBotFirstScreen firstScreen={firstScreen} after={mailRows} />
         ) : (
-          <GestureHandlerRootView style={styles.listWrap}>
+          <GestureHandlerRootView style={[styles.listWrap, transcriptInset]}>
             <MobileNativeChatDisclosureContext.Provider value={disclosures}>
               <MobileBotCardSendContext.Provider value={sendFromCard}>
                 <MobileMarkdownBotCardContext.Provider value={drawReplyCard}>

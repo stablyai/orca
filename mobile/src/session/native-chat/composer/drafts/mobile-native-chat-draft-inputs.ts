@@ -219,6 +219,18 @@ export function registerMobileNativeChatTextDestination(
 export function focusMobileNativeChatTextDestination(scope: string): void {
   focusedScope = scope
 }
+
+export function composerFieldFocus(
+  setFocused: (focused: boolean) => void,
+  draftScopeKey: string | null | undefined
+): () => void {
+  return () => {
+    setFocused(true)
+    if (draftScopeKey) {
+      focusMobileNativeChatTextDestination(draftScopeKey)
+    }
+  }
+}
 // A closed field gives up the dictation target, so the next one falls back to the chat on screen.
 export function blurMobileNativeChatTextDestination(scope: string): void {
   if (focusedScope === scope) {

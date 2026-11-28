@@ -21,16 +21,25 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
   'orca:custom-accessory-keys'
 ] as const
 
+// Terminal settings and the device-wide Duo chat width. A later storage frame copies these into a page that is already open.
 export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   ...TERMINAL_SHORTCUT_STORAGE_KEYS,
   'orca:terminalTextScale',
   'orca:terminalFontStyle',
   'orca:terminalAutocompleteEnabled',
   'orca:terminalLinkOpenMode',
+  /** Whether every Duo chat runs across the status column. */
+  'orca:duoChatExpanded',
   /** Chat text size, font and spacing, so an open chat follows Settings too. */
   'orca:nativeChatText',
   /** Used or remaining on usage bars, so an open Accounts page follows Settings. */
-  'orca:usagePercentageDisplay'
+  'orca:usagePercentageDisplay',
+  /** The composer meter's window, display and position, so an open chat follows Settings. */
+  'orca:composerUsageWindow',
+  'orca:composerUsageDisplay',
+  'orca:composerUsagePosition',
+  /** Green and yellow over-pace cutoffs for the composer meter and usage pop-up. */
+  'orca:usagePaceColorThresholds'
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -48,6 +57,16 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
   'orca:terminalSplitLayout',
+  /** Whether every Duo chat runs across the status column. */
+  'orca:duoChatExpanded',
+  /** Which usage window the composer meter shows. */
+  'orca:composerUsageWindow',
+  /** Whether that meter shows percent used or percent left. */
+  'orca:composerUsageDisplay',
+  /** Whether that meter sits in the controls row or above the text. */
+  'orca:composerUsagePosition',
+  /** Green and yellow over-pace cutoffs, so an open chat follows Settings. */
+  'orca:usagePaceColorThresholds',
   /** Terminal font, line spacing and weight. */
   'orca:terminalFontStyle',
   /** Chat text size, font and spacing; a pinch in a chat saves here. */
@@ -65,6 +84,11 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  */
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
+  'orca:duoChatExpanded',
+  'orca:composerUsageWindow',
+  'orca:composerUsageDisplay',
+  'orca:composerUsagePosition',
+  'orca:usagePaceColorThresholds',
   'orca:terminalFontStyle',
   'orca:nativeChatText',
   'orca:newAgentSurface',

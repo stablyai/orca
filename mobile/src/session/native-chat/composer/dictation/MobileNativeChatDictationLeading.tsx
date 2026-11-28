@@ -8,6 +8,8 @@ import {
   MobileDictationRecordingMeter
 } from '../../../../dictation/MobileDictationLiveControls'
 import { mobileNativeChatComposerStylesSheet } from '../field/mobile-native-chat-composer-styles'
+import { MobileNativeChatActionGap } from '../MobileNativeChatActionGap'
+import type { ChatWidthToggle } from '../use-chat-bottom-fit'
 import { useThemedStyles } from '../../../../theme/themed-styles'
 
 // While dictating, the row's leading side swaps attach and the pickers for ✕ and the meter (or a kept failure), so the composer keeps its height.
@@ -16,12 +18,14 @@ export function MobileNativeChatDictationLeading({
   micStarting = false,
   micProcessing = false,
   cancelRef,
+  gap = null,
   children
 }: {
   micActive: boolean
   micStarting?: boolean
   micProcessing?: boolean
   cancelRef: RefObject<HostInstance | null>
+  gap?: { agent: string | null; ring: ReactNode; toggle: ChatWidthToggle | null } | null
   children: ReactNode
 }): React.JSX.Element {
   const styles = useThemedStyles(mobileNativeChatComposerStylesSheet)
@@ -35,7 +39,14 @@ export function MobileNativeChatDictationLeading({
     )
   }
   if (!live || (!micActive && !micProcessing)) {
-    return <View style={styles.leadingControls}>{children}</View>
+    return (
+      <View style={styles.leadingControls}>
+        {children}
+        {gap ? (
+          <MobileNativeChatActionGap agent={gap.agent} ring={gap.ring} toggle={gap.toggle} />
+        ) : null}
+      </View>
+    )
   }
   return (
     <View style={[styles.leadingControls, styles.dictationLeading]}>
