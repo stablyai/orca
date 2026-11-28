@@ -9,7 +9,7 @@ import {
 import type { EditorExternalWatchTarget } from './editor-external-watch-targets'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
-// A reconnect can refuse the re-watch while main swaps transports; nothing else re-watches until the next contact change.
+// A reconnect can refuse the re-watch mid transport swap; without a retry Source Control waits for its 60 s poll.
 const PAIRING_REFUSAL_RETRY_DELAYS_MS = [250, 1_000, 4_000]
 
 export function subscribeEditorRuntimeFileWatch(
