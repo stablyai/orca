@@ -28673,8 +28673,6 @@
         "automationOn": "会为这个事项唤醒智能体"
       },
       "menu": {
-        "cancel": "取消事项",
-        "done": "完成",
         "waiting": "等待中…"
       },
       "pill": {
@@ -28684,6 +28682,7 @@
         "moveTo": "移至"
       },
       "row": {
+        "cancel": "取消事项",
         "done": "完成",
         "more": "更多",
         "select": "选择“{{title}}”"

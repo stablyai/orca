@@ -844,7 +844,10 @@ import {
 } from './projects/repo-params'
 import { ReferenceFind, ReferenceList } from './references/reference-params'
 import { BrowserTarget, ExpectUrlBrowserTarget } from './rpc-param-primitives'
-import { SessionTabsUnsubscribeAllParams } from './session-tabs/session-tabs-params'
+import {
+  SessionTabsSubscribeAllParams,
+  SessionTabsUnsubscribeAllParams
+} from './session-tabs/session-tabs-params'
 import {
   ActivateTab,
   BotLinkActivateTab,
@@ -2181,7 +2184,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'session.tabs.movePaneToNewTab': MovePaneToNewTab,
   'session.tabs.setTabProps': SetTabProps,
   'session.tabs.subscribe': WorktreeTabSelector,
-  'session.tabs.subscribeAll': null,
+  'session.tabs.subscribeAll': SessionTabsSubscribeAllParams,
   'session.tabs.terminalShellChoices': WorktreeTabSelector,
   'session.tabs.unsubscribe': SessionTabsUnsubscribe,
   'session.tabs.unsubscribeAll': SessionTabsUnsubscribeAllParams,

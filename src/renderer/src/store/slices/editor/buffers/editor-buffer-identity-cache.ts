@@ -96,10 +96,15 @@ export function editorBufferRouteInputsChanged(
   state: EditorBufferRouteState,
   write: Partial<EditorBufferRouteState>
 ): boolean {
-  return EDITOR_BUFFER_ROUTE_INPUT_KEYS.some(
-    (key) =>
+  for (let i = 0; i < EDITOR_BUFFER_ROUTE_INPUT_KEYS.length; i += 1) {
+    const key = EDITOR_BUFFER_ROUTE_INPUT_KEYS[i]
+    if (
       Object.hasOwn(write, key) &&
       write[key] !== state[key] &&
       routeInputOf(write, key) !== routeInputOf(state, key)
-  )
+    ) {
+      return true
+    }
+  }
+  return false
 }
