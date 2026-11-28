@@ -128,22 +128,33 @@ export class TerminalAgentPhonePush {
       return
     }
     const { sshHostId } = agentPaneWorkspace(worktreeId, batch.connectionId)
-    this.hooklessNews.noteFacts({ paneKey, worktreeId, executionHostId: sshHostId }, batch.facts)
+    // A daemon-detected BEL arrives in its own batch after the title's, so seed the pane's live title here (#33137).
+    const terminalTitle = this.deps.readTerminalTitle(paneKey) ?? undefined
+    this.hooklessNews.noteFacts(
+      {
+        paneKey,
+        worktreeId,
+        executionHostId: sshHostId,
+        ...(terminalTitle ? { terminalTitle } : {})
+      },
+      batch.facts
+    )
   }
 
   /** A bell or a title-only finish: no hook row, so no agent detail, as the window sends it. */
   private buildHooklessNews(
     source: 'agent-task-complete' | 'terminal-bell',
-    { paneKey, worktreeId, executionHostId }: TerminalHooklessNewsItem,
+    { paneKey, worktreeId, executionHostId, terminalTitle: itemTitle }: TerminalHooklessNewsItem,
     terminalTitle?: string
   ): PaneNews {
-    const { title, body } = buildNotificationOptions(
+    const title = terminalTitle ?? itemTitle
+    const { title: notificationTitle, body } = buildNotificationOptions(
       {
         source,
         worktreeId,
         paneKey,
         ...this.readLabels(worktreeId, paneKey),
-        ...(terminalTitle ? { terminalTitle } : {})
+        ...(title ? { terminalTitle: title } : {})
       },
       this.deps.translate
     )
@@ -153,7 +164,7 @@ export class TerminalAgentPhonePush {
         type: 'notification',
         ...(executionHostId ? { workspaceExecutionHostId: executionHostId } : {}),
         source,
-        title,
+        title: notificationTitle,
         body,
         worktreeId,
         paneKey

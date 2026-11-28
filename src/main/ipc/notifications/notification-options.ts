@@ -26,12 +26,29 @@ export function buildNotificationOptions(
 } {
   if (args.source === 'terminal-bell') {
     const attention = translate('notifications.bell.attentionRequested', 'Attention requested')
+    const worktreeLabel = normalizeNotificationText(
+      args.worktreeLabel,
+      NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
+    )
+    // Name the work that rang: the tab's own title beats the generic fallback (#33137).
+    const title = normalizeNotificationText(
+      args.terminalTitle,
+      NOTIFICATION_TITLE_CONTEXT_MAX_LENGTH
+    )
+    // The body carries the pane title unless the title already names the work (no row, or the same name).
+    const titleContext = worktreeLabel && title !== worktreeLabel ? title : ''
     return {
       title: fillNotificationPlaceholders(
         translate('notifications.bell.title', 'Bell in {{worktree}}'),
-        { worktree: args.worktreeLabel ?? translateWorkspace(translate) }
+        { worktree: worktreeLabel || title || translateWorkspace(translate) }
       ),
-      body: args.repoLabel ? `${args.repoLabel} · ${attention}` : attention
+      body: titleContext
+        ? args.repoLabel
+          ? `${args.repoLabel} · ${titleContext}`
+          : titleContext
+        : args.repoLabel
+          ? `${args.repoLabel} · ${attention}`
+          : attention
     }
   }
 
