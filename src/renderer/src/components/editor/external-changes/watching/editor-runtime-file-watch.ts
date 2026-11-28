@@ -36,7 +36,7 @@ export function subscribeEditorRuntimeFileWatch(
       return false
     }
     pairingRetries += 1
-    // No per-watch catalog read: a real re-pairing republishes the catalog, and that restarts this watch.
+    // No catalog read per watch: main re-reads the current pairing on every subscribe.
     retryTimer = setTimeout(() => {
       retryTimer = null
       if (!disposed && attempt === failedAttempt) {
