@@ -39,14 +39,18 @@ export async function startAcpStructuredSession(
   const generation = deps.mintGeneration?.() ?? randomUUID()
   children.endings.admit(sessionId, generation)
   try {
-    // Inside the launch gate, before the spawn: the account this child launches on.
-    const accountKey = await deps.spec.launchAccount?.atLaunch()
+    // The selection is read before the spawn; the key is taken as the child spawns.
+    await deps.spec.launchAccount?.atLaunch()
+    let accountKey: string | undefined
     const { acquisition, session } = await acquireAcpStructuredSession({
       acquire: input,
       deps: deps,
       generation,
       abandoned: () => attempt.signal.aborted,
-      track: (connection) => {
+      track: (connection, launch) => {
+        const account = launch.spec.launchAccount
+        accountKey =
+          account?.usedBy?.(launch) === false ? undefined : (account?.current() ?? undefined)
         connection.onExit((_exit, requested, lost) => {
           if (!requested) {
             input.events?.observeRootExit?.()

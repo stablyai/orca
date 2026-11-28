@@ -107,7 +107,7 @@ export function AntigravityAccountsSection({
         setState(next)
       }
       if (action === 'Select' && accountId) {
-        announceAntigravityAccountSwitch(next, accountId)
+        announceAntigravityAccountSwitch(next, accountId, target.runtime === 'host')
       }
     } catch (cause) {
       if (action === 'Select') {

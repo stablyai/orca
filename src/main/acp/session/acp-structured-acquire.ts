@@ -25,6 +25,7 @@ import {
   prepareAcpStructuredLaunch
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
+import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
 import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
@@ -37,15 +38,13 @@ import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-a
 import type { AcpStructuredTurnsDeps } from '../turns/acp-turn-dispatch-contract'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
-const MAX_EARLY_FRAMES = 2_048
-
 export async function acquireAcpStructuredSession(input: {
   acquire: StructuredAgentSessionAcquireInput
   deps: AcpStructuredSessionAdapterDeps
   generation: string
   /** Checked until spawn; afterward `track` gives cancellation the connection. */
   abandoned: () => boolean
-  track: (connection: AcpStructuredConnection) => void
+  track: (connection: AcpStructuredConnection, launch: AcpStructuredLaunch) => void
   onExit: (session: childState.AcpStructuredChild | null) => void
   /** Protocol loss may precede process exit; null means startup has not produced a session. */
   onConnectionLost: (session: childState.AcpStructuredChild | null, error: Error) => void
@@ -93,7 +92,8 @@ export async function acquireAcpStructuredSession(input: {
   const whenLane = (deliver: () => void): void => {
     if (slot.lane) {
       deliver()
-    } else if (early.length < MAX_EARLY_FRAMES) {
+    } else if (early.length < 2_048) {
+      // Frames before the lane exists, bounded.
       early.push(deliver)
     }
   }
@@ -150,7 +150,7 @@ export async function acquireAcpStructuredSession(input: {
     options.applied.set('permissionMode', fullAccess ? 'full-access' : 'ask')
   }
   // From here, cancellation closes this connection even before exit is proven.
-  input.track(connection)
+  input.track(connection, launch)
   stopAtToolWork(launch, connection, (reason) => input.interrupt(sessionId, reason))
   connection.subscribe((event: AcpSessionEvent) =>
     whenLane(() => {

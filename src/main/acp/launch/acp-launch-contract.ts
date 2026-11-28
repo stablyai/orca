@@ -24,11 +24,13 @@ import type {
   McpServer
 } from '../generated/acp-protocol.generated'
 
-/** Opaque account keys: what a start now records, and what a running child should match (null
- *  while that is unknown). */
+/** Opaque account keys: what a running child should match (null while that is unknown). A launch
+ *  records `current()` as it spawns, once `atLaunch` has read it, when `usedBy` its launch. */
 export type AcpLaunchAccount = {
   atLaunch(): Promise<string>
   current(): string | null
+  /** False for a launch that signs in some other way (a key, gcloud), which no saved account names. */
+  usedBy?(launch: { antigravityChatAuth?: AntigravityChatAuthConfig }): boolean
 }
 
 export type AcpLaunchSpec = {

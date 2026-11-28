@@ -170,9 +170,16 @@ export class AntigravityAccountService {
 
   /** `mayPrompt: false` (a chat start) never waits on a keychain dialog: it skips the restore while
    *  other account work runs, reads agy's login only briefly, and not again once that failed. */
-  async prepareForLaunch({ mayPrompt = true }: { mayPrompt?: boolean } = {}): Promise<void> {
+  async prepareForLaunch({
+    mayPrompt = true,
+    quiet = false
+  }: { mayPrompt?: boolean; quiet?: boolean } = {}): Promise<void> {
     const early = mayPrompt ? undefined : await this.backend.readWithoutPrompt?.()
     if (await this.logins.settlesLaunch(early, false)) {
+      return
+    }
+    // Nobody asked (`quiet`): a login only a keychain read could name waits for the next launch.
+    if (quiet && early && 'fingerprint' in early) {
       return
     }
     if (early && 'fingerprint' in early && (this.logins.briefAccessFailed || this.prompting > 0)) {

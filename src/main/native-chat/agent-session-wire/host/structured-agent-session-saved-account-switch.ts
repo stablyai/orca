@@ -56,18 +56,20 @@ export async function moveChatsToSelectedAccount(
   await Promise.all(
     host.loadedSessionIds().map(async (sessionId) => {
       const from = host.sessionAgent(sessionId) === agent && host.reads.childAccountKey(sessionId)
-      if (from === false || from === undefined || from === to) {
+      // No account selected when it launched: it ran on whatever login agy held, so nothing to name.
+      if (!from || from === to) {
         return
       }
       const notice = {
         from: selection.email(from) ?? 'the previous account',
         to: selection.email(to) ?? 'the selected account'
       }
-      // One note per chat and account pair: switching there and back revises it in place.
+      // One note per running agent and account pair: switching there and back revises it in place.
+      const fence = host.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
       await writeStructuredAgentSessionOrcaNote(
         host,
         sessionId,
-        `account-switch:${from}:${to}`,
+        `account-switch:${fence}:${from}:${to}`,
         agentAccountSwitchRow(notice)
       ).catch((error: unknown) =>
         console.warn(
