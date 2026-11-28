@@ -51,6 +51,15 @@ export async function deliverPeerMailToBot(
     })
     pulled?.alsoOnAdmitted()
   }
+  // Stored already whenever this runs after admission: mail with files says it was delivered, so its
+  // sender doesn't send it again or forget its question.
+  const linkStored = () => {
+    try {
+      link()
+    } catch (error) {
+      throw params.attachments?.length ? peerMailStored(error) : error
+    }
+  }
   // A retry while the first attempt is still admitted is refused, never answered for mail that may yet fail.
   if (admitting.has(params.messageId)) {
     throw new OrchestrationError(
@@ -61,7 +70,7 @@ export async function deliverPeerMailToBot(
   }
   // Stored by an attempt that ended before linking it: a duplicate, never a second request.
   if (db.getMessageById(params.messageId)) {
-    link()
+    linkStored()
     return 'delivered'
   }
   // A restart while a chat was made for it can leave its request held with no mail; nothing is in flight now.
@@ -105,12 +114,7 @@ export async function deliverPeerMailToBot(
     if (!('receipt' in routed)) {
       return routed
     }
-    try {
-      link()
-    } catch (error) {
-      // Stored already: mail with files says it was delivered, so its sender doesn't send it again.
-      throw params.attachments?.length ? peerMailStored(error) : error
-    }
+    linkStored()
     return 'delivered'
   } finally {
     admitting.delete(params.messageId)

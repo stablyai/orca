@@ -659,4 +659,21 @@ describe('files sent with mail to a bot on a paired server', () => {
     expect(questionsOut()).toBe(0)
     expect(relay).toHaveBeenCalledWith('env_b')
   })
+  it('says a retried delivery of stored mail with files was delivered when linking it fails', async () => {
+    await send({ to: 'bot:Docs', files: [file] })
+    const delivered = calls.find(({ method }) => method === 'orchestration.peerMailDeliver')!
+    // Stored, yet its link was never written: the case a retry finds and links.
+    b.db.db.prepare('DELETE FROM peer_mail_messages').run()
+    vi.spyOn(b.db, 'linkPeerMailMessage').mockImplementation(() => {
+      throw new Error('database is locked')
+    })
+
+    const retried = await transport.call('devB', 'orchestration.peerMailDeliver', delivered.params)
+
+    expect(retried).toMatchObject({
+      ok: false,
+      error: { code: 'peer_mail_stored', data: { effectsApplied: true } }
+    })
+    expect(b.db.getUnreadMessages(CHAT_ON_B)).toHaveLength(1)
+  })
 })
