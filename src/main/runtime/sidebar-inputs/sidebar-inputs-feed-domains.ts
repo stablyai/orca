@@ -224,10 +224,11 @@ export function sidebarInputsFeedDomains(
           watchCatalog(changed),
           store?.onWorkspaceSessionWritten?.(() => changed()),
           // Pins, settings (saved with or without notifying), UI, and catalog saves (repos, folders, SSH).
-          store?.onStateWritten?.((domains) => {
+          store?.onStateWritten?.((domains, options) => {
             if (
-              savedWorkspaceCatalog(domains) ||
-              DESKTOP_WRITE_DOMAINS.some((domain) => domains?.includes(domain))
+              !options?.onlyExternalConversationLinks &&
+              (savedWorkspaceCatalog(domains) ||
+                DESKTOP_WRITE_DOMAINS.some((domain) => domains?.includes(domain)))
             ) {
               changed(urgent)
             }
@@ -257,8 +258,8 @@ export function sidebarInputsFeedDomains(
           // Manual repo order and project order live in the UI state.
           sources.store()?.onUIChanged?.(() => changed()),
           // Some catalog writes (a project rename) announce no event.
-          sources.store()?.onStateWritten?.((domains) => {
-            if (savedWorkspaceCatalog(domains)) {
+          sources.store()?.onStateWritten?.((domains, options) => {
+            if (!options?.onlyExternalConversationLinks && savedWorkspaceCatalog(domains)) {
               changed()
             }
           })

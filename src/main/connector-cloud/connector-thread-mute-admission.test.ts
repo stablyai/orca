@@ -24,7 +24,10 @@ vi.mock('../bots/bot-chat-session', () => ({
   })
 }))
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
-import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
+import type {
+  ConnectorAck,
+  ConnectorConversation
+} from '../../shared/connectors/connector-cloud-contract'
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
 import { findLink, writeLink } from '../external-conversations/external-conversation-links'
@@ -34,6 +37,9 @@ import { closeTestStores, createStore, testState } from '../persistence/persiste
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { ConversationChain } from '../external-conversations/external-conversation-chain'
 import { dispatchDelivery } from './connector-deliveries'
+import { ConnectorDeliveryAcks } from './connector-delivery-acks'
+import { fakeMachine } from './fake-connector-seam.test-fixture'
+import { placeLaunchTarget } from './connector-places'
 import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
 import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
 import { ProfileStateIndeterminateWriteError } from '../persistence/profile-state/database/profile-state-write-transaction'
@@ -51,6 +57,7 @@ const ELSEWHERE: ConnectorConversation = {
   source: 'slack',
   externalId: 'T1:C1:1800000000.000900:U0BOT'
 }
+const MUTED = { outcome: 'accepted', muted: true }
 
 let sent = 0
 const send = (conversation: ConnectorConversation, text: string, extra = {}) => ({
@@ -64,6 +71,25 @@ const send = (conversation: ConnectorConversation, text: string, extra = {}) => 
     role: 'member',
     place: { kind: 'public_channel', id: 'C1' },
     text,
+    context: [],
+    messageRef: `slack:${THREAD}:1800000000.000${200 + sent}`
+  },
+  ...extra
+})
+
+const start = (conversation: ConnectorConversation, prompt: string, extra = {}) => ({
+  kind: 'start' as const,
+  deliveryId: `start${++sent}`,
+  expiresAt: 1_900_000_000_000,
+  conversation,
+  agent: 'claude',
+  placeId: Buffer.from(JSON.stringify(['bot', 'bot1'])).toString('base64url'),
+  prompt,
+  asker: {
+    userId: 'U1',
+    role: 'member',
+    place: { kind: 'public_channel', id: 'C1' },
+    text: prompt,
     context: [],
     messageRef: `slack:${THREAD}:1800000000.000${200 + sent}`
   },
@@ -125,15 +151,41 @@ function connector(
   queue?: ThreadMuteDeps['queued']
 ) {
   const turns: string[] = []
+  const starts: string[] = []
+  const automationsTaken: string[] = []
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mute path calls only these seam members.
   const seam = {
     receipts,
+    linkedChat: (key: ConnectorConversation) => {
+      const linked = findLink(store, key)
+      return linked
+        ? { worktreeId: linked.workspace.worktreeId, sessionId: linked.link.sessionId }
+        : null
+    },
     // As the real seam does, a turn runs under its own durable receipt.
     send: (_host: unknown, key: ConnectorConversation, id: string, message: { text: string }) =>
       receipts.run(key, id, 'connector.send', [message.text], async () => {
         turns.push(message.text)
         return { outcome: 'accepted' }
-      })
+      }),
+    start: async (
+      _host: unknown,
+      key: ConnectorConversation,
+      id: string,
+      input: { agent: string; target: string; prompt: string }
+    ) => ({
+      conversation: key,
+      initial: receipts.run(
+        key,
+        id,
+        'connector.start',
+        [input.agent, input.target, input.prompt],
+        async () => {
+          starts.push(input.prompt)
+          return { outcome: 'accepted' }
+        }
+      )
+    })
   } as unknown as ExternalConversationSeam
   const deps = {
     waiting: new Map<string, Promise<unknown>>(),
@@ -148,22 +200,25 @@ function connector(
   }
   const machine = {
     runTrigger: async () => false,
+    turnAutomations: (entries: readonly { automationId: string }[]) =>
+      entries.length
+        ? {
+            note: 'automation',
+            record: async () =>
+              entries.forEach((entry) => automationsTaken.push(entry.automationId))
+          }
+        : null,
     threadMute: (
       delivery: Parameters<typeof handleThreadMute>[1],
       record: Parameters<typeof handleThreadMute>[2],
       carriedBefore?: Promise<boolean>
     ) => handleThreadMute(deps, delivery, record, carriedBefore)
   }
-  const deliver = async (raw: unknown) =>
-    await dispatchDelivery(
-      seam,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in seam never reads its host.
-      {} as ExternalConversationHost,
-      machine,
-      raw,
-      () => 60_000
-    )?.done
-  return { deliver, turns }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in seam never reads its host.
+  const host = {} as ExternalConversationHost
+  const dispatch = (raw: unknown) => dispatchDelivery(seam, host, machine, raw, () => 60_000)
+  const deliver = async (raw: unknown) => await dispatch(raw)?.done
+  return { dispatch, deliver, turns, starts, automationsTaken, seam, host, machine }
 }
 
 const TURN_ID = 1_800_000_000_300
@@ -261,13 +316,199 @@ function leaver(
 }
 
 describe('a muted bot thread', () => {
+  it('settles both observed post-leave fresh starts without a turn, card admission, or replay', async () => {
+    const store = await botHome({ first: true })
+    const { dispatch, deliver, turns, starts } = connector(store)
+
+    // These model the two reported roots: their plain follower posts arrived after the previous
+    // turn ended, so the connector chose fresh `start` rather than `send`.
+    const first = start(FIRST, 'hi', { mentioned: false })
+    const second = start(ELSEWHERE, 'test', { mentioned: false })
+    await threadMuteSaves(store)(ELSEWHERE, true)
+    const mutedFirst = dispatch(first)
+    expect(mutedFirst?.received).toBe(false)
+    expect(await mutedFirst?.done).toEqual(MUTED)
+    expect(await deliver(second)).toEqual(MUTED)
+    expect(await deliver(first)).toEqual(MUTED)
+    expect(await deliver(second)).toEqual(MUTED)
+    expect(turns).toEqual([])
+    expect(starts).toEqual([])
+
+    await closeTestStores()
+    const reopened = connector(createStore())
+    expect(await reopened.deliver(first)).toEqual(MUTED)
+    expect(await reopened.deliver(second)).toEqual(MUTED)
+    expect(reopened.turns).toEqual([])
+    expect(reopened.starts).toEqual([])
+
+    // A legacy start whose cloud omitted the fact keeps its old admission, rather than risking an
+    // explicit current mention being dropped during the staged rollout.
+    expect(await reopened.deliver(start(FIRST, 'legacy mention shape'))).toEqual({
+      outcome: 'accepted'
+    })
+    expect(reopened.starts).toEqual(['legacy mention shape'])
+  })
+
+  it('lets a current explicit mention reopen from a fresh start, then leaves other bots isolated', async () => {
+    const store = await botHome({ first: true, second: true })
+    const { deliver, turns, starts } = connector(store)
+
+    expect(await deliver(start(FIRST, 'please return', { mentioned: true }))).toEqual({
+      outcome: 'accepted'
+    })
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
+
+    expect(await deliver(send(FIRST, 'ordinary follow-up'))).toEqual({ outcome: 'accepted' })
+    expect(await deliver(start(SECOND, 'still muted', { mentioned: false }))).toEqual(MUTED)
+    expect(turns).toEqual(['ordinary follow-up'])
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, SECOND)).toMatchObject({ muted: true })
+  })
+
+  it('lets an explicit fresh start reopen when optional requester facts are unavailable', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, starts } = connector(store)
+
+    expect(
+      await deliver(start(FIRST, 'please return', { mentioned: true, asker: undefined }))
+    ).toEqual({ outcome: 'accepted' })
+    expect(starts).toEqual(['please return'])
+    expect(readThreadMute(store, FIRST)).toMatchObject({ muted: false })
+  })
+
+  it('uses the normal start receipt identity when silencing a fresh start', async () => {
+    const store = await botHome({ first: true })
+    const { deliver, starts } = connector(store)
+    const quiet = start(FIRST, 'quiet', { deliveryId: 'same', mentioned: false })
+
+    expect(await deliver(quiet)).toEqual(MUTED)
+    // The equivalent pre-repair start path sees the same receipt identity after a rollback, so it
+    // replays accepted instead of rejecting a legitimate retry or starting a chat.
+    expect(await deliver(quiet)).toEqual(MUTED)
+    expect(
+      await deliver(start(FIRST, 'changed', { deliveryId: 'same', mentioned: false }))
+    ).toEqual({ outcome: 'refused', reason: 'delivery_id_reused' })
+    expect(await deliver(send(FIRST, 'quiet', { deliveryId: 'same' }))).toEqual({
+      outcome: 'refused',
+      reason: 'delivery_id_reused'
+    })
+    expect(starts).toEqual([])
+  })
+
+  it.each([null, 'fixture-account'])(
+    'replays a saved muted start without pickup after restart (reply outbox %s)',
+    async (outbox) => {
+      const before = connector(await botHome({ first: true }))
+      const quiet = start(FIRST, 'quiet after leaving', {
+        mentioned: false,
+        automations: [
+          {
+            automationId: 'a1',
+            triggerId: 't1',
+            botId: 'bot1',
+            event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text: 'quiet' }
+          }
+        ]
+      })
+      const muted = { ...MUTED, inTurn: true }
+      const ordinary = start(ELSEWHERE, 'ordinary start', { mentioned: true })
+      expect(await before.deliver(quiet)).toEqual(muted)
+      expect(await before.deliver(quiet)).toEqual(muted)
+      expect(await before.deliver(ordinary)).toEqual({ outcome: 'accepted' })
+      expect(before.starts).toEqual([ordinary.prompt])
+      expect(before.automationsTaken).toEqual([])
+
+      await closeTestStores()
+      orchestration.close()
+      orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
+      const after = connector(createStore())
+      const sent: ConnectorAck[] = []
+      const acks = new ConnectorDeliveryAcks({
+        seam: after.seam,
+        host: after.host,
+        machine: { ...fakeMachine(() => null), ...after.machine },
+        send: async (batch) => {
+          sent.push(...batch)
+          return null
+        },
+        helloRev: () => 1,
+        random: () => 0.5,
+        signal: new AbortController().signal
+      })
+      try {
+        // The first process wrote these receipts but the service can still be waiting for its acks.
+        acks.deliverAll([quiet, ordinary], () => 60_000, outbox)
+        await expect.poll(() => acks.settled).toBe(true)
+        expect(sent.filter((ack) => ack.deliveryId === quiet.deliveryId)).toEqual([
+          { deliveryId: quiet.deliveryId, step: 'done', result: muted }
+        ])
+        expect(sent.filter((ack) => ack.deliveryId === ordinary.deliveryId)).toEqual([
+          { deliveryId: ordinary.deliveryId, step: 'received' },
+          { deliveryId: ordinary.deliveryId, step: 'done', result: { outcome: 'accepted' } }
+        ])
+
+        sent.length = 0
+        acks.deliverAll([{ ...quiet, prompt: 'different payload' }], () => 60_000, outbox)
+        await expect.poll(() => acks.settled).toBe(true)
+        expect(sent).toEqual([
+          {
+            deliveryId: quiet.deliveryId,
+            step: 'done',
+            result: { outcome: 'refused', reason: 'delivery_id_reused' }
+          }
+        ])
+        expect(after.starts).toEqual([])
+        expect(after.automationsTaken).toEqual([])
+      } finally {
+        acks.stop()
+      }
+    }
+  )
+
+  it.each(['start', 'send'] as const)(
+    'recovers an admitted %s automation when its receipt survived but its bookkeeping did not',
+    async (kind) => {
+      await botHome({ first: true })
+      const text = 'check the build'
+      const automations = [
+        {
+          automationId: 'build-check',
+          triggerId: 't1',
+          botId: 'bot1',
+          event: { key: THREAD, actorId: 'U1', occurredAt: 1_800_000_000_000, text }
+        }
+      ]
+      const delivery =
+        kind === 'start'
+          ? start(FIRST, text, { mentioned: false, automations })
+          : send(FIRST, text, { automations })
+      const payload =
+        'placeId' in delivery ? [delivery.agent, placeLaunchTarget(delivery.placeId), text] : [text]
+      const receipts = new DeliveryReceipts(() => orchestration)
+      // The turn was admitted before the bot left, but the process stopped before recording its automation.
+      await receipts.run(FIRST, delivery.deliveryId, `connector.${kind}`, payload, async () => ({
+        outcome: 'accepted'
+      }))
+      await closeTestStores()
+      orchestration.close()
+      orchestration = new OrchestrationDb(join(testState.dir, 'orchestration.db'))
+
+      const reopened = connector(createStore())
+      expect(await reopened.deliver(delivery)).toEqual({ outcome: 'accepted', inTurn: true })
+      expect(reopened.automationsTaken).toEqual(['build-check'])
+      expect(reopened.turns).toEqual([])
+      expect(reopened.starts).toEqual([])
+    }
+  )
+
   it('admits no unmentioned reply, and one turn for a mention that unmutes it on disk', async () => {
     const store = await botHome({ first: true })
     const { deliver, turns } = connector(store)
 
     const quiet = send(FIRST, 'fyi, the build is green')
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
-    expect(await deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await deliver(quiet)).toEqual(MUTED)
+    expect(await deliver(quiet)).toEqual(MUTED)
     // Nor do the automations it matched: the cloud is told they were taken, so it starts none.
     const automations = [
       {
@@ -278,7 +519,7 @@ describe('a muted bot thread', () => {
       }
     ]
     const matched = send(FIRST, 'deploy done', { automations })
-    const taken = { outcome: 'accepted', inTurn: true }
+    const taken = { ...MUTED, inTurn: true }
     expect(await deliver(matched)).toEqual(taken)
     expect(await deliver(matched)).toEqual(taken)
     expect(turns).toEqual([])
@@ -339,8 +580,8 @@ describe('a bot that leaves its thread', () => {
 
     const after = connector(reopened)
     const quiet = send(FIRST, 'thanks all')
-    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
-    expect(await after.deliver(quiet)).toEqual({ outcome: 'accepted' })
+    expect(await after.deliver(quiet)).toEqual(MUTED)
+    expect(await after.deliver(quiet)).toEqual(MUTED)
     await after.deliver(send(SECOND, 'thanks all'))
     await after.deliver(send(ELSEWHERE, 'and here'))
     expect(after.turns).toEqual(['thanks all', 'and here'])
@@ -507,7 +748,7 @@ describe('a bot that leaves its thread', () => {
     const replied = deliver(send(FIRST, 'sounds good, thanks'))
     go()
     expect(await leaving).toEqual({ ok: true })
-    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(await replied).toEqual(MUTED)
     expect(turns).toEqual([])
   })
 
@@ -526,7 +767,7 @@ describe('a bot that leaves its thread', () => {
     const replied = deliver(send(FIRST, 'great, thanks'))
     read()
     expect(await leaving).toEqual({ ok: true })
-    expect(await replied).toEqual({ outcome: 'accepted' })
+    expect(await replied).toEqual(MUTED)
     expect(turns).toEqual([])
     journal.reading.held = Promise.resolve()
   })

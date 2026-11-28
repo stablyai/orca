@@ -207,3 +207,20 @@ describe('bot shares contract', () => {
     expect(canAskBot(shared, 'U0MEMBER', [])).toBe(true)
   })
 })
+
+describe('fresh delivery mention state', () => {
+  const start = {
+    kind: 'start',
+    deliveryId: 'd1',
+    seq: 1,
+    expiresAt: 1_900_000_000_000,
+    conversation: { source: 'slack', externalId: 'T:C:1.000:U0BOT' },
+    agent: 'claude',
+    placeId: 'place',
+    prompt: 'hello'
+  }
+
+  it.each([true, false])('keeps explicit mention=%s on a fresh start', (mentioned) => {
+    expect(ConnectorDeliverySchema.parse({ ...start, mentioned })).toMatchObject({ mentioned })
+  })
+})

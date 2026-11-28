@@ -29,16 +29,6 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
     return countUnreadWorkspaces(this.store)
   }
 
-  onWorkspaceRecordsWritten(listener: () => void): () => void {
-    return (
-      this.store?.onStateWritten?.((domains) => {
-        if (writesWorkspaceRecords(domains)) {
-          listener()
-        }
-      }) ?? (() => {})
-    )
-  }
-
   /** Every unread write (window, phone, CLI, activation) lands in a workspace record; activity stamps that keep the flags are skipped. */
   onUnreadStateWritten(listener: () => void): () => void {
     return (

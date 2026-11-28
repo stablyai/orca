@@ -3,18 +3,19 @@
 // @mentions it. The bot's own posts (a background run's result, an automation) still go out.
 import type {
   ConnectorConversation,
-  ConnectorDelivery,
   ConnectorDeliveryResult
 } from '../../shared/connectors/connector-cloud-contract'
-import type { SendDelivery } from './connector-deliveries'
+import type { RequestDelivery } from './connector-deliveries'
 import { ThreadMuteUnconfirmedError } from './connector-thread-mute-saves'
 import { refused, type Delivery } from '../external-conversations/external-conversation-types'
 
-/** What a send to a bot's thread does: a muted thread silences any send that doesn't mention the
- *  bot; a mention unmutes and goes on. */
+/** What a request to a bot's thread does: a muted thread silences a known-unmentioned request; a
+ *  current explicit mention unmutes and goes on. */
 export type ThreadMuteStep = 'silence' | 'unmute_and_send' | 'send'
 
-type MuteFacts = Pick<SendDelivery, 'bareMention' | 'mentioned' | 'resume'> & {
+type MuteFacts = Pick<RequestDelivery, 'bareMention' | 'mentioned'> & {
+  kind?: RequestDelivery['kind']
+  resume?: unknown
   asker?: { app?: true; via?: unknown }
 }
 
@@ -27,13 +28,18 @@ function byPerson(delivery: MuteFacts): boolean {
 export function threadMuteStep(muted: boolean, delivery: MuteFacts): ThreadMuteStep {
   // Resume is pressed on the bot's own failed turn: it goes on, and may still be refused, so it
   // leaves the mute as it was.
-  if (delivery.resume) {
+  if ('resume' in delivery && delivery.resume) {
     return 'send'
   }
   if (!muted) {
     return 'send'
   }
-  return byPerson(delivery) && (delivery.mentioned || delivery.bareMention)
+  // A fresh start is the connector's direct admission of the current message. When an older
+  // desktop cannot read optional asker facts, keep that explicit wake rather than acknowledging
+  // it away. An asker we can read still has to be a person.
+  const explicitMention = delivery.mentioned || delivery.bareMention
+  const startWithoutAsker = delivery.kind === 'start' && delivery.asker === undefined
+  return explicitMention && (startWithoutAsker || byPerson(delivery))
     ? 'unmute_and_send'
     : 'silence'
 }
@@ -47,14 +53,11 @@ export function slackThreadBotUser(externalId: string): string | null {
     : null
 }
 
-/** A send the thread's mute handled starts no turn, and so none of its automations: the cloud is told
+/** A request the thread's mute handled starts no turn, and so none of its automations: the cloud is told
  *  they were taken, so it never starts them on their own. */
-export function withoutAutomations(
-  delivery: ConnectorDelivery,
-  result: ConnectorDeliveryResult
-): ConnectorDeliveryResult {
-  return result.outcome === 'accepted' && delivery.kind === 'send' && delivery.automations?.length
-    ? { ...result, inTurn: true }
+export function mutedDeliveryResult(delivery: RequestDelivery, result: Delivery): Delivery {
+  return result.outcome === 'accepted'
+    ? { ...result, muted: true, ...(delivery.automations?.length ? { inTurn: true as const } : {}) }
     : result
 }
 
@@ -85,19 +88,19 @@ export type ThreadMuteDeps = {
 
 const ACCEPTED = { outcome: 'accepted' } as const
 
-/** Runs a handled send's effects under its durable delivery receipt, so a resend replays it. */
+/** Runs a handled request's effects under its durable delivery receipt, so a resend replays it. */
 export type RecordHandled = (handled: () => Promise<Delivery>) => Promise<ConnectorDeliveryResult>
 
 type Decided = ConnectorDeliveryResult | 'send' | 'carried'
 
-/** A send this step holds: its result (accepted with no turn), or 'send' when it goes on once
+/** A request this step holds: its result (accepted with no turn), or 'send' when it goes on once
  *  decided. */
 export type ThreadMuteOutcome = { decided: Promise<ConnectorDeliveryResult | 'send' | 'carried'> }
 
 /** The send's outcome when this step holds it; null when it goes on to the agent now. */
 export function handleThreadMute(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: RequestDelivery,
   record: RecordHandled,
   // A later send of a held batch: whether an earlier send of it carried this one into its turn.
   carriedBefore?: Promise<boolean>
@@ -138,7 +141,7 @@ export function handleThreadMute(
  *  while a mention's unmute saves refuses the mention, and the thread stays unmuted. */
 function inPlace(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: RequestDelivery,
   record: RecordHandled,
   before: () => Promise<boolean>
 ): Promise<Decided> {
@@ -163,7 +166,7 @@ function inPlace(
 
 async function decideNow(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: RequestDelivery,
   record: RecordHandled
 ): Promise<Decided> {
   const linked = deps.read(delivery.conversation)
@@ -178,8 +181,11 @@ async function decideNow(
 
 // A cloud known not to mark mentions lets every reply through; a bare @mention it still names
 // brings the bot back for good, so the mute isn't restored once the cloud marks mentions again.
-const mutes = (deps: ThreadMuteDeps, delivery: SendDelivery): boolean =>
-  deps.mentionsKnown?.() !== false || threadMuteStep(true, delivery) === 'unmute_and_send'
+const mutes = (deps: ThreadMuteDeps, delivery: RequestDelivery): boolean =>
+  // A legacy start never said whether it was an explicit mention. Preserve its admission so an
+  // updated desktop does not drop a legitimate wake while its cloud rolls out this field.
+  (delivery.kind !== 'start' || delivery.mentioned !== undefined) &&
+  (deps.mentionsKnown?.() !== false || threadMuteStep(true, delivery) === 'unmute_and_send')
 
 /** Keeps the thread's newest deciding reply until it settles, for the replies behind it. */
 function hold<Decided>(
@@ -200,7 +206,7 @@ function hold<Decided>(
 
 function applyStep(
   deps: ThreadMuteDeps,
-  delivery: SendDelivery,
+  delivery: RequestDelivery,
   record: RecordHandled,
   // Already in its place in the thread's queue, so an unmute saves there and queues nothing more.
   place?: 'in_place'

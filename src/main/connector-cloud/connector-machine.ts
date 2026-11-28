@@ -11,6 +11,7 @@ import type { ExternalConversationHost } from '../external-conversations/externa
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import type { ConnectorAccountTransport } from './connector-transport'
 import type { ConnectorWakeSocketFactory } from './connector-wake-socket'
+import type { RequestDelivery } from './connector-deliveries'
 
 export type ConnectorRuntimeKind = 'desktop' | 'serve'
 
@@ -31,10 +32,10 @@ export type ConnectorMachine = {
   runTrigger: (delivery: Extract<ConnectorDelivery, { kind: 'trigger' }>) => Promise<boolean>
   /** The automations a bot's start or send also carries, run in that turn; null for none. */
   turnAutomations?: (entries: readonly ConnectorTurnAutomation[]) => TurnAutomations | null
-  /** A send a bot thread's mute handles before the agent (accepted, no turn); null when it goes on
-   *  now, 'send' when it goes on once its thread is linked. */
+  /** A request a bot thread's mute handles before the agent (accepted, no turn); null when it goes
+   *  on now, 'send' when it goes on once its thread is linked. */
   threadMute?: (
-    delivery: Extract<ConnectorDelivery, { kind: 'send' }>,
+    delivery: RequestDelivery,
     record: RecordHandled,
     carriedBefore?: Promise<boolean>
   ) => ThreadMuteOutcome | null

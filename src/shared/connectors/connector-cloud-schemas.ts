@@ -84,6 +84,8 @@ export const ConnectorDelivery = lazyZodSchema(() => {
       prompt: z.string().min(1),
       asker: OptionalAsker,
       automations: OptionalTurnAutomations,
+      // An older cloud omits this fact on starts, which keep their existing admission.
+      mentioned: z.boolean().optional().catch(undefined),
       // A mention of the bot with no words of its own; its text is the cloud's stand-in.
       bareMention: z.literal(true).optional(),
       askedAt: OptionalAskedAt

@@ -123,7 +123,7 @@ export type ConnectorBotWorkspace = {
 }
 
 export type ConnectorDeliveryResult =
-  | { outcome: 'accepted'; reopened?: true; inTurn?: true }
+  | { outcome: 'accepted'; reopened?: true; inTurn?: true; muted?: true }
   | { outcome: 'refused'; reason: string; failure?: ConnectorFailure }
   | { outcome: 'unknown'; reason: string }
   | { outcome: 'expired' | 'unsupported' }

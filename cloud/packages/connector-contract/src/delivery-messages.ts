@@ -187,6 +187,9 @@ export const ConnectorDeliverySchema = z.discriminatedUnion('kind', [
     // A bot's: an older machine ignores it.
     asker: ConnectorAskerSchema.optional(),
     automations: TurnAutomations,
+    // An older cloud omitted this; a newer one says whether this start explicitly @mentioned the
+    // bot, so a machine can distinguish it from a legacy start.
+    mentioned: z.boolean().optional(),
     bareMention: BareMention,
     askedAt: AskedAt
   }),
@@ -296,6 +299,7 @@ export const ConnectorDeliveryResultSchema = z.discriminatedUnion('outcome', [
   z.object({
     outcome: z.literal('accepted'),
     reopened: z.literal(true).optional(),
+    muted: z.literal(true).optional(),
     // The machine ran the automations the start or send carried, in its turn.
     inTurn: z.literal(true).optional()
   }),

@@ -106,8 +106,8 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       },
       { consumesTerminalSideEffects: true }
     )
-    // A Done may re-tier.
-    this.onWorkspaceRecordsWritten(() => this.sortStamps.noteRecordsWritten())
+    // A Done may re-tier when the workspace's unread flag changes.
+    this.onUnreadStateWritten(() => this.sortStamps.noteRecordsWritten())
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {

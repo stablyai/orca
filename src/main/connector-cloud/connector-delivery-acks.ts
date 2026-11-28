@@ -29,7 +29,7 @@ export class ConnectorDeliveryAcks {
   // Of those, the ones confirmed only by done (a trigger, a pull request event): never `received`, so
   // a quit before done leaves the cloud to resend them rather than reconcile them as unknown.
   private readonly onlyDone = new Set<string>()
-  // Admitted through the reply outbox and not yet settled: `received` waits for the admission commit.
+  // Pickup waits for a committed admission or the outcome of a replay.
   private readonly unadmitted = new Set<string>()
 
   constructor(
@@ -129,23 +129,20 @@ export class ConnectorDeliveryAcks {
     return this.deps.outbox?.() ?? null
   }
 
-  private track({ deliveryId, received, done, viaOutbox }: DispatchedDelivery): void {
+  private track({ deliveryId, received, done, waitForAdmission }: DispatchedDelivery): void {
     this.active.add(deliveryId)
     if (!received) {
       this.onlyDone.add(deliveryId)
-    } else if (viaOutbox) {
-      // Its outbox row commits with its admission: until then the cloud keeps it leased, so a crash
-      // before the commit hands it out again rather than leaving it received and never answered.
+    } else if (waitForAdmission) {
+      // Leave the delivery leased until we can confirm the machine took it.
       this.unadmitted.add(deliveryId)
     } else {
       this.push({ deliveryId, step: 'received' })
     }
     void done.then((result) => {
-      // Only a committed admission is received; a refusal before the journal is done alone. Both
-      // go in one push, so no request carries the received without its done.
+      // Muted or refused deliveries settle with done alone. A confirmed pickup goes with done.
       const unadmitted = this.unadmitted.delete(deliveryId)
-      const admitted = unadmitted && result.outcome === 'accepted'
-      // Refused before its admission: confirmed by done alone, like onlyDone.
+      const admitted = unadmitted && result.outcome === 'accepted' && !result.muted
       if (unadmitted && !admitted) {
         this.onlyDone.add(deliveryId)
       }
