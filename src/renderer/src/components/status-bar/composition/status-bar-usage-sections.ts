@@ -4,6 +4,7 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import { antigravityBarBuckets } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
@@ -45,6 +46,14 @@ export function getStatusBarUsageSections(
         labelFirst: isNamedBucket
       }
     ]
+  }
+  if (p.provider === 'antigravity') {
+    return antigravityBarBuckets(p.buckets).map((bucket) => ({
+      key: bucket.name,
+      window: bucket,
+      label: bucket.name,
+      labelFirst: true
+    }))
   }
   if (p.buckets?.length) {
     const buckets = p.buckets.filter((bucket) => isCursorUsageBucket(bucket.name))

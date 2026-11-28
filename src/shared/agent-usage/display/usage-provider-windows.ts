@@ -52,6 +52,14 @@ export function hasUsageData(provider: ProviderUsageWindows): boolean {
 
 /** The usage windows a provider shows, in order; session and weekly stay as null placeholders. */
 export function getUsageWindowSections(p: ProviderUsageWindows): UsageWindowSection[] {
+  // Antigravity's pools are independent, so none is a rollup of another and none is dropped.
+  if (p.provider === 'antigravity') {
+    return (p.buckets ?? []).map((bucket) => ({
+      kind: 'bucket' as const,
+      name: bucket.name,
+      window: bucket
+    }))
+  }
   if (p.buckets?.length) {
     // Drop the rollup only when it repeats a listed weekly pool.
     const { weekly } = p

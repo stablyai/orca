@@ -86,8 +86,6 @@ export type UsageRateLimitMetadata = {
   unverifiableOwner?: boolean
   /** Renderer-only: set up on this device but not on the remote host that owns usage. Hosts never set it. */
   ownerNotSetUp?: OwnerNotSetUpPlaceholder
-  /** Antigravity: the agy login the status-line reading came from; id is null for an unsaved login. */
-  account?: { id: string | null; email: string | null }
   /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
   readingAccount?: UsageReadingAccount
   /** Codex: the managed login this auth rejection actually came from. */

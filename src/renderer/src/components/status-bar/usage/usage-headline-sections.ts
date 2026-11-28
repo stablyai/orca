@@ -3,6 +3,7 @@ import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
 } from './rate-limit-window-localized-label'
+import { antigravityBarBuckets } from '../../../../../shared/agent-usage/rate-limits/antigravity-statusline-quota'
 import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
 import type {
   ProviderRateLimits,
@@ -97,6 +98,18 @@ export function getUsageHeadlineSection(
   t?: Translate,
   scope: UsageHeadlineScope = 'primary'
 ): UsageSection | null {
+  if (p.provider === 'antigravity') {
+    const lead = antigravityBarBuckets(p.buckets)
+    const sections = headlineSections(p, t, scope).filter((section) =>
+      lead.some((bucket) => bucket === section.window)
+    )
+    if (sections.length > 0) {
+      const tightest = sections.reduce((a, b) =>
+        clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
+      )
+      return { ...tightest, label: shortUsageLabel(p, tightest, true) }
+    }
+  }
   if (p.provider === 'cursor') {
     const primary = headlineSections(p, t, scope).find(
       (section) => section.label === CURSOR_MODELS_BUCKET_NAME

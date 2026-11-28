@@ -1,98 +1,119 @@
 import { describe, expect, it } from 'vitest'
-import { readAntigravityStatusLineQuota } from './antigravity-statusline-quota'
+import {
+  antigravityBarBuckets,
+  readAntigravityStatusLinePost,
+  readAntigravityStatusLineQuota
+} from './antigravity-statusline-quota'
 
 const NOW = Date.parse('2026-11-28T10:00:00Z')
 
-function payload(quota: unknown): string {
-  return JSON.stringify({
+function payload(quota: unknown): object {
+  return {
     cwd: '/tmp/work',
     model: { id: 'm', display_name: 'Gemini 4 Neon (High)', effort: 'high' },
     cycle_mode: 'auto',
-    email: ' user@example.com ',
+    email: 'user@example.com',
     quota
-  })
+  }
 }
 
 describe('readAntigravityStatusLineQuota', () => {
-  it('maps agy quota windows to session, weekly and named buckets', () => {
-    const result = readAntigravityStatusLineQuota(
+  it('keeps every present pool as its own named window', () => {
+    const reading = readAntigravityStatusLineQuota(
       payload({
-        'gemini-5h': {
-          remaining_fraction: 0.75,
-          reset_time: '2026-11-28T12:00:00Z',
-          reset_in_seconds: 7200
-        },
+        'gemini-5h': { remaining_fraction: 0.75, reset_time: '2026-11-28T12:00:00Z' },
         'gemini-weekly': { remaining_fraction: 0.5, reset_time: '2026-12-01T00:00:00Z' },
         '3p-5h': { remaining_fraction: 0.1, reset_time: '2026-11-28T11:00:00Z' },
-        '3p-weekly': { remaining_fraction: 1, reset_time: '1970-01-01T00:00:00Z' }
+        // Same value and reset as Gemini's weekly pool: still a separate pool.
+        '3p-weekly': { remaining_fraction: 0.5, reset_time: '2026-12-01T00:00:00Z' }
       }),
       NOW
     )
-    expect(result?.email).toBe('user@example.com')
-    expect(result?.limits).toMatchObject({
+    expect(reading).toMatchObject({
       provider: 'antigravity',
       status: 'ok',
-      error: null,
       updatedAt: NOW,
-      session: {
-        usedPercent: 25,
-        windowMinutes: 300,
-        resetsAt: Date.parse('2026-11-28T12:00:00Z')
-      },
-      weekly: {
-        usedPercent: 50,
-        windowMinutes: 10080,
-        resetsAt: Date.parse('2026-12-01T00:00:00Z')
-      }
+      session: { usedPercent: 25, windowMinutes: 300 },
+      weekly: { usedPercent: 50, windowMinutes: 10080 }
     })
-    expect(result?.limits.buckets).toHaveLength(2)
-    expect(result?.limits.buckets?.[0]).toMatchObject({ usedPercent: 90, windowMinutes: 300 })
-    expect(result?.limits.buckets?.[1]).toMatchObject({
-      usedPercent: 0,
-      windowMinutes: 10080,
-      resetsAt: null
-    })
+    expect(reading?.buckets?.map((bucket) => [bucket.name, bucket.usedPercent])).toEqual([
+      ['Gemini 5h', 25],
+      ['Gemini weekly', 50],
+      ['Claude · GPT 5h', 90],
+      ['Claude · GPT weekly', 50]
+    ])
+    expect(JSON.stringify(reading)).not.toContain('example.com')
   })
 
-  it('reads an untouched epoch window and a lapsed reset as 0% used with no reset time', () => {
-    const result = readAntigravityStatusLineQuota(
+  it('reads an epoch or lapsed reset as unused, but keeps the fraction for a bad reset time', () => {
+    const reading = readAntigravityStatusLineQuota(
       payload({
         'gemini-5h': { remaining_fraction: 1, reset_time: '1970-01-01T00:00:00Z' },
-        'gemini-weekly': { remaining_fraction: 0.2, reset_time: '2026-11-28T09:59:59Z' }
+        'gemini-weekly': { remaining_fraction: 0.2, reset_time: '2026-11-28T09:59:59Z' },
+        '3p-5h': { remaining_fraction: 0.1, reset_time: 'not a date' },
+        '3p-weekly': { remaining_fraction: 0.4 }
       }),
       NOW
     )
-    expect(result?.limits.session).toMatchObject({ usedPercent: 0, resetsAt: null })
-    expect(result?.limits.weekly).toMatchObject({ usedPercent: 0, resetsAt: null })
+    expect(reading?.session).toMatchObject({ usedPercent: 0, resetsAt: null })
+    expect(reading?.weekly).toMatchObject({ usedPercent: 0, resetsAt: null })
+    expect(reading?.buckets?.[2]).toMatchObject({ usedPercent: 90, resetsAt: null })
+    expect(reading?.buckets?.[3]).toMatchObject({ usedPercent: 60, resetsAt: null })
   })
 
-  it('clamps an out-of-range remaining fraction', () => {
-    const result = readAntigravityStatusLineQuota(
-      payload({ 'gemini-5h': { remaining_fraction: -0.4, reset_time: '2026-11-28T12:00:00Z' } }),
+  it('omits a disabled pool and clamps an out-of-range fraction', () => {
+    const reading = readAntigravityStatusLineQuota(
+      payload({
+        'gemini-5h': { remaining_fraction: -0.4, reset_time: '2026-11-28T12:00:00Z' },
+        '3p-5h': { remaining_fraction: 0.5, reset_time: '2026-11-28T12:00:00Z', disabled: true }
+      }),
       NOW
     )
-    expect(result?.limits.session?.usedPercent).toBe(100)
+    expect(reading?.session?.usedPercent).toBe(100)
+    expect(reading?.buckets?.map((bucket) => bucket.name)).toEqual(['Gemini 5h'])
   })
 
-  it('returns null without a usable quota or for malformed input', () => {
+  it('returns null without a usable quota window', () => {
     expect(readAntigravityStatusLineQuota(payload(undefined), NOW)).toBeNull()
     expect(readAntigravityStatusLineQuota(payload({}), NOW)).toBeNull()
+    expect(readAntigravityStatusLineQuota(payload('nope'), NOW)).toBeNull()
     expect(
       readAntigravityStatusLineQuota(payload({ 'gemini-5h': { reset_time: 'x' } }), NOW)
     ).toBeNull()
-    expect(readAntigravityStatusLineQuota(payload('nope'), NOW)).toBeNull()
-    expect(readAntigravityStatusLineQuota('{not json', NOW)).toBeNull()
-    expect(readAntigravityStatusLineQuota('[]', NOW)).toBeNull()
-    expect(readAntigravityStatusLineQuota('null', NOW)).toBeNull()
+    expect(
+      readAntigravityStatusLineQuota(
+        payload({ 'gemini-5h': { remaining_fraction: 1, disabled: true } }),
+        NOW
+      )
+    ).toBeNull()
   })
+})
 
-  it('leaves the email null when absent', () => {
-    const result = readAntigravityStatusLineQuota(
-      JSON.stringify({
-        quota: { 'gemini-5h': { remaining_fraction: 0.5, reset_time: '2026-11-28T12:00:00Z' } }
-      }),
-      NOW
-    )
-    expect(result?.email).toBeNull()
+describe('readAntigravityStatusLinePost', () => {
+  it('reads the posted form once and rejects a payload that is not an object', () => {
+    const quota = { 'gemini-5h': { remaining_fraction: 0.5, reset_time: '2999-01-01T00:00:00Z' } }
+    expect(
+      readAntigravityStatusLinePost({ payload: JSON.stringify(payload(quota)) }, NOW)?.session
+    ).toMatchObject({ usedPercent: 50 })
+    expect(readAntigravityStatusLinePost({ payload: '{not json' }, NOW)).toBeNull()
+    expect(readAntigravityStatusLinePost({ payload: '[]' }, NOW)).toBeNull()
+    expect(readAntigravityStatusLinePost({}, NOW)).toBeNull()
+  })
+})
+
+describe('antigravityBarBuckets', () => {
+  it('leads with Gemini pools, else the third-party 5h pool', () => {
+    const quota = {
+      'gemini-5h': { remaining_fraction: 0.5 },
+      '3p-5h': { remaining_fraction: 0.5 },
+      '3p-weekly': { remaining_fraction: 0.5 }
+    }
+    const both = readAntigravityStatusLineQuota(payload(quota), NOW)
+    expect(antigravityBarBuckets(both?.buckets).map((bucket) => bucket.name)).toEqual(['Gemini 5h'])
+    const { 'gemini-5h': _gemini, ...thirdPartyOnly } = quota
+    const only = readAntigravityStatusLineQuota(payload(thirdPartyOnly), NOW)
+    expect(antigravityBarBuckets(only?.buckets).map((bucket) => bucket.name)).toEqual([
+      'Claude · GPT 5h'
+    ])
   })
 })

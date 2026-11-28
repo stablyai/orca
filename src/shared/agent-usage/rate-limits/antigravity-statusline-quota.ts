@@ -16,6 +16,14 @@ type QuotaPayload = {
   '3p-weekly'?: unknown
 }
 
+/** Names the four independent pools agy reports; the status bar and details menu key off them. */
+export const ANTIGRAVITY_POOL_LABELS = {
+  gemini5h: 'Gemini 5h',
+  geminiWeekly: 'Gemini weekly',
+  thirdParty5h: 'Claude · GPT 5h',
+  thirdPartyWeekly: 'Claude · GPT weekly'
+} as const
+
 function isQuotaPayload(value: unknown): value is QuotaPayload {
   return typeof value === 'object' && value !== null
 }
@@ -28,19 +36,23 @@ function parseWindow(value: unknown, receivedAt: number): ParsedWindow | null {
   if (typeof value !== 'object' || value === null || !('remaining_fraction' in value)) {
     return null
   }
+  if ('disabled' in value && value.disabled === true) {
+    return null
+  }
   const remaining = finiteNumber(value.remaining_fraction)
   if (remaining === undefined) {
     return null
   }
+  const used = (1 - Math.min(1, Math.max(0, remaining))) * 100
   const resetTime =
     'reset_time' in value && typeof value.reset_time === 'string'
       ? Date.parse(value.reset_time)
       : Number.NaN
-  // An untouched window reports the epoch and a lapsed one only refills, so both read 0% used.
-  if (!(resetTime > 0) || resetTime <= receivedAt) {
+  // Only a valid epoch or past reset means the window refilled; a bad value keeps its fraction.
+  if (Number.isFinite(resetTime) && resetTime <= receivedAt) {
     return { usedPercent: 0, resetsAt: null }
   }
-  return { usedPercent: (1 - Math.min(1, Math.max(0, remaining))) * 100, resetsAt: resetTime }
+  return { usedPercent: used, resetsAt: Number.isFinite(resetTime) ? resetTime : null }
 }
 
 function toWindow(parsed: ParsedWindow | null, windowMinutes: number): RateLimitWindow | null {
@@ -56,48 +68,42 @@ function toBucket(
   return window ? [{ ...window, name }] : []
 }
 
-export type AntigravityStatusLineReading = { email: string | null; limits: ProviderRateLimits }
+/** The reading holds only quota windows; the payload's email never leaves this function. */
+export type AntigravityStatusLineReading = ProviderRateLimits
 
-/** Null means the payload carries no usable quota window; the email only attributes the reading. */
+/** Null means the payload carries no usable quota window. `payload` is already-parsed JSON. */
 export function readAntigravityStatusLineQuota(
-  payloadJson: string,
+  payload: unknown,
   receivedAt: number
 ): AntigravityStatusLineReading | null {
-  let payload: unknown
-  try {
-    payload = JSON.parse(payloadJson)
-  } catch {
-    return null
-  }
-  if (typeof payload !== 'object' || payload === null || !('quota' in payload)) {
-    return null
-  }
-  const { quota } = payload
+  const quota =
+    typeof payload === 'object' && payload !== null && 'quota' in payload ? payload.quota : null
   if (!isQuotaPayload(quota)) {
     return null
   }
-  const session = toWindow(parseWindow(quota['gemini-5h'], receivedAt), FIVE_HOUR_MINUTES)
-  const weekly = toWindow(parseWindow(quota['gemini-weekly'], receivedAt), WEEKLY_MINUTES)
+  const gemini5h = parseWindow(quota['gemini-5h'], receivedAt)
+  const geminiWeekly = parseWindow(quota['gemini-weekly'], receivedAt)
+  const thirdParty5h = parseWindow(quota['3p-5h'], receivedAt)
+  const thirdPartyWeekly = parseWindow(quota['3p-weekly'], receivedAt)
+  // Every present pool is a named bucket, so identical values in two pools stay separate rows.
   const buckets = [
-    ...toBucket(parseWindow(quota['3p-5h'], receivedAt), 'Claude · GPT 5h', FIVE_HOUR_MINUTES),
-    ...toBucket(parseWindow(quota['3p-weekly'], receivedAt), 'Claude · GPT weekly', WEEKLY_MINUTES)
+    ...toBucket(gemini5h, ANTIGRAVITY_POOL_LABELS.gemini5h, FIVE_HOUR_MINUTES),
+    ...toBucket(geminiWeekly, ANTIGRAVITY_POOL_LABELS.geminiWeekly, WEEKLY_MINUTES),
+    ...toBucket(thirdParty5h, ANTIGRAVITY_POOL_LABELS.thirdParty5h, FIVE_HOUR_MINUTES),
+    ...toBucket(thirdPartyWeekly, ANTIGRAVITY_POOL_LABELS.thirdPartyWeekly, WEEKLY_MINUTES)
   ]
-  if (!session && !weekly && buckets.length === 0) {
+  if (buckets.length === 0) {
     return null
   }
-  const email = 'email' in payload && typeof payload.email === 'string' ? payload.email.trim() : ''
   return {
-    email: email || null,
-    limits: {
-      provider: 'antigravity',
-      session,
-      weekly,
-      ...(buckets.length > 0 ? { buckets } : {}),
-      updatedAt: receivedAt,
-      error: null,
-      status: 'ok',
-      usageMetadata: { source: 'live-session' }
-    }
+    provider: 'antigravity',
+    session: toWindow(gemini5h, FIVE_HOUR_MINUTES),
+    weekly: toWindow(geminiWeekly, WEEKLY_MINUTES),
+    buckets,
+    updatedAt: receivedAt,
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'live-session' }
   }
 }
 
@@ -107,6 +113,19 @@ export function readAntigravityStatusLinePost(
   receivedAt: number
 ): AntigravityStatusLineReading | null {
   const form = readClaudeStatusLineForm(body)
-  const payload = form && 'payload' in form.fields ? form.fields.payload : null
-  return typeof payload === 'string' ? readAntigravityStatusLineQuota(payload, receivedAt) : null
+  return form ? readAntigravityStatusLineQuota(form.payload, receivedAt) : null
+}
+
+/** The pool the status bar leads with: Gemini's windows, else the third-party 5h one. */
+export function antigravityBarBuckets(
+  buckets: readonly RateLimitBucket[] | undefined
+): RateLimitBucket[] {
+  const gemini = (buckets ?? []).filter(
+    (bucket) =>
+      bucket.name === ANTIGRAVITY_POOL_LABELS.gemini5h ||
+      bucket.name === ANTIGRAVITY_POOL_LABELS.geminiWeekly
+  )
+  return gemini.length > 0
+    ? gemini
+    : (buckets ?? []).filter((bucket) => bucket.name === ANTIGRAVITY_POOL_LABELS.thirdParty5h)
 }
