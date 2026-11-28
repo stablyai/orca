@@ -2081,7 +2081,11 @@
       "deleteUnconfirmed": "Es ist noch vorhanden. Prüfe den Ordner und versuche es erneut.",
       "renameFailed": "{{name}} konnte nicht umbenannt werden. {{reason}}",
       "newFileFailed": "Die Datei konnte nicht erstellt werden. {{reason}}",
-      "newFolderFailed": "Der Ordner konnte nicht erstellt werden. {{reason}}"
+      "newFolderFailed": "Der Ordner konnte nicht erstellt werden. {{reason}}",
+      "share": "Teilen",
+      "shareFailed": "{{name}} konnte nicht geteilt werden",
+      "shareTooLarge": "Dateien über 256 MB können nicht vom Telefon geteilt werden",
+      "shareHostOutdated": "Aktualisiere Orca dort, wo dieser Workspace läuft, um Dateien zu teilen"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Geladenen Markdown-Quelltext kopieren",

@@ -2263,7 +2263,11 @@
       "deleteUnconfirmed": "Он всё ещё на месте. Проверьте папку и повторите попытку.",
       "renameFailed": "Не удалось переименовать {{name}}. {{reason}}",
       "newFileFailed": "Не удалось создать файл. {{reason}}",
-      "newFolderFailed": "Не удалось создать папку. {{reason}}"
+      "newFolderFailed": "Не удалось создать папку. {{reason}}",
+      "share": "Поделиться",
+      "shareFailed": "Не удалось поделиться {{name}}",
+      "shareTooLarge": "Файлы больше 256 МБ нельзя отправить с телефона",
+      "shareHostOutdated": "Обновите Orca там, где работает это рабочее пространство, чтобы делиться файлами"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Скопировать загруженный исходный код Markdown",

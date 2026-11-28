@@ -2141,7 +2141,11 @@
       "deleteUnconfirmed": "Il est toujours là. Vérifiez le dossier et réessayez.",
       "renameFailed": "Impossible de renommer {{name}}. {{reason}}",
       "newFileFailed": "Impossible de créer le fichier. {{reason}}",
-      "newFolderFailed": "Impossible de créer le dossier. {{reason}}"
+      "newFolderFailed": "Impossible de créer le dossier. {{reason}}",
+      "share": "Partager",
+      "shareFailed": "Impossible de partager {{name}}",
+      "shareTooLarge": "Les fichiers de plus de 256 Mo ne peuvent pas être partagés depuis le téléphone",
+      "shareHostOutdated": "Mettez à jour Orca là où ce workspace s’exécute pour partager des fichiers"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Copier le code source Markdown chargé",

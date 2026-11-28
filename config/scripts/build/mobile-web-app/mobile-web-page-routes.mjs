@@ -57,11 +57,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   {
     pathname: '/h/[hostId]/files/[worktreeId]',
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
-    // Older shells cannot open PDFs; the preview asks for an app update instead.
+    // Older shells cannot open PDFs; the preview asks for an app update instead. Without native.file.share the row sheet has no Share.
     // Match preview grants for in-document navigation; older shells render inert HTML links.
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -73,6 +74,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     optionalGrants: [
       'externalNavigation',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       DEVICE_STORE_GRANT
     ]
@@ -137,11 +139,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; the docked Files has no Share without native.file.share; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
       'native.pdf.view',
+      'native.file.share',
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',

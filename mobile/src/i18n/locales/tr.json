@@ -2248,7 +2248,11 @@
       "deleteUnconfirmed": "Hâlâ orada. Klasörü kontrol edip tekrar deneyin.",
       "renameFailed": "{{name}} yeniden adlandırılamadı. {{reason}}",
       "newFileFailed": "Dosya oluşturulamadı. {{reason}}",
-      "newFolderFailed": "Klasör oluşturulamadı. {{reason}}"
+      "newFolderFailed": "Klasör oluşturulamadı. {{reason}}",
+      "share": "Paylaş",
+      "shareFailed": "{{name}} paylaşılamadı",
+      "shareTooLarge": "256 MB’tan büyük dosyalar telefondan paylaşılamaz",
+      "shareHostOutdated": "Dosya paylaşmak için bu çalışma alanının çalıştığı yerde Orca’yı güncelleyin"
     },
     "fileMarkdownPreview": {
       "copyLoadedSource": "Yüklenen Markdown kaynağını kopyala",
