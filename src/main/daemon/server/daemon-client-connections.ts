@@ -13,6 +13,7 @@ import {
   type DaemonStreamFraming
 } from '../transport/framing/daemon-stream-binary-framing'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
+import type { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 
 // Kernel probe timing can exceed this idle delay; producer-stall recovery has its own bound.
 const STREAM_SOCKET_KEEPALIVE_DELAY_MS = 30_000
@@ -39,6 +40,8 @@ type DaemonClientConnectionOptions = {
     providerRelay?: true
     providerRelayKeep?: true
     providerRelayAcks?: true
+    /** Advertised as `toolRelayFront`; its `tool-relay` connections are spliced into it. */
+    toolRelayFront?: DaemonToolRelayFront
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -63,8 +66,9 @@ export class DaemonClientConnections {
     this.options.onConnectionAccepted()
     this.transportSockets.add(socket)
     socket.once('close', () => {
-      this.transportSockets.delete(socket)
-      this.options.onTransportChanged()
+      if (this.transportSockets.delete(socket)) {
+        this.options.onTransportChanged()
+      }
     })
     socket.on('error', () => socket.destroy())
 
@@ -144,7 +148,9 @@ export class DaemonClientConnections {
       socket.destroy()
       return
     }
-    if (hello.role !== 'control' && hello.role !== 'stream') {
+    const front = this.options.identity.toolRelayFront
+    const toolRelay = hello.role === 'tool-relay' && front !== undefined
+    if (hello.role !== 'control' && hello.role !== 'stream' && !toolRelay) {
       this.options.log.log('client-hello-rejected', {
         reason: 'invalid-role',
         role: hello.role
@@ -178,6 +184,7 @@ export class DaemonClientConnections {
                 ...(identity.providerRelay ? { providerRelay: true } : {}),
                 ...(identity.providerRelayKeep ? { providerRelayKeep: true } : {}),
                 ...(identity.providerRelayAcks ? { providerRelayAcks: true } : {}),
+                ...(identity.toolRelayFront ? { toolRelayFront: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,
@@ -192,6 +199,15 @@ export class DaemonClientConnections {
 
     if (hello.role === 'control') {
       this.installControlSocket(socket, hello.clientId)
+      return
+    }
+    if (toolRelay && hello.frontConnectionId !== undefined) {
+      // Its own connection, not a client's; nothing past its hello is read before the splice.
+      // The front owns it from here, so its close (one per tool call) re-runs no idle check.
+      this.transportSockets.delete(socket)
+      socket.removeAllListeners('data')
+      socket.pause()
+      front.splice(hello.frontConnectionId, socket, hello.clientId)
       return
     }
     if (hello.role === 'stream') {

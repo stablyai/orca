@@ -2,6 +2,7 @@ import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
 import type { ProviderRelayAckFlags } from './relayed-provider-cut-keys'
 import { ProviderRelayAckBatch } from './provider-relay-ack-batch'
+import type { ToolRelayFrontKept } from '../daemon/protocol/daemon-tool-relay-front-protocol'
 import type {
   ProviderRelayAckWantedEvent,
   ProviderRelayAttachResult,
@@ -102,11 +103,20 @@ export class ProviderRelayChannel {
     chatKey: string,
     policy: ProviderRelayDetachPolicy,
     agent: string,
-    keep?: ProviderRelayKeepSpec
+    keep?: ProviderRelayKeepSpec,
+    /** The agent's tool grants, for a daemon start whose front its tools were given. */
+    toolGrants?: ToolRelayFrontKept
   ): Promise<ProviderRelaySpawnResult> {
     return this.client.request(
       'relaySpawn',
-      keep ? { spec, chatKey, agent, policy, keep } : { spec, chatKey, agent, policy },
+      {
+        spec,
+        chatKey,
+        agent,
+        policy,
+        ...(keep ? { keep } : {}),
+        ...(toolGrants ? { toolGrants } : {})
+      },
       RELAY_SPAWN_TIMEOUT_MS
     )
   }

@@ -8,6 +8,7 @@ import { botToolsOffInstruction } from '../../bots/bot-launch-tools'
 import { withSessionMcpToolsEnv } from '../../mcp-servers/session-mcp-tools'
 import { deliverHostMcpServersBesideConfig } from '../../mcp-servers/session-host-mcp-delivery'
 import { acpLaunchServers } from '../../bots/bot-tools-acp'
+import { acpSpecRelays } from '../process/acp-relay-work-markers'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
@@ -249,16 +250,13 @@ export function acpStructuredLaunchPart(
           version: launchedVersion
         })) ?? [])
     // An agent that ignores a session's servers gets none of the host list's; a bot's own are noted off.
-    const named = { env, cwd, also: ownServers.map((one) => one.name), hostOff: !!spec.botToolsOff }
+    const also = ownServers.map((one) => one.name)
+    const named = { env, cwd, also, hostOff: !!spec.botToolsOff, relays: acpSpecRelays(spec) }
     const tools = await deliverHostMcpServersBesideConfig(basis, spec.agent, named)
     // Why a bot's tools are off for this agent; its chat starts without them and is told so.
     const toolsOff = tools.servers.length > 0 ? spec.botToolsOff : undefined
-    const own = await basis.instructions(
-      linkedSkillsSection(
-        linked.projects,
-        linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
-      )
-    )
+    const unloaded = linkedRoot && loaded.includes(linkedRoot) ? [] : linked.projects
+    const own = await basis.instructions(linkedSkillsSection(linked.projects, unloaded))
     const delivered = await acpInstructionsWithVisuals(
       spec,
       deps,

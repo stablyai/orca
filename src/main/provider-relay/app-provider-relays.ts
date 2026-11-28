@@ -1,6 +1,6 @@
-import type { DaemonClient } from '../daemon/transport/client/daemon-client'
-import type * as RelayProtocol from '../daemon/protocol/daemon-provider-relay-protocol'
+import { connectedRelayClient } from './provider-relay-connected-client'
 import type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
+import { policyFor, type ProviderRelayOpenWork } from './provider-relay-detach-policy-for'
 export {
   dropListedProviderRelay,
   keptProviderRelaySpawnToken,
@@ -52,11 +52,15 @@ import { RelayedProviderChild } from './relayed-provider-child'
 import { daemonReadsFolder, providerRelaySpawnSpec } from './provider-relay-spawn-request'
 import { ProviderRelayCarriedWork } from './provider-relay-carried-work'
 import { relayedManagedProcess } from './relayed-managed-process'
+import {
+  refuseMovedProviderRelayFront,
+  refuseUnrelayedFront,
+  launchProviderRelayFrontPin,
+  type ProviderRelayFrontPin
+} from './provider-relay-front-pins'
 
 export type { ProviderRelayWorkMarkers } from './provider-relay-agent-markers'
-
-/** The provider's open work at detach, keyed as its markers key it. */
-export type ProviderRelayOpenWork = Record<string, string[][]>
+export type { ProviderRelayOpenWork } from './provider-relay-detach-policy-for'
 
 import type { ProviderRelayLaunch } from './provider-relay-launch'
 export type { ProviderRelayLaunch }
@@ -72,7 +76,6 @@ export type RelayedProviderProcess = {
 
 /** Quit waits at most this for detaches before disconnecting; a closing stream detaches anyway. */
 const QUIT_DETACH_WAIT_MS = 5_000
-const CONNECT_TIMEOUT_MS = 1_000
 /** How long one chat's hand-back waits for its paused reader, apart from quit's shared deadline. */
 const KEEP_READER_WAIT_MS = 2_000
 
@@ -97,20 +100,6 @@ export function installProviderRelayDurability(barrier: typeof durableFor): void
   durableFor = barrier
 }
 
-function policyFor(
-  markers: ProviderRelayWorkMarkers,
-  open?: ProviderRelayOpenWork | null
-): RelayProtocol.ProviderRelayDetachPolicy {
-  return {
-    idleStopMs: providerRelayRoute()?.idleStopMs() ?? null,
-    markers: [...markers.markers],
-    ...(markers.requests ? { workRequests: [...markers.requests] } : {}),
-    ...(markers.quiet ? { quiet: [...markers.quiet] } : {}),
-    ...(markers.startApprovals ? { startApprovals: [...markers.startApprovals] } : {}),
-    ...(open ? { open } : {})
-  }
-}
-
 /** Lists the daemons' kept relays once per launch (again after a daemon that didn't answer). */
 export function listProviderRelaysAtLaunch(): Promise<void> {
   const installed = providerRelayRoute()
@@ -120,18 +109,6 @@ export function listProviderRelaysAtLaunch(): Promise<void> {
 /** Whether this chat could have an agent kept here; no other chat waits on a daemon. */
 export function providerRelayMayKeepChat(provider: string, ownerOnLocalHost: boolean): boolean {
   return providerRelayRoute() !== null && providerRelayMayKeep(provider, ownerOnLocalHost)
-}
-
-async function connected(client: DaemonClient | null): Promise<DaemonClient | null> {
-  if (!client) {
-    return null
-  }
-  try {
-    await client.ensureConnectedWithin(CONNECT_TIMEOUT_MS)
-    return client
-  } catch {
-    return null
-  }
 }
 
 function track(chatKey: string, child: RelayedProviderChild, markers: ProviderRelayWorkMarkers) {
@@ -179,7 +156,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   }
   const { channel, info } = relay
   let endedSince = false
-  if (keptProviderRelayAttachable(info) && (await connected(channel.client))) {
+  if (keptProviderRelayAttachable(info) && (await connectedRelayClient(channel.client))) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
     const attach = await child.start(info.ackedSeq).catch(() => null)
     // An agent that ended can't answer the chat's open, unless its integration opens ended ones.
@@ -242,6 +219,16 @@ export async function launchRelayedProviderProcess(
 ): Promise<RelayedProviderProcess | null> {
   handedBack.delete(relay.chatKey)
   forgetProviderRelayRunPlacement(relay.chatKey)
+  const front = launchProviderRelayFrontPin(relay.chatKey, relay.only)
+  // An agent given a front runs under its daemon start or not at all (the next send goes app-bound).
+  return refuseUnrelayedFront(relay, front, await launchRelayed(launch, relay, front))
+}
+
+async function launchRelayed(
+  launch: ProviderProcessLaunch,
+  relay: ProviderRelayLaunch,
+  front: ProviderRelayFrontPin | null
+): Promise<RelayedProviderProcess | null> {
   const installed = providerRelayRoute()
   if (!installed) {
     return null
@@ -263,7 +250,13 @@ export async function launchRelayedProviderProcess(
   if (kept || relay.only === 'reattach') {
     return kept
   }
-  const client = await connected(await installed.current().catch(() => null))
+  const client = await connectedRelayClient(await installed.current().catch(() => null))
+  // An agent given one daemon start's tool front never runs under another start.
+  await refuseMovedProviderRelayFront(
+    relay.chatKey,
+    front,
+    client?.getDaemonIdentity()?.launchNonce
+  )
   const spec = client ? providerRelaySpawnSpec(launch, client, installed.appVersion, relay) : null
   if (!client || !spec || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
@@ -272,7 +265,8 @@ export async function launchRelayedProviderProcess(
   let spawned: Awaited<ReturnType<ProviderRelayChannel['spawn']>>
   try {
     const { chatKey, markers, keep } = relay
-    spawned = await channel.spawn(spec, chatKey, policyFor(markers), markers.agent, keep)
+    const policy = policyFor(markers)
+    spawned = await channel.spawn(spec, chatKey, policy, markers.agent, keep, front?.kept)
   } catch {
     // An unanswered spawn may still have started the agent; the daemon ends it once no one attaches.
     return null
@@ -280,6 +274,9 @@ export async function launchRelayedProviderProcess(
   if (!('relayId' in spawned)) {
     return null
   }
+  await refuseMovedProviderRelayFront(relay.chatKey, front, spawned.daemonInstance, () =>
+    channel.close(spawned.relayId)
+  )
   const child = relayedChild(channel, spawned.relayId, spawned.pid, relay)
   try {
     await child.start(0)

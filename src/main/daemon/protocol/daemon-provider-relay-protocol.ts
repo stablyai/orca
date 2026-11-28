@@ -1,7 +1,12 @@
 // Frozen relay RPC set: newer apps must be able to drive a daemon of this version unchanged.
+import type { ToolRelayFrontKept } from './daemon-tool-relay-front-protocol'
 export const PROVIDER_RELAY_PROTOCOL_VERSION = 63
 
-export type ProviderRelayCapability = 'providerRelay' | 'providerRelayKeep' | 'providerRelayAcks'
+export type ProviderRelayCapability =
+  | 'providerRelay'
+  | 'providerRelayKeep'
+  | 'providerRelayAcks'
+  | 'toolRelayFront'
 
 /**
  * The hello capabilities a relaying daemon of each protocol advertises. An app adopts any running
@@ -13,7 +18,8 @@ export const PROVIDER_RELAY_CAPABILITIES_BY_PROTOCOL: Readonly<
   Record<number, readonly ProviderRelayCapability[]>
 > = {
   63: ['providerRelay'],
-  64: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks']
+  64: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks'],
+  65: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks', 'toolRelayFront']
 }
 
 /** What a relaying daemon of this protocol advertises: its newest row at or below it. */
@@ -58,6 +64,8 @@ export type ProviderRelayRequest =
         policy?: ProviderRelayDetachPolicy
         /** Only sent to a daemon advertising `providerRelayKeep`; older ones ignore it. */
         keep?: ProviderRelayKeepSpec
+        /** Only sent to a daemon advertising `toolRelayFront`: held in its memory for this relay. */
+        toolGrants?: ToolRelayFrontKept
       }
     }
   | {
@@ -288,6 +296,8 @@ export type ProviderRelayInfo = {
   nextSeq: number
   ackedSeq: number
   pendingCount: number
+  /** Its agent's tool grants are held by this start's front (a newer daemon only). */
+  toolGrants?: true
 }
 
 /** `daemonInstance`: as in `ProviderRelaySpawnResult`, the instance this listing speaks for. */

@@ -12,6 +12,7 @@ import { ProviderRelayDetachedCap } from './provider-relay-detached-cap'
 import { ProviderRelayEndedRetention } from './provider-relay-ended-retention'
 import type { ProviderRelayStream } from './provider-relay-attachment'
 import { waitAtMost } from './provider-relay-bounded-wait'
+import { DaemonToolRelayFront } from '../tool-relay-front/daemon-tool-relay-front'
 import { readProviderRelayDetachPolicy } from './provider-relay-idle-stop'
 import { validProviderRelaySpawnSpec } from './provider-relay-spawn-spec'
 import {
@@ -30,6 +31,8 @@ type RelayHostOptions = {
   entryPath: string | null
   /** Echoed in spawn and list replies so a client knows which daemon start holds an agent. */
   daemonInstance?: string | null
+  /** Holds a tool relay front (only where the relay protocol is advertised). */
+  toolRelayFront?: boolean
   platform?: NodeJS.Platform
   acceptsWork: () => boolean
   onLiveCountChanged: () => void
@@ -51,9 +54,15 @@ export class ProviderRelayHost {
   private ready: Promise<Prepared> | null = null
   private disposed = false
   private disposing: Promise<void> | null = null
+  /** The loopback address this start holds for the agents it keeps; null where none relays. */
+  readonly toolRelayFront: DaemonToolRelayFront | null
 
   constructor(private readonly options: RelayHostOptions) {
     this.platform = options.platform ?? process.platform
+    this.toolRelayFront =
+      this.supported && options.toolRelayFront && options.daemonInstance
+        ? new DaemonToolRelayFront(options.daemonInstance)
+        : null
   }
 
   get daemonInstance(): string | null {
@@ -83,7 +92,9 @@ export class ProviderRelayHost {
     chatKey: unknown,
     policy?: unknown,
     agent?: unknown,
-    keep?: unknown
+    keep?: unknown,
+    /** The agent's tool grants, held in memory for its relay's life (only with a front). */
+    toolGrants?: unknown
   ): Promise<ProviderRelaySpawnResult> {
     if (!this.supported || this.disposed || !this.options.acceptsWork()) {
       return { refused: 'unavailable' }
@@ -126,6 +137,9 @@ export class ProviderRelayHost {
       spoolPath: join(directory, `${relayId}.ndjson`),
       log: this.options.log,
       onSettled: () => {
+        if (!relay.live) {
+          this.toolRelayFront?.forgetKept(relayId)
+        }
         this.removeIfFinished(relay)
         this.expireWhenAbandoned(relay)
         this.cap.forget(relay)
@@ -137,6 +151,8 @@ export class ProviderRelayHost {
       },
       onIdleUnread: () => this.cap.idleUnread(relay)
     })
+    // Held once its relay formed, before any I/O, so it goes with that relay and nothing outlives it.
+    this.toolRelayFront?.kept.keep(relayId, chatKey, toolGrants)
     relay.idleStopPolicy.configure(readProviderRelayDetachPolicy(policy))
     relay.pending.kept.configure(keep)
     this.relays.set(relayId, relay)
@@ -237,7 +253,12 @@ export class ProviderRelayHost {
   }
 
   list(): ProviderRelayListResult {
-    return { relays: [...this.relays.values()].map((relay) => relay.info()) }
+    const kept = this.toolRelayFront?.kept
+    return {
+      relays: [...this.relays.values()].map((relay) =>
+        kept?.holds(relay.relayId) ? { ...relay.info(), toolGrants: true } : relay.info()
+      )
+    }
   }
 
   /** Every caller waits for the same cleanup, so a second shutdown path can't overtake the first. */
@@ -248,6 +269,7 @@ export class ProviderRelayHost {
 
   private async disposeOnce(): Promise<void> {
     this.disposed = true
+    this.toolRelayFront?.dispose()
     this.cap.stop()
     this.retention.dispose()
     const relays = [...this.relays.values()]
@@ -283,6 +305,7 @@ export class ProviderRelayHost {
 
   private remove(relay: ProviderRelay): void {
     this.retention.clear(relay)
+    this.toolRelayFront?.forgetKept(relay.relayId)
     if (this.registered(relay)) {
       this.relays.delete(relay.relayId)
       void relay.dispose()

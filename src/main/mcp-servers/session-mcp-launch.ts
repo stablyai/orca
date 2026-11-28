@@ -25,7 +25,8 @@ import { SessionMcpTools, type SessionHostMcpServers } from './session-mcp-tools
 // it is restarts (its digest names the grant, never a token refresh or a lost sign-in).
 onMcpHostListSignInChanged(() => advanceBotToolsEpoch(mcpHostListFolder()))
 
-type LaunchRecord = { provider: string; location: { workspaceId: string } }
+/** `sessionId`: a chat's, whose agent may keep its tools across a restart (absent: a check's). */
+type LaunchRecord = { sessionId?: string; provider: string; location: { workspaceId: string } }
 type HostWorkspace = { key: string | null } | 'any'
 
 /** What a launch read of the host list: the server set this session resolved, and how to read it again. */
@@ -88,9 +89,14 @@ export async function sessionMcpLaunchTools(
   bot: Pick<Bot, 'id' | 'hostMcpServers'> | null,
   record: LaunchRecord,
   launchDirectory: string,
-  deps: { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string } = {}
+  deps: { relay?: Pick<BotToolRelay, 'grant'>; hostFolder?: string; relays?: boolean } = {}
 ): Promise<{ tools: SessionMcpTools; launched: SessionLaunchedTools | null }> {
   const relay = deps.relay ?? botToolRelay
+  // Only an agent the terminal daemon runs may outlive the app, so only its tools reach a front.
+  const keep =
+    deps.relays && record.sessionId
+      ? { keepFor: { chatKey: record.sessionId, cwd: launchDirectory } }
+      : {}
   if (bot) {
     const own = await readBotLaunchServers(launchDirectory)
     // A bot's home isn't one of the user's workspaces: it takes every server on for its agent.
@@ -101,7 +107,11 @@ export async function sessionMcpLaunchTools(
     const host = read?.host ?? botHostMcpAccess(bot.hostMcpServers === true, deps.hostFolder)
     const tools = await SessionMcpTools.for(
       relay,
-      { bot: { botId: bot.id, folder: launchDirectory }, agent: record.provider },
+      {
+        bot: { botId: bot.id, folder: launchDirectory },
+        agent: record.provider,
+        ...keep
+      },
       { own: own.servers, ...(host ? { host } : {}) }
     )
     return { tools, launched: { bot: own.launched, host: read?.launched ?? null } }
@@ -114,7 +124,15 @@ export async function sessionMcpLaunchTools(
   // Recorded even with no server on, so turning one on reaches the session's next turn.
   const tools =
     read.host.servers.length > 0
-      ? await SessionMcpTools.for(relay, { bot: null, agent: record.provider }, { host: read.host })
+      ? await SessionMcpTools.for(
+          relay,
+          {
+            bot: null,
+            agent: record.provider,
+            ...keep
+          },
+          { host: read.host }
+        )
       : SessionMcpTools.none
   return { tools, launched: { bot: null, host: read.launched } }
 }

@@ -236,9 +236,9 @@ export async function launchRelayedAcpAgent(
   if (!acpSpecRelays(spec)) {
     return null
   }
-  // A bot's tool grants live only in this app and a tool-free run's folder goes with its launch, so
-  // neither starts a kept agent; the chat's kept one is still reattached, never a second beside it,
-  // and owes a fresh agent at its next send.
+  // Grants no daemon start holds end with this app and a tool-free run's folder goes with its launch,
+  // so neither starts a kept agent; the chat's kept one is still reattached, never a second beside
+  // it, and owes a fresh agent at its next send.
   const appBound = launch.appBoundGrants === true || launch.toolFree !== undefined
   const refuse = async (refused: unknown): Promise<never> => {
     // Nothing of this launch ran, so its files go.

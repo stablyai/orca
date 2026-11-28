@@ -1,0 +1,169 @@
+import { connect, createServer, Socket, type Server } from 'node:net'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+// Guards #51086's front bounds: held connections, live pipes, announcements, and their release.
+import { DaemonToolRelayFront, TOOL_RELAY_FRONT_HOLD_MS } from './daemon-tool-relay-front'
+
+import type { ToolRelayFrontEventPayload } from '../protocol/daemon-tool-relay-front-protocol'
+
+// The guarded caps, hardcoded so a raised limit fails here.
+const MAX_HELD = 64
+const MAX_ANSWERING = 64
+const MAX_PIPES = 128
+
+const opened: Socket[] = []
+
+const heldId = (event: ToolRelayFrontEventPayload): string =>
+  'frontConnectionId' in event ? event.frontConnectionId : ''
+let front: DaemonToolRelayFront | null = null
+let pairs: Server | null = null
+
+afterEach(() => {
+  front?.dispose()
+  pairs?.close()
+  pairs = null
+  for (const socket of opened.splice(0)) {
+    socket.destroy()
+  }
+})
+
+/** An agent's connection to the front; resolves with everything it read once it closed. */
+function agent(port: number, allowHalfOpen = false): { socket: Socket; answer: Promise<string> } {
+  const socket = connect({ port, host: '127.0.0.1', allowHalfOpen })
+  opened.push(socket)
+  let read = ''
+  socket.on('data', (chunk) => (read += chunk.toString('utf8')))
+  socket.on('error', () => {})
+  return { socket, answer: new Promise((resolve) => socket.once('close', () => resolve(read))) }
+}
+
+/** The app's side of a splice: one end of a connected loopback pair. */
+async function appSocket(): Promise<Socket> {
+  if (!pairs) {
+    pairs = createServer((accepted) => {
+      opened.push(accepted)
+      accepted.on('error', () => {})
+    })
+    await new Promise<void>((resolve) => pairs!.listen(0, '127.0.0.1', resolve))
+  }
+  const address = pairs.address()
+  const socket = connect(typeof address === 'object' && address ? address.port : 0, '127.0.0.1')
+  opened.push(socket)
+  socket.on('error', () => {})
+  await new Promise<void>((resolve) => socket.once('connect', resolve))
+  return socket
+}
+
+describe.skipIf(process.platform === 'win32')('tool relay front bounds', () => {
+  it('never holds more descriptors than its budget, however many connections arrive', async () => {
+    const budget = 9
+    front = new DaemonToolRelayFront('start-1', TOOL_RELAY_FRONT_HOLD_MS, budget)
+    const port = await front.open()
+    const announced: string[] = []
+    front.serve('app', new Socket(), (event) => announced.push(heldId(event)))
+    const calls = Array.from({ length: 4 }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(4))
+    // Two pipes take four descriptors; with the listener and two held that is the budget.
+    for (const id of announced.splice(0, 2)) {
+      expect(front.splice(id, await appSocket(), 'app')).toBe(true)
+    }
+    expect(front.descriptorCount).toBe(budget - 2)
+    const over = Array.from({ length: 4 }, () => agent(port))
+    await vi.waitFor(() => expect(front!.descriptorCount).toBe(budget))
+    // Every connection past the budget is closed at once, so the front never holds more.
+    const closed: string[] = []
+    for (const call of over) {
+      void call.answer.then((text) => closed.push(text))
+    }
+    await vi.waitFor(() => expect(closed).toHaveLength(2))
+    expect(front.descriptorCount).toBe(budget)
+    expect(calls).toHaveLength(4)
+  })
+
+  it('holds at most 64 connections, answers the rest 503 at once, and frees each on splice and close', async () => {
+    front = new DaemonToolRelayFront('start-1')
+    const port = await front.open()
+    const announced: string[] = []
+    const held = Array.from({ length: MAX_HELD }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(MAX_HELD))
+    const over = agent(port)
+    expect(await over.answer).toContain('503 Service Unavailable')
+    expect(front.heldCount).toBe(MAX_HELD)
+
+    // Registering announces every held connection; the same connection registering again (one per
+    // chat launch) announces nothing more.
+    const control = new Socket()
+    for (let launch = 0; launch < 100; launch += 1) {
+      front.serve('app', control, (event) => announced.push(heldId(event)))
+    }
+    expect(announced).toHaveLength(MAX_HELD)
+    for (const id of announced) {
+      front.splice(id, await appSocket(), 'app')
+    }
+    expect(front.heldCount).toBe(0)
+    expect(front.pipeCount).toBe(MAX_HELD)
+
+    // An agent closing frees its pipe.
+    held[0]!.socket.destroy()
+    await vi.waitFor(() => expect(front!.pipeCount).toBe(MAX_HELD - 1))
+    // The app going frees every pipe it answered.
+    front.clientGone('app')
+    expect(front.pipeCount).toBe(0)
+  })
+
+  it('counts connections it is answering, caps them, and closes them on dispose', async () => {
+    front = new DaemonToolRelayFront('start-1')
+    const port = await front.open()
+    Array.from({ length: MAX_HELD }, () => agent(port))
+    await vi.waitFor(() => expect(front!.heldCount).toBe(MAX_HELD))
+    // Refused peers that never close their side: each is counted, and past the cap closed unanswered.
+    const refused = Array.from({ length: 2 * MAX_ANSWERING }, () => agent(port, true))
+    await vi.waitFor(() =>
+      expect(
+        refused.filter((call) => call.socket.readableEnded || call.socket.destroyed).length
+      ).toBe(refused.length)
+    )
+    expect(front.descriptorCount).toBe(1 + MAX_HELD + MAX_ANSWERING)
+    front.dispose()
+    expect(front.descriptorCount).toBe(0)
+  })
+
+  it('answers a connection no app takes within the hold, and frees it', async () => {
+    front = new DaemonToolRelayFront('start-1', 50)
+    const port = await front.open()
+    const { answer } = agent(port)
+    const text = await answer
+    expect(text).toContain('503 Service Unavailable')
+    expect(text).toContain('Retry-After: 5')
+    // A JSON-RPC body here would name no id, and an MCP client would wait out its own timeout.
+    expect(text).toContain('Content-Type: text/plain')
+    expect(text).toContain('Orca is restarting')
+    expect(front.heldCount).toBe(0)
+  })
+
+  it('keeps live pipes at the cap however many connections arrive', async () => {
+    front = new DaemonToolRelayFront('start-1')
+    const port = await front.open()
+    let spliced = 0
+    let handled = 0
+    const answered: Promise<string>[] = []
+    front.serve('app', new Socket(), (event) => {
+      void appSocket().then((socket) => {
+        if (front!.splice(heldId(event), socket, 'app')) {
+          spliced += 1
+        }
+        handled += 1
+      })
+    })
+    for (let index = 0; index < MAX_PIPES + 8; index += 1) {
+      answered.push(agent(port).answer)
+      // One at a time, so the hold cap never refuses: every refusal is the pipe cap's.
+      await vi.waitFor(() => expect(handled).toBe(index + 1))
+    }
+    expect(front.pipeCount).toBe(MAX_PIPES)
+    expect(spliced).toBe(MAX_PIPES)
+    const refused = await Promise.all(answered.slice(MAX_PIPES))
+    expect(refused.every((text) => text.includes('503 Service Unavailable'))).toBe(true)
+    front.clientGone('app')
+    expect(front.pipeCount).toBe(0)
+  })
+})

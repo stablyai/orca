@@ -4,6 +4,8 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { providerRelayChannel, type ProviderRelayChannel } from './provider-relay-channel'
 import { readFile } from 'node:fs/promises'
 import { spawnTokenFromEnvironBlock } from '../runtime/agent-session/ownership/agent-session-spawn-token-readback'
+import { serveKeptToolGrants } from '../bots/tool-relay/kept-tool-grants'
+import { forgetKeptSharedToolChat } from '../runtime/agent-session/environment/shared-tool-process-callers'
 import {
   forgetProviderRelayRunVerdict,
   providerRelayRunAskUnfenced,
@@ -36,6 +38,10 @@ let launchListed = false
 /** After a daemon didn't answer the launch pass, it is asked again no sooner than this. */
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
+/** The one pending re-list, so kept agents' fronts get served without waiting for a chat launch;
+ *  a few at most, then only launches ask again. */
+let relist: ReturnType<typeof setTimeout> | null = null
+let relistsLeft = 3
 
 /** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
  *  nothing of theirs was cut and restart offers leave them alone. */
@@ -267,7 +273,12 @@ async function listOne(client: DaemonClient): Promise<boolean> {
   if (!identity?.providerRelay) {
     return identity !== null
   }
-  return (await listProviderRelayInstance(client, identity.launchNonce)) !== null
+  const listing = await listProviderRelayInstance(client, identity.launchNonce)
+  // An agent this start keeps carries a tool grant: its front is served from now on.
+  if ([...(listing?.values() ?? [])].some((info) => info.toolGrants)) {
+    serveKeptToolGrants()
+  }
+  return listing !== null
 }
 
 /**
@@ -286,6 +297,15 @@ export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): 
       const answered = all ? await Promise.all(all.map(listOne)) : [false]
       if (answered.includes(false)) {
         retryAt = Date.now() + RETRY_AFTER_MS
+        if (!relist && relistsLeft > 0) {
+          relistsLeft -= 1
+          relist = setTimeout(() => {
+            relist = null
+            retryAt = 0
+            void listKeptProviderRelays(clients)
+          }, RETRY_AFTER_MS)
+          relist.unref()
+        }
       } else {
         launchListed = true
       }
@@ -345,6 +365,8 @@ export function dropListedProviderRelay(chatKey: string, keepUnread = false): vo
   }
   const relay = keptProviderRelay(chatKey)
   if (relay) {
+    // Its agent goes, so the shared-tool caller its daemon start kept for it goes too.
+    forgetKeptSharedToolChat(chatKey)
     forgetKeptProviderRelay(chatKey, relay)
     if (!keepUnread || !keptProviderRelayUnread(relay.info)) {
       void relay.channel.close(relay.info.relayId).catch(() => {})

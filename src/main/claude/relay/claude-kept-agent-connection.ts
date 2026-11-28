@@ -110,7 +110,7 @@ export function claudeChatConnectionOpener(
   handlers: ClaudeStreamJsonConnectionHandlers
 ) => Promise<ClaudeStreamJsonConnection> {
   return async (launch, handlers) =>
-    // Kept agents were all started without this run's grants.
+    // A kept agent is reattached whatever this launch's grants: it carries the ones it started with.
     (await openKeptClaudeAgentConnection(chatKey, launch, handlers, appBoundGrants)) ??
     open(appBoundGrants ? launch : { ...launch, relayChatKey: chatKey }, handlers)
 }

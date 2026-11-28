@@ -1,4 +1,5 @@
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
+import { configureKeptToolGrants } from '../../bots/tool-relay/kept-tool-grants'
 import { installProviderRelayRoute } from '../../provider-relay/app-provider-relays'
 import { nativeChatIdleStopMs } from '../../../shared/native-chat/settings/native-chat-idle-stop'
 import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
@@ -245,6 +246,8 @@ export function bindTerminalRuntimeStartupServices(
       appVersion: app.getVersion(),
       idleStopMs: () => nativeChatIdleStopMs(state.store?.getSettings())
     })
+    // Bots' tool grants kept by the daemon for agents that outlive the app; deleted bots' are dropped.
+    configureKeptToolGrants({ bots: () => state.store?.getBots() ?? null })
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)

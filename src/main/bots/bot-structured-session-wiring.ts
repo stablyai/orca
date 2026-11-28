@@ -191,11 +191,12 @@ export function botStructuredSessionWiring(deps: {
       }
     },
     // Every session: a bot's own tools in its home, and the host's MCP servers where they're on.
-    resolveSessionToolServers: async (record, launchDirectory) => {
+    resolveSessionToolServers: async (record, launchDirectory, relays) => {
       const { tools, launched } = await sessionMcpLaunchTools(
         botOfRecord(record),
         record,
-        launchDirectory
+        launchDirectory,
+        { relays }
       )
       if (launched) {
         launchedTools.set(record.sessionId, launched)

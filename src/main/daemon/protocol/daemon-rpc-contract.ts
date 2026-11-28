@@ -1,5 +1,6 @@
 import type { HostedProviderRequest } from './daemon-provider-process-protocol'
 import type { ProviderRelayRequest } from './daemon-provider-relay-protocol'
+import type { ToolRelayFrontRequest } from './daemon-tool-relay-front-protocol'
 import type { TerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
@@ -244,6 +245,7 @@ export type TakePendingOutputResult = {
 export type DaemonRequest =
   | HostedProviderRequest
   | ProviderRelayRequest
+  | ToolRelayFrontRequest
   | CreateOrAttachRequest
   | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest

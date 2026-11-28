@@ -8,6 +8,7 @@ import {
 } from '../protocol/daemon-provider-relay-protocol'
 import { jsonObject } from '../../../shared/json-stream/json-value-property'
 import type { ProviderRelayHost } from './provider-relay-host'
+import { answerToolRelayFrontRequest } from '../tool-relay-front/daemon-tool-relay-front-requests'
 
 function isRelayRequest(request: DaemonRequest): request is ProviderRelayRequest {
   return PROVIDER_RELAY_REQUEST_TYPES.has(request.type)
@@ -21,7 +22,7 @@ export function answerProviderRelayRequest(
   relays: ProviderRelayHost
 ): Promise<unknown> | undefined {
   if (!isRelayRequest(request)) {
-    return undefined
+    return answerToolRelayFrontRequest(request, client, socket, relays.toolRelayFront)
   }
   if (!client?.authenticatedPairEstablished || client.controlSocket !== socket) {
     return Promise.reject(new Error('Relay host unavailable'))
@@ -42,7 +43,8 @@ export function answerProviderRelayRequest(
           request.payload?.chatKey,
           payload.policy,
           payload.agent,
-          payload.keep
+          payload.keep,
+          payload.toolGrants
         )
         .then((spawned) => ('relayId' in spawned ? { ...spawned, ...instance } : spawned))
     case 'relayAttach':

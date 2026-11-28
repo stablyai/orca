@@ -20,7 +20,9 @@ import { startResponsiveDeadline } from './daemon-responsive-deadline'
 export type DaemonHelloRequest = {
   socket: Socket
   token: string
-  role: 'control' | 'stream'
+  role: 'control' | 'stream' | 'tool-relay'
+  /** `tool-relay` only: the held front connection this one answers. */
+  frontConnectionId?: string
   timeoutMs: number
   protocolVersion: number
   clientId: string
@@ -51,6 +53,9 @@ export function sendDaemonHello(request: DaemonHelloRequest): Promise<DaemonHell
       token,
       clientId,
       role,
+      ...(request.frontConnectionId !== undefined
+        ? { frontConnectionId: request.frontConnectionId }
+        : {}),
       ...(requestBinaryStream ? { streamFraming: BINARY_STREAM_FRAMING } : {})
     }
 
@@ -164,6 +169,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
     providerRelay?: unknown
     providerRelayKeep?: unknown
     providerRelayAcks?: unknown
+    toolRelayFront?: unknown
   }
   if (
     !Number.isSafeInteger(identity.pid) ||
@@ -183,6 +189,7 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
       ? { providerRelayKeep: true as const }
       : {}),
     ...(identity.providerRelayAcks === true ? { providerRelayAcks: true as const } : {}),
+    ...(identity.toolRelayFront === true ? { toolRelayFront: true as const } : {}),
     pid: identity.pid as number,
     startedAtMs: identity.startedAtMs,
     launchNonce: identity.launchNonce,

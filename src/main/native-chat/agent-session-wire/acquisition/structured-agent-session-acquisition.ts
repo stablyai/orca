@@ -1,5 +1,6 @@
 import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
 import { takeProviderRelayRunPlacement } from '../../../provider-relay/app-provider-relays'
+import { takeProviderRelayFrontPin } from '../../../provider-relay/provider-relay-front-pins'
 import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
@@ -79,20 +80,23 @@ export async function acquireOwner(
       ...(input.startupAttemptId ? { attemptId: input.startupAttemptId } : {})
     })
     const progress = input.onStartupAttempt?.(attempt)
-    const acquired = await input.adapter.acquire({
-      ...attempt,
-      ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
-      onSpawned: async (process) => {
-        progress?.spawned()
-        record = await input.store.commitProcessIdentity({
-          sessionId: record.sessionId,
-          fence,
-          process,
-          placement: takeProviderRelayRunPlacement(record.sessionId),
-          now: input.now()
-        })
-      }
-    })
+    const acquired = await input.adapter
+      .acquire({
+        ...attempt,
+        ...(input.recordPhase ? { recordPhase: input.recordPhase } : {}),
+        onSpawned: async (process) => {
+          progress?.spawned()
+          record = await input.store.commitProcessIdentity({
+            sessionId: record.sessionId,
+            fence,
+            process,
+            placement: takeProviderRelayRunPlacement(record.sessionId),
+            now: input.now()
+          })
+        }
+      })
+      // The launch's front pin served its spawn, or the launch failed: none outlives it.
+      .finally(() => takeProviderRelayFrontPin(record.sessionId))
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,

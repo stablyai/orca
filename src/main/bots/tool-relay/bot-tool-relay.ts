@@ -22,10 +22,11 @@ import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
 import { composioHeaderSource } from './bot-tool-relay-composio'
 import {
   MCP_HOST_LIST_RELAY_OWNER,
-  RelayGrants,
   relayToolPath,
   type RelayFolders
 } from './bot-tool-relay-grants'
+import { KeptRelayGrants, type RelayGrantAnswer } from './bot-tool-relay-kept-grants'
+import type { ToolRelayKeep } from './bot-tool-relay-fronts'
 import { header, readBody, RelayRefusal } from './bot-tool-relay-requests'
 import * as answers from './bot-tool-relay-sign-in-answer'
 import {
@@ -36,8 +37,6 @@ import {
   type RelayFetch
 } from './bot-tool-relay-upstream'
 
-const MAX_TRACKED_SESSIONS = 1_000
-const MAX_TRACKED_PROBLEMS = 1_000
 /** Why a call was aborted: the agent hung up, or the tool, its sign-in or the bot went. */
 const AGENT_LEFT = Symbol('agent left')
 const CREDENTIAL_ENDED = Symbol('credential ended')
@@ -53,10 +52,11 @@ export class BotToolRelay {
   private port = 0
   private listening: Promise<number> | null = null
   private stopListeningForEnds: (() => void) | null = null
-  private readonly grants = new RelayGrants()
+  /** Tokens, and the daemon-held fronts that agents outliving the app reach the relay by. */
+  readonly kept = new KeptRelayGrants(() => this.listen().then(() => this.server))
   /** Which upstream session identity an MCP session was made under, so a changed one starts over. */
-  private readonly sessions = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_SESSIONS })
-  private readonly problems = new BoundedMap<string, string>({ maxEntries: MAX_TRACKED_PROBLEMS })
+  private readonly sessions = new BoundedMap<string, string>({ maxEntries: 1_000 })
+  private readonly problems = new BoundedMap<string, string>({ maxEntries: 1_000 })
   private readonly admission = new RelayAdmission()
 
   constructor(
@@ -70,21 +70,27 @@ export class BotToolRelay {
    * The relay's address and the owner's token for this run of Orca; starts listening on first use.
    * The token reaches only `folders`, as the owner's latest launch named them.
    */
-  async grant(owner: string, folders: RelayFolders): Promise<{ origin: string; token: string }> {
-    const port = await this.listen()
-    return { origin: `http://127.0.0.1:${port}`, token: this.grants.grant(owner, folders) }
+  grant(
+    owner: string,
+    folders: RelayFolders,
+    /** A chat's launch, whose agent may outlive this app: it gets a daemon-held front when it can. */
+    options: { keepFor?: ToolRelayKeep } = {}
+  ): Promise<RelayGrantAnswer> {
+    const origin = async () => `http://127.0.0.1:${await this.listen()}`
+    return this.kept.grant(owner, folders, origin, options.keepFor)
   }
 
-  /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
+  /** The bot a token was granted to; null once revoked, or for one no kept agent carries. */
   botOf(token: string): string | null {
-    const owner = this.grants.of(token)?.owner ?? null
+    const owner = this.kept.of(token)?.owner ?? null
     return owner === MCP_HOST_LIST_RELAY_OWNER ? null : owner
   }
 
-  /** A deleted bot's token stops working at once, and its open calls are cut. */
-  revoke(botId: string): void {
-    this.grants.revoke(botId)
+  /** A deleted bot's token stops working and its calls are cut at once; daemons then drop its kept grants. */
+  async revoke(botId: string): Promise<void> {
+    const dropped = this.kept.revoke(botId)
     this.admission.abortWhere((call) => call.botId === botId, CREDENTIAL_ENDED)
+    await dropped
   }
 
   /** Why the tool's server last refused, for the Tools row; null when it hasn't. */
@@ -94,6 +100,7 @@ export class BotToolRelay {
 
   /** Stops listening, drops open calls, and forgets every token, session and problem. */
   close(): void {
+    this.kept.close()
     this.processes()?.close()
     this.admission.abortWhere(() => true, CREDENTIAL_ENDED)
     this.stopListeningForEnds?.()
@@ -103,7 +110,6 @@ export class BotToolRelay {
     this.server = null
     this.port = 0
     this.listening = null
-    this.grants.clear()
     this.sessions.clear()
     this.problems.clear()
   }
@@ -148,13 +154,8 @@ export class BotToolRelay {
     let call: RelayCall | null = null
     let label = ''
     try {
-      const port = this.port
-      const host = req.headers.host
       // A browser page can reach loopback too; Orca's agents send no Origin and name this address.
-      if (
-        req.headers.origin !== undefined ||
-        (host !== `127.0.0.1:${port}` && host !== `localhost:${port}`)
-      ) {
+      if (!this.kept.answers(req, res, this.port) || req.headers.origin !== undefined) {
         throw new RelayRefusal(403, 'Not allowed.')
       }
       const match = relayToolPath(req.url ?? '')
@@ -165,8 +166,7 @@ export class BotToolRelay {
       if (!['POST', 'GET', 'DELETE'].includes(method)) {
         throw new RelayRefusal(405, 'Method not allowed.')
       }
-      const auth = /^Bearer (\S+)$/.exec(req.headers.authorization ?? '')
-      const grant = auth?.[1] ? this.grants.of(auth[1]) : undefined
+      const grant = await this.kept.bearer(req)
       if (!grant) {
         throw new RelayRefusal(401, 'This tool needs the bot’s Orca token.')
       }
@@ -180,7 +180,9 @@ export class BotToolRelay {
       // session shares the host's token, so only this computer's limits bound its calls.
       const shared = grant.owner === MCP_HOST_LIST_RELAY_OWNER
       const key = credentialKey(folder, entry)
-      call = this.admission.admit(grant.owner, method, key, !shared, match.process !== undefined)
+      call = this.kept.admitThroughFront(req, res, () =>
+        this.admission.admit(grant.owner, method, key, !shared, match.process !== undefined)
+      )
       if (!call) {
         throw new RelayRefusal(429, 'Too many tool calls at once.')
       }

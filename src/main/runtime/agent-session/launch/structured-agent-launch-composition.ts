@@ -2,6 +2,10 @@
 
 import { toolFreeSession, type ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
 import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
+import {
+  pinProviderRelayFront,
+  takeProviderRelayFrontRefused
+} from '../../../provider-relay/provider-relay-front-pins'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -56,7 +60,9 @@ export type StructuredAgentLaunchSources = {
   /** The MCP servers Orca adds to the session: a bot's own, and the host's list; absent adds none. */
   resolveToolServers?: (
     record: AgentSessionRecord,
-    launchDirectory: string
+    launchDirectory: string,
+    /** The launch's agent runs under the terminal daemon, so its tools may reach a daemon front. */
+    relays: boolean
   ) => Promise<SessionMcpTools>
   /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
   resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
@@ -78,8 +84,9 @@ export type StructuredAgentLaunchBasis = {
   visuals(): Promise<NativeChatVisualsLaunch | null>
   /** Null when there are none. A resumed conversation keeps the ones it started with, in both agents. */
   instructions(linkedSkills?: string | null): Promise<string | null>
-  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session. */
-  toolServers(): Promise<SessionMcpTools>
+  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session.
+   *  `relays`: the part starts this launch's agent under the terminal daemon; the first call decides. */
+  toolServers(relays?: boolean): Promise<SessionMcpTools>
   /** The bot's linked-skills folder the chat loads beside the agent's own; none for any other chat. */
   linkedSkills(): Promise<LinkedSkills>
   /** After launch, when the agent turned the linked skill roots down. */
@@ -142,9 +149,10 @@ export type StructuredAgentLaunchReader<L> = (
   identity: AgentSessionJournalIdentity
 ) => Promise<ComposedStructuredLaunch<L>>
 
-function once<T>(read: () => T): () => T {
+/** The first call's arguments decide. */
+function once<A extends unknown[], T>(read: (...args: A) => T): (...args: A) => T {
   let result: { value: T } | null = null
-  return () => (result ??= { value: read() }).value
+  return (...args) => (result ??= { value: read(...args) }).value
 }
 
 function admittedRecord(
@@ -181,11 +189,16 @@ async function composedPart<L>(
   sources: StructuredAgentLaunchSources,
   part: StructuredAgentLaunchPartResolver<L>,
   identity: AgentSessionJournalIdentity,
-  permissionMode?: AgentChatPermissionChoice
+  permissionMode?: AgentChatPermissionChoice,
+  /** A read of the launch (a conversation copy): no front, and the chat's own launch's pin stays. */
+  read = false
 ): Promise<StructuredAgentLaunchPart<L> & { cwd: string }> {
   const record = admittedRecord(definition, sources.store, identity.sessionId)
   const launchEnv = once(() => sources.resolveAgentLaunchEnv?.(definition.agent) ?? {})
   const launchDirectory = once(() => resolveAgentSessionLaunchDirectory(sources, record))
+  // The launch after one refused its daemon front gets its tools at the app's own address.
+  const mayFront = !read && !takeProviderRelayFrontRefused(record.sessionId)
+  const pin = (front: string | null) => !read && pinProviderRelayFront(record.sessionId, front)
   const readEnvironments = () => ({
     base: once(sources.resolveBaseEnvironment),
     agent: once(() => sources.resolveAgentEnvironment(definition.agent))
@@ -219,11 +232,15 @@ async function composedPart<L>(
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
-    toolServers: once(async () =>
-      readOnly || !sources.resolveToolServers
-        ? SessionMcpTools.none
-        : sources.resolveToolServers(record, await launchDirectory())
-    ),
+    toolServers: once(async (relays: boolean = false) => {
+      const tools =
+        readOnly || !sources.resolveToolServers
+          ? SessionMcpTools.none
+          : await sources.resolveToolServers(record, await launchDirectory(), relays && mayFront)
+      // An agent given a daemon start's tool front may only run under that start.
+      pin(tools.front)
+      return tools
+    }),
     linkedSkills: once(async () =>
       toolFree
         ? NO_LINKED_SKILLS
@@ -245,6 +262,8 @@ async function composedPart<L>(
     readOnly,
     toolFree
   }
+  // A launch that resolves no tools leaves no earlier launch's pin behind.
+  pin(null)
   await sources.prepareLaunch?.(record, await launchDirectory())
   const composed = await part(basis, identity)
   return {
@@ -291,7 +310,9 @@ export function composeStructuredLaunchRead<L>(
       definition,
       sources,
       part,
-      identity
+      identity,
+      undefined,
+      true
     )
     admittedRecord(definition, sources.store, identity.sessionId)
     return { ...launch, cwd, env, envToDelete: [...inheritedEnvToDelete] }

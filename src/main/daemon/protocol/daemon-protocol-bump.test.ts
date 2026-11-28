@@ -11,7 +11,8 @@ import {
 // with a PROTOCOL_VERSION bump; never edit a shipped one, or that daemon silently lacks it.
 const SHIPPED: Record<number, string[]> = {
   63: ['providerRelay'],
-  64: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks']
+  64: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks'],
+  65: ['providerRelay', 'providerRelayKeep', 'providerRelayAcks', 'toolRelayFront']
 }
 
 it('a relay capability ships only with a daemon protocol bump', () => {

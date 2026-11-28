@@ -40,13 +40,14 @@ async function connectCodexAppServer(
   handlers: CodexAppServerConnectionHandlers = {},
   spawnImpl: ProviderProcessSpawner,
   initialize: boolean,
-  relayChatKey?: string
+  /** `only: 'reattach'`: a launch whose tools end with this app reattaches a kept agent, never spawns one. */
+  relay?: { chatKey: string; only?: 'reattach' }
 ): Promise<CodexAppServerConnection> {
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let requestFloor = Number.POSITIVE_INFINITY
-  const relayed = relayChatKey
+  const relayed = relay
     ? await launchRelayedProviderProcess(launch, {
-        chatKey: relayChatKey,
+        ...relay,
         markers: CODEX_RELAY_WORK_MARKERS,
         passWhileHeld: (line) => isCodexAnswerAbove(line, requestFloor)
       })
@@ -320,12 +321,10 @@ export function spawnCodexAppServerConnection(
 }
 
 /** One chat's own app-server, run under the terminal daemon where it can, so it outlives a restart. */
-export function spawnRelayedCodexAppServerConnection(
-  chatKey: string
-): typeof spawnCodexAppServerConnection {
-  return (launch, handlers = {}) =>
-    connectCodexAppServer(launch, handlers, spawnProcess, false, chatKey)
-}
+export const spawnRelayedCodexAppServerConnection =
+  (relay: { chatKey: string; only?: 'reattach' }): typeof spawnCodexAppServerConnection =>
+  (launch, handlers = {}) =>
+    connectCodexAppServer(launch, handlers, spawnProcess, false, relay)
 
 export function openCodexAppServerConnection(
   launch: CodexAppServerLaunch,

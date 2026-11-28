@@ -38,10 +38,10 @@ export type DaemonClientOptions = {
 }
 
 export class DaemonClient {
-  private socketPath: string
-  private tokenPath: string
-  private protocolVersion: number
-  private clientId = randomUUID()
+  readonly socketPath: string
+  readonly tokenPath: string
+  readonly protocolVersion: number
+  readonly clientId = randomUUID()
 
   private controlSocket: Socket | null = null
   private streamSocket: Socket | null = null

@@ -50,10 +50,20 @@ export function relayToolPath(path: string): RelayToolPath | null {
   return { scope: match[1] === 'mcp-servers' ? 'host' : 'bot', credentialId: match[2]! }
 }
 
-/** One token per owner for this run of Orca; only a hash of it is kept as the grant's key. */
+const resolvedFolders = (folders: RelayFolders): RelayFolders => ({
+  ...(folders.bot ? { bot: resolve(folders.bot) } : {}),
+  ...(folders.host ? { host: resolve(folders.host) } : {})
+})
+
+/**
+ * One token per owner for this run of Orca; only a hash of it is kept as the grant's key. Agents a
+ * daemon kept from an earlier run carry that run's token, which the daemon hands back (`adopt`).
+ */
 export class RelayGrants {
   private readonly grants = new Map<string, RelayGrant>()
   private readonly tokens = new Map<string, string>()
+  /** Each owner's token hashes, kept agents' included. */
+  private readonly hashesOf = new Map<string, Set<string>>()
 
   /** The owner's token, now reaching only `folders`, as the owner's latest launch named them. */
   grant(owner: string, folders: RelayFolders): string {
@@ -62,31 +72,66 @@ export class RelayGrants {
       token = randomBytes(32).toString('base64url')
       this.tokens.set(owner, token)
     }
-    this.grants.set(hashToken(token), {
-      owner,
-      folders: {
-        ...(folders.bot ? { bot: resolve(folders.bot) } : {}),
-        ...(folders.host ? { host: resolve(folders.host) } : {})
+    const reach = resolvedFolders(folders)
+    // Every token of the owner, kept agents' included, reaches only what its latest launch named.
+    for (const hash of this.hashesOf.get(owner) ?? []) {
+      const grant = this.grants.get(hash)
+      if (grant) {
+        grant.folders = reach
       }
-    })
+    }
+    this.set(hashToken(token), { owner, folders: reach })
     return token
+  }
+
+  /** A kept agent's token no daemon start holds any more; the owner's current one stays. */
+  forget(token: string): void {
+    const hash = hashToken(token)
+    const grant = this.grants.get(hash)
+    if (grant && this.tokens.get(grant.owner) !== token) {
+      this.grants.delete(hash)
+      this.hashesOf.get(grant.owner)?.delete(hash)
+    }
+  }
+
+  /**
+   * A kept agent's token from an earlier run of Orca, reaching `folders` as the current config names
+   * them. It becomes the owner's current one when the owner has none yet, so new launches share it.
+   */
+  adopt(owner: string, token: string, folders: RelayFolders): void {
+    this.set(hashToken(token), { owner, folders: resolvedFolders(folders) })
+    if (!this.tokens.has(owner)) {
+      this.tokens.set(owner, token)
+    }
   }
 
   of(token: string): RelayGrant | undefined {
     return this.grants.get(hashToken(token))
   }
 
-  /** The owner's token stops working. */
+  /** Every token of the owner stops working, kept agents' included. */
   revoke(owner: string): void {
-    const token = this.tokens.get(owner)
-    if (token) {
-      this.grants.delete(hashToken(token))
-      this.tokens.delete(owner)
+    for (const hash of this.hashesOf.get(owner) ?? []) {
+      this.grants.delete(hash)
     }
+    this.hashesOf.delete(owner)
+    this.tokens.delete(owner)
   }
 
   clear(): void {
     this.grants.clear()
     this.tokens.clear()
+    this.hashesOf.clear()
+  }
+
+  private set(hash: string, grant: RelayGrant): void {
+    const earlier = this.grants.get(hash)
+    if (earlier && earlier.owner !== grant.owner) {
+      this.hashesOf.get(earlier.owner)?.delete(hash)
+    }
+    this.grants.set(hash, grant)
+    const hashes = this.hashesOf.get(grant.owner) ?? new Set<string>()
+    hashes.add(hash)
+    this.hashesOf.set(grant.owner, hashes)
   }
 }

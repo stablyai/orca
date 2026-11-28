@@ -6,6 +6,7 @@ import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-sha
 import { CodexSharedServerUncontainedError } from '../../app-server/shared-servers/codex-shared-server-windows-job'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
 import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
+import { refuseFrontOutsideRelay } from '../../../provider-relay/provider-relay-front-pins'
 import type {
   CodexStructuredLaunch,
   CodexStructuredSessionAdapterDeps
@@ -39,17 +40,23 @@ export function codexConnectionOpener(
     return deps.openConnection
   }
   // A chat's own app-server runs under the terminal daemon where it can, so it survives a restart.
-  // Windows launches its own as always, and so does a bot's chat: its grants end with this app.
+  // Windows launches its own as always. One whose tool grants end with this app starts its own too,
+  // but first reattaches the chat's kept agent, so no second one ever runs beside it.
   if (launch.customCommand || platform === 'win32' || deps.sharedServers?.() !== true) {
-    return platform === 'win32' || launch.appBoundGrants
+    return platform === 'win32'
       ? spawnCodexAppServerConnection
-      : spawnRelayedCodexAppServerConnection(sessionId)
+      : spawnRelayedCodexAppServerConnection({
+          chatKey: sessionId,
+          ...(launch.appBoundGrants ? { only: 'reattach' as const } : {})
+        })
   }
   const skillRoots = codexSkillRoots({
     ...(launch.visuals ? { visualsSkillsRoot: launch.visuals.skill.skillsRoot } : {}),
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
   const open: CodexConnectionOpen = (connectionLaunch, handlers) => {
+    // A pooled thread isn't kept by a daemon start, so its tools may not name one's front.
+    refuseFrontOutsideRelay(sessionId)
     // A pooled launch retires a hand-back's exemption, as a relayed one does.
     takeProviderRelayHandedBack(sessionId)
     return pool()

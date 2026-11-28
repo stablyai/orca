@@ -83,7 +83,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** See `StructuredAgentLaunchSources.resolveToolServers`. */
   resolveSessionToolServers?: (
     record: AgentSessionRecord,
-    launchDirectory: string
+    launchDirectory: string,
+    relays: boolean
   ) => Promise<SessionMcpTools>
   /** See `StructuredAgentLaunchSources.resolveLinkedSkills`. */
   resolveSessionLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>

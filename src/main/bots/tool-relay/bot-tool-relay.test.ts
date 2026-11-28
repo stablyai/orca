@@ -217,7 +217,7 @@ describe("Orca's tool relay", () => {
   it('stops a deleted bot’s token', async () => {
     const tool = await upstream((_seen, res) => res.end('{}'))
     const bot = await botWith(tool.url)
-    relay.revoke('scout')
+    await relay.revoke('scout')
     const answer = await call(bot.address, {
       headers: { ...json, authorization: `Bearer ${bot.token}` },
       body: '{}'

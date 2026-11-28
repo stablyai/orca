@@ -27,7 +27,7 @@ import {
 } from '../launch/acp-structured-launch-preparation'
 import { acpProcessEnvironment } from '../launch/acp-structured-launch-resolution'
 import type { AcpStructuredLaunch } from '../launch/acp-structured-launch-resolution'
-import { SharedToolProcessSession } from '../../runtime/agent-session/environment/shared-tool-process-callers'
+import { acpSharedToolLaunch } from './acp-shared-tool-launch'
 import { AcpStructuredOptions } from '../options/acp-structured-options'
 import { AcpStructuredPrompts } from '../requests/acp-structured-prompts'
 import { acpRunRequests, acpToolFreeRun, stopAtToolWork } from './acp-tool-free-run'
@@ -100,10 +100,11 @@ export async function acquireAcpStructuredSession(input: {
   }
   // Keep the last abort check and spawn synchronous when no temp directory is needed.
   const connect = await acpLaunchConnect(deps, launch, closedBeforeSpawn)
-  let sharedTools: SharedToolProcessSession | null = null
   const { command, args, cwd } = launch
   const processLaunch = { command, args, cwd, ...acpProcessEnvironment(launch) }
-  const relayed = await launchRelayedAcpAgent(input, launch, processLaunch)
+  const shared = acpSharedToolLaunch(launch, { sessionId })
+  const relayed = await shared.relay((kept) => launchRelayedAcpAgent(input, kept, processLaunch))
+  const sharedTools = shared.take(relayed?.reattached === true)
   const launchPermission = await keptAcpLaunchPermission(spec, relayed, launch, run)
   // Cancellation owns no connection yet: the relayed agent goes as a tracked one would.
   if (relayed && input.abandoned()) {
@@ -111,8 +112,8 @@ export async function acquireAcpStructuredSession(input: {
   }
   const fullAccess = launchPermission.permission === 'full-access'
   // The last wait before the synchronous spawn.
-  const spawning = await currentAcpLaunchAccount(launch, closedBeforeSpawn)
-  const connection = connect(processLaunch, {
+  const spawning = await shared.beforeSpawn(currentAcpLaunchAccount(launch, closedBeforeSpawn))
+  const connection = shared.connecting(connect)(processLaunch, {
     ...(relayed ? { relayed } : {}),
     clientInfo: acpClientInfo(spec),
     // Only a chat can show a URL request's card, so other connections never advertise it.
@@ -147,8 +148,6 @@ export async function acquireAcpStructuredSession(input: {
       input.onExit(session)
     }
   })
-  // Until the process exits, only its session's tools can name the chat.
-  sharedTools = SharedToolProcessSession.forLaunch(spec, launch.env, launch.version)
   if (!spec.permissionModeConfig) {
     options.applied.set('permissionMode', fullAccess ? 'full-access' : 'ask')
   }
