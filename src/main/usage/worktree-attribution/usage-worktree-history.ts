@@ -29,8 +29,11 @@ export class UsageWorktreeHistory implements UsageWorktreeSource {
     file: string
   ) {
     this.writer = new UsageCacheSnapshotWriter('[usage-worktree-history]', () => file)
-    for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
-      this.remember(worktreeId, meta.displayName)
+    const allMeta = store.getAllWorktreeMeta()
+    for (const worktreeId in allMeta) {
+      if (Object.hasOwn(allMeta, worktreeId)) {
+        this.remember(worktreeId, allMeta[worktreeId].displayName)
+      }
     }
     // Record on every metadata write: worktrees are often created and deleted between usage scans.
     // Read the live row, not the event: another host's write leaves the local row unchanged.
@@ -51,8 +54,11 @@ export class UsageWorktreeHistory implements UsageWorktreeSource {
           this.displayNames.set(worktreeId, displayName)
         }
       }
-      if ([...this.displayNames].some(([worktreeId, name]) => saved.get(worktreeId) !== name)) {
-        this.write()
+      for (const [worktreeId, name] of this.displayNames) {
+        if (saved.get(worktreeId) !== name) {
+          this.write()
+          break
+        }
       }
     })
   }
